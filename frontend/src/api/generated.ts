@@ -141,6 +141,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/assignments/batch/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Assignment Batch
+         * @description Targets, skipped cases and people of a batch; nothing is written.
+         */
+        post: operations["preview_assignment_batch_api_v1_projects__key__assignments_batch_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/assignments/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Assignment Batch
+         * @description Every assignment of the preview in one transaction, or none (409).
+         */
+        post: operations["commit_assignment_batch_api_v1_projects__key__assignments_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/document-rows/selection-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Selection Summary
+         * @description Assignable steps of the selected cases and the common one.
+         */
+        post: operations["selection_summary_api_v1_projects__key__document_rows_selection_summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{assignment_id}/rounds": {
         parameters: {
             query?: never;
@@ -1119,7 +1179,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Members */
+        /**
+         * Members
+         * @description Members with roles, languages and open tasks.
+         *
+         *     Leads (``MANAGE_ASSIGNMENTS``) see everything; other callers see other
+         *     people by pseudonym only (D1) and only their own open tasks.
+         */
         get: operations["members_api_v1_projects__key__members_get"];
         put?: never;
         post?: never;
@@ -1941,6 +2007,17 @@ export interface components {
             /** Refused */
             refused: components["schemas"]["RefusedAssignment"][];
         };
+        /** AssignableStepView */
+        AssignableStepView: {
+            /** Task */
+            task: string;
+            /** Language */
+            language: string;
+            /** Versions */
+            versions: number;
+            /** Cases */
+            cases: number;
+        };
         /** Assignee */
         Assignee: {
             /** Assignment Id */
@@ -2150,6 +2227,150 @@ export interface components {
              * @default true
              */
             allow_empty: boolean;
+        };
+        /** BatchAssignBody */
+        BatchAssignBody: {
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "translation_review" | "annotate" | "review";
+            /** Language */
+            language: string;
+            /** Case Ids */
+            case_ids: string[];
+            /**
+             * Sort
+             * @default case
+             * @enum {string}
+             */
+            sort: "case" | "import" | "activity";
+            filters?: components["schemas"]["DocumentRowFilters"];
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "one" | "split";
+            /** Usernames */
+            usernames?: string[];
+            /**
+             * Review Accepted Translation
+             * @default false
+             */
+            review_accepted_translation: boolean;
+            /** Expected Preview Digest */
+            expected_preview_digest: string;
+            /**
+             * Confirm Language
+             * @default false
+             */
+            confirm_language: boolean;
+        };
+        /** BatchAssignRequest */
+        BatchAssignRequest: {
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "translation_review" | "annotate" | "review";
+            /** Language */
+            language: string;
+            /** Case Ids */
+            case_ids: string[];
+            /**
+             * Sort
+             * @default case
+             * @enum {string}
+             */
+            sort: "case" | "import" | "activity";
+            filters?: components["schemas"]["DocumentRowFilters"];
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "one" | "split";
+            /** Usernames */
+            usernames?: string[];
+            /**
+             * Review Accepted Translation
+             * @default false
+             */
+            review_accepted_translation: boolean;
+        };
+        /** BatchAssignResult */
+        BatchAssignResult: {
+            /** Created */
+            created: components["schemas"]["AssignmentView"][];
+        };
+        /** BatchPersonView */
+        BatchPersonView: {
+            /** Username */
+            username: string;
+            person: components["schemas"]["PersonRefView"];
+            /** Reads */
+            reads: string[];
+            /** Open Before */
+            open_before: number;
+            /** Open After */
+            open_after: number;
+            /** Gets */
+            gets: number;
+            /** First Case */
+            first_case: string | null;
+            /** Last Case */
+            last_case: string | null;
+            /** Language Mismatch */
+            language_mismatch: boolean;
+            /** Unavailable */
+            unavailable: ("does_not_read" | "role_missing" | "inactive") | null;
+            /** Already Assigned */
+            already_assigned: number;
+        };
+        /** BatchPreview */
+        BatchPreview: {
+            /** Task */
+            task: string;
+            /** Language */
+            language: string;
+            /** Versions */
+            versions: number;
+            /** Targets */
+            targets: components["schemas"]["BatchTargetView"][];
+            /** Skipped */
+            skipped: components["schemas"]["BatchSkipView"][];
+            /** People */
+            people: components["schemas"]["BatchPersonView"][];
+            /** Per Text */
+            per_text: number;
+            /** Digest */
+            digest: string;
+        };
+        /** BatchSkipView */
+        BatchSkipView: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "waiting_for_review" | "not_in_plan" | "already_assigned" | "step_differs" | "discarded";
+        };
+        /** BatchTargetView */
+        BatchTargetView: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Document Id */
+            document_id: string;
+            /** Version */
+            version: number;
+            /** Remaining */
+            remaining: number;
+            /** Usernames */
+            usernames: string[];
         };
         /** Body_create_upload_api_v1_projects__key__uploads_post */
         Body_create_upload_api_v1_projects__key__uploads_post: {
@@ -2549,6 +2770,34 @@ export interface components {
             /** Not In Plan Languages */
             not_in_plan_languages?: string[];
         };
+        /**
+         * DocumentRowFilters
+         * @description The Documents filters, same names and values as its query parameters.
+         */
+        DocumentRowFilters: {
+            /** Language */
+            language?: string | null;
+            /** Case */
+            case?: string | null;
+            /** Segment */
+            segment?: ("decision" | "assign" | "progress") | null;
+            /** Step */
+            step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | null;
+            /** Stage */
+            stage?: ("translation_review" | "annotation" | "final" | "done") | null;
+            /** Owner */
+            owner?: string | null;
+            /** Plan */
+            plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan") | null;
+            /** Final */
+            final?: ("missing" | "none") | null;
+            /** Origin */
+            origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
+            /** Translation Status */
+            translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
+            /** Status */
+            status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
+        };
         /** DocumentRowView */
         DocumentRowView: {
             /** Case Id */
@@ -2858,6 +3107,7 @@ export interface components {
             is_newest_of_chain: boolean;
             /** Adjudicator Not Annotator */
             adjudicator_not_annotator: boolean | null;
+            author?: components["schemas"]["PersonRefView"] | null;
         };
         /** FinalSelectionView */
         FinalSelectionView: {
@@ -3187,7 +3437,11 @@ export interface components {
             /** Password */
             password: string;
         };
-        /** Member */
+        /**
+         * Member
+         * @description For non-lead callers ``username`` and ``display_name`` of other people
+         *     are empty (pseudonym only, D1); the caller's own record is complete.
+         */
         Member: {
             /** Username */
             username: string;
@@ -3199,6 +3453,7 @@ export interface components {
             roles: string[];
             /** Languages */
             languages: string[];
+            open_tasks?: components["schemas"]["OpenTasksView"];
         };
         /** MemberChange */
         MemberChange: {
@@ -3394,6 +3649,27 @@ export interface components {
             /** Label */
             label: string | null;
         };
+        /**
+         * OpenTasksView
+         * @description Non-revoked, unsubmitted assignments of a member per task.
+         */
+        OpenTasksView: {
+            /**
+             * Translation Review
+             * @default 0
+             */
+            translation_review: number;
+            /**
+             * Annotate
+             * @default 0
+             */
+            annotate: number;
+            /**
+             * Review
+             * @default 0
+             */
+            review: number;
+        };
         /** OpenTranslationReviewView */
         OpenTranslationReviewView: {
             /** Assignment Id */
@@ -3408,6 +3684,7 @@ export interface components {
             reviewer_label: string;
             /** Is Me */
             is_me: boolean;
+            reviewer?: components["schemas"]["PersonRefView"] | null;
         };
         /**
          * OpenWorkspaceRequest
@@ -3900,6 +4177,21 @@ export interface components {
             /** Assignees */
             assignees?: components["schemas"]["Assignee"][];
         };
+        /** ProgressLedeView */
+        ProgressLedeView: {
+            /** Cases */
+            cases: number;
+            /** Translations To Review */
+            translations_to_review: number;
+            /** Versions To Annotate */
+            versions_to_annotate: number;
+            /** Not In Plan */
+            not_in_plan: number;
+            /** Needs Decision */
+            needs_decision: number;
+            /** To Assign */
+            to_assign: number;
+        };
         /** ProgressPerson */
         ProgressPerson: {
             /**
@@ -3928,6 +4220,32 @@ export interface components {
             display_name: string;
             /** Pseudonym */
             pseudonym: string;
+        };
+        /**
+         * ProgressStageView
+         * @description One stage card: rows in ``scope`` (Review or Annotate on), ``done`` of
+         *     ``total`` and row counts per state (keys per card, see the spec).
+         */
+        ProgressStageView: {
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "review" | "annotate";
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+        };
+        /** ProgressStagesView */
+        ProgressStagesView: {
+            translation_review: components["schemas"]["ProgressStageView"];
+            annotation: components["schemas"]["ProgressStageView"];
+            final: components["schemas"]["ProgressStageView"];
         };
         /** ProgressTotals */
         ProgressTotals: {
@@ -3961,6 +4279,37 @@ export interface components {
              * @default 0
              */
             unassigned: number;
+        };
+        /** ProgressWorkloadView */
+        ProgressWorkloadView: {
+            person: components["schemas"]["PersonRefView"];
+            /** Username */
+            username: string;
+            /**
+             * Translation Reviews Open
+             * @default 0
+             */
+            translation_reviews_open: number;
+            /**
+             * Annotations Open
+             * @default 0
+             */
+            annotations_open: number;
+            /**
+             * Reviews Open
+             * @default 0
+             */
+            reviews_open: number;
+            /**
+             * Paused
+             * @default 0
+             */
+            paused: number;
+            /**
+             * Submitted
+             * @default 0
+             */
+            submitted: number;
         };
         /** ProjectDocumentSummary */
         ProjectDocumentSummary: {
@@ -4022,6 +4371,10 @@ export interface components {
             /** People */
             people: components["schemas"]["ProgressPerson"][];
             totals: components["schemas"]["ProgressTotals"];
+            lede?: components["schemas"]["ProgressLedeView"] | null;
+            stages?: components["schemas"]["ProgressStagesView"] | null;
+            /** Workload */
+            workload?: components["schemas"]["ProgressWorkloadView"][];
         };
         /** ProjectSettings */
         ProjectSettings: {
@@ -4457,6 +4810,7 @@ export interface components {
              * @enum {string}
              */
             task_state: "paused" | "resumed";
+            reporter?: components["schemas"]["PersonRefView"] | null;
         };
         /** ReportSubmissionRef */
         ReportSubmissionRef: {
@@ -4671,6 +5025,7 @@ export interface components {
             state: "open" | "resolved" | "withdrawn";
             /** Active Hold Count */
             active_hold_count: number;
+            reporter?: components["schemas"]["PersonRefView"] | null;
         };
         /** RowRefView */
         RowRefView: {
@@ -4707,6 +5062,7 @@ export interface components {
             round_ordinal: number | null;
             /** Submitted */
             submitted: boolean;
+            author?: components["schemas"]["PersonRefView"] | null;
         };
         /** RowSubmissionView */
         RowSubmissionView: {
@@ -4744,6 +5100,7 @@ export interface components {
             is_latest_in_round: boolean | null;
             /** Finding Count */
             finding_count: number;
+            author?: components["schemas"]["PersonRefView"] | null;
         };
         /** RowSubmissions */
         RowSubmissions: {
@@ -4931,6 +5288,29 @@ export interface components {
             start: number;
             /** End */
             end: number;
+        };
+        /** SelectionSummary */
+        SelectionSummary: {
+            /** Cases */
+            cases: number;
+            /** Steps */
+            steps: components["schemas"]["AssignableStepView"][];
+            /** Skipped */
+            skipped: {
+                [key: string]: number;
+            };
+            common: components["schemas"]["AssignableStepView"] | null;
+            /**
+             * Not Shown
+             * @default 0
+             */
+            not_shown: number;
+        };
+        /** SelectionSummaryRequest */
+        SelectionSummaryRequest: {
+            /** Case Ids */
+            case_ids: string[];
+            filters?: components["schemas"]["DocumentRowFilters"];
         };
         /** SourceObligationView */
         SourceObligationView: {
@@ -5218,6 +5598,8 @@ export interface components {
             source_language?: string | null;
             /** Target Language */
             target_language?: string | null;
+            /** Case Id */
+            case_id?: string | null;
         };
         /** TemplateInfo */
         TemplateInfo: {
@@ -5797,6 +6179,7 @@ export interface components {
             round_ordinal: number | null;
             /** Round State */
             round_state: string | null;
+            person?: components["schemas"]["PersonRefView"] | null;
         };
         /** WorkRoundView */
         WorkRoundView: {
@@ -6254,6 +6637,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_assignment_batch_api_v1_projects__key__assignments_batch_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchAssignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commit_assignment_batch_api_v1_projects__key__assignments_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchAssignBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchAssignResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    selection_summary_api_v1_projects__key__document_rows_selection_summary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectionSummaryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SelectionSummary"];
                 };
             };
             /** @description Validation Error */

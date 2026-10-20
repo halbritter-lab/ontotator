@@ -14,7 +14,10 @@ from sqlalchemy import Connection, and_, exists, func, select, union_all
 
 from ontocurator.application.document_row_page import build_page, case_ids
 from ontocurator.application.document_row_reports import load_row_reports
-from ontocurator.application.document_row_submissions import build_submissions
+from ontocurator.application.document_row_submissions import (
+    build_submissions,
+    pseudonym_refs,
+)
 from ontocurator.application.final_causes import (
     authorize_final_results,
     derive_final_state,
@@ -169,6 +172,8 @@ class RowFacts:
     rule_on: bool = True  # annotate_accepted_translations_only
     # user id -> PersonRefView fields (lead viewer: display names included)
     people: dict[int, dict[str, Any]] = field(default_factory=dict)
+    # pseudonym -> PersonRefView fields (authors of the selected submissions)
+    people_by_pseudonym: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def load_last_activity(
@@ -514,6 +519,7 @@ def load_facts(
     versions = _versions(conn, pid)
     assignments = _assignments(conn, pid)
     reports = _reports(conn, pid)
+    selected = _selected_submissions(conn, pid)
     people = person_refs(
         conn,
         [
@@ -524,6 +530,7 @@ def load_facts(
         viewer_id=viewer_user_id,
         viewer_is_lead=True,  # Documents is lead-only
     )
+    people_fields = {uid: ref.model_dump() for uid, ref in people.items()}
     return RowFacts(
         project_key=key,
         viewer_user_id=viewer_user_id,
@@ -534,7 +541,7 @@ def load_facts(
         assignments=assignments,
         rounds=_rounds(conn, pid),
         submission_counts=_submission_counts(conn, pid),
-        selected_submissions=_selected_submissions(conn, pid),
+        selected_submissions=selected,
         open_translation_reviews=_open_translation_reviews(conn, pid),
         reports=reports,
         final_state=derive_final_state(
@@ -544,14 +551,19 @@ def load_facts(
         last_activity=last_activity,
         selection_activity=selection_activity,
         row_reports=load_row_reports(
-            conn, pid, {(v.case_id, v.language) for v in versions}
+            conn, pid, {(v.case_id, v.language) for v in versions}, people_fields
         ),
         plan=plan,
         revisions=work_plan_store.project_revisions(conn, pid),
         discarded=discarded,
         annotations_per_text=project.annotations_per_text,
         rule_on=project.annotate_accepted_translations_only,
-        people={uid: ref.model_dump() for uid, ref in people.items()},
+        people=people_fields,
+        people_by_pseudonym=pseudonym_refs(
+            conn,
+            (item.annotator_id for item in selected.values()),
+            viewer_id=viewer_user_id,
+        ),
     )
 
 

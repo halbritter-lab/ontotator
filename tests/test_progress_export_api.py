@@ -242,10 +242,13 @@ def test_progress_groups_all_statuses_in_one_metadata_query(project):
     }
     worker = next(p for p in data["people"] if p["username"] == "worker")
     assert worker["in_progress"] == worker["reopened"] == 1
+    # The per-document projection stays one statement without text; the
+    # stage counts read the Documents facts (spec D9) separately.
     projections = [
         statement
         for statement in statements
-        if "FROM ontocurator.documents" in statement
+        if "FROM ontocurator.documents LEFT OUTER JOIN ontocurator.assignments"
+        in statement
     ]
     assert len(projections) == 1
     assert "documents.text" not in projections[0]
@@ -291,6 +294,63 @@ def test_empty_project_progress_has_explicit_zero_totals(project):
             "submitted": 0,
             "reopened": 0,
         },
+        "lede": {
+            "cases": 0,
+            "translations_to_review": 0,
+            "versions_to_annotate": 0,
+            "not_in_plan": 0,
+            "needs_decision": 0,
+            "to_assign": 0,
+        },
+        "stages": {
+            name: {"scope": scope, "done": 0, "total": 0, "counts": counts}
+            for name, scope, counts in (
+                (
+                    "translation_review",
+                    "review",
+                    dict.fromkeys(
+                        (
+                            "to_assign",
+                            "in_review",
+                            "check_failed",
+                            "check_failed_with_reviewer",
+                            "rejected_or_queried",
+                            "accepted",
+                        ),
+                        0,
+                    ),
+                ),
+                (
+                    "annotation",
+                    "annotate",
+                    dict.fromkeys(
+                        (
+                            "waiting_for_review",
+                            "to_assign",
+                            "in_progress",
+                            "paused",
+                            "submitted",
+                        ),
+                        0,
+                    ),
+                ),
+                (
+                    "final",
+                    "annotate",
+                    dict.fromkeys(
+                        (
+                            "not_ready",
+                            "to_choose",
+                            "to_confirm",
+                            "final",
+                            "would_be_omitted",
+                        ),
+                        0,
+                    ),
+                ),
+            )
+        },
+        "workload": [],
     }
 
 

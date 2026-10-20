@@ -70,6 +70,8 @@ class WorkItemView(_View):
     held: bool
     round_ordinal: int | None
     round_state: str | None
+    # Lead workflow (D1): the assignee as a person reference.
+    person: PersonRefView | None = None
 
 
 class ReportIssueView(_View):
@@ -78,6 +80,7 @@ class ReportIssueView(_View):
     reporter_label: str
     created_at: datetime
     task_state: Literal["paused", "resumed"]
+    reporter: PersonRefView | None = None
 
 
 class RowItemView(_View):
@@ -113,6 +116,7 @@ class FinalSelectionSummary(_View):
     is_newest_of_chain: bool
     # Snapshot at selection time; the current rule is on the page.
     adjudicator_not_annotator: bool | None
+    author: PersonRefView | None = None
 
 
 class MissingFinalView(_View):
@@ -138,6 +142,7 @@ class RowProblemReport(_View):
     created_at: datetime
     state: Literal["open", "resolved", "withdrawn"]
     active_hold_count: int
+    reporter: PersonRefView | None = None
 
 
 class StepOwnerView(_View):
@@ -284,6 +289,7 @@ class RowSubmissionView(_View):
     round_state: str | None
     is_latest_in_round: bool | None
     finding_count: int
+    author: PersonRefView | None = None
 
 
 class RowRoundView(_View):
@@ -300,6 +306,7 @@ class RowRoundView(_View):
     is_me: bool
     round_ordinal: int | None
     submitted: bool
+    author: PersonRefView | None = None
 
 
 class OpenTranslationReviewView(_View):
@@ -309,6 +316,7 @@ class OpenTranslationReviewView(_View):
     chain_name: str | None
     reviewer_label: str
     is_me: bool
+    reviewer: PersonRefView | None = None
 
 
 class RowSubmissions(_View):

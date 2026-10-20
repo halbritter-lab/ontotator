@@ -7,6 +7,7 @@ the row and page dictionaries of the Documents read API.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -100,6 +101,7 @@ class _Context:
         self.segments: dict[RowKey, steps_rules.Segment | None] = {}
         self.owners: dict[RowKey, frozenset[str]] = {}
         self.in_plan: dict[RowKey, bool] = {}
+        self.step_facts: dict[RowKey, steps_rules.StepFacts] = {}
 
     def person(self, user_id: int, pseudonym: str) -> dict[str, Any]:
         """PersonRefView fields of ``user_id`` (pseudonym alone when unknown)."""
@@ -126,6 +128,10 @@ def _report(facts: RowFacts, report_id: str | None) -> dict[str, Any] | None:
         "reporter_label": fact.reporter_label,
         "created_at": fact.created_at,
         "task_state": fact.task_state,
+        "reporter": (
+            facts.people.get(fact.reporter_id) if fact.reporter_id is not None else None
+        )
+        or {"pseudonym": fact.reporter_label, "display_name": None, "is_me": False},
     }
 
 
@@ -185,6 +191,11 @@ def _final(
         ),
         # Snapshot at selection time; the current rule is page-level.
         "adjudicator_not_annotator": selection.get("adjudicator_not_annotator"),
+        "author": (
+            facts.people_by_pseudonym.get(submission.annotator_id)
+            if submission is not None
+            else None
+        ),
     }
 
 
@@ -383,6 +394,7 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
                 "version": version_of[item.document_id].version,
                 "author_label": item.pseudonym,
                 "is_me": item.user_id == facts.viewer_user_id,
+                "person": ctx.person(item.user_id, item.pseudonym),
                 "task": item.task,
                 "status": item.status,
                 "held": item.held,
@@ -575,6 +587,7 @@ def _row_steps(
         and needs_reviewer.translation_status == "automatic_check_failed",
     )
     ctx.flags[key] = (review, annotate)
+    ctx.step_facts[key] = step_facts
     ctx.in_plan[key] = steps_rules.in_plan(step_facts)
     derived = steps_rules.derive_steps(step_facts, row=key)
     ctx.segments[key] = steps_rules.segment_of(derived[0]) if derived else None
@@ -853,6 +866,40 @@ def _evaluate(
         for key, row in rows.items()
     }
     return ctx, rows, matches
+
+
+@dataclass(frozen=True)
+class RowState:
+    """One row as the Documents derivation sees it (Progress counts these)."""
+
+    key: RowKey
+    row: dict[str, Any]
+    step_facts: steps_rules.StepFacts
+    segment: steps_rules.Segment | None
+    review: bool  # effective flags (sources never review, discarded rows off)
+    annotate: bool
+    has_final: bool  # a live final result
+
+
+def row_states(facts: RowFacts) -> list[RowState]:
+    """Every row of the project with its step facts, in (case, language) order."""
+    ctx = _Context(facts)
+    states = []
+    for key in sorted(ctx.by_row):
+        row = _build_row(ctx, *key)
+        review, annotate = ctx.flags[key]
+        states.append(
+            RowState(
+                key=key,
+                row=row,
+                step_facts=ctx.step_facts[key],
+                segment=ctx.segments[key],
+                review=review,
+                annotate=annotate,
+                has_final=ctx.has_final[key],
+            )
+        )
+    return states
 
 
 def _matching_cases(facts: RowFacts, query: RowQuery) -> set[str]:

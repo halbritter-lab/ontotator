@@ -335,6 +335,7 @@ VERSION_KEYS = {
     "last_activity_at",
 }
 WORK_KEYS = {
+    "person",
     "assignment_id",
     "document_id",
     "version",
@@ -347,6 +348,7 @@ WORK_KEYS = {
     "round_state",
 }
 FINAL_KEYS = {
+    "author",
     "case_id",
     "language",
     "document_id",

@@ -40,6 +40,7 @@ def test_row_lists_closed_and_withdrawn_reports_newest_first(team):
         "created_at",
         "state",
         "active_hold_count",
+        "reporter",
     }
     assert reports[1]["title"] == "Text is cut off"
     assert reports[0]["title"] == "Wrong language…"

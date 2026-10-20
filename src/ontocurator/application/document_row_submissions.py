@@ -5,10 +5,12 @@ has authorized the lead and holds the shared project lock.
 """
 
 from collections import Counter
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import Connection, and_, func, select
 
+from ontocurator.application.people import person_refs
 from ontocurator.domain import document_rows as rules
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.submission_labels import round_ordinals, submission_kind
@@ -25,6 +27,30 @@ from ontocurator.storage.workflow_tables import (
     WorkRoundRow,
     WorkRoundStateRow,
 )
+
+
+def pseudonym_refs(
+    conn: Connection, pseudonyms: Iterable[str], *, viewer_id: int
+) -> dict[str, dict[str, Any]]:
+    """PersonRefView fields per pseudonym for a lead viewer (D1).
+
+    Submissions and rounds name their author by pseudonym only; a pseudonym
+    without an account keeps the pseudonym alone.
+    """
+    wanted = sorted(set(pseudonyms))
+    if not wanted:
+        return {}
+    ids = conn.execute(
+        select(UserRow.id).where(UserRow.pseudonym.in_(wanted))
+    ).scalars()
+    refs = person_refs(conn, ids, viewer_id=viewer_id, viewer_is_lead=True)
+    known = {ref.pseudonym: ref.model_dump() for ref in refs.values()}
+    return {
+        pseudonym: known.get(
+            pseudonym, {"pseudonym": pseudonym, "display_name": None, "is_me": False}
+        )
+        for pseudonym in wanted
+    }
 
 
 def _row_versions(
@@ -221,6 +247,16 @@ def build_submissions(
             archived_owner.setdefault(sid, rid)
 
     rows = _submissions(conn, pid, documents)
+    open_reviews = _open_translation_reviews(conn, pid, documents)
+    people = pseudonym_refs(
+        conn,
+        [
+            *(row.annotator_id for row in rows),
+            *(row.annotator_id for row in live),
+            *(row.pseudonym for row in open_reviews),
+        ],
+        viewer_id=viewer_user_id,
+    )
     owner = {
         row.submission_id: row.round_id or archived_owner.get(row.submission_id)
         for row in rows
@@ -253,6 +289,7 @@ def build_submissions(
                     else row.submission_id == latest
                 ),
                 "finding_count": int(row.findings),
+                "author": people[row.annotator_id],
             }
         )
 
@@ -271,6 +308,7 @@ def build_submissions(
             "is_me": row.annotator_id == viewer,
             "round_ordinal": ordinals.get(row.round_id),
             "submitted": row.latest_submission_id is not None,
+            "author": people[row.annotator_id],
         }
         for row in live
         if row.mode is not None
@@ -283,8 +321,9 @@ def build_submissions(
             "chain_name": chain_name[row.document_id],
             "reviewer_label": row.pseudonym,
             "is_me": row.user_id == viewer_user_id,
+            "reviewer": people[row.pseudonym],
         }
-        for row in _open_translation_reviews(conn, pid, documents)
+        for row in open_reviews
     ]
     return {
         "case_id": case_id,

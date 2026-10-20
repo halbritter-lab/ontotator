@@ -4,12 +4,14 @@ from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ontocurator.api.document_projection import Assignee
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.job_routes import EXPORT_ACTIONS, authorized_project
+from ontocurator.api.person_views import PersonRefView
 from ontocurator.api.routes import get_access
+from ontocurator.application.progress import progress_view
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Action, can
 from ontocurator.authz.scoped import project_not_found
@@ -58,12 +60,24 @@ class MemberChange(BaseModel):
     revoke_assignments: bool = False
 
 
+class OpenTasksView(BaseModel):
+    """Non-revoked, unsubmitted assignments of a member per task."""
+
+    translation_review: int = 0
+    annotate: int = 0
+    review: int = 0
+
+
 class Member(BaseModel):
+    """For non-lead callers ``username`` and ``display_name`` of other people
+    are empty (pseudonym only, D1); the caller's own record is complete."""
+
     username: str
     display_name: str
     pseudonym: str
     roles: list[str]
     languages: list[str]
+    open_tasks: OpenTasksView = Field(default_factory=OpenTasksView)
 
 
 class ProgressDocument(BaseModel):
@@ -91,10 +105,49 @@ class ProgressTotals(AssignmentCounts):
     unassigned: int = 0
 
 
+class ProgressLedeView(BaseModel):
+    cases: int
+    translations_to_review: int
+    versions_to_annotate: int
+    not_in_plan: int
+    needs_decision: int
+    to_assign: int
+
+
+class ProgressStageView(BaseModel):
+    """One stage card: rows in ``scope`` (Review or Annotate on), ``done`` of
+    ``total`` and row counts per state (keys per card, see the spec)."""
+
+    scope: Literal["review", "annotate"]
+    done: int
+    total: int
+    counts: dict[str, int]
+
+
+class ProgressStagesView(BaseModel):
+    translation_review: ProgressStageView
+    annotation: ProgressStageView
+    final: ProgressStageView
+
+
+class ProgressWorkloadView(BaseModel):
+    person: PersonRefView
+    username: str
+    translation_reviews_open: int = 0
+    annotations_open: int = 0
+    reviews_open: int = 0
+    paused: int = 0
+    submitted: int = 0
+
+
 class ProjectProgress(BaseModel):
     documents: list[ProgressDocument]
     people: list[ProgressPerson]
     totals: ProgressTotals
+    # Lead workflow (D9): counts from the Documents derivation.
+    lede: ProgressLedeView | None = None
+    stages: ProgressStagesView | None = None
+    workload: list[ProgressWorkloadView] = Field(default_factory=list)
 
 
 class ExportRequest(BaseModel):
@@ -179,10 +232,19 @@ def progress(key: str, principal: PrincipalDep, request: Request) -> ProjectProg
         totals.unassigned = sum(
             not document.assignees for document in documents.values()
         )
+        pipeline = progress_view(
+            conn, request.app.state.repo, key, project_id, principal.user_id
+        )
         return ProjectProgress(
             documents=list(documents.values()),
             people=sorted(people.values(), key=lambda p: p.username),
             totals=totals,
+            lede=ProgressLedeView(**pipeline["lede"]),
+            stages=ProgressStagesView.model_validate(pipeline["stages"]),
+            workload=[
+                ProgressWorkloadView.model_validate(item)
+                for item in pipeline["workload"]
+            ],
         )
 
 
@@ -316,7 +378,13 @@ def update_profile(
 
 @router.get("/{key}/members")
 def members(key: str, principal: PrincipalDep, request: Request) -> list[Member]:
+    """Members with roles, languages and open tasks.
+
+    Leads (``MANAGE_ASSIGNMENTS``) see everything; other callers see other
+    people by pseudonym only (D1) and only their own open tasks.
+    """
     _guard(request, Action.VIEW_PROJECT, key)
+    is_lead = can(get_access(request), Action.MANAGE_ASSIGNMENTS, key)
     accounts = request.app.state.accounts
     with accounts.db.snapshot() as conn:
         project_id = conn.execute(
@@ -349,12 +417,32 @@ def members(key: str, principal: PrincipalDep, request: Request) -> list[Member]
                 ),
             )
             member.roles.append(row.role)
+        if not is_lead:
+            for user_id, member in by_id.items():
+                if user_id != principal.user_id:
+                    member.username = member.display_name = ""
+        visible = list(by_id) if is_lead else [principal.user_id]
+        for user_id, task, count in conn.execute(
+            select(AssignmentRow.user_id, AssignmentRow.task, func.count())
+            .where(
+                AssignmentRow.project_id == project_id,
+                AssignmentRow.user_id.in_(visible),
+                AssignmentRow.revoked_at.is_(None),
+                AssignmentRow.status != "submitted",
+            )
+            .group_by(AssignmentRow.user_id, AssignmentRow.task)
+        ).tuples():
+            if user_id in by_id and task in OpenTasksView.model_fields:
+                setattr(by_id[user_id].open_tasks, task, count)
         for user_id, language in conn.execute(
             select(UserLanguageRow.user_id, UserLanguageRow.language)
             .where(UserLanguageRow.user_id.in_(by_id))
             .order_by(UserLanguageRow.language)
         ).tuples():
             by_id[user_id].languages.append(language)
+        if not is_lead:
+            # Username order would hint at hidden usernames.
+            return sorted(by_id.values(), key=lambda member: member.pseudonym)
         return list(by_id.values())
 
 

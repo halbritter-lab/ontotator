@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { ApiClient, onCsrfRejected, onSessionExpired } from "../src/api/client";
+import { ApiClient, onCsrfRejected, onSessionExpired, type ProjectProgress } from "../src/api/client";
 afterEach(() => vi.unstubAllGlobals());
 it("uses actual progress/export endpoints, escaping project keys and preserving CSRF JSON transport", async () => {
   const fetch = vi.fn().mockImplementation(() => Promise.resolve(new Response("{}")));
@@ -49,4 +49,27 @@ it("does not expire a renewed session for a late binary 401", async () => {
     const pending = client.downloadJob(1); client.setCsrfToken("new"); resolve(new Response("{}", { status: 401 }));
     await expect(pending).rejects.toMatchObject({ status: 401 }); expect(expired).not.toHaveBeenCalled();
   } finally { stop(); }
+});
+it("reads progress stages and workload", async () => {
+  const card = (scope: "review" | "annotate", counts: Record<string, number>) => ({ scope, done: 1, total: 4, counts });
+  const body: ProjectProgress = {
+    documents: [], people: [],
+    totals: { documents: 0, unassigned: 0, open: 0, in_progress: 0, submitted: 0, reopened: 0 },
+    lede: { cases: 3, translations_to_review: 3, versions_to_annotate: 4, not_in_plan: 1, needs_decision: 2, to_assign: 1 },
+    stages: {
+      translation_review: card("review", { to_assign: 1, in_review: 1, check_failed: 2, check_failed_with_reviewer: 1, rejected_or_queried: 1, accepted: 1 }),
+      annotation: card("annotate", { waiting_for_review: 2, to_assign: 0, in_progress: 1, paused: 1, submitted: 1 }),
+      final: card("annotate", { not_ready: 3, to_choose: 0, to_confirm: 0, final: 1, would_be_omitted: 3 }),
+    },
+    workload: [{
+      person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false }, username: "ana",
+      translation_reviews_open: 1, annotations_open: 1, reviews_open: 0, paused: 0, submitted: 0,
+    }],
+  };
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body))));
+  const progress = await new ApiClient().getProgress("proj");
+  expect(progress.lede?.needs_decision).toBe(2);
+  expect(progress.stages?.translation_review.counts.check_failed_with_reviewer).toBe(1);
+  expect(progress.stages?.final.counts.would_be_omitted).toBe(3);
+  expect(progress.workload?.[0].person).toEqual({ pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false });
 });

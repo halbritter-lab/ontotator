@@ -110,6 +110,8 @@ class TaskSummary:
     hold_reason: str | None = None
     source_language: str | None = None
     target_language: str | None = None
+    # The text label's case ID (spec "Text label").
+    case_id: str | None = None
 
 
 def _assignments() -> Select[tuple[object, ...]]:
@@ -654,6 +656,7 @@ class AssignmentService:
                 ProjectRow.project_key,
                 ProjectRow.name.label("project_name"),
                 AssignmentRow.document_id,
+                DocumentRow.case_id,
                 DocumentRow.language,
                 DocumentRow.external_id,
                 AssignmentRow.task,

@@ -477,6 +477,165 @@
         }
       }
     },
+    "/api/v1/projects/{key}/assignments/batch/preview": {
+      "post": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Preview Assignment Batch",
+        "description": "Targets, skipped cases and people of a batch; nothing is written.",
+        "operationId": "preview_assignment_batch_api_v1_projects__key__assignments_batch_preview_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchAssignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/assignments/batch": {
+      "post": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Commit Assignment Batch",
+        "description": "Every assignment of the preview in one transaction, or none (409).",
+        "operationId": "commit_assignment_batch_api_v1_projects__key__assignments_batch_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchAssignBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAssignResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/document-rows/selection-summary": {
+      "post": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Selection Summary",
+        "description": "Assignable steps of the selected cases and the common one.",
+        "operationId": "selection_summary_api_v1_projects__key__document_rows_selection_summary_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectionSummaryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assignments/{assignment_id}/rounds": {
       "post": {
         "tags": [
@@ -4153,6 +4312,7 @@
           "projects"
         ],
         "summary": "Members",
+        "description": "Members with roles, languages and open tasks.\n\nLeads (``MANAGE_ASSIGNMENTS``) see everything; other callers see other\npeople by pseudonym only (D1) and only their own open tasks.",
         "operationId": "members_api_v1_projects__key__members_get",
         "parameters": [
           {
@@ -6244,6 +6404,34 @@
         ],
         "title": "AssignResponse"
       },
+      "AssignableStepView": {
+        "properties": {
+          "task": {
+            "type": "string",
+            "title": "Task"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "versions": {
+            "type": "integer",
+            "title": "Versions"
+          },
+          "cases": {
+            "type": "integer",
+            "title": "Cases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task",
+          "language",
+          "versions",
+          "cases"
+        ],
+        "title": "AssignableStepView"
+      },
       "Assignee": {
         "properties": {
           "assignment_id": {
@@ -6769,6 +6957,389 @@
         ],
         "title": "AxisDefinition",
         "description": "Definition of an individual annotation contextual axis."
+      },
+      "BatchAssignBody": {
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": [
+              "translation_review",
+              "annotate",
+              "review"
+            ],
+            "title": "Task"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Case Ids"
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "case",
+              "import",
+              "activity"
+            ],
+            "title": "Sort",
+            "default": "case"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/DocumentRowFilters"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "one",
+              "split"
+            ],
+            "title": "Mode"
+          },
+          "usernames": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Usernames"
+          },
+          "review_accepted_translation": {
+            "type": "boolean",
+            "title": "Review Accepted Translation",
+            "default": false
+          },
+          "expected_preview_digest": {
+            "type": "string",
+            "title": "Expected Preview Digest"
+          },
+          "confirm_language": {
+            "type": "boolean",
+            "title": "Confirm Language",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task",
+          "language",
+          "case_ids",
+          "mode",
+          "expected_preview_digest"
+        ],
+        "title": "BatchAssignBody"
+      },
+      "BatchAssignRequest": {
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": [
+              "translation_review",
+              "annotate",
+              "review"
+            ],
+            "title": "Task"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Case Ids"
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "case",
+              "import",
+              "activity"
+            ],
+            "title": "Sort",
+            "default": "case"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/DocumentRowFilters"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "one",
+              "split"
+            ],
+            "title": "Mode"
+          },
+          "usernames": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Usernames"
+          },
+          "review_accepted_translation": {
+            "type": "boolean",
+            "title": "Review Accepted Translation",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task",
+          "language",
+          "case_ids",
+          "mode"
+        ],
+        "title": "BatchAssignRequest"
+      },
+      "BatchAssignResult": {
+        "properties": {
+          "created": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentView"
+            },
+            "type": "array",
+            "title": "Created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created"
+        ],
+        "title": "BatchAssignResult"
+      },
+      "BatchPersonView": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "person": {
+            "$ref": "#/components/schemas/PersonRefView"
+          },
+          "reads": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reads"
+          },
+          "open_before": {
+            "type": "integer",
+            "title": "Open Before"
+          },
+          "open_after": {
+            "type": "integer",
+            "title": "Open After"
+          },
+          "gets": {
+            "type": "integer",
+            "title": "Gets"
+          },
+          "first_case": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Case"
+          },
+          "last_case": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Case"
+          },
+          "language_mismatch": {
+            "type": "boolean",
+            "title": "Language Mismatch"
+          },
+          "unavailable": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "does_not_read",
+                  "role_missing",
+                  "inactive"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable"
+          },
+          "already_assigned": {
+            "type": "integer",
+            "title": "Already Assigned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "person",
+          "reads",
+          "open_before",
+          "open_after",
+          "gets",
+          "first_case",
+          "last_case",
+          "language_mismatch",
+          "unavailable",
+          "already_assigned"
+        ],
+        "title": "BatchPersonView"
+      },
+      "BatchPreview": {
+        "properties": {
+          "task": {
+            "type": "string",
+            "title": "Task"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "versions": {
+            "type": "integer",
+            "title": "Versions"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/BatchTargetView"
+            },
+            "type": "array",
+            "title": "Targets"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/BatchSkipView"
+            },
+            "type": "array",
+            "title": "Skipped"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/BatchPersonView"
+            },
+            "type": "array",
+            "title": "People"
+          },
+          "per_text": {
+            "type": "integer",
+            "title": "Per Text"
+          },
+          "digest": {
+            "type": "string",
+            "title": "Digest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task",
+          "language",
+          "versions",
+          "targets",
+          "skipped",
+          "people",
+          "per_text",
+          "digest"
+        ],
+        "title": "BatchPreview"
+      },
+      "BatchSkipView": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "waiting_for_review",
+              "not_in_plan",
+              "already_assigned",
+              "step_differs",
+              "discarded"
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "reason"
+        ],
+        "title": "BatchSkipView"
+      },
+      "BatchTargetView": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          },
+          "usernames": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Usernames"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "document_id",
+          "version",
+          "remaining",
+          "usernames"
+        ],
+        "title": "BatchTargetView"
       },
       "Body_create_upload_api_v1_projects__key__uploads_post": {
         "properties": {
@@ -7861,6 +8432,199 @@
         ],
         "title": "DocumentGroupView"
       },
+      "DocumentRowFilters": {
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "case": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case"
+          },
+          "segment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "decision",
+                  "assign",
+                  "progress"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segment"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "decide_report",
+                  "resume_task",
+                  "confirm_final",
+                  "resolve_rejected",
+                  "resolve_queried",
+                  "translation_not_accepted",
+                  "choose_final",
+                  "assign_translation_review",
+                  "translation_review_in_progress",
+                  "assign_annotation",
+                  "annotation_in_progress",
+                  "annotation_review_in_progress",
+                  "waiting_for_translation_review",
+                  "done",
+                  "translation_accepted",
+                  "needs_attention"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translation_review",
+                  "annotation",
+                  "final",
+                  "done"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "review",
+                  "annotate",
+                  "review_and_annotate",
+                  "not_in_plan"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan"
+          },
+          "final": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "missing",
+                  "none"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "native",
+                  "machine_translation",
+                  "human_translation",
+                  "correction"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "translation_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translated",
+                  "automatic_check_failed",
+                  "ready_for_review",
+                  "reviewed",
+                  "accepted"
+                ]
+              },
+              {
+                "type": "string",
+                "const": "accepted_without_review"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Status"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "unassigned",
+                  "open",
+                  "in_progress",
+                  "submitted",
+                  "reopened",
+                  "held"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentRowFilters",
+        "description": "The Documents filters, same names and values as its query parameters."
+      },
       "DocumentRowView": {
         "properties": {
           "case_id": {
@@ -8839,6 +9603,16 @@
               }
             ],
             "title": "Adjudicator Not Annotator"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -9615,6 +10389,9 @@
             },
             "type": "array",
             "title": "Languages"
+          },
+          "open_tasks": {
+            "$ref": "#/components/schemas/OpenTasksView"
           }
         },
         "type": "object",
@@ -9625,7 +10402,8 @@
           "roles",
           "languages"
         ],
-        "title": "Member"
+        "title": "Member",
+        "description": "For non-lead callers ``username`` and ``display_name`` of other people\nare empty (pseudonym only, D1); the caller's own record is complete."
       },
       "MemberChange": {
         "properties": {
@@ -10174,6 +10952,28 @@
         ],
         "title": "OpenTargetView"
       },
+      "OpenTasksView": {
+        "properties": {
+          "translation_review": {
+            "type": "integer",
+            "title": "Translation Review",
+            "default": 0
+          },
+          "annotate": {
+            "type": "integer",
+            "title": "Annotate",
+            "default": 0
+          },
+          "review": {
+            "type": "integer",
+            "title": "Review",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "OpenTasksView",
+        "description": "Non-revoked, unsubmitted assignments of a member per task."
+      },
       "OpenTranslationReviewView": {
         "properties": {
           "assignment_id": {
@@ -10206,6 +11006,16 @@
           "is_me": {
             "type": "boolean",
             "title": "Is Me"
+          },
+          "reviewer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -11617,6 +12427,44 @@
         ],
         "title": "ProgressDocument"
       },
+      "ProgressLedeView": {
+        "properties": {
+          "cases": {
+            "type": "integer",
+            "title": "Cases"
+          },
+          "translations_to_review": {
+            "type": "integer",
+            "title": "Translations To Review"
+          },
+          "versions_to_annotate": {
+            "type": "integer",
+            "title": "Versions To Annotate"
+          },
+          "not_in_plan": {
+            "type": "integer",
+            "title": "Not In Plan"
+          },
+          "needs_decision": {
+            "type": "integer",
+            "title": "Needs Decision"
+          },
+          "to_assign": {
+            "type": "integer",
+            "title": "To Assign"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cases",
+          "translations_to_review",
+          "versions_to_annotate",
+          "not_in_plan",
+          "needs_decision",
+          "to_assign"
+        ],
+        "title": "ProgressLedeView"
+      },
       "ProgressPerson": {
         "properties": {
           "open": {
@@ -11660,6 +12508,62 @@
         ],
         "title": "ProgressPerson"
       },
+      "ProgressStageView": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "review",
+              "annotate"
+            ],
+            "title": "Scope"
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope",
+          "done",
+          "total",
+          "counts"
+        ],
+        "title": "ProgressStageView",
+        "description": "One stage card: rows in ``scope`` (Review or Annotate on), ``done`` of\n``total`` and row counts per state (keys per card, see the spec)."
+      },
+      "ProgressStagesView": {
+        "properties": {
+          "translation_review": {
+            "$ref": "#/components/schemas/ProgressStageView"
+          },
+          "annotation": {
+            "$ref": "#/components/schemas/ProgressStageView"
+          },
+          "final": {
+            "$ref": "#/components/schemas/ProgressStageView"
+          }
+        },
+        "type": "object",
+        "required": [
+          "translation_review",
+          "annotation",
+          "final"
+        ],
+        "title": "ProgressStagesView"
+      },
       "ProgressTotals": {
         "properties": {
           "open": {
@@ -11695,6 +12599,48 @@
         },
         "type": "object",
         "title": "ProgressTotals"
+      },
+      "ProgressWorkloadView": {
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/PersonRefView"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "translation_reviews_open": {
+            "type": "integer",
+            "title": "Translation Reviews Open",
+            "default": 0
+          },
+          "annotations_open": {
+            "type": "integer",
+            "title": "Annotations Open",
+            "default": 0
+          },
+          "reviews_open": {
+            "type": "integer",
+            "title": "Reviews Open",
+            "default": 0
+          },
+          "paused": {
+            "type": "integer",
+            "title": "Paused",
+            "default": 0
+          },
+          "submitted": {
+            "type": "integer",
+            "title": "Submitted",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "person",
+          "username"
+        ],
+        "title": "ProgressWorkloadView"
       },
       "ProjectDocumentSummary": {
         "properties": {
@@ -11882,6 +12828,33 @@
           },
           "totals": {
             "$ref": "#/components/schemas/ProgressTotals"
+          },
+          "lede": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProgressLedeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stages": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProgressStagesView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workload": {
+            "items": {
+              "$ref": "#/components/schemas/ProgressWorkloadView"
+            },
+            "type": "array",
+            "title": "Workload"
           }
         },
         "type": "object",
@@ -13026,6 +13999,16 @@
               "resumed"
             ],
             "title": "Task State"
+          },
+          "reporter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -13721,6 +14704,16 @@
           "active_hold_count": {
             "type": "integer",
             "title": "Active Hold Count"
+          },
+          "reporter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -13827,6 +14820,16 @@
           "submitted": {
             "type": "boolean",
             "title": "Submitted"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -13947,6 +14950,16 @@
           "finding_count": {
             "type": "integer",
             "title": "Finding Count"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -14449,6 +15462,73 @@
         ],
         "title": "Segment",
         "description": "Zero-based Unicode codepoint interval [start, end)."
+      },
+      "SelectionSummary": {
+        "properties": {
+          "cases": {
+            "type": "integer",
+            "title": "Cases"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AssignableStepView"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "skipped": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Skipped"
+          },
+          "common": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssignableStepView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "not_shown": {
+            "type": "integer",
+            "title": "Not Shown",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "cases",
+          "steps",
+          "skipped",
+          "common"
+        ],
+        "title": "SelectionSummary"
+      },
+      "SelectionSummaryRequest": {
+        "properties": {
+          "case_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Case Ids"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/DocumentRowFilters"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_ids"
+        ],
+        "title": "SelectionSummaryRequest"
       },
       "SourceObligationView": {
         "properties": {
@@ -15188,6 +16268,17 @@
               }
             ],
             "title": "Target Language"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
           }
         },
         "type": "object",
@@ -16842,6 +17933,16 @@
               }
             ],
             "title": "Round State"
+          },
+          "person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

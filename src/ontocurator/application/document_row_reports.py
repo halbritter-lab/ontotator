@@ -4,7 +4,7 @@ The expanded row's "More" section lists them so closed and withdrawn reports
 stay findable. One query per page build; the caller holds the project lock.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from sqlalchemy import Connection, and_, func, select
@@ -38,9 +38,16 @@ def report_title(text: str, limit: int = TITLE_LENGTH) -> str:
 
 
 def load_row_reports(
-    conn: Connection, pid: int, row_keys: Iterable[RowKey]
+    conn: Connection,
+    pid: int,
+    row_keys: Iterable[RowKey],
+    people: Mapping[int, Mapping[str, Any]] | None = None,
 ) -> dict[RowKey, list[dict[str, Any]]]:
-    """Reports per (case_id, language), newest first; rows without one are absent."""
+    """Reports per (case_id, language), newest first; rows without one are absent.
+
+    ``people`` (user id -> PersonRefView fields) names the reporters; a
+    reporter missing there is shown by pseudonym alone.
+    """
     wanted = set(row_keys)
     if not wanted:
         return {}
@@ -63,6 +70,7 @@ def load_row_reports(
             ProblemReportRow.reason,
             ProblemReportRow.created_at,
             ProblemReportStateRow.state,
+            ProblemReportRow.reporter_id,
             UserRow.pseudonym,
             active_holds.label("active_hold_count"),
         )
@@ -95,6 +103,14 @@ def load_row_reports(
                 "created_at": row.created_at,
                 "state": row.state,
                 "active_hold_count": row.active_hold_count,
+                "reporter": dict(
+                    (people or {}).get(row.reporter_id)
+                    or {
+                        "pseudonym": row.pseudonym,
+                        "display_name": None,
+                        "is_me": False,
+                    }
+                ),
             }
         )
     return result
