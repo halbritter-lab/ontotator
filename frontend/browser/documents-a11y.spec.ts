@@ -1,11 +1,14 @@
 /**
  * Documents lead table: keyboard, screen reader semantics, deep links, layout,
  * forced colours and reduced motion (plan Tasks 7.4 and 7.5; spec "Testing",
- * "Structure and semantics", "Narrow viewports", "Route query", "Design system changes").
+ * "Structure and semantics", "Narrow viewports", "Route query", "Design system changes"),
+ * on the lead-workflow layout (lead-workflow spec "Screens › Documents", "Accessibility"):
+ * case header with case checkbox, six columns, bar segments All · Needs your decision ·
+ * To assign · In progress, row disclosure "Show details, …", cards at most 700 px wide.
  *
  * Every test builds a fresh project through ``POST /__test_documents__`` and logs
- * in as its lead. Person labels are the users' pseudonyms, read from the project
- * members (the fixture keys users by role name, not by pseudonym).
+ * in as its lead. Person labels are "Display name (pseudonym)" (D1), read from the
+ * project members (the fixture keys users by role name, not by pseudonym).
  */
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
@@ -23,6 +26,8 @@ test.use({ actionTimeout: 15_000 });
 /** "19 Oct, 15:01", optionally with seconds or a year. */
 const TIME = String.raw`\d{1,2} [A-Z][a-z]{2}(?: \d{4})?, \d{2}:\d{2}(?::\d{2})?`;
 const S0_CASE = "synthetic-accepted";
+/** Accessible name of the S0 case header disclosure. */
+const S0_GROUP = `${S0_CASE} · en source + 1 translation`;
 const CONFLICT_TEXT = "The final result or its warnings changed since you opened this. Nothing was saved. Review the current state.";
 
 const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -35,13 +40,17 @@ async function evidence(page: Page, name: string, part?: Locator) {
   if (part) await part.screenshot({ path }); else await page.screenshot({ path, fullPage: true });
 }
 
-/** Pseudonym (person label) per fixture role name. */
+/** Person label "Display name (pseudonym)" per fixture role name; the lead's own reads "(pseudonym, you)". */
 async function labelsOf(page: Page, s: DocumentsScenario): Promise<Record<string, string>> {
   const response = await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(s.project)}/members`);
   expect(response.ok(), await response.text()).toBeTruthy();
   const members = (await response.json()) as Member[];
-  const byUsername = new Map(members.map(member => [member.username, member.pseudonym]));
-  return Object.fromEntries(Object.entries(s.users).map(([name, username]) => [name, byUsername.get(username) ?? username]));
+  const byUsername = new Map(members.map(member => [member.username, member]));
+  return Object.fromEntries(Object.entries(s.users).map(([name, username]) => {
+    const member = byUsername.get(username);
+    if (!member) return [name, username];
+    return [name, `${member.display_name} (${member.pseudonym}${username === s.users.lead ? ", you" : ""})`];
+  }));
 }
 
 const documentsUrl = (s: DocumentsScenario, query = "") => `/#/projects/${encodeURIComponent(s.project)}/documents${query}`;
@@ -69,21 +78,21 @@ function documentsQueryOf(url: string): string[] {
 
 const table = (page: Page) => page.getByRole("table", { name: "Documents", exact: true });
 const disclosure = (page: Page, caseId: string, language: string) =>
-  page.getByRole("button", { name: `Show submissions, ${caseId} · ${language}`, exact: true });
+  page.getByRole("button", { name: `Show details, ${caseId} · ${language}`, exact: true });
 const region = (page: Page, caseId: string, language: string) => page.getByRole("region", { name: `${caseId} · ${language}`, exact: true });
 /** The page's polite live region (outside the table). */
 const live = (page: Page) => page.locator('.documents-page > p[role="status"]');
 const segment = (page: Page, name: string | RegExp) =>
-  page.getByRole("navigation", { name: "Decision filter" }).getByRole("link", { name, exact: typeof name === "string" });
+  page.getByRole("navigation", { name: "Segments", exact: true }).getByRole("link", { name, exact: typeof name === "string" });
 const confirmGroup = (page: Page, title: string) => page.getByRole("group", { name: title, exact: true });
 
-/** Expand a row (if collapsed) and wait until its submissions have loaded. */
+/** Expand a row (if collapsed) and wait until its content (and its submissions, if any) has loaded. */
 async function expand(page: Page, caseId: string, language: string): Promise<Locator> {
   const button = disclosure(page, caseId, language);
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
   await expect(button).toHaveAttribute("aria-expanded", "true");
   const area = region(page, caseId, language);
-  await expect(area.getByRole("heading", { name: /^Submissions \(\d+\)$/, level: 3 })).toBeVisible();
+  await expect(area.getByRole("heading", { name: "More", level: 3 })).toBeVisible();
   await expect(area.getByText("Loading submissions…")).toHaveCount(0);
   return area;
 }
@@ -124,34 +133,45 @@ async function axeViolations(page: Page): Promise<string[]> {
 
 // --- Task 7.4: keyboard, screen reader semantics, live announcements, deep links ---------------- //
 
-test("Tab-only order: filters, bar segments, group header, then Select, row disclosure and Open per row", async ({ page }) => {
+test("Tab-only order: filters, bar segments, selection tools, case header, then each row's controls", async ({ page }) => {
   await openScenario(page, "S0");
   await expect(disclosure(page, S0_CASE, "de")).toBeVisible();
 
   const stops = await tabStops(page, 40);
   const expected = [
     "select:Language",
-    "select:Status",
-    "input:ID",
+    "select:Next step",
+    "select:Plan",
+    "input:Case ID",
     "summary:More filters",
-    "a:All",
+    "a:All (2)",
     "a:Needs your decision (1)",
-    "a:No final result (1)",
-    `button:${S0_CASE}, 2 languages, final 1 of 2`,
-    `input:Select ${S0_CASE} · en`,
-    `button:Show submissions, ${S0_CASE} · en`,
+    "a:To assign (1)",
+    "a:In progress (0)",
+    "input:Select all 1 filtered case",
+    "button:Select by case IDs…",
+    `input:Select ${S0_CASE} (2 languages)`,
+    `button:${S0_GROUP}`,
+    `button:Show details, ${S0_CASE} · en`,
     `a:Open ${S0_CASE} · en`,
-    `button:Show submissions, ${S0_CASE} · de`,
+    `button:Annotate, ${S0_CASE} · en`,
+    `button:Assign annotation…, ${S0_CASE} · en`,
+    `button:Show details, ${S0_CASE} · de`,
     `a:Open ${S0_CASE} · de`,
+    `button:Review, ${S0_CASE} · de`,
+    `button:Annotate, ${S0_CASE} · de`,
+    `button:+2 more steps, ${S0_CASE} · de`,
+    `button:Review changes…, ${S0_CASE} · de`,
   ];
   const positions = expected.map(stop => stops.indexOf(stop));
   expect(positions.filter(position => position < 0).length, `Tab stops: ${stops.join(" | ")}`).toBe(0);
   // Every control is a stop of its own, in document order; nothing is skipped (no roving tabindex).
   expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-  const fromGroup = positions[7];
-  expect(stops.slice(fromGroup, fromGroup + 6)).toEqual(expected.slice(7));
+  const tableStart = expected.indexOf(`input:Select ${S0_CASE} (2 languages)`);
+  const fromCase = positions[tableStart];
+  expect(stops.slice(fromCase, fromCase + expected.length - tableStart)).toEqual(expected.slice(tableStart));
 
-  // Arrow keys do not move focus inside the table (Tab and Shift+Tab only).
+  // Plain arrow keys do not move focus inside the table (Tab and Shift+Tab only).
   const enDisclosure = disclosure(page, S0_CASE, "en");
   await enDisclosure.focus();
   for (const key of ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"]) {
@@ -159,9 +179,9 @@ test("Tab-only order: filters, bar segments, group header, then Select, row disc
     await expect(enDisclosure).toBeFocused();
   }
   await page.keyboard.press("Shift+Tab");
-  await expect(page.getByRole("checkbox", { name: `Select ${S0_CASE} · en`, exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: S0_GROUP, exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
-  await expect(page.getByRole("button", { name: `${S0_CASE}, 2 languages, final 1 of 2`, exact: true })).toBeFocused();
+  await expect(page.getByRole("checkbox", { name: `Select ${S0_CASE} (2 languages)`, exact: true })).toBeFocused();
 
   // No element of the table takes itself out of the Tab order.
   const removed = await table(page).locator("a[href], button, input, select").evaluateAll(elements =>
@@ -177,18 +197,18 @@ test("Tab-only order: filters, bar segments, group header, then Select, row disc
   await expect(enDisclosure).toHaveAttribute("aria-expanded", "false");
 });
 
-test("Screen reader semantics: bar heading and aria-current, group and row headers, Open and View names", async ({ page }) => {
+test("Screen reader semantics: segments and aria-current, case and row headers, Open and View names", async ({ page }) => {
   const { s, labels } = await openScenario(page, "S0");
   const ann = esc(labels["ann-0004"]);
 
-  // Bar: h2 and the active segment.
-  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
-  await expect(segment(page, "All")).toHaveAttribute("aria-current", "page");
-  await expect(segment(page, "Needs your decision (1)")).not.toHaveAttribute("aria-current", /.+/);
-  await expect(segment(page, "No final result (1)")).not.toHaveAttribute("aria-current", /.+/);
+  // Bar: the active segment.
+  await expect(segment(page, "All (2)")).toHaveAttribute("aria-current", "page");
+  for (const other of ["Needs your decision (1)", "To assign (1)", "In progress (0)"]) {
+    await expect(segment(page, other)).not.toHaveAttribute("aria-current", /.+/);
+  }
 
-  // Group header: a disclosure inside <th scope="rowgroup" colspan>, controlling its language rows.
-  const group = page.getByRole("button", { name: `${S0_CASE}, 2 languages, final 1 of 2`, exact: true });
+  // Case header: a disclosure inside <th scope="rowgroup" colspan>, controlling its language rows; the case checkbox beside it.
+  const group = page.getByRole("button", { name: S0_GROUP, exact: true });
   await expect(group).toHaveAttribute("aria-expanded", "true");
   const groupHeader = await group.evaluate(button => {
     const cell = button.closest("th");
@@ -197,12 +217,13 @@ test("Screen reader semantics: bar heading and aria-current, group and row heade
       scope: cell?.getAttribute("scope"), colspan: Number(cell?.getAttribute("colspan") ?? 1),
       controlled: controls.map(id => document.getElementById(id)?.tagName.toLowerCase() ?? "missing"),
       rowgroup: cell?.closest("tbody") != null,
+      checkbox: cell?.querySelector('input[type="checkbox"]')?.getAttribute("aria-label") ?? null,
     };
   });
-  expect(groupHeader).toEqual({ scope: "rowgroup", colspan: 7, controlled: ["tr", "tr"], rowgroup: true });
+  expect(groupHeader).toEqual({ scope: "rowgroup", colspan: 6, controlled: ["tr", "tr"], rowgroup: true, checkbox: `Select ${S0_CASE} (2 languages)` });
   await expect(page.getByRole("rowgroup").filter({ has: group })).toHaveCount(1);
 
-  // Row headers: disclosure in <th scope="row"> named "Show submissions, {text} · {language}"; "Open {text} · {language}".
+  // Row headers: disclosure in <th scope="row"> named "Show details, {text} · {language}"; "Open {text} · {language}".
   for (const language of ["en", "de"]) {
     const button = disclosure(page, S0_CASE, language);
     await expect(button).toHaveAttribute("aria-expanded", "false");
@@ -226,8 +247,13 @@ test("Screen reader semantics: bar heading and aria-current, group and row heade
   expect(controlled.region).toBe(true);
   expect(controlled.cell).toBeGreaterThan(1);
   expect(controlled.labelledBy).toBeTruthy();
-  await expect(area.getByRole("heading", { name: "Issues", level: 3 })).toBeVisible();
+  // Stage blocks are labelled groups with an h3; the current one carries aria-current="step".
+  for (const name of ["Translation review", "Annotation", "Final result"]) {
+    await expect(area.getByRole("group", { name, exact: true }).getByRole("heading", { name, level: 3 })).toBeVisible();
+  }
+  await expect(area.getByRole("group", { name: "Final result", exact: true })).toHaveAttribute("aria-current", "step");
   await expect(area.getByRole("heading", { name: "Submissions (2)", level: 3 })).toBeVisible();
+  await expect(area.getByRole("heading", { name: "More", level: 3 })).toBeVisible();
   const submissions = submissionsTable(area, S0_CASE, "de");
   await expect(submissions.getByRole("link", { name: new RegExp(`^View Annotation · Round 1 · ${ann} · de v1 · ${TIME}$`) })).toHaveText("Round 1");
   await expect(submissions.getByRole("link", { name: new RegExp(`^View Review · Round 1 · ${esc(labels["ann-0003"])} · de v1 · ${TIME}$`) })).toHaveText("Round 1");
@@ -235,7 +261,7 @@ test("Screen reader semantics: bar heading and aria-current, group and row heade
   // The decision segment and a category link carry aria-current.
   await openDocuments(page, s, "?decision=all");
   await expect(segment(page, "Needs your decision (1)")).toHaveAttribute("aria-current", "page");
-  await expect(segment(page, "All")).not.toHaveAttribute("aria-current", /.+/);
+  await expect(segment(page, "All (2)")).not.toHaveAttribute("aria-current", /.+/);
   const categories = page.getByRole("navigation", { name: "Decision categories" });
   await categories.getByRole("link", { name: /^Final result to confirm \(1\)$/ }).click();
   await expect(categories.getByRole("link", { name: /^Final result to confirm \(1\)$/ })).toHaveAttribute("aria-current", "page");
@@ -252,7 +278,7 @@ test("Live announcements: texts shown, previous confirmation closed, Saving…, 
   await segment(page, "Needs your decision (1)").click();
   await expect(segment(page, "Needs your decision (1)")).toHaveAttribute("aria-current", "page");
   await expect(live(page)).toHaveText("1 text shown");
-  await segment(page, "All").click();
+  await segment(page, "All (2)").click();
   await page.getByLabel("Language", { exact: true }).selectOption("");
   await expect(disclosure(page, S0_CASE, "en")).toBeVisible();
 
@@ -315,10 +341,10 @@ test("Deep links: case, language, decision, final, repeated open; pinned row; un
   await expect(disclosure(page, S0_CASE, "de")).toBeFocused();
   await expect(region(page, S0_CASE, "de").getByRole("heading", { name: /^Submissions \(\d+\)$/ })).toBeVisible();
 
-  // case alone: the group header has focus.
+  // case alone: the case header has focus.
   await page.goto("about:blank");
   await openDocuments(page, s, `?case=${S0_CASE}`);
-  await expect(page.getByRole("button", { name: `${S0_CASE}, 2 languages, final 1 of 2`, exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: S0_GROUP, exact: true })).toBeFocused();
 
   // A named row that no longer matches the decision stays visible with a notice.
   await page.goto("about:blank");
@@ -333,10 +359,12 @@ test("Deep links: case, language, decision, final, repeated open; pinned row; un
   await expect(disclosure(page, S0_CASE, "en")).toHaveCount(0);
   await expect(page.getByText("This no longer needs your decision.")).toHaveCount(0);
 
-  // final=missing: the "No final result" segment is current; only the row without a final result.
+  // final=none (the "No final result" segment became the filter "Final result: none", D21): More filters is
+  // open with the filter set; only the row without a final result.
   await page.goto("about:blank");
-  await openDocuments(page, s, "?final=missing");
-  await expect(segment(page, "No final result (1)")).toHaveAttribute("aria-current", "page");
+  await openDocuments(page, s, "?final=none");
+  await expect(page.locator("details.documents-more-filters")).toHaveAttribute("open", "");
+  await expect(page.getByLabel("Final result", { exact: true })).toHaveValue("none");
   await expect(disclosure(page, S0_CASE, "en")).toBeVisible();
   await expect(disclosure(page, S0_CASE, "de")).toHaveCount(0);
 
@@ -373,9 +401,9 @@ test("Deep link page: S15 page 2 of 2", async ({ page }) => {
   await openScenario(page, "S15", "?page=2");
   const pages = page.getByRole("navigation", { name: "Pages" });
   await expect(pages).toContainText("Page 2 of 2");
-  const groups = table(page).getByRole("button", { name: /^case-\d{4}, \d languages?, final \d+ of \d+$/ });
+  const groups = table(page).getByRole("button", { name: /^case-\d{4} · en source( \+ \d translations?)?$/ });
   await expect(groups).toHaveCount(5);
-  await expect(groups.first()).toHaveAccessibleName(/^case-0051, /);
+  await expect(groups.first()).toHaveAccessibleName(/^case-0051 · /);
   // "Next" at the end stays focusable as an aria-disabled link.
   await expect(pages.getByRole("link", { name: "Next", exact: true })).toHaveAttribute("aria-disabled", "true");
 });
@@ -438,33 +466,37 @@ test("axe: default view, decision filter, expanded row with open Keep, 390 px ca
 
 // --- Task 7.5: layout, forced colours, reduced motion ------------------------------------------- //
 
-test("320 CSS px: no horizontal scroll; heading, version, final result and Open stay in view", async ({ page }) => {
+test("320 CSS px: no horizontal scroll; case header, heading, next step, row action and Open stay in view", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   const { s } = await openScenario(page, "S0");
   await expect(page.getByRole("article")).toHaveCount(2);
 
+  const inView = async (fact: Locator, state: string) => {
+    await expect(fact).toBeVisible();
+    const box = (await fact.boundingBox())!;
+    expect(box.x, state).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width, state).toBeLessThanOrEqual(320);
+  };
   const checkReflow = async (state: string) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth), state).toBeLessThanOrEqual(320);
+    await inView(page.getByRole("checkbox", { name: `Select ${S0_CASE} (2 languages)`, exact: true }), `${state} case checkbox`);
+    await inView(page.getByRole("heading", { name: S0_GROUP, level: 2 }), `${state} case title`);
     for (const language of ["en", "de"]) {
       const card = page.getByRole("article", { name: `${S0_CASE} · ${language}`, exact: true });
       const facts = [
         card.getByRole("heading", { name: `${S0_CASE} · ${language}`, level: 3 }),
-        card.locator(".documents-version"),
-        card.locator(".documents-final"),
+        card.locator(".documents-next-step"),
+        card.locator(".documents-action"),
         card.getByRole("link", { name: `Open ${S0_CASE} · ${language}`, exact: true }),
+        card.getByRole("button", { name: `Show details, ${S0_CASE} · ${language}`, exact: true }),
       ];
-      for (const fact of facts) {
-        await expect(fact).toBeVisible();
-        const box = (await fact.boundingBox())!;
-        expect(box.x, `${state} ${language}`).toBeGreaterThanOrEqual(0);
-        expect(box.x + box.width, `${state} ${language}`).toBeLessThanOrEqual(320);
-      }
+      for (const fact of facts) await inView(fact, `${state} ${language}`);
     }
   };
   await checkReflow("collapsed");
   await evidence(page, "320-collapsed");
 
-  await page.getByRole("button", { name: `Show submissions, ${S0_CASE} · de`, exact: true }).click();
+  await page.getByRole("button", { name: `Show details, ${S0_CASE} · de`, exact: true }).click();
   await expect(page.getByRole("article", { name: `${S0_CASE} · de` }).getByRole("heading", { name: "Submissions (2)", level: 3 })).toBeVisible();
   await checkReflow("expanded");
   await evidence(page, "320-expanded");
@@ -475,7 +507,7 @@ test("390 px cards: every interactive target is at least 24 by 24 px, or meets a
   await page.setViewportSize({ width: 390, height: 844 });
   await openScenario(page, "S0");
   await expect(page.getByRole("article")).toHaveCount(2);
-  const toggle = page.getByRole("button", { name: `Show submissions, ${S0_CASE} · de`, exact: true });
+  const toggle = page.getByRole("button", { name: `Show details, ${S0_CASE} · de`, exact: true });
   await toggle.click();
   await expect(page.getByRole("article", { name: `${S0_CASE} · de` }).getByRole("heading", { name: "Submissions (2)", level: 3 })).toBeVisible();
   await page.getByRole("article", { name: `${S0_CASE} · de` }).getByRole("button", { name: "Keep final result…", exact: true }).click();
@@ -493,7 +525,8 @@ test("390 px cards: every interactive target is at least 24 by 24 px, or meets a
       const box = element.getBoundingClientRect();
       return box.width > 0 && box.height > 0 && element.checkVisibility({ visibilityProperty: true, contentVisibilityAuto: true });
     };
-    const cards = Array.from(document.querySelectorAll("article.document-card"));
+    // Every case card: its header (case checkbox) and its language articles.
+    const cards = Array.from(document.querySelectorAll("li.document-case-card"));
     const targets = cards.flatMap(card => Array.from(card.querySelectorAll(selector))).filter(visible);
     const everyTarget = Array.from(document.querySelectorAll(selector)).filter(visible);
     /** A link inside a sentence of running text: inline display, and its block has other text. */
@@ -591,7 +624,7 @@ test("Forced colours: Final row border, pill borders, focus outline, active segm
     expect(outline.width, outline.element).toBeGreaterThan(0);
   }
 
-  const colours = await page.getByRole("navigation", { name: "Decision filter" }).getByRole("link").evaluateAll(links => links.map(link => ({
+  const colours = await page.getByRole("navigation", { name: "Segments", exact: true }).getByRole("link").evaluateAll(links => links.map(link => ({
     current: link.getAttribute("aria-current"), colour: getComputedStyle(link).borderBottomColor, width: parseFloat(getComputedStyle(link).borderBottomWidth),
   })));
   await evidence(page, "forced-colours");
