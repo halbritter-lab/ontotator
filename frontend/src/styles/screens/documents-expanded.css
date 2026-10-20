@@ -5,7 +5,25 @@
 .expanded-row-section > h3 { margin: 0; font-size: var(--size-md); font-weight: var(--weight-strong); }
 .expanded-row-section > h3:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
 
+/* Pipeline blocks: one per planned stage; the current stage has an accent top edge */
+.stage-blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--space-3); min-width: 0; }
+.stage-blocks--none { grid-template-columns: minmax(0, 1fr); }
+.stage-block { display: grid; align-content: start; gap: var(--space-2); min-width: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); }
+/* Width as well as colour, so the edge stays visible in forced colours */
+.stage-block--current { border-top: 3px solid var(--accent); padding-top: calc(var(--space-2) - 2px); }
+.stage-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.stage-block-head > h3 { margin: 0; font-size: var(--size-md); font-weight: var(--weight-strong); }
+.stage-block-head > h3:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
+.stage-block-line,
+.stage-blocks-note { margin: 0; overflow-wrap: anywhere; }
+.stage-blocks-note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--text-muted); grid-column: 1 / -1; }
+.stage-block-list > li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); overflow-wrap: anywhere; }
+.stage-block-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.stage-block-links:empty { display: none; }
+.text-version-record { margin: 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
+
 .expanded-row-issues,
+.stage-block-list,
 .selection-notice-lines,
 .submissions-pending,
 .text-versions,
@@ -52,7 +70,7 @@
 .technical-details dt { color: var(--text-muted); }
 .technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
 
-@media (max-width: 699px) {
+@media (max-width: 700px) {
   .technical-details { grid-template-columns: minmax(0, 1fr); }
   .technical-details dd { margin-bottom: var(--space-1); }
 }
@@ -60,4 +78,5 @@
 @media (forced-colors: active) {
   .selection-notice { border-left-color: CanvasText; }
   .text-version { border-left-color: CanvasText; }
+  .stage-block--current { border-top-color: CanvasText; }
 }

@@ -3,7 +3,8 @@ import type { AssignmentView, DocumentRowView, DocumentVersionView, Member, Vari
 import { AssignmentActions } from "../admin/AssignmentActions";
 import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
-import { personLabel } from "../app/submissionLabels";
+import { personLabel as identityLabel, type PersonRef } from "../app/identity";
+import { formatTime, personLabel } from "../app/submissionLabels";
 import { Button, Checkbox, StatusBadge, type StatusTone } from "../ui";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { originLabels } from "../admin/variantMetadata";
@@ -25,6 +26,66 @@ export interface TextVersionsTools {
   /** Per-version bulk selection (rows that show "Choose in Text versions"). */
   bulkSelected?: ReadonlySet<string>;
   onToggleBulk?: (documentId: string) => void;
+}
+
+/** Acceptance record of a translation version (spec "Annotate without review: acceptance record"). */
+export interface VersionAcceptance {
+  source: "package" | "lead" | "override";
+  reason?: string | null;
+  accepted_at?: string | null;
+  accepted_by?: PersonRef | null;
+  /** Package metadata (`translation.review`), kept only as given. */
+  reviewer?: string | null;
+  reviewed_at?: string | null;
+}
+
+/** Discard record of a text version (spec "Discarding a language version"). */
+export interface VersionDiscard {
+  reason?: string | null;
+  discarded_at?: string | null;
+  discarded_by?: PersonRef | null;
+}
+
+/**
+ * Records the expanded row reads from a `DocumentVersionView` when the API sends them
+ * (`acceptance`, `discarded`); both stay optional so rows without them render unchanged.
+ */
+export interface VersionRecords {
+  acceptance?: VersionAcceptance | null;
+  discarded?: VersionDiscard | null;
+}
+
+export function acceptanceOf(version: DocumentVersionView): VersionAcceptance | null {
+  return (version as DocumentVersionView & VersionRecords).acceptance ?? null;
+}
+
+/** A version is discarded by its own record or because every version of the row is discarded. */
+export function isDiscarded(row: Pick<DocumentRowView, "plan_row">, version: DocumentVersionView): boolean {
+  return !!row.plan_row?.discarded || !!(version as DocumentVersionView & VersionRecords).discarded;
+}
+
+const dateOnly = (iso: string, now?: Date) => formatTime(iso, { now }).split(", ")[0];
+
+/**
+ * "Accepted: reviewed outside Ontocurator · Project lead (ann-0002) · 20 Oct, 11:40 · {reason}",
+ * "Accepted: marked as reviewed in the package · R. Roe, 1 Oct".
+ */
+export function acceptanceLabel(acceptance: VersionAcceptance, now?: Date): string {
+  if (acceptance.source === "package") {
+    const given = [acceptance.reviewer?.trim(), acceptance.reviewed_at ? dateOnly(acceptance.reviewed_at, now) : null].filter(Boolean).join(", ");
+    return ["Accepted: marked as reviewed in the package", given].filter(Boolean).join(" · ");
+  }
+  const what = acceptance.source === "lead" ? "Accepted: reviewed outside Ontocurator" : "Accepted: without review at import";
+  return [what, acceptance.accepted_by ? identityLabel(acceptance.accepted_by) : null, acceptance.accepted_at ? formatTime(acceptance.accepted_at, { now }) : null,
+    acceptance.reason?.trim()].filter(Boolean).join(" · ");
+}
+
+/** "Discarded · Project lead (ann-0002) · 19 Oct, 08:00 · {reason}"; "Discarded" without a record. */
+export function discardLabel(version: DocumentVersionView, now?: Date): string {
+  const record = (version as DocumentVersionView & VersionRecords).discarded;
+  if (!record) return "Discarded";
+  return ["Discarded", record.discarded_by ? identityLabel(record.discarded_by) : null, record.discarded_at ? formatTime(record.discarded_at, { now }) : null,
+    record.reason?.trim()].filter(Boolean).join(" · ");
 }
 
 function badgeTone(version: DocumentVersionView): StatusTone {
@@ -49,10 +110,12 @@ export interface TextVersionsProps {
   query: ProjectDocumentsQuery;
   onNavigate: (route: Route) => void;
   tools?: TextVersionsTools;
+  /** Reference time for the current-year rule (tests). */
+  now?: Date;
 }
 
 /** Child rows per text version of a row: origin, status with review decision, chain name, work and version actions. */
-export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(function TextVersions({ row, projectKey, query, onNavigate, tools }, ref) {
+export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(function TextVersions({ row, projectKey, query, onNavigate, tools, now }, ref) {
   const documents = Object.keys(query).length ? { documents: query } : {};
   const chooseInVersions = row.bulk.mode === "choose_in_versions";
   return <ul ref={ref} className="text-versions">
@@ -64,6 +127,8 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
       const variant = tools?.variants.get(version.document_id);
       const fullName = `${name} of ${rowName(row)}`;
       const checkboxId = `text-version-select-${encodeURIComponent(version.document_id)}`;
+      const discarded = isDiscarded(row, version);
+      const acceptance = acceptanceOf(version);
       let actions: ReactNode = null;
       if (tools) {
         actions = <>
@@ -78,9 +143,12 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
           <span className="text-version-name">{name}</span>
           <span className="text-version-origin">{originText(version, row)}</span>
           {badge && <StatusBadge tone={badgeTone(version)}>{badge}</StatusBadge>}
+          {discarded && <StatusBadge tone="neutral">Discarded</StatusBadge>}
           <span className="text-version-chain">{version.chain_name}</span>
           {!version.matches_filter && <span className="cell-secondary">Does not match the filters</span>}
         </div>
+        {acceptance && <p className="text-version-record">{acceptanceLabel(acceptance, now)}</p>}
+        {discarded && discardLabel(version, now) !== "Discarded" && <p className="text-version-record">{discardLabel(version, now)}</p>}
         {work.length > 0 && <ul className="text-version-work" aria-label={`Assignments on ${name}`}>
           {work.map(item => {
             const assignment = tools?.assignments.find(entry => entry.id === item.assignment_id && entry.document_id === version.document_id && !entry.revoked_at);

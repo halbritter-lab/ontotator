@@ -486,6 +486,15 @@ it("passes the current project rule, not the final's snapshot, to the expanded r
   expect(expandedProps.at(-1)?.adjudicatorNotAnnotator).toBe(true);
 });
 
+it("passes the case's plan revision and the row assign dialog to the expanded row", async () => {
+  const s5 = scenarioS5();
+  mockRows(page([{ ...s5.group, plan_revision: 7 }]), s5.submissions);
+  renderPage({ query: { open: [rowKey("case-0377", "en")] } });
+  await screen.findByRole("heading", { name: /^Submissions \(/ });
+  expect(expandedProps.at(-1)?.planRevision).toBe(7);
+  expect(typeof expandedProps.at(-1)?.onAssign).toBe("function");
+});
+
 it("reloads the submissions of open rows when the rows refresh", async () => {
   const s1 = scenarioS1();
   mockRows(s1.page, s1.submissions);

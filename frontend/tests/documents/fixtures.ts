@@ -21,6 +21,7 @@ import type {
   RowSubmissions,
 } from "../../src/api/client";
 import type { components } from "../../src/api/generated";
+import type { VersionRecords } from "../../src/documents/TextVersions";
 
 export type WorkItemView = components["schemas"]["WorkItemView"];
 export type ReportIssueView = components["schemas"]["ReportIssueView"];
@@ -524,4 +525,13 @@ export function planRow(caseId: string, language: string, next: NextStepView | n
 export function notInPlanRow(caseId: string, language: string, overrides: Partial<DocumentRowView> = {}): DocumentRowView {
   const isSource = overrides.is_source ?? false;
   return planRow(caseId, language, null, { plan_row: { review: false, annotate: false, review_applicable: !isSource, discarded: false }, in_plan: false, ...overrides });
+}
+
+// ---- Lead workflow (L4): acceptance and discard records on text versions ----
+
+export type RecordedVersion = DocumentVersionView & VersionRecords;
+
+/** A text version with optional acceptance and discard records (fields the expanded row reads when present). */
+export function recordedVersion(overrides: Partial<RecordedVersion> & Pick<RecordedVersion, "document_id">): RecordedVersion {
+  return version(overrides) as RecordedVersion;
 }

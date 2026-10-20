@@ -8,7 +8,7 @@ import { TextVersions, type TextVersionsTools } from "../../src/documents/TextVe
 import type { RowSubmissionsState } from "../../src/documents/useRowSubmissions";
 import { refKey } from "../../src/variants/versionState";
 import {
-  final, item, round, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS6, submission, submissions, translationReview, version, work, type DocumentsScenario,
+  final, item, notInPlanRow, planRow, recordedVersion, round, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS6, stepOf, submission, submissions, translationReview, version, work, type DocumentsScenario,
 } from "./fixtures";
 
 afterEach(cleanup);
@@ -58,11 +58,11 @@ const chainData = (overrides: Partial<RowSubmissions> = {}) => submissions("c", 
 
 const noticeLines = (container: HTMLElement) => [...container.querySelectorAll(".selection-notice-lines > li")].map(line => line.textContent);
 
-it("renders a region labelled by the row with Submissions and More but no Issues without issues", () => {
+it("renders a region labelled by the row with stage blocks, Submissions and More but no Issues without issues", () => {
   const { target, data } = scenarioRow(scenarioS1(), "en");
   renderRow(target, data);
   const region = screen.getByRole("region", { name: "case-0042 · en" });
-  expect(within(region).getAllByRole("heading", { level: 3 }).map(heading => heading.textContent)).toEqual(["Submissions (2)", "More"]);
+  expect(within(region).getAllByRole("heading", { level: 3 }).map(heading => heading.textContent)).toEqual(["Annotation", "Final result", "Submissions (2)", "More"]);
   expect(screen.getByRole("heading", { name: "Submissions (2)" }).getAttribute("tabindex")).toBe("-1");
 });
 
@@ -354,4 +354,109 @@ it("names the people on text version work with display name and pseudonym", () =
   const list = screen.getByRole("list", { name: "Assignments on v1" });
   expect(within(list).getByText("Ana Weber (ann-0004) · Annotation · In progress")).toBeTruthy();
   expect(within(list).getByText("ann-0005 · Annotation · Submitted")).toBeTruthy();
+});
+
+// ---- Lead workflow (L4) ----
+
+it("shows Submissions only when there is one or a final", () => {
+  const target = planRow("case-0101", "de", stepOf("assign_translation_review"));
+  renderRow(target, submissions("case-0101", "de"));
+  expect(screen.queryByRole("heading", { name: /^Submissions/ })).toBeNull();
+  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByText("No submissions yet.")).toBeNull();
+  cleanup();
+
+  // While loading without a final result nothing but a status is shown.
+  render(<ExpandedRow row={target} projectKey="p" query={query} submissions={state(null, { loading: true })} onNavigate={vi.fn()} now={now} />);
+  expect(screen.queryByRole("heading", { name: /^Submissions/ })).toBeNull();
+  expect(screen.getByText("Loading submissions…")).toBeTruthy();
+  cleanup();
+
+  const withFinal = { ...target, final: final({ case_id: "case-0101", language: "de", document_id: "case-0101-de", submission_id: "s1" }) };
+  renderRow(withFinal, submissions("case-0101", "de"));
+  expect(screen.getByRole("heading", { name: "Submissions (0)" })).toBeTruthy();
+  cleanup();
+
+  const { target: s1, data } = scenarioRow(scenarioS1(), "en");
+  renderRow({ ...s1, final: null }, data);
+  expect(screen.getByRole("heading", { name: "Submissions (2)" })).toBeTruthy();
+});
+
+it("More holds Start consolidation…, Text versions, Problem reports, Technical details with IDs and plan revision", () => {
+  const { target, data } = scenarioRow(scenarioS1(), "en");
+  const withReport = { ...target, problem_reports: [{ report_id: "r-1", title: "Cut off", reporter_label: "ann-0004", created_at: "2026-10-19T08:00:00Z", state: "open" as const, active_hold_count: 0 }] };
+  renderRow(withReport, data, { planRevision: 4 });
+  const more = screen.getByRole("heading", { name: "More" }).parentElement!;
+  const details = [...more.querySelectorAll("details")];
+  expect(details.map(entry => entry.querySelector("summary")!.textContent)).toEqual(["Start consolidation…", "Text versions (1)", "Problem reports (1)", "Technical details"]);
+  const technical = details[3];
+  expect(within(technical).getByText("Plan revision").nextElementSibling!.textContent).toBe("4");
+  expect(technical.textContent).toContain("case-0042-en");
+});
+
+it("labels acceptances and discarded versions in Text versions", () => {
+  const lead = recordedVersion({
+    document_id: "c-de", chain_name: "DeepL", origin: "machine_translation", translation_status: "accepted",
+    acceptance: { source: "lead", reason: "Checked by the clinic", accepted_at: "2026-10-20T11:40:00Z", accepted_by: { pseudonym: "ann-0002", display_name: "Project lead", is_me: false } },
+  });
+  const pkg = recordedVersion({
+    document_id: "c-de-b", chain_id: "c-de-b", chain_name: "Provider B", origin: "machine_translation", translation_status: "accepted",
+    acceptance: { source: "package", reviewer: "R. Roe", reviewed_at: "2026-10-01T09:00:00Z" },
+  });
+  const dropped = recordedVersion({
+    document_id: "c-de-c", chain_id: "c-de-c", chain_name: "Provider C", origin: "machine_translation", translation_status: "reviewed", latest_review_decision: "rejected",
+    discarded: { reason: "Wrong language", discarded_at: "2026-10-19T08:00:00Z", discarded_by: { pseudonym: "ann-0002", display_name: "Project lead", is_me: false } },
+  });
+  const target = planRow("c", "de", stepOf("assign_annotation", { stage: "annotation" }), { versions: [lead, pkg, dropped], parallel_roots: true });
+  renderRow(target, submissions("c", "de"));
+  const versions = screen.getByText("Text versions (3)", { selector: "summary" }).closest("details")!;
+  const items = [...versions.querySelectorAll(".text-version")] as HTMLElement[];
+  expect(within(items[0]).getByText(`Accepted: reviewed outside Ontocurator · Project lead (ann-0002) · ${time("2026-10-20T11:40:00Z")} · Checked by the clinic`)).toBeTruthy();
+  expect(within(items[1]).getByText(`Accepted: marked as reviewed in the package · R. Roe, ${time("2026-10-01T09:00:00Z").split(", ")[0]}`)).toBeTruthy();
+  expect(within(items[2]).getByText("Discarded").closest(".status-pill")).toBeTruthy();
+  expect(within(items[2]).getByText(`Discarded · Project lead (ann-0002) · ${time("2026-10-19T08:00:00Z")} · Wrong language`)).toBeTruthy();
+  const technical = screen.getByText("Technical details").closest("details")!;
+  expect(technical.textContent).toContain("Accepted: reviewed outside Ontocurator");
+  expect(technical.textContent).toContain("Accepted: marked as reviewed in the package");
+  expect(technical.textContent).toContain("Discarded · Project lead (ann-0002)");
+
+  // A row whose every version is discarded labels them without per-version records.
+  cleanup();
+  const all = planRow("c", "fr", null, { plan_row: { review: true, annotate: true, review_applicable: true, discarded: true }, in_plan: false });
+  renderRow(all, submissions("c", "fr"));
+  const list = screen.getByText("Text versions (1)").closest("details")!;
+  expect(within(list).getByText("Discarded").closest(".status-pill")).toBeTruthy();
+});
+
+it("offers Assign a new review… for lead and override acceptances only", () => {
+  const accepted = (source: "lead" | "override" | "package") => planRow("c", "de", stepOf("assign_annotation", { stage: "annotation" }), {
+    plan_row: { review: false, annotate: true, review_applicable: true, discarded: false },
+    versions: [recordedVersion({
+      document_id: "c-de", chain_name: "DeepL", origin: "machine_translation", translation_status: "accepted", accepted_without_review: source === "override",
+      acceptance: { source, reason: source === "package" ? null : "Reviewed by the partner site", accepted_at: "2026-10-20T11:40:00Z", accepted_by: null },
+    })],
+  });
+  for (const source of ["lead", "override"] as const) {
+    const onAssign = vi.fn();
+    const target = accepted(source);
+    renderRow(target, submissions("c", "de"), { onAssign });
+    const block = screen.getByRole("group", { name: "Translation review" });
+    fireEvent.click(within(block).getByRole("button", { name: "Assign a new review…" }));
+    expect(onAssign).toHaveBeenCalledWith(target, "translation_review", { newReviewOfAccepted: true });
+    cleanup();
+  }
+  renderRow(accepted("package"), submissions("c", "de"), { onAssign: vi.fn() });
+  expect(screen.getByRole("group", { name: "Translation review" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Assign a new review…" })).toBeNull();
+});
+
+it("keeps open problem reports listed under More for rows not in plan", () => {
+  const target = notInPlanRow("c", "de", {
+    problem_reports: [{ report_id: "r-9", title: "Wrong text", reporter_label: "ann-0004", created_at: "2026-10-19T08:00:00Z", state: "open", active_hold_count: 1 }],
+  });
+  renderRow(target, submissions("c", "de"));
+  expect(screen.getByText("Not in plan")).toBeTruthy();
+  const reports = screen.getByText("Problem reports (1)").closest("details")!;
+  expect(within(reports).getByRole("listitem").textContent).toContain("Wrong text · ann-0004");
+  expect(within(reports).getByRole("link", { name: "Open report" })).toBeTruthy();
 });

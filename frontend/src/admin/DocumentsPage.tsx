@@ -717,6 +717,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         renderConfirm={submission => (own && own.request.kind !== "keep" && own.request.submissionId === submission.submission_id ? confirmElement(own) : null)}
         keepConfirm={own?.request.kind === "keep" ? confirmElement(own) : undefined}
         confirmBusy={confirm?.busy ?? false} layout={options?.layout}
+        planRevision={planSaves.revisionOf(row.case_id, groupOf(row.case_id)?.plan_revision ?? 1)} onAssign={onAssign}
         autoAction={autoAction?.rowKey === rowKeyOf(row) ? autoAction : null} onAutoActionDone={() => setAutoAction(null)} />
     </>;
   };
@@ -911,6 +912,8 @@ interface ExpandedRowLoaderProps {
   onAnnounce: (message: string) => void;
   textVersionTools?: TextVersionsTools;
   layout?: ExpandedRowProps["layout"];
+  planRevision?: ExpandedRowProps["planRevision"];
+  onAssign?: ExpandedRowProps["onAssign"];
   /** Opens a final-result confirmation built from this row and its loaded submissions. */
   onOpenConfirm: (request: FinalConfirmRequest) => void;
   renderConfirm: ExpandedRowProps["renderConfirm"];
