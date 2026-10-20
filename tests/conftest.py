@@ -75,3 +75,59 @@ def database_per_workspace(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-
     for db in created:
         db.close()
     pg_harness.reset()
+
+
+# Modules that test hashing, the supplied-hash policy or rehash-on-login keep
+# the production Argon2 parameters; every other test hashes cheaply.
+_PRODUCTION_ARGON2_PREFIXES = (
+    "test_passwords",
+    "test_accounts",
+    "test_sessions",
+    "test_admin_cli",
+)
+_CHEAP_ARGON2: dict[str, object] = {}
+
+
+def _cheap_argon2_values() -> dict[str, object]:
+    """Low-cost stand-ins for the hasher state in ``ontocurator.auth.passwords``.
+
+    The parameters (t=1, m=8 MiB, p=1) exist only here, in the test suite;
+    the production module has no switch that could select them.
+    """
+    if not _CHEAP_ARGON2:
+        from argon2 import PasswordHasher, Type, extract_parameters
+
+        time_cost, memory_cost, parallelism = 1, 8_192, 1
+        hasher = PasswordHasher(
+            time_cost=time_cost,
+            memory_cost=memory_cost,
+            parallelism=parallelism,
+            type=Type.ID,
+        )
+        dummy = hasher.hash(b"ontocurator timing equaliser")
+        _CHEAP_ARGON2.update(
+            _HASHER=hasher,
+            _DUMMY_HASH=dummy,
+            _OUR_PARAMETERS=extract_parameters(dummy),
+            TIME_COST=time_cost,
+            MEMORY_COST=memory_cost,
+            PARALLELISM=parallelism,
+        )
+    return _CHEAP_ARGON2
+
+
+@pytest.fixture(autouse=True)
+def cheap_argon2(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hash with low Argon2 cost outside the password, account and session tests.
+
+    Hashing, verifying, ``needs_rehash`` and ``assert_policy`` all switch
+    together, so hashes made in a test are "ours" and logins do not rehash.
+    """
+    if request.path.name.startswith(_PRODUCTION_ARGON2_PREFIXES):
+        return
+    from ontocurator.auth import passwords
+
+    for name, value in _cheap_argon2_values().items():
+        monkeypatch.setattr(passwords, name, value)
