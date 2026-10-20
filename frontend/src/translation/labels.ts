@@ -1,4 +1,3 @@
-import { textLabel } from "../app/identity";
 import type { TaskSummary } from "../api/client";
 import type { ClinicalCategory, IssueCode, ReviewDecisionCode } from "./reviewRules";
 
@@ -72,8 +71,7 @@ export const decisionOutcomes: Readonly<Record<ReviewDecisionCode, string>> = {
 
 /** The "Next task" button after submitting (spec A.5). */
 export function nextTaskLabel(task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language">): string {
-  if (task.case_id) return `Next task: ${textLabel({ case_id: task.case_id, language: task.language })}`;
-  return `Next task: ${task.external_id ?? task.document_id} (${task.language})`;
+  return `Next task: ${task.external_id ?? task.case_id ?? task.document_id} (${task.language})`;
 }
 
 /** Open tasks left in the project after submitting, besides the one just submitted. */
