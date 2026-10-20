@@ -12,7 +12,12 @@ import type { ReviewDecisionCode } from "../src/translation/reviewRules";
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }) {
   vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
-  vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ get matches() { return !viewport || viewport.width >= 1100; }, media: query, onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: (_: string, cb: () => void) => viewport?.listeners.add(cb), removeEventListener: (_: string, cb: () => void) => viewport?.listeners.delete(cb), dispatchEvent: () => true })));
+  const width = () => viewport?.width ?? 1440;
+  const evaluate = (query: string) => {
+    const min = /min-width:\s*(\d+)px/.exec(query), max = /max-width:\s*(\d+)px/.exec(query);
+    return (!min || width() >= Number(min[1])) && (!max || width() <= Number(max[1]));
+  };
+  vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ get matches() { return evaluate(query); }, media: query, onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: (_: string, cb: () => void) => viewport?.listeners.add(cb), removeEventListener: (_: string, cb: () => void) => viewport?.listeners.delete(cb), dispatchEvent: () => true })));
   const open = vi.spyOn(api, "openTranslationReview").mockResolvedValue(workspace);
   const save = vi.spyOn(api, "saveTranslationReviewDraft").mockResolvedValue({ revision: 41 });
   const submit = vi.spyOn(api, "submitTranslationReview").mockResolvedValue(reviewRecord());
@@ -45,8 +50,10 @@ it("opens the exact source, inherited run and correction baseline with no defaul
   expect(screen.getByRole("region", { name: "Source (en)" }).textContent).toContain("Second paragraph.");
   expect(screen.getByText(/Example MT/)).toBeDefined();
   expect(screen.getByRole("heading", { name: "Automatic translation checks" })).toBeDefined();
-  expect(screen.getByText("1 automatic check failed")).toBeDefined();
-  expect(within(screen.getByText("1 automatic check failed").closest(".notice") as HTMLElement).getByText("Units added in translation")).toBeDefined();
+  const band = screen.getByRole("region", { name: "Automatic translation checks" });
+  expect(band.textContent).toContain("1 automatic check failed: Units added in translation");
+  expect(screen.queryByText(/A unit changed/)).toBeNull();
+  fireEvent.click(within(band).getByRole("button", { name: "Details" }));
   expect(screen.getAllByText(/A unit changed/)).toHaveLength(2);
   expect(screen.getAllByRole("radio").every(n => !(n as HTMLInputElement).checked)).toBe(true);
   expect(submitButton().disabled).toBe(true);
@@ -247,15 +254,16 @@ it("clinical-off clears categories through the actual controlled form but retain
 });
 it("couples only opted-in reading views and clears the request on return to editing", async () => {
   setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
-  const box=screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
-  expect(box.checked).toBe(false); expect(box.disabled).toBe(true);
+  expect(screen.queryByRole('checkbox',{name:'Couple scrolling'})).toBeNull();
   fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'}));
-  expect(box.disabled).toBe(false); fireEvent.click(box);
+  const box=screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'});
+  expect(box.checked).toBe(false); expect(box.disabled).toBe(false); fireEvent.click(box);
   expect(screen.getByText('Paragraphs are paired by position, not by meaning')).toBeDefined();
   expect(screen.getByLabelText('Paragraph pairing')).toBeDefined();
   fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'}));
-  expect(box.checked).toBe(false); expect(box.disabled).toBe(true);
-  fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'})); expect(box.checked).toBe(false);
+  expect(screen.queryByRole('checkbox',{name:'Couple scrolling'})).toBeNull();
+  fireEvent.click(screen.getByRole('checkbox',{name:'Show changes'}));
+  expect(screen.getByRole<HTMLInputElement>('checkbox',{name:'Couple scrolling'}).checked).toBe(false);
 });
 it("uses only the workspace's comparison choices and shows passed inherited checks on demand", async () => {
   const workspace = reviewWorkspace();
@@ -266,6 +274,7 @@ it("uses only the workspace's comparison choices and shows passed inherited chec
   const select = screen.getByRole("combobox", { name: "Comparison translation" });
   expect(Array.from((select as HTMLSelectElement).options).map(option => option.value)).toEqual(["comparison-1", "comparison-2"]);
   fireEvent.change(select, { target: { value: "comparison-2" } }); expect(screen.getByText("Second comparison")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Details" }));
   const all = screen.getByText("Show all checks").closest("details") as HTMLDetailsElement;
   expect(all.open).toBe(false);
   expect(within(all).getAllByRole("listitem").map(item => item.textContent)).toEqual(["Failed Units added in translation: A unit changedTechnical codeunits_added", "Passed NumbersTechnical codenumbers"]);
@@ -359,22 +368,19 @@ it('pauses read-only coupling while stacked and retains opt-in through a resize'
   const resize = (width: number) => act(() => { viewport.width = width; viewport.listeners.forEach(listener => listener()); });
   setup(reviewWorkspace({ read_only: true, submitted_record: reviewRecord() }), false, viewport);
   await screen.findByRole('textbox', { name: 'Translation (de)' });
-  const box = screen.getByRole<HTMLInputElement>('checkbox', { name: 'Couple scrolling' });
-  expect(box.disabled).toBe(true);
-  expect(box.checked).toBe(false);
-  expect(document.getElementById(box.getAttribute('aria-describedby')!)?.textContent).toMatch(/widen.*1100/i);
+  const couple = () => screen.queryByRole<HTMLInputElement>('checkbox', { name: 'Couple scrolling' });
+  expect(couple()).toBeNull();
+  expect(screen.queryByText(/widen/i)).toBeNull();
   resize(1100);
-  expect(box.disabled).toBe(false);
-  expect(box.checked).toBe(false);
-  fireEvent.click(box);
+  expect(couple()!.checked).toBe(false);
+  fireEvent.click(couple()!);
   expect(screen.getByRole('status', { name: 'Paragraph pairing' })).toBeDefined();
   resize(1099);
-  expect(box.disabled).toBe(true);
-  expect(box.checked).toBe(false);
+  expect(couple()).toBeNull();
   expect(screen.queryByText('Paragraphs are paired by position, not by meaning')).toBeNull();
   expect(screen.queryByRole('status', { name: 'Paragraph pairing' })).toBeNull();
   resize(1440);
-  expect(box.checked).toBe(true);
+  expect(couple()!.checked).toBe(true);
 });
 
 const radio = (name: string) => screen.getByRole("radio", { name }) as HTMLInputElement;
@@ -496,4 +502,65 @@ it("shows the key hint line in the rail footer", async () => {
   await screen.findByRole("textbox", { name: "Translation (de)" });
   const hint = screen.getByText("Ctrl + Enter submits · 1–4 choose a decision outside the text");
   expect(hint.closest(".translation-decision-footer")).not.toBeNull();
+});
+
+it("puts the document name, meta and tools in one bar without a back link", async () => {
+  setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  const title = screen.getByRole("heading", { level: 1, name: "EN 1/7" });
+  const bar = title.closest(".translation-review-bar") as HTMLElement;
+  expect(bar).not.toBeNull();
+  expect(screen.queryByRole("link", { name: "Back to my tasks" })).toBeNull();
+  expect(within(bar).getByText("Translation details").closest("details")).not.toBeNull();
+  expect(within(bar).getByRole("button", { name: "Reload from server" })).toBeDefined();
+  expect(bar.textContent).toContain("English");
+  expect(bar.textContent).not.toContain("Translation review ·");
+});
+it("folds the text toolbar into the column heads", async () => {
+  setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(screen.getByRole("checkbox", { name: "Show changes" }).closest(".translation-column-head")?.textContent).toContain("Translation (de)");
+  expect(screen.queryByRole("group", { name: "Text view" })).toBeNull();
+});
+it("hides Couple scrolling while it is unavailable and offers it on a read-only target at 1440 px", async () => {
+  setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(screen.queryByRole("checkbox", { name: "Couple scrolling" })).toBeNull();
+  expect(screen.queryByText("Coupled scrolling is available in read-only views.")).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show changes" }));
+  expect(screen.getByRole("checkbox", { name: "Couple scrolling" }).closest(".translation-column-head")?.textContent).toContain("Translation (de)");
+});
+it("shows the pinned bottom bar with the decision and the only Submit button below 1100 px", async () => {
+  setup(undefined, false, { width: 800, listeners: new Set() });
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  const submits = screen.getAllByRole("button", { name: "Submit review…" });
+  expect(submits).toHaveLength(1);
+  const bar = submits[0].closest(".translation-pinned-bar") as HTMLElement;
+  expect(bar).not.toBeNull();
+  expect(bar.getAttribute("role")).toBe("region");
+  expect(bar.getAttribute("aria-label")).toBe("Decision and submit");
+  expect(bar.textContent).toContain("Decision: Not chosen");
+  expect(submits[0].getAttribute("aria-describedby")).toBe("review-submit-reason");
+  expect(document.querySelectorAll("#review-submit-reason")).toHaveLength(1);
+  expect(document.querySelector(".translation-decision-footer")).toBeNull();
+  fireEvent.click(screen.getByRole("radio", { name: "Query" }));
+  expect(bar.textContent).toContain("Decision: Query");
+  fireEvent.click(within(bar).getByRole("button", { name: "Change ↓" }));
+  expect(document.activeElement).toBe(document.querySelector("[data-decision-legend]"));
+  expect(screen.getAllByRole("button", { name: "Submit review…" })).toHaveLength(1);
+  expect(submitButton().getAttribute("aria-describedby")).toBe("review-submit-reason");
+});
+it("keeps the rail footer with Submit at 1440 px and renders no pinned bar", async () => {
+  setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(screen.getAllByRole("button", { name: "Submit review…" })).toHaveLength(1);
+  expect(submitButton().closest(".translation-decision-footer")).not.toBeNull();
+  expect(document.querySelector(".translation-pinned-bar")).toBeNull();
+  expect(screen.queryByRole("region", { name: "Decision and submit" })).toBeNull();
+});
+it("keeps Skip to decision", async () => {
+  setup(undefined, false, { width: 800, listeners: new Set() });
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(screen.getByRole("button", { name: "Skip to decision" }));
+  expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Your review" }));
 });

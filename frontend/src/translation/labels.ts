@@ -98,8 +98,14 @@ export const checkExplanations: Readonly<Record<string, string>> = {
   numbers_changed: "The translation run's check found numbers in the translation that differ from those in the source.",
 };
 export const unknownCheckExplanation = "The translation run reported this check as failed. Ontocurator has no description for it; ask the project lead what it checks.";
-export const checkNoLocation = "This check does not point to a text location. Compare the source and the translation yourself.";
-export const checkDeviationGuidance = "Choose Accepted unchanged and say in the rationale why the difference is correct. If it changes the clinical meaning, choose Query or Rejected with the category Number or unit.";
+export const checkNoLocation = "It does not point to a text location; compare the texts yourself.";
+
+const valueCheckCodes: ReadonlySet<string> = new Set(["units_added", "numbers_changed"]);
+/** What to do when a check failed but the translation is right; only number and unit checks name the category. */
+export function checkDeviationGuidance(code: string): string {
+  const start = "Choose Accepted unchanged (or Accepted with corrections if you edited it). You can say in the rationale why the difference is correct. If it changes the clinical meaning, choose Query or Rejected";
+  return valueCheckCodes.has(code) ? `${start} with the category Number or unit.` : `${start}.`;
+}
 
 export function checkExplanation(code: string): string {
   return Object.hasOwn(checkExplanations, code) ? checkExplanations[code] : unknownCheckExplanation;
@@ -107,6 +113,29 @@ export function checkExplanation(code: string): string {
 
 export function failedChecksTitle(count: number): string {
   return count === 1 ? "1 automatic check failed" : `${count} automatic checks failed`;
+}
+
+/** Check label without "in translation", for lists of several checks; unknown codes keep `checkLabel`. */
+export function shortCheckLabel(code: unknown): string {
+  const label = checkLabel(code);
+  return typeof code === "string" && Object.hasOwn(checkLabels, code) ? label.replace(/ in translation$/, "") : label;
+}
+
+/** One-line summary of failed checks: "{n} automatic check(s) failed: {labels}". */
+export function checkBandText(failedCodes: readonly string[]): string {
+  const count = failedCodes.length;
+  if (count === 1) return `1 automatic check failed: ${checkLabel(failedCodes[0])}`;
+  const [first, second] = failedCodes.map(shortCheckLabel);
+  const labels = count === 2 ? `${first} and ${second}` : `${first}, ${second} and ${count - 2} more`;
+  return `${count} automatic checks failed: ${labels}`;
+}
+
+export function calmCheckText(count: number): string {
+  return count === 1 ? "1 automatic check passed." : `All ${count} automatic checks passed.`;
+}
+
+export function allChecksLine(passed: number, failed: number): string {
+  return `All checks: ${passed} passed, ${failed} failed`;
 }
 
 /** Translation status of a document after a review, in words. */

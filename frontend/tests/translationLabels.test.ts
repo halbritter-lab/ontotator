@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clinicalChangeFacts, decisionDescriptions, decisionKeyHint, rationaleHint, checkExplanation, checkLabel, failedChecksTitle, unknownCheckExplanation, formatReviewDate, languageName, translationStatusLabel } from "../src/translation/labels";
+import { clinicalChangeFacts, decisionDescriptions, decisionKeyHint, rationaleHint, allChecksLine, calmCheckText, checkBandText, checkDeviationGuidance, checkExplanation, checkLabel, checkNoLocation, failedChecksTitle, shortCheckLabel, unknownCheckExplanation, formatReviewDate, languageName, translationStatusLabel } from "../src/translation/labels";
 
 describe("translation review labels", () => {
   it("names known check codes and turns unknown codes into words", () => {
@@ -19,6 +19,27 @@ describe("translation review labels", () => {
   it("counts failed checks in words", () => {
     expect(failedChecksTitle(1)).toBe("1 automatic check failed");
     expect(failedChecksTitle(3)).toBe("3 automatic checks failed");
+  });
+  it("shortens check labels and builds the band text", () => {
+    expect(shortCheckLabel("units_added")).toBe("Units added");
+    expect(shortCheckLabel("numbers_changed")).toBe("Numbers changed");
+    expect(shortCheckLabel("glossary_miss")).toBe(checkLabel("glossary_miss"));
+    expect(checkBandText(["units_added"])).toBe("1 automatic check failed: Units added in translation");
+    expect(checkBandText(["units_added", "numbers_changed"])).toBe("2 automatic checks failed: Units added and Numbers changed");
+    expect(checkBandText(["units_added", "numbers_changed", "glossary_miss"])).toBe("3 automatic checks failed: Units added, Numbers changed and 1 more");
+    expect(checkBandText(["units_added", "numbers_changed", "a", "b"])).toBe("4 automatic checks failed: Units added, Numbers changed and 2 more");
+  });
+  it("builds the calm text and the all-checks line", () => {
+    expect(calmCheckText(1)).toBe("1 automatic check passed.");
+    expect(calmCheckText(5)).toBe("All 5 automatic checks passed.");
+    expect(allChecksLine(4, 1)).toBe("All checks: 4 passed, 1 failed");
+  });
+  it("ends the guidance by code", () => {
+    const start = "Choose Accepted unchanged (or Accepted with corrections if you edited it). You can say in the rationale why the difference is correct. If it changes the clinical meaning, choose Query or Rejected";
+    expect(checkDeviationGuidance("units_added")).toBe(`${start} with the category Number or unit.`);
+    expect(checkDeviationGuidance("numbers_changed")).toBe(`${start} with the category Number or unit.`);
+    expect(checkDeviationGuidance("glossary_miss")).toBe(`${start}.`);
+    expect(checkNoLocation).toBe("It does not point to a text location; compare the texts yourself.");
   });
   it("describes translation statuses without raw values", () => {
     expect(translationStatusLabel("reviewed")).toBe("Reviewed");

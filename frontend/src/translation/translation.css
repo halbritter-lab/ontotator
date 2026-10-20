@@ -3,8 +3,11 @@
 .translation-diff ins { color: var(--success); background: var(--success-light); text-decoration: underline; text-underline-offset: 3px; }
 .translation-diff del { color: var(--danger); background: var(--danger-light); text-decoration: line-through; }
 
-/* Translation review. Wide screens: source and translation side by side, decision in a
-   rail, only the texts and the rail scroll. Narrower screens: one scrolling page. */
+/* Translation review. At least 1100 px: the texts own the viewport, the decision sits in a
+   pinned rail and only the texts and the rail scroll. Narrower: one scrolling page whose
+   texts stay side by side (stacked below 700 px) and a pinned bar keeps Submit reachable.
+   Layout rules are scoped under .translation-review or its own bands, so the re-anchor panel
+   (DiffView) and the source-update review (.source-obligation-*) keep their geometry. */
 .translation-review { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; height: 100%; overflow: auto; background: var(--surface); }
 .translation-review > * { flex-shrink: 0; }
 .review-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -12,48 +15,60 @@
 .translation-skip:focus { transform: none; }
 .translation-section-title { margin: 0; font-family: var(--font-sans); font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); color: var(--text); }
 
-/* Header: document name first; languages and run details recede. */
-.translation-review-header { padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--border); }
-.translation-review-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); }
-.translation-back { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--size-md); line-height: var(--leading-md); }
-.translation-review-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
-.translation-save-status .status-pill { font-weight: var(--weight-regular); }
-.translation-review-header h1 { margin: var(--space-2) 0 0; font-size: var(--size-xl); line-height: var(--leading-xl); overflow-wrap: anywhere; }
-.translation-review-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-4); margin-top: var(--space-1); color: var(--text-muted); font-size: var(--size-md); line-height: var(--leading-md); }
+/* Review bar: document name, languages with run details, tools; one row of 52 px when it fits. */
+.translation-review-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); min-height: 52px; padding: var(--space-2) var(--space-5); border-bottom: 1px solid var(--border); }
+.translation-review-bar h1 { margin: 0; font-family: var(--font-serif); font-size: var(--size-xl); line-height: var(--leading-xl); overflow-wrap: anywhere; }
+.translation-review-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); color: var(--text-muted); font-size: var(--size-md); line-height: var(--leading-md); }
 .translation-review-meta p { margin: 0; }
+.translation-review-meta p::after { content: "·"; margin-left: var(--space-2); }
+.translation-review-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-left: auto; }
+.translation-save-status .status-pill { font-weight: var(--weight-regular); }
+.translation-review-bar .translation-details { position: relative; }
+.translation-review-bar .translation-details[open] > dl { position: absolute; top: calc(100% + var(--space-1)); left: 0; z-index: 10; flex-direction: column; min-width: 18rem; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); box-shadow: var(--shadow-2); }
 .translation-details > summary { cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
 .translation-details > summary:hover { color: var(--text); }
 .translation-details[open] { flex-basis: 100%; }
+.translation-review-bar .translation-details[open] { flex-basis: auto; }
 .translation-details dl { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5); margin: var(--space-2) 0 0; }
 .translation-details dl > div { display: flex; gap: var(--space-2); min-width: 0; }
 .translation-details dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
 
-/* Automatic checks: one calm line, or a warning listing what failed. */
-.translation-checks { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--border); font-size: var(--size-md); line-height: var(--leading-md); }
-.translation-checks .notice { flex-basis: 100%; align-items: flex-start; margin: 0; }
-.translation-checks-calm { margin: 0; color: var(--text-muted); }
+/* Automatic checks: a 40 px band (warning fill only when a check failed) and a Details region. */
+.translation-checks { border-bottom: 1px solid var(--border); font-size: var(--size-md); line-height: var(--leading-md); }
+.translation-checks-band { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--space-3); min-height: 40px; padding: var(--space-1) var(--space-5); }
+.translation-checks--failed .translation-checks-band { background: var(--warning-light); }
+.translation-checks-line { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--text); }
+.translation-checks-line .icon { flex: none; }
+.translation-checks--failed .translation-checks-line .icon { color: var(--warning); }
+.translation-checks-calm { color: var(--text-muted); }
+.translation-checks-toggle .translation-checks-chevron { transition: transform 0.15s ease-out; }
+.translation-checks-toggle[aria-expanded="true"] .translation-checks-chevron { transform: rotate(90deg); }
+.translation-check-details { max-width: 1080px; max-height: 40vh; overflow: auto; padding: var(--space-3) var(--space-5) var(--space-4); background: var(--surface-raised); }
+.translation-check-details[hidden] { display: none; }
 .translation-check-list { margin: var(--space-1) 0 0; padding-left: var(--space-5); }
 .translation-check-list li + li { margin-top: var(--space-1); }
 .translation-check-detail { color: inherit; }
+.translation-checks-all-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); margin-top: var(--space-3); color: var(--text-muted); }
 .translation-checks-all > summary { cursor: pointer; color: var(--text-muted); text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
 .translation-checks-all > summary:hover { color: var(--text); }
 .translation-checks-all[open] { flex-basis: 100%; }
-.translation-checks-all .translation-check-list { max-height: 12rem; overflow: auto; padding-left: 0; list-style: none; }
+.translation-checks-all .translation-check-list { max-height: 12rem; overflow: auto; padding-left: 0; list-style: none; color: var(--text); }
 .translation-check-code { margin-left: var(--space-2); font-family: var(--font-mono); font-size: var(--size-xs); color: var(--text-muted); }
 
 /* Texts */
 .translation-workspace { display: grid; grid-template-columns: minmax(0, 1fr); }
-.translation-texts { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; padding: var(--space-3) var(--space-5) var(--space-5); }
-.translation-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--space-5); }
-.translation-toolbar .form-group { margin: 0; }
-.translation-toolbar .form-group:has(.form-select) { display: flex; align-items: center; gap: var(--space-2); }
-.translation-toolbar .form-label { margin: 0; font-size: var(--size-md); font-weight: var(--weight-regular); }
-.translation-toolbar .form-select { width: auto; max-width: 20rem; }
-.translation-toolbar-note { margin: 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
+.translation-texts { display: flex; flex-direction: column; min-width: 0; padding: var(--space-3) var(--space-5) var(--space-4); }
 .translation-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
 .translation-columns--comparison { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .translation-column { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .translation-column-head { margin-bottom: var(--space-2); }
+.translation-texts .translation-column-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--space-4); min-height: 28px; }
+.translation-texts .translation-column-head .form-group { margin: 0; }
+.translation-texts .translation-column-head .form-checkbox-row { min-height: 28px; font-size: var(--size-md); line-height: var(--leading-md); }
+.translation-texts .translation-column-head .form-group:has(.form-select) { display: flex; align-items: center; gap: var(--space-2); }
+.translation-texts .translation-column-head .form-label { margin: 0; font-size: var(--size-md); font-weight: var(--weight-regular); }
+.translation-texts .translation-column-head .form-select { width: auto; max-width: 14rem; }
+.translation-column-hint { display: flex; flex-wrap: wrap; flex-basis: 100%; gap: 0 var(--space-3); margin: 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .translation-column-title { margin: 0; font-family: var(--font-sans); font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); color: var(--text); }
 .translation-column-note { flex: none; margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .translation-text,
@@ -83,6 +98,12 @@
 .translation-decision-body .notice { margin: 0; align-items: flex-start; }
 .translation-decision-body .notice p { margin: var(--space-1) 0 0; }
 .translation-decision-footer { position: sticky; bottom: 0; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); padding: var(--space-3) var(--space-5) var(--space-4); border-top: 1px solid var(--border); background: var(--surface-raised); }
+/* Below 1100 px: decision and Submit pinned to the bottom of the scrolling page. */
+.translation-pinned-bar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-height: 60px; padding: var(--space-2) var(--space-5); border-top: 1px solid var(--border); background: var(--surface-raised); }
+.translation-pinned-decision { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); }
+.translation-pinned-bar > .btn-primary { margin-left: auto; }
+.translation-pinned-bar .translation-submit-reason { flex: 1 1 14rem; max-height: 6rem; overflow: auto; }
+.translation-pinned-bar .translation-submit-reason + .btn-primary { margin-left: 0; }
 .translation-submit-reason,
 .translation-submit-note { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); color: var(--text-muted); }
 .translation-submit-reason { align-self: stretch; max-width: 44rem; color: var(--text); }
@@ -132,44 +153,51 @@
 .review-confirm p { margin: var(--space-4) 0 0; }
 .review-confirm-final { font-weight: var(--weight-strong); }
 
-@media (min-width: 1280px) {
+@media (min-width: 1100px) {
   .translation-review { overflow: hidden; }
-  .translation-workspace { flex: 1 1 0; min-height: 0; grid-template-columns: minmax(0, 1fr) 22rem; }
-  .translation-texts { min-height: 0; }
-  .translation-columns { flex: 1; min-height: 0; }
-  .translation-column > .translation-text,
-  .translation-column > .translation-diff,
-  .translation-column > .translation-editor { flex: 1; height: auto; min-height: 0; }
-  .translation-checks .translation-check-list { max-height: 6rem; overflow: auto; }
-  .translation-decision { min-height: 0; border-top: 0; border-left: 1px solid var(--border); }
-  .translation-decision-body { flex: 1; min-height: 0; overflow: auto; }
-}
-@media (min-width: 1600px) {
-  .translation-workspace { grid-template-columns: minmax(0, 1fr) 26rem; }
+  .translation-review .translation-workspace { flex: 1 1 0; min-height: 0; grid-template-columns: minmax(0, 1fr) 360px; }
+  .translation-review .translation-texts { min-height: 0; }
+  .translation-texts .translation-columns { flex: 1; min-height: 0; }
+  .translation-texts .translation-column > .translation-text,
+  .translation-texts .translation-column > .translation-diff,
+  .translation-texts .translation-column > .translation-editor { flex: 1; height: auto; min-height: 0; }
+  .translation-review .translation-decision { min-height: 0; border-top: 0; border-left: 1px solid var(--border); }
+  .translation-review .translation-decision-body { flex: 1; min-height: 0; overflow: auto; }
 }
 @media (max-width: 1099px) {
-  .translation-columns, .translation-columns--comparison { grid-template-columns: minmax(0, 1fr); }
+  /* Texts side by side; their height leaves room for the bands above and the pinned bar. */
+  .translation-texts .translation-column > .translation-text,
+  .translation-texts .translation-column > .translation-diff,
+  .translation-texts .translation-column > .translation-editor { height: calc(100dvh - var(--review-bands, 13rem) - 60px); min-height: 18rem; }
+  .source-obligation-review .translation-columns { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 699px) {
-  .translation-review-header, .translation-checks { padding-inline: var(--space-4); }
+  .translation-texts .translation-columns, .translation-texts .translation-columns--comparison { grid-template-columns: minmax(0, 1fr); }
+  .translation-texts .translation-column > .translation-text,
+  .translation-texts .translation-column > .translation-diff,
+  .translation-texts .translation-column > .translation-editor { height: auto; min-height: 12rem; max-height: 50dvh; }
+  .translation-review-bar, .translation-checks-band, .translation-check-details { padding-inline: var(--space-4); }
   .translation-texts { padding-inline: var(--space-4); }
-  .translation-decision-body, .translation-decision-footer { padding-inline: var(--space-4); }
+  .translation-decision-body, .translation-decision-footer, .translation-pinned-bar { padding-inline: var(--space-4); }
   .translation-text, .translation-review .translation-diff, .translation-editor-mirror, .translation-editor-input { padding-inline: var(--space-4); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .review-decision { transition: none; }
+  .review-decision, .translation-checks-toggle .translation-checks-chevron { transition: none; }
 }
 /* Reserve the number gutter in both editing and reading modes. */
 .translation-text, .translation-review .translation-diff,
 .translation-editor-mirror, .translation-editor-input { padding-inline-start: var(--space-6); }
 
-/* Failed automatic check blocks (spec section 9). */
-.translation-check { margin-top: var(--space-2); }
+/* Failed automatic check blocks inside Details (review-and-annotation spec A.3). */
+.translation-check + .translation-check { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }
 .translation-check h3 { font-size: var(--size-md); margin: 0 0 var(--space-2); }
 .translation-check p { margin: 0 0 var(--space-2); }
 .translation-check-facts { margin: 0; }
 .translation-check-facts dt { font-weight: var(--weight-strong); }
 .translation-check-facts dd { margin: 0 0 var(--space-2); }
+.translation-check-technical > summary { cursor: pointer; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
+.translation-check-technical p { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--size-sm); }
+.translation-check-technical .translation-check-code { margin-left: 0; }
 .translation-check-code-line { display: flex; gap: var(--space-1); margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--size-xs); }
 .translation-check-code-line dt::after { content: ":"; }
 .translation-check-code-line dd { margin: 0; }
