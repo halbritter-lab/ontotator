@@ -10,27 +10,30 @@
 
 **Binding inputs:** the spec above; mockups `.superpowers/mockups/review-annotation-20261020/` (`01-translation-review.html`, `02-annotation-term-loop.html`, `03-editor-header-polish.html`; where a mockup and the spec differ, the spec wins); critique screenshots `build/phase0-ux/evidence/critique-20261020/`; `PRODUCT.md`; `DESIGN.md`.
 
-**Runs after the lead workflow.** The plan [2026-10-20-lead-workflow.md](2026-10-20-lead-workflow.md) is still executing in the same worktree. No WP of this plan starts before that plan's "Final gate" has passed and its plan-review fixes are committed (see "Overlap with the lead-workflow plan").
+**Runs in its own worktree, in parallel with the lead workflow.** This plan executes in the separate worktree `C:/Users/jan-p/Development/ontocurator/.worktrees/review-annotation` on branch `feat/review-annotation-flow`, created from `feat/lead-workflow` at `fb9de4d`. The plan [2026-10-20-lead-workflow.md](2026-10-20-lead-workflow.md) keeps executing in `.worktrees/phase0-implementation` on `feat/lead-workflow`. The orchestrator merges `feat/lead-workflow` into `feat/review-annotation-flow` periodically, **only between waves** (see Global rule 14 and "Overlap with the lead-workflow plan"); overlapping files are resolved at merge time, never by a WP. This plan file and its later fixes live on `feat/lead-workflow` (commit `70de1c5` and later); they reach the new branch with the first merge, which happens before wave 1.
+
+**Infrastructure first (T1).** An infrastructure WP **T1** (pytest-xdist for the backend suite, a tuned test PostgreSQL in `tests/pg_harness.py`/`tests/conftest.py`, configurable Playwright workers; `CHECK_PYTEST_WORKERS` and `CHECK_PLAYWRIGHT_WORKERS` in `scripts/check.sh`) lands first on `feat/review-annotation-flow`. It is defined outside this plan (not in the WP count) and owns `pyproject.toml`, `uv.lock`, `scripts/check.sh`, `tests/conftest.py`, `tests/pg_harness.py` and `frontend/playwright.config.ts`; no WP of this plan writes those files.
 
 ---
 
 ## Global rules (every WP; a subagent reads only this section and its WP block)
 
-Worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation` (Git Bash: `/c/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation`), branch `feat/lead-workflow`. Every command runs from the worktree root: `cd /c/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation && …`.
+Worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/review-annotation` (Git Bash: `/c/Users/jan-p/Development/ontocurator/.worktrees/review-annotation`), branch `feat/review-annotation-flow`. Every command runs from the worktree root: `cd /c/Users/jan-p/Development/ontocurator/.worktrees/review-annotation && …`. Never write in `.worktrees/phase0-implementation` (the lead-workflow plan runs there).
 
 1. **Subagents never commit, push, `git reset`, `git checkout -- <file>`, `git stash` or `git clean`.** Edit on top of the working tree. The orchestrator commits each WP after its done check (and review, where flagged) with the WP's commit message, staging only the WP's owned files (`git add <files>`, never `git add -A`). No AI attribution lines anywhere (no `Co-Authored-By`, no "Generated with").
 2. **Exclusive file ownership.** A WP writes only the files in its **Owns** list (test files included). If it needs another file, it stops and reports. Two WPs never own the same file at the same time; shared files follow "Shared-file chains".
-3. **Prerequisite checks first.** Run the WP's prerequisite commands; if one fails, stop and report. Never re-implement a missing prerequisite. Every WP of wave 1 also checks the lead-workflow gate: `git log --oneline main..HEAD | grep -q "test(browser): align existing browser specs with the lead workflow"` and the orchestrator's confirmation that the lead final gate and its plan-review fixes are committed; `git status --short` must be empty when wave 1 starts.
+3. **Prerequisite checks first.** Run the WP's prerequisite commands; if one fails, stop and report. Never re-implement a missing prerequisite. Every WP of wave 1 also checks: `git rev-parse --abbrev-ref HEAD` prints `feat/review-annotation-flow`; T1 is committed (`grep -q CHECK_PYTEST_WORKERS scripts/check.sh` and `git status --short` empty when wave 1 starts); the first merge of `feat/lead-workflow` is in (`test -e docs/superpowers/plans/2026-10-20-review-and-annotation-flow.md`).
 4. **Shell.** Git Bash. `rg` is not installed; use `grep -rnE`. `frontend/src/editor/TextPane.tsx` contains a literal NUL character (line 110, `prev.join("\0")` written as a raw byte): use `grep -a`, edit it only with the Edit tool on other lines, never rewrite it with Write.
-5. **Machine limits (16 GB).** At most **two heavy** agents at once. Heavy = backend pytest that touches PostgreSQL, a full Vitest run, Playwright, a `scripts/check.sh` stage. Light = single Vitest files, `npm --prefix frontend run typecheck`, ruff/mypy, generator scripts. At most three light agents at once. Lane **L+** = light, but its one full Vitest run at the end waits until the orchestrator confirms a free heavy slot.
+5. **Machine limits (16 GB), machine-wide.** The limits count the agents of **both** worktrees: while the lead-workflow plan still runs in `.worktrees/phase0-implementation`, its heavy, light and Playwright agents use the same slots. At most **two heavy** agents at once. Heavy = backend pytest that touches PostgreSQL, a full Vitest run, Playwright, a `scripts/check.sh` stage. Light = single Vitest files, `npm --prefix frontend run typecheck`, ruff/mypy, generator scripts. At most three light agents at once. Lane **L+** = light, but its one full Vitest run at the end waits until the orchestrator confirms a free heavy slot.
 6. **Vitest always** with `--maxWorkers=4 --minWorkers=1`: single file `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/<path>`; full suite `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1`.
-7. **Playwright: one run at a time on the machine**, always with `HPO_E2E_PORT=18793` for this plan: `HPO_E2E_PORT=18793 npm --prefix frontend run test:e2e -- <spec>` (it rebuilds `frontend/dist`). If the build fails because another agent is mid-edit, rerun after it finishes; never fix its files. The static gate `scripts/check.sh --only static` checks the whole tree, so it may fail on a sibling WP's in-progress files; a WP fixes only failures in its own Owns, reports the others with file names, and the orchestrator reruns it later.
-8. **Backend tests.** Need Docker running or `ONTOCURATOR_TEST_PG_URL`. Run single files: `uv run pytest tests/<file>.py -q`. Static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`. The full backend suite (~25 min) runs only in the final gate.
-9. **Contracts.** `contracts/openapi.json` and `frontend/src/api/generated.ts` are never hand-edited. Regenerate with `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate`; drift checks `uv run python scripts/export_openapi.py --check` and `npm --prefix frontend run api:check`. The only contracts writer of this plan is R4a. The response change is additive (`failed_check_count: int | None = None`), so existing frontend code and fixtures keep compiling. No migration.
+7. **Playwright: one run at a time on the machine** (across both worktrees; the lead plan uses port 18765), always with `HPO_E2E_PORT=18793` for this plan: `HPO_E2E_PORT=18793 npm --prefix frontend run test:e2e -- <spec>` (it rebuilds `frontend/dist`). If the build fails because another agent is mid-edit, rerun after it finishes; never fix its files. The static gate `scripts/check.sh --only static` checks the whole tree, so it may fail on a sibling WP's in-progress files; a WP fixes only failures in its own Owns, reports the others with file names, and the orchestrator reruns it later.
+8. **Backend tests.** Need Docker running or `ONTOCURATOR_TEST_PG_URL`. Run single files serially (no `-n`): `uv run pytest tests/<file>.py -q`. Static: `uv run ruff check . && uv run ruff format --check . && uv run mypy src`. The full backend suite (~25 min) runs only in the final gate.
+9. **Contracts.** `contracts/openapi.json` and `frontend/src/api/generated.ts` are never hand-edited. Regenerate with `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate`; drift checks `uv run python scripts/export_openapi.py --check` and `npm --prefix frontend run api:check`. The only contracts writer among the WPs is R4a. The response change is additive (`failed_check_count: int | None = None`), so existing frontend code and fixtures keep compiling. No migration. **After every merge of `feat/lead-workflow`** the orchestrator regenerates both files (conflicts in them are resolved by taking either side and regenerating, never by hand) and runs both drift checks before the next wave.
 10. **Straight-swap rule.** When copy or styles change, keep classes, IDs, `data-*` attributes and test hooks (`.candidate-card`, `#search-input`, `data-axis-field`, `data-testid="annotator-identity"`, `data-repair=…`) unless the WP block names the replacement. Tests that assert replaced copy are updated in the WP that changes the copy (they are listed in its Owns).
 11. **English** for all files and UI copy; icons only from `frontend/src/ui/icons.tsx` (no "✓", "↳", "+" glyph icons). Status never by colour alone. Unavailable actions use `aria-disabled` + `aria-describedby` reason (existing `Button`). Every programmatic focus uses `focus({ preventScroll: true })` unless the WP block says otherwise. Shortcuts only through `useShortcut` / `useShortcutHint` in `ui/shortcuts.ts` (read-only for this plan: checkboxes and radios are already not typing targets; single-character bindings already ignore Shift).
 12. **TDD.** Write the listed failing tests first, run them red, implement, run green. Keep the WP's report short.
 13. **Hand-back** (final message): changed/created/deleted files (subset of Owns), commands with exit status and one-line result, done checklist item by item, skipped parts and deviations, open risks, the commit message.
+14. **Merges of `feat/lead-workflow` (orchestrator only).** Only between waves, when every WP of the finished wave is committed and `git status --short` is empty: `git merge --no-ff feat/lead-workflow`. Conflicts in overlapping files (table "Overlap with the lead-workflow plan") are resolved at merge time by the orchestrator (or one fix agent at effort medium), keeping both sides' behaviour. After the merge: `uv sync` and `npm --prefix frontend ci` if `uv.lock` or `frontend/package-lock.json` changed; regenerate contracts (rule 9); `npm --prefix frontend run typecheck`; `uv run ruff check . && uv run mypy src`; the full Vitest suite (heavy slot). Failures caused by the merge go to one fix agent before the next wave starts. Merge at least before waves 1, 3 and 6 and before the final gate, and always before a wave whose WPs own an overlapping file that the lead plan has changed since the last merge.
 
 ## Spec WP mapping
 
@@ -53,14 +56,14 @@ Deviations (all inside the spec's intent): the "Defaulted axes" badge lives in `
 
 | WP | Content | Size | Lane | Depends on | Review |
 |---|---|---|---|---|---|
-| R2 | `decisionOrigin.ts`, rationale for every decision, fact line for Query/Rejected, auto-select/revert, decision copy, keys 1–4 | M | L+ | lead gate | — |
+| R2 | `decisionOrigin.ts`, rationale for every decision, fact line for Query/Rejected, auto-select/revert, decision copy, keys 1–4 | M | L+ | T1, merge | — |
 | R1 | Review bar, check band + Details, column heads, pinned rail ≥1100, side-by-side 700–1099, pinned bottom bar, hidden unavailable coupling, check copy | L | L+ | R2 | yes (L) |
 | R3 | `nextOpenTask()`, "Next task" after submit | S | L+ | R1 | — |
-| R4a | `TaskSummary.failed_check_count`, contracts | S | H | lead gate | yes (backend) |
+| R4a | `TaskSummary.failed_check_count`, contracts | S | H | T1, merge | yes (backend) |
 | R4b | My tasks failed-check line | S | L | R4a | — |
-| A1 | `termSearch.ts`, `textFocus.ts`, SearchPanel combobox, prefill and focus, pending pane copy, Esc, SearchPanel styles | M | L+ | lead gate | — |
-| A2 | Values block, Confirm defaults (one mutation), focus loop, `/` `V` `D`, coalesced changes, ≤700 px bar, badge text | M | L+ | A1 | — |
-| P2 | Settings section addresses, nav links, leave guard | M | L+ | lead gate | — |
+| A1 | `termSearch.ts`, `textFocus.ts`, SearchPanel combobox, prefill and focus, pending pane copy, Esc, SearchPanel styles | M | L+ | T1, merge | — |
+| A2 | Values block, Confirm defaults (one mutation), focus loop, `/` `V` `D`, coalesced changes, ≤700 px bar, badge text | M | L+ | A1 | yes (critical per spec) |
+| P2 | Settings section addresses, nav links, leave guard | M | L+ | T1, merge | — |
 | P1 | Empty inspector, AnnotationPanel styles → CSS, one way back, task breadcrumb, type hierarchy, jargon | M | L+ | A2, P2 | — |
 | DOC | DESIGN.md: check band, review layout, finding keys, Values block, editor hierarchy, settings sections | S | L | R1, A2, P1, P2 | — |
 | V0 | `tests/browser_review_flow_scenarios.py` (`REVIEW_FLOW`, `ANNOTATION_LOOP`), route, helpers | M | H | R4a | — |
@@ -68,11 +71,13 @@ Deviations (all inside the spec's intent): the "Defaulted axes" badge lives in `
 | V2 | `frontend/browser/annotation-loop.spec.ts` | M | PW | V0, A1, A2, P1 | — |
 | V3 | Existing browser specs, full browser suite | M | PW | V1, V2, DOC | — (plan review at the gate) |
 
-Review: R1 (size L) and R4a (backend) get one review each by the `superpowers:code-reviewer` agent (or `agy` with gemini-3.8-flash), read-only, then one fix agent at effort medium. The spec also named A2 as critical; it is M, so it is covered by the plan review after the final gate (the plan review must read A2's diff first). No Codex.
+"T1, merge" = T1 committed on `feat/review-annotation-flow` and the first merge of `feat/lead-workflow` done (Global rule 14).
+
+Review: R1 (size L), A2 (named critical by the spec's "Work packages" note: focus loop, one-mutation confirm, keys in the editor) and R4a (backend) get one review each by the `superpowers:code-reviewer` agent (or `agy` with gemini-3.8-flash), read-only, then one fix agent at effort medium. Plus one plan review after the final gate. No Codex.
 
 ## Overlap with the lead-workflow plan
 
-Both plans run in the same worktree on `feat/lead-workflow`. These files were written by lead-workflow WPs and are written again here; every WP of this plan starts only after the lead-workflow **Final gate** (its wave 12) has passed and its plan-review fixes are committed. The lead WPs still open when this plan was written (L4, L8, L10b, L10c, gate) must not be running when wave 1 starts.
+The plans run on different branches in different worktrees at the same time. `feat/review-annotation-flow` periodically merges `feat/lead-workflow`; the orchestrator does it between waves (Global rule 14). The files below are written by both plans; their conflicts are resolved **at merge time** by the orchestrator, keeping both behaviours (e.g. the lead plan's Settings › Workflow section survives P2's per-section addresses; L6's My tasks columns survive R4b's line; L2b's `ReviewParts` changes survive R1's band). A WP never merges, and never edits a file to pre-empt a merge. After each merge, contracts are regenerated (rule 9) and lead-side tests that now assert this plan's replaced copy are fixed in the next WP that owns them, or by one fix agent if no open WP owns them. The lead WPs still open when this plan was written (L4, L8, L10b, L10c, gate) land through later merges; new browser specs from the lead plan (`lead-workflow.spec.ts`, `lead-workflow-a11y.spec.ts`) are in V3's scope.
 
 | File(s) | Lead-workflow writer | This plan |
 |---|---|---|
@@ -88,8 +93,10 @@ Both plans run in the same worktree on `feat/lead-workflow`. These files were wr
 | `src/ontocurator/assignments/service.py` | L0b → L1p | R4a |
 | `contracts/openapi.json`, `frontend/src/api/generated.ts` | L0b → L1 → L1p → L1b | R4a |
 | `tests/browser_server.py` | L10a | V0 (one import, one registration line) |
-| existing `frontend/browser/*.spec.ts` | L10c | V3 |
+| existing `frontend/browser/*.spec.ts`, `lead-workflow*.spec.ts` (arrive by merge) | L10b, L10c | V3 |
 | `frontend/tests/variantAdmin.test.tsx`, `variantAdminApp.test.tsx`, `adminApp.test.tsx` | L6 → L3b → L4 → L8 | P2 (assertion-only, settings links) |
+
+T1's files (`pyproject.toml`, `uv.lock`, `scripts/check.sh`, `tests/conftest.py`, `tests/pg_harness.py`, `frontend/playwright.config.ts`) may also conflict with lead-side changes at merge time; keep T1's worker options and the lead side's other edits.
 
 ## Shared-file chains (one writer at a time, in this order)
 
@@ -104,7 +111,7 @@ Both plans run in the same worktree on `feat/lead-workflow`. These files were wr
 | `frontend/src/tasks/MyTasks.tsx`, `frontend/tests/myTasks.test.tsx`, `frontend/src/styles/components.css` | R4b only |
 | `frontend/src/app/CaseScreen.tsx`, `frontend/src/editor/AnnotationPanel.tsx`, `frontend/src/styles/screens/editor.css`, `frontend/tests/caseScreen.test.tsx`, `frontend/tests/review-findings.test.tsx`, `frontend/tests/workflow-regressions.test.tsx` | A1 → A2 → P1 |
 | `frontend/src/editor/SearchPanel.tsx`, `frontend/src/editor/termSearch.ts`, `frontend/src/editor/textFocus.ts`, `frontend/tests/searchPanel.test.tsx`, `frontend/tests/termSearch.test.ts`, `frontend/tests/textFocus.test.ts`, `frontend/tests/assignmentEditor.test.tsx`, `frontend/tests/caseTree.test.tsx` | A1 only (A2 imports `textFocus.ts`) |
-| `frontend/src/editor/FindingRow.tsx`, `frontend/src/editor/useCoalescedAxisChange.ts`, `frontend/tests/coalescedAxisChange.test.tsx`, `frontend/tests/valuesBlock.test.tsx`, `frontend/tests/dynamicAxes.test.tsx`, `frontend/tests/projectRulesAxes.test.tsx`, `frontend/tests/submitDialog.test.tsx` | A2 only |
+| `frontend/src/editor/FindingRow.tsx`, `frontend/src/editor/useCoalescedAxisChange.ts`, `frontend/tests/coalescedAxisChange.test.tsx`, `frontend/tests/valuesBlock.test.tsx`, `frontend/tests/dynamicAxes.test.tsx`, `frontend/tests/projectRulesAxes.test.tsx`, `frontend/tests/submitDialog.test.tsx`, `frontend/tests/assignmentReadOnlyHandlers.test.tsx` | A2 only |
 | `frontend/src/editor/TextPane.tsx`, `frontend/src/app/CaseNavigation.tsx`, `frontend/tests/caseNavigation.test.tsx`, `frontend/src/ui/AppShell.tsx`, `frontend/tests/ui/appShell.test.tsx`, `frontend/src/app/labels.ts`, `frontend/tests/labels.test.ts`, `frontend/tests/translationTaskApp.test.tsx`, `frontend/tests/carried/carriedInspector.test.tsx`, `frontend/tests/carried/carriedList.test.tsx`, `frontend/tests/reanchorIntegration.test.tsx`, `frontend/tests/caseResize.test.tsx`, `frontend/tests/annotationPanelStyles.test.ts` | P1 only |
 | `frontend/src/App.tsx` | P2 → P1 |
 | `frontend/src/app/router.ts`, `frontend/tests/router.test.ts`, `frontend/src/admin/ProjectSettingsPage.tsx`, `frontend/tests/projectSettings.test.tsx`, `frontend/src/styles/screens/settings.css`, `frontend/src/styles/index.css`, `frontend/tests/adminApp.test.tsx`, `frontend/tests/variantAdmin.test.tsx`, `frontend/tests/variantAdminApp.test.tsx`, `frontend/tests/ontologiesPage.test.tsx` | P2 only |
@@ -118,7 +125,8 @@ Both plans run in the same worktree on `feat/lead-workflow`. These files were wr
 
 ```mermaid
 flowchart LR
-  Lead[Lead-workflow final gate] --> R2 & A1 & P2 & R4a
+  T1[T1 infrastructure] --> M1[Merge feat/lead-workflow]
+  M1 --> R2 & A1 & P2 & R4a
   R2 --> R1 --> R3
   R4a --> R4b & V0
   A1 --> A2 --> P1
@@ -126,7 +134,7 @@ flowchart LR
   R1 & A2 & P1 & P2 --> DOC
   V0 & R1 & R2 & R3 & R4b & P1 --> V1
   V0 & A1 & A2 & P1 --> V2
-  V1 & V2 & DOC --> V3 --> Gate
+  V1 & V2 & DOC --> V3 --> Mlast[Final merge feat/lead-workflow] --> Gate
 ```
 
 ## Wave schedule
@@ -135,16 +143,18 @@ A wave's WPs may run at the same time (disjoint owned files, ≤ 2 heavy, ≤ 3 
 
 | Wave | Heavy lane (≤ 2) | Light lane (≤ 3) | Notes |
 |---|---|---|---|
-| 0 | — | — | Lead-workflow plan: L4, L8, L10b, L10c, Final gate and its plan-review fixes committed. `git status --short` empty. |
+| 0 | T1 | — | T1 (outside this plan) committed on `feat/review-annotation-flow`; then merge `feat/lead-workflow` (brings this plan file); regenerate contracts; `git status --short` empty. |
 | 1 | R4a | R2 (L+), A1 (L+), P2 (L+) | No prerequisites inside this plan. R4a is the only contracts writer. |
-| 2 | V0 | R1 (L+), A2 (L+), R4b | R1 after R2; A2 after A1; R4b and V0 after R4a. |
-| 3 | — | R3 (L+), P1 (L+) | R3 after R1 (size L); P1 after A2 and P2. |
-| 4 | V1 (PW) | DOC | V1 after R1, R2, R3, R4b, P1, V0. DOC after R1, A2, P1, P2. |
+| 2 | V0 | R1 (L+), A2 (L+), R4b | R1 after R2; A2 after A1; R4b and V0 after R4a. Merge before this wave if the lead plan changed `MyTasks.tsx`, `ReviewParts.tsx`, `service.py` or `browser_server.py` since the last merge. |
+| 3 | — | R3 (L+), P1 (L+) | Merge first (P1 owns `App.tsx`, `AppShell.tsx`, `app/labels.ts`). R3 after R1 (size L); P1 after A2 and P2. |
+| 4 | V1 (PW) | DOC | Merge first if L9 changed `DESIGN.md`. V1 after R1, R2, R3, R4b, P1, V0. DOC after R1, A2, P1, P2. |
 | 5 | V2 (PW) | — | After A1, A2, P1, V0; one Playwright run at a time. |
-| 6 | V3 (PW) | — | Runs alone. |
-| 7 | Final gate (alone) | — | See "Final gate". |
+| 6 | V3 (PW) | — | Merge first (brings L10b/L10c specs). Runs alone. |
+| 7 | Final gate (alone) | — | Final merge of `feat/lead-workflow` (ideally after its own final gate), then "Final gate". |
 
-Count: 14 WPs (R1, R2, R3, R4a, R4b, A1, A2, P1, P2, DOC, V0, V1, V2, V3), each exactly once.
+Heavy and Playwright slots are shared with the lead-workflow agents in the other worktree (Global rule 5).
+
+Count: 14 WPs (R1, R2, R3, R4a, R4b, A1, A2, P1, P2, DOC, V0, V1, V2, V3), each exactly once; T1 and the merges are orchestrator steps outside the count.
 
 ## Dispatching a WP to a subagent
 
@@ -428,7 +438,7 @@ describe("reactToTextEdit (spec A.4)", () => {
 - **Shared contracts:** "Translation review" (R1 part of `labels.ts`; `ReviewFormProps` from R2: `data-decision-legend`).
 - **Owns:** `frontend/src/translation/TranslationReviewScreen.tsx` (layout), `frontend/src/translation/ReviewParts.tsx` (`ChecksSummary`), `frontend/src/translation/labels.ts` (check copy), `frontend/src/translation/translation.css`, `frontend/src/translation/ReviewForm.tsx` (only if a layout hook is missing; no behaviour change), tests `frontend/tests/translationChecks.test.tsx`, `frontend/tests/translationReview.test.tsx`, `frontend/tests/translationLabels.test.ts`, `frontend/tests/reviewForm.test.tsx` (only if `ReviewForm.tsx` changes).
 - **Size / lane / review:** L / L+ / yes (L).
-- **Code to read:** `translation/TranslationReviewScreen.tsx:240-352` (header, toolbar, columns, rail), `translation/ReviewParts.tsx:1-50`, `translation/translation.css` (whole; note the existing `@media (min-width: 1280px)` rail and `@media (max-width: 1099px)` stacking rules that this WP replaces), `translation/DiffView.tsx` and `TranslationEditor.tsx` (both import `translation.css`; `.translation-text` is also used by `SourceObligationReview.tsx` — keep its rules), `variants/useCoupledScroll.ts` (`available`), `ui/useMediaQuery.ts`, `ui/icons.tsx` (`IconCheck`, `IconWarning`, `IconChevronRight`), screenshots `build/phase0-ux/evidence/critique-20261020/`.
+- **Code to read:** `translation/TranslationReviewScreen.tsx:240-352` (header, toolbar, columns, rail), `translation/ReviewParts.tsx:1-50`, `translation/translation.css` (whole; note the existing `@media (min-width: 1280px)` rail and `@media (max-width: 1099px)` stacking rules that this WP replaces), `translation/DiffView.tsx` and `TranslationEditor.tsx` (both import `translation.css`; `.translation-text` is also used by `SourceObligationReview.tsx` and `DiffView` is also rendered by `variants/ReanchorPanel.tsx` — scope every new or changed layout rule under `.translation-review` so those views keep their current geometry), `variants/useCoupledScroll.ts` (`available`), `ui/useMediaQuery.ts`, `ui/icons.tsx` (`IconCheck`, `IconWarning`, `IconChevronRight`), screenshots `build/phase0-ux/evidence/critique-20261020/`.
 - **Prerequisites:** `grep -n "export function chooseDecision" frontend/src/translation/decisionOrigin.ts`; `grep -n "data-decision-legend" frontend/src/translation/ReviewForm.tsx`.
 
 - [ ] **Step 1: Failing check-band tests** (rewrite `frontend/tests/translationChecks.test.tsx`):
@@ -512,7 +522,7 @@ const evaluate = (query: string) => {
   - `ReviewParts.tsx` `ChecksSummary`: `<section className="translation-checks" aria-labelledby>` with a `review-sr-only` `h2`; a band line (`IconWarning` + strong count part + labels, `warning-light` band fill when failures; `IconCheck` + muted text when all passed; muted text when none recorded); "Details"/"Hide details" `Button variant="quiet"` with `aria-expanded`, `aria-controls`, `IconChevronRight` rotating 90° (no transition under reduced motion); collapsed on every mount (local `useState(false)`, never stored). Region (`.translation-check-details`, max width 1080 px, `surface-raised`, `max-height: 40vh`, own scroll): per failed check `section` with `h3`, one paragraph explanation + `checkNoLocation`, quoted run detail, "If the translation is right anyway" + `checkDeviationGuidance(code)`, `<details><summary>Technical details</summary>Technical code: <code>…</code></details>`; then the line `allChecksLine(...)` · existing "Show all checks" `details` list.
   - `TranslationReviewScreen.tsx`: header becomes one `.translation-review-bar`: `h1` (title 22/28 serif) · meta (`Translation review` text dropped; "English → German" + "Translation details" disclosure) · right tools (report actions, save badge, Reload). Remove the "Back to my tasks" link (the error state's "Back to my tasks" button stays). Remove the toolbar `div role="group"`; "Show changes" goes into the translation column head; the comparison `Select` into the comparison column head; "Couple scrolling" renders only when `canCouple && pairing.available`, inside the translation column head; while coupled, the pairing notes are one muted line there; the `couplingUnavailable` sentence is deleted. `const wide = useMediaQuery("(min-width: 1100px)")`: when `wide`, the rail footer holds reason + key hint + "Submit review…" as today; when not wide and not read-only, the footer content moves into `<div className="translation-pinned-bar" role="region" aria-label="Decision and submit">` with "Decision: {label or Not chosen}", a quiet "Change ↓" button focusing `[data-decision-legend]`, the reason element (`id="review-submit-reason"`) and "Submit review…" — exactly one Submit button and one reason element in the DOM at any width.
   - `translation.css`: ≥1100 px: `.translation-review` no page scroll, `.translation-workspace` `flex: 1 1 0; min-height: 0; grid-template-columns: minmax(0, 1fr) 360px`, `.translation-texts` padding `space-3 space-5 space-4`, columns gap `space-5`, column head 28 px, text boxes `flex: 1; height: auto; min-height: 0` (drop `min(60vh, 40rem)` inside `.translation-review` only), rail left hairline, body own scroll, footer sticky. 700–1099 px: columns stay `repeat(2, minmax(0, 1fr))` (three with comparison), text boxes `height: calc(100dvh - var(--review-bands, 13rem) - 60px); min-height: 18rem`, decision follows in flow, `.translation-pinned-bar` (60 px, `surface-raised`, top hairline, `position: sticky; bottom: 0`). <700 px: columns stack, each text `max-height: 50dvh`, same bar. Check band and region rules; band 40 px; bar 52 px. Remove the old 1280/1099 rules this replaces; keep `.source-obligation-*` rules.
-- [ ] **Step 5:** run the three files → PASS; then `tests/sourceObligationReview.test.tsx tests/diffView.test.tsx tests/useCoupledScroll.test.tsx tests/translationTaskApp.test.tsx tests/reviewForm.test.tsx`.
+- [ ] **Step 5:** run the three files → PASS; then `tests/sourceObligationReview.test.tsx tests/diffView.test.tsx tests/useCoupledScroll.test.tsx tests/translationTaskApp.test.tsx tests/reviewForm.test.tsx tests/reanchorPanel.test.tsx` (a failure in `translationTaskApp.test.tsx` is reported, not fixed: P1 owns it).
 - [ ] **Step 6: Verify:** the files above with the Vitest flags; `npm --prefix frontend run typecheck`; full Vitest suite at the end (heavy slot). Geometry is proven by V1.
 - **Done:** band states and copy per A.3/A.8; Details collapsed on every load; no back link; coupling hidden while unavailable; one Submit at every width; layouts per A.2/A.6 in CSS; existing translation tests green.
 - **Commit:** `feat(translation-review): texts own the viewport with a one-line check band and a pinned decision rail`
@@ -549,7 +559,7 @@ describe("nextOpenTask", () => {
 
   `translationReview.test.tsx` (mock `api.listMyTasks`): `it("offers the next task focused after submit and opens it")` — after `confirmSubmit()`: button "Next task: case-2 (de)" is `document.activeElement`; link "Back to my tasks"; "1 more open task in this project."; click → `navigate` called with `{ name: "task", assignmentId: 18 }`; `it("makes Back to my tasks primary when nothing is left")` — "No more open tasks in this project."; no "Next task" button; `it("shows loading and an error with Retry for the task list")` — pending promise → Next task button `aria-disabled` and busy; rejection → only "Back to my tasks" plus an error with "Retry" that reloads.
 - [ ] **Step 2:** run → FAIL.
-- [ ] **Step 3: Implement.** `nextOpenTask` per contract (filter `project_key === projectKey && assignment_id !== current && status !== "submitted"`). In the screen, after a successful `submit`, fetch `api.listMyTasks()` (fresh); state `next: { kind: "loading" } | { kind: "ready"; next; remaining } | { kind: "error"; error }`. Render in the rail under the success message: primary `Button` "Next task: {external_id ?? case_id ?? document_id} ({language})" (`loading` while loading), focused once ready with `focus({ preventScroll: true })`; quiet link "Back to my tasks" (navigate `{ name: "tasks" }`; primary `Button` when there is no next task); muted line "{n} more open task(s) in this project." / "No more open tasks in this project."; on error `ErrorNotice` + "Retry". The confirmation dialog is unchanged (focus starts on "Submit review", so Ctrl+Enter, Enter submits). Copy helpers in `labels.ts`: `nextTaskLabel(task)`, `remainingTasksText(n)`.
+- [ ] **Step 3: Implement.** `nextOpenTask` per contract (filter `project_key === projectKey && assignment_id !== current && status !== "submitted"`). In the screen, after a successful `submit`, fetch `api.listMyTasks()` (fresh); state `next: { kind: "loading" } | { kind: "ready"; next; remaining } | { kind: "error"; error }`. Render in the rail under the success message: primary `Button` "Next task: {external_id ?? case_id ?? document_id} ({language})" (`loading` while loading), focused once ready with `focus({ preventScroll: true })`; quiet link "Back to my tasks" (navigate `{ name: "tasks" }`; primary `Button` when there is no next task); muted line "{n} more open task(s) in this project." / "No more open tasks in this project." rendered as `role="status"` (spec A.9: "Next task" readiness is announced); on error `ErrorNotice` + "Retry". The confirmation dialog is unchanged (focus starts on "Submit review", so Ctrl+Enter, Enter submits). Copy helpers in `labels.ts`: `nextTaskLabel(task)`, `remainingTasksText(n)`.
 - [ ] **Step 4:** run → PASS.
 - [ ] **Step 5: Verify:** both files and `tests/caseScreen.test.tsx -t "Next task"` (orderTasks unchanged); typecheck; full Vitest suite at the end (heavy slot).
 - **Done:** keyboard-only flow `1`, `Ctrl+Enter`, `Enter`, `Enter` reaches the next task (asserted in V1); no task left → "Back to my tasks" primary.
@@ -700,7 +710,7 @@ it("pluralises the failed-check line", async () => {
 });
 ```
 
-- [ ] **Step 2:** run → FAIL; implement: Task cell renders `taskDescription(task)` and, when `task.task === "translation_review" && (task.failed_check_count ?? 0) > 0`, `<span className="task-check-flag"><IconWarning /> {failedChecksTitle(n)}</span>` on a second line; `rowProps` `aria-label` appends `, {failedChecksTitle(n)}`. CSS: `.task-check-flag { display: flex; align-items: center; gap: var(--space-1); color: var(--warning-text, var(--warning)); font-size: var(--size-sm); }` (use the existing warning text token from `styles/tokens.css`; no fill). Run → PASS.
+- [ ] **Step 2:** run → FAIL; implement: Task cell renders `taskDescription(task)` and, when `task.task === "translation_review" && (task.failed_check_count ?? 0) > 0`, `<span className="task-check-flag"><IconWarning /> {failedChecksTitle(n)}</span>` on a second line; `rowProps` `aria-label` appends `, {failedChecksTitle(n)}`. CSS: `.task-check-flag { display: flex; align-items: center; gap: var(--space-1); color: var(--warning); font-size: var(--size-sm); }` (`--warning` is the existing warning text colour in `styles/tokens.css`; there is no `--warning-text`; no fill). Run → PASS.
 - [ ] **Step 3: Verify:** `tests/myTasks.test.tsx tests/translationTaskApp.test.tsx tests/quickFixStyles.test.ts` with the Vitest flags; typecheck.
 - **Done:** line only on translation-review rows with failures; text + icon; no new column; counts (Q9) unchanged.
 - **Commit:** `feat(tasks): failed-check line in My tasks`
@@ -807,9 +817,9 @@ it("firstUsableIndex skips obsolete hits", () => {
 - **Goal:** after a term is added, one keystroke confirms all defaults in one mutation and focus returns to the text; `/`, `V`, `D` keep the hands on the keyboard.
 - **Spec:** B.0 (axes rows), B.1 items 4–6, B.2 steps 2–3 and "Changing a value instead", B.4 rows "Read-only / paused" and "Review mode", B.5 row ≤700 px, B.6 rows "Values heading" to "Row badge", B.7 (Finding group), B.8, B.9, "Deviations" 2, "Acceptance" item 9, resolved questions 6–8. Mockup `02-annotation-term-loop.html` (steps 2–3).
 - **Shared contracts:** "Editor" (`useCoalescedAxisChange`, AnnotationPanel props after A2, `handleUpdateAxes`, `focusTextAt`).
-- **Owns:** `frontend/src/editor/AnnotationPanel.tsx` (Values block, section order, `searchRequest`), `frontend/src/editor/useCoalescedAxisChange.ts` (create), `frontend/src/editor/FindingRow.tsx` (badge text), `frontend/src/app/CaseScreen.tsx` (create/confirm focus, announcements, keys, `handleUpdateAxes`, ≤700 px bar, badge text at the findings list), `frontend/src/styles/screens/editor.css` (Values rules, bar), tests `frontend/tests/coalescedAxisChange.test.tsx`, `frontend/tests/valuesBlock.test.tsx` (create), `frontend/tests/caseScreen.test.tsx`, `frontend/tests/dynamicAxes.test.tsx`, `frontend/tests/projectRulesAxes.test.tsx`, `frontend/tests/review-findings.test.tsx`, `frontend/tests/submitDialog.test.tsx`, `frontend/tests/workflow-regressions.test.tsx`.
-- **Size / lane / review:** M / L+ / — (plan review reads it first).
-- **Code to read:** `editor/AnnotationPanel.tsx:222-290` (axes, note), `app/CaseScreen.tsx:1498-1545` (`createPendingAnnotation`), `:1700-1715` (`handleUpdateAxes`), `:1110-1125` (`announceCarried`, the polite live region), `:2311-2366` (registered keys), `:2600-2612` and `editor/FindingRow.tsx:36` (badge), `:2960-2975` (AnnotationPanel props), `editor/axisLabels.ts` (`axisOptionLabel`), `editor/textFocus.ts` (A1), `application/editing.py:769` (`chosen_axis_ids` list; read only), `styles/components.css:75-115` (`.axis-options`, read only).
+- **Owns:** `frontend/src/editor/AnnotationPanel.tsx` (Values block, section order, `searchRequest`), `frontend/src/editor/useCoalescedAxisChange.ts` (create), `frontend/src/editor/FindingRow.tsx` (badge text), `frontend/src/app/CaseScreen.tsx` (create/confirm focus, announcements, keys, `handleUpdateAxes`, ≤700 px bar, badge text at the findings list), `frontend/src/styles/screens/editor.css` (Values rules, bar), tests `frontend/tests/coalescedAxisChange.test.tsx`, `frontend/tests/valuesBlock.test.tsx` (create), `frontend/tests/caseScreen.test.tsx`, `frontend/tests/dynamicAxes.test.tsx`, `frontend/tests/projectRulesAxes.test.tsx`, `frontend/tests/review-findings.test.tsx`, `frontend/tests/submitDialog.test.tsx`, `frontend/tests/workflow-regressions.test.tsx`, `frontend/tests/assignmentReadOnlyHandlers.test.tsx` (calls `onConfirmAxis?.("assertion")`; becomes `onConfirmDefaults?.(["assertion"])`, keeping the read-only assertion).
+- **Size / lane / review:** M / L+ / yes (critical per spec).
+- **Code to read:** `editor/AnnotationPanel.tsx:222-290` (axes, note), `app/CaseScreen.tsx:1498-1545` (`createPendingAnnotation`), `:1700-1715` (`handleUpdateAxes`), `:1110-1125` (`announceCarried`, the polite live region), `:2311-2366` (registered keys), `:2600-2612` and `editor/FindingRow.tsx:36` (badge), `:2960-2975` (AnnotationPanel props), `editor/axisLabels.ts` (`axisOptionLabel`), `editor/textFocus.ts` (A1), `application/editing.py:975-990` (`set_axes`: `chosen_axis_ids` list, each must name a nonempty supplied value, removed from `axes_defaulted`; read only), `styles/components.css:75-115` (`.axis-options`, read only).
 - **Prerequisites:** `grep -n "export function focusTextAt" frontend/src/editor/textFocus.ts`; `grep -n 'role="combobox"\|role: "combobox"\|"combobox"' frontend/src/editor/SearchPanel.tsx`.
 
 - [ ] **Step 1: Failing tests.**
@@ -866,7 +876,7 @@ it("flushes the pending axis when another axis changes and on flush()", () => {
   - `CaseScreen.tsx`: `handleUpdateAxes(values, confirmedAxisIds?: string[])` (`chosen_axis_ids: confirmedAxisIds ?? <existing changed-value filter>`); `handleConfirmDefaults(ids)` → on success `announceCarried("Confirmed: …")` and `focusTextAt(rootRef.current, view.document.text, markEnd)` (mark end = largest segment end of the selected evidence, else of the finding's first evidence); on failure `setValuesError("The values could not be confirmed. Try again.")`, focus stays. After `createPendingAnnotation` succeeds for a marked span (not re-anchor, not carried) → in `requestAnimationFrame`: first required empty axis's first radio, else `[data-confirm-defaults]`, else `focusTextAt(...)` after the mark; announcement per B.2. Keys (`shortcutOptions`, group "Finding"): `"/"` (description "Focus the term search"), `"v"` ("Focus the values"; returns `false` with Shift), `"d"` ("Confirm all default values"; plain d only); enabled per B.7 (own editable finding = `selectedAnnotationId` set, not `readOnly`, not `display`; pending finding for `/`). The ≤700 px bar: while `panes && pendingAnnotation` (marked span), no automatic pane switch; bar at the bottom of the text pane "New finding “…” · Choose term" (primary) · "Cancel"; Choose term → `setMobilePane("details")` and focus the search; after the finding is confirmed, a "Back to text" button in the inspector returns to the text pane and calls `focusTextAt`. Badge "Defaults to confirm" here and in `FindingRow.tsx`.
   - `editor.css`: `.values-section .axis-field` grid (96 px legend), `.axis-option.is-default` dashed border, solid when confirmed, 2 px focus ring with 2 px offset, targets ≥24×24 px, forced-colours keeps border style; `.pending-bar`.
 - [ ] **Step 4:** run → PASS.
-- [ ] **Step 5: Verify:** the changed files plus `tests/openItems.test.ts tests/carried/*.test.tsx tests/reanchorIntegration.test.tsx tests/review-findings.test.tsx` with the Vitest flags; typecheck; full Vitest suite at the end (heavy slot).
+- [ ] **Step 5: Verify:** the changed files plus `tests/openItems.test.ts tests/carried/*.test.tsx tests/reanchorIntegration.test.tsx tests/review-findings.test.tsx tests/assignmentReadOnlyHandlers.test.tsx` with the Vitest flags; typecheck; full Vitest suite at the end (heavy slot).
 - **Done:** one `set_axes` for D; focus loop per B.2; keys never fire in text fields; `?` lists group "Finding"; text pane scroll offset untouched (asserted by spying `scrollTop` writes and `focus` options).
 - **Commit:** `feat(editor): values block with confirm defaults, focus loop and finding keys`
 
@@ -918,15 +928,15 @@ it("parses and builds settings section addresses", () => {
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 it("has no inline styles or glyph icons in the inspector and the search", () => {
-  for (const file of ["src/editor/AnnotationPanel.tsx", "src/editor/SearchPanel.tsx"]) {
-    const source = readFileSync(file, "utf8");
+  for (const file of ["../src/editor/AnnotationPanel.tsx", "../src/editor/SearchPanel.tsx"]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
     expect(source).not.toMatch(/style=\{/);
     expect(source).not.toMatch(/[↳✓]/);
   }
 });
 ```
 
-  (Paths are relative to `frontend/`, the Vitest root; check how `tests/ui/styles.test.ts` resolves paths and copy it.)
+  (Paths resolve against the test file with `new URL(…, import.meta.url)`, as `tests/ui/styles.test.ts` does.)
   - `labels.test.ts`: `it("names a task for the breadcrumb")` → `taskCrumbLabel({ external_id: "failed-translation", document_id: "d", task: "translation_review", language: "de" }) === "failed-translation · Translation review (de)"`; annotate → "accepted-translation · Annotation (de)"; missing external id → document id.
   - `translationTaskApp.test.tsx`: `it("names the task in the breadcrumb and keeps the assignment number in its title")` — deep link `#/tasks/17` with `listMyTasks` returning the task → breadcrumb current item "EN 1/7 · Translation review (de)" with `title` "Assignment 17"; while `listMyTasks` is pending the item reads "Task" (never "Task 17").
   - `ui/appShell.test.tsx`: `it("passes a crumb title through")`.
@@ -983,7 +993,7 @@ Route `POST /__test_review_flow__?scenario=<name>` returns `result(...)` of the 
 - **Spec:** "Acceptance" items 1–7, A.2, A.6 (incl. 390×844 per the spec's R1 note), A.9, A.10.
 - **Owns:** `frontend/browser/review-flow.spec.ts` (create).
 - **Size / lane / review:** M / PW / —.
-- **Code to read:** `frontend/browser/translation-review.spec.ts` (login, layout helpers), `frontend/browser/lead-workflow-a11y.spec.ts` (axe, forced colours), `frontend/browser/reviewFlowHelpers.ts`.
+- **Code to read:** `frontend/browser/translation-review.spec.ts` (login, layout helpers), `frontend/browser/lead-workflow-a11y.spec.ts` if a merge has brought it, else `frontend/browser/documents-a11y.spec.ts` (axe, forced colours), `frontend/browser/reviewFlowHelpers.ts`. Scenario users are named `{project}-{name}` (`person()` in `tests/browser_lead_workflow_scenarios.py`); log in as `{project}-ana`.
 - **Prerequisites:** `grep -n "__test_review_flow__" tests/browser_server.py tests/browser_review_flow_scenarios.py`; `grep -n "export function nextOpenTask" frontend/src/app/caseOrder.ts`; `grep -n "task-check-flag" frontend/src/tasks/MyTasks.tsx`; `grep -n "taskCrumbLabel" frontend/src/App.tsx`.
 
 - [ ] **Step 1: Write tests** (each starts with a fresh `REVIEW_FLOW` scenario, logged in as `ana`):
@@ -1028,9 +1038,9 @@ Route `POST /__test_review_flow__?scenario=<name>` returns `result(...)` of the 
 
 - **Goal:** the existing Playwright suite matches the new review, editor and Settings UI.
 - **Spec:** "Deviations from earlier specs" (all), C.3, C.6, B.6.
-- **Owns:** existing `frontend/browser/*.spec.ts` that fail because of this plan's UI changes (expected from a grep of the replaced copy: `admin.spec.ts`, `carried-review.spec.ts`, `compare.spec.ts`, `decision-semantics.spec.ts`, `documents-a11y.spec.ts`, `documents-decisions.spec.ts`, `documents-table.spec.ts`, `final-workflow.spec.ts`, `layers.spec.ts`, `quick-fixes.spec.ts`, `reanchor.spec.ts`, `spans.spec.ts`, `spans-resize.spec.ts`, `translation-review.spec.ts`, `translations.spec.ts`, `tree.spec.ts`, `variant-admin.spec.ts`, `variants.spec.ts`, `workflow.spec.ts`), `frontend/browser/helpers.ts` (only selectors of replaced copy, e.g. "Search ontology term", "← My tasks").
+- **Owns:** existing `frontend/browser/*.spec.ts` that fail because of this plan's UI changes (expected from a grep of the replaced copy: `admin.spec.ts`, `carried-review.spec.ts`, `compare.spec.ts`, `decision-semantics.spec.ts`, `documents-a11y.spec.ts`, `documents-decisions.spec.ts`, `documents-table.spec.ts`, `final-workflow.spec.ts`, `layers.spec.ts`, `quick-fixes.spec.ts`, `reanchor.spec.ts`, `spans.spec.ts`, `spans-resize.spec.ts`, `translation-review.spec.ts`, `translations.spec.ts`, `tree.spec.ts`, `variant-admin.spec.ts`, `variants.spec.ts`, `workflow.spec.ts`), plus every spec merged from `feat/lead-workflow` that asserts replaced UI (expected: `lead-workflow.spec.ts`, `lead-workflow-a11y.spec.ts`, e.g. Settings anchor buttons, "Task {n}" breadcrumb, My tasks rows); re-run the grep of Step 2's copy list after the wave-6 merge, since the list above was taken at `fb9de4d`. `frontend/browser/helpers.ts` (only selectors of replaced copy, e.g. "Search ontology term", "← My tasks").
 - **Size / lane / review:** M / PW / — (covered by the plan review after the gate).
-- **Prerequisites:** V1 and V2 done (`test -e frontend/browser/review-flow.spec.ts && test -e frontend/browser/annotation-loop.spec.ts`).
+- **Prerequisites:** V1 and V2 done (`test -e frontend/browser/review-flow.spec.ts && test -e frontend/browser/annotation-loop.spec.ts`); the wave-6 merge of `feat/lead-workflow` is committed.
 
 - [ ] **Step 1:** `HPO_E2E_PORT=18793 npm --prefix frontend run test:e2e` (full suite, alone on the machine). Collect failures.
 - [ ] **Step 2:** For each failure decide: (a) the spec asserts replaced UI ("Search ontology term", candidate `role="button"`, "Context Axes", "Confirm {axis} value", "Defaulted axes", "+ Add Mention", "+ Segment", "Delete Annotation", "Annotate from scratch", "Annotating as", "Selection intent", "← My tasks", "Back to my tasks" link in the review, "Couple scrolling" while unavailable, check blocks shown by default, Settings anchor buttons, "Task {n}" breadcrumb) → update the selector/copy to the new UI named in this plan's spec sections; (b) product bug → stop and report with the failing step. Never delete a scenario's intent.
@@ -1040,20 +1050,24 @@ Route `POST /__test_review_flow__?scenario=<name>` returns `result(...)` of the 
 
 ## Final gate (wave 7, alone on the machine, sequential)
 
-Run from the worktree root, one stage after the other; stop at the first failure and send it to one fix agent (effort medium), then rerun that stage.
+Before the gate: final merge of `feat/lead-workflow` (Global rule 14, incl. contracts regeneration and the post-merge checks), committed; nothing of the lead plan's agents may run heavy or Playwright work on the machine meanwhile. Run from the worktree root, one stage after the other; stop at the first failure and send it to one fix agent (effort medium), then rerun that stage.
 
 ```bash
-cd /c/Users/jan-p/Development/ontocurator/.worktrees/phase0-implementation
+cd /c/Users/jan-p/Development/ontocurator/.worktrees/review-annotation
+git rev-parse --abbrev-ref HEAD   # feat/review-annotation-flow
 bash scripts/check.sh --only static
-bash scripts/check.sh --only backend
-HPO_E2E_PORT=18793 bash scripts/check.sh --only browser
+# T1's worker options, when scripts/check.sh documents them (grep -q CHECK_PYTEST_WORKERS scripts/check.sh):
+CHECK_PYTEST_WORKERS=4 bash scripts/check.sh --only backend
+HPO_E2E_PORT=18793 CHECK_PLAYWRIGHT_WORKERS=1 bash scripts/check.sh --only browser
 CHECK_VITEST_WORKERS=4 bash scripts/check.sh --only frontend
 ```
+
+Unknown environment variables are ignored by `check.sh`, so the commands also run if T1's options are missing (then the backend runs serially and the browser suite with one worker). Use a `CHECK_PLAYWRIGHT_WORKERS` value above 1 only if T1 states that the spec files are safe in parallel (its `--help` default is 1 because spec files share fixture projects); lower `CHECK_PYTEST_WORKERS` if the machine is short of memory.
 
 Expected last line of each: `Selected stage checks passed (partial gate: <stage>).` Then:
 
 - [ ] `git status --short` shows nothing uncommitted (every WP committed by the orchestrator).
-- [ ] Plan review: one `superpowers:code-reviewer` agent (or `agy` gemini-3.8-flash) over the commits of this plan (`git log --oneline` from the first R/A/P/V commit to HEAD) against the spec, starting with A2's diff; one fix agent for verified findings; rerun the affected stages.
+- [ ] Plan review: one `superpowers:code-reviewer` agent (or `agy` gemini-3.8-flash) over the commits of this plan only (`git log --oneline --no-merges feat/lead-workflow..HEAD`, minus T1; merge commits and lead-side commits are out of scope, but merge resolutions in overlapping files are checked with `git diff feat/lead-workflow...HEAD -- <file>`) against the spec; one fix agent for verified findings; rerun the affected stages.
 - [ ] Manual smoke (optional, user): review the failed-translation task with keys only (`1`, `Ctrl+Enter`, `Enter`, `Enter`); annotate two findings in `loop-en` with mark, Enter, Enter.
 
 ## Self-review against the spec
