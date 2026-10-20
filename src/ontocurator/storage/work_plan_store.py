@@ -70,12 +70,16 @@ def _in_keys(case_col: Any, language_col: Any, keys: Iterable[RowKey]) -> Any:
     return tuple_(case_col, language_col).in_([(k.case_id, k.language) for k in keys])
 
 
-def _latest_decisions(conn: Connection, pid: int) -> dict[str, str]:
+def _latest_decisions(
+    conn: Connection, pid: int, document_ids: Sequence[str] | None = None
+) -> dict[str, str]:
+    query = select(
+        TranslationReviewRow.document_id, TranslationReviewRow.decision
+    ).where(TranslationReviewRow.project_id == pid)
+    if document_ids is not None:
+        query = query.where(TranslationReviewRow.document_id.in_(list(document_ids)))
     rows = conn.execute(
-        select(TranslationReviewRow.document_id, TranslationReviewRow.decision)
-        .where(TranslationReviewRow.project_id == pid)
-        .distinct(TranslationReviewRow.document_id)
-        .order_by(
+        query.distinct(TranslationReviewRow.document_id).order_by(
             TranslationReviewRow.document_id,
             TranslationReviewRow.created_at.desc(),
             TranslationReviewRow.id.desc(),
@@ -90,8 +94,15 @@ def language_versions(
     """Every Documents row of the project (or of ``case_ids``) as the plan sees it.
 
     Discarded roots do not count for ``accepted``, ``marked_in_package`` and
-    ``review_blocked``; the newest version of a root skips corrections whose
-    latest review is rejected or queried (``Version.not_newer``).
+    ``review_blocked``. For ``accepted`` and ``marked_in_package`` the newest
+    version of a root skips corrections whose latest review is rejected or
+    queried (``Version.not_newer``). ``review_blocked`` intentionally looks at
+    the literal newest version (``chain.newest``): a rejected or queried
+    correction blocks external acceptance although the older accepted version
+    still counts, so a row may be ``accepted`` and ``review_blocked`` at once.
+
+    With ``case_ids`` every query is restricted to the documents of those
+    cases; no project-wide data is loaded.
     """
     query = select(
         DocumentRow.document_id,
@@ -110,29 +121,43 @@ def language_versions(
     documents = conn.execute(query).all()
     if not documents:
         return {}
-    decisions = _latest_decisions(conn, project_id)
+    doc_ids = None if case_ids is None else [row.document_id for row in documents]
+
+    def scoped(query: Any, column: Any) -> Any:
+        return query if doc_ids is None else query.where(column.in_(doc_ids))
+
+    decisions = _latest_decisions(conn, project_id, doc_ids)
     packaged = set(
         conn.execute(
-            select(TranslationAcceptanceRow.document_id).where(
-                TranslationAcceptanceRow.project_id == project_id,
-                TranslationAcceptanceRow.source == "package",
+            scoped(
+                select(TranslationAcceptanceRow.document_id).where(
+                    TranslationAcceptanceRow.project_id == project_id,
+                    TranslationAcceptanceRow.source == "package",
+                ),
+                TranslationAcceptanceRow.document_id,
             )
         ).scalars()
     )
     dropped = set(
         conn.execute(
-            select(DiscardedVariantRow.document_id).where(
-                DiscardedVariantRow.project_id == project_id
+            scoped(
+                select(DiscardedVariantRow.document_id).where(
+                    DiscardedVariantRow.project_id == project_id
+                ),
+                DiscardedVariantRow.document_id,
             )
         ).scalars()
     )
     in_review = set(
         conn.execute(
-            select(AssignmentRow.document_id).where(
-                AssignmentRow.project_id == project_id,
-                AssignmentRow.task == "translation_review",
-                AssignmentRow.revoked_at.is_(None),
-                AssignmentRow.status.in_(_OPEN_STATUSES),
+            scoped(
+                select(AssignmentRow.document_id).where(
+                    AssignmentRow.project_id == project_id,
+                    AssignmentRow.task == "translation_review",
+                    AssignmentRow.revoked_at.is_(None),
+                    AssignmentRow.status.in_(_OPEN_STATUSES),
+                ),
+                AssignmentRow.document_id,
             )
         ).scalars()
     )
@@ -174,6 +199,8 @@ def language_versions(
             and not is_source
             and all(v.document_id in packaged for v in targets),
             discarded=not live,
+            # Literal newest version on purpose (see docstring), unlike the
+            # not_newer-skipping targets of accepted/marked_in_package.
             review_blocked=not is_source
             and any(
                 (
@@ -288,6 +315,10 @@ def write_rows(
 
     A key in ``restored`` sets ``restored_revision`` exactly (None clears it);
     any other row clears it when its Annotate is off. Returns new revisions.
+
+    The revision is bumped even when no flag actually changes, so callers
+    should skip no-op change sets. ``updated_by`` is ``actor_id`` (rows created
+    by ``ensure_rows`` or the 0016 migration have NULL ``updated_by``).
     """
     if not rows:
         return {}
@@ -335,7 +366,11 @@ def write_rows(
 def ensure_rows(
     conn: Connection, project_id: int, defaults: Mapping[RowKey, PlanFlags]
 ) -> int:
-    """Insert only missing rows (and missing ``work_plans`` rows at revision 1)."""
+    """Insert only missing rows (and missing ``work_plans`` rows at revision 1).
+
+    Inserted rows have NULL ``updated_by`` (system defaults, like the 0016
+    migration rows); existing rows and revisions are left untouched.
+    """
     if not defaults:
         return 0
     conn.execute(

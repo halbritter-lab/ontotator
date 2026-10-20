@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 from pg_harness import database_for
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import event, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from ontocurator.domain.work_plans import (
@@ -234,6 +234,49 @@ def test_language_versions_flag_review_blocked(env) -> None:
     assert not got[RowKey("c1", "es")].accepted
     assert not got[RowKey("c1", "nl")].review_blocked
     assert not got[RowKey("c1", "en")].review_blocked
+
+
+def test_language_versions_for_cases_only_read_those_cases(env) -> None:
+    for case in ("c1", "c2"):
+        env.doc(f"{case}-en", case, "en", "native")
+        env.doc(f"{case}-de", case, "de", status="accepted")
+        env.doc(f"{case}-fr", case, "fr", status="reviewed")
+        env.review(f"{case}-fr", "rejected")
+        env.doc(f"{case}-it", case, "it")
+        env.assign(f"{case}-it", "translation_review")
+        env.run(
+            store.add_acceptance,
+            f"{case}-de",
+            source="package",
+            reason=None,
+            accepted_by=None,
+        )
+    env.discard("c2-fr")
+    full = env.run(store.language_versions)
+    statements: list[tuple[str, Any]] = []
+    with env.db.transaction() as conn:
+
+        def capture(_c: Any, _cur: Any, statement: str, params: Any, *_: Any) -> None:
+            statements.append((statement, params))
+
+        event.listen(conn, "before_cursor_execute", capture)
+        scoped = store.language_versions(conn, env.pid, ["c1"])
+    assert scoped == {k: v for k, v in full.items() if k.case_id == "c1"}
+    assert scoped[RowKey("c1", "fr")].review_blocked
+    assert not scoped[RowKey("c1", "fr")].discarded
+    assert full[RowKey("c2", "fr")].discarded
+    tables = (
+        "translation_reviews",
+        "translation_acceptances",
+        "discarded_variants",
+        "assignments",
+    )
+    for table in tables:
+        hits = [(sql, params) for sql, params in statements if f".{table}" in sql]
+        assert len(hits) == 1, table
+        sql, params = hits[0]
+        assert "document_id IN" in sql, table
+        assert "c1-de" in str(params) and "c2-" not in str(params), table
 
 
 def test_revisions_default_to_1_and_write_rows_stores_current_plus_one(env) -> None:

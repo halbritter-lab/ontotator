@@ -128,7 +128,10 @@ def import_defaults(
     """Flags a newly imported language version gets under the project setting."""
     if setting == "nothing":
         return {row.key: OFF for row in rows}
-    translated = {row.case_id for row in rows if not row.is_source}
+    # A fully discarded translation row does not make its case translated.
+    translated = {
+        row.case_id for row in rows if not row.is_source and not row.discarded
+    }
     result: dict[RowKey, PlanFlags] = {}
     for row in rows:
         if row.is_source:
@@ -181,12 +184,13 @@ def merge(
     """Tri-state merge over the selected cases; only existing rows are returned.
 
     Key ``"source"`` targets each case's source row(s); a source row ignores
-    ``review``. A row without current flags counts as off/off.
+    ``review``. A row without current flags counts as off/off. Fully
+    discarded rows are skipped (no flag is turned on for them).
     """
     selected = set(case_ids)
     result: dict[RowKey, PlanFlags] = {}
     for key, row in rows.items():
-        if row.case_id not in selected:
+        if row.case_id not in selected or row.discarded:
             continue
         change = languages.get(SOURCE_KEY if row.is_source else row.language)
         if change is None:
@@ -200,13 +204,18 @@ def merge(
 def preset_changes(
     preset: Preset, rows: Iterable[LanguageVersion]
 ) -> dict[str, LanguageChange]:
-    """Expand a one-click preset over every translation language of the rows."""
+    """Expand a one-click preset over every translation language of the rows.
+
+    Fully discarded rows contribute no language.
+    """
     change = (
         LanguageChange("on", "on")
         if preset == "review_and_annotate_translations"
         else LanguageChange("keep", "on")
     )
-    languages = sorted({row.language for row in rows if not row.is_source})
+    languages = sorted(
+        {row.language for row in rows if not row.is_source and not row.discarded}
+    )
     return dict.fromkeys(languages, change)
 
 

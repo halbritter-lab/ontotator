@@ -129,3 +129,24 @@ def test_mixed_counts():
         "annotate_on": 1,
         "annotate_off": 1,
     }
+
+
+def test_discarded_translation_rows_are_ignored_by_defaults_merge_and_presets():
+    en, de, fr = RowKey("c1", "en"), RowKey("c1", "de"), RowKey("c1", "fr")
+    gone = LanguageVersion("c1", "de", False, False, False, discarded=True)
+    # A case whose only translation is discarded counts as not translated.
+    got = import_defaults(
+        "review_and_annotate_translations", [lv("c1", "en", source=True), gone]
+    )
+    assert got[en] == OFF_ON
+    rows = {en: lv("c1", "en", source=True), de: gone, fr: lv("c1", "fr")}
+    merged = merge(
+        {},
+        rows,
+        ["c1"],
+        {"de": LanguageChange("on", "on"), "fr": LanguageChange("on", "on")},
+    )
+    assert de not in merged and merged[fr] == ON_ON
+    assert preset_changes("annotate_only", rows.values()) == {
+        "fr": LanguageChange("keep", "on")
+    }

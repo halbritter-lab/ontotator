@@ -43,7 +43,7 @@ def _assign(conn, doc: str, task: str, user: str = "ann") -> None:
 
 
 def _seed(conn) -> None:
-    for key in ("p", "empty"):
+    for key in ("p", "empty", "q"):
         _exec(
             conn,
             f"INSERT INTO {S}.projects (project_key, name, manifest, manifest_sha256,"
@@ -130,6 +130,33 @@ def _seed(conn) -> None:
             doc=doc,
             reason=reason,
         )
+    # Project q reuses c1/en and c1/fr without any work; its override on c1/fr
+    # has no reason in the audit details.
+    for lang, origin, status in (
+        ("en", "native", None),
+        ("fr", "machine_translation", "accepted"),
+    ):
+        _exec(
+            conn,
+            f"INSERT INTO {S}.documents (project_id, document_id, language, text,"
+            " case_id, external_id, version, origin, derived_from,"
+            " translation_status, text_sha256) SELECT id, :doc, :lang, 'x', 'c1',"
+            f" :doc, 1, :origin, :source, :status, 'h' FROM {S}.projects"
+            " WHERE project_key = 'q'",
+            doc=f"d-c1-{lang}",
+            lang=lang,
+            origin=origin,
+            source=None if origin == "native" else "d-c1-en",
+            status=status,
+        )
+    _exec(
+        conn,
+        f"INSERT INTO {S}.audit_events (at, actor_user_id, actor_label, action,"
+        " target_type, target_id, project_id, details)"
+        " SELECT '2026-10-02T10:00:00Z', u.id, 'lead', 'variant.status_override',"
+        f" 'document', 'd-c1-fr', p.id, '{{}}' FROM {S}.projects p, {S}.users u"
+        " WHERE p.project_key = 'q' AND u.username = 'lead'",
+    )
 
 
 @pytest.fixture
@@ -144,10 +171,17 @@ def migrated(tmp_path) -> Any:
     engine.dispose()
 
 
-def _flags(engine: Engine) -> dict[tuple[str, str], tuple[bool, bool]]:
+def _flags(
+    engine: Engine, project: str = "p"
+) -> dict[tuple[str, str], tuple[bool, bool]]:
     with engine.connect() as conn:
         rows = conn.execute(
-            text(f"SELECT case_id, language, review, annotate FROM {S}.work_plan_rows")
+            text(
+                f"SELECT r.case_id, r.language, r.review, r.annotate"
+                f" FROM {S}.work_plan_rows r JOIN {S}.projects p ON p.id = r.project_id"
+                " WHERE p.project_key = :project"
+            ),
+            {"project": project},
         ).all()
     return {(r.case_id, r.language): (r.review, r.annotate) for r in rows}
 
@@ -183,7 +217,11 @@ def test_no_row_with_work_is_out_of_plan(migrated) -> None:
     assert set(flags) == {(case, lang) for case, lang, _, _ in DOCUMENTS}
     with migrated[1].connect() as conn:
         plans = conn.execute(
-            text(f"SELECT case_id, revision FROM {S}.work_plans ORDER BY case_id")
+            text(
+                f"SELECT w.case_id, w.revision FROM {S}.work_plans w"
+                f" JOIN {S}.projects p ON p.id = w.project_id"
+                " WHERE p.project_key = 'p' ORDER BY w.case_id"
+            )
         ).all()
     assert [(p.case_id, p.revision) for p in plans] == [
         ("c1", 1),
@@ -198,15 +236,22 @@ def test_override_audit_becomes_acceptance_record(migrated) -> None:
     with migrated[1].connect() as conn:
         rows = conn.execute(
             text(
-                f"SELECT a.document_id, a.source, a.reason, a.upload_id,"
-                " a.accepted_at, u.username"
+                f"SELECT p.project_key, a.document_id, a.source, a.reason,"
+                " a.upload_id, a.accepted_at, u.username"
                 f" FROM {S}.translation_acceptances a"
                 f" JOIN {S}.users u ON u.id = a.accepted_by"
+                f" JOIN {S}.projects p ON p.id = a.project_id"
+                " ORDER BY p.project_key"
             )
         ).all()
     assert [
-        (r.document_id, r.source, r.reason, r.upload_id, r.username) for r in rows
-    ] == [("d-c1-fr", "override", "checked by phone", None, "lead")]
+        (r.project_key, r.document_id, r.source, r.reason, r.upload_id, r.username)
+        for r in rows
+    ] == [
+        ("p", "d-c1-fr", "override", "checked by phone", None, "lead"),
+        # No reason in the audit details: the fallback text.
+        ("q", "d-c1-fr", "override", "Accepted without review", None, "lead"),
+    ]
     assert rows[0].accepted_at.isoformat().startswith("2026-10-01")
 
 
@@ -277,7 +322,7 @@ def test_migration_is_audited_per_project(migrated) -> None:
                 " WHERE e.action = 'work_plan.migrate' ORDER BY p.project_key"
             )
         ).all()
-    assert [r.project_key for r in rows] == ["empty", "p"]
+    assert [r.project_key for r in rows] == ["empty", "p", "q"]
     for row in rows:
         assert row.actor_user_id is None
         assert row.actor_label == "migration"
@@ -286,6 +331,16 @@ def test_migration_is_audited_per_project(migrated) -> None:
     assert rows[0].details == {"rows": 0, "review": 0, "annotate": 0, "not_in_plan": 0}
     # p: 8 rows; review on c1/de, it, es, c3/de; annotate on all but c1/en.
     assert rows[1].details == {"rows": 8, "review": 4, "annotate": 7, "not_in_plan": 1}
+    assert rows[2].details == {"rows": 2, "review": 1, "annotate": 1, "not_in_plan": 1}
+
+
+def test_projects_are_migrated_in_isolation(migrated) -> None:
+    # Same case/language as p, but p's annotation work on c1/fr does not leak.
+    assert _flags(migrated[1])[("c1", "fr")] == (False, True)
+    assert _flags(migrated[1], "q") == {
+        ("c1", "en"): (False, False),
+        ("c1", "fr"): (True, True),
+    }
 
 
 def test_downgrade_is_not_supported(migrated) -> None:
