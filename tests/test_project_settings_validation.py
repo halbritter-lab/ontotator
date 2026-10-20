@@ -75,21 +75,3 @@ def test_hidden_validation_does_not_mutate_the_profile():
         {"hpo-layer": {"assertion": ["absent"]}},
     )
     assert result.model_dump() == before
-
-
-@pytest.mark.parametrize(
-    "url,version",
-    [
-        ("file:///g", "v1"),
-        ("http://[", "v1"),
-        ("https://example.org", None),
-        (None, "v1"),
-        ("https://example.org", "v" * 65),
-    ],
-)
-def test_guidelines_require_a_complete_http_reference(url, version):
-    from ontocurator.projects.service import validate_guideline
-
-    with pytest.raises(DomainError) as error:
-        validate_guideline(url, version)
-    assert error.value.code == "GUIDELINE_INCOMPLETE"

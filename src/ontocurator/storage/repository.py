@@ -1447,12 +1447,9 @@ class Repository:
         )
         with context as conn:
             project = conn.execute(
-                select(
-                    ProjectRow.id,
-                    ProjectRow.task_profile,
-                    ProjectRow.guideline_url,
-                    ProjectRow.guideline_version,
-                ).where(ProjectRow.project_key == project_key)
+                select(ProjectRow.id, ProjectRow.task_profile).where(
+                    ProjectRow.project_key == project_key
+                )
             ).one_or_none()
             if project is None:
                 raise DomainError(
@@ -1574,9 +1571,6 @@ class Repository:
             proposals=proposals,
             proposal_notes=proposal_notes,
             contributors=contributors,
-            guideline_ref=f"{project.guideline_url}@{project.guideline_version}"
-            if project.guideline_url and project.guideline_version
-            else None,
         )
 
     def edit_log(self, project_key: str) -> list[dict[str, Any]]:

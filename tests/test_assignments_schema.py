@@ -148,11 +148,11 @@ def test_project_settings_have_defaults(
     with db.engine.begin() as conn:
         row = conn.execute(
             text(
-                f"SELECT languages, hidden_axis_values, require_chosen_axes, adjudicator_not_annotator, contiguous_mentions_only, guideline_url, guideline_version, updated_at FROM {SCHEMA}.projects WHERE id = :project"
+                f"SELECT languages, hidden_axis_values, require_chosen_axes, adjudicator_not_annotator, contiguous_mentions_only, updated_at FROM {SCHEMA}.projects WHERE id = :project"
             ),
             {"project": project_id},
         ).one()
-    assert tuple(row[:7]) == ([], {}, False, False, False, None, None)
+    assert tuple(row[:5]) == ([], {}, False, False, False)
     assert row.updated_at is not None
 
 

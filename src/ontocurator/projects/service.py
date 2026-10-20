@@ -4,7 +4,6 @@ import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urlsplit
 
 import ontospan
 from pydantic import BaseModel, ConfigDict, Field
@@ -56,8 +55,6 @@ class ProjectSettingsChange(BaseModel):
     name: str = ""
     description: str | None = None
     languages: list[str] = Field(default_factory=list)
-    guideline_url: str | None = None
-    guideline_version: str | None = None
     allow_spanless_findings: bool = True
     require_spanless_note: bool = True
     require_chosen_axes: bool = False
@@ -157,21 +154,6 @@ def validate_hidden_values(
             raise DomainError(
                 "SETTINGS_INVALID", {"path": f"hidden_axis_values.{layer_id}"}
             )
-
-
-def validate_guideline(url: str | None, version: str | None) -> None:
-    if not url and not version:
-        return
-    try:
-        parsed = urlsplit(url or "")
-        valid_url = parsed.scheme in {"http", "https"} and bool(parsed.hostname)
-    except ValueError:
-        valid_url = False
-    if not valid_url or not version or not 1 <= len(version) <= 64:
-        raise DomainError(
-            "GUIDELINE_INCOMPLETE",
-            "Supply an HTTP(S) URL and a version of 1-64 characters together.",
-        )
 
 
 class ProjectService:
@@ -316,7 +298,6 @@ class ProjectService:
                 conn, actor, key, row["id"], Action.MANAGE_PROJECT_SETTINGS
             )
             combined = dict(row) | fields
-            validate_guideline(combined["guideline_url"], combined["guideline_version"])
             validate_hidden_values(
                 TaskProfile.model_validate(row["task_profile"]),
                 self.repo._pins(conn, row["id"]),
