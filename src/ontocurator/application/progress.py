@@ -15,6 +15,7 @@ from sqlalchemy import Connection, select
 
 from ontocurator.application.document_row_page import RowState, row_states
 from ontocurator.application.document_rows import RowFacts, load_facts
+from ontocurator.assignments.batch import WAITING_FOR_REVIEW_STEPS
 from ontocurator.domain import document_rows as rules
 from ontocurator.domain.next_steps import row_stage
 from ontocurator.storage.repository import Repository
@@ -65,20 +66,29 @@ def _translation_review(states: list[RowState]) -> dict[str, Any]:
 
 
 def _annotation(states: list[RowState]) -> dict[str, Any]:
-    """Rows with Annotate on: where their annotation work stands."""
+    """Rows with Annotate on: where their annotation work stands.
+
+    "Waiting for review" uses the batch's waiting steps (a translation review
+    runs or is still to come). "In progress", "Paused" and "Submitted" do not
+    overlap: a row with a held annotate/review task is paused only, and a row
+    at the final/done stage counts as submitted only while none of its
+    annotation work runs or is paused (e.g. not after a reopen).
+    """
     counts = dict.fromkeys(
         ("waiting_for_review", "to_assign", "in_progress", "paused", "submitted"), 0
     )
     scope = [state for state in states if state.annotate]
     for state in scope:
         stage, codes = row_stage(state.step_facts), _codes(state)
-        counts["waiting_for_review"] += stage == "translation_review"
-        counts["to_assign"] += "assign_annotation" in codes
-        counts["in_progress"] += bool(codes & _IN_PROGRESS)
-        counts["paused"] += any(
+        paused = any(
             item["held"] and item["task"] in _PAUSABLE for item in state.row["work"]
         )
-        counts["submitted"] += stage in ("final", "done")
+        running = not paused and bool(codes & _IN_PROGRESS)
+        counts["waiting_for_review"] += bool(codes & WAITING_FOR_REVIEW_STEPS)
+        counts["to_assign"] += "assign_annotation" in codes
+        counts["in_progress"] += running
+        counts["paused"] += paused
+        counts["submitted"] += stage in ("final", "done") and not paused and not running
     return _card("annotate", counts["submitted"], len(scope), counts)
 
 
@@ -99,7 +109,12 @@ def _final(states: list[RowState]) -> dict[str, Any]:
 
 
 def _workload(conn: Connection, facts: RowFacts) -> list[dict[str, Any]]:
-    """Per person with non-revoked work; open columns exclude paused tasks."""
+    """Per person with non-revoked work.
+
+    Unlike the members list and the batch people (``open_task_counts``, held
+    counts as open), the open columns here exclude paused (held) tasks: those
+    count in ``paused``; the sort key adds them back as open work.
+    """
     columns = {
         "translation_review": "translation_reviews_open",
         "annotate": "annotations_open",

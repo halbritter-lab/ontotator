@@ -11,7 +11,22 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Literal
 
-__all__ = ["layout"]
+__all__ = ["TooFewPeople", "layout", "too_few_message"]
+
+
+class TooFewPeople(ValueError):
+    """ "Split evenly" with fewer people than the open slots of one case."""
+
+    def __init__(self, needed: int, task: str = "annotate") -> None:
+        super().__init__(too_few_message(needed, task))
+        self.needed = needed
+
+
+def too_few_message(needed: int, task: str = "annotate") -> str:
+    """Copy of the refusal: annotators for annotations, else reviewers."""
+    if task == "annotate":
+        return f"Choose at least {needed} annotators for {needed} annotations per text"
+    return f"Choose at least {needed} reviewers for {needed} reviews per text"
 
 
 def layout(
@@ -21,6 +36,7 @@ def layout(
     mode: Literal["one", "split"],
     remaining: Mapping[str, int],
     already: Mapping[str, frozenset[str]],
+    task: str = "annotate",
 ) -> tuple[dict[str, list[str]], list[str]]:
     """Usernames per case and the cases skipped as already assigned.
 
@@ -28,6 +44,8 @@ def layout(
     non-revoked assignments); a case with none is skipped. ``already`` names
     the people who already hold the task on a case: in "split" they are
     replaced by the next person in rotation, in "one" the case is skipped.
+    Raises ``TooFewPeople`` (with the largest ``remaining``) when "split" has
+    fewer people than a case has open slots; ``task`` picks its copy.
     """
     if mode == "one" and len(people) > 1:
         raise ValueError("Choose one person.")
@@ -47,9 +65,7 @@ def layout(
     k = len(people)
     needed = max((remaining[case] for case in open_cases), default=0)
     if needed > k:
-        raise ValueError(
-            f"Choose at least {needed} people for {needed} assignments per text."
-        )
+        raise TooFewPeople(needed, task)
     q, r = divmod(len(open_cases), k)
     start = 0
     for block in range(k):

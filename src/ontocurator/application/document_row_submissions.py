@@ -29,7 +29,7 @@ from ontocurator.storage.workflow_tables import (
 )
 
 
-def pseudonym_refs(
+def lead_pseudonym_refs(
     conn: Connection, pseudonyms: Iterable[str], *, viewer_id: int
 ) -> dict[str, dict[str, Any]]:
     """PersonRefView fields per pseudonym for a lead viewer (D1).
@@ -248,7 +248,7 @@ def build_submissions(
 
     rows = _submissions(conn, pid, documents)
     open_reviews = _open_translation_reviews(conn, pid, documents)
-    people = pseudonym_refs(
+    people = lead_pseudonym_refs(
         conn,
         [
             *(row.annotator_id for row in rows),

@@ -133,6 +133,9 @@ class BatchPreview(BaseModel):
     people: list[BatchPersonView]
     per_text: int
     digest: str
+    # "Split evenly" with too few people: the most open slots of one target
+    # ("Choose at least n annotators for n annotations per text"); no usernames.
+    needs_people: int | None = None
 
 
 class BatchAssignResult(BaseModel):
@@ -153,6 +156,17 @@ class AssignableStepView(BaseModel):
 
 
 class SelectionSummary(BaseModel):
+    """Assignable steps of the selected cases (D21).
+
+    ``steps``: per (task, language) the versions and cases whose row has that
+    task's assign step, most versions first (then most cases, then task and
+    language). ``common`` is the first of ``steps`` (None when nothing is
+    assignable), the step the dialog preselects; ``skipped`` counts the
+    selected cases that ``common`` does not reach, by skip reason.
+    ``not_shown`` counts selected cases the current filters hide; filters
+    never change ``steps``, ``common`` or ``skipped``.
+    """
+
     cases: int
     steps: list[AssignableStepView]
     skipped: dict[str, int]

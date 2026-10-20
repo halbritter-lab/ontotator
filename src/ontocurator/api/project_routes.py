@@ -4,7 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from ontocurator.api.document_projection import Assignee
 from ontocurator.api.identity import PrincipalDep
@@ -12,6 +12,7 @@ from ontocurator.api.job_routes import EXPORT_ACTIONS, authorized_project
 from ontocurator.api.person_views import PersonRefView
 from ontocurator.api.routes import get_access
 from ontocurator.application.progress import progress_view
+from ontocurator.assignments.batch import open_task_counts
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Action, can
 from ontocurator.authz.scoped import project_not_found
@@ -61,7 +62,8 @@ class MemberChange(BaseModel):
 
 
 class OpenTasksView(BaseModel):
-    """Non-revoked, unsubmitted assignments of a member per task."""
+    """Open tasks of a member per task: non-revoked and unsubmitted or paused
+    (``open_task_counts``, the count of the batch dialog's people)."""
 
     translation_review: int = 0
     annotate: int = 0
@@ -422,18 +424,10 @@ def members(key: str, principal: PrincipalDep, request: Request) -> list[Member]
                 if user_id != principal.user_id:
                     member.username = member.display_name = ""
         visible = list(by_id) if is_lead else [principal.user_id]
-        for user_id, task, count in conn.execute(
-            select(AssignmentRow.user_id, AssignmentRow.task, func.count())
-            .where(
-                AssignmentRow.project_id == project_id,
-                AssignmentRow.user_id.in_(visible),
-                AssignmentRow.revoked_at.is_(None),
-                AssignmentRow.status != "submitted",
-            )
-            .group_by(AssignmentRow.user_id, AssignmentRow.task)
-        ).tuples():
-            if user_id in by_id and task in OpenTasksView.model_fields:
-                setattr(by_id[user_id].open_tasks, task, count)
+        for user_id, tasks in open_task_counts(conn, project_id, visible).items():
+            for task, count in tasks.items():
+                if user_id in by_id and task in OpenTasksView.model_fields:
+                    setattr(by_id[user_id].open_tasks, task, count)
         for user_id, language in conn.execute(
             select(UserLanguageRow.user_id, UserLanguageRow.language)
             .where(UserLanguageRow.user_id.in_(by_id))

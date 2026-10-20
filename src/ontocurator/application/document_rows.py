@@ -16,7 +16,7 @@ from ontocurator.application.document_row_page import build_page, case_ids
 from ontocurator.application.document_row_reports import load_row_reports
 from ontocurator.application.document_row_submissions import (
     build_submissions,
-    pseudonym_refs,
+    lead_pseudonym_refs,
 )
 from ontocurator.application.final_causes import (
     authorize_final_results,
@@ -559,7 +559,7 @@ def load_facts(
         annotations_per_text=project.annotations_per_text,
         rule_on=project.annotate_accepted_translations_only,
         people=people_fields,
-        people_by_pseudonym=pseudonym_refs(
+        people_by_pseudonym=lead_pseudonym_refs(
             conn,
             (item.annotator_id for item in selected.values()),
             viewer_id=viewer_user_id,

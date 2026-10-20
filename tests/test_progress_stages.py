@@ -117,7 +117,7 @@ def test_stage_cards_count_rows_per_state(env, tmp_path):
     assert annotation["counts"] == {
         "waiting_for_review": 2,
         "to_assign": 0,
-        "in_progress": 1,
+        "in_progress": 0,  # c2 en is paused, not in progress
         "paused": 1,
         "submitted": 1,
     }
@@ -172,6 +172,19 @@ def test_workload_people_sorted_by_open_work(env):
         (0, 1, 0, 0, 0),
         (0, 0, 0, 0, 1),
     ]
+
+
+def test_annotation_in_progress_excludes_paused_rows(env):
+    assign(env, doc("c1", "en"), "ana", "annotate")
+    paused = assign(env, doc("c2", "en"), "ben", "annotate")
+    counts = progress(env.lead)["stages"]["annotation"]["counts"]
+    assert (counts["in_progress"], counts["paused"]) == (2, 0)
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow).where(AssignmentRow.id == paused).values(held=True)
+        )
+    counts = progress(env.lead)["stages"]["annotation"]["counts"]
+    assert (counts["in_progress"], counts["paused"]) == (1, 1)
 
 
 def test_progress_people_are_lead_only(env):

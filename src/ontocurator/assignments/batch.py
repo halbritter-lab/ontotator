@@ -29,13 +29,14 @@ from ontocurator.authz.policy import TASK_ROLES, Access, Action, Role, Task
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain import document_rows as rules
-from ontocurator.domain.batch_layout import layout
+from ontocurator.domain.batch_layout import TooFewPeople, layout
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.next_steps import REVIEWER_NEEDED_STATUSES
 from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import _lock_id
 from ontocurator.storage.tables import (
+    AssignmentRow,
     ProjectMembershipRow,
     ProjectRow,
     UserLanguageRow,
@@ -57,8 +58,9 @@ ASSIGN_STEPS: dict[Task, str] = {
     "translation_review": "assign_translation_review",
     "annotate": "assign_annotation",
 }
-# Steps of a row whose translation review still runs or is still to come.
-_WAITING = frozenset(
+# Steps of a row whose translation review still runs or is still to come
+# (also Progress "Waiting for review").
+WAITING_FOR_REVIEW_STEPS = frozenset(
     {"translation_review_in_progress", "waiting_for_translation_review"}
 )
 # D25: acceptances whose translation may get a new review.
@@ -100,11 +102,37 @@ class _Batch:
     view: dict[str, Any]
     targets: tuple[_Target, ...]
     digest: str
-    too_few: bool
+    needs_people: int | None  # layout refused: too few people chosen
 
 
 def _open(item: rules.AssignmentFact) -> bool:
+    """An open task: not revoked, and not submitted or paused (held)."""
     return not item.revoked and (item.status != "submitted" or item.held)
+
+
+def open_task_counts(
+    conn: Connection, project_id: int, user_ids: Iterable[int]
+) -> dict[int, Counter[str]]:
+    """Open tasks (as ``_open``) per user and task in project ``project_id``.
+
+    The one count of "open tasks" for the members list and the batch people.
+    """
+    wanted = list(user_ids)
+    counts: dict[int, Counter[str]] = {user_id: Counter() for user_id in wanted}
+    if not wanted:
+        return counts
+    for user_id, task, count in conn.execute(
+        select(AssignmentRow.user_id, AssignmentRow.task, func.count())
+        .where(
+            AssignmentRow.project_id == project_id,
+            AssignmentRow.user_id.in_(wanted),
+            AssignmentRow.revoked_at.is_(None),
+            or_(AssignmentRow.status != "submitted", AssignmentRow.held),
+        )
+        .group_by(AssignmentRow.user_id, AssignmentRow.task)
+    ).tuples():
+        counts[user_id][task] = count
+    return counts
 
 
 class _Rows:
@@ -113,8 +141,15 @@ class _Rows:
     def __init__(self, conn: Connection, pid: int, facts: RowFacts) -> None:
         self.facts = facts
         self.acceptances = work_plan_store.acceptances(conn, pid)
-        ctx, rows, _ = page._evaluate(facts, RowQuery())
-        self.ctx, self.rows = ctx, rows
+        self.ctx = page.row_context(facts)
+        self.rows = self.ctx.rows
+        # D25 (``enable_review_for_accepted``): a version with a correction
+        # derived from it never gets a new review.
+        self.corrected = frozenset(
+            v.derived_from
+            for v in facts.versions
+            if v.origin == "correction" and v.derived_from is not None
+        )
         users = {item.user_id for item in facts.assignments}
         self.username_of: dict[int, str] = (
             {
@@ -132,8 +167,8 @@ class _Rows:
 
     def _newest(self, key: tuple[str, str]) -> list[rules.Version]:
         """Newest version of every root that is not discarded."""
-        dropped = self.ctx.dropped
-        chains = rules.build_chains(self.ctx.by_row[key])
+        dropped = self.ctx.discarded
+        chains = rules.build_chains(self.ctx.versions[key])
         return [
             [v for v in chain.versions if not v.not_newer][-1]
             for chain in chains
@@ -153,6 +188,9 @@ class _Rows:
         work = self._work(version.document_id, task)
         if task == "annotate":
             remaining = self.facts.annotations_per_text - len(work)
+        elif task == "review":
+            # No automatic re-review: any non-revoked review fills the slot.
+            remaining = 0 if work else 1
         else:
             remaining = 0 if any(_open(item) for item in work) else 1
         return _Target(
@@ -170,7 +208,7 @@ class _Rows:
     ) -> _Match:
         key = (case_id, language)
         row = self.rows.get(key)
-        if row is None:
+        if row is None:  # unknown case IDs and languages, too
             return _Match((), "not_in_plan", frozenset())
         newest = self._newest(key)
         holders = frozenset(
@@ -184,6 +222,7 @@ class _Rows:
         codes = {step["code"] for step in row["steps"]}
         candidates: list[_Target] = []
         if task == "translation_review":
+            # The predicate of ``enable_review_for_accepted`` (D25).
             external = (
                 [
                     self._target(v, task, accepted_review=True)
@@ -191,12 +230,16 @@ class _Rows:
                     if v.translation_status == "accepted"
                     and self.acceptances.get(v.document_id, {}).get("source")
                     in _REVIEWABLE_ACCEPTANCES
+                    and v.document_id not in self.corrected
                 ]
                 if accepted_review and row["in_plan"]
                 else []
             )
             if not review and not external:
-                return _Match((), "not_in_plan", holders)
+                # In the plan (Annotate on), e.g. package-accepted: its step
+                # is not a translation review.
+                reason: SkipReason = "step_differs" if row["in_plan"] else "not_in_plan"
+                return _Match((), reason, holders)
             if review and ASSIGN_STEPS[task] in codes:
                 candidates = [
                     self._target(v, task)
@@ -223,7 +266,7 @@ class _Rows:
         targets = tuple(t for t in candidates if t.remaining > 0)
         if targets:
             return _Match(targets, None, holders)
-        if task != "translation_review" and codes & _WAITING:
+        if task != "translation_review" and codes & WAITING_FOR_REVIEW_STEPS:
             return _Match((), "waiting_for_review", holders)
         if candidates or any(
             _open(item)
@@ -312,7 +355,7 @@ class BatchAssignmentService:
             "steps": steps,
             "skipped": dict(skipped),
             "common": common,
-            "not_shown": page.cases_not_shown(facts, selected, query),
+            "not_shown": rows.ctx.cases_not_shown(selected, query),
         }
 
     # -- the batch ----------------------------------------------------------
@@ -385,7 +428,7 @@ class BatchAssignmentService:
                 skipped[case_id] = match.reason
             else:
                 targets[case_id] = match.targets
-        too_few = False
+        needs_people: int | None = None
         try:
             got, layout_skipped = layout(
                 list(targets),
@@ -398,9 +441,10 @@ class BatchAssignmentService:
                     c: frozenset().union(*(t.holders for t in ts))
                     for c, ts in targets.items()
                 },
+                task=task,
             )
-        except ValueError:
-            got, layout_skipped, too_few = {}, [], True
+        except TooFewPeople as error:
+            got, layout_skipped, needs_people = {}, [], error.needed
         for case_id in layout_skipped:
             skipped[case_id] = "already_assigned"
             del targets[case_id]
@@ -443,17 +487,17 @@ class BatchAssignmentService:
             "versions": len(flat),
             "targets": target_views,
             "skipped": skip_views,
-            "people": self._people(conn, pid, rows, task, spec, flat, holders),
+            "people": self._people(conn, pid, task, spec, flat, holders),
             "per_text": per_text,
             "digest": digest,
+            "needs_people": needs_people,
         }
-        return _Batch(view, tuple(flat), digest, too_few)
+        return _Batch(view, tuple(flat), digest, needs_people)
 
     def _people(
         self,
         conn: Connection,
         pid: int,
-        rows: _Rows,
         task: Task,
         spec: BatchSpec,
         targets: Sequence[_Target],
@@ -478,13 +522,12 @@ class BatchAssignmentService:
             viewer_id=self.access.user_id,
             viewer_is_lead=True,
         )
-        open_tasks = Counter(
-            item.user_id for item in rows.facts.assignments if _open(item)
-        )
+        open_tasks = open_task_counts(conn, pid, [m["user_id"] for m in members])
         task_roles: frozenset[Role] = TASK_ROLES[task]
         views = []
         for member in members:
             username = member["username"]
+            # One entry per target (version) the person gets.
             cases = [t.case_id for t in targets if username in t.usernames]
             mismatch = not required <= set(member["reads"])
             unavailable: Unavailable | None = (
@@ -497,7 +540,7 @@ class BatchAssignmentService:
                 else None
             )
             ref = refs[member["user_id"]]
-            before = open_tasks[member["user_id"]]
+            before = sum(open_tasks[member["user_id"]].values())
             views.append(
                 {
                     "username": username,
@@ -516,8 +559,10 @@ class BatchAssignmentService:
                     "_name": (ref.display_name or ref.pseudonym).casefold(),
                 }
             )
+        # Eligible first; people without the role or inactive last.
         views.sort(
             key=lambda v: (
+                v["unavailable"] in ("role_missing", "inactive"),
                 v["language_mismatch"],
                 v["open_before"],
                 v["_name"],
@@ -573,9 +618,10 @@ class BatchAssignmentService:
             batch = self._batch(conn, key, project["id"], spec)
             if batch.digest != expected_digest:
                 raise DomainError("ASSIGNMENT_BATCH_STALE")
-            if batch.too_few:
+            if batch.needs_people is not None:
                 raise DomainError(
-                    "ASSIGNMENT_BATCH_REFUSED", {"refused": [], "too_few_people": True}
+                    "ASSIGNMENT_BATCH_REFUSED",
+                    {"refused": [], "needs_people": batch.needs_people},
                 )
             variants = load_variants(conn, project["id"])
             service = AssignmentService(self.db)

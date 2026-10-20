@@ -868,6 +868,46 @@ def _evaluate(
     return ctx, rows, matches
 
 
+class RowContext:
+    """Every row of one project state, built once, for readers outside the page.
+
+    ``rows`` are the Documents row dictionaries; ``versions``, ``assignments``,
+    ``flags`` and ``discarded`` are the lookups the rows were built from.
+    """
+
+    def __init__(self, facts: RowFacts) -> None:
+        self._ctx = _Context(facts)
+        self.rows: dict[RowKey, dict[str, Any]] = {
+            key: _build_row(self._ctx, *key) for key in sorted(self._ctx.by_row)
+        }
+        self.versions: Mapping[RowKey, list[rules.Version]] = self._ctx.by_row
+        self.assignments: Mapping[str, list[rules.AssignmentFact]] = (
+            self._ctx.assignments
+        )
+        # Effective (review, annotate) flags per row.
+        self.flags: Mapping[RowKey, tuple[bool, bool]] = self._ctx.flags
+        self.discarded: frozenset[str] = self._ctx.dropped
+
+    def cases_not_shown(self, case_ids: Sequence[str], query: RowQuery) -> int:
+        """Selected cases without any row matching the filters of ``query``.
+
+        Reuses the built rows (no second derivation); marks their versions'
+        ``matches_filter`` for ``query``.
+        """
+        shown = {
+            key[0]
+            for key, row in self.rows.items()
+            if _apply_filters(self._ctx, row, query)
+            and _matches_decision(self._ctx, key, row, query)
+        }
+        return sum(1 for case_id in dict.fromkeys(case_ids) if case_id not in shown)
+
+
+def row_context(facts: RowFacts) -> RowContext:
+    """Every row of ``facts`` with the lookups they were built from."""
+    return RowContext(facts)
+
+
 @dataclass(frozen=True)
 class RowState:
     """One row as the Documents derivation sees it (Progress counts these)."""

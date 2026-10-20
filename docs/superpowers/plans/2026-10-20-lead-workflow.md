@@ -1429,6 +1429,14 @@ def test_too_few_people_for_per_text_raises():
 - [ ] **Step 7: Verify:** `uv run pytest tests/test_batch_layout.py tests/test_assignment_batch.py tests/test_assignments.py tests/test_admin_error_codes.py -q`; `bash scripts/check.sh --only static`; `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/assignmentBatchClient.test.ts tests/errors.test.ts`.
 - **Done:** layout rules (contiguous, remainder, rotation, remaining per case, skips) tested; any-step match; server-side Documents order; commit all-or-nothing with the same refusals as `createAssignments`; selection summary; static gate green.
 - **Commit:** `feat(assignments): batch assignment preview and commit, selection summary`
+- **Recorded decisions (L1p/L1b review fixes):**
+  - Filters only drive `not_shown` (selection summary); the batch case order depends on `sort` only, and filters never change targets, skips, `steps` or `common`.
+  - No automatic re-review: for task `review`, `remaining = 0` as soon as any non-revoked review assignment exists on the target (submitted ones included); the case is skipped as `already_assigned`.
+  - Too few people for "Split evenly": `BatchPreview.needs_people` (largest `remaining` among targets, else `null`); commit 409 `ASSIGNMENT_BATCH_REFUSED` details `{"refused": [], "needs_people": n}`. Copy: "Choose at least {n} annotators for {n} annotations per text" (review tasks: "reviewers … reviews").
+  - D25 targets use the predicate of `enable_review_for_accepted`: a version with a correction derived from it is no target (`step_differs`). A row in the plan with Review off (e.g. package-accepted) in a translation-review batch is `step_differs`; `not_in_plan` stays for rows out of the plan and unknown case IDs.
+  - Open tasks (members list `open_tasks`, batch `open_before`) share `open_task_counts`: non-revoked and unsubmitted, plus held. Progress workload keeps held tasks out of its open columns (they count as `paused`).
+  - People order: eligible, then language mismatch, then role missing / inactive; then open tasks, name.
+  - Progress Annotation card: `waiting_for_review` = rows with a `translation_review_in_progress` / `waiting_for_translation_review` step; `in_progress`, `paused` and `submitted` are disjoint (paused wins; final/done counts as submitted only without running or paused annotation work).
 
 ### L9: PlanChip, TriStateButton, Toast, grouped-table case selection, DESIGN.md
 

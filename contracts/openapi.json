@@ -7255,6 +7255,17 @@
           "digest": {
             "type": "string",
             "title": "Digest"
+          },
+          "needs_people": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Needs People"
           }
         },
         "type": "object",
@@ -10972,7 +10983,7 @@
         },
         "type": "object",
         "title": "OpenTasksView",
-        "description": "Non-revoked, unsubmitted assignments of a member per task."
+        "description": "Open tasks of a member per task: non-revoked and unsubmitted or paused\n(``open_task_counts``, the count of the batch dialog's people)."
       },
       "OpenTranslationReviewView": {
         "properties": {
@@ -15506,7 +15517,8 @@
           "skipped",
           "common"
         ],
-        "title": "SelectionSummary"
+        "title": "SelectionSummary",
+        "description": "Assignable steps of the selected cases (D21).\n\n``steps``: per (task, language) the versions and cases whose row has that\ntask's assign step, most versions first (then most cases, then task and\nlanguage). ``common`` is the first of ``steps`` (None when nothing is\nassignable), the step the dialog preselects; ``skipped`` counts the\nselected cases that ``common`` does not reach, by skip reason.\n``not_shown`` counts selected cases the current filters hide; filters\nnever change ``steps``, ``common`` or ``skipped``."
       },
       "SelectionSummaryRequest": {
         "properties": {

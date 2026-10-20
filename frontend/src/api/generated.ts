@@ -2344,6 +2344,8 @@ export interface components {
             per_text: number;
             /** Digest */
             digest: string;
+            /** Needs People */
+            needs_people?: number | null;
         };
         /** BatchSkipView */
         BatchSkipView: {
@@ -3651,7 +3653,8 @@ export interface components {
         };
         /**
          * OpenTasksView
-         * @description Non-revoked, unsubmitted assignments of a member per task.
+         * @description Open tasks of a member per task: non-revoked and unsubmitted or paused
+         *     (``open_task_counts``, the count of the batch dialog's people).
          */
         OpenTasksView: {
             /**
@@ -5289,7 +5292,18 @@ export interface components {
             /** End */
             end: number;
         };
-        /** SelectionSummary */
+        /**
+         * SelectionSummary
+         * @description Assignable steps of the selected cases (D21).
+         *
+         *     ``steps``: per (task, language) the versions and cases whose row has that
+         *     task's assign step, most versions first (then most cases, then task and
+         *     language). ``common`` is the first of ``steps`` (None when nothing is
+         *     assignable), the step the dialog preselects; ``skipped`` counts the
+         *     selected cases that ``common`` does not reach, by skip reason.
+         *     ``not_shown`` counts selected cases the current filters hide; filters
+         *     never change ``steps``, ``common`` or ``skipped``.
+         */
         SelectionSummary: {
             /** Cases */
             cases: number;

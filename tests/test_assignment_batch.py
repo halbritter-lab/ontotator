@@ -271,8 +271,9 @@ def test_preview_people_sorted_reads_then_open_tasks_then_name_with_reasons(env)
     assign(env, de(CASES[19]), "ana", "translation_review")
     result = preview(env, "translation_review")
     order = [item["username"] for item in result["people"]]
-    assert order[-1] == "cyd"
-    assert order.index("ben") < order.index("ana")
+    # eligible, then language mismatch, then no role or inactive
+    assert order.index("ben") < order.index("ana") < order.index("cyd")
+    assert set(order[-2:]) == {"adj", "leader"}
     by_name = people(result)
     assert by_name["cyd"]["unavailable"] == "does_not_read"
     assert by_name["cyd"]["language_mismatch"] is True
@@ -484,15 +485,18 @@ def test_remaining_per_case_with_one_of_two_assigned(env):
         and sorted(targets[c]["usernames"]) == ["ana", "ben"]
         for c in CASES[1:4]
     )
+    assert result["needs_people"] is None
     too_few = preview(
         env, "annotate", case_ids=CASES[:4], mode="split", usernames=["ana"]
     )
     assert all(t["usernames"] == [] for t in too_few["targets"])
+    assert too_few["needs_people"] == 2
     response = commit(
         env, "annotate", case_ids=CASES[:4], mode="split", usernames=["ana"]
     )
     assert response.status_code == 409, response.text
     assert response.json()["code"] == "ASSIGNMENT_BATCH_REFUSED"
+    assert response.json()["details"] == {"refused": [], "needs_people": 2}
 
 
 def test_review_accepted_translation_targets_externally_accepted_rows_only(env):
@@ -521,7 +525,7 @@ def test_review_accepted_translation_targets_externally_accepted_rows_only(env):
     assert skipped(result) == {CASES[2]: "step_differs"}
     plain = preview(env, "translation_review", case_ids=CASES[:3])
     assert skipped(plain) == {
-        CASES[0]: "not_in_plan",
+        CASES[0]: "step_differs",  # Review off, in the plan
         CASES[1]: "step_differs",
         CASES[2]: "step_differs",
     }
@@ -531,6 +535,69 @@ def test_review_accepted_translation_targets_externally_accepted_rows_only(env):
     with env.db.transaction() as conn:
         flags = store.effective_plan(conn, env.pid, [CASES[0]])
     assert flags[RowKey(CASES[0], "de")] == BOTH
+
+
+def test_review_accepted_translation_skips_versions_with_a_correction(env, tmp_path):
+    """D25 as ``enable_review_for_accepted``: a version with a correction
+    derived from it (here a rejected one, so v1 stays newest) is no target."""
+    from tests_support_reviews import insert_review
+
+    lead = env.app.state.accounts.get_by_username("leader")
+    corrected = import_correction(env, tmp_path, CASES[0])
+    set_status(env, "accepted", *CASES[:2])
+    plan(env, ANNOTATE, *CASES[:2])
+    assign(env, de(CASES[5]), "ana", "translation_review")
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(DocumentRow)
+            .where(DocumentRow.document_id == corrected)
+            .values(translation_status="reviewed")
+        )
+        for case in CASES[:2]:
+            store.add_acceptance(
+                conn,
+                env.pid,
+                de(case),
+                source="lead",
+                reason="checked externally",
+                accepted_by=lead.id,
+            )
+    insert_review(env.db, "proj", corrected, "rejected")
+    result = preview(
+        env,
+        "translation_review",
+        case_ids=CASES[:2],
+        review_accepted_translation=True,
+    )
+    assert [t["case_id"] for t in result["targets"]] == [CASES[1]]
+    assert skipped(result) == {CASES[0]: "step_differs"}
+
+
+def test_review_task_has_no_automatic_re_review(env):
+    set_status(env, "accepted", *CASES[:2])
+    for case in CASES[:2]:
+        submit(env, assign(env, de(case), "cyd", "annotate"), f"s-{case}")
+    submit(env, assign(env, de(CASES[0]), "adj", "review"), "r-0")
+    result = preview(env, "review", case_ids=CASES[:2])
+    assert [(t["case_id"], t["remaining"]) for t in result["targets"]] == [
+        (CASES[1], 1)
+    ]
+    assert skipped(result) == {CASES[0]: "already_assigned"}
+
+
+def test_open_tasks_count_paused_work_in_batch_and_members(env):
+    task_id = assign(env, de(CASES[0]), "ana", "translation_review")
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == task_id)
+            .values(status="submitted", held=True)
+        )
+    ana = people(preview(env, "annotate", case_ids=[CASES[1]]))["ana"]
+    assert ana["open_before"] == 1
+    members = env.lead.get(f"{BASE}/members").json()
+    (member,) = [m for m in members if m["username"] == "ana"]
+    assert member["open_tasks"]["translation_review"] == 1
 
 
 def test_request_validation(env):

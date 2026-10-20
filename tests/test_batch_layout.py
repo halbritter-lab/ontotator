@@ -2,7 +2,7 @@
 
 import pytest
 
-from ontocurator.domain.batch_layout import layout
+from ontocurator.domain.batch_layout import TooFewPeople, layout
 
 CASES = [f"case-{n:04d}" for n in range(101, 121)]
 
@@ -77,9 +77,25 @@ def test_already_assigned_person_is_skipped_in_split_and_case_skipped_in_one():
 
 
 def test_too_few_people_for_per_text_raises():
-    with pytest.raises(ValueError, match="at least 2"):
+    with pytest.raises(
+        TooFewPeople,
+        match=r"^Choose at least 2 annotators for 2 annotations per text$",
+    ) as error:
         layout(
             CASES[:2], ["ana"], mode="split", remaining=ones(CASES[:2], 2), already={}
+        )
+    assert error.value.needed == 2
+
+
+def test_too_few_reviewers_copy_names_reviewers():
+    with pytest.raises(TooFewPeople, match=r"^Choose at least 2 reviewers for 2 "):
+        layout(
+            CASES[:1],
+            ["ana"],
+            mode="split",
+            remaining=ones(CASES[:1], 2),
+            already={},
+            task="translation_review",
         )
 
 
