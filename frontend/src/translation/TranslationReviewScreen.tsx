@@ -13,7 +13,8 @@ import { SourceObligationReview } from './SourceObligationReview';
 import { notifyFinalSelectionChanged } from '../variants/finalSelectionState';
 import { ChecksSummary, ReviewSummary, SubmitSummary } from "./ReviewParts";
 import { ReviewForm } from "./ReviewForm";
-import { categoryLabels, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName } from "./labels";
+import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type DecisionState } from "./decisionOrigin";
+import { categoryLabels, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName } from "./labels";
 import { checkReview, type ClinicalCategory, type IssueCode, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
 
 export interface TranslationReviewScreenProps {
@@ -42,6 +43,13 @@ function typedForm(raw: Record<string, unknown>): FormValue | null {
     || (raw.rationale !== undefined && raw.rationale !== null && typeof raw.rationale !== "string")) return null;
   return { ...visualForm(raw), decision: raw.decision, clinical_change: raw.clinical_change === true };
 }
+/** The backend form needs clinical_change; a chosen decision without it gets the unticked default. */
+const withClinicalDefault = (form: Record<string, unknown>): Record<string, unknown> =>
+  decision(form.decision) && !has(form, "clinical_change") ? { ...form, clinical_change: false } : form;
+/** Query and Rejected always imply a clinical change; older drafts may lack it. */
+const lacksImpliedClinical = (form: Record<string, unknown>): boolean =>
+  (form.decision === "query" || form.decision === "rejected") && form.clinical_change !== true;
+const decisionKeys: readonly ReviewDecisionCode[] = ["accepted_unchanged", "accepted_corrected", "query", "rejected"];
 const recordForm = (record: TranslationReviewRecord): Record<string, unknown> => ({ decision: record.decision, clinical_change: record.clinical_change, categories: record.categories, rationale: record.rationale });
 
 export function TranslationReviewScreen(props: TranslationReviewScreenProps): JSX.Element {
@@ -67,7 +75,15 @@ export function TranslationReviewScreen(props: TranslationReviewScreenProps): JS
 function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreenProps & { workspace: ReviewWorkspace; onReload: () => void }): JSX.Element {
   const immutableReadOnly = workspace.read_only && (!workspace.assignment.held || workspace.assignment.status === "submitted" || workspace.submitted_record !== null);
   const held = props.held ?? workspace.assignment.held;
-  const [draft, setDraft] = useState<RawDraft>(() => ({ text: workspace.draft.text, form: structuredClone(workspace.draft.form) }));
+  // A stored Query/Rejected draft without the implied clinical change is normalised once on open (and saved).
+  const [normaliseOnOpen] = useState(() => !immutableReadOnly && !held && lacksImpliedClinical(workspace.draft.form));
+  const [draft, setDraft] = useState<RawDraft>(() => {
+    const form = structuredClone(workspace.draft.form);
+    return { text: workspace.draft.text, form: normaliseOnOpen && decision(form.decision) ? chooseDecision(form, form.decision) : form };
+  });
+  /** Client-side origin of the decision (spec A.4); a stored decision counts as the user's. */
+  const [decisionState, setDecisionState] = useState<DecisionState>(USER_ORIGIN);
+  const decisionStateRef = useRef(decisionState); decisionStateRef.current = decisionState;
   const draftRef = useRef(draft); draftRef.current = draft;
   const saver = useRef<DraftSaver<RawDraft> | null>(null);
   const alive = useRef(false), operation = useRef(false), departing = useRef(false), readOnlyRef = useRef(workspace.read_only);
@@ -115,6 +131,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           return (await api.saveTranslationReviewDraft(props.assignmentId, { ...value, expected_revision })).revision;
         }, onStateChange: () => { if (alive.current && saver.current === instance) refresh(n => n + 1); } });
       saver.current = instance;
+      if (normaliseOnOpen) instance.update(draftRef.current);
     }
     return () => { alive.current = false; saver.current?.dispose(); saver.current = null; pendingLeave.current?.resolve?.(false); pendingLeave.current = null; };
   }, [workspace, props.assignmentId, props.username]);
@@ -221,6 +238,25 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     if (canSubmit) setConfirming(true);
     else submitReason.current?.focus();
   };
+  const chooseOption = (option: ReviewDecisionCode) => {
+    if (readOnlyRef.current || operation.current) return;
+    const current = draftRef.current;
+    edit({ ...current, form: withClinicalDefault(chooseDecision(current.form, option)) });
+    decisionStateRef.current = USER_ORIGIN; setDecisionState(USER_ORIGIN);
+  };
+  const editText = (nextText: string) => {
+    if (readOnlyRef.current || operation.current) return;
+    const current = draftRef.current;
+    const result = reactToTextEdit(decisionStateRef.current, current.form, workspace.text, nextText);
+    // The whole returned form, so undoing an automatic selection can remove the decision again.
+    edit({ text: nextText, form: result.form === current.form ? result.form : withClinicalDefault(result.form) });
+    decisionStateRef.current = result.state; setDecisionState(result.state);
+  };
+  const keyOptions = { scope: "screen", group: "Translation review", enabled: !readOnly } as const;
+  useShortcut("1", () => chooseOption(decisionKeys[0]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[0]]}` });
+  useShortcut("2", () => chooseOption(decisionKeys[1]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[1]]}` });
+  useShortcut("3", () => chooseOption(decisionKeys[2]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[2]]}` });
+  useShortcut("4", () => chooseOption(decisionKeys[3]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[3]]}` });
   useShortcut("Ctrl+Enter", requestSubmit, { scope: "screen", group: "Translation review", description: "Submit review (asks for confirmation)", enabled: !readOnly, allowInInputs: true });
   const focusDecision = () => { decisionHeading.current?.scrollIntoView?.({ block: "nearest" }); decisionHeading.current?.focus(); };
 
@@ -297,7 +333,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
               ? <DiffView ref={setTargetElement} before={workspace.text} after={text} lang={targetLanguage} />
               : <TranslationEditor ref={setTargetElement} id="review-translation" labelledBy="review-translation-label" describedBy="review-translation-note"
                   machineText={workspace.text} value={text} lang={targetLanguage} readOnly={readOnly} disabled={busy}
-                  onChange={event => edit({ ...draftRef.current, text: event.target.value })} />}
+                  onChange={event => editText(event.target.value)} />}
             <p id="review-translation-note" className="translation-column-note">{showChanges
               ? "Showing changes against the machine translation. Turn off Show changes to edit."
               : changed ? "Underlined text differs from the machine translation." : "Same as the machine translation."}</p>
@@ -318,11 +354,12 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
             {createdVersion !== null && <p>A corrected version v{createdVersion} was created.</p>}
             {submitted.created_variant_id && createdVersion === null && <Button size="sm" onClick={() => { void loadCreated(submitted); }}>Retry corrected version metadata</Button>}</InlineMessage>}
           {record ? <ReviewSummary record={record} heading="Submitted review" />
-            : held ? <><InlineMessage tone="info">This task is paused. Your review choices are kept.</InlineMessage><ReviewForm value={visualForm(rawForm)} issues={[]} readOnly onChange={() => {}} /></>
+            : held ? <><InlineMessage tone="info">This task is paused. Your review choices are kept.</InlineMessage><ReviewForm value={visualForm(rawForm)} issues={[]} failedCheckCount={workspace.failed_checks.length} readOnly onChange={() => {}} /></>
             : readOnly ? <InlineMessage tone="info">This review can no longer be edited.</InlineMessage>
             : <>
               {decision(rawForm.decision) && !form && <InlineMessage tone="error">The review form contains unsupported values. Update the affected fields before submitting.</InlineMessage>}
-              <ReviewForm value={visualForm(rawForm)} issues={[]} readOnly={busy} onChange={next => {
+              <ReviewForm value={visualForm(rawForm)} issues={[]} readOnly={busy} failedCheckCount={workspace.failed_checks.length}
+                autoNote={autoNoteText(decisionState.note)} onChooseDecision={chooseOption} onChange={next => {
                 const current = draftRef.current;
                 edit({ ...current, form: { ...(!has(current.form, "clinical_change") ? { clinical_change: false } : {}), ...current.form, ...next } });
               }} />
@@ -346,6 +383,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
               ? <><p>Before submitting:</p><ol className="review-issues" aria-label="Review issues">{issues.map((issue, index) => <li key={`${issue}-${index}`}>{issueMessages[issue]}</li>)}</ol></>
               : <p>{submitBlocker}</p>}
           </div>}
+          <p className="translation-key-hint">{decisionKeyHint}</p>
           <Button variant="primary" aria-describedby={submitBlocker || issues.length > 0 ? "review-submit-reason" : undefined} disabled={!canSubmit} loading={busy} onClick={requestSubmit}>Submit review…</Button>
         </div>}
       </aside>

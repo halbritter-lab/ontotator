@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { api, ApiError } from "../src/api/client";
 import type { RouteLeaveGuard } from "../src/app/router";
@@ -69,7 +69,7 @@ it.each(["accepted_unchanged", "accepted_corrected"] as const)("sends a server-v
   if (selected === "accepted_corrected") fireEvent.change(screen.getByRole("textbox", { name: "Translation (de)" }), { target: { value: "Nonclinical correction" } });
   await clock();
   expect(wire).toEqual([{ expected_revision: 6, text: selected === "accepted_corrected" ? "Nonclinical correction" : "Übersetzt.",
-    form: { decision: selected, clinical_change: false } }]);
+    form: selected === "accepted_unchanged" ? { decision: selected, clinical_change: false, categories: [] } : { decision: selected, clinical_change: false } }]);
 });
 it("autosaves exact raw data once in StrictMode and submits with the actual confirmed revision", async () => {
   const { save, submit } = setup(undefined, true);
@@ -98,7 +98,7 @@ it.each<ReviewDecisionCode>(["accepted_unchanged", "accepted_corrected", "query"
   fireEvent.click(screen.getByRole("radio", { name: decisionLabels[decision] }));
   if (decision === "accepted_corrected") fireEvent.change(screen.getByRole("textbox", { name: "Translation (de)" }), { target: { value: text } });
   if (clinical) {
-    fireEvent.click(screen.getByRole("checkbox", { name: "Clinically relevant change" }));
+    expect(screen.queryByRole("checkbox", { name: "Clinically relevant change" })).toBeNull();
     fireEvent.click(screen.getByRole("checkbox", { name: "Number or unit" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Rationale" }), { target: { value: "Check the dose" } });
   }
@@ -120,8 +120,9 @@ it("retains invalid raw form values while changing a visual field and blocks unk
   const { save } = setup(workspace);
   await screen.findByRole("textbox", { name: "Translation (de)" }); vi.useFakeTimers();
   expect(screen.getAllByRole("radio").every(n => !(n as HTMLInputElement).checked)).toBe(true);
-  fireEvent.click(screen.getByRole("radio", { name: "Accepted unchanged" })); await clock();
-  expect(save.mock.calls[0][1].form).toEqual({ decision: "accepted_unchanged", clinical_change: "stored-invalid", categories: ["unknown"], rationale: { invalid: true }, extra: "keep" });
+  // Accepted with corrections keeps clinical change and categories, so the invalid raw values stay untouched.
+  fireEvent.click(screen.getByRole("radio", { name: "Accepted with corrections" })); await clock();
+  expect(save.mock.calls[0][1].form).toEqual({ decision: "accepted_corrected", clinical_change: "stored-invalid", categories: ["unknown"], rationale: { invalid: true }, extra: "keep" });
   expect(submitButton().disabled).toBe(true);
 });
 it("retains latest edits after an ordinary save error and retries explicitly", async () => {
@@ -156,7 +157,8 @@ it("reloads a conflicted review only after explicit discard and uses the fresh s
   expect(open).toHaveBeenCalledTimes(2);
   expect((screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement).value).toBe("Fresh baseline");
   fireEvent.change(screen.getByRole("textbox", { name: "Translation (de)" }), { target: { value: "After reopen" } }); await clock();
-  expect(save).toHaveBeenLastCalledWith(17, { expected_revision: 87, text: "After reopen", form: {} });
+  // The edit differs from the machine text, so Accepted with corrections is selected automatically (spec A.4).
+  expect(save).toHaveBeenLastCalledWith(17, { expected_revision: 87, text: "After reopen", form: { decision: "accepted_corrected", clinical_change: false } });
 });
 it("preserves ordered server issues and entered data after submit refusal", async () => {
   const { submit } = setup(); submit.mockRejectedValue(new ApiError(422, "Invalid", "REVIEW_INVALID", { issues: ["RATIONALE_REQUIRED", "NEW_SERVER_RULE", "TEXT_EMPTY"] }));
@@ -338,12 +340,9 @@ it("explains a blocked submit right at the button with the rules' own issues", a
   expect(document.getElementById(submitButton().getAttribute("aria-describedby")!)?.textContent).toBe("Choose a decision to submit.");
   fireEvent.click(screen.getByRole("radio", { name: "Query" }));
   const issues = screen.getByRole("list", { name: "Review issues" });
-  expect(within(issues).getAllByRole("listitem").map(item => item.textContent)).toEqual([issueMessages.CLINICAL_CHANGE_REQUIRED]);
+  expect(within(issues).getAllByRole("listitem").map(item => item.textContent)).toEqual([issueMessages.CATEGORY_REQUIRED, issueMessages.RATIONALE_REQUIRED]);
   expect(issues.closest(".translation-decision-footer")?.contains(submitButton())).toBe(true);
   expect(screen.getAllByRole("list", { name: "Review issues" })).toHaveLength(1);
-  fireEvent.click(screen.getByRole("checkbox", { name: "Clinically relevant change" }));
-  expect(within(screen.getByRole("list", { name: "Review issues" })).getAllByRole("listitem").map(item => item.textContent))
-    .toEqual([issueMessages.CATEGORY_REQUIRED, issueMessages.RATIONALE_REQUIRED]);
   expect(submitButton().disabled).toBe(true);
 });
 
@@ -376,4 +375,125 @@ it('pauses read-only coupling while stacked and retains opt-in through a resize'
   expect(screen.queryByRole('status', { name: 'Paragraph pairing' })).toBeNull();
   resize(1440);
   expect(box.checked).toBe(true);
+});
+
+const radio = (name: string) => screen.getByRole("radio", { name }) as HTMLInputElement;
+const SELECTED_NOTE = "Selected because you edited the translation. You can choose another decision.";
+it("auto-selects Accepted with corrections on the first edit, announces it once and reverts when the edit is undone", async () => {
+  const { save } = setup();
+  const input = await screen.findByRole("textbox", { name: "Translation (de)" }); vi.useFakeTimers();
+  fireEvent.change(input, { target: { value: "Übersetzt!" } });
+  expect(radio("Accepted with corrections").checked).toBe(true);
+  const status = screen.getByText(SELECTED_NOTE);
+  expect(status.getAttribute("role")).toBe("status");
+  fireEvent.change(input, { target: { value: "Übersetzt!!" } });
+  expect(screen.getAllByText(SELECTED_NOTE)).toEqual([status]);
+  fireEvent.change(input, { target: { value: "Übersetzt." } });
+  expect(screen.getAllByRole("radio").every(n => !(n as HTMLInputElement).checked)).toBe(true);
+  expect(screen.queryByText(SELECTED_NOTE)).toBeNull();
+  expect(screen.getByText("Your edits are undone, so the decision is back to not chosen.")).toBeDefined();
+  await clock();
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(save.mock.calls[0][1].text).toBe("Übersetzt.");
+  expect(save.mock.calls[0][1].form).not.toHaveProperty("decision");
+});
+it("names a replaced Accepted unchanged and drops the note once the reviewer picks a decision", async () => {
+  const { save } = setup();
+  const input = await screen.findByRole("textbox", { name: "Translation (de)" }); vi.useFakeTimers();
+  fireEvent.click(radio("Accepted unchanged"));
+  fireEvent.change(input, { target: { value: "Übersetzt!" } });
+  expect(radio("Accepted with corrections").checked).toBe(true);
+  expect(screen.getByText("Changed from Accepted unchanged because you edited the translation.")).toBeDefined();
+  await clock();
+  expect(save).toHaveBeenLastCalledWith(17, { expected_revision: 6, text: "Übersetzt!", form: { decision: "accepted_corrected", clinical_change: false, categories: [] } });
+  fireEvent.change(input, { target: { value: "Übersetzt." } });
+  expect(radio("Accepted unchanged").checked).toBe(true);
+  expect(screen.getByText("Your edits are undone, so the decision is back to Accepted unchanged.")).toBeDefined();
+  fireEvent.change(input, { target: { value: "Übersetzt?" } });
+  fireEvent.click(radio("Query"));
+  expect(screen.queryByText(/because you edited the translation|Your edits are undone/)).toBeNull();
+  fireEvent.change(input, { target: { value: "Übersetzt." } });
+  expect(radio("Query").checked).toBe(true);
+});
+it("treats a stored decision as chosen by the user after reload", async () => {
+  setup(reviewWorkspace({ draft: { revision: 6, text: "Übersetzt.", form: { decision: "accepted_corrected", clinical_change: false } } }));
+  const input = await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(screen.queryByText(/because you edited the translation|Your edits are undone/)).toBeNull();
+  const footer = document.querySelector(".translation-decision-footer") as HTMLElement;
+  expect(within(footer).getByText("Accepted with corrections needs changed text.")).toBeDefined();
+  fireEvent.change(input, { target: { value: "Übersetzt!" } });
+  fireEvent.change(input, { target: { value: "Übersetzt." } });
+  expect(radio("Accepted with corrections").checked).toBe(true);
+  expect(screen.queryByText(/because you edited the translation|Your edits are undone/)).toBeNull();
+  expect(within(footer).getByText("Accepted with corrections needs changed text.")).toBeDefined();
+});
+it("keys 1 to 4 choose decisions outside text fields and never inside the translation or rationale", async () => {
+  setup();
+  const input = await screen.findByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement;
+  fireEvent.keyDown(document.body, { key: "3" });
+  expect(radio("Query").checked).toBe(true);
+  expect(screen.getByText("Clinically relevant change: yes, always for a query.")).toBeDefined();
+  input.focus(); fireEvent.keyDown(input, { key: "1" });
+  expect(radio("Query").checked).toBe(true);
+  expect(input.value).toBe("Übersetzt.");
+  const rationale = screen.getByRole("textbox", { name: "Rationale" });
+  rationale.focus(); fireEvent.keyDown(rationale, { key: "4" });
+  expect(radio("Query").checked).toBe(true);
+  expect(document.activeElement).toBe(rationale);
+  fireEvent.keyDown(radio("Query"), { key: "4" });
+  expect(radio("Rejected").checked).toBe(true);
+  fireEvent.keyDown(document.body, { key: "1" });
+  expect(radio("Accepted unchanged").checked).toBe(true);
+  fireEvent.keyDown(document.body, { key: "2" });
+  expect(radio("Accepted with corrections").checked).toBe(true);
+});
+it("ignores decision keys while a review is read-only", async () => {
+  const base = reviewWorkspace();
+  const { save } = setup(reviewWorkspace({ read_only: true, assignment: { ...base.assignment, held: true } }));
+  await screen.findByRole("textbox", { name: "Translation (de)" }); vi.useFakeTimers();
+  fireEvent.keyDown(document.body, { key: "3" });
+  expect(screen.getAllByRole("radio").every(n => !(n as HTMLInputElement).checked)).toBe(true);
+  await clock(1600); expect(save).not.toHaveBeenCalled();
+  vi.useRealTimers(); cleanup();
+  setup(reviewWorkspace({ read_only: true, submitted_record: reviewRecord() }));
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.keyDown(document.body, { key: "3" });
+  expect(screen.queryByRole("radio")).toBeNull();
+  expect(within(screen.getByRole("region", { name: "Submitted review" })).getByText("Accepted with corrections")).toBeDefined();
+});
+it("lists the four decision keys under Translation review in ? help", async () => {
+  setup();
+  render(<ShortcutHelpHost />);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  act(openShortcutHelp);
+  const group = screen.getByRole("heading", { name: "Translation review" }).closest("section") as HTMLElement;
+  for (const description of ["Choose Accepted unchanged", "Choose Accepted with corrections", "Choose Query", "Choose Rejected"])
+    expect(within(group).getByText(description)).toBeDefined();
+});
+it("never shows CLINICAL_CHANGE_REQUIRED for query or rejected", async () => {
+  setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(radio("Query"));
+  expect(screen.queryByText(issueMessages.CLINICAL_CHANGE_REQUIRED)).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Number or unit" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Rationale" }), { target: { value: "Dose differs" } });
+  expect(screen.queryByRole("list", { name: "Review issues" })).toBeNull();
+  fireEvent.click(radio("Rejected"));
+  expect(screen.queryByRole("list", { name: "Review issues" })).toBeNull();
+});
+it("normalises a stored legacy query draft to an implied clinical change once on open", async () => {
+  const { save } = setup(reviewWorkspace({ draft: { revision: 6, text: "Übersetzt.", form: { decision: "query", clinical_change: false, categories: ["value"], rationale: "r" } } }), true);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(screen.queryByText(issueMessages.CLINICAL_CHANGE_REQUIRED)).toBeNull();
+  // The saver starts on mount, before fake timers could be installed, so wait in real time.
+  await waitFor(() => expect(save).toHaveBeenCalledTimes(1), { timeout: 3000 });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 1000)); });
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(save).toHaveBeenCalledWith(17, { expected_revision: 6, text: "Übersetzt.", form: { decision: "query", clinical_change: true, categories: ["value"], rationale: "r" } });
+});
+it("shows the key hint line in the rail footer", async () => {
+  setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  const hint = screen.getByText("Ctrl + Enter submits · 1–4 choose a decision outside the text");
+  expect(hint.closest(".translation-decision-footer")).not.toBeNull();
 });

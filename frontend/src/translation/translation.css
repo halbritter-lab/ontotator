@@ -102,6 +102,11 @@
 .review-decision-label { font-size: var(--size-base); line-height: var(--leading-base); font-weight: var(--weight-strong); color: var(--text); }
 .review-decision-hint { font-size: var(--size-sm); line-height: var(--leading-sm); color: var(--text-muted); }
 .review-form:disabled .review-decision { cursor: not-allowed; }
+.review-decision .kbd { flex: none; margin-left: auto; }
+.review-auto-note { margin: 0; padding: 0 var(--space-3); font-size: var(--size-sm); line-height: var(--leading-sm); color: var(--text-muted); }
+.review-auto-note:empty { display: none; }
+.review-fact { margin: 0 0 var(--space-3); font-size: var(--size-md); line-height: var(--leading-md); color: var(--text); }
+.translation-key-hint { margin: 0; font-size: var(--size-sm); line-height: var(--leading-sm); color: var(--text-muted); }
 .review-categories { min-width: 0; margin: 0 0 var(--space-4) var(--space-2); padding: 0 0 0 var(--space-4); border: 0; border-left: 1px solid var(--border-strong); }
 .review-categories .form-group { margin-bottom: 0; }
 .review-categories .form-checkbox-row { min-height: 28px; }

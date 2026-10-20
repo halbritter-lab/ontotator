@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import cases from "../../contracts/translation-review-cases.json";
-import { checkReview, type ReviewForm } from "../src/translation/reviewRules";
+import { checkReview, textDiffers, type ReviewForm } from "../src/translation/reviewRules";
 import { categoryLabels, decisionLabels, issueMessages } from "../src/translation/labels";
 
 const unchanged: ReviewForm = { decision: "accepted_unchanged", clinical_change: false };
@@ -76,5 +76,13 @@ describe("translation review English labels", () => {
     ].sort());
     expect(issueMessages.RATIONALE_REQUIRED).toBe("A clinical change needs a rationale.");
     for (const message of Object.values(issueMessages)) expect(message).toMatch(/\S/);
+  });
+});
+
+describe("textDiffers", () => {
+  it("textDiffers uses the canonical comparison", () => {
+    expect(textDiffers("a\nb", "a\r\nb")).toBe(false);
+    expect(textDiffers("a\u00e9", "\ufeffae\u0301")).toBe(false);
+    expect(textDiffers("a", "b")).toBe(true);
   });
 });

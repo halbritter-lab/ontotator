@@ -29,13 +29,28 @@ export const issueMessages: Readonly<Record<IssueCode, string>> = {
   CATEGORIES_WITHOUT_CHANGE: "Categories need a clinical change.",
 };
 
-/** One-line explanation shown under each decision option. */
+/** Short hint shown under each decision option; the confirmation dialog keeps `decisionConsequences`. */
 export const decisionDescriptions: Readonly<Record<ReviewDecisionCode, string>> = {
-  accepted_unchanged: "The translation is correct as it stands. You made no edits.",
-  accepted_corrected: "You corrected the translation. Your version is accepted.",
-  query: "The meaning may differ clinically and needs clarification. Not accepted.",
-  rejected: "The translation changes clinical meaning and cannot be used. Not accepted.",
+  accepted_unchanged: "Correct as it stands. No edits.",
+  accepted_corrected: "Your corrected version is accepted.",
+  query: "Meaning may differ clinically. Not accepted.",
+  rejected: "Changes clinical meaning. Not accepted.",
 };
+
+/** Query and Rejected always mean a clinically relevant change; this line replaces the checkbox for them. */
+export const clinicalChangeFacts: Readonly<Record<"query" | "rejected", string>> = {
+  query: "Clinically relevant change: yes, always for a query.",
+  rejected: "Clinically relevant change: yes, always for a rejection.",
+};
+
+/** Hint under "Rationale"; it asks for a note when Accepted unchanged overrides failed checks. */
+export function rationaleHint(decision: ReviewDecisionCode | undefined, clinical: boolean, failedCheckCount: number): string {
+  if (clinical) return "Required for a clinically relevant change.";
+  if (decision === "accepted_unchanged" && failedCheckCount > 0) return "Optional. Say why the flagged difference is correct.";
+  return "Optional.";
+}
+
+export const decisionKeyHint = "Ctrl + Enter submits · 1–4 choose a decision outside the text";
 
 /** What submitting each decision will do, for the confirmation dialog. */
 export const decisionConsequences: Readonly<Record<ReviewDecisionCode, string>> = {
@@ -53,7 +68,7 @@ export const decisionOutcomes: Readonly<Record<ReviewDecisionCode, string>> = {
   rejected: "The translation is marked as reviewed and rejected. It is not accepted for annotation.",
 };
 
-/** Hint under "Clinically relevant change", following the review rules for each decision. */
+/** Hint under "Clinically relevant change", following the review rules for each decision (the checkbox is shown for the Accepted decisions only). */
 export const clinicalChangeHints: Readonly<Record<ReviewDecisionCode, string>> = {
   accepted_unchanged: "Not allowed with Accepted unchanged. Clear it or choose another decision.",
   accepted_corrected: "Tick this if your correction changes the clinical meaning.",

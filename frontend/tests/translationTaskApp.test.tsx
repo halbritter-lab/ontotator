@@ -90,7 +90,7 @@ it("flushes raw review work before following its real qualification profile link
   const input = await screen.findByRole("textbox", { name: "Translation (de)" });
   fireEvent.change(input, { target: { value: "Preserve this correction" } });
   fireEvent.click(screen.getByRole("link", { name: "Add your qualification in your profile" }));
-  await waitFor(() => expect(save).toHaveBeenCalledWith(17, { text: "Preserve this correction", form: {}, expected_revision: 6 }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith(17, { text: "Preserve this correction", form: { decision: "accepted_corrected", clinical_change: false }, expected_revision: 6 }));
   expect(window.location.hash).toBe("#/tasks/17"); expect(screen.getByRole("textbox", { name: "Translation (de)" })).toBe(input);
   await act(async () => { finish({ revision: 31 }); });
   await screen.findByRole("heading", { name: "Profile" }); expect(window.location.hash).toBe("#/me");
@@ -176,7 +176,7 @@ it.each(["alice", "bob"])("uses the real AuthGate after an expired translation s
     fireEvent.click(screen.getByRole("button", { name: "Retry save" }));
     await waitFor(() => expect(writes).toHaveLength(2));
     expect((writes[1].headers as Headers).get("X-CSRF-Token")).toBe("fresh-token");
-    expect(JSON.parse(writes[1].body as string)).toEqual({ expected_revision: 6, text: "Unsaved Alice text", form: {} });
+    expect(JSON.parse(writes[1].body as string)).toEqual({ expected_revision: 6, text: "Unsaved Alice text", form: { decision: "accepted_corrected", clinical_change: false } });
     expect(metadata).toHaveBeenCalledTimes(1); expect(open).toHaveBeenCalledTimes(1);
   } else {
     await screen.findByRole('heading', { name: 'My tasks' });

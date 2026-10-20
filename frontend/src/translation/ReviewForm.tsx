@@ -1,6 +1,7 @@
 import { useId } from "react";
-import { Checkbox, Textarea } from "../ui";
-import { categoryLabels, clinicalChangeHints, decisionDescriptions, decisionLabels, issueMessages } from "./labels";
+import { Checkbox, Kbd, Textarea } from "../ui";
+import { chooseDecision } from "./decisionOrigin";
+import { categoryLabels, clinicalChangeFacts, clinicalChangeHints, decisionDescriptions, decisionLabels, issueMessages, rationaleHint } from "./labels";
 import type {
   ClinicalCategory,
   IssueCode,
@@ -12,6 +13,12 @@ export interface ReviewFormProps {
   value: Partial<ReviewFormValue>;
   issues: readonly IssueCode[];
   onChange: (next: Partial<ReviewFormValue>) => void;
+  /** Radio choice; default: onChange(chooseDecision(value, decision)). The screen uses it to set origin "user". */
+  onChooseDecision?: (decision: ReviewDecisionCode) => void;
+  /** Failed automatic checks of the reviewed run; selects the rationale hint for Accepted unchanged. */
+  failedCheckCount?: number;
+  /** Text of the auto-selection note (autoNoteText), rendered as role="status" under "Accepted with corrections". */
+  autoNote?: string | null;
   readOnly?: boolean;
 }
 
@@ -19,30 +26,35 @@ const decisions = Object.keys(decisionLabels) as ReviewDecisionCode[];
 const categories = Object.keys(categoryLabels) as ClinicalCategory[];
 
 /**
- * Follow-up fields appear when the review rules make them relevant
- * (`reviewRules.checkReview`), and stay visible while they hold a value that a
- * rule still has to judge, so nothing that blocks submission is ever hidden:
- * - "Clinically relevant change" once a decision is chosen, except for Accepted
- *   unchanged, which forbids it (shown again if it is set, so it can be cleared);
- * - categories while a clinical change is set (it requires one) or any are set;
- * - rationale for every decision except Accepted unchanged (required with a
- *   clinical change, otherwise an optional note), or whenever it has text.
+ * Fields shown by state (spec A.4):
+ *
+ * | Decision                  | Clinically relevant change | Categories            | Rationale                 |
+ * | ------------------------- | -------------------------- | --------------------- | ------------------------- |
+ * | none                      | hidden                     | hidden                | hidden                    |
+ * | Accepted unchanged        | hidden (*)                 | hidden (*)            | shown, optional (**)      |
+ * | Accepted with corrections | checkbox                   | when ticked, required | optional, required ticked |
+ * | Query / Rejected          | fact line (always yes)     | shown, required       | shown, required           |
+ *
+ * (*) Shown while a stored draft sets it, so a value that blocks submission can be cleared.
+ * (**) The hint asks for a note when automatic checks failed.
+ * The rationale also stays visible whenever it holds text.
  */
-export function ReviewForm({ value, issues, onChange, readOnly = false }: ReviewFormProps) {
+export function ReviewForm({ value, issues, onChange, onChooseDecision, failedCheckCount = 0, autoNote = null, readOnly = false }: ReviewFormProps) {
   const id = useId();
   const decision = value.decision;
-  const clinical = value.clinical_change ?? false;
+  const implied = decision === "query" || decision === "rejected";
+  const clinical = implied || value.clinical_change === true;
   const chosen = (value.categories?.length ?? 0) > 0;
-  const showClinical = clinical || (decision !== undefined && decision !== "accepted_unchanged");
+  const showCheckbox = !implied && (value.clinical_change === true || decision === "accepted_corrected");
   const showCategories = clinical || chosen;
-  const showRationale = clinical || (decision !== undefined && decision !== "accepted_unchanged") || (value.rationale ?? "") !== "";
+  const showRationale = decision !== undefined || clinical || (value.rationale ?? "") !== "";
 
   return (
     <fieldset className="review-form" disabled={readOnly}>
       <legend className="review-sr-only">Translation review</legend>
       <fieldset className="review-decisions">
-        <legend className="review-form-legend">Decision</legend>
-        {decisions.map((option) => (
+        <legend className="review-form-legend" data-decision-legend tabIndex={-1}>Decision</legend>
+        {decisions.map((option, index) => [
           <label className="review-decision" htmlFor={`${id}-${option}`} key={option}>
             <input
               id={`${id}-${option}`}
@@ -54,22 +66,27 @@ export function ReviewForm({ value, issues, onChange, readOnly = false }: Review
               aria-describedby={`${id}-${option}-hint`}
               checked={decision === option}
               onChange={() => {
-                if (!readOnly) onChange({ ...value, decision: option });
+                if (readOnly) return;
+                if (onChooseDecision) onChooseDecision(option);
+                else onChange(chooseDecision(value, option) as Partial<ReviewFormValue>);
               }}
             />
             <span className="review-decision-text">
               <span className="review-decision-label" id={`${id}-${option}-label`}>{decisionLabels[option]}</span>
               <span className="review-decision-hint" id={`${id}-${option}-hint`}>{decisionDescriptions[option]}</span>
             </span>
-          </label>
-        ))}
+            <Kbd>{index + 1}</Kbd>
+          </label>,
+          option === "accepted_corrected" && <p key="auto-note" role="status" className="review-auto-note">{autoNote ?? ""}</p>,
+        ])}
       </fieldset>
-      {showClinical && (
+      {implied && <p className="review-fact">{clinicalChangeFacts[decision]}</p>}
+      {showCheckbox && (
         <Checkbox
           id={`${id}-clinical-change`}
           label="Clinically relevant change"
           hint={decision ? clinicalChangeHints[decision] : undefined}
-          checked={clinical}
+          checked={value.clinical_change === true}
           onChange={(event) => {
             if (readOnly) return;
             onChange(event.target.checked
@@ -104,7 +121,7 @@ export function ReviewForm({ value, issues, onChange, readOnly = false }: Review
         <Textarea
           id={`${id}-rationale`}
           label="Rationale"
-          hint={clinical ? "Required for a clinically relevant change." : "Optional."}
+          hint={rationaleHint(decision, clinical, failedCheckCount)}
           rows={3}
           value={value.rationale ?? ""}
           onChange={(event) => {
