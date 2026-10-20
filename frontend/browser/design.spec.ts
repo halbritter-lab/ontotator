@@ -116,14 +116,14 @@ test.describe("Design direction C", () => {
     await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
     await shoot(page, "login");
     await checkContrastAndTextSize(page);
-    await importPackage(page, "", "browser-fixture", "design-dashboard");
+    await importPackage(page, "", "browser-fixture-design", "design-dashboard");
     await expect(page.getByRole("table", { name: "My tasks" })).toBeVisible();
     await shoot(page, "dashboard-compact-table");
     await checkContrastAndTextSize(page);
   });
 
   test("design: editor in reading density", async ({ page }) => {
-    await openReview(page, "?scenario=many_proposals", "pkg-many-proposals", "design-many");
+    await openReview(page, "?scenario=many_proposals", "pkg-many-proposals-design", "design-many");
     await shoot(page, "editor-review-many");
 
     await page.context().clearCookies();
