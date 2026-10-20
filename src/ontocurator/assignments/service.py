@@ -49,6 +49,7 @@ from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import WorkspaceMode
 from ontocurator.projects.assignments import revoke_assignments
 from ontocurator.storage.database import Database
+from ontocurator.storage.plan_tables import DiscardedVariantRow
 from ontocurator.storage.repository import _lock_id
 from ontocurator.storage.tables import (
     AssignmentRow,
@@ -552,6 +553,17 @@ class AssignmentService:
             old = self._locked(conn, assignment_id)
             if old["status"] != "submitted":
                 raise DomainError("ASSIGNMENT_NOT_SUBMITTED")
+            # A discarded version takes no work, reopened work included.
+            if (
+                conn.execute(
+                    select(DiscardedVariantRow.document_id).where(
+                        DiscardedVariantRow.project_id == project["id"],
+                        DiscardedVariantRow.document_id == old["document_id"],
+                    )
+                ).first()
+                is not None
+            ):
+                raise DomainError("NOT_IN_WORK_PLAN")
             self._require_target(conn, project, target, cast(Task, old["task"]))
             now = self._now()
             conn.execute(

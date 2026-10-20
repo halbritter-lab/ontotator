@@ -3,23 +3,42 @@ filtered case IDs (lead workflow, spec "Next step" and "Bar (D21)")."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
+from auth_harness import logged_in
 from document_rows_support import rows_of
 from document_rows_support import service as rows_service
-from sqlalchemy import update
-from t1_builders import bundle, native_unit
-from t1_fixtures import run_import
-from work_plan_support import BASE, assign, doc, plan_env, revision_of, submit, write
+from sqlalchemy import insert, select, update
+from t1_builders import bundle, native_unit, translation_unit
+from t1_fixtures import TEXT, run_import
+from tests_support_reviews import insert_review
+from work_plan_support import (
+    BASE,
+    assign,
+    doc,
+    plan_env,
+    preflight,
+    revision_of,
+    select_final,
+    set_rule,
+    submit,
+    write,
+)
+from work_plan_support import service as plan_service
 
+from ontocurator.api.work_plan_routes import PlanRowPatch
 from ontocurator.application import document_row_page
 from ontocurator.application.document_row_page import cases_not_shown, sorted_case_ids
 from ontocurator.application.document_rows import RowFacts, RowQuery, load_facts
 from ontocurator.application.final_causes import authorize_final_results
+from ontocurator.assignments.service import AssignmentService
+from ontocurator.auth.audit import Actor
+from ontocurator.domain.errors import DomainError
 from ontocurator.domain.next_steps import Segment
 from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage.tables import DocumentRow, ProjectRow
+from ontocurator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
 
 BOTH = PlanFlags(True, True)
 REVIEW = PlanFlags(True, False)
@@ -229,15 +248,16 @@ def test_filters_segment_step_stage_owner_plan(env):
     assert set(rows(env, owner="me")) == {("c1", "de"), ("c1", "en"), ("c1", "fr")}
     assert set(rows(env, owner=pseudonym(env, "ana"))) == {("c2", "de")}
     assert set(rows(env, owner=pseudonym(env, "anno"))) == {("c2", "en")}
-    assert set(rows(env, plan="not_in_plan")) == {("c2", "fr")}
-    assert set(rows(env, plan="review")) == {("c1", "de"), ("c2", "de")}
-    assert set(rows(env, plan="review_and_annotate")) == {("c2", "de")}
-    assert set(rows(env, plan="annotate")) == {
-        ("c1", "en"),
-        ("c1", "fr"),
-        ("c2", "en"),
-        ("c2", "de"),
+    # The Plan filter is an exclusive partition of the rows.
+    partition = {
+        "not_in_plan": {("c2", "fr")},
+        "review": {("c1", "de")},
+        "review_and_annotate": {("c2", "de")},
+        "annotate": {("c1", "en"), ("c1", "fr"), ("c2", "en")},
     }
+    for option, expected in partition.items():
+        assert set(rows(env, plan=option)) == expected, option
+    assert set().union(*partition.values()) == set(rows(env))
     with pytest.raises(ValueError):
         RowQuery(segment="decision", decision="all")
     refused = env.lead.get(f"{BASE}/document-rows?segment=assign&decision=all")
@@ -341,3 +361,286 @@ def test_detail_and_owner(env, tmp_path):
         "review_only",
     )
     assert c2_fr["owner"] == {"kind": "none", "person": None, "count": 0}
+
+
+# --- review follow-ups: discards, finals, reports, restored plans ---------- #
+
+SECOND = "c1-fr-b"
+
+
+def second_root(env: Any, tmp_path: Any) -> None:
+    """A second translation root of (c1, fr) from another provider."""
+    source = native_unit(doc("c1", "en"), "en", f"{TEXT} c1", case_id="c1")
+    unit = translation_unit(
+        SECOND, "fr", f"{TEXT} c1 fr b", source=source, provider="other-mt"
+    )
+    folder = tmp_path / "second-root"
+    folder.mkdir()
+    result = run_import(env.db, bundle(folder, [unit]))
+    assert result.status == "succeeded", result.error
+    set_status(env, SECOND, "ready_for_review")
+
+
+def add_correction(env: Any, parent: str, document_id: str, status: str) -> None:
+    """Version + 1 of ``parent`` as a correction (direct insert)."""
+    with env.db.transaction() as conn:
+        row = dict(
+            conn.execute(
+                select(*DocumentRow.__table__.c).where(
+                    DocumentRow.project_id == env.pid,
+                    DocumentRow.document_id == parent,
+                )
+            )
+            .mappings()
+            .one()
+        )
+        conn.execute(
+            insert(DocumentRow).values(
+                {
+                    **row,
+                    "document_id": document_id,
+                    "version": row["version"] + 1,
+                    "origin": "correction",
+                    "derived_from": parent,
+                    "translation_status": status,
+                    "position": None,
+                }
+            )
+        )
+
+
+def lead_actor(env: Any) -> Actor:
+    return Actor(env.app.state.accounts.get_by_username("leader").id, "user:leader")
+
+
+def open_report(env: Any, username: str, assignment_id: int) -> str:
+    client = logged_in(env.app, username, assignments=[])
+    with env.db.transaction() as conn:
+        revision = AssignmentService._get(conn, assignment_id).workflow_revision
+    created = client.post(
+        f"/api/v1/assignments/{assignment_id}/problem-reports",
+        json={
+            "request_id": f"report-{assignment_id}",
+            "expected_workflow_revision": revision,
+            "reason": "The text is cut off",
+        },
+    )
+    assert created.status_code == 200, created.text
+    return str(created.json()["report_id"])
+
+
+def force_reopened(env: Any, assignment_id: int) -> None:
+    """Older data: an assignment reopened on a since discarded version."""
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == assignment_id)
+            .values(status="reopened")
+        )
+
+
+def two_roots_annotated(env: Any, tmp_path: Any) -> int:
+    """(c1, fr) with two roots, Annotate only, rule off, one submission each.
+
+    Returns the assignment on the first root (``doc("c1", "fr")``).
+    """
+    set_rule(env.db, False)
+    second_root(env, tmp_path)
+    plan(env, c1_fr=ANNOTATE)
+    first = assign(env, doc("c1", "fr"), "anno", "annotate")
+    submit(env, first, "s-fr-a")
+    other = assign(env, SECOND, "anno2", "annotate")
+    submit(env, other, "s-fr-b")
+    return first
+
+
+def scenario_discarded_root_reopened(env: Any, tmp_path: Any) -> None:
+    """C1: two roots, discard A, A's annotation reopened (older data)."""
+    first = two_roots_annotated(env, tmp_path)
+    plan_service(env).discard("proj", doc("c1", "fr"), "Duplicate", True)
+    force_reopened(env, first)
+
+
+def scenario_final_on_discarded_root(env: Any, tmp_path: Any) -> None:
+    two_roots_annotated(env, tmp_path)
+    select_final(env, doc("c1", "fr"), "s-fr-a")
+    plan_service(env).discard("proj", doc("c1", "fr"), "Duplicate", True)
+
+
+def scenario_report(env: Any, tmp_path: Any) -> None:
+    aid = assign(env, doc("c1", "en"), "anno", "annotate")
+    open_report(env, "anno", aid)
+
+
+def scenario_plan_restored(env: Any, tmp_path: Any) -> None:
+    aid = assign(env, doc("c1", "en"), "anno", "annotate")
+    submit(env, aid, "s-c1-en")
+    select_final(env, doc("c1", "en"), "s-c1-en")
+    for annotate in (False, True):
+        plan_service(env).patch_row(
+            "proj",
+            "c1",
+            "en",
+            PlanRowPatch(
+                annotate=annotate,
+                expected_revision=revision_of(env, "c1"),
+                confirm=True,
+            ),
+        )
+
+
+def scenario_rejected_correction(env: Any, tmp_path: Any) -> None:
+    """I2: v1 accepted_corrected (status reviewed), its correction v2 rejected."""
+    plan(env, c1_de=REVIEW)
+    assign(env, doc("c1", "en"), "anno", "annotate")  # insert_review needs one
+    set_status(env, doc("c1", "de"), "reviewed")
+    insert_review(env.db, "proj", doc("c1", "de"), "accepted_corrected")
+    add_correction(env, doc("c1", "de"), "c1-de-v2", "reviewed")
+    insert_review(env.db, "proj", "c1-de-v2", "rejected")
+
+
+def scenario_mixed_plan(env: Any, tmp_path: Any) -> None:
+    plan(env, c1_de=REVIEW, c1_fr=ANNOTATE, c2_de=BOTH, c2_fr=BOTH)
+    assign(env, doc("c2", "de"), "ana", "translation_review")
+    assign(env, doc("c2", "en"), "anno", "annotate")
+    plan_service(env).discard("proj", doc("c2", "fr"), "Wrong text", True)
+
+
+SCENARIOS: dict[str, Callable[[Any, Any], None]] = {
+    "fresh": lambda env, tmp_path: None,
+    "mixed_plan": scenario_mixed_plan,
+    "discarded_root_reopened": scenario_discarded_root_reopened,
+    "final_on_discarded_root": scenario_final_on_discarded_root,
+    "report": scenario_report,
+    "plan_restored": scenario_plan_restored,
+    "rejected_correction": scenario_rejected_correction,
+}
+
+
+@pytest.mark.parametrize("name", list(SCENARIOS))
+def test_every_in_plan_row_has_a_non_fallback_step(env, tmp_path, name):
+    SCENARIOS[name](env, tmp_path)
+    for key, row in rows(env).items():
+        codes = [step["code"] for step in row["steps"]]
+        assert bool(codes) == row["in_plan"], (name, key)
+        assert "needs_attention" not in codes, (name, key)
+        assert row["next_step"] == (row["steps"][0] if codes else None)
+
+
+def test_discarded_root_with_reopened_annotation_asks_for_the_final(env, tmp_path):
+    first = two_roots_annotated(env, tmp_path)
+    before = rows(env)[("c1", "fr")]["next_step"]
+    assert before["code"] == "choose_final"
+    # One submitted annotation per target version, two roots.
+    assert (before["detail"]["submitted"], before["detail"]["total"]) == (2, 2)
+    plan_service(env).discard("proj", doc("c1", "fr"), "Duplicate", True)
+    # Reopening work on a discarded version is refused ...
+    with pytest.raises(DomainError) as refused:
+        AssignmentService(env.db).reopen(lead_actor(env), first, "Fix a span")
+    assert refused.value.code == "NOT_IN_WORK_PLAN"
+    # ... and a reopened assignment there (older data) is out of scope.
+    force_reopened(env, first)
+    fr = rows(env)[("c1", "fr")]
+    assert fr["in_plan"] is True and fr["plan_row"]["discarded"] is False
+    assert fr["missing_final"]["counts"] is True
+    step = fr["next_step"]
+    assert step["code"] == "choose_final"
+    assert (step["detail"]["submitted"], step["detail"]["total"]) == (1, 1)
+
+
+def test_full_discard_takes_the_row_out_of_the_plan(env):
+    plan(env, c1_de=BOTH)
+    plan_service(env).discard("proj", doc("c1", "de"), "Wrong text", True)
+    de = rows(env)[("c1", "de")]
+    assert de["plan_row"]["discarded"] is True
+    assert (de["in_plan"], de["next_step"], de["steps"]) == (False, None, [])
+    assert ("c1", "de") in rows(env, plan="not_in_plan")
+
+
+def test_final_on_a_discarded_root_is_not_the_rows_final(env, tmp_path):
+    scenario_final_on_discarded_root(env, tmp_path)
+    fr = rows(env)[("c1", "fr")]
+    assert fr["final"] is not None  # history stays visible
+    assert fr["missing_final"]["counts"] is True
+    assert fr["next_step"]["code"] == "choose_final"
+    assert ("c1", "fr") in rows(env, final="none")
+    state = preflight(env)
+    assert "s-fr-a" not in [s["submission_id"] for s in state["selections"]]
+    assert {"case_id": "c1", "language": "fr"} in state["omissions"]
+
+
+def test_rejected_correction_of_accepted_corrected_version(env, tmp_path):
+    scenario_rejected_correction(env, tmp_path)
+    step = rows(env)[("c1", "de")]["next_step"]
+    assert (step["code"], step["kind"]) == ("resolve_rejected", "decision")
+
+
+def test_report_and_pause_without_report_are_decisions(env):
+    aid = assign(env, doc("c1", "en"), "anno", "annotate")
+    report_id = open_report(env, "anno", aid)
+    step = rows(env)[("c1", "en")]["next_step"]
+    assert (step["code"], step["action"], step["report_id"]) == (
+        "decide_report",
+        "decide_report",
+        report_id,
+    )
+    assert step["assignment_id"] == aid and step["detail"]["task_paused"] is True
+    resolved = env.lead.post(
+        f"/api/v1/problem-reports/{report_id}/actions",
+        json={
+            "request_id": "resolve-1",
+            "expected_revision": 1,
+            "action": "resolve",
+            "reason": "Resolved, hold kept",
+            "assignment_ids": [],
+        },
+    )
+    assert resolved.status_code == 200, resolved.text
+    step = rows(env)[("c1", "en")]["next_step"]
+    assert (step["code"], step["assignment_id"]) == ("resume_task", aid)
+    assert step["badges"] == ["your_decision", "paused"]
+
+
+def test_plan_restored_final_asks_for_confirmation(env, tmp_path):
+    scenario_plan_restored(env, tmp_path)
+    step = rows(env)[("c1", "en")]["next_step"]
+    assert (step["code"], step["action"], step["detail"]["kind"]) == (
+        "confirm_final",
+        "review_changes",
+        "final",
+    )
+
+
+def test_check_failed_badge_comes_from_the_root_rule_6_points_at(env, tmp_path):
+    second_root(env, tmp_path)
+    set_status(env, SECOND, "automatic_check_failed")
+    plan(env, c1_fr=REVIEW)
+    step = rows(env)[("c1", "fr")]["next_step"]
+    assert step["code"] == "assign_translation_review"
+    assert step["document_id"] == doc("c1", "fr") and step["badges"] == []
+
+
+def test_sorted_case_ids_and_cases_not_shown_with_unknown_ids(env):
+    facts = facts_of(env)
+    assert sorted_case_ids(facts, ["zz", "c2", "c1", "c2", "aa"], "case") == [
+        "c1",
+        "c2",
+        "zz",
+        "aa",
+    ]
+    assert cases_not_shown(facts, ["c1", "zz", "zz"], RowQuery(language="fr")) == 1
+
+
+def test_bar_counts_only_in_plan_rows_and_shown_follows_the_segment(env):
+    plan(env, c1_de=REVIEW, c2_de=REVIEW)
+    # c2 fr is not in the plan: its failed check is not counted.
+    set_status(env, doc("c2", "fr"), "automatic_check_failed")
+    result = page(env)
+    assert "translation" in rows_of(result)[("c2", "fr")]["categories"]
+    assert result["bar"]["translation"] == 0 and result["bar"]["total"] == 0
+    assert result["bar"]["no_final"] == 2  # c1 en and c2 en (Annotate on)
+    assert result["bar"]["shown"] == result["bar"]["in_plan"] == 4
+    # "k of n shown": n = the active segment's count.
+    assign_de = page(env, segment="assign", language="de")["bar"]
+    assert (assign_de["shown"], assign_de["to_assign"]) == (2, 4)
+    assert page(env, segment="progress")["bar"]["shown"] == 0

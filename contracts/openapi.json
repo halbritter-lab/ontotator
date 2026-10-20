@@ -2640,7 +2640,8 @@
                     "annotation_review_in_progress",
                     "waiting_for_translation_review",
                     "done",
-                    "translation_accepted"
+                    "translation_accepted",
+                    "needs_attention"
                   ],
                   "type": "string"
                 },
@@ -3009,7 +3010,8 @@
                     "annotation_review_in_progress",
                     "waiting_for_translation_review",
                     "done",
-                    "translation_accepted"
+                    "translation_accepted",
+                    "needs_attention"
                   ],
                   "type": "string"
                 },
@@ -9765,7 +9767,8 @@
               "annotation_review_in_progress",
               "waiting_for_translation_review",
               "done",
-              "translation_accepted"
+              "translation_accepted",
+              "needs_attention"
             ],
             "title": "Code"
           },

@@ -3,11 +3,14 @@
 Rules 1-11 (with 4a) are checked in precedence order; ``derive_steps``
 returns every matching rule, the first is the row's next step. "In plan"
 (Review or Annotate on) is its own fact: a row in the plan always has at
-least one step, a row outside it has none.
+least one step, a row outside it has none. Should no rule match an in-plan
+row (an application invariant broke), the row gets the logged safety
+fallback "needs_attention" instead of an error.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Literal
 
@@ -43,6 +46,7 @@ StepCode = Literal[
     "waiting_for_translation_review",
     "done",
     "translation_accepted",
+    "needs_attention",
 ]
 StepKind = Literal["decision", "assign", "in_progress", "done"]
 Stage = Literal["translation_review", "annotation", "final", "done"]
@@ -63,6 +67,8 @@ Badge = Literal["your_decision", "check_failed", "paused"]
 REVIEWER_NEEDED_STATUSES = frozenset(
     {"translated", "automatic_check_failed", "ready_for_review"}
 )
+logger = logging.getLogger(__name__)
+
 # Rule 4: latest review decisions that leave a translation not accepted.
 NOT_ACCEPTED_DECISIONS = frozenset({"rejected", "query"})
 
@@ -84,8 +90,9 @@ class StepFacts:
     open_report_id: str | None
     orphan_pause_assignment_id: int | None
     unacknowledged_final_cause: bool  # incl. PLAN_RESTORED
-    # Latest review decision per root's newest version ("rejected"/"query"
-    # only with status "reviewed"), parallel to ``translation_statuses``.
+    # Rule 4: latest review decision of each live root's literal newest
+    # version (``chain.newest``, corrections that are not newer included),
+    # None unless that version's status is "reviewed".
     newest_decisions: tuple[str | None, ...]
     # Newest version status per root (Version.not_newer corrections skipped).
     translation_statuses: tuple[str | None, ...]
@@ -151,12 +158,17 @@ def row_stage(facts: StepFacts) -> Stage:
     return "done"
 
 
-def _decision(code: StepCode, stage: Stage, action: RowAction, *badges: Badge) -> Step:
+def _decision(
+    code: StepCode, stage: Stage, action: RowAction | None, *badges: Badge
+) -> Step:
     return Step(code, "decision", stage, action, ("your_decision", *badges))
 
 
-def derive_steps(facts: StepFacts) -> list[Step]:
-    """Every matching rule in precedence order; [] only outside the plan."""
+def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
+    """Every matching rule in precedence order; [] only outside the plan.
+
+    ``row`` (the row key) only names the row in the fallback's log line.
+    """
     if not in_plan(facts):
         return []
     translation = not facts.is_source
@@ -176,10 +188,8 @@ def derive_steps(facts: StepFacts) -> list[Step]:
     if facts.review and translation and not open_review:
         reviewed = [
             decision
-            for status, decision in zip(
-                facts.translation_statuses, facts.newest_decisions, strict=False
-            )
-            if status == "reviewed"
+            for decision in facts.newest_decisions
+            if decision in NOT_ACCEPTED_DECISIONS
         ]
         if reviewed:
             code: StepCode = (
@@ -285,9 +295,12 @@ def derive_steps(facts: StepFacts) -> list[Step]:
         return [Step("done", "done", "done", None, ())]
     if not facts.annotate and accepted:
         return [Step("translation_accepted", "done", "done", None, ())]
-    raise AssertionError(f"no next step for an in-plan row: {facts!r}")
+    # Safety fallback: should never appear (spec "Next step").
+    logger.warning("no next step for in-plan row %r: %r", row, facts)
+    return [_decision("needs_attention", stage, None)]
 
 
 def segment_of(step: Step) -> Segment | None:
-    """Bar segment: decision (rules 1-5, 4a), assign (6, 8), progress (7, 9, 10)."""
+    """Bar segment: decision (rules 1-5, 4a, fallback), assign (6, 8),
+    progress (7, 9, 10)."""
     return _SEGMENTS[step.kind]

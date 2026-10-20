@@ -263,13 +263,16 @@ Every row in the plan has exactly one **next step** with an **owner**, derived o
 
 - A row matching several rules shows the first; "+1 more step" expands the row.
 - "In plan" means Review or Annotate is on. It is its own fact, never inferred from an empty step list; every in-plan row has at least one step.
+- **Safety fallback `needs_attention` (deviation, WP L1 review):** should no rule match an in-plan row (an application invariant broke), the server logs a warning with the row key and its facts and shows "Needs attention" (kind decision, owner You, segment "Needs your decision", no row action, no decision category) instead of failing the page. It should never appear; a domain test over every valid fact combination asserts that.
+- **Live scope:** a discarded root's versions, work and final count for no rule. The missing-final rule (rule 5) counts only assignments and submissions of undiscarded roots, and a final chosen on a discarded version is not the row's final (rules 3, 5, 8, 11, "Final result: none"); it stays visible as history and leaves the export. Rule 4 reads the latest review decision of each undiscarded root's literal newest version (a rejected correction of an `accepted_corrected` version is "Resolve rejected translation"); the version shown and the statuses of the other rules use the newest version that is not a rejected or queried correction. The "Check failed" badge comes from the version rule 6 points at. "2 of 2 annotations submitted" counts annotations on those target versions only.
+- Reopening a submitted assignment on a discarded version is refused (`NOT_IN_WORK_PLAN`).
 - "Assign review or accept…" (rule 4a) opens an `InlineConfirm` under the row with two choices: "Turn Review on" (the row then shows "Assign translation review") and "This translation was reviewed outside Ontocurator — accept it as it is" with a required reason.
 - Secondary line (muted, `size-sm`): "v1 machine translation · ready for review", "Source text · ready to annotate", "2 of 2 annotations submitted", "Round 1 · in progress", a report excerpt (60 characters) with reporter and "task paused", "Final: Annotation · Round 1 · Annotator (ann-0004)", "Review only · not annotated".
 - Owner "You" is the lead viewing the page; another lead's own open task shows that lead's name.
 
 ### Bar (D21)
 
-The bar counts rows in the plan. Segments: **All (n) · Needs your decision (n) · To assign (n) · In progress (n)** (`approved/work-plan-step4-assign.html` d). Needs your decision = rules 1–5 (incl. 4a); To assign = rules 6 and 8 (D4: failed check without reviewer is here, with its badge); In progress = rules 7, 9 and 10 (rows waiting for their review count here and show "waiting for review"). A failed check with an open review is "In progress", never a decision. The translation category under "Needs your decision" is "Translation rejected or queried". "No final result" moves from the bar to the filter "Final result: none" under More filters (unchanged semantics: rows with Annotate on and no final selection). Other bar rules of the Documents spec stay (project-wide counts, "k of n shown · Clear filters", segments mutually exclusive). Counts update on refetch (focus, own actions, every 60 s).
+The bar counts rows in the plan. Segments: **All (n) · Needs your decision (n) · To assign (n) · In progress (n)** (`approved/work-plan-step4-assign.html` d). Needs your decision = rules 1–5 (incl. 4a); To assign = rules 6 and 8 (D4: failed check without reviewer is here, with its badge); In progress = rules 7, 9 and 10 (rows waiting for their review count here and show "waiting for review"). A failed check with an open review is "In progress", never a decision. The translation category under "Needs your decision" is "Translation rejected or queried". "No final result" moves from the bar to the filter "Final result: none" under More filters (unchanged semantics: rows with Annotate on and no final selection). Other bar rules of the Documents spec stay (project-wide counts, "k of n shown · Clear filters", segments mutually exclusive). Every bar count, the old category counts included, covers rows in the plan only. In "k of n shown", n is the active segment's count (All = rows in the plan; a decision category = that category) and k the rows of that segment matching the other filters (`shown`). Counts update on refetch (focus, own actions, every 60 s).
 
 ### Identity (D1)
 
@@ -293,7 +296,7 @@ The bar counts rows in the plan. Segments: **All (n) · Needs your decision (n) 
 Layout (desktop, compact density), top to bottom:
 
 1. **Heading row:** `h1` "Documents"; at the right quiet "Upload texts…".
-2. **Filters:** Language, **Next step** (grouped by stage), **Plan** (Review · Annotate · Review and annotate · Not in plan), Case ID; "More filters": Final result (any · none), Origin, Translation status, Status, Sort (Case ID · Import batch · Last activity).
+2. **Filters:** Language, **Next step** (grouped by stage), **Plan** (Review · Annotate · Review and annotate · Not in plan; exclusive: "Review" = Review only, "Annotate" = Annotate only, "Review and annotate" = both, "Not in plan" = neither, by the effective flags), Case ID; "More filters": Final result (any · none), Origin, Translation status, Status, Sort (Case ID · Import batch · Last activity).
 3. **Bar:** segments as above; at the right "Updated 10:42 · Refresh". A quiet "Export final results…" link when the project has at least one final result.
 4. **Above the table:** quiet "Select by case IDs…".
 5. **Selection bar** (see above).
@@ -367,7 +370,7 @@ Replaces "Totals" and "Documents"; People in a new form (`progress.html`).
 
 ### Export (D8)
 
-Preflight runs on opening Export ("Checking final results…"); "Check again" reruns it; final-selection changes rerun it when visible. Primary "Create final export"; warnings keep the acknowledgement. After the job: primary "Download final export" (explicit). Only rows with Annotate on are exported; rows with a final result but Annotate off are listed as "Not in plan, not exported" (information). Clicks: Export → Create → Download (3); with warnings 4.
+Preflight runs on opening Export ("Checking final results…"); "Check again" reruns it; final-selection changes rerun it when visible. Primary "Create final export"; warnings keep the acknowledgement. After the job: primary "Download final export" (explicit). Only rows with Annotate on are exported; rows with a final result but Annotate off are listed as "Not in plan, not exported" (information). A final chosen on a discarded version leaves the export; the row then counts as without a final result (omission). Clicks: Export → Create → Download (3); with warnings 4.
 
 ### Settings › Workflow
 
@@ -399,7 +402,7 @@ Preflight runs on opening Export ("Checking final results…"); "Check again" re
 | Upload step | "Work plan", "Versions in bundle", "Adjust per case…", "Import {n} cases", "keeps its plan" |
 | Assign many | "Assign · {n} cases", "Translation review · de · 20 versions", "from the plan", "Distribute", "One person", "Split evenly", "Person", "Reads", "Open tasks", "Gets", "does not read de", "Ana Weber gets 20 translation reviews (de). Her open tasks: 3 → 23.", "Cases in list order: case-0101…0110 → Ana, case-0111…0120 → Ben.", "6 still in translation review: waiting for review, they join the next batch", "Assign {n}", "Random distribution…" |
 | Bar | "All (n)", "Needs your decision (n)", "To assign (n)", "In progress (n)"; category "Translation rejected or queried" |
-| Steps | "Decide on problem report", "Resume paused task", "Confirm final result", "Resolve rejected translation", "Resolve queried translation", "Translation not accepted", "Choose final result", "Assign translation review", "Translation review in progress", "Assign annotation", "Annotation in progress", "Annotation review in progress", "Waiting for translation review", "Done", "Translation accepted" |
+| Steps | "Decide on problem report", "Resume paused task", "Confirm final result", "Resolve rejected translation", "Resolve queried translation", "Translation not accepted", "Choose final result", "Assign translation review", "Translation review in progress", "Assign annotation", "Annotation in progress", "Annotation review in progress", "Waiting for translation review", "Done", "Translation accepted", "Needs attention" (safety fallback, should never appear) |
 | Row actions | "Decide on report…", "Resume task…", "Review changes…", "Resolve…", "Assign review or accept…" (choices "Turn Review on", acceptance), "Choose final…", "Assign translation review…", "Assign annotation…"; Translation review block (D25): "Assign a new review…" |
 | Resolve options | "Assign a new review…", "Correct the translation…", "Discard the de translation…" |
 | Badges | "Your decision", "Check failed", "Paused", "Not in plan", "Discarded", "{n} decision(s)" |

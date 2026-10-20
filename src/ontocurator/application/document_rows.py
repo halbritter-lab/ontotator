@@ -81,7 +81,9 @@ class RowQuery:
     step: StepCode | None = None  # any of the row's steps
     stage: Stage | None = None  # stage of the row's next step
     owner: str | None = None  # "me" or a pseudonym (owner of the next step)
-    plan: PlanFilter | None = None  # review / annotate: that flag is on
+    # Exclusive: review / annotate = only that flag on, review_and_annotate =
+    # both, not_in_plan = neither (effective flags).
+    plan: PlanFilter | None = None
     sort: Sort = "case"
     # "{case_id}:{language}" keys kept visible this visit (Task 5.9). A key
     # splits at the last ":" (case ids may contain ":"; language codes do not).
@@ -158,11 +160,10 @@ class RowFacts:
     row_reports: dict[tuple[str, str], list[dict[str, Any]]] = field(
         default_factory=dict
     )
-    # Work plan: effective flags per row, plan revision per case, newest
-    # acceptance and discard record per document.
+    # Work plan: effective flags per row, stored plan revision per case (a
+    # case missing here has revision 1) and discard record per document.
     plan: dict[RowKey, PlanFlags] = field(default_factory=dict)
     revisions: dict[str, int] = field(default_factory=dict)
-    acceptances: dict[str, dict[str, Any]] = field(default_factory=dict)
     discarded: dict[str, dict[str, Any]] = field(default_factory=dict)
     annotations_per_text: int = 1
     rule_on: bool = True  # annotate_accepted_translations_only
@@ -508,6 +509,8 @@ def load_facts(
         select(UserRow.pseudonym).where(UserRow.id == viewer_user_id)
     ).scalar_one()
     last_activity, selection_activity = load_last_activity(conn, pid)
+    plan = work_plan_store.effective_plan(conn, pid)
+    discarded = work_plan_store.discarded(conn, pid)
     versions = _versions(conn, pid)
     assignments = _assignments(conn, pid)
     reports = _reports(conn, pid)
@@ -534,19 +537,18 @@ def load_facts(
         selected_submissions=_selected_submissions(conn, pid),
         open_translation_reviews=_open_translation_reviews(conn, pid),
         reports=reports,
-        final_state=derive_final_state(conn, repo, key, pid),
+        final_state=derive_final_state(
+            conn, repo, key, pid, plan=plan, discarded=frozenset(discarded)
+        ),
         selections=_selections(conn, pid),
         last_activity=last_activity,
         selection_activity=selection_activity,
         row_reports=load_row_reports(
             conn, pid, {(v.case_id, v.language) for v in versions}
         ),
-        plan=work_plan_store.effective_plan(conn, pid),
-        revisions=work_plan_store.revisions(
-            conn, pid, sorted({v.case_id for v in versions})
-        ),
-        acceptances=work_plan_store.acceptances(conn, pid),
-        discarded=work_plan_store.discarded(conn, pid),
+        plan=plan,
+        revisions=work_plan_store.project_revisions(conn, pid),
+        discarded=discarded,
         annotations_per_text=project.annotations_per_text,
         rule_on=project.annotate_accepted_translations_only,
         people={uid: ref.model_dump() for uid, ref in people.items()},

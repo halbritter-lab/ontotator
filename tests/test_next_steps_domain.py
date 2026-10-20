@@ -1,8 +1,17 @@
 """Next-step rules 1-11 and precedence (spec "Next step")."""
 
+import itertools
+import logging
+
 import pytest
 
-from ontocurator.domain.next_steps import StepFacts, derive_steps, in_plan, segment_of
+from ontocurator.domain.next_steps import (
+    REVIEWER_NEEDED_STATUSES,
+    StepFacts,
+    derive_steps,
+    in_plan,
+    segment_of,
+)
 
 
 def facts(**kw):
@@ -247,3 +256,163 @@ def test_source_row_ignores_translation_rules():
     )
     assert [s.code for s in steps] == ["assign_annotation"]
     assert steps[0].stage == "annotation"
+
+
+def test_rejected_correction_of_accepted_corrected_version_is_resolve_rejected():
+    # The target (v1, accepted_corrected, status reviewed) skips its rejected
+    # correction; rule 4 reads the literal newest version's decision.
+    assert (
+        codes(
+            review=True,
+            translation_statuses=("reviewed",),
+            newest_decisions=("rejected",),
+        )[0]
+        == "resolve_rejected"
+    )
+    # An accepted target with a queried newest correction is resolved too.
+    assert (
+        codes(
+            review=True,
+            translation_statuses=("accepted",),
+            newest_decisions=("query",),
+        )[0]
+        == "resolve_queried"
+    )
+
+
+def test_unmatched_in_plan_row_gets_logged_needs_attention_fallback(caplog):
+    # Violates the missing-final invariant: everything submitted, no final.
+    broken = facts(
+        annotate=True,
+        translation_statuses=("accepted",),
+        annotation_assignments=1,
+    )
+    with caplog.at_level(logging.WARNING, logger="ontocurator.domain.next_steps"):
+        [step] = derive_steps(broken, row=("c1", "de"))
+    assert (step.code, step.kind, step.action) == ("needs_attention", "decision", None)
+    assert step.badges == ("your_decision",)
+    assert segment_of(step) == "decision"
+    assert "('c1', 'de')" in caplog.text and "StepFacts(" in caplog.text
+
+
+_STATUSES = (
+    None,
+    "translated",
+    "automatic_check_failed",
+    "ready_for_review",
+    "reviewed",
+    "accepted",
+)
+# (target status, decision of the literal newest version); a target with
+# status "reviewed" is itself rejected/queried or skips a rejected/queried
+# correction, so its newest decision is never None.
+_ROOTS = [
+    (status, decision)
+    for status in _STATUSES
+    for decision in (None, "rejected", "query")
+    if status != "reviewed" or decision is not None
+]
+
+# Representative roots for two parallel roots (keeps the product small).
+_PARALLEL = [
+    (None, None),
+    ("ready_for_review", None),
+    ("automatic_check_failed", None),
+    ("reviewed", "rejected"),
+    ("reviewed", "query"),
+    ("accepted", None),
+    ("accepted", "rejected"),
+]
+
+
+def _valid(f: StepFacts) -> bool:
+    """Invariants the application guarantees when it builds StepFacts."""
+    open_work = (
+        f.open_translation_reviews or f.open_annotations or f.open_annotation_reviews
+    )
+    if f.is_source and (f.review or f.open_translation_reviews):
+        return False
+    if f.missing_final and (not f.annotate or f.has_final or open_work):
+        return False
+    if f.unacknowledged_final_cause and not (f.annotate and f.has_final):
+        return False
+    # All work submitted and enough annotations on every target: the
+    # missing-final rule holds (same live scope as the step facts).
+    return not (
+        f.annotate
+        and not f.has_final
+        and not open_work
+        and f.annotation_assignments >= f.per_text
+        and not f.missing_final
+    )
+
+
+def test_needs_attention_never_appears_for_valid_facts():
+    checked = 0
+    for (
+        review,
+        annotate,
+        is_source,
+        rule_on,
+        per_text,
+        report,
+        pause,
+        cause,
+        roots,
+        open_reviews,
+        assigned,
+        open_annotations,
+        open_annotation_reviews,
+        missing_final,
+        has_final,
+    ) in itertools.product(
+        (False, True),
+        (False, True),
+        (False, True),
+        (False, True),
+        (1, 2),
+        (None, "r1"),
+        (None, 7),
+        (False, True),
+        [(root,) for root in _ROOTS] + list(itertools.combinations(_PARALLEL, 2)),
+        (0, 1),
+        (0, 1, 2),
+        (0, 1),
+        (0, 1),
+        (False, True),
+        (False, True),
+    ):
+        statuses = (None,) if is_source else tuple(s for s, _ in roots)
+        decisions = (None,) if is_source else tuple(d for _, d in roots)
+        if is_source and roots != (_ROOTS[0],):
+            continue  # one representative: sources ignore translation facts
+        f = StepFacts(
+            review=review,
+            annotate=annotate,
+            is_source=is_source,
+            rule_on=rule_on,
+            per_text=per_text,
+            open_report_id=report,
+            orphan_pause_assignment_id=pause,
+            unacknowledged_final_cause=cause,
+            newest_decisions=decisions,
+            translation_statuses=statuses,
+            open_translation_reviews=open_reviews,
+            annotation_assignments=assigned,
+            open_annotations=open_annotations,
+            open_annotation_reviews=open_annotation_reviews,
+            missing_final=missing_final,
+            has_final=has_final,
+            check_failed=any(
+                s == "automatic_check_failed"
+                for s in statuses
+                if s in REVIEWER_NEEDED_STATUSES
+            ),
+        )
+        if not _valid(f):
+            continue
+        steps = derive_steps(f)
+        assert bool(steps) == in_plan(f), f
+        assert all(step.code != "needs_attention" for step in steps), f
+        checked += 1
+    assert checked > 10_000

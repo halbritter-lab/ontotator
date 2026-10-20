@@ -4,6 +4,7 @@ Runs on the caller's connection. Callers authorize first: Documents with the
 shared project lock, preflight/select/freeze with the exclusive one.
 """
 
+from collections.abc import Collection, Mapping
 from typing import Any
 from urllib.parse import quote
 
@@ -15,7 +16,7 @@ from ontocurator.authz.policy import Action
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.authz.scoped import project_not_found
 from ontocurator.domain.errors import DomainError
-from ontocurator.domain.work_plans import RowKey
+from ontocurator.domain.work_plans import PlanFlags, RowKey
 from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.storage import work_plan_store
 from ontocurator.storage.final_tables import FinalSelectionRow
@@ -123,13 +124,22 @@ def corrects_selected_text(status: str | None, decision: str | None) -> bool:
 
 
 def derive_final_state(
-    conn: Connection, repo: Repository, key: str, pid: int
+    conn: Connection,
+    repo: Repository,
+    key: str,
+    pid: int,
+    *,
+    plan: Mapping[RowKey, PlanFlags] | None = None,
+    discarded: Collection[str] | None = None,
 ) -> dict[str, Any]:
     """Selections, omissions and warnings of project ``key`` on ``conn``.
 
     Only rows with Annotate on are in scope (spec "Export"): their selections
     are exported and missing ones omitted. Selections on rows with Annotate off
-    stay in history and are listed in ``not_in_plan`` (information only).
+    stay in history and are listed in ``not_in_plan`` (information only). A
+    selection on a discarded version leaves the export (the row counts as
+    without a final result). ``plan`` and ``discarded`` are the caller's
+    ``effective_plan`` and discarded document IDs, read here when omitted.
     """
 
     def destination(case_id: str, document_id: str) -> str:
@@ -160,7 +170,11 @@ def derive_final_state(
         .mappings()
         .all()
     )
-    plan = work_plan_store.effective_plan(conn, pid)
+    if plan is None:
+        plan = work_plan_store.effective_plan(conn, pid)
+    dropped = frozenset(
+        work_plan_store.discarded(conn, pid) if discarded is None else discarded
+    )
     planned = {(k.case_id, k.language) for k, flags in plan.items() if flags.annotate}
     restored = work_plan_store.restored(conn, pid)
     not_in_plan = sorted(
@@ -170,7 +184,12 @@ def derive_final_state(
             if (row["case_id"], row["language"]) not in planned
         }
     )
-    rows = [row for row in rows if (row["case_id"], row["language"]) in planned]
+    rows = [
+        row
+        for row in rows
+        if (row["case_id"], row["language"]) in planned
+        and row["document_id"] not in dropped
+    ]
     selected = [
         {
             name: row[name]

@@ -95,6 +95,8 @@ class _Context:
         # Per row, filled by _build_row: effective (review, annotate) flags,
         # bar segment of the next step and pseudonyms owning the next step.
         self.flags: dict[RowKey, tuple[bool, bool]] = {}
+        # A final on a discarded root is not the row's final (export, steps).
+        self.has_final: dict[RowKey, bool] = {}
         self.segments: dict[RowKey, steps_rules.Segment | None] = {}
         self.owners: dict[RowKey, frozenset[str]] = {}
         self.in_plan: dict[RowKey, bool] = {}
@@ -290,18 +292,23 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
     discarded = not live
     review = flags.review and not is_source and not discarded
     annotate = flags.annotate and not discarded
+    # Live scope (as the step facts): discarded roots' work and finals count
+    # for neither the missing-final rule nor the next step.
+    live_ids = {v.document_id for chain in live for v in chain.versions}
+    has_final = final is not None and final["document_id"] in live_ids
+    ctx.has_final[key] = has_final
     submission_count = sum(
-        facts.submission_counts.get(v.document_id, 0) for v in versions
+        facts.submission_counts.get(document_id, 0) for document_id in live_ids
     )
     # The missing-final rule holds only for rows with Annotate on.
     counts = annotate and rules.missing_final_counts(
-        has_selection=selection is not None,
+        has_selection=has_final,
         submission_count=submission_count,
-        assignments=row_assignments,
+        assignments=[item for item in row_assignments if item.document_id in live_ids],
         per_text=facts.annotations_per_text,
     )
     reason: str | None = None
-    if selection is None and not counts:
+    if not has_final and not counts:
         reason = "no_submission" if submission_count == 0 else "work_open"
     if counts:
         issues_and_notes.append(
@@ -339,7 +346,7 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
         annotate=annotate,
         is_source=is_source,
         missing_final=counts,
-        final=final,
+        final=final if has_final else None,
     )
     return {
         "case_id": case_id,
@@ -525,6 +532,16 @@ def _row_steps(
         sum(1 for item in annotations if item.document_id == target.document_id)
         for target in targets
     ]
+    # Rule 6 points at the first target that still needs a reviewer.
+    needs_reviewer = next(
+        (
+            v
+            for v in targets
+            if v.translation_status in steps_rules.REVIEWER_NEEDED_STATUSES
+            or v.translation_status is None
+        ),
+        None,
+    )
     step_facts = steps_rules.StepFacts(
         review=review,
         annotate=annotate,
@@ -536,7 +553,13 @@ def _row_steps(
         unacknowledged_final_cause=any(
             w["code"] in rules.ACKNOWLEDGEABLE for w in warnings
         ),
-        newest_decisions=tuple(v.latest_decision for v in targets)
+        # Rule 4 looks at each live root's literal newest version.
+        newest_decisions=tuple(
+            c.newest.latest_decision
+            if c.newest.translation_status == "reviewed"
+            else None
+            for c in live
+        )
         if not is_source
         else (None,),
         translation_statuses=tuple(v.translation_status for v in targets)
@@ -548,13 +571,12 @@ def _row_steps(
         open_annotation_reviews=len(open_reviews),
         missing_final=missing_final,
         has_final=final is not None,
-        check_failed=any(
-            v.translation_status == "automatic_check_failed" for v in targets
-        ),
+        check_failed=needs_reviewer is not None
+        and needs_reviewer.translation_status == "automatic_check_failed",
     )
     ctx.flags[key] = (review, annotate)
     ctx.in_plan[key] = steps_rules.in_plan(step_facts)
-    derived = steps_rules.derive_steps(step_facts)
+    derived = steps_rules.derive_steps(step_facts, row=key)
     ctx.segments[key] = steps_rules.segment_of(derived[0]) if derived else None
 
     def first(predicate: Callable[[rules.Version], bool]) -> rules.Version | None:
@@ -563,10 +585,12 @@ def _row_steps(
         )
 
     version_of = {v.document_id: v for c in live for v in c.versions}
+    target_ids = {v.document_id for v in targets}
+    on_targets = [item for item in annotations if item.document_id in target_ids]
     submitted = sum(
-        1 for item in annotations if item.status == "submitted" and not item.held
+        1 for item in on_targets if item.status == "submitted" and not item.held
     )
-    total = max(facts.annotations_per_text, len(annotations))
+    total = max(facts.annotations_per_text * len(targets), len(on_targets))
     views: list[dict[str, Any]] = []
     for step in derived:
         work: Sequence[rules.AssignmentFact] = ()
@@ -602,9 +626,7 @@ def _row_steps(
             version = first(lambda v: v.translation_status == "reviewed")
             detail = _version_detail("version", version)
         elif code == "assign_translation_review":
-            version = first(
-                lambda v: v.translation_status not in ("reviewed", "accepted")
-            )
+            version = needs_reviewer or version
             detail = _version_detail("version", version)
         elif code == "translation_review_in_progress":
             work = reviews
@@ -616,6 +638,8 @@ def _row_steps(
                 "version" if code == "translation_not_accepted" else "waiting",
                 version,
             )
+        elif code == "needs_attention":
+            detail = _version_detail("version", version)
         elif code == "translation_accepted":
             detail = _version_detail("review_only", version)
         elif code == "choose_final":
@@ -685,15 +709,17 @@ def _version_matches(
     )
 
 
+# Plan filter: an exclusive partition of the rows by their effective flags.
+_PLAN_OPTIONS: dict[tuple[bool, bool], str] = {
+    (True, False): "review",
+    (False, True): "annotate",
+    (True, True): "review_and_annotate",
+    (False, False): "not_in_plan",
+}
+
+
 def _plan_matches(ctx: _Context, key: RowKey, query: RowQuery) -> bool:
-    if query.plan is None:
-        return True
-    review, annotate = ctx.flags[key]
-    if query.plan == "not_in_plan":
-        return not ctx.in_plan[key]
-    if query.plan == "review_and_annotate":
-        return review and annotate
-    return review if query.plan == "review" else annotate
+    return query.plan is None or _PLAN_OPTIONS[ctx.flags[key]] == query.plan
 
 
 def _row_level_matches(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -> bool:
@@ -735,13 +761,33 @@ def _apply_filters(ctx: _Context, row: dict[str, Any], query: RowQuery) -> bool:
     return any(version["matches_filter"] for version in row["versions"])
 
 
+def _no_final(ctx: _Context, key: RowKey) -> bool:
+    """Filter "Final result: none": Annotate on and no (live) final result."""
+    return ctx.flags[key][1] and not ctx.has_final[key]
+
+
+def _in_active_segment(
+    ctx: _Context, key: RowKey, row: Mapping[str, Any], query: RowQuery
+) -> bool:
+    """Row counts toward the "n" of the bar's "k of n shown" for ``query``."""
+    if not row["in_plan"]:
+        return False
+    if query.segment is not None:
+        return ctx.segments[key] == query.segment
+    if query.decision is not None:
+        if query.decision == "all":
+            return bool(row["categories"])
+        return query.decision in row["categories"]
+    return True
+
+
 def _matches_decision(
     ctx: _Context, key: RowKey, row: Mapping[str, Any], query: RowQuery
 ) -> bool:
     """Decision-like filters (bar segment, category, final result)."""
-    if query.final == "missing" and row["final"] is not None:
+    if query.final == "missing" and ctx.has_final[key]:
         return False
-    if query.final == "none" and not (ctx.flags[key][1] and row["final"] is None):
+    if query.final == "none" and not _no_final(ctx, key):
         return False
     if query.segment is not None and ctx.segments[key] != query.segment:
         return False
@@ -842,10 +888,13 @@ def cases_not_shown(facts: RowFacts, case_ids: Sequence[str], query: RowQuery) -
 def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
     ctx, rows, matches = _evaluate(facts, query)
 
+    # Every bar count covers rows in the plan only.
     bar: dict[str, Any] = dict(
-        rules.bar_counts(set(row["categories"]) for row in rows.values())
+        rules.bar_counts(
+            set(row["categories"]) for row in rows.values() if row["in_plan"]
+        )
     )
-    bar["no_final"] = sum(1 for row in rows.values() if row["final"] is None)
+    bar["no_final"] = sum(1 for key in rows if _no_final(ctx, key))
     bar.update(
         rules.segment_counts(
             (
@@ -868,7 +917,7 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
     for key, row in rows.items():
         filtered, decision = matches[key]
         row["matches_decision"] = decision
-        if filtered and row["categories"]:
+        if filtered and _in_active_segment(ctx, key, row, query):
             shown_bar += 1
         if key == pinned_key:
             row["pinned"] = True

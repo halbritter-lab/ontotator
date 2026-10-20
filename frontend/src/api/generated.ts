@@ -3262,7 +3262,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted";
+            code: "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention";
             /**
              * Kind
              * @enum {string}
@@ -7508,7 +7508,7 @@ export interface operations {
                 final?: ("missing" | "none") | null;
                 case?: string | null;
                 segment?: ("decision" | "assign" | "progress") | null;
-                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted") | null;
+                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | null;
                 stage?: ("translation_review" | "annotation" | "final" | "done") | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;
@@ -7557,7 +7557,7 @@ export interface operations {
                 final?: ("missing" | "none") | null;
                 case?: string | null;
                 segment?: ("decision" | "assign" | "progress") | null;
-                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted") | null;
+                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | null;
                 stage?: ("translation_review" | "annotation" | "final" | "done") | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;

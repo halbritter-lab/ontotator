@@ -56,6 +56,7 @@ __all__ = [
     "open_reports",
     "open_tasks",
     "plan_rows",
+    "project_revisions",
     "restored",
     "revisions",
     "write_rows",
@@ -272,6 +273,18 @@ def revisions(
     ):
         result[row.case_id] = row.revision
     return result
+
+
+def project_revisions(conn: Connection, project_id: int) -> dict[str, int]:
+    """Stored plan revisions of the whole project; a case missing here has 1."""
+    return {
+        row.case_id: row.revision
+        for row in conn.execute(
+            select(WorkPlanRow.case_id, WorkPlanRow.revision).where(
+                WorkPlanRow.project_id == project_id
+            )
+        )
+    }
 
 
 def restored(conn: Connection, project_id: int) -> dict[RowKey, int]:

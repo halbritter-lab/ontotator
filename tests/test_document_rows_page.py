@@ -158,7 +158,9 @@ def test_bar_counts_are_project_wide_and_ignore_filters(case_env):
     all_rows = service(env).page("proj", RowQuery())
     filtered = service(env).page("proj", RowQuery(language="fr"))
     assert all_rows["bar"] == {**filtered["bar"], "shown": all_rows["bar"]["shown"]}
-    assert filtered["bar"]["shown"] <= filtered["bar"]["total"]
+    # Without a segment, "k of n shown" counts filtered rows of the plan.
+    assert filtered["bar"]["shown"] <= filtered["bar"]["in_plan"]
+    assert all_rows["bar"]["shown"] == all_rows["bar"]["in_plan"]
 
 
 def test_case_deep_link_keeps_row_visible_and_unknown_case_is_reported(case_env):
