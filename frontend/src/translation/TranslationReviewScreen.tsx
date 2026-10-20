@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
-import { api, ApiError, type ReviewWorkspace, type TranslationReviewRecord, type SourceObligationView } from "../api/client";
+import { api, ApiError, type ReviewWorkspace, type TaskSummary, type TranslationReviewRecord, type SourceObligationView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
+import { nextOpenTask } from "../app/caseOrder";
 import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
 import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconRetry, InlineMessage, Select, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
@@ -14,7 +15,7 @@ import { notifyFinalSelectionChanged } from '../variants/finalSelectionState';
 import { ChecksSummary, ReviewSummary, SubmitSummary } from "./ReviewParts";
 import { ReviewForm } from "./ReviewForm";
 import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type DecisionState } from "./decisionOrigin";
-import { categoryLabels, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName } from "./labels";
+import { categoryLabels, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, nextTaskLabel, remainingTasksText } from "./labels";
 import { checkReview, type ClinicalCategory, type IssueCode, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
 
 export interface TranslationReviewScreenProps {
@@ -27,6 +28,8 @@ export interface TranslationReviewScreenProps {
   saveBeforeReportRef?: MutableRefObject<(() => Promise<void>) | null>;
 }
 type RawDraft = { text: string; form: Record<string, unknown> };
+/** The reviewer's next open task after submitting (spec A.5). */
+type NextTask = { kind: "loading" } | { kind: "ready"; next: TaskSummary | null; remaining: number } | { kind: "error"; error: unknown };
 const has = (object: object, key: string): boolean => Object.prototype.hasOwnProperty.call(object, key);
 const decision = (value: unknown): value is ReviewDecisionCode => typeof value === "string" && has(decisionLabels, value);
 const category = (value: unknown): value is ClinicalCategory => typeof value === "string" && has(categoryLabels, value);
@@ -92,6 +95,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const [qualification, setQualification] = useState(workspace.qualification);
   const [submitted, setSubmitted] = useState<TranslationReviewRecord | null>(null);
   const [createdVersion, setCreatedVersion] = useState<number | null>(null);
+  const [nextTask, setNextTask] = useState<NextTask | null>(null), [nextTaskLoad, setNextTaskLoad] = useState(0);
+  const nextTaskButton = useRef<HTMLButtonElement | null>(null);
   const [serverIssues, setServerIssues] = useState<string[]>([]);
   const [showChanges, setShowChanges] = useState(false), [confirming, setConfirming] = useState(false);
   const decisionHeading = useRef<HTMLHeadingElement | null>(null), submitReason = useRef<HTMLDivElement | null>(null);
@@ -206,6 +211,19 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     try { const variant = await api.getVariantMetadata(workspace.assignment.project_key, value.created_variant_id); if (alive.current) setCreatedVersion(variant.version); }
     catch (failure) { if (alive.current) setError(failure); }
   };
+  /** After a successful submit: a fresh My tasks list, so a task assigned meanwhile counts. */
+  const projectKey = workspace.assignment.project_key;
+  useEffect(() => {
+    if (!submitted) return;
+    let active = true;
+    setNextTask({ kind: "loading" });
+    api.listMyTasks().then(tasks => {
+      if (active) setNextTask({ kind: "ready", ...nextOpenTask(tasks, props.assignmentId, projectKey) });
+    }, failure => { if (active) setNextTask({ kind: "error", error: failure }); });
+    return () => { active = false; };
+  }, [submitted, nextTaskLoad, props.assignmentId, projectKey]);
+  const nextTaskId = nextTask?.kind === "ready" ? nextTask.next?.assignment_id : undefined;
+  useEffect(() => { if (nextTaskId !== undefined) nextTaskButton.current?.focus({ preventScroll: true }); }, [nextTaskId]);
   const saveState = saver.current?.state ?? "saved";
   const canSubmit = !readOnly && !busy && form !== null && issues.length === 0 && nonblank(qualification)
     && saveState === "saved" && !saver.current?.hasUnsavedChanges;
@@ -429,6 +447,16 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           {submitted && <InlineMessage tone="success" title="Review submitted"><p>{decisionOutcomes[submitted.decision]}</p>
             {createdVersion !== null && <p>A corrected version v{createdVersion} was created.</p>}
             {submitted.created_variant_id && createdVersion === null && <Button size="sm" onClick={() => { void loadCreated(submitted); }}>Retry corrected version metadata</Button>}</InlineMessage>}
+          {submitted && nextTask && <div className="translation-next-task">
+            {nextTask.kind === "loading" && <Button variant="primary" loading>Next task</Button>}
+            {nextTask.kind === "ready" && nextTask.next && <Button ref={nextTaskButton} variant="primary"
+              onClick={() => props.onNavigate({ name: "task", assignmentId: nextTask.next!.assignment_id })}>{nextTaskLabel(nextTask.next)}</Button>}
+            {nextTask.kind === "ready" && !nextTask.next
+              ? <Button variant="primary" onClick={() => props.onNavigate({ name: "tasks" })}>Back to my tasks</Button>
+              : navigateLink({ name: "tasks" }, "Back to my tasks")}
+            {nextTask.kind === "ready" && <p role="status" className="translation-submit-note">{remainingTasksText(nextTask.remaining)}</p>}
+            {nextTask.kind === "error" && <><ErrorNotice error={nextTask.error} /><Button onClick={() => setNextTaskLoad(n => n + 1)}>Retry</Button></>}
+          </div>}
           {record ? <ReviewSummary record={record} heading="Submitted review" />
             : held ? <><InlineMessage tone="info">This task is paused. Your review choices are kept.</InlineMessage><ReviewForm value={visualForm(rawForm)} issues={[]} failedCheckCount={workspace.failed_checks.length} readOnly onChange={() => {}} /></>
             : readOnly ? <InlineMessage tone="info">This review can no longer be edited.</InlineMessage>

@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { api, ApiError } from "../src/api/client";
+import { api, ApiError, type TaskSummary } from "../src/api/client";
 import type { RouteLeaveGuard } from "../src/app/router";
 import { TranslationReviewScreen } from "../src/translation/TranslationReviewScreen";
 import { reviewRecord, reviewWorkspace } from "./translationFixtures";
@@ -12,6 +12,7 @@ import type { ReviewDecisionCode } from "../src/translation/reviewRules";
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }) {
   vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
   const width = () => viewport?.width ?? 1440;
   const evaluate = (query: string) => {
     const min = /min-width:\s*(\d+)px/.exec(query), max = /max-width:\s*(\d+)px/.exec(query);
@@ -650,4 +651,59 @@ it("measures the bands and the pinned bar into inline custom properties", async 
   const root = screen.getByRole("region", { name: "Translation review" });
   expect(root.style.getPropertyValue("--review-bar")).toBe("72px");
   expect(root.style.getPropertyValue("--review-bands")).toMatch(/^\d+(\.\d+)?px$/);
+});
+
+const taskSummary = (assignment_id: number, overrides: Partial<TaskSummary> = {}): TaskSummary => ({
+  assignment_id, workflow_revision: 0, held: false, project_key: "proj", project_name: "Project",
+  document_id: `document-${assignment_id}`, language: "de", task: "translation_review", status: "open",
+  updated_at: "2026-10-20T12:00:00Z", ...overrides,
+});
+async function submitAcceptedUnchanged() {
+  await screen.findByRole("textbox", { name: "Translation (de)" }); vi.useFakeTimers();
+  fireEvent.click(screen.getByRole("radio", { name: decisionLabels.accepted_unchanged }));
+  await clock();
+  await confirmSubmit();
+  await clock(0);
+}
+it("offers the next task focused after submit and opens it", async () => {
+  const { navigate } = setup();
+  const tasks = vi.spyOn(api, "listMyTasks").mockResolvedValue([taskSummary(17, { status: "in_progress" }),
+    taskSummary(30, { project_key: "other", external_id: "elsewhere" }), taskSummary(18, { external_id: "case-2", task: "annotate" })]);
+  await submitAcceptedUnchanged();
+  expect(tasks).toHaveBeenCalledTimes(1);
+  const next = screen.getByRole("button", { name: "Next task: case-2 (de)" });
+  expect(document.activeElement).toBe(next);
+  expect(screen.getByRole("link", { name: "Back to my tasks" })).toBeDefined();
+  expect(screen.getByText("1 more open task in this project.").getAttribute("role")).toBe("status");
+  fireEvent.click(next);
+  expect(navigate).toHaveBeenCalledWith({ name: "task", assignmentId: 18 });
+});
+it("makes Back to my tasks primary when nothing is left", async () => {
+  const { navigate } = setup();
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([taskSummary(17, { status: "submitted" })]);
+  await submitAcceptedUnchanged();
+  expect(screen.getByText("No more open tasks in this project.")).toBeDefined();
+  expect(screen.queryByRole("button", { name: /^Next task/ })).toBeNull();
+  const back = screen.getByRole("button", { name: "Back to my tasks" });
+  expect(back.className).toContain("primary");
+  fireEvent.click(back);
+  expect(navigate).toHaveBeenCalledWith({ name: "tasks" });
+});
+it("shows loading and an error with Retry for the task list", async () => {
+  setup();
+  let fail: (reason: unknown) => void = () => {};
+  const tasks = vi.spyOn(api, "listMyTasks").mockImplementationOnce(() => new Promise<TaskSummary[]>((_, reject) => { fail = reject; }));
+  await submitAcceptedUnchanged();
+  const loading = screen.getByRole("button", { name: /^Next task/ });
+  expect(loading.getAttribute("aria-disabled")).toBe("true");
+  expect(loading.getAttribute("aria-busy")).toBe("true");
+  await act(async () => { fail(new Error("Network down")); });
+  expect(screen.queryByRole("button", { name: /^Next task/ })).toBeNull();
+  expect(screen.getByRole("link", { name: "Back to my tasks" })).toBeDefined();
+  expect(screen.getByText(/Network down/)).toBeDefined();
+  tasks.mockResolvedValueOnce([taskSummary(18, { external_id: "case-2" })]);
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Retry" })); });
+  expect(tasks).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole("button", { name: "Next task: case-2 (de)" })).toBeDefined();
+  expect(screen.queryByText(/Network down/)).toBeNull();
 });

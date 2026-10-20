@@ -214,3 +214,7 @@
 .translation-check-code-line dt::after { content: ":"; }
 .translation-check-code-line dd { margin: 0; }
 .translation-check-code-line .translation-check-code { margin-left: 0; }
+
+/* Next task after submit: actions in one wrapping row, the remaining count below. */
+.translation-next-task { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.translation-next-task [role="status"] { flex-basis: 100%; }

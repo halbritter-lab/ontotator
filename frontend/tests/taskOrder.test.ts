@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TaskSummary } from "../src/api/client";
-import { orderTasks } from "../src/app/caseOrder";
+import { nextOpenTask, orderTasks } from "../src/app/caseOrder";
 
 const task = (assignment_id: number, overrides: Partial<TaskSummary> = {}): TaskSummary => ({
   assignment_id,
@@ -100,5 +100,20 @@ describe("orderTasks", () => {
     expect(readonlyTasks[0]).toBe(first);
     expect(readonlyTasks[1]).toBe(middle);
     expect(readonlyTasks[2]).toBe(last);
+  });
+});
+
+describe("nextOpenTask", () => {
+  it("returns the first unsubmitted task of the same project in list order, any task type", () => {
+    const tasks = [task(5, { status: "submitted", task: "translation_review" }), task(9, { status: "open" }),
+      task(7, { status: "in_progress", task: "translation_review" }), task(3, { project_key: "other" })];
+    expect(nextOpenTask(tasks, 5, "project-a")).toEqual({ next: tasks[1], remaining: 2 });
+  });
+  it("skips the current task even while the list still shows it unsubmitted", () => {
+    const tasks = [task(5, { status: "in_progress" }), task(9, { status: "open" })];
+    expect(nextOpenTask(tasks, 5, "project-a")).toEqual({ next: tasks[1], remaining: 1 });
+  });
+  it("returns null and zero when nothing is open in the project", () => {
+    expect(nextOpenTask([task(5, { status: "submitted" }), task(3, { project_key: "other" })], 5, "project-a")).toEqual({ next: null, remaining: 0 });
   });
 });

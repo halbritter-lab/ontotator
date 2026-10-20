@@ -1,3 +1,5 @@
+import { textLabel } from "../app/identity";
+import type { TaskSummary } from "../api/client";
 import type { ClinicalCategory, IssueCode, ReviewDecisionCode } from "./reviewRules";
 
 /** English presentation keyed by domain codes, ready for later translation. */
@@ -67,6 +69,18 @@ export const decisionOutcomes: Readonly<Record<ReviewDecisionCode, string>> = {
   query: "The translation is marked as reviewed with a query. It is not accepted for annotation.",
   rejected: "The translation is marked as reviewed and rejected. It is not accepted for annotation.",
 };
+
+/** The "Next task" button after submitting (spec A.5). */
+export function nextTaskLabel(task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language">): string {
+  if (task.case_id) return `Next task: ${textLabel({ case_id: task.case_id, language: task.language })}`;
+  return `Next task: ${task.external_id ?? task.document_id} (${task.language})`;
+}
+
+/** Open tasks left in the project after submitting, besides the one just submitted. */
+export function remainingTasksText(count: number): string {
+  if (count <= 0) return "No more open tasks in this project.";
+  return `${count} more open ${count === 1 ? "task" : "tasks"} in this project.`;
+}
 
 /** Hint under "Clinically relevant change", following the review rules for each decision (the checkbox is shown for the Accepted decisions only). */
 export const clinicalChangeHints: Readonly<Record<ReviewDecisionCode, string>> = {
