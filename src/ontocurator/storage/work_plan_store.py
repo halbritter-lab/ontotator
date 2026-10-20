@@ -10,7 +10,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, cast
 
-from sqlalchemy import Connection, and_, case, exists, func, select, tuple_
+from sqlalchemy import Connection, and_, case, exists, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 
 from ontocurator.domain import document_rows as rules
@@ -47,6 +47,7 @@ __all__ = [
     "acceptances",
     "add_acceptance",
     "bump_revisions",
+    "clear_restored",
     "discarded",
     "effective_plan",
     "ensure_rows",
@@ -288,6 +289,24 @@ def restored(conn: Connection, project_id: int) -> dict[RowKey, int]:
             )
         )
     }
+
+
+def clear_restored(conn: Connection, project_id: int, key: RowKey) -> None:
+    """Drop the row's PLAN_RESTORED marker; the plan revision stays as it is.
+
+    For a final selection that changes the chosen result: the restored final
+    is no longer the one the warning was about.
+    """
+    conn.execute(
+        update(WorkPlanFlagsRow)
+        .where(
+            WorkPlanFlagsRow.project_id == project_id,
+            WorkPlanFlagsRow.case_id == key.case_id,
+            WorkPlanFlagsRow.language == key.language,
+            WorkPlanFlagsRow.restored_revision.is_not(None),
+        )
+        .values(restored_revision=None)
+    )
 
 
 def _bump(conn: Connection, project_id: int, case_ids: Iterable[str]) -> dict[str, int]:

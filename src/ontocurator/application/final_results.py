@@ -17,8 +17,10 @@ from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import AccessDenied, DomainError, RevisionConflict
+from ontocurator.domain.work_plans import RowKey
 from ontocurator.exchange.final_content import freeze_content
 from ontocurator.exchange.human_inputs import human_input_closure
+from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
 from ontocurator.storage.final_tables import (
     ExportSelectionSnapshotRow,
@@ -164,6 +166,12 @@ class FinalResultService:
                 conn.execute(update(FinalSelectionRow).where(*slot).values(**values))
             else:
                 conn.execute(insert(FinalSelectionRow).values(**values))
+            if not same:
+                # PLAN_RESTORED was about the earlier final; a new choice
+                # settles it (the plan revision stays).
+                work_plan_store.clear_restored(
+                    conn, pid, RowKey(doc.case_id, doc.language)
+                )
             result = {
                 name: values[name]
                 for name in (

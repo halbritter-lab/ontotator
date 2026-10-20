@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import Connection, insert, select, update
 
 from ontocurator.application.translation_reviews import (
     TranslationReviewRecord,
@@ -16,9 +16,12 @@ from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.policy import Access
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError, RevisionConflict
+from ontocurator.domain.variants import VariantInfo
+from ontocurator.domain.work_plans import RowKey
 from ontocurator.domain.work_rounds import derive_source_obligations
 from ontocurator.jobs.queue import JobQueue
 from ontocurator.storage.database import Database
+from ontocurator.storage.plan_tables import DiscardedVariantRow
 from ontocurator.storage.tables import (
     AssignmentRow,
     TranslationReviewDraftRow,
@@ -72,6 +75,7 @@ class TranslationWorkflowService:
                 confirm_language,
                 variants=variants,
                 allow_accepted_translation_review=True,
+                check_plan=False,
             )
             existing = assignments.active_for(
                 conn, project["id"], document_id, target, "translation_review"
@@ -86,6 +90,8 @@ class TranslationWorkflowService:
                 require_task_writable(conn, existing.id)
                 if existing.status != "submitted":
                     return existing
+            self._plan_review(conn, actor, project["id"], variant)
+            if existing is not None:
                 assignment = existing
                 conn.execute(
                     update(TranslationReviewDraftRow)
@@ -165,6 +171,28 @@ class TranslationWorkflowService:
                 },
             )
             return assignments._get(conn, assignment.id)
+
+    @staticmethod
+    def _plan_review(
+        conn: Connection, actor: Actor, project_id: int, variant: VariantInfo
+    ) -> None:
+        """D26: a correction needs Review; turn it on (audited, no consequences).
+
+        A discarded version takes no new work (``NOT_IN_WORK_PLAN``).
+        """
+        from ontocurator.application.work_plans import turn_review_on
+
+        discarded = conn.execute(
+            select(DiscardedVariantRow.document_id).where(
+                DiscardedVariantRow.project_id == project_id,
+                DiscardedVariantRow.document_id == variant.document_id,
+            )
+        ).first()
+        if discarded is not None:
+            raise DomainError("NOT_IN_WORK_PLAN")
+        turn_review_on(
+            conn, actor, project_id, RowKey(variant.case_id, variant.language)
+        )
 
     def obligations(self, access: Access, assignment_id: int) -> list[dict[str, Any]]:
         with self.db.transaction() as conn:

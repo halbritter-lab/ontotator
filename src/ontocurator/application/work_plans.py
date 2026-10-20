@@ -25,7 +25,7 @@ from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.policy import Access, Action
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain import document_rows as rules
-from ontocurator.domain.errors import DomainError
+from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.work_plans import (
     OFF,
     SOURCE_KEY,
@@ -44,6 +44,7 @@ from ontocurator.domain.work_plans import (
 from ontocurator.projects.assignments import revoke_assignments
 from ontocurator.storage import work_plan_store as store
 from ontocurator.storage.database import Database
+from ontocurator.storage.final_tables import FinalSelectionRow
 from ontocurator.storage.plan_tables import DiscardedVariantRow
 from ontocurator.storage.repository import _lock_id
 from ontocurator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
@@ -55,7 +56,12 @@ if TYPE_CHECKING:
         PlanRowsSet,
     )
 
-__all__ = ["MAX_CASE_IDS", "WorkPlanService", "enable_review_for_accepted"]
+__all__ = [
+    "MAX_CASE_IDS",
+    "WorkPlanService",
+    "enable_review_for_accepted",
+    "turn_review_on",
+]
 
 MAX_CASE_IDS = 5000
 _INVALID_ORDER = ("source_review", "not_acceptable", "annotate_not_accepted")
@@ -235,14 +241,24 @@ def enable_review_for_accepted(
         or acceptance["source"] not in _REVIEWABLE_ACCEPTANCES
     ):
         return False
-    key = RowKey(document.case_id, document.language)
-    current = store.effective_plan(conn, project_id, [document.case_id])
+    turn_review_on(conn, actor, project_id, RowKey(document.case_id, document.language))
+    return True
+
+
+def turn_review_on(
+    conn: Connection, actor: Actor, project_id: int, key: RowKey
+) -> None:
+    """Review on for one row if it is off (D25, D26).
+
+    Audited as ``work_plan.update``; no consequences and no confirmation (turning
+    a flag on withdraws nothing). The caller holds the project lock.
+    """
+    current = store.effective_plan(conn, project_id, [key.case_id])
     old = current.get(key, OFF)
     if not old.review:
         new = {key: PlanFlags(True, old.annotate)}
         revisions = _write(conn, actor, project_id, current, new, restored={})
         _audit_cases(conn, actor, project_id, current, new, revisions)
-    return True
 
 
 @dataclass
@@ -342,7 +358,40 @@ class WorkPlanService:
             raise DomainError("WORK_PLAN_CHANGED", {"cases": stale})
 
     @staticmethod
-    def _require_valid(plan: _Plan) -> None:
+    def _invalid_row(plan: _Plan, row_key: RowKey) -> dict[str, Any]:
+        row = plan.versions[row_key]
+        return {
+            **_ref(row_key),
+            "not_accepted": int(not row.is_source and not row.accepted),
+            "not_acceptable": int(row.review_blocked),
+            "marked_in_package": int(row.marked_in_package),
+        }
+
+    @classmethod
+    def _require_valid(cls, plan: _Plan, *, discarded_rule: bool = True) -> None:
+        """``discarded`` first: no flag may turn on for a fully discarded row
+        (a service rule: pure ``validate`` does not see the previous flags).
+        An Undo (``discarded_rule=False``) restores an earlier state exactly."""
+        discarded = [
+            row_key
+            for row_key, flags in sorted(
+                plan.new.items(), key=lambda item: _row_order(item[0])
+            )
+            if discarded_rule
+            and plan.versions[row_key].discarded
+            and (
+                (flags.review and not plan.current.get(row_key, OFF).review)
+                or (flags.annotate and not plan.current.get(row_key, OFF).annotate)
+            )
+        ]
+        if discarded:
+            raise DomainError(
+                "WORK_PLAN_INVALID",
+                {
+                    "reason": "discarded",
+                    "rows": [cls._invalid_row(plan, k) for k in discarded],
+                },
+            )
         if not plan.invalid:
             return
         reasons = {item.reason for item in plan.invalid}
@@ -352,17 +401,7 @@ class WorkPlanService:
             {
                 "reason": reason,
                 "rows": [
-                    {
-                        **_ref(item.key),
-                        "not_accepted": int(
-                            not plan.versions[item.key].is_source
-                            and not plan.versions[item.key].accepted
-                        ),
-                        "not_acceptable": int(plan.versions[item.key].review_blocked),
-                        "marked_in_package": int(
-                            plan.versions[item.key].marked_in_package
-                        ),
-                    }
+                    cls._invalid_row(plan, item.key)
                     for item in plan.invalid
                     if item.reason == reason
                 ],
@@ -542,6 +581,21 @@ class WorkPlanService:
                 and _needs_acceptance(row, new)
                 else frozenset()
             )
+            if new == old and not accepting:
+                # Nothing to write: no revision bump, no audit, empty Undo.
+                return {
+                    "case_id": case_id,
+                    "language": language,
+                    "flags": {
+                        **_flags(new),
+                        "review_applicable": not row.is_source,
+                        "discarded": row.discarded,
+                    },
+                    "revision": revisions[case_id],
+                    "undo": {"rows": [], "revisions": {case_id: revisions[case_id]}},
+                    "withdrawn": [],
+                    "accepted_document_ids": [],
+                }
             plan = _Plan(
                 pid,
                 project["annotate_accepted_translations_only"],
@@ -713,7 +767,12 @@ class WorkPlanService:
             project = self._lock(conn, key, exclusive=True)
             plan = self._bulk_plan(conn, project, request)
             if request.expected_revisions is not None:
-                self._require_revisions(plan.revisions, request.expected_revisions)
+                # A selected case missing from ``expected_revisions`` is stale
+                # (None never matches); without them the preset path applies.
+                expected = request.expected_revisions
+                self._require_revisions(
+                    plan.revisions, {c: expected.get(c) for c in plan.revisions}
+                )
             self._require_valid(plan)
             if not plan.new:
                 return {
@@ -770,7 +829,7 @@ class WorkPlanService:
             plan.invalid = validate(
                 plan.new, versions, rule_on=rule_on and not request.undo
             )
-            self._require_valid(plan)
+            self._require_valid(plan, discarded_rule=not request.undo)
             result = self._consequences(conn, plan, lock=True)
             if request.undo:
                 # Finals and PLAN_RESTORED are restored exactly; only tasks
@@ -872,7 +931,9 @@ class WorkPlanService:
         if not reason:
             raise DomainError("DISCARD_REASON_REQUIRED")
         if self.actor.user_id is None:
-            raise DomainError("NOT_ALLOWED", "Only a signed-in lead can discard.")
+            # discarded_variants.discarded_by names the lead (as final
+            # selections): process actors cannot discard.
+            raise AccessDenied("NOT_ALLOWED", "Only a signed-in lead can discard.")
         with self.db.transaction() as conn:
             project = self._lock(conn, key, exclusive=True)
             pid = project["id"]
@@ -926,7 +987,34 @@ class WorkPlanService:
                 revisions,
             )
             if remaining:
-                result = Consequences(tuple(root_tasks), (), ())
+                # The row stays planned; only the discarded root's work goes.
+                # A final chosen on one of its versions leaves the export and
+                # its open reports are listed (they stay open).
+                final_document = conn.execute(
+                    select(FinalSelectionRow.document_id).where(
+                        FinalSelectionRow.project_id == pid,
+                        FinalSelectionRow.case_id == row_key.case_id,
+                        FinalSelectionRow.language == row_key.language,
+                    )
+                ).scalar_one_or_none()
+                root_assignments = set(
+                    conn.execute(
+                        select(AssignmentRow.id).where(
+                            AssignmentRow.project_id == pid,
+                            AssignmentRow.document_id.in_(ids),
+                        )
+                    ).scalars()
+                )
+                result = Consequences(
+                    tuple(root_tasks),
+                    (row_key,) if final_document in ids else (),
+                    (),
+                    tuple(
+                        report
+                        for report in store.open_reports(conn, pid, [row_key])
+                        if report.assignment_id in root_assignments
+                    ),
+                )
             else:
                 row_result = self._consequences(conn, plan, lock=True)
                 withdrawn = {t.assignment_id: t for t in row_result.withdrawn} | {

@@ -107,6 +107,22 @@ def final_with_submission(env: Any, case: str = "c1", language: str = "en") -> N
     select_final(env, doc(case, language), f"s-{case}-{language}")
 
 
+def report(env: Any, username: str, assignment_id: int) -> str:
+    client = logged_in(env.app, username, assignments=[])
+    with env.db.transaction() as conn:
+        revision = AssignmentService._get(conn, assignment_id).workflow_revision
+    created = client.post(
+        f"/api/v1/assignments/{assignment_id}/problem-reports",
+        json={
+            "request_id": f"report-{assignment_id}",
+            "expected_workflow_revision": revision,
+            "reason": "The text is cut off",
+        },
+    )
+    assert created.status_code == 200, created.text
+    return str(created.json()["report_id"])
+
+
 def codes(state: dict[str, Any]) -> set[str]:
     return {w["cause_id"] or w["code"] for w in state["warnings"]}
 
@@ -632,7 +648,7 @@ def test_new_review_of_externally_accepted_translation(env):
             review_accepted_translation=True,
         )
     )
-    assert package.code in {"NOT_A_TRANSLATION", "NOT_IN_WORK_PLAN"}
+    assert package.code == "NOT_A_TRANSLATION"
     assert flags_of(env, "c2", "de").review is False
 
 
@@ -725,6 +741,21 @@ def test_discard_one_of_two_roots_keeps_the_row_flags(env, tmp_path):
     write(env, {RowKey("c2", "fr"): PlanFlags(True, True)})
     first_task = assign(env, doc("c2", "fr"), "ana", "translation_review")
     second_task = assign(env, "c2-fr-b", "ben", "translation_review")
+    final_with_submission(env, "c2", "fr")
+    open_task = assign(env, doc("c2", "fr"), "anno2", "annotate")
+    report_id = report(env, "anno2", open_task)
+    error = refused(
+        lambda: service(env).discard(
+            "proj", doc("c2", "fr"), "Duplicate delivery", False
+        )
+    )
+    assert error.code == "WORK_PLAN_CONFIRMATION_REQUIRED"
+    assert error.details["finals_leaving"] == [{"case_id": "c2", "language": "fr"}]
+    assert [r["report_id"] for r in error.details["open_reports"]] == [report_id]
+    assert {w["assignment_id"] for w in error.details["withdrawn"]} == {
+        first_task,
+        open_task,
+    }
     service(env).discard("proj", doc("c2", "fr"), "Duplicate delivery", True)
     assert flags_of(env, "c2", "fr") == PlanFlags(True, True)
     assert revoked(env, first_task) and not revoked(env, second_task)
@@ -757,3 +788,166 @@ def test_every_change_is_audited(env):
     assert second["rows"][0]["new"] == {"review": False, "annotate": False}
     assert second["withdrawn"] == [aid]
     assert second["revision"] == 4
+
+
+def test_new_final_choice_clears_plan_restored(env):
+    final_with_submission(env)
+    for annotate, expected in ((False, 2), (True, 3)):
+        service(env).patch_row(
+            "proj",
+            "c1",
+            "en",
+            PlanRowPatch(annotate=annotate, expected_revision=expected, confirm=True),
+        )
+    assert [w for w in preflight(env)["warnings"] if w["code"] == "PLAN_RESTORED"]
+    revision = revision_of(env, "c1")
+    other = assign(env, doc("c1", "en"), "anno2", "annotate")
+    submit(env, other, "s-c1-en-2")
+    chosen = env.lead.put(
+        f"{BASE}/final-selections",
+        json={
+            "document_id": doc("c1", "en"),
+            "submission_id": "s-c1-en-2",
+            "expected_revision": 1,
+        },
+    )
+    assert chosen.status_code == 200, chosen.text
+    with env.db.transaction() as conn:
+        assert store.restored(conn, env.pid) == {}
+    assert revision_of(env, "c1") == revision
+    assert not [w for w in preflight(env)["warnings"] if w["code"] == "PLAN_RESTORED"]
+
+
+def test_no_flag_turns_on_for_a_discarded_row(env):
+    set_rule(env.db, False)
+    service(env).discard("proj", doc("c1", "de"), "Wrong text", True)
+    revision = revision_of(env, "c1")
+    for change in (
+        PlanRowPatch(review=True, expected_revision=revision),
+        PlanRowPatch(annotate=True, expected_revision=revision),
+    ):
+        error = refused(
+            lambda change=change: service(env).patch_row("proj", "c1", "de", change)
+        )
+        assert error.code == "WORK_PLAN_INVALID"
+        assert error.details["reason"] == "discarded"
+        assert error.details["rows"][0]["case_id"] == "c1"
+    rows = PlanRowsSet(
+        rows=[UndoRowView(case_id="c1", language="de", review=True, annotate=False)],
+        expected_revisions={"c1": revision},
+    )
+    error = refused(lambda: service(env).set_rows("proj", rows))
+    assert error.code == "WORK_PLAN_INVALID"
+    assert error.details["reason"] == "discarded"
+    # Bulk skips discarded rows: nothing changes, nothing is refused.
+    saved = service(env).bulk_save(
+        "proj",
+        BulkPlanRequest(
+            case_ids=["c1"],
+            languages={"de": LanguageChangeView(review="on", annotate="on")},
+            expected_revisions={"c1": revision},
+        ),
+    )
+    assert saved["changed_rows"] == 0
+    assert flags_of(env, "c1", "de") == PlanFlags(False, False)
+
+
+def test_bulk_save_treats_unlisted_cases_as_stale(env):
+    set_rule(env.db, False)
+    request = BulkPlanRequest(
+        case_ids=["c1", "c2"],
+        languages={"de": LanguageChangeView(review="on")},
+        expected_revisions={"c1": 2},
+    )
+    error = refused(lambda: service(env).bulk_save("proj", request))
+    assert error.code == "WORK_PLAN_CHANGED"
+    assert error.details == {"cases": [{"case_id": "c2", "revision": 2}]}
+    assert flags_of(env, "c1", "de") == PlanFlags(False, False)
+    unchecked = service(env).bulk_save(
+        "proj", request.model_copy(update={"expected_revisions": None})
+    )
+    assert unchecked["changed_rows"] == 2
+
+
+def test_no_op_patch_writes_nothing(env):
+    result = service(env).patch_row(
+        "proj", "c1", "de", PlanRowPatch(review=False, expected_revision=2)
+    )
+    assert result["revision"] == 2
+    assert result["undo"] == {"rows": [], "revisions": {"c1": 2}}
+    assert revision_of(env, "c1") == 2
+    assert audits(env, "work_plan.update") == []
+
+
+def test_process_actor_cannot_discard(env):
+    from auth_harness import HARNESS
+
+    from ontocurator.domain.errors import AccessDenied
+
+    process = service(env)
+    process.actor = HARNESS
+    with pytest.raises(AccessDenied):
+        process.discard("proj", doc("c1", "de"), "Wrong text", True)
+
+
+def correct(env: Any, document_id: str, username: str = "ana") -> Any:
+    from ontocurator.application.translation_workflow import (
+        TranslationWorkflowService,
+    )
+    from ontocurator.auth.audit import Actor
+
+    lead = env.app.state.accounts.get_by_username("leader")
+    variant = env.app.state.repo.get_variant("proj", document_id)
+    return TranslationWorkflowService(env.db, env.app.state.jobs).assign_correction(
+        Actor(lead.id, "user:leader"),
+        "proj",
+        document_id,
+        username,
+        expected_text_sha256=variant.text_sha256,
+        reason="Check the wording",
+        confirm_language=True,
+    )
+
+
+def test_correction_turns_review_on(env):
+    """D26: a correction on a row with Review off turns Review on (audited)."""
+    service(env).patch_row(
+        "proj",
+        "c1",
+        "de",
+        PlanRowPatch(
+            annotate=True,
+            expected_revision=2,
+            accept_external_review=AcceptExternalReview(reason="checked externally"),
+        ),
+    )
+    before = audits(env, "work_plan.update")
+    created = correct(env, doc("c1", "de"))
+    assert flags_of(env, "c1", "de") == PlanFlags(True, True)
+    (audit,) = audits(env, "work_plan.update")[len(before) :]
+    assert audit["rows"] == [
+        {
+            "language": "de",
+            "old": {"review": False, "annotate": True},
+            "new": {"review": True, "annotate": True},
+        }
+    ]
+    assert audit["withdrawn"] == []
+    # The idempotent retry of an open correction returns before the plan step.
+    write(env, {RowKey("c1", "de"): PlanFlags(False, True)})
+    revision = revision_of(env, "c1")
+    again = correct(env, doc("c1", "de"))
+    assert again.id == created.id
+    assert flags_of(env, "c1", "de") == PlanFlags(False, True)
+    assert revision_of(env, "c1") == revision
+    assert len(audits(env, "work_plan.update")) == len(before) + 1
+
+
+def test_correction_with_review_on_changes_no_plan(env):
+    set_rule(env.db, False)
+    write(env, {RowKey("c1", "de"): PlanFlags(True, False)})
+    set_status(env, doc("c1", "de"), "accepted")
+    revision = revision_of(env, "c1")
+    correct(env, doc("c1", "de"))
+    assert revision_of(env, "c1") == revision
+    assert audits(env, "work_plan.update") == []

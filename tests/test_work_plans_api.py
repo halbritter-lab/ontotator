@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+from auth_harness import logged_in
 from sqlalchemy import update
 from test_case_api import BASE, CASE, CORRECTED, TARGET
 from test_case_api import case_env as case_env
 from test_translation_review_task import assigned
 
+from ontocurator.domain.work_plans import PlanFlags, RowKey
+from ontocurator.storage import work_plan_store
+from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import ProjectRow
 
 CASE_PATH = quote(CASE, safe="")
@@ -176,12 +180,35 @@ def test_rows_put_restores_undo(case_env):
     restored = env.lead.put(f"{BASE}/work-plans/rows", json={**body, "confirm": True})
     assert restored.status_code == 200, restored.text
     assert restored.json()["changed_rows"] == 1
-    current = env.lead.patch(
-        plan_path("de"),
-        json={"expected_revision": restored.json()["revisions"][CASE]},
-    )
-    assert current.status_code == 200, current.text
-    assert current.json()["flags"]["review"] is False
+    with env.db.transaction() as conn:
+        pid = Repository._project_id(conn, "proj")
+        assert pid is not None
+        assert work_plan_store.effective_plan(conn, pid, [CASE])[
+            RowKey(CASE, "de")
+        ] == PlanFlags(False, True)
+        assert (
+            work_plan_store.revisions(conn, pid, [CASE]) == restored.json()["revisions"]
+        )
+
+
+def test_routes_hide_the_project_from_non_members(case_env):
+    env = case_env
+    stranger = logged_in(env.app, "stranger", projects={}, assignments=[])
+    calls = [
+        ("patch", plan_path("de"), {"review": False, "expected_revision": 2}),
+        ("post", f"{BASE}/work-plans/bulk/preview", {"case_ids": [CASE]}),
+        ("put", f"{BASE}/work-plans/bulk", {"case_ids": [CASE]}),
+        ("post", f"{BASE}/case-ids/lookup", {"ids": [CASE]}),
+        (
+            "post",
+            f"{BASE}/variants/{quote(TARGET, safe='')}/discard",
+            {"reason": "x", "confirm": True},
+        ),
+    ]
+    for method, url, body in calls:
+        response = getattr(stranger, method)(url, json=body)
+        assert response.status_code == 404, (url, response.text)
+        assert response.json()["code"] == "PROJECT_NOT_FOUND"
 
 
 def test_lookup_and_discard_routes(case_env):
