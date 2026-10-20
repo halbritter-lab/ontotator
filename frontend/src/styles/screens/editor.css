@@ -275,6 +275,7 @@
 /* Center Content: Text Pane */
 
 .center-pane {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -283,23 +284,36 @@
 }
 
 /* A marking mode (adding a mention or a segment) shows one line above the text;
-   nothing is shown in the normal state (spec C.6). */
+   nothing is shown in the normal state (spec C.6). The text never moves
+   (PRODUCT.md): the line overlays the top of the text sheet instead of taking
+   space in the flow. It is one line of 32 px (24 px button + 2 x 4 px), which
+   fits the sheet's top padding (--space-6), so the first line of text stays
+   visible. In the grid layouts (versions, comparison) its grid area is the
+   empty row above the text. */
 
 .attach-mention-banner,
 .pane-intent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  height: var(--space-6);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-5);
+  padding: var(--space-1) var(--space-5);
   background: var(--warning-light);
   color: var(--text);
-  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border);
   font-size: var(--size-sm);
   line-height: var(--leading-sm);
 }
 
-.pane-intent__message {
+.pane-intent__message,
+.attach-mention-banner > span {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -311,6 +325,8 @@
 .pane-intent .btn {
   flex-shrink: 0;
   white-space: nowrap;
+  min-height: 24px;
+  padding-block: 2px;
 }
 
 .text-pane-alert {
@@ -1146,7 +1162,8 @@
   }
   .text-container.density-reading {
     width: calc(100% - 2 * var(--space-4));
-    padding: var(--space-5) var(--space-6) var(--space-6);
+    /* Top padding holds the marking-mode line (32 px) without covering the first line. */
+    padding: var(--space-6) var(--space-6) var(--space-6);
   }
 }
 
@@ -1169,7 +1186,8 @@
   .text-container.density-reading {
     width: 100%;
     margin: 0;
-    padding: var(--space-5) var(--space-4) var(--space-6);
+    /* Top padding holds the marking-mode line (32 px) without covering the first line. */
+    padding: var(--space-6) var(--space-4) var(--space-6);
     border: 0;
     border-top: 1px solid var(--border);
     border-radius: 0;
