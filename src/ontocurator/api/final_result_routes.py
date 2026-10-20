@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.routes import get_access
+from ontocurator.api.work_plan_routes import RowRefView
 from ontocurator.application.final_results import FinalResultService
 from ontocurator.auth.audit import Actor
 
@@ -59,6 +60,8 @@ class FinalPreflight(BaseModel):
     warnings: list[FinalWarning]
     omissions: list[FinalOmission]
     state_digest: str
+    # Rows with a final result and Annotate off: kept, not exported (information).
+    not_in_plan: list[RowRefView] = Field(default_factory=list)
 
 
 class WarningAcknowledgement(BaseModel):

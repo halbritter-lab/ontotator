@@ -15,7 +15,9 @@ from ontocurator.authz.policy import Action
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.authz.scoped import project_not_found
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.work_plans import RowKey
 from ontocurator.domain.workspace import WorkspaceKey
+from ontocurator.storage import work_plan_store
 from ontocurator.storage.final_tables import FinalSelectionRow
 from ontocurator.storage.repository import Repository, _key_str, _lock_id
 from ontocurator.storage.tables import (
@@ -38,6 +40,7 @@ ACKNOWLEDGEABLE_CODES = frozenset(
         "SELECTED_RESULT_REVISED",
         "SELECTED_TEXT_CORRECTED",
         "SELECTED_NEWER_RESULT",
+        "PLAN_RESTORED",
     }
 )
 # Latest review decisions that keep a correction from counting as a newer text.
@@ -122,7 +125,12 @@ def corrects_selected_text(status: str | None, decision: str | None) -> bool:
 def derive_final_state(
     conn: Connection, repo: Repository, key: str, pid: int
 ) -> dict[str, Any]:
-    """Selections, omissions and warnings of project ``key`` on ``conn``."""
+    """Selections, omissions and warnings of project ``key`` on ``conn``.
+
+    Only rows with Annotate on are in scope (spec "Export"): their selections
+    are exported and missing ones omitted. Selections on rows with Annotate off
+    stay in history and are listed in ``not_in_plan`` (information only).
+    """
 
     def destination(case_id: str, document_id: str) -> str:
         return (
@@ -152,6 +160,17 @@ def derive_final_state(
         .mappings()
         .all()
     )
+    plan = work_plan_store.effective_plan(conn, pid)
+    planned = {(k.case_id, k.language) for k, flags in plan.items() if flags.annotate}
+    restored = work_plan_store.restored(conn, pid)
+    not_in_plan = sorted(
+        {
+            (row["case_id"], row["language"])
+            for row in rows
+            if (row["case_id"], row["language"]) not in planned
+        }
+    )
+    rows = [row for row in rows if (row["case_id"], row["language"]) in planned]
     selected = [
         {
             name: row[name]
@@ -256,6 +275,25 @@ def derive_final_state(
     decisions = latest_review_decisions(conn, pid) if rows else {}
     for row in rows:
         acknowledged = set(row["acknowledged_cause_ids"])
+        restored_revision = restored.get(RowKey(row["case_id"], row["language"]))
+        if restored_revision is not None:
+            # Annotate returned on this row while a final result existed (D13).
+            cause_id = (
+                f"PLAN_RESTORED:{row['case_id']}:{row['language']}:{restored_revision}"
+            )
+            if cause_id not in acknowledged:
+                causes.append(
+                    {
+                        "code": "PLAN_RESTORED",
+                        "cause_id": cause_id,
+                        "cause_revision": 1,
+                        "case_id": row["case_id"],
+                        "language": row["language"],
+                        "document_id": row["document_id"],
+                        "reason": "This language version returned to the plan. Confirm its earlier final result.",
+                        "destination": destination(row["case_id"], row["document_id"]),
+                    }
+                )
         round_view = repo.round_for_submission_in(conn, key, pid, row["submission_id"])
         if round_view and round_view.state in {"abandoned", "superseded"}:
             code = "SELECTED_ROUND_" + round_view.state.upper()
@@ -365,4 +403,13 @@ def derive_final_state(
                     "destination": destination(row["case_id"], item.document_id),
                 }
             )
-    return project_warnings(key, inventory, selected, causes)
+    state = project_warnings(
+        key,
+        [i for i in inventory if (i["case_id"], i["language"]) in planned],
+        selected,
+        causes,
+    )
+    state["not_in_plan"] = [
+        {"case_id": case_id, "language": language} for case_id, language in not_in_plan
+    ]
+    return state

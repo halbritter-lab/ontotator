@@ -2711,6 +2711,398 @@
         }
       }
     },
+    "/api/v1/projects/{key}/work-plans/annotation-target-preview": {
+      "get": {
+        "tags": [
+          "work-plans"
+        ],
+        "summary": "Annotation Target Preview",
+        "operationId": "annotation_target_preview_api_v1_projects__key__work_plans_annotation_target_preview_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "annotations_per_text",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "title": "Annotations Per Text"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationTargetPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/work-plans/bulk/preview": {
+      "post": {
+        "tags": [
+          "work-plans"
+        ],
+        "summary": "Preview Work Plans",
+        "operationId": "preview_work_plans_api_v1_projects__key__work_plans_bulk_preview_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/work-plans/bulk": {
+      "put": {
+        "tags": [
+          "work-plans"
+        ],
+        "summary": "Save Work Plans",
+        "operationId": "save_work_plans_api_v1_projects__key__work_plans_bulk_put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/work-plans/rows": {
+      "put": {
+        "tags": [
+          "work-plans"
+        ],
+        "summary": "Set Work Plan Rows",
+        "operationId": "set_work_plan_rows_api_v1_projects__key__work_plans_rows_put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanRowsSet"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/work-plans/{case_id}/{language}": {
+      "patch": {
+        "tags": [
+          "work-plans"
+        ],
+        "summary": "Patch Work Plan",
+        "operationId": "patch_work_plan_api_v1_projects__key__work_plans__case_id___language__patch",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "language",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Language"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanRowPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanRowResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/case-ids/lookup": {
+      "post": {
+        "tags": [
+          "work-plans"
+        ],
+        "summary": "Lookup Case Ids",
+        "operationId": "lookup_case_ids_api_v1_projects__key__case_ids_lookup_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseIdLookup"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseIdLookupResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/variants/{document_id}/discard": {
+      "post": {
+        "tags": [
+          "work-plans"
+        ],
+        "summary": "Discard Variant",
+        "operationId": "discard_variant_api_v1_projects__key__variants__document_id__discard_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscardResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/documents/{doc}/translation-correction-assignment": {
       "post": {
         "tags": [
@@ -4812,6 +5204,22 @@
   },
   "components": {
     "schemas": {
+      "AcceptExternalReview": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "AcceptExternalReview"
+      },
       "ActiveHoldView": {
         "properties": {
           "reason": {
@@ -5197,6 +5605,19 @@
         "title": "AnnotationSnapshot",
         "description": "Immutable snapshot binding annotation, evidence, text, layer config and ontology digests (V3)."
       },
+      "AnnotationTargetPreview": {
+        "properties": {
+          "rows_over_target": {
+            "type": "integer",
+            "title": "Rows Over Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows_over_target"
+        ],
+        "title": "AnnotationTargetPreview"
+      },
       "AnnotationTypeDefinition": {
         "properties": {
           "type_id": {
@@ -5304,6 +5725,17 @@
                 "type": "null"
               }
             ]
+          },
+          "review_accepted_translation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Accepted Translation"
           }
         },
         "additionalProperties": false,
@@ -5935,6 +6367,193 @@
         ],
         "title": "Body_upload_ontology_results_api_v1_admin_ontologies_upload_results_post"
       },
+      "BulkAcceptance": {
+        "properties": {
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Languages"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "languages",
+          "reason"
+        ],
+        "title": "BulkAcceptance"
+      },
+      "BulkPlanRequest": {
+        "properties": {
+          "case_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Case Ids"
+          },
+          "languages": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/LanguageChangeView"
+            },
+            "type": "object",
+            "title": "Languages"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "review_and_annotate_translations",
+                  "annotate_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
+          },
+          "accept_external_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BulkAcceptance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expected_revisions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revisions"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_ids"
+        ],
+        "title": "BulkPlanRequest"
+      },
+      "BulkPreview": {
+        "properties": {
+          "cases": {
+            "type": "integer",
+            "title": "Cases"
+          },
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/LanguagePreviewView"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "changes": {
+            "type": "integer",
+            "title": "Changes"
+          },
+          "to_assign": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "To Assign"
+          },
+          "consequences": {
+            "$ref": "#/components/schemas/ConsequencesView"
+          },
+          "invalid": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Invalid"
+          },
+          "revisions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Revisions"
+          },
+          "rule_on": {
+            "type": "boolean",
+            "title": "Rule On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cases",
+          "languages",
+          "changes",
+          "to_assign",
+          "consequences",
+          "invalid",
+          "revisions",
+          "rule_on"
+        ],
+        "title": "BulkPreview"
+      },
+      "BulkResult": {
+        "properties": {
+          "changed_rows": {
+            "type": "integer",
+            "title": "Changed Rows"
+          },
+          "revisions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Revisions"
+          },
+          "undo": {
+            "$ref": "#/components/schemas/UndoView"
+          },
+          "withdrawn": {
+            "items": {
+              "$ref": "#/components/schemas/WithdrawnTaskView"
+            },
+            "type": "array",
+            "title": "Withdrawn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changed_rows",
+          "revisions",
+          "undo",
+          "withdrawn"
+        ],
+        "title": "BulkResult"
+      },
       "BulkTargetView": {
         "properties": {
           "document_id": {
@@ -5985,6 +6604,83 @@
           "variants"
         ],
         "title": "CaseDetail"
+      },
+      "CaseIdLookup": {
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "title": "CaseIdLookup"
+      },
+      "CaseIdLookupResult": {
+        "properties": {
+          "found": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Found"
+          },
+          "unknown": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unknown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "found",
+          "unknown"
+        ],
+        "title": "CaseIdLookupResult"
+      },
+      "CasePlanChoice": {
+        "properties": {
+          "review": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
+          },
+          "annotate": {
+            "type": "boolean",
+            "title": "Annotate"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "annotate",
+          "case_id",
+          "language"
+        ],
+        "title": "CasePlanChoice"
       },
       "CaseSummary": {
         "properties": {
@@ -6061,6 +6757,30 @@
             },
             "type": "array",
             "title": "Status Overrides"
+          },
+          "plan_languages": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PlanChoice"
+            },
+            "type": "object",
+            "title": "Plan Languages"
+          },
+          "plan_cases": {
+            "items": {
+              "$ref": "#/components/schemas/CasePlanChoice"
+            },
+            "type": "array",
+            "title": "Plan Cases"
+          },
+          "accept_external_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportAcceptance"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -6069,6 +6789,45 @@
           "plan_sha256"
         ],
         "title": "CommitUpload"
+      },
+      "ConsequencesView": {
+        "properties": {
+          "withdrawn": {
+            "items": {
+              "$ref": "#/components/schemas/WithdrawnTaskView"
+            },
+            "type": "array",
+            "title": "Withdrawn"
+          },
+          "finals_leaving": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Finals Leaving"
+          },
+          "restored": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Restored"
+          },
+          "open_reports": {
+            "items": {
+              "$ref": "#/components/schemas/OpenReportView"
+            },
+            "type": "array",
+            "title": "Open Reports"
+          }
+        },
+        "type": "object",
+        "required": [
+          "withdrawn",
+          "finals_leaving",
+          "restored"
+        ],
+        "title": "ConsequencesView"
       },
       "CorrectionAssignmentRequest": {
         "properties": {
@@ -6362,6 +7121,70 @@
         ],
         "title": "DecisionBarView",
         "description": "Rows per category; hyphenated categories map to underscore fields."
+      },
+      "DiscardRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "DiscardRequest"
+      },
+      "DiscardResult": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "discarded_document_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Discarded Document Ids"
+          },
+          "flags": {
+            "$ref": "#/components/schemas/PlanFlagsView"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "withdrawn": {
+            "items": {
+              "$ref": "#/components/schemas/WithdrawnTaskView"
+            },
+            "type": "array",
+            "title": "Withdrawn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "discarded_document_ids",
+          "flags",
+          "revision",
+          "withdrawn"
+        ],
+        "title": "DiscardResult"
       },
       "DistributionContextView": {
         "properties": {
@@ -7245,6 +8068,13 @@
           "state_digest": {
             "type": "string",
             "title": "State Digest"
+          },
+          "not_in_plan": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Not In Plan"
           }
         },
         "type": "object",
@@ -7641,6 +8471,32 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "ImportAcceptance": {
+        "properties": {
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Languages"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "languages",
+          "reason"
+        ],
+        "title": "ImportAcceptance",
+        "description": "Translations of these languages were reviewed outside Ontocurator."
+      },
       "ImportPlan": {
         "properties": {
           "variants": {
@@ -7729,6 +8585,16 @@
             "type": "boolean",
             "title": "Committable",
             "default": true
+          },
+          "work_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UploadWorkPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -7984,6 +8850,99 @@
         ],
         "title": "JobView"
       },
+      "LanguageChangeView": {
+        "properties": {
+          "review": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "on",
+              "off"
+            ],
+            "title": "Review",
+            "default": "keep"
+          },
+          "annotate": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "on",
+              "off"
+            ],
+            "title": "Annotate",
+            "default": "keep"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "LanguageChangeView"
+      },
+      "LanguagePreviewView": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "source_languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Languages"
+          },
+          "cases_in_selection": {
+            "type": "integer",
+            "title": "Cases In Selection"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MixedCountView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "annotate": {
+            "$ref": "#/components/schemas/MixedCountView"
+          },
+          "will_change": {
+            "type": "integer",
+            "title": "Will Change"
+          },
+          "not_accepted": {
+            "type": "integer",
+            "title": "Not Accepted"
+          },
+          "not_acceptable": {
+            "type": "integer",
+            "title": "Not Acceptable",
+            "default": 0
+          },
+          "in_review": {
+            "type": "integer",
+            "title": "In Review",
+            "default": 0
+          },
+          "marked_in_package": {
+            "type": "integer",
+            "title": "Marked In Package"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "source_languages",
+          "cases_in_selection",
+          "review",
+          "annotate",
+          "will_change",
+          "not_accepted",
+          "marked_in_package"
+        ],
+        "title": "LanguagePreviewView"
+      },
       "LayerDefinition": {
         "properties": {
           "layer_id": {
@@ -8147,6 +9106,24 @@
           "reason"
         ],
         "title": "MissingFinalView"
+      },
+      "MixedCountView": {
+        "properties": {
+          "on": {
+            "type": "integer",
+            "title": "On"
+          },
+          "off": {
+            "type": "integer",
+            "title": "Off"
+          }
+        },
+        "type": "object",
+        "required": [
+          "on",
+          "off"
+        ],
+        "title": "MixedCountView"
       },
       "MultilingualSearchPreferences": {
         "properties": {
@@ -8393,6 +9370,45 @@
           "ontology"
         ],
         "title": "OntologyUploadResult"
+      },
+      "OpenReportView": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "assignment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
+          },
+          "held": {
+            "type": "boolean",
+            "title": "Held",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_id",
+          "case_id",
+          "language"
+        ],
+        "title": "OpenReportView"
       },
       "OpenTargetView": {
         "properties": {
@@ -8735,6 +9751,36 @@
         ],
         "title": "PendingReanchorRef"
       },
+      "PersonRefView": {
+        "properties": {
+          "pseudonym": {
+            "type": "string",
+            "title": "Pseudonym"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "is_me": {
+            "type": "boolean",
+            "title": "Is Me",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "pseudonym"
+        ],
+        "title": "PersonRefView",
+        "description": "``display_name`` only for lead callers or the caller's own record."
+      },
       "PinnedOntology": {
         "properties": {
           "ontology_id": {
@@ -8774,6 +9820,196 @@
           "release"
         ],
         "title": "PinnedOntology"
+      },
+      "PlanChoice": {
+        "properties": {
+          "review": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
+          },
+          "annotate": {
+            "type": "boolean",
+            "title": "Annotate"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "annotate"
+        ],
+        "title": "PlanChoice",
+        "description": "Plan flags chosen in the upload's \"Work plan\" step."
+      },
+      "PlanFlagsView": {
+        "properties": {
+          "review": {
+            "type": "boolean",
+            "title": "Review"
+          },
+          "annotate": {
+            "type": "boolean",
+            "title": "Annotate"
+          },
+          "review_applicable": {
+            "type": "boolean",
+            "title": "Review Applicable"
+          },
+          "discarded": {
+            "type": "boolean",
+            "title": "Discarded",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "review",
+          "annotate",
+          "review_applicable"
+        ],
+        "title": "PlanFlagsView"
+      },
+      "PlanRowPatch": {
+        "properties": {
+          "review": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
+          },
+          "annotate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotate"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "title": "Expected Revision"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          },
+          "accept_external_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptExternalReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_revision"
+        ],
+        "title": "PlanRowPatch"
+      },
+      "PlanRowResult": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "flags": {
+            "$ref": "#/components/schemas/PlanFlagsView"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "undo": {
+            "$ref": "#/components/schemas/UndoView"
+          },
+          "withdrawn": {
+            "items": {
+              "$ref": "#/components/schemas/WithdrawnTaskView"
+            },
+            "type": "array",
+            "title": "Withdrawn"
+          },
+          "accepted_document_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Accepted Document Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "flags",
+          "revision",
+          "undo",
+          "withdrawn",
+          "accepted_document_ids"
+        ],
+        "title": "PlanRowResult"
+      },
+      "PlanRowsSet": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/UndoRowView"
+            },
+            "type": "array",
+            "maxItems": 20000,
+            "minItems": 1,
+            "title": "Rows"
+          },
+          "expected_revisions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Expected Revisions"
+          },
+          "undo": {
+            "type": "boolean",
+            "title": "Undo",
+            "default": false
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rows",
+          "expected_revisions"
+        ],
+        "title": "PlanRowsSet",
+        "description": "Exact flags per row (bulk Undo). ``undo`` restores ``restored_revision``,\nnever creates PLAN_RESTORED and needs ``confirm`` only when it withdraws\ntasks assigned after the change (D22)."
       },
       "PlannedDocument": {
         "properties": {
@@ -9005,6 +10241,11 @@
               }
             ],
             "title": "Status Reason"
+          },
+          "marked_in_package": {
+            "type": "boolean",
+            "title": "Marked In Package",
+            "default": false
           }
         },
         "type": "object",
@@ -10026,6 +11267,20 @@
             "type": "object",
             "title": "Creation Defaults"
           },
+          "annotations_per_text": {
+            "type": "integer",
+            "title": "Annotations Per Text",
+            "default": 1
+          },
+          "import_plan": {
+            "type": "string",
+            "enum": [
+              "nothing",
+              "review_and_annotate_translations"
+            ],
+            "title": "Import Plan",
+            "default": "review_and_annotate_translations"
+          },
           "project_key": {
             "type": "string",
             "title": "Project Key"
@@ -10173,6 +11428,34 @@
             },
             "type": "object",
             "title": "Creation Defaults"
+          },
+          "annotations_per_text": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotations Per Text"
+          },
+          "import_plan": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "nothing",
+                  "review_and_annotate_translations"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Plan"
           }
         },
         "additionalProperties": false,
@@ -11723,6 +13006,24 @@
           "active_hold_count"
         ],
         "title": "RowProblemReport"
+      },
+      "RowRefView": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language"
+        ],
+        "title": "RowRefView"
       },
       "RowRoundView": {
         "properties": {
@@ -13752,7 +15053,8 @@
               "translation_not_accepted",
               "not_a_translation",
               "translation_already_accepted",
-              "variant_source_unknown"
+              "variant_source_unknown",
+              "NOT_IN_WORK_PLAN"
             ],
             "title": "Reason"
           },
@@ -13769,6 +15071,69 @@
           "eligible_count"
         ],
         "title": "UnassignableDocument"
+      },
+      "UndoRowView": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "review": {
+            "type": "boolean",
+            "title": "Review"
+          },
+          "annotate": {
+            "type": "boolean",
+            "title": "Annotate"
+          },
+          "restored_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "review",
+          "annotate"
+        ],
+        "title": "UndoRowView"
+      },
+      "UndoView": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/UndoRowView"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "revisions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Revisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows",
+          "revisions"
+        ],
+        "title": "UndoView"
       },
       "UploadCreated": {
         "properties": {
@@ -13810,6 +15175,131 @@
           "size"
         ],
         "title": "UploadFileInfo"
+      },
+      "UploadPlanCase": {
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
+          },
+          "annotate": {
+            "type": "boolean",
+            "title": "Annotate"
+          },
+          "new_row": {
+            "type": "boolean",
+            "title": "New Row"
+          },
+          "accepted": {
+            "type": "boolean",
+            "title": "Accepted",
+            "default": false
+          },
+          "marked_in_package": {
+            "type": "boolean",
+            "title": "Marked In Package",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "language",
+          "review",
+          "annotate",
+          "new_row"
+        ],
+        "title": "UploadPlanCase"
+      },
+      "UploadPlanLanguage": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "source_languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Languages"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows",
+            "default": 0
+          },
+          "versions": {
+            "type": "integer",
+            "title": "Versions"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review"
+          },
+          "annotate": {
+            "type": "boolean",
+            "title": "Annotate"
+          },
+          "source_rule": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "always",
+                  "if_no_translation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Rule"
+          },
+          "marked_in_package": {
+            "type": "integer",
+            "title": "Marked In Package"
+          },
+          "not_accepted": {
+            "type": "integer",
+            "title": "Not Accepted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "source_languages",
+          "versions",
+          "review",
+          "annotate",
+          "source_rule",
+          "marked_in_package",
+          "not_accepted"
+        ],
+        "title": "UploadPlanLanguage",
+        "description": "One row of the upload's \"Work plan\" step: the sources or one language."
       },
       "UploadView": {
         "properties": {
@@ -13909,6 +15399,44 @@
           "created_at"
         ],
         "title": "UploadView"
+      },
+      "UploadWorkPlan": {
+        "properties": {
+          "setting": {
+            "type": "string",
+            "enum": [
+              "nothing",
+              "review_and_annotate_translations"
+            ],
+            "title": "Setting"
+          },
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/UploadPlanLanguage"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/UploadPlanCase"
+            },
+            "type": "array",
+            "title": "Cases"
+          },
+          "existing_rows_kept": {
+            "type": "integer",
+            "title": "Existing Rows Kept"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setting",
+          "languages",
+          "cases",
+          "existing_rows_kept"
+        ],
+        "title": "UploadWorkPlan"
       },
       "UserProject": {
         "properties": {
@@ -14317,6 +15845,43 @@
           "new_text"
         ],
         "title": "WindowOpcodeView"
+      },
+      "WithdrawnTaskView": {
+        "properties": {
+          "assignment_id": {
+            "type": "integer",
+            "title": "Assignment Id"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "task": {
+            "type": "string",
+            "enum": [
+              "annotate",
+              "review",
+              "translation_review"
+            ],
+            "title": "Task"
+          },
+          "person": {
+            "$ref": "#/components/schemas/PersonRefView"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignment_id",
+          "case_id",
+          "language",
+          "task",
+          "person"
+        ],
+        "title": "WithdrawnTaskView"
       },
       "WorkItemView": {
         "properties": {

@@ -86,5 +86,6 @@ function unassignableLabel(row: ProposalResponse["unassignable"][number], places
     case "not_a_translation": return "Only translations can be reviewed";
     case "translation_already_accepted": return "Translation already accepted";
     case "variant_source_unknown": return "Translation source unavailable";
+    case "NOT_IN_WORK_PLAN": return "Not planned for this task";
   }
 }

@@ -785,6 +785,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/work-plans/annotation-target-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Annotation Target Preview */
+        get: operations["annotation_target_preview_api_v1_projects__key__work_plans_annotation_target_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/work-plans/bulk/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Work Plans */
+        post: operations["preview_work_plans_api_v1_projects__key__work_plans_bulk_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/work-plans/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Work Plans */
+        put: operations["save_work_plans_api_v1_projects__key__work_plans_bulk_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/work-plans/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Work Plan Rows */
+        put: operations["set_work_plan_rows_api_v1_projects__key__work_plans_rows_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/work-plans/{case_id}/{language}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Work Plan */
+        patch: operations["patch_work_plan_api_v1_projects__key__work_plans__case_id___language__patch"];
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/case-ids/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lookup Case Ids */
+        post: operations["lookup_case_ids_api_v1_projects__key__case_ids_lookup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/variants/{document_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard Variant */
+        post: operations["discard_variant_api_v1_projects__key__variants__document_id__discard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/documents/{doc}/translation-correction-assignment": {
         parameters: {
             query?: never;
@@ -1584,6 +1703,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptExternalReview */
+        AcceptExternalReview: {
+            /** Reason */
+            reason: string;
+        };
         /**
          * ActiveHoldView
          * @description An active pause on the owner's task; other people's reports stay unnamed.
@@ -1739,6 +1863,11 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** AnnotationTargetPreview */
+        AnnotationTargetPreview: {
+            /** Rows Over Target */
+            rows_over_target: number;
+        };
         /**
          * AnnotationTypeDefinition
          * @description Definition of an annotation type available in a layer.
@@ -1782,6 +1911,8 @@ export interface components {
             /** Seed */
             seed?: number | null;
             context?: components["schemas"]["DistributionContextView"] | null;
+            /** Review Accepted Translation */
+            review_accepted_translation?: boolean | null;
         };
         /** AssignResponse */
         AssignResponse: {
@@ -2022,6 +2153,68 @@ export interface components {
             /** Files[] */
             "files[]": string[];
         };
+        /** BulkAcceptance */
+        BulkAcceptance: {
+            /** Languages */
+            languages: string[];
+            /** Reason */
+            reason: string;
+        };
+        /** BulkPlanRequest */
+        BulkPlanRequest: {
+            /** Case Ids */
+            case_ids: string[];
+            /** Languages */
+            languages?: {
+                [key: string]: components["schemas"]["LanguageChangeView"];
+            };
+            /** Preset */
+            preset?: ("review_and_annotate_translations" | "annotate_only") | null;
+            accept_external_review?: components["schemas"]["BulkAcceptance"] | null;
+            /** Expected Revisions */
+            expected_revisions?: {
+                [key: string]: number;
+            } | null;
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+        };
+        /** BulkPreview */
+        BulkPreview: {
+            /** Cases */
+            cases: number;
+            /** Languages */
+            languages: components["schemas"]["LanguagePreviewView"][];
+            /** Changes */
+            changes: number;
+            /** To Assign */
+            to_assign: {
+                [key: string]: number;
+            };
+            consequences: components["schemas"]["ConsequencesView"];
+            /** Invalid */
+            invalid: components["schemas"]["RowRefView"][];
+            /** Revisions */
+            revisions: {
+                [key: string]: number;
+            };
+            /** Rule On */
+            rule_on: boolean;
+        };
+        /** BulkResult */
+        BulkResult: {
+            /** Changed Rows */
+            changed_rows: number;
+            /** Revisions */
+            revisions: {
+                [key: string]: number;
+            };
+            undo: components["schemas"]["UndoView"];
+            /** Withdrawn */
+            withdrawn: components["schemas"]["WithdrawnTaskView"][];
+        };
         /** BulkTargetView */
         BulkTargetView: {
             /** Document Id */
@@ -2038,6 +2231,29 @@ export interface components {
             case_id: string;
             /** Variants */
             variants: components["schemas"]["VariantSummary"][];
+        };
+        /** CaseIdLookup */
+        CaseIdLookup: {
+            /** Ids */
+            ids: string[];
+        };
+        /** CaseIdLookupResult */
+        CaseIdLookupResult: {
+            /** Found */
+            found: string[];
+            /** Unknown */
+            unknown: string[];
+        };
+        /** CasePlanChoice */
+        CasePlanChoice: {
+            /** Review */
+            review?: boolean | null;
+            /** Annotate */
+            annotate: boolean;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
         };
         /** CaseSummary */
         CaseSummary: {
@@ -2071,6 +2287,24 @@ export interface components {
             plan_sha256: string;
             /** Status Overrides */
             status_overrides?: components["schemas"]["StatusOverride"][];
+            /** Plan Languages */
+            plan_languages?: {
+                [key: string]: components["schemas"]["PlanChoice"];
+            };
+            /** Plan Cases */
+            plan_cases?: components["schemas"]["CasePlanChoice"][];
+            accept_external_review?: components["schemas"]["ImportAcceptance"] | null;
+        };
+        /** ConsequencesView */
+        ConsequencesView: {
+            /** Withdrawn */
+            withdrawn: components["schemas"]["WithdrawnTaskView"][];
+            /** Finals Leaving */
+            finals_leaving: components["schemas"]["RowRefView"][];
+            /** Restored */
+            restored: components["schemas"]["RowRefView"][];
+            /** Open Reports */
+            open_reports?: components["schemas"]["OpenReportView"][];
         };
         /** CorrectionAssignmentRequest */
         CorrectionAssignmentRequest: {
@@ -2181,6 +2415,30 @@ export interface components {
             no_final: number;
             /** Shown */
             shown: number;
+        };
+        /** DiscardRequest */
+        DiscardRequest: {
+            /** Reason */
+            reason: string;
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+        };
+        /** DiscardResult */
+        DiscardResult: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Discarded Document Ids */
+            discarded_document_ids: string[];
+            flags: components["schemas"]["PlanFlagsView"];
+            /** Revision */
+            revision: number;
+            /** Withdrawn */
+            withdrawn: components["schemas"]["WithdrawnTaskView"][];
         };
         /** DistributionContextView */
         DistributionContextView: {
@@ -2481,6 +2739,8 @@ export interface components {
             omissions: components["schemas"]["FinalOmission"][];
             /** State Digest */
             state_digest: string;
+            /** Not In Plan */
+            not_in_plan?: components["schemas"]["RowRefView"][];
         };
         /** FinalSelectionRequest */
         FinalSelectionRequest: {
@@ -2581,6 +2841,16 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * ImportAcceptance
+         * @description Translations of these languages were reviewed outside Ontocurator.
+         */
+        ImportAcceptance: {
+            /** Languages */
+            languages: string[];
+            /** Reason */
+            reason: string;
+        };
         /** ImportPlan */
         ImportPlan: {
             /** Variants */
@@ -2625,6 +2895,7 @@ export interface components {
              * @default true
              */
             committable: boolean;
+            work_plan?: components["schemas"]["UploadWorkPlan"] | null;
         };
         /**
          * ImportedProposals
@@ -2772,6 +3043,48 @@ export interface components {
             /** Finished At */
             finished_at: string | null;
         };
+        /** LanguageChangeView */
+        LanguageChangeView: {
+            /**
+             * Review
+             * @default keep
+             * @enum {string}
+             */
+            review: "keep" | "on" | "off";
+            /**
+             * Annotate
+             * @default keep
+             * @enum {string}
+             */
+            annotate: "keep" | "on" | "off";
+        };
+        /** LanguagePreviewView */
+        LanguagePreviewView: {
+            /** Key */
+            key: string;
+            /** Source Languages */
+            source_languages: string[];
+            /** Cases In Selection */
+            cases_in_selection: number;
+            review: components["schemas"]["MixedCountView"] | null;
+            annotate: components["schemas"]["MixedCountView"];
+            /** Will Change */
+            will_change: number;
+            /** Not Accepted */
+            not_accepted: number;
+            /**
+             * Not Acceptable
+             * @default 0
+             */
+            not_acceptable: number;
+            /**
+             * In Review
+             * @default 0
+             */
+            in_review: number;
+            /** Marked In Package */
+            marked_in_package: number;
+        };
         /**
          * LayerDefinition
          * @description Definition of an annotation layer binding an ontology and types.
@@ -2834,6 +3147,13 @@ export interface components {
             counts: boolean;
             /** Reason */
             reason: ("no_submission" | "work_open") | null;
+        };
+        /** MixedCountView */
+        MixedCountView: {
+            /** On */
+            on: number;
+            /** Off */
+            off: number;
         };
         /**
          * MultilingualSearchPreferences
@@ -2942,6 +3262,22 @@ export interface components {
              */
             status: "added" | "already_present";
             ontology: components["schemas"]["AdminOntology"];
+        };
+        /** OpenReportView */
+        OpenReportView: {
+            /** Report Id */
+            report_id: string;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Assignment Id */
+            assignment_id?: number | null;
+            /**
+             * Held
+             * @default false
+             */
+            held: boolean;
         };
         /** OpenTargetView */
         OpenTargetView: {
@@ -3071,6 +3407,21 @@ export interface components {
             proposal_set_id: number;
             source_ref: components["schemas"]["AnnotationRef"];
         };
+        /**
+         * PersonRefView
+         * @description ``display_name`` only for lead callers or the caller's own record.
+         */
+        PersonRefView: {
+            /** Pseudonym */
+            pseudonym: string;
+            /** Display Name */
+            display_name?: string | null;
+            /**
+             * Is Me
+             * @default false
+             */
+            is_me: boolean;
+        };
         /** PinnedOntology */
         PinnedOntology: {
             /** Ontology Id */
@@ -3087,6 +3438,84 @@ export interface components {
             t1_profile: "generic" | "hpo-phenotype";
             /** Release */
             release: string;
+        };
+        /**
+         * PlanChoice
+         * @description Plan flags chosen in the upload's "Work plan" step.
+         */
+        PlanChoice: {
+            /** Review */
+            review?: boolean | null;
+            /** Annotate */
+            annotate: boolean;
+        };
+        /** PlanFlagsView */
+        PlanFlagsView: {
+            /** Review */
+            review: boolean;
+            /** Annotate */
+            annotate: boolean;
+            /** Review Applicable */
+            review_applicable: boolean;
+            /**
+             * Discarded
+             * @default false
+             */
+            discarded: boolean;
+        };
+        /** PlanRowPatch */
+        PlanRowPatch: {
+            /** Review */
+            review?: boolean | null;
+            /** Annotate */
+            annotate?: boolean | null;
+            /** Expected Revision */
+            expected_revision: number;
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+            accept_external_review?: components["schemas"]["AcceptExternalReview"] | null;
+        };
+        /** PlanRowResult */
+        PlanRowResult: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            flags: components["schemas"]["PlanFlagsView"];
+            /** Revision */
+            revision: number;
+            undo: components["schemas"]["UndoView"];
+            /** Withdrawn */
+            withdrawn: components["schemas"]["WithdrawnTaskView"][];
+            /** Accepted Document Ids */
+            accepted_document_ids: string[];
+        };
+        /**
+         * PlanRowsSet
+         * @description Exact flags per row (bulk Undo). ``undo`` restores ``restored_revision``,
+         *     never creates PLAN_RESTORED and needs ``confirm`` only when it withdraws
+         *     tasks assigned after the change (D22).
+         */
+        PlanRowsSet: {
+            /** Rows */
+            rows: components["schemas"]["UndoRowView"][];
+            /** Expected Revisions */
+            expected_revisions: {
+                [key: string]: number;
+            };
+            /**
+             * Undo
+             * @default false
+             */
+            undo: boolean;
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
         };
         /** PlannedDocument */
         PlannedDocument: {
@@ -3168,6 +3597,11 @@ export interface components {
             failed_checks: string[];
             /** Status Reason */
             status_reason?: string | null;
+            /**
+             * Marked In Package
+             * @default false
+             */
+            marked_in_package: boolean;
         };
         /**
          * Preferences
@@ -3545,6 +3979,17 @@ export interface components {
                     };
                 };
             };
+            /**
+             * Annotations Per Text
+             * @default 1
+             */
+            annotations_per_text: number;
+            /**
+             * Import Plan
+             * @default review_and_annotate_translations
+             * @enum {string}
+             */
+            import_plan: "nothing" | "review_and_annotate_translations";
             /** Project Key */
             project_key: string;
             profile: components["schemas"]["TaskProfile"];
@@ -3623,6 +4068,10 @@ export interface components {
                     };
                 };
             };
+            /** Annotations Per Text */
+            annotations_per_text?: number | null;
+            /** Import Plan */
+            import_plan?: ("nothing" | "review_and_annotate_translations") | null;
         };
         /**
          * ProjectSummary
@@ -4119,6 +4568,13 @@ export interface components {
             state: "open" | "resolved" | "withdrawn";
             /** Active Hold Count */
             active_hold_count: number;
+        };
+        /** RowRefView */
+        RowRefView: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
         };
         /** RowRoundView */
         RowRoundView: {
@@ -4884,9 +5340,31 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "NO_READER" | "TOO_FEW_READERS" | "translation_not_accepted" | "not_a_translation" | "translation_already_accepted" | "variant_source_unknown";
+            reason: "NO_READER" | "TOO_FEW_READERS" | "translation_not_accepted" | "not_a_translation" | "translation_already_accepted" | "variant_source_unknown" | "NOT_IN_WORK_PLAN";
             /** Eligible Count */
             eligible_count: number;
+        };
+        /** UndoRowView */
+        UndoRowView: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Review */
+            review: boolean;
+            /** Annotate */
+            annotate: boolean;
+            /** Restored Revision */
+            restored_revision?: number | null;
+        };
+        /** UndoView */
+        UndoView: {
+            /** Rows */
+            rows: components["schemas"]["UndoRowView"][];
+            /** Revisions */
+            revisions: {
+                [key: string]: number;
+            };
         };
         /** UploadCreated */
         UploadCreated: {
@@ -4903,6 +5381,56 @@ export interface components {
             sha256: string;
             /** Size */
             size: number;
+        };
+        /** UploadPlanCase */
+        UploadPlanCase: {
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Review */
+            review: boolean | null;
+            /** Annotate */
+            annotate: boolean;
+            /** New Row */
+            new_row: boolean;
+            /**
+             * Accepted
+             * @default false
+             */
+            accepted: boolean;
+            /**
+             * Marked In Package
+             * @default false
+             */
+            marked_in_package: boolean;
+        };
+        /**
+         * UploadPlanLanguage
+         * @description One row of the upload's "Work plan" step: the sources or one language.
+         */
+        UploadPlanLanguage: {
+            /** Key */
+            key: string;
+            /** Source Languages */
+            source_languages: string[];
+            /**
+             * Rows
+             * @default 0
+             */
+            rows: number;
+            /** Versions */
+            versions: number;
+            /** Review */
+            review: boolean | null;
+            /** Annotate */
+            annotate: boolean;
+            /** Source Rule */
+            source_rule: ("always" | "if_no_translation") | null;
+            /** Marked In Package */
+            marked_in_package: number;
+            /** Not Accepted */
+            not_accepted: number;
         };
         /** UploadView */
         UploadView: {
@@ -4931,6 +5459,20 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** UploadWorkPlan */
+        UploadWorkPlan: {
+            /**
+             * Setting
+             * @enum {string}
+             */
+            setting: "nothing" | "review_and_annotate_translations";
+            /** Languages */
+            languages: components["schemas"]["UploadPlanLanguage"][];
+            /** Cases */
+            cases: components["schemas"]["UploadPlanCase"][];
+            /** Existing Rows Kept */
+            existing_rows_kept: number;
         };
         /** UserProject */
         UserProject: {
@@ -5063,6 +5605,21 @@ export interface components {
             old_text: string;
             /** New Text */
             new_text: string;
+        };
+        /** WithdrawnTaskView */
+        WithdrawnTaskView: {
+            /** Assignment Id */
+            assignment_id: number;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /**
+             * Task
+             * @enum {string}
+             */
+            task: "annotate" | "review" | "translation_review";
+            person: components["schemas"]["PersonRefView"];
         };
         /** WorkItemView */
         WorkItemView: {
@@ -6853,6 +7410,252 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RowSubmissions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    annotation_target_preview_api_v1_projects__key__work_plans_annotation_target_preview_get: {
+        parameters: {
+            query: {
+                annotations_per_text: number;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnotationTargetPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_work_plans_api_v1_projects__key__work_plans_bulk_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_work_plans_api_v1_projects__key__work_plans_bulk_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_work_plan_rows_api_v1_projects__key__work_plans_rows_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRowsSet"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_work_plan_api_v1_projects__key__work_plans__case_id___language__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                case_id: string;
+                language: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRowPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRowResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lookup_case_ids_api_v1_projects__key__case_ids_lookup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseIdLookup"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseIdLookupResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_variant_api_v1_projects__key__variants__document_id__discard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscardRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscardResult"];
                 };
             };
             /** @description Validation Error */

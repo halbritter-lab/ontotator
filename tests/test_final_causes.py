@@ -144,13 +144,14 @@ def _warnings(env, code):
     return [w for w in state["warnings"] if w["code"] == code]
 
 
-def test_acknowledgeable_codes_are_the_five_selection_codes():
+def test_acknowledgeable_codes_are_the_five_selection_codes_and_plan_restored():
     assert {
         "SELECTED_ROUND_ABANDONED",
         "SELECTED_ROUND_SUPERSEDED",
         "SELECTED_RESULT_REVISED",
         "SELECTED_TEXT_CORRECTED",
         "SELECTED_NEWER_RESULT",
+        "PLAN_RESTORED",
     } == ACKNOWLEDGEABLE_CODES
 
 

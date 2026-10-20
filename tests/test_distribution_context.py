@@ -199,6 +199,9 @@ def stored(tmp_path):
                     text_sha256="sha",
                 )
             )
+    from work_plan_support import plan_all
+
+    plan_all(db, "p")
     return db, DistributionService(db), project, users
 
 

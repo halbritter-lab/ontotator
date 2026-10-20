@@ -421,6 +421,12 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "PROJECT_IN_USE": 409,
                     "LAST_LEAD": 409,
                     "MEMBER_HAS_ASSIGNMENTS": 409,
+                    "WORK_PLAN_CONFIRMATION_REQUIRED": 409,
+                    "WORK_PLAN_CHANGED": 409,
+                    "WORK_PLAN_INVALID": 422,
+                    "NOT_IN_WORK_PLAN": 409,
+                    "CASE_IDS_TOO_MANY": 422,
+                    "VARIANT_ALREADY_DISCARDED": 409,
                 }.get(exc.code, 422)
             ),
             content={"code": exc.code, "details": exc.details or str(exc)},
@@ -452,6 +458,9 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(ontology_router)
     app.include_router(final_result_router)
     app.include_router(document_row_router)
+    from ontocurator.api.work_plan_routes import router as work_plan_router
+
+    app.include_router(work_plan_router)
     app.include_router(translation_workflow_router)
     app.include_router(project_router)
     app.include_router(job_router)

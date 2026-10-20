@@ -18,6 +18,7 @@ from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile, profile_hash
+from ontocurator.domain.work_plans import ImportPlanSetting
 from ontocurator.exchange.t1 import Pin, T1Profile, check_t1_profile
 from ontocurator.ontology.store import OntologyStore
 from ontocurator.packages.models import PackageManifest
@@ -65,9 +66,14 @@ class ProjectSettingsChange(BaseModel):
     annotate_accepted_translations_only: bool = True
     hidden_axis_values: HiddenValues = Field(default_factory=dict)
     creation_defaults: CreationDefaults = Field(default_factory=dict)
+    # ``None`` keeps the stored value (the settings page sends full replaces).
+    annotations_per_text: int | None = Field(None, ge=1, le=5)
+    import_plan: ImportPlanSetting | None = None
 
 
 class ProjectSettings(ProjectSettingsChange):
+    annotations_per_text: int = 1
+    import_plan: ImportPlanSetting = "review_and_annotate_translations"
     project_key: str
     profile: TaskProfile
     pins: list[PinnedOntology]
@@ -295,6 +301,9 @@ class ProjectService:
         self, actor: Actor, key: str, change: ProjectSettingsChange
     ) -> ProjectSettings:
         fields = change.model_dump(exclude_unset=True)
+        for name in ("annotations_per_text", "import_plan"):
+            if fields.get(name, 0) is None:
+                del fields[name]
         if "languages" in fields:
             fields["languages"] = sorted(normalize_languages(change.languages))
         with self.db.transaction() as conn:

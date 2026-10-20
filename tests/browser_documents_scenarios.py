@@ -120,6 +120,10 @@ def import_texts(
     if job.status != "succeeded":
         raise HTTPException(500, job.error)
     _wait_for_children(scenario, job.id)
+    from work_plan_support import plan_all
+
+    # Every imported language version in the plan (review on translations).
+    plan_all(scenario.db, scenario.key)
     return {
         (row.external_id, row.language, row.version): row.document_id
         for row in scenario.app.state.repo.list_variants(scenario.key)

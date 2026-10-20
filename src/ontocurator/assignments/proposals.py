@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, cast
 
-from sqlalchemy import Connection, func, or_, select
+from sqlalchemy import Connection, and_, func, or_, select
 
 from ontocurator.assignments.distribution import (
     Candidate,
@@ -27,6 +27,7 @@ from ontocurator.assignments.eligibility import (
     VARIANT_COLUMNS,
     check_variant_assignable,
     conflicting_tasks,
+    outside_work_plan,
 )
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import (
@@ -40,7 +41,10 @@ from ontocurator.authz.policy import (
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.variants import VariantInfo
+from ontocurator.domain.work_plans import PlanFlags, RowKey
+from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
+from ontocurator.storage.plan_tables import DiscardedVariantRow, WorkPlanFlagsRow
 from ontocurator.storage.repository import _lock_id
 from ontocurator.storage.tables import (
     AssignmentRow,
@@ -272,7 +276,30 @@ class DistributionService:
         )
         inventory = (
             conn.execute(
-                select(*VARIANT_COLUMNS, DocumentRow.position)
+                # The plan flags and discards ride along in the one inventory
+                # query; only rows without a stored plan row load more.
+                select(
+                    *VARIANT_COLUMNS,
+                    DocumentRow.position,
+                    WorkPlanFlagsRow.review.label("plan_review"),
+                    WorkPlanFlagsRow.annotate.label("plan_annotate"),
+                    DiscardedVariantRow.document_id.label("discarded_id"),
+                )
+                .outerjoin(
+                    WorkPlanFlagsRow,
+                    and_(
+                        WorkPlanFlagsRow.project_id == DocumentRow.project_id,
+                        WorkPlanFlagsRow.case_id == DocumentRow.case_id,
+                        WorkPlanFlagsRow.language == DocumentRow.language,
+                    ),
+                )
+                .outerjoin(
+                    DiscardedVariantRow,
+                    and_(
+                        DiscardedVariantRow.project_id == DocumentRow.project_id,
+                        DiscardedVariantRow.document_id == DocumentRow.document_id,
+                    ),
+                )
                 .where(DocumentRow.project_id == project_id)
                 .order_by(
                     DocumentRow.position.asc().nulls_last(), DocumentRow.document_id
@@ -300,11 +327,31 @@ class DistributionService:
             # Never look up a missing ID in another project, or echo metadata.
             raise DomainError("DOCUMENT_NOT_FOUND")
         eligibility: dict[str, tuple[tuple[str, ...], str | None]] = {}
+        plan = {
+            RowKey(row["case_id"], row["language"]): PlanFlags(
+                row["plan_review"], row["plan_annotate"]
+            )
+            for row in inventory
+            if row["plan_review"] is not None
+        }
+        missing = sorted(
+            {
+                variants[d["document_id"]].case_id
+                for d in documents
+                if RowKey(variants[d["document_id"]].case_id, d["language"]) not in plan
+            }
+        )
+        if missing:
+            plan |= work_plan_store.effective_plan(conn, project_id, missing)
+        discarded = {row["document_id"] for row in inventory if row["discarded_id"]}
         for d in documents:
             try:
                 needed = check_variant_assignable(
                     project, variants[d["document_id"]], task, variants.get
                 )
+                if outside_work_plan(plan, discarded, variants[d["document_id"]], task):
+                    eligibility[d["document_id"]] = ((), "NOT_IN_WORK_PLAN")
+                    continue
                 eligibility[d["document_id"]] = (tuple(sorted(needed)), None)
             except DomainError as error:
                 reasons = {

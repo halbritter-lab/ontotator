@@ -135,7 +135,7 @@ it("keeps translation distribution context exact through partial language retry"
   expect(vi.mocked(api.createAssignments).mock.calls[1][1]).toEqual({ task: "translation_review", seed: 42, context, confirm_language: true, rows: [{ document_id: readyTarget.document_id, username: "alice" }] });
 });
 
-const overridePlan: ImportPlan = { documents: [], duplicates: [], collisions: [], proposal_sets: [], documents_only: [], errors: [], warnings: [], normalised_count: 0, counts: {}, input_sha256: "input", state_sha256: "state", plan_sha256: "real-plan", committable: true, variants: [{ document_id: "internal", external_id: "external:/ß", case_id: "case", language: "de", version: 3, origin: "correction", derived_from: "previous", derived_in_upload: false, translation: null, status: "ready_for_review", failed_checks: [] }] };
+const overridePlan: ImportPlan = { documents: [], duplicates: [], collisions: [], proposal_sets: [], documents_only: [], errors: [], warnings: [], normalised_count: 0, counts: {}, input_sha256: "input", state_sha256: "state", plan_sha256: "real-plan", committable: true, variants: [{ document_id: "internal", external_id: "external:/ß", case_id: "case", language: "de", version: 3, origin: "correction", derived_from: "previous", derived_in_upload: false, translation: null, status: "ready_for_review", failed_checks: [], marked_in_package: false }] };
 const retained: UploadView = { id: 7, kind: "t1", language: null, files: [], status: "ready", preview: overridePlan, plan_sha256: "real-plan", commit_job_id: null, preview_job_id: null, created_at: "2026-10-16T00:00:00Z" };
 
 it("requires an explicit per-variant reason and retains exact override after a recoverable refusal", async () => {
@@ -292,7 +292,7 @@ it("binds document state to actual user identity before accepting late replies",
 });
 
 it("renders exact preview variant lineage and every failed code", () => {
-  const plan: ImportPlan = { documents: [], duplicates: [], collisions: [], proposal_sets: [], documents_only: [], errors: [], warnings: [], normalised_count: 0, counts: {}, input_sha256: "input", state_sha256: "state", plan_sha256: "plan", committable: true, variants: [{ document_id: "internal", external_id: "external", case_id: "case", language: "de", version: 3, origin: "correction", derived_from: "actual-predecessor", derived_in_upload: true, translation: null, status: "automatic_check_failed", failed_checks: ["units_added", "negation_changed"] }] };
+  const plan: ImportPlan = { documents: [], duplicates: [], collisions: [], proposal_sets: [], documents_only: [], errors: [], warnings: [], normalised_count: 0, counts: {}, input_sha256: "input", state_sha256: "state", plan_sha256: "plan", committable: true, variants: [{ document_id: "internal", external_id: "external", case_id: "case", language: "de", version: 3, origin: "correction", derived_from: "actual-predecessor", derived_in_upload: true, translation: null, status: "automatic_check_failed", failed_checks: ["units_added", "negation_changed"], marked_in_package: false }] };
   render(<UploadPreview plan={plan} />);
   const table = within(screen.getByRole("table", { name: "Variants" }));
   expect(table.getByText("external")).toBeTruthy();

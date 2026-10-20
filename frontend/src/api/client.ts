@@ -39,6 +39,29 @@ export type RowSubmissions = components["schemas"]["RowSubmissions"];
 export type RowSubmissionView = components["schemas"]["RowSubmissionView"];
 export type RowRoundView = components["schemas"]["RowRoundView"];
 export type OpenTranslationReviewView = components["schemas"]["OpenTranslationReviewView"];
+// Work plan (lead workflow L0)
+export type PersonRefView = components["schemas"]["PersonRefView"];
+export type PlanFlagsView = components["schemas"]["PlanFlagsView"];
+export type ConsequencesView = components["schemas"]["ConsequencesView"];
+export type WithdrawnTaskView = components["schemas"]["WithdrawnTaskView"];
+export type OpenReportView = components["schemas"]["OpenReportView"];
+/** Request fields with server defaults stay optional for callers. */
+type Defaulted<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
+export type PlanRowPatch = Defaulted<components["schemas"]["PlanRowPatch"], "confirm">;
+export type PlanRowResult = components["schemas"]["PlanRowResult"];
+export type LanguageChangeRequest = Partial<components["schemas"]["LanguageChangeView"]>;
+export type BulkPlanRequest = Omit<components["schemas"]["BulkPlanRequest"], "languages" | "confirm"> & { languages?: Record<string, LanguageChangeRequest>; confirm?: boolean };
+export type BulkPreview = components["schemas"]["BulkPreview"];
+export type BulkResult = components["schemas"]["BulkResult"];
+export type PlanRowsSet = Defaulted<components["schemas"]["PlanRowsSet"], "undo" | "confirm">;
+export type UndoView = components["schemas"]["UndoView"];
+export type CaseIdLookupResult = components["schemas"]["CaseIdLookupResult"];
+export type AnnotationTargetPreview = components["schemas"]["AnnotationTargetPreview"];
+export type DiscardRequest = Defaulted<components["schemas"]["DiscardRequest"], "confirm">;
+export type DiscardResult = components["schemas"]["DiscardResult"];
+export type UploadWorkPlan = components["schemas"]["UploadWorkPlan"];
+/** Optional work-plan part of an upload commit (absent: the old body is sent). */
+export type CommitUploadPlan = Partial<Pick<components["schemas"]["CommitUpload"], "plan_languages" | "plan_cases" | "accept_external_review">>;
 /** Filters of the Documents read API; `retain` keys are "{case_id}:{language}". */
 export type DocumentRowsQuery = Omit<NonNullable<operations["document_rows_api_v1_projects__key__document_rows_get"]["parameters"]["query"]>, "retain"> & { retain?: readonly string[] };
 export type SubmissionHistorySummary = components['schemas']['SubmissionHistorySummary'];
@@ -300,8 +323,37 @@ export class ApiClient {
     return this.request<UploadView>(`/api/v1/projects/${encodeURIComponent(key)}/uploads/${id}`, { method: "GET" });
   }
 
-  async commitUpload(key: string, id: number, planSha256: string, overrides?: readonly StatusOverride[]): Promise<UploadCreated> {
-    return this.request<UploadCreated>(`/api/v1/projects/${encodeURIComponent(key)}/uploads/${id}/commit`, { method: "POST", body: JSON.stringify({ plan_sha256: planSha256, ...(overrides === undefined ? {} : { status_overrides: overrides }) }) });
+  async commitUpload(key: string, id: number, planSha256: string, overrides?: readonly StatusOverride[], plan?: CommitUploadPlan): Promise<UploadCreated> {
+    return this.request<UploadCreated>(`/api/v1/projects/${encodeURIComponent(key)}/uploads/${id}/commit`, { method: "POST", body: JSON.stringify({ plan_sha256: planSha256, ...(overrides === undefined ? {} : { status_overrides: overrides }), ...(plan ?? {}) }) });
+  }
+
+  async patchWorkPlan(key: string, caseId: string, language: string, body: PlanRowPatch): Promise<PlanRowResult> {
+    return this.request<PlanRowResult>(`/api/v1/projects/${encodeURIComponent(key)}/work-plans/${encodeURIComponent(caseId)}/${encodeURIComponent(language)}`, { method: "PATCH", body: JSON.stringify(body) });
+  }
+
+  async previewWorkPlans(key: string, body: BulkPlanRequest): Promise<BulkPreview> {
+    return this.request<BulkPreview>(`/api/v1/projects/${encodeURIComponent(key)}/work-plans/bulk/preview`, { method: "POST", body: JSON.stringify(body) });
+  }
+
+  async saveWorkPlans(key: string, body: BulkPlanRequest): Promise<BulkResult> {
+    return this.request<BulkResult>(`/api/v1/projects/${encodeURIComponent(key)}/work-plans/bulk`, { method: "PUT", body: JSON.stringify(body) });
+  }
+
+  /** Exact flags per row; `undo: true` restores an Undo payload exactly (D22). */
+  async setWorkPlanRows(key: string, body: PlanRowsSet): Promise<BulkResult> {
+    return this.request<BulkResult>(`/api/v1/projects/${encodeURIComponent(key)}/work-plans/rows`, { method: "PUT", body: JSON.stringify(body) });
+  }
+
+  async annotationTargetPreview(key: string, annotationsPerText: number): Promise<AnnotationTargetPreview> {
+    return this.request<AnnotationTargetPreview>(`/api/v1/projects/${encodeURIComponent(key)}/work-plans/annotation-target-preview?annotations_per_text=${annotationsPerText}`, { method: "GET" });
+  }
+
+  async lookupCaseIds(key: string, ids: readonly string[]): Promise<CaseIdLookupResult> {
+    return this.request<CaseIdLookupResult>(`/api/v1/projects/${encodeURIComponent(key)}/case-ids/lookup`, { method: "POST", body: JSON.stringify({ ids }) });
+  }
+
+  async discardVariant(key: string, documentId: string, body: DiscardRequest): Promise<DiscardResult> {
+    return this.request<DiscardResult>(`/api/v1/projects/${encodeURIComponent(key)}/variants/${encodeURIComponent(documentId)}/discard`, { method: "POST", body: JSON.stringify(body) });
   }
 
   async discardUpload(key: string, id: number): Promise<UploadView> {

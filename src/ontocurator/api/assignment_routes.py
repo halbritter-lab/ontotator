@@ -132,6 +132,7 @@ class UnassignableDocument(BaseModel):
         "not_a_translation",
         "translation_already_accepted",
         "variant_source_unknown",
+        "NOT_IN_WORK_PLAN",
     ]
     eligible_count: int
 
@@ -151,6 +152,9 @@ class AssignRequest(BaseModel):
     confirm_language: bool = False
     seed: int | None = None
     context: DistributionContextView | None = None
+    # D25: a new review of a translation the lead or an import override accepted.
+    # None (omitted) means False; None keeps the generated client field optional.
+    review_accepted_translation: bool | None = None
 
 
 class RefusedAssignment(AssignmentRowRequest):
@@ -301,6 +305,7 @@ def assign(
                     row.username,
                     body.task,
                     confirm_language=body.confirm_language,
+                    review_accepted_translation=bool(body.review_accepted_translation),
                 )
             )
         except DomainError as exc:

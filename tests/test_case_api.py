@@ -10,6 +10,7 @@ from sqlalchemy import delete, event, func, select, update
 from t1_builders import bundle, correction_unit, native_unit, translation_unit
 from t1_fixtures import TEXT, annotation, create_project, run_import
 from test_auth_api import _app
+from work_plan_support import plan_all
 
 from ontocurator.assignments.service import AssignmentService
 from ontocurator.authz.policy import Access
@@ -60,6 +61,7 @@ def case_env(tmp_path):
     other = native_unit("other", "fr", "Unrelated", case_id="other-case")
     result = run_import(db, bundle(tmp_path, [source, target, corrected, other]))
     assert result.status == "succeeded", result.error
+    plan_all(db, "proj")
     alice = logged_in(
         app,
         "alice",

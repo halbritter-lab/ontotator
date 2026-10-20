@@ -12,6 +12,7 @@ from t1_builders import bundle, correction_unit, native_unit, translation_unit
 from t1_fixtures import create_project, run_import
 from test_auth_api import _app
 from test_case_api import BASE, CORRECTED, SOURCE, TARGET
+from work_plan_support import plan_all
 
 from ontocurator.assignments.service import AssignmentService
 from ontocurator.domain.errors import DomainError
@@ -38,6 +39,7 @@ def case_env(tmp_path):
     corrected = correction_unit(target, "Corrected text")
     result = run_import(db, bundle(tmp_path, [source, target, corrected]))
     assert result.status == "succeeded", result.error
+    plan_all(db, "proj")
     alice = logged_in(
         app,
         "alice",
@@ -800,6 +802,7 @@ def unrelated_documents(env, count=7):
                 for i in range(count)
             ],
         )
+    plan_all(env.db, "proj")
 
 
 def observe_eligibility_metadata(env, monkeypatch):

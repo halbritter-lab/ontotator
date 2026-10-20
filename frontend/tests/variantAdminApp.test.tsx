@@ -9,7 +9,7 @@ import { group, page, row, version } from "./documents/fixtures";
 
 const project: ProjectSummary = { project_key: "p/key", name: "Research", description: null, roles: ["lead"], can_manage: true, allowed_modes: ["independent"], document_count: 1 };
 const ordinaryProject: ProjectSummary = { ...project, roles: ["annotator"], can_manage: false };
-const plan: ImportPlan = { input_sha256: "input", state_sha256: "state", plan_sha256: "plan", committable: true, counts: {}, documents: [], documents_only: [], duplicates: [], collisions: [], proposal_sets: [], errors: [], warnings: [], normalised_count: 0, variants: [{ document_id: "opaque/internal", external_id: "external", case_id: "case", language: "de", version: 2, origin: "correction", derived_from: "actual-predecessor", derived_in_upload: false, translation: null, status: "ready_for_review", failed_checks: [] }] };
+const plan: ImportPlan = { input_sha256: "input", state_sha256: "state", plan_sha256: "plan", committable: true, counts: {}, documents: [], documents_only: [], duplicates: [], collisions: [], proposal_sets: [], errors: [], warnings: [], normalised_count: 0, variants: [{ document_id: "opaque/internal", external_id: "external", case_id: "case", language: "de", version: 2, origin: "correction", derived_from: "actual-predecessor", derived_in_upload: false, translation: null, status: "ready_for_review", failed_checks: [], marked_in_package: false }] };
 const upload: UploadView = { id: 7, kind: "t1", language: null, files: [], status: "ready", preview: plan, plan_sha256: "plan", commit_job_id: null, preview_job_id: null, created_at: "2026-10-16T00:00:00Z" };
 const lead = testUser("lead", { is_system_admin: false });
 

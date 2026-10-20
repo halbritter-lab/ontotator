@@ -28,6 +28,7 @@ from sqlalchemy import (
 
 from ontocurator.assignments.eligibility import (
     check_variant_assignable,
+    check_work_plan,
     conflicting_tasks,
     load_variants,
 )
@@ -301,7 +302,9 @@ class AssignmentService:
         excluding: int | None = None,
         variants: Mapping[str, VariantInfo] | None = None,
         allow_accepted_translation_review: bool = False,
+        check_plan: bool = True,
     ) -> tuple[str, list[str], bool, list[str]]:
+        """``check_plan=False`` only for work that already exists (reassign)."""
         AssignmentService._require_target(conn, project, target, task)
         if variants is None:
             variants = load_variants(conn, project["id"], document_id)
@@ -315,6 +318,8 @@ class AssignmentService:
             variants.get,
             allow_accepted_translation_review=allow_accepted_translation_review,
         )
+        if check_plan:
+            check_work_plan(conn, project["id"], variant, task)
         language = variant.language
         languages = list(
             conn.execute(
@@ -409,12 +414,32 @@ class AssignmentService:
         task: Task,
         *,
         confirm_language: bool = False,
+        review_accepted_translation: bool = False,
     ) -> Assignment:
+        """``review_accepted_translation`` (D25): a new translation review of a
+        newest version with a lead or override acceptance; turns Review on for
+        its row in the same transaction."""
         with self.db.transaction() as conn:
             target = self._target(conn, username)
             project = self._prepare(conn, actor, key, target)
+            allow = False
+            if review_accepted_translation and task == "translation_review":
+                from ontocurator.application.work_plans import (
+                    enable_review_for_accepted,
+                )
+
+                allow = enable_review_for_accepted(
+                    conn, actor, project["id"], document_id
+                )
             return self._assign_locked(
-                conn, actor, project, document_id, target, task, confirm_language
+                conn,
+                actor,
+                project,
+                document_id,
+                target,
+                task,
+                confirm_language,
+                allow_accepted_translation_review=allow,
             )
 
     def _assign_locked(
@@ -428,6 +453,7 @@ class AssignmentService:
         confirm_language: bool,
         *,
         variants: Mapping[str, VariantInfo] | None = None,
+        allow_accepted_translation_review: bool = False,
     ) -> Assignment:
         """Assign on caller's connection under preheld authority/target locks.
 
@@ -451,6 +477,7 @@ class AssignmentService:
             task,
             confirm_language,
             variants=variants,
+            allow_accepted_translation_review=allow_accepted_translation_review,
         )
         return self._create(
             conn, actor, project, document_id, target, task, eligibility, self._now()
@@ -488,6 +515,7 @@ class AssignmentService:
                 task,
                 confirm_language,
                 excluding=assignment_id,
+                check_plan=False,
             )
             now = self._now()
             revoke_assignments(

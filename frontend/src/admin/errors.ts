@@ -175,6 +175,13 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   invalid_archive: "The archive could not be read. Check the ZIP file.",
   too_large: "The expanded upload exceeds the size limit.",
   unsafe_path: "The archive contains an unsafe file path.",
+  WORK_PLAN_CHANGED: "This plan changed. Reloaded the current plan.",
+  WORK_PLAN_CONFIRMATION_REQUIRED: "This change affects existing work. Confirm to continue.",
+  WORK_PLAN_INVALID: "Annotation needs an accepted translation.",
+  NOT_IN_WORK_PLAN: "This language version is not planned for this task.",
+  CASE_IDS_TOO_MANY: "Paste at most 5000 case IDs.",
+  VARIANT_ALREADY_DISCARDED: "This translation was already discarded.",
+  DISCARD_REASON_REQUIRED: "Discarding a translation requires a reason.",
 };
 
 export function errorMessage(error: unknown): string {

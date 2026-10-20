@@ -1,6 +1,6 @@
 """Shared task target/language rules over bounded, metadata-only lineage."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from typing import Any
 
 from sqlalchemy import Connection, literal, select
@@ -13,6 +13,9 @@ from ontocurator.domain.variants import (
     VariantInfo,
     resolve_translation_lineage,
 )
+from ontocurator.domain.work_plans import PlanFlags, RowKey
+from ontocurator.storage import work_plan_store
+from ontocurator.storage.plan_tables import DiscardedVariantRow
 from ontocurator.storage.tables import DocumentRow, ProjectRow
 
 # These are immutable metadata inputs, never document text or annotation payload.
@@ -117,6 +120,52 @@ def check_variant_assignable(
     ):
         raise DomainError("TRANSLATION_NOT_ACCEPTED")
     return required_languages(variant, task, lookup)
+
+
+def outside_work_plan(
+    plan: Mapping[RowKey, PlanFlags],
+    discarded: Collection[str],
+    variant: VariantInfo,
+    task: Task,
+) -> bool:
+    """A new task needs its row's flag: Review for translation reviews, Annotate
+    for annotation and annotation review; a discarded version takes none."""
+    if variant.document_id in discarded:
+        return True
+    flags = plan.get(RowKey(variant.case_id, variant.language))
+    if flags is None:
+        return True
+    return not (flags.review if task == "translation_review" else flags.annotate)
+
+
+def plan_for(
+    conn: Connection, project_id: int, keys: Collection[RowKey]
+) -> dict[RowKey, PlanFlags]:
+    """Effective flags of ``keys``: stored rows first (one query); only cases
+    with a row missing derive the import default (``effective_plan``)."""
+    cases = sorted({key.case_id for key in keys})
+    plan = work_plan_store.plan_rows(conn, project_id, cases)
+    missing = sorted({key.case_id for key in keys if key not in plan})
+    if missing:
+        plan |= work_plan_store.effective_plan(conn, project_id, missing)
+    return plan
+
+
+def check_work_plan(
+    conn: Connection, project_id: int, variant: VariantInfo, task: Task
+) -> None:
+    """New allocations only; reopen, reassign and exact retries bypass it."""
+    plan = plan_for(conn, project_id, [RowKey(variant.case_id, variant.language)])
+    discarded = set(
+        conn.execute(
+            select(DiscardedVariantRow.document_id).where(
+                DiscardedVariantRow.project_id == project_id,
+                DiscardedVariantRow.document_id == variant.document_id,
+            )
+        ).scalars()
+    )
+    if outside_work_plan(plan, discarded, variant, task):
+        raise DomainError("NOT_IN_WORK_PLAN")
 
 
 def conflicting_tasks(task: Task) -> frozenset[Task]:

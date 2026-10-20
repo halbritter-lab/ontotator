@@ -59,6 +59,7 @@ ACKNOWLEDGEABLE = frozenset(
         "SELECTED_RESULT_REVISED",
         "SELECTED_TEXT_CORRECTED",
         "SELECTED_NEWER_RESULT",
+        "PLAN_RESTORED",
     }
 )
 NOT_NEWER = frozenset({"rejected", "query"})
@@ -177,10 +178,15 @@ def version_label(chain: Chain, version: Version, *, parallel: bool) -> str:
 
 
 def missing_final_counts(
-    *, has_selection: bool, submission_count: int, assignments: Iterable[AssignmentFact]
+    *,
+    has_selection: bool,
+    submission_count: int,
+    assignments: Iterable[AssignmentFact],
+    per_text: int = 1,
 ) -> bool:
-    """Missing final result rule: no selection, a submission, all work submitted."""
-    if has_selection or submission_count == 0:
+    """Missing final result rule: no selection, at least ``per_text``
+    submissions ("Annotations per text"), all work submitted."""
+    if has_selection or submission_count == 0 or submission_count < per_text:
         return False
     return all(
         item.status == "submitted" and not item.held
