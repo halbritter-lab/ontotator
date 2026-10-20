@@ -168,6 +168,8 @@ class RowFacts:
     plan: dict[RowKey, PlanFlags] = field(default_factory=dict)
     revisions: dict[str, int] = field(default_factory=dict)
     discarded: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # document id -> newest acceptance record (``work_plan_store.acceptances``)
+    acceptances: dict[str, dict[str, Any]] = field(default_factory=dict)
     annotations_per_text: int = 1
     rule_on: bool = True  # annotate_accepted_translations_only
     # user id -> PersonRefView fields (lead viewer: display names included)
@@ -516,6 +518,7 @@ def load_facts(
     last_activity, selection_activity = load_last_activity(conn, pid)
     plan = work_plan_store.effective_plan(conn, pid)
     discarded = work_plan_store.discarded(conn, pid)
+    acceptances = work_plan_store.acceptances(conn, pid)
     versions = _versions(conn, pid)
     assignments = _assignments(conn, pid)
     reports = _reports(conn, pid)
@@ -526,6 +529,12 @@ def load_facts(
             viewer_user_id,
             *(item.user_id for item in assignments),
             *(item.reporter_id for item in reports.values() if item.reporter_id),
+            *(
+                item["accepted_by"]
+                for item in acceptances.values()
+                if item["accepted_by"]
+            ),
+            *(item["discarded_by"] for item in discarded.values()),
         ],
         viewer_id=viewer_user_id,
         viewer_is_lead=True,  # Documents is lead-only
@@ -556,6 +565,7 @@ def load_facts(
         plan=plan,
         revisions=work_plan_store.project_revisions(conn, pid),
         discarded=discarded,
+        acceptances=acceptances,
         annotations_per_text=project.annotations_per_text,
         rule_on=project.annotate_accepted_translations_only,
         people=people_fields,

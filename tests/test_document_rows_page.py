@@ -333,6 +333,8 @@ VERSION_KEYS = {
     "is_newest_in_chain",
     "matches_filter",
     "last_activity_at",
+    "acceptance",
+    "discarded",
 }
 WORK_KEYS = {
     "person",

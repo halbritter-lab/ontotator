@@ -8966,6 +8966,26 @@
               }
             ],
             "title": "Last Activity At"
+          },
+          "acceptance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionAcceptanceView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discarded": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionDiscardView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -17731,6 +17751,122 @@
           "text_sha256"
         ],
         "title": "VariantText"
+      },
+      "VersionAcceptanceView": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "package",
+              "lead",
+              "override"
+            ],
+            "title": "Source"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "accepted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
+          "accepted_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "VersionAcceptanceView",
+        "description": "Newest acceptance record of a translation version (lead workflow)."
+      },
+      "VersionDiscardView": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "discarded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discarded At"
+          },
+          "discarded_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "VersionDiscardView",
+        "description": "Discard record of a text version (lead workflow)."
       },
       "VersionRef": {
         "properties": {
