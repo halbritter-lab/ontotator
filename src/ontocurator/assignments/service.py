@@ -112,6 +112,9 @@ class TaskSummary:
     target_language: str | None = None
     # The text label's case ID (spec "Text label").
     case_id: str | None = None
+    # Spec A.7: failed automatic checks of the reviewed variant's translation run
+    # (the list ReviewWorkspace.failed_checks shows); None for other tasks.
+    failed_check_count: int | None = None
 
 
 def _assignments() -> Select[tuple[object, ...]]:
@@ -643,6 +646,9 @@ class AssignmentService:
             ]
 
     def my_tasks(self, user_id: int) -> List[TaskSummary]:
+        from ontocurator.application.translation_reviews import (
+            failed_translation_checks,
+        )
         from ontocurator.authz.visibility import qualifying_assignment
         from ontocurator.domain.variants import resolve_translation_lineage
 
@@ -705,13 +711,20 @@ class AssignmentService:
             result = []
             for row in rows:
                 source = target = None
+                failed: int | None = None
                 if row["task"] == "translation_review":
                     project_variants = variants[row["project_key"]]
-                    _, original = resolve_translation_lineage(
+                    ancestor, original = resolve_translation_lineage(
                         project_variants[row["document_id"]], project_variants.get
                     )
                     source, target = original.language, row["language"]
+                    failed = len(failed_translation_checks(ancestor.translation))
                 result.append(
-                    TaskSummary(**row, source_language=source, target_language=target)
+                    TaskSummary(
+                        **row,
+                        source_language=source,
+                        target_language=target,
+                        failed_check_count=failed,
+                    )
                 )
             return result
