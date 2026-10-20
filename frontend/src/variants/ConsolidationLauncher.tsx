@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { personLabel } from '../app/identity';
 import { api, ApiError, type AssignmentView, type Member, type SubmissionHistorySummary, type WorkRoundView } from '../api/client';
 import { Button, Checkbox, InlineMessage, Select, Textarea } from '../ui';
 import { ErrorNotice } from '../admin/ErrorNotice';
@@ -81,14 +82,14 @@ function ConsolidationContent({ projectKey, documentId, language, username, rows
         })} />)}</fieldset>
       <Select id={`${fieldId}-reviewer`} label="Consolidation reviewer" value={member ? reviewer : ''} disabled={busy}
         onChange={event => { setReviewer(event.target.value); setConfirmLanguage(false); }}><option value="">Choose a reviewer</option>
-        {reviewers.map(row => <option key={row.username} value={row.username}>{row.display_name} ({row.username})</option>)}
+        {reviewers.map(row => <option key={row.username} value={row.username}>{personLabel(row)}</option>)}
       </Select>
       {missingLanguage && <Checkbox id={`${fieldId}-language`} label={`Assign this reviewer despite missing ${language} in their profile`} checked={confirmLanguage} disabled={busy} onChange={event => setConfirmLanguage(event.target.checked)} />}
       <Textarea id={`${fieldId}-reason`} label="Consolidation reason (optional)" value={reason} disabled={busy} onChange={event => setReason(event.target.value)} />
       {error != null && <><ErrorNotice error={error} /><Button disabled={busy} onClick={() => { setError(undefined); setAttempt(value => value + 1); }}>Reload reviewer tasks</Button></>}
       <Button disabled={!member || selectedIds.length < 2 || (missingLanguage && !confirmLanguage) || busy} loading={busy} onClick={() => { void start(); }}>Start consolidation</Button>
     </>}
-    {created && <InlineMessage tone="success">Consolidation assigned to {member?.display_name ?? reviewer}. Round {created.round_id}.
+    {created && <InlineMessage tone="success">Consolidation assigned to {personLabel(member, { fallback: 'the reviewer' })}. Round {created.round_id}.
       {reviewer === username && <> <a href={`#/tasks/${created.assignment_id}`}>Open my consolidation task</a></>}
     </InlineMessage>}
   </section>;

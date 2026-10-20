@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import type { FinalSelectionSummary } from "../../src/api/client";
+import { finalResultLabel } from "../../src/problems/LeadStatePanel";
 import { conflictReasonText, historyItems, intentState, leadOutcome, leadSummary, reportStateBadge, reportStateFact, reportTitle, taskLabel, taskRef, toolbarEntry, yourTaskFact } from "../../src/problems/labels";
 import { event, hold, report } from "./fixtures";
+
+const T = "2026-10-18T10:05:00Z";
 
 describe("problem report labels", () => {
   it("title_is_first_line_cut_at_a_word_boundary", () => {
@@ -114,4 +118,11 @@ describe("problem report labels", () => {
     expect(conflictReasonText({ reason: "OTHER" })).toBeNull();
     expect(conflictReasonText(null)).toBeNull();
   });
+});
+
+it("names the final result's author with display name and pseudonym for leads", () => {
+  const base = { case_id: "accepted-translation", language: "de", document_id: "d", submission_id: "s", revision: 1, selected_at: T, updated_at: T,
+    selected_by: "lead-0002", kind: "annotation" as const, round_ordinal: 2, author_label: "ann-0004", is_mine: false, recorded_at: null };
+  expect(finalResultLabel({ ...base, author: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } } as FinalSelectionSummary)).toBe("Round 2 · Ana Weber (ann-0004)");
+  expect(finalResultLabel(base as FinalSelectionSummary)).toBe("Round 2 · ann-0004");
 });

@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from "react";
 import type { FinalSelectionSummary, RowRoundView, RowSubmissionView } from "../api/client";
+import { textLabel } from "../app/identity";
 import { routeHref, type Route } from "../app/router";
 import { kindLabels, personLabel, submissionLabel, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
@@ -29,6 +30,8 @@ export interface SubmissionsTableProps {
   showFinalColumn: boolean;
   /** Language of the row; part of every submission label. */
   language: string;
+  /** Case of the row; with it the Version column names the text ("case-0101 · de v2"). */
+  caseId?: string;
   /** Selection and compare actions. Undefined = read-only mode without an Actions column. */
   actions?: (row: RowSubmissionView, context: SubmissionActionContext) => ReactNode;
   /** Non-null content becomes a full-width row below the submission (inline confirmations). */
@@ -65,7 +68,7 @@ export function submissionVersion(version: number, chainName: string | null, par
 /** Full submission label, e.g. "Annotation · Round 2 · ann-0004 · de v1 · 19 Oct, 00:57". */
 export function rowSubmissionLabel(row: RowSubmissionView, language: string, parallel: boolean, options: { now?: Date; seconds?: boolean } = {}): string {
   return submissionLabel({
-    kind: row.kind, ordinal: row.round_ordinal, author: row.author_label, isMe: row.is_me, language,
+    kind: row.kind, ordinal: row.round_ordinal, author: row.author_label, isMe: row.is_me, person: row.author, language,
     version: submissionVersion(row.version, row.chain_name, parallel), recordedAt: row.recorded_at,
   }, options);
 }
@@ -92,7 +95,7 @@ export function pendingRounds(rounds: readonly RowRoundView[]): RowRoundView[] {
  * (with actions and confirmations) and read-only by the case viewer history.
  */
 export function SubmissionsTable({
-  rows, rounds, final = null, parallel, showFinalColumn, language, actions, renderConfirm, viewRoute, onNavigate, label = "Submissions", now,
+  rows, rounds, final = null, parallel, showFinalColumn, language, caseId, actions, renderConfirm, viewRoute, onNavigate, label = "Submissions", now,
   layout = "table", finalLinkId,
 }: SubmissionsTableProps): JSX.Element {
   const id = useId();
@@ -122,21 +125,25 @@ export function SubmissionsTable({
       }}>{text}</a>{hidden}
     </>;
   };
+  const versionCell = (row: RowSubmissionView) => {
+    const version = submissionVersion(row.version, row.chain_name, parallel);
+    return caseId == null ? version : `${textLabel({ case_id: caseId, language })} ${version}`;
+  };
   const roundCellContent = (row: RowSubmissionView) => viewLink(row, [roundName(row), ...roundSuffixes(row, rows)].join(" · "));
 
   const columns: Column<RowSubmissionView>[] = [
     ...(showFinalColumn ? [{ id: "final", header: "Final", cell: (row: RowSubmissionView) => isFinal(row) ? <StatusBadge tone="success">Final</StatusBadge> : null }] : []),
     { id: "round", header: "Round", cell: roundCellContent },
     { id: "kind", header: "Kind", cell: row => kindLabels[row.kind] },
-    ...(showVersion ? [{ id: "version", header: "Version", cell: (row: RowSubmissionView) => submissionVersion(row.version, row.chain_name, parallel) }] : []),
-    { id: "by", header: "By", cell: row => personLabel(row.author_label, row.is_me) },
+    ...(showVersion ? [{ id: "version", header: "Version", cell: (row: RowSubmissionView) => versionCell(row) }] : []),
+    { id: "by", header: "By", cell: row => personLabel(row.author_label, row.is_me, row.author) },
     { id: "submitted", header: "Submitted", cell: row => <Time iso={row.recorded_at} now={now} seconds={needsSeconds(row)} /> },
     { id: "findings", header: "Findings", align: "end", cell: row => row.finding_count },
     ...(actions ? [{ id: "actions", header: "Actions", cell: (row: RowSubmissionView) => <div className="submission-actions">{actions(row, { labelId: labelId(row), label: labelOf(row), isFinal: isFinal(row) })}</div> }] : []),
   ];
   const pending = pendingRounds(rounds);
   const pendingList = pending.length > 0 && <ul className="submissions-pending">
-    {pending.map(round => <li key={round.round_id}>{`${roundName({ round_ordinal: round.round_ordinal, round_id: round.round_id, kind: round.kind })} · ${personLabel(round.author_label, round.is_me)} · in progress, not submitted yet`}</li>)}
+    {pending.map(round => <li key={round.round_id}>{`${roundName({ round_ordinal: round.round_ordinal, round_id: round.round_id, kind: round.kind })} · ${personLabel(round.author_label, round.is_me, round.author)} · in progress, not submitted yet`}</li>)}
   </ul>;
   const showAllButton = collapsed && <Button size="sm" variant="quiet" onClick={() => setShowAll(true)}>Show all ({sorted.length})</Button>;
 
@@ -147,8 +154,8 @@ export function SubmissionsTable({
           {visible.map(row => {
             const confirm = renderConfirm?.(row) ?? null;
             // Consolidations name their kind once ("Consolidation", not "Consolidation · Consolidation").
-            const parts = [kindLabels[row.kind], roundName(row), ...roundSuffixes(row, rows), personLabel(row.author_label, row.is_me),
-              showVersion ? submissionVersion(row.version, row.chain_name, parallel) : ""];
+            const parts = [kindLabels[row.kind], roundName(row), ...roundSuffixes(row, rows), personLabel(row.author_label, row.is_me, row.author),
+              showVersion ? versionCell(row) : ""];
             const text = parts.filter((part, index) => part && parts.indexOf(part) === index).join(" · ");
             return <li key={row.submission_id} className={isFinal(row) ? "submissions-list-item final-row" : "submissions-list-item"}>
                 <div className="submissions-list-line">

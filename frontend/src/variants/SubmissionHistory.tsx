@@ -75,7 +75,7 @@ export function SubmissionHistory({ projectKey, caseId, documentId, language, ve
       {current?.error ? <><ErrorNotice error={current.error} /><Button onClick={() => setRetry(value => value + 1)}>Retry submissions</Button></>
         : !current?.data ? <InlineMessage tone="info">Loading submissions...</InlineMessage>
         : <SubmissionsTable rows={current.data.rows} rounds={current.data.rounds} final={current.data.final} parallel={current.data.parallel}
-          showFinalColumn={canManage} language={language} viewRoute={viewRoute} label="Submission history"
+          showFinalColumn={canManage} language={language} caseId={caseId} viewRoute={viewRoute} label="Submission history"
           onNavigate={route => { close(); onNavigate(route); }} />}
     </Dialog>
   </>;

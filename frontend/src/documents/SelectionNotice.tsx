@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from "react";
-import type { DocumentRowView, RowItemView, RowSubmissions } from "../api/client";
+import type { DocumentRowView, RowItemView, RowRoundView, RowSubmissions } from "../api/client";
 import { formatTime, personLabel, roundCell } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { Button } from "../ui";
@@ -48,6 +48,12 @@ function chainNameOf(row: DocumentRowView, documentId: string | null): string {
   return row.versions.find(version => version.document_id === documentId)?.chain_name ?? "";
 }
 
+/** "Round 2 (ann-0004)", "Consolidation (ann-0004)"; with a display name "Round 2 · Ana Weber (ann-0004)". */
+function roundLabelOf(round: RowRoundView): string {
+  const name = round.round_ordinal != null ? undefined : roundName({ round_ordinal: null, round_id: round.round_id, kind: round.kind });
+  return roundCell({ ordinal: round.round_ordinal, author: round.author_label, isMe: round.is_me, person: round.author, name });
+}
+
 /** Segments and hint of one acknowledgeable cause, worded as in the spec ("Selection notice"). */
 function causeSegments(row: DocumentRowView, data: RowSubmissions | null, item: RowItemView): { segments: CauseSegment[]; hint?: string } | null {
   const rounds = data?.rounds ?? [];
@@ -55,9 +61,7 @@ function causeSegments(row: DocumentRowView, data: RowSubmissions | null, item: 
   const roundLabel = (roundId: string | null | undefined) => {
     const round = rounds.find(entry => entry.round_id === roundId);
     if (!round) return "The selected round";
-    return round.round_ordinal != null
-      ? roundCell({ ordinal: round.round_ordinal, author: round.author_label, isMe: round.is_me })
-      : `${roundName({ round_ordinal: null, round_id: round.round_id, kind: round.kind })} (${round.author_label}${round.is_me ? ", you" : ""})`;
+    return roundLabelOf(round);
   };
   switch (item.code) {
     case "SELECTED_ROUND_ABANDONED":
@@ -78,7 +82,7 @@ function causeSegments(row: DocumentRowView, data: RowSubmissions | null, item: 
     case "SELECTED_NEWER_RESULT": {
       const newer = submissions.find(entry => entry.submission_id === suffix(item.cause_id, item.code));
       const subject = newer
-        ? [roundName(newer), personLabel(newer.author_label, newer.is_me), submissionVersion(newer.version, newer.chain_name, row.parallel_roots)].join(" · ")
+        ? [roundName(newer), personLabel(newer.author_label, newer.is_me, newer.author), submissionVersion(newer.version, newer.chain_name, row.parallel_roots)].join(" · ")
         : "A newer result";
       const selectedAt = row.final?.selected_at;
       return { segments: selectedAt
@@ -131,13 +135,10 @@ function notAcceptedLines(row: DocumentRowView): NoticeLine[] {
 export function waitingLines(row: DocumentRowView, data: RowSubmissions | null): string[] {
   if (!data) return [];
   const rounds = pendingRounds(data.rounds).map(round => {
-    const name = round.round_ordinal != null
-      ? roundCell({ ordinal: round.round_ordinal, author: round.author_label, isMe: round.is_me })
-      : `${roundName({ round_ordinal: null, round_id: round.round_id, kind: round.kind })} (${round.author_label}${round.is_me ? ", you" : ""})`;
-    return `Waiting: ${name} is in progress. You can choose again once it is submitted.`;
+    return `Waiting: ${roundLabelOf(round)} is in progress. You can choose again once it is submitted.`;
   });
   const reviews = data.open_translation_reviews.map(review =>
-    `Waiting: translation review of ${submissionVersion(review.version, review.chain_name, row.parallel_roots)} by ${personLabel(review.reviewer_label, review.is_me)} is open. You can choose again once it is submitted.`);
+    `Waiting: translation review of ${submissionVersion(review.version, review.chain_name, row.parallel_roots)} by ${personLabel(review.reviewer_label, review.is_me, review.reviewer)} is open. You can choose again once it is submitted.`);
   return [...rounds, ...reviews];
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, type PauseCandidate, type ProblemActionRequest, type ProblemReportView } from "../api/client";
 import { Time } from "../app/Time";
 import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea, TextInput, type InlineConfirmOutcome } from "../ui";
-import { historyItems, type Intent } from "./labels";
+import { historyItems, taskLabel, type Intent } from "./labels";
 import type { ReportLink } from "./LeadStatePanel";
 import type { LeadReportState } from "./useLeadReport";
 
@@ -164,7 +164,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
         <fieldset className="lead-task-picker" aria-describedby={selectionError ? `${id}-selection-error` : undefined}>
           <legend>Paused by this report</legend>
           {activeHolds.map(hold => <Checkbox key={hold.hold_id} id={`${id}-release-${hold.assignment_id}`}
-            label={`Task ${hold.assignment_id} · ${hold.owner_label} · ${hold.case_id} · ${hold.language}`}
+            label={taskLabel(hold)}
             hint={<>paused since <Time iso={hold.created_at} />{(hold.other_active_holds?.length ?? 0) > 0 && <>. Also paused by another report: stays paused</>}</>}
             checked={selected.includes(hold.assignment_id)} readOnly={busy}
             onChange={event => { if (!busy) toggle(hold.assignment_id, event.target.checked); }} />)}
@@ -185,7 +185,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
       const others = query ? all.filter(c => !c.same_text && (c.case_id.toLowerCase().startsWith(query) || c.owner_label.toLowerCase().includes(query))) : [];
       const row = (candidate: PauseCandidate) => {
         const paused = candidate.paused_by_this_report;
-        const label = `Task ${candidate.assignment_id} · ${candidate.owner_label} · ${candidate.case_id} · ${candidate.language}${candidate.reporter_task && !paused ? " (reporter's task)" : ""}`;
+        const label = `${taskLabel(candidate)}${candidate.reporter_task && !paused ? " (reporter's task)" : ""}`;
         return <Checkbox key={candidate.assignment_id} id={`${id}-pause-${candidate.assignment_id}`} label={label}
           hint={paused ? "Already paused by this report" : undefined}
           aria-disabled={paused || undefined} checked={!paused && selected.includes(candidate.assignment_id)} readOnly={busy}

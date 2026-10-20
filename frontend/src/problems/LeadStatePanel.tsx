@@ -5,15 +5,15 @@ import { StatusBadge } from "../ui";
 import { leadSummary, reportStateBadge, reportStateFact, taskLabel } from "./labels";
 import "./problems.css";
 
-/** "Annotation · Round 2 · ann-0004 · 18 Oct, 10:00": the row's final result without language. */
+/** "Annotation · Round 2 · Ana Weber (ann-0004) · 18 Oct, 10:00" (leads; else the pseudonym): the row's final result without language. */
 export function finalResultLabel(final: FinalSelectionSummary | null): string {
   if (!final) return "None";
   const kind = final.kind ?? "annotation";
   const author = final.author_label ?? "Unknown";
   if (final.recorded_at) {
-    return submissionLabel({ kind, ordinal: final.round_ordinal, author, isMe: final.is_mine, language: final.language, version: null, recordedAt: final.recorded_at }, { withLanguage: false });
+    return submissionLabel({ kind, ordinal: final.round_ordinal, author, isMe: final.is_mine, language: final.language, version: null, recordedAt: final.recorded_at, person: final.author }, { withLanguage: false });
   }
-  return [kind === "consolidation" ? null : final.round_ordinal == null ? "Initial submission" : `Round ${final.round_ordinal}`, personLabel(author, final.is_mine)]
+  return [kind === "consolidation" ? null : final.round_ordinal == null ? "Initial submission" : `Round ${final.round_ordinal}`, personLabel(author, final.is_mine, final.author)]
     .filter(Boolean).join(" · ");
 }
 

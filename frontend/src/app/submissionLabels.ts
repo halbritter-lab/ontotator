@@ -2,6 +2,7 @@
  * Shared submission and time labels (Documents, confirmations, case viewer).
  * Must not import from `documents/`: other pages reuse these helpers.
  */
+import { personLabel as identityLabel, type PersonRef } from "./identity";
 
 export type SubmissionKind = "annotation" | "review" | "consolidation" | "carry_forward";
 
@@ -49,14 +50,28 @@ export function fullTimestamp(value: string | number | Date): string {
   return date ? fullFormat.format(date) : String(value);
 }
 
-/** The pseudonym; the viewer's own items carry "(you)". */
-export function personLabel(pseudonym: string, isMe: boolean): string {
-  return isMe ? `${pseudonym} (you)` : pseudonym;
+function hasDisplayName(person: PersonRef | null | undefined): boolean {
+  return !!person?.display_name?.trim();
 }
 
-/** "Round 1 (lead-0002, you)"; a submission without a round is "Initial submission (...)". Never nested parentheses. */
-export function roundCell(input: { ordinal: number | null; author: string; isMe: boolean }): string {
-  const round = input.ordinal == null ? "Initial submission" : `Round ${input.ordinal}`;
+/**
+ * A person in a label. With a display name (spec "Identity (D1)", leads and the viewer's own items):
+ * "Ana Weber (ann-0004)", own items "Project Lead (ann-0002, you)". Without one the pseudonym,
+ * the viewer's own items marked "(you)". Usernames are never part of it.
+ */
+export function personLabel(pseudonym: string, isMe: boolean, person?: PersonRef | null): string {
+  if (person && hasDisplayName(person)) return identityLabel({ ...person, is_me: !!person.is_me || isMe });
+  const name = person?.pseudonym ?? pseudonym;
+  return isMe ? `${name} (you)` : name;
+}
+
+/**
+ * "Round 1 (lead-0002, you)"; a submission without a round is "Initial submission (...)"; `name` replaces the
+ * round part (e.g. "Consolidation"). With a display name "Round 1 · Ana Weber (ann-0004)". Never nested parentheses.
+ */
+export function roundCell(input: { ordinal: number | null; author: string; isMe: boolean; person?: PersonRef | null; name?: string }): string {
+  const round = input.name ?? (input.ordinal == null ? "Initial submission" : `Round ${input.ordinal}`);
+  if (hasDisplayName(input.person)) return `${round} · ${personLabel(input.author, input.isMe, input.person)}`;
   return `${round} (${input.author}${input.isMe ? ", you" : ""})`;
 }
 
@@ -66,6 +81,8 @@ export interface SubmissionLabelInput {
   ordinal: number | null;
   author: string;
   isMe: boolean;
+  /** Server person ref; its display name is shown when present (leads). */
+  person?: PersonRef | null;
   language: string;
   /** Version text, e.g. "v1" or "DeepL v3 v1"; null omits it (the Final column appends its own marker). */
   version: string | null;
@@ -86,7 +103,7 @@ export function submissionLabel(input: SubmissionLabelInput, options: Submission
   const { withLanguage = true, ...timeOptions } = options;
   const parts: string[] = [kindLabels[input.kind]];
   if (input.kind !== "consolidation") parts.push(input.ordinal == null ? "Initial submission" : `Round ${input.ordinal}`);
-  parts.push(personLabel(input.author, input.isMe));
+  parts.push(personLabel(input.author, input.isMe, input.person));
   const version = [withLanguage ? input.language : "", input.version ?? ""].filter(Boolean).join(" ");
   if (version) parts.push(version);
   parts.push(formatTime(input.recordedAt, timeOptions));

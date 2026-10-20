@@ -138,3 +138,20 @@ it("adds seconds only when two labels share a minute", () => {
     time("2026-10-18T11:00:00Z"),
   ]);
 });
+
+it("shows the author as display name and pseudonym for leads", () => {
+  renderTable({
+    rows: [
+      submission({ submission_id: "a", document_id: "d1", author_label: "ann-0004", author: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } }),
+      submission({ submission_id: "b", document_id: "d1", author_label: "ann-0005", recorded_at: "2026-10-18T11:00:00Z" }),
+    ],
+    rounds: [round({ round_id: "r9", assignment_id: 9, document_id: "d1", round_ordinal: 3, author_label: "ann-0006", state: "open", submitted: false,
+      author: { pseudonym: "ann-0006", display_name: "Ben Ito", is_me: false } })],
+    final: null,
+  });
+  const [first, second] = bodyRows();
+  expect(within(first).getByRole("cell", { name: "Ana Weber (ann-0004)" })).toBeTruthy();
+  expect(within(second).getByRole("cell", { name: "ann-0005" })).toBeTruthy();
+  expect(screen.getByText("Round 3 · Ben Ito (ann-0006) · in progress, not submitted yet")).toBeTruthy();
+  expect(first.querySelector("[hidden]")!.textContent).toContain("Ana Weber (ann-0004)");
+});

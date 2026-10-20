@@ -1,5 +1,6 @@
 import { useId } from "react";
 import type { TranslationReviewRecord } from "../api/client";
+import { personLabel } from "../app/identity";
 import { InlineMessage, StatusBadge } from "../ui";
 import { categoryLabels, checkDeviationGuidance, checkExplanation, checkLabel, checkNoLocation, decisionConsequences, decisionLabels, failedChecksTitle, formatReviewDate, translationStatusLabel } from "./labels";
 import type { ClinicalCategory, ReviewDecisionCode } from "./reviewRules";
@@ -60,7 +61,7 @@ export function ReviewSummary({ record, heading }: { record: TranslationReviewRe
       <div><dt>Clinically relevant change</dt><dd>{record.clinical_change ? `Yes: ${categoryList(record.categories)}` : "No"}</dd></div>
       <div><dt>Rationale</dt><dd className="review-summary-rationale">{record.rationale?.trim() ? record.rationale : "None given"}</dd></div>
       <div><dt>Status of the reviewed version</dt><dd>{translationStatusLabel(record.status_after)}</dd></div>
-      <div><dt>Reviewer</dt><dd>{record.reviewer_pseudonym}{record.reviewer_qualification ? `, ${record.reviewer_qualification}` : ""}</dd></div>
+      <div><dt>Reviewer</dt><dd>{personLabel({ pseudonym: record.reviewer_pseudonym })}{record.reviewer_qualification ? `, ${record.reviewer_qualification}` : ""}</dd></div>
       <div><dt>Submitted</dt><dd><time dateTime={record.created_at}>{formatReviewDate(record.created_at)}</time></dd></div>
     </dl>
   </section>;

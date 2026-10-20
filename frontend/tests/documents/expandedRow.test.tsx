@@ -4,11 +4,11 @@ import type { DocumentRowView, RowSubmissions } from "../../src/api/client";
 import type { ProjectDocumentsQuery } from "../../src/app/router";
 import { formatTime } from "../../src/app/submissionLabels";
 import { ExpandedRow, type ExpandedRowProps } from "../../src/documents/ExpandedRow";
-import type { TextVersionsTools } from "../../src/documents/TextVersions";
+import { TextVersions, type TextVersionsTools } from "../../src/documents/TextVersions";
 import type { RowSubmissionsState } from "../../src/documents/useRowSubmissions";
 import { refKey } from "../../src/variants/versionState";
 import {
-  final, item, round, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS6, submission, submissions, translationReview, version, type DocumentsScenario,
+  final, item, round, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS6, submission, submissions, translationReview, version, work, type DocumentsScenario,
 } from "./fixtures";
 
 afterEach(cleanup);
@@ -342,4 +342,16 @@ it("renders Submissions as two-line list items with the confirmation below its i
   expect(within(lines[1] as HTMLElement).getByRole("button", { name: "Replace…" })).toBeTruthy();
   expect(items[1].querySelector(".submissions-list-confirm")!.textContent).toBe("Confirm here");
   expect(items[0].querySelector(".submissions-list-confirm")).toBeNull();
+});
+
+it("names the people on text version work with display name and pseudonym", () => {
+  const document = version({ document_id: "c-de" });
+  const target = row({ case_id: "c", language: "de", versions: [document], work: [
+    work({ assignment_id: 1, document_id: "c-de", author_label: "ann-0004", status: "in_progress", person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } }),
+    work({ assignment_id: 2, document_id: "c-de", author_label: "ann-0005", status: "submitted" }),
+  ] });
+  render(<TextVersions row={target} projectKey="p" query={query} onNavigate={vi.fn()} />);
+  const list = screen.getByRole("list", { name: "Assignments on v1" });
+  expect(within(list).getByText("Ana Weber (ann-0004) · Annotation · In progress")).toBeTruthy();
+  expect(within(list).getByText("ann-0005 · Annotation · Submitted")).toBeTruthy();
 });

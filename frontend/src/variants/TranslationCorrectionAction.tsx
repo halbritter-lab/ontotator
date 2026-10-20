@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { personLabel } from '../app/identity';
 import { api, type AssignmentView, type Member, type VariantSummary } from '../api/client';
 import { eligibleMembers } from '../admin/assignmentUI';
 import { ErrorNotice } from '../admin/ErrorNotice';
@@ -47,7 +48,7 @@ function CorrectionContent({ projectKey, variant, username, requiredLanguages }:
     {!assigned && members && <>
       <Select id={`${fieldId}-reviewer`} label="Translation reviewer" value={member ? reviewer : ''} disabled={busy}
         onChange={event => { setReviewer(event.target.value); setConfirmLanguage(false); }}><option value="">Choose a reviewer</option>
-        {reviewers.map(row => <option key={row.username} value={row.username}>{row.display_name} ({row.username})</option>)}
+        {reviewers.map(row => <option key={row.username} value={row.username}>{personLabel(row)}</option>)}
       </Select>
       <Textarea id={`${fieldId}-reason`} label="Reason for another review" value={reason} disabled={busy} onChange={event => setReason(event.target.value)} />
       {missingLanguages.length > 0 && <Checkbox id={`${fieldId}-language`} label={`Assign despite missing ${missingLanguages.join(', ')} in this reviewer's profile`}
@@ -55,7 +56,7 @@ function CorrectionContent({ projectKey, variant, username, requiredLanguages }:
       <Button disabled={!member || !requiredLanguages || !reason.trim() || (missingLanguages.length > 0 && !confirmLanguage) || busy} loading={busy} onClick={() => { void assign(); }}>Assign correction review</Button>
     </>}
     {error != null && <><ErrorNotice error={error} />{!members && <Button onClick={() => setAttempt(value => value + 1)}>Reload translation reviewers</Button>}</>}
-    {assigned && <InlineMessage tone="success">Translation correction assigned to {member?.display_name ?? reviewer}.
+    {assigned && <InlineMessage tone="success">Translation correction assigned to {personLabel(member, { fallback: 'the reviewer' })}.
       {assigned.username === username && <> <a href={`#/tasks/${assigned.id}`}>Open my translation review</a></>}
     </InlineMessage>}
   </section>;

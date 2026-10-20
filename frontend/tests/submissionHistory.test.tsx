@@ -88,3 +88,15 @@ it('retains an explicit retry after a history read fails', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Retry submissions' }));
   await screen.findByRole('table', { name: 'Submission history' });
 });
+
+it('labels history entries with the text label', async () => {
+  vi.mocked(api.getRowSubmissions).mockResolvedValue(submissions('case-0101', 'de', { submissions: [
+    submission({ submission_id: 'sub-1', document_id: 'target', author_label: 'ann-0001', recorded_at: '2026-10-18T10:00:00Z' }),
+    submission({ submission_id: 'sub-2', document_id: 'target-v2', version: 2, author_label: 'ann-0002', recorded_at: '2026-10-18T11:00:00Z' }),
+  ] }));
+  vi.mocked(api.listDocumentRows).mockResolvedValue(page([group('case-0101', [row({ case_id: 'case-0101', language: 'de' })])]));
+  render(<SubmissionHistory {...base} caseId="case-0101" canManage />);
+  const table = await openHistory();
+  expect(within(table).getByRole('cell', { name: 'case-0101 · de v1' })).toBeTruthy();
+  expect(within(table).getByRole('cell', { name: 'case-0101 · de v2' })).toBeTruthy();
+});

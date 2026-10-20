@@ -85,7 +85,7 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
           {work.map(item => {
             const assignment = tools?.assignments.find(entry => entry.id === item.assignment_id && entry.document_id === version.document_id && !entry.revoked_at);
             return <li key={item.assignment_id}>
-              <span>{personLabel(item.author_label, item.is_me)} · {labelFor(taskLabels, item.task)} · {labelFor(assignmentStatusLabels, item.status)}</span>
+              <span>{personLabel(item.author_label, item.is_me, item.person)} · {labelFor(taskLabels, item.task)} · {labelFor(assignmentStatusLabels, item.status)}</span>
               {item.held && <> <StatusBadge tone="warning">Paused</StatusBadge></>}
               {assignment && tools && <AssignmentActions assignment={assignment} members={tools.members} onChanged={tools.onAssignmentsChanged} />}
             </li>;

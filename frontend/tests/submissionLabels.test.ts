@@ -38,3 +38,17 @@ describe("shared submission labels", () => {
     expect(kindLabels).toEqual({ annotation: "Annotation", review: "Review", consolidation: "Consolidation", carry_forward: "Carry-forward" });
   });
 });
+
+it("uses the display name and pseudonym when a person ref carries a display name", () => {
+  const ana = { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false };
+  expect(personLabel("ann-0004", false, ana)).toBe("Ana Weber (ann-0004)");
+  expect(personLabel("ann-0002", true, { pseudonym: "ann-0002", display_name: "Project Lead", is_me: true })).toBe("Project Lead (ann-0002, you)");
+  expect(personLabel("ann-0004", false, { pseudonym: "ann-0004", display_name: null, is_me: false })).toBe("ann-0004");
+  expect(personLabel("ann-0002", true, { pseudonym: "ann-0002", display_name: null, is_me: true })).toBe("ann-0002 (you)");
+  expect(personLabel("ann-0004", false, null)).toBe("ann-0004");
+  expect(roundCell({ ordinal: 3, author: "ann-0004", isMe: false, person: ana })).toBe("Round 3 · Ana Weber (ann-0004)");
+  expect(roundCell({ ordinal: null, author: "ann-0004", isMe: false, person: ana })).toBe("Initial submission · Ana Weber (ann-0004)");
+  expect(roundCell({ ordinal: null, author: "ann-0004", isMe: false, name: "Consolidation" })).toBe("Consolidation (ann-0004)");
+  const base = { kind: "annotation" as const, ordinal: 2, author: "ann-0004", isMe: false, language: "de", version: "v1", recordedAt: "2026-10-19T00:57:00" };
+  expect(submissionLabel({ ...base, person: ana }, { now })).toBe("Annotation · Round 2 · Ana Weber (ann-0004) · de v1 · 19 Oct, 00:57");
+});

@@ -4,6 +4,7 @@
  * "Paused" / "Resumed" / "Restarted" for tasks; never "hold" or "resolve" in UI text.
  */
 import type { ProblemReportView, ReportEventView, ReportHoldView } from "../api/client";
+import { textLabel } from "../app/identity";
 import { formatTime, personLabel } from "../app/submissionLabels";
 import type { StatusTone } from "../ui";
 
@@ -60,7 +61,7 @@ export function reportStateFact(r: ProblemReportView, now?: Date): string {
 
 /** "Task 4 · ann-0004 · accepted-translation · de". */
 export function taskLabel(t: { assignment_id: number; owner_label: string; case_id: string; language: string }): string {
-  return `Task ${t.assignment_id} · ${t.owner_label} · ${t.case_id} · ${t.language}`;
+  return `Task ${t.assignment_id} · ${t.owner_label} · ${textLabel(t)}`;
 }
 
 /** Running-text reference: "Task 4 (ann-0004)". */
