@@ -42,6 +42,12 @@ const comparisonStatus = (page: Page) => page.locator('.comparison-global-contro
 const rightText = (page: Page) => comparison(page).locator('.text-container');
 const viewerLeft = (page: Page) => page.locator('.comparison-reading > .readonly-annotation-view .text-container');
 const editorLeft = (page: Page) => page.locator('.app-layout > .center-pane .text-container');
+/** Top of the first rendered character of the text, relative to the text sheet (page scrolling does not count). */
+const firstLineOffset = (surface: Locator) => surface.evaluate(el => {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: node => node.textContent!.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP });
+  const node = walker.nextNode()!; const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 1);
+  return range.getBoundingClientRect().top - el.getBoundingClientRect().top;
+});
 
 async function openVersions(page: Page) {
   const disclosure = page.locator('details.case-version-controls, details.comparison-identity-choices');
@@ -242,18 +248,24 @@ test('open editor has two equal reading surfaces and reachable lower controls; c
   for (const width of [1280, 1024]) {
     await page.setViewportSize({ width, height: 720 });
     const before = (await editorLeft(page).boundingBox())!;
-    await page.getByRole('button', { name: '+ Add Mention', exact: true }).click();
+    const lineBefore = await firstLineOffset(editorLeft(page));
+    await page.getByRole('button', { name: 'Add mention', exact: true }).click();
     const banner = page.locator('.app-layout > .center-pane > .attach-mention-banner');
     await expect(banner).toBeVisible();
     const during = (await editorLeft(page).boundingBox())!;
-    const bar = (await page.locator('.app-layout > .center-pane > .pane-toolbar').boundingBox())!;
-    const notice = (await banner.boundingBox())!;
+    // The marking line overlays the top of the text sheet: the text does not move ...
     expect(Math.abs(during.width - before.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(during.height - before.height)).toBeLessThanOrEqual(1);
-    expect(Math.abs(notice.x - bar.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(notice.y - bar.y)).toBeLessThanOrEqual(1);
-    expect(Math.abs(notice.width - bar.width)).toBeLessThanOrEqual(1);
-    expect(notice.y + notice.height).toBeLessThanOrEqual(during.y + 1);
+    expect(Math.abs((await firstLineOffset(editorLeft(page))) - lineBefore)).toBeLessThanOrEqual(1);
+    // ... the line stays inside the text pane, and the first line of text stays clear of it (one layout read, no scroll in between).
+    const overlay = await editorLeft(page).evaluate((el, line) => {
+      const sheet = el.getBoundingClientRect(), pane = el.closest('.center-pane')!.getBoundingClientRect();
+      const notice = document.querySelector('.app-layout > .center-pane > .attach-mention-banner')!.getBoundingClientRect();
+      return { left: notice.left - pane.left, right: pane.right - notice.right, clear: sheet.top + line - notice.bottom };
+    }, lineBefore);
+    expect(overlay.left).toBeGreaterThanOrEqual(-1);
+    expect(overlay.right).toBeGreaterThanOrEqual(-1);
+    expect(overlay.clear).toBeGreaterThanOrEqual(-1);
     expect(await editorLeft(page).evaluate((element, previous) => element === previous, original)).toBe(true);
     await recordGeometry(page, `attach-banner-${width}`);
     if (width === 1280) {
@@ -307,8 +319,8 @@ test('Unicode pointer and native Shift-click selections with keyboard edge resiz
   await page.mouse.move(from.x, from.y); await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 8 }); await page.mouse.up();
   await recordGeometry(page, 'native-unicode-selection');
-  await expect(page.getByLabel('New Annotation', { exact: true })).toBeVisible();
-  await page.getByLabel(/Search ontology term/).fill('Hypotonia');
+  await expect(page.getByLabel('New finding', { exact: true })).toBeVisible();
+  await page.getByLabel("Search term", { exact: true }).fill('Hypotonia');
   await page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).click();
   await expect(mentionWithOffsets(page, `[${start}:${start + 2}]`)).toBeVisible();
   await expect(editorLeft(page).locator('[data-paragraph]')).toHaveCount(13);
@@ -336,8 +348,8 @@ test('Unicode pointer and native Shift-click selections with keyboard edge resiz
   await page.keyboard.down('Shift');
   await page.mouse.click(endpoint.x, endpoint.y);
   await page.keyboard.up('Shift');
-  await expect(page.getByLabel('New Annotation', { exact: true })).toBeVisible();
-  await page.getByLabel(/Search ontology term/).fill('Hypotonia');
+  await expect(page.getByLabel('New finding', { exact: true })).toBeVisible();
+  await page.getByLabel("Search term", { exact: true }).fill('Hypotonia');
   await page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).click();
   await expect(mentionWithOffsets(page, '[0:9]')).toBeVisible();
   await expect(page.locator('.status-badge')).toHaveAttribute('title', 'Revision 5');
@@ -364,7 +376,7 @@ test('read-only comparison selection and keyboard leave the editable left draft 
   await page.keyboard.down('Shift'); await page.keyboard.press('ArrowRight'); await page.keyboard.up('Shift');
   await expect(comparison(page).locator('.resize-handle')).toHaveCount(0);
   await expect(comparison(page).getByLabel('Annotations', { exact: true }).locator('option[value="draft"]')).toHaveCount(0);
-  await expect(page.getByLabel('New Annotation', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('New finding', { exact: true })).toHaveCount(0);
   expect(writes).toEqual([]);
   await expect(page.locator('.status-badge')).toHaveAttribute('title', 'Revision 1');
   await mentionWithOffsets(page, '[0:9]').scrollIntoViewIfNeeded();

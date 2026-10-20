@@ -49,7 +49,7 @@ async function openReview(page: Page, s: Scenario) {
   expect(projects.find(p => p.project_key === s.project)?.roles).toEqual(['annotator']);
 }
 async function saved(page: Page, id: number, text: string, decision: string) {
-  await expect(review(page).getByRole('status')).toHaveText('Saved');
+  await expect(review(page).locator('.translation-save-status')).toHaveText('Saved');
   const current = await workspace(page, id);
   expect(current.draft.text).toBe(text); expect(current.draft.form.decision).toBe(decision);
   expect(current.draft.revision).toBeGreaterThan(0); return current;
@@ -134,7 +134,7 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   await expect(source).toHaveText(s.texts.source);
   await expect(review(page)).not.toContainText('Selection intent');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(opened.variant.external_id);
-  await expect(review(page)).toContainText('Translation review · English → to German');
+  await expect(review(page)).toContainText('English → to German');
   const details = page.locator('.translation-details');
   await expect(details.getByText('Review fixture MT', { exact: true })).toBeHidden();
   await details.getByText('Translation details', { exact: true }).click();
@@ -177,7 +177,7 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   await expect(summary).toContainText(record.reviewer_pseudonym);
   await expect(summary.locator('time')).toHaveText(/^\d{1,2} [A-Z][a-z]+ \d{4} at \d{2}:\d{2}$/);
   expect((await workspace(page, assignmentId)).submitted_record).toEqual(record); expect(writes).toEqual([]);
-  await page.getByRole('link', { name: 'Back to my tasks', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', { name: 'My tasks', exact: true }).click();
   const submittedTask = page.getByTestId('task-row').filter({ has: page.locator(`a[href="#/tasks/${assignmentId}"]`) });
   await expect(submittedTask).toContainText('Submitted');
   // My tasks names the text as "{case ID} · {language}".
@@ -206,13 +206,14 @@ test('fresh failed checks remain visible and an independent edited Accepted unch
   const failed = await scenario(page, 'failed'); await loginExisting(page, failed.users.reviewer);
   await page.locator(`a[href="#/tasks/${failed.assignment_id}"]`).click(); await expect(target(page)).toHaveValue(failed.texts.failed);
   const checks = page.getByRole('region', { name: 'Automatic translation checks', exact: true });
-  await expect(checks).toContainText('1 automatic check failed');
-  await expect(checks.locator('.notice')).toContainText('Units added in translation');
+  await expect(checks.locator('.translation-checks-line')).toHaveText('1 automatic check failed: Units added in translation');
+  await checks.getByRole('button', { name: 'Details', exact: true }).click();
   // The readable label is the heading; the raw code appears only as the labelled technical code.
-  const failedCheck = checks.locator('.notice .translation-check');
+  const failedCheck = checks.locator('.translation-check');
   await expect(failedCheck.getByRole('heading', { name: 'Units added in translation', exact: true })).toBeVisible();
   await expect(failedCheck.getByRole('heading', { name: 'units_added' })).toHaveCount(0);
-  await expect(failedCheck.locator('dt').filter({ hasText: 'Technical code' }).locator('+ dd code')).toHaveText('units_added');
+  await failedCheck.getByText('Technical details', { exact: true }).click();
+  await expect(failedCheck.locator('.translation-check-technical code')).toHaveText('units_added');
   await checks.getByText('Show all checks', { exact: true }).click();
   await expect(checks.locator('.translation-checks-all li').filter({ hasText: 'Numbers changed in translation' })).toContainText('Passed');
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
@@ -332,7 +333,8 @@ for (const width of [1280, 1024, 600]) test(`review source, the one editable tra
     const mirror = el.querySelector('.translation-editor-mirror')!, input = el.querySelector('textarea')!;
     return Math.abs(mirror.getBoundingClientRect().height - input.getBoundingClientRect().height) <= 1 && input.scrollHeight <= input.clientHeight + 1;
   })).toBe(true);
-  await expect(page.getByRole('checkbox', {name:'Couple scrolling',exact:true})).toBeDisabled();
+  // Coupling is offered only where it works: not beside the editable translation.
+  await expect(page.getByRole('checkbox', {name:'Couple scrolling',exact:true})).toHaveCount(0);
   if (width >= 1100) {
     const initial = await editor.evaluate(el=>el.scrollTop); await alignAt(source,2); expect(await editor.evaluate(el=>el.scrollTop)).toBe(initial);
     await showChanges.check(); await expect(diff).toHaveText(s.texts.target);
@@ -342,7 +344,10 @@ for (const width of [1280, 1024, 600]) test(`review source, the one editable tra
     await alignAt(diff, 8); await expect.poll(() => markerDistance(comparison, 9)).toBeLessThanOrEqual(20);
   } else {
     const initial = await editor.evaluate(el => el.scrollTop); await alignAt(source, 2); expect(await editor.evaluate(el => el.scrollTop)).toBe(initial);
-    const sourceBox = await source.boundingBox(), editorBox = await editor.boundingBox(); expect(sourceBox && editorBox && editorBox.y > sourceBox.y).toBeTruthy();
+    // Texts stay side by side down to 700 px and stack below it.
+    const sourceBox = await source.boundingBox(), editorBox = await editor.boundingBox();
+    if (width >= 700) expect(sourceBox && editorBox && editorBox.x > sourceBox.x + sourceBox.width && Math.abs(editorBox.y - sourceBox.y) <= 50).toBeTruthy();
+    else expect(sourceBox && editorBox && editorBox.y > sourceBox.y).toBeTruthy();
     await showChanges.check(); await expect(target(page)).toHaveCount(0); await expect(diff).toHaveText(s.texts.target);
   }
   await showChanges.uncheck(); await expect(diff).toHaveCount(0);
@@ -359,7 +364,9 @@ for (const width of [1280, 1024, 600]) test(`review source, the one editable tra
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Your review', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('radio', { name: 'Accepted unchanged', exact: true })).toBeFocused();
+  // Editing the translation auto-selected Accepted with corrections; Tab enters the decisions at the selected one.
+  const selectedDecision = page.getByRole('radio', { name: 'Accepted with corrections', exact: true });
+  await expect(selectedDecision).toBeChecked(); await expect(selectedDecision).toBeFocused();
   await page.getByRole('radio', { name: 'Query', exact: true }).scrollIntoViewIfNeeded(); await expect(page.getByRole('radio', { name: 'Query', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: test.info().outputPath(`review-${width}.png`), fullPage: true });
@@ -371,7 +378,7 @@ test('three reading panes preserve positional progress and reject delayed feedba
   const s=await response.json() as Scenario; await openReview(page,s); await page.evaluate(()=>document.fonts.ready);
   const box=page.getByRole('checkbox',{name:'Couple scrolling',exact:true}),show=page.getByRole('checkbox',{name:'Show changes',exact:true});
   const source=page.getByRole('region',{name:'Source (en)',exact:true}),diff=page.getByRole('region',{name:'Text changes',exact:true}),comparison=page.getByRole('region',{name:'Comparison',exact:true});
-  await expect(box).not.toBeChecked(); await expect(box).toBeDisabled();
+  await expect(box).toHaveCount(0);
   await target(page).evaluate(el=>{(el as HTMLTextAreaElement).setSelectionRange(8,15);});
   await source.dispatchEvent('wheel'); await alignAt(source,1);
   expect(await target(page).evaluate(el=>[(el as HTMLTextAreaElement).selectionStart,(el as HTMLTextAreaElement).selectionEnd])).toEqual([8,15]);
@@ -391,16 +398,14 @@ test('three reading panes preserve positional progress and reject delayed feedba
     }
   }
   await page.setViewportSize({width:1024,height:900});
-  await expect(box).toBeDisabled(); await expect(box).not.toBeChecked();
-  await expect(page.getByText(/Widen the window/)).toBeVisible();
+  await expect(box).toHaveCount(0);
   await expect(page.getByRole('status',{name:'Paragraph pairing'})).toHaveCount(0);
   await expect(page.getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toHaveCount(0);
-  await box.scrollIntoViewIfNeeded();
   await page.screenshot({path:test.info().outputPath('coupling-unavailable-1024.png')});
   await page.setViewportSize({width:1280,height:900});
   await expect(box).toBeEnabled(); await expect(box).toBeChecked();
   await expect(page.getByRole('status',{name:'Paragraph pairing'})).toBeVisible();
-  await show.uncheck(); await expect(box).not.toBeChecked(); await expect(box).toBeDisabled();
+  await show.uncheck(); await expect(box).toHaveCount(0);
   await target(page).fill(s.texts.target+' Native correction.'); await expect(target(page)).toHaveValue(s.texts.target+' Native correction.');
   await show.check(); await expect(box).not.toBeChecked();
 });

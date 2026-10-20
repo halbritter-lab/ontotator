@@ -157,7 +157,7 @@ test('current accepted-to-reviewed gate refuses old editable commands and submis
     const written = await authenticatedRequest(page, `${path}/commands`, 'POST', receipt); expect(written.ok()).toBeTruthy();
     const draft = await written.json() as components['schemas']['Draft'];
     await page.locator(`a[href="#/tasks/${editableId}"]`).click(); await expect(page.locator('.status-badge')).toBeVisible();
-    await selectText(page, 0, 6); const input = page.getByLabel('Search ontology term', { exact: true }); await input.fill('Hypotonia'); await expect(page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).first()).toBeVisible();
+    await selectText(page, 0, 6); const input = page.getByLabel('Search term', { exact: true }); await input.fill('Hypotonia'); await expect(page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).first()).toBeVisible();
     const reopened = await authenticatedRequest(lead.page, `/api/v1/assignments/${s.assignment_id}/reopen`, 'POST', { reason: 'Correct the actual accepted translation' }); expect(reopened.ok()).toBeTruthy();
     const corrected = await submitReview(reviewer.page, s, s.texts.target.replace('Dosis 5 mg', 'Dosis 6 mg'));
     expect(corrected.status_after).toBe('reviewed'); expect(corrected.created_variant_id).not.toBeNull();

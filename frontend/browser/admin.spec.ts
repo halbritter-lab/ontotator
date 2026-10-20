@@ -99,6 +99,8 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   await page.getByLabel("T1 profile for HP", { exact: true }).selectOption("hpo-phenotype");
   await page.getByRole("button", { name: "Create project", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings$`));
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Members", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings/members$`));
   const members = page.getByRole("form", { name: "Add member", exact: true });
   for (const [actor, role] of [[lead, "Project lead"], [annotator, "Annotator"]] as const) {
     await members.getByLabel(/^Username/).fill(actor.username);
@@ -195,7 +197,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await expect(page.getByTestId("task-row").filter({ hasText: "two · en" })).toHaveCount(0);
   await tasks.getByRole("link", { name: /^(Start|Continue|View)$/ }).click();
   await selectText(page, 0, 9);
-  await page.getByLabel("Search ontology term").fill("Hypotonia");
+  await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
   for (const [axis, value] of [["Assertion", "Present"], ["Experiencer", "Patient"], ["Temporality", "Current"]]) {
     const choice = page.getByRole("group", { name: new RegExp(`^${axis}`) }).getByRole("radio", { name: value, exact: true });

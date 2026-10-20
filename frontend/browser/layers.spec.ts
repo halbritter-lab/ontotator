@@ -28,7 +28,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     // 3. Create annotation without any ontology/layer dialogs using unified search flow
     await page.getByRole("button", { name: "Add finding without a text span" }).click();
     await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
-    await page.getByLabel("Search ontology term").fill("HP:0001250");
+    await page.getByLabel("Search term", { exact: true }).fill("HP:0001250");
     await page.locator(".candidate-card").filter({ hasText: "HP:0001250" }).first().click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);
 
@@ -37,7 +37,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 0");
     await page.getByRole("button", { name: "Add finding without a text span" }).click();
     await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
-    await page.getByLabel("Search ontology term").fill("HP:0001252");
+    await page.getByLabel("Search term", { exact: true }).fill("HP:0001252");
     await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
     await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001252");
     await page.locator(".case-navigation").getByRole("button", { name: /Previous Case|Vorheriger Fall/i }).click();
@@ -93,7 +93,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await page.getByRole("button", { name: /MONDO:0005027/ }).click();
     await expect(page.getByLabel(/Reference details|Referenzdetails/i)).toContainText("Reference Diseases");
     await expect(page.getByLabel(/Reference details|Referenzdetails/i)).toContainText(/Epilepsy|Epilepsie/i);
-    await expect(page.getByRole("button", { name: /Change term|Delete Annotation|Begriff ändern|Annotation löschen/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Change term|Delete finding|Begriff ändern|Annotation löschen/i })).toHaveCount(0);
     await expect(page.locator(".text-container .run--marked")).not.toHaveCount(0);
 
     // 4. Toggle visibility of reference layer
@@ -112,7 +112,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     // 5. Annotate independently in target layer
     await page.getByRole("button", { name: "Add finding without a text span" }).click();
     await page.getByLabel("Reason for no text span").fill("Finding documented outside the selected excerpt");
-    await page.getByLabel("Search ontology term").fill("HP:0001252");
+    await page.getByLabel("Search term", { exact: true }).fill("HP:0001252");
     await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);
   });
@@ -140,7 +140,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
 
     // Returning to the case with references from My tasks works.
-    await page.getByRole("button", { name: "← My tasks" }).click();
+    await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: "My tasks", exact: true }).click();
     await openCase(page, { task: "review" });
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (1)" })).toBeVisible();

@@ -34,10 +34,10 @@ async function finding(page: Page, assignment: Assignment, note: string) {
   await page.goto(`/#/tasks/${assignment.id}`);
   await expect(page.locator('.text-container')).toBeVisible();
   await selectText(page, 0, 9);
-  await page.getByLabel(/Search ontology term/i).fill('Hypotonia');
+  await page.getByLabel("Search term", { exact: true }).fill('Hypotonia');
   await page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).click();
   await expect(page.locator('.sidebar .doc-item')).toHaveCount(1);
-  const noteField = page.getByRole('textbox', { name: 'Annotation note' });
+  const noteField = page.getByRole('textbox', { name: 'Note', exact: true });
   if (await noteField.count()) {
     await noteField.fill(note);
     await noteField.blur();
@@ -54,7 +54,7 @@ test('Q7: focused resize handle shows a focus-ring ring without moving text', as
   await importPackage(page, '', 'browser-fixture', 'quick-fix-q7');
   await openCase(page, { task: 'annotate' });
   await selectText(page, 0, 9);
-  await page.getByLabel(/Search ontology term/i).fill('Hypotonia');
+  await page.getByLabel("Search term", { exact: true }).fill('Hypotonia');
   await page.locator('.candidate-card').filter({ hasText: 'HP:0001252' }).click();
   await expect(mentionWithOffsets(page, '[0:9]')).toBeVisible();
   const handle = page.locator('.text-container .resize-handle--end');

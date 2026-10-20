@@ -76,7 +76,7 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   await expect(page.getByText(/Select supporting text to re-create/)).toBeVisible();
   const start=s.text.indexOf('Ataxia 😀new'),end=start+'Ataxia 😀new'.length;
   await selectText(page,start,end);
-  const editor=page.getByRole('region',{name:'New Annotation',exact:true});
+  const editor=page.getByRole('region',{name:'New finding',exact:true});
   await expect(editor.getByRole('heading')).toHaveText('Re-create finding on corrected text');
   await expect(editor).toContainText(first.term_id);
   await page.screenshot({path:test.info().outputPath('reanchor-desktop.png')});
@@ -87,7 +87,7 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   await editor.getByRole('button',{name:'Save re-created finding',exact:true}).click();
   await expect(page.getByRole('button',{name:'Complete text-change review',exact:true})).toBeVisible();
   expect((await workspace(page,s)).view.draft.reanchor_resolutions ?? []).toEqual([]);
-  await page.getByRole('button',{name:/Confirm .*Experiencer.* value/}).click();
+  await page.getByRole('button',{name:/^Confirm defaults \(\d+\)/}).click();
   await page.getByRole('button',{name:'Complete text-change review',exact:true}).click();
   await panel(page).getByText('Completed text-change reviews (1)',{exact:true}).click();
   await expect(firstRow).toContainText('Re-created');
@@ -205,7 +205,7 @@ async function nativeAcrossExpiry(page:Page,s:Scenario,button:Locator,method:'po
   expect(await nativeSelection(left(page))).toEqual(before);expect(writes).toEqual([]);
   await page.mouse.up();
   if(method==='Shift')await page.keyboard.up('Shift');
-  await expect(page.getByRole('heading',{name:'Select term for highlighted text',exact:true})).toBeVisible();
+  await expect(page.getByRole('region',{name:'New finding',exact:true}).getByRole('heading',{name:'New finding',exact:true})).toBeVisible();
   // Completion may prepare ordinary pending UI, but saving still needs a term.
   expect(writes).toEqual([]);
   await page.getByRole('button',{name:'Cancel',exact:true}).click();

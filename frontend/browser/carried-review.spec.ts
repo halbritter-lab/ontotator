@@ -165,7 +165,7 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   await expect(carriedSection(page).getByRole("button", { name: "Mark as checked", exact: true })).toBeFocused();
 
   // Delete: the carried delete confirmation, then the placeholder with "Dismiss with reason…" focused.
-  await page.getByRole("button", { name: "Delete Annotation", exact: true }).click();
+  await page.getByRole("button", { name: "Delete finding", exact: true }).click();
   const confirm = page.getByRole("group", { name: "Confirm deletion" });
   await expect(confirm).toContainText("This is a carried finding. After deleting it, you must link another finding or dismiss it with a reason.");
   await confirm.getByRole("button", { name: "Yes, delete", exact: true }).click();
