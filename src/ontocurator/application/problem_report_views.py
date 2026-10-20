@@ -470,12 +470,12 @@ def build_report_view(
 
 
 def build_pause_candidates(
-    conn: Connection, report_id: str, *, viewer_id: int | None = None
+    conn: Connection, report_id: str, *, viewer_id: int, viewer_is_lead: bool
 ) -> list[PauseCandidate]:
     """Live tasks of active users in the report's project ("Pause other tasks").
 
     Only leads read this list, so owners carry display names (D1); ``is_me``
-    is set only when ``viewer_id`` is given.
+    marks the viewer's own tasks.
     """
     report = conn.execute(
         select(
@@ -526,8 +526,8 @@ def build_pause_candidates(
     people = _people(
         conn,
         (r.user_id for r in rows),
-        viewer_id=-1 if viewer_id is None else viewer_id,
-        viewer_is_lead=True,
+        viewer_id=viewer_id,
+        viewer_is_lead=viewer_is_lead,
     )
     candidates = [
         PauseCandidate(

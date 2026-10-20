@@ -310,8 +310,12 @@ class ProblemReportService:
             project, pid, fresh, assignment = self._prepare(
                 conn, access, actor, assignment_id
             )
-            if assignment["user_id"] != fresh.user_id or not may_take(
-                fresh, project, assignment["task"]
+            # FD9: a lead correction takes no problem report, also for a lead
+            # who is an annotator too (``may_take`` would grant it).
+            if (
+                assignment["user_id"] != fresh.user_id
+                or assignment["lead_correction"]
+                or not may_take(fresh, project, assignment["task"])
             ):
                 raise AccessDenied("NOT_ALLOWED")
             replay = self._receipt(conn, pid, access, request_id, digest)
@@ -726,7 +730,9 @@ class ProblemReportService:
             _project, _fresh, lead = self._readable(conn, access, report_id)
             if not lead:
                 raise DomainError("REPORT_NOT_FOUND")
-            return build_pause_candidates(conn, report_id, viewer_id=access.user_id)
+            return build_pause_candidates(
+                conn, report_id, viewer_id=access.user_id, viewer_is_lead=lead
+            )
 
     def list(
         self,

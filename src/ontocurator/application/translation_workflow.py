@@ -219,6 +219,8 @@ class TranslationWorkflowService:
                 raise DomainError("DOCUMENT_NOT_FOUND")
             if variant.text_sha256 != expected_text_sha256:
                 raise DomainError("VARIANT_REVIEW_STALE")
+            # Before any language or qualification prompt (FD3, FD6).
+            self._require_not_discarded(conn, pid, variant)
             existing = assignments.active_for(
                 conn, pid, document_id, lead, "translation_review"
             )
@@ -237,6 +239,15 @@ class TranslationWorkflowService:
                 raise DomainError(
                     "LEAD_CORRECTION_NOT_AVAILABLE", {"reason": "review_open"}
                 )
+            if existing is not None:
+                # The earlier review is revoked below; a paused one keeps its
+                # hold until a lead resumes it (no orphaned hold).
+                assignments._locked(conn, existing.id)
+                from ontocurator.application.workflow_guards import (
+                    require_task_writable,
+                )
+
+                require_task_writable(conn, existing.id)
             qualification = conn.execute(
                 select(UserRow.qualification).where(UserRow.id == lead)
             ).scalar_one()
@@ -353,6 +364,20 @@ class TranslationWorkflowService:
             raise DomainError("LEAD_CORRECTION_NOT_AVAILABLE", {"reason": reason})
 
     @staticmethod
+    def _require_not_discarded(
+        conn: Connection, project_id: int, variant: VariantInfo
+    ) -> None:
+        """A discarded version takes no new work (``NOT_IN_WORK_PLAN``)."""
+        discarded = conn.execute(
+            select(DiscardedVariantRow.document_id).where(
+                DiscardedVariantRow.project_id == project_id,
+                DiscardedVariantRow.document_id == variant.document_id,
+            )
+        ).first()
+        if discarded is not None:
+            raise DomainError("NOT_IN_WORK_PLAN")
+
+    @staticmethod
     def _plan_review(
         conn: Connection, actor: Actor, project_id: int, variant: VariantInfo
     ) -> None:
@@ -362,14 +387,7 @@ class TranslationWorkflowService:
         """
         from ontocurator.application.work_plans import turn_review_on
 
-        discarded = conn.execute(
-            select(DiscardedVariantRow.document_id).where(
-                DiscardedVariantRow.project_id == project_id,
-                DiscardedVariantRow.document_id == variant.document_id,
-            )
-        ).first()
-        if discarded is not None:
-            raise DomainError("NOT_IN_WORK_PLAN")
+        TranslationWorkflowService._require_not_discarded(conn, project_id, variant)
         turn_review_on(
             conn, actor, project_id, RowKey(variant.case_id, variant.language)
         )

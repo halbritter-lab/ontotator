@@ -475,6 +475,9 @@ class AssignmentService:
         if task not in ADMINISTRATION_TASKS:
             raise DomainError("TASK_INVALID")
         existing = self.active_for(conn, project["id"], document_id, target, task)
+        if existing is not None and existing.lead_correction:
+            # The target's own lead correction (FD1) is not this ordinary task.
+            raise DomainError("ASSIGNMENT_EXISTS")
         if existing is not None:
             self._require_target(conn, project, target, task)
             return existing
@@ -515,6 +518,10 @@ class AssignmentService:
                 conn, project["id"], old["document_id"], target, task
             )
             if existing is not None and existing.id != assignment_id:
+                raise DomainError("ASSIGNMENT_EXISTS")
+            if old["lead_correction"] and target == old["user_id"]:
+                # FD9: a lead correction stays the lead's own; handing it to
+                # someone else makes it an ordinary review.
                 raise DomainError("ASSIGNMENT_EXISTS")
             eligibility = self.check_assignable(
                 conn,
@@ -572,6 +579,11 @@ class AssignmentService:
                 is not None
             ):
                 raise DomainError("NOT_IN_WORK_PLAN")
+            if old["lead_correction"]:
+                # A submitted correction made a newer version (FD3, FD4).
+                raise DomainError(
+                    "LEAD_CORRECTION_NOT_AVAILABLE", {"reason": "not_newest"}
+                )
             self._require_target(conn, project, target, cast(Task, old["task"]))
             now = self._now()
             conn.execute(

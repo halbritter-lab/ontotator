@@ -120,5 +120,18 @@ def test_blinding_rules_still_hold(team):
         text = json.dumps(payload)
         assert "Alice Lead" not in text and "Carol Clark" not in text
         assert CAROL not in text
-    # Carol (no report of her own) learns nothing; a third annotator sees no names.
+    # Carol (paused by the lead, not the reporter) cannot read the report and
+    # sees no names in her own project list.
     assert team.carol.get(f"/api/v1/problem-reports/{rid}").status_code == 404
+    listed = team.carol.get(f"/api/v1/projects/{team.key}/problem-reports")
+    assert listed.status_code == 200, listed.text
+    text = json.dumps(listed.json())
+    assert all(name not in text for name in NAMES.values())
+
+
+def test_pause_candidates_mark_the_leads_own_task(team):
+    rid = _scenario(team)
+    rows = team.lead.get(f"/api/v1/problem-reports/{rid}/pause-candidates").json()
+    owners = {r["assignment_id"]: r["owner"] for r in rows}
+    assert owners[team.lead_task.id] == _ref(LEAD, "Alice Lead", me=True)
+    assert owners[team.bob_task.id] == _ref(BOB, "Bob Berger")

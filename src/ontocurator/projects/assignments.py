@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Connection, select, update
+from sqlalchemy import ColumnElement, Connection, and_, or_, select, update
 
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.policy import Role
@@ -12,12 +12,24 @@ from ontocurator.storage.tables import AssignmentRow
 def unsupported_assignments(
     conn: Connection, project_id: int, user_id: int, removed_roles: frozenset[Role]
 ) -> list[dict[str, object]]:
-    """Lock active unsubmitted work whose task role is being removed."""
+    """Lock active unsubmitted work whose task role is being removed.
+
+    A lead correction (FD1, FD2) rests on the lead role alone.
+    """
     tasks = [
         task
         for task, role in [("annotate", "annotator"), ("review", "adjudicator")]
         if role in removed_roles
     ]
+    supported: ColumnElement[bool] = AssignmentRow.task.in_(tasks)
+    if "lead" in removed_roles:
+        supported = or_(
+            supported,
+            and_(
+                AssignmentRow.task == "translation_review",
+                AssignmentRow.lead_correction.is_(True),
+            ),
+        )
     rows = conn.execute(
         select(AssignmentRow.id, AssignmentRow.document_id, AssignmentRow.task)
         .where(
@@ -25,7 +37,7 @@ def unsupported_assignments(
             AssignmentRow.user_id == user_id,
             AssignmentRow.revoked_at.is_(None),
             AssignmentRow.status.in_(["open", "in_progress", "reopened"]),
-            AssignmentRow.task.in_(tasks),
+            supported,
         )
         .order_by(AssignmentRow.id)
         .with_for_update(key_share=True)

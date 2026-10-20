@@ -13,6 +13,7 @@ from work_plan_support import flags_of, revision_of, write
 from ontocurator.application.translation_workflow import TranslationWorkflowService
 from ontocurator.assignments.service import AssignmentService
 from ontocurator.auth.audit import Actor
+from ontocurator.authz.memberships import MembershipService
 from ontocurator.authz.policy import TASK_ROLES
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.work_plans import PlanFlags, RowKey
@@ -231,8 +232,9 @@ def test_refusals_stale_hash_and_discarded(rejected):
                 discarded_at=datetime(2026, 10, 20, tzinfo=UTC),
             )
         )
+    # Refused before the language prompt (no confirmation offered for it).
     with pytest.raises(DomainError, match="NOT_IN_WORK_PLAN"):
-        start(env)
+        start(env, confirm_language=False)
 
 
 def test_refusals_annotator_caller_is_refused(rejected):
@@ -435,3 +437,156 @@ def test_lead_who_rejected_as_annotator_gets_a_new_task(review_env):
     assert revoked is not None
     record = submit_as_lead(env, correction.id, "accepted_corrected", "Korrigiert")
     assert record.assignment_id == correction.id
+
+
+def _make_annotator(env: Any) -> None:
+    with env.db.transaction() as conn:
+        conn.execute(
+            insert(ProjectMembershipRow).values(
+                project_id=env.pid,
+                user_id=env.accesses["leader"].user_id,
+                role="annotator",
+            )
+        )
+
+
+@pytest.mark.parametrize("annotator", [False, True])
+def test_submitted_correction_cannot_be_reopened(rejected, annotator):
+    env = rejected
+    if annotator:
+        _make_annotator(env)
+    assignment = start(env)
+    submit_as_lead(env, assignment.id, "accepted_corrected", "Korrigiert")
+    with pytest.raises(DomainError) as caught:
+        AssignmentService(env.db).reopen(HARNESS, assignment.id)
+    assert caught.value.code == "LEAD_CORRECTION_NOT_AVAILABLE"
+    assert caught.value.details == {"reason": "not_newest"}
+
+
+def test_losing_the_lead_role_revokes_the_open_correction(rejected):
+    env = rejected
+    correction = start(env)
+    bob = env.accesses["bob"].user_id
+    with env.db.transaction() as conn:
+        conn.execute(
+            insert(ProjectMembershipRow).values(
+                project_id=env.pid, user_id=bob, role="lead"
+            )
+        )
+    members = MembershipService(env.db)
+    with pytest.raises(DomainError) as caught:
+        members.remove(HARNESS, "proj", "leader", ["lead"])
+    assert caught.value.code == "MEMBER_HAS_ASSIGNMENTS"
+    (affected,) = caught.value.details["assignments"]
+    assert affected["id"] == correction.id
+    members.remove(HARNESS, "proj", "leader", ["lead"], revoke_assignments=True)
+    with env.db.transaction() as conn:
+        revoked = conn.execute(
+            select(AssignmentRow.revoked_at).where(AssignmentRow.id == correction.id)
+        ).scalar_one()
+    assert revoked is not None
+    second = workflow(env).start_lead_correction(
+        Actor.user(bob, "bob"),
+        "proj",
+        "target",
+        expected_text_sha256=target_hash(env),
+        confirm_language=True,
+    )
+    assert second.lead_correction and second.user_id == bob
+
+
+def test_losing_another_role_keeps_the_correction(rejected):
+    env = rejected
+    _make_annotator(env)
+    correction = start(env)
+    MembershipService(env.db).remove(HARNESS, "proj", "leader", ["annotator"])
+    with env.db.transaction() as conn:
+        revoked = conn.execute(
+            select(AssignmentRow.revoked_at).where(AssignmentRow.id == correction.id)
+        ).scalar_one()
+    assert revoked is None
+
+
+def _rejected_by_lead_as_annotator(env: Any) -> int:
+    service = AssignmentService(env.db)
+    for name in ("alice", "bob"):
+        service.revoke(HARNESS, env.ids[name])
+    _make_annotator(env)
+    review = service.assign(
+        HARNESS, "proj", "target", "leader", "translation_review", confirm_language=True
+    )
+    submit_as_lead(
+        env,
+        review.id,
+        "rejected",
+        "Übersetzt",
+        clinical_change=True,
+        categories=["omission"],
+        rationale="Missing",
+    )
+    return review.id
+
+
+def test_paused_earlier_review_is_not_revoked(review_env):
+    env = review_env
+    review = _rejected_by_lead_as_annotator(env)
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == review)
+            .values(held=True, hold_reason="Wait")
+        )
+    with pytest.raises(DomainError) as caught:
+        start(env)
+    assert caught.value.code == "TASK_HELD"
+    with env.db.transaction() as conn:
+        revoked = conn.execute(
+            select(AssignmentRow.revoked_at).where(AssignmentRow.id == review)
+        ).scalar_one()
+    assert revoked is None
+    assert audits(env, "translation.lead_correction_started") == []
+
+
+@pytest.mark.parametrize("annotator", [False, True])
+def test_correction_is_not_reassigned_to_the_lead(rejected, annotator):
+    env = rejected
+    if annotator:
+        _make_annotator(env)
+    correction = start(env)
+    with pytest.raises(DomainError, match="ASSIGNMENT_EXISTS"):
+        AssignmentService(env.db).reassign(HARNESS, correction.id, "leader")
+
+
+def test_ordinary_assignment_does_not_return_the_correction(rejected):
+    env = rejected
+    _make_annotator(env)
+    start(env)
+    with pytest.raises(DomainError, match="ASSIGNMENT_EXISTS"):
+        AssignmentService(env.db).assign(
+            HARNESS,
+            "proj",
+            "target",
+            "leader",
+            "translation_review",
+            confirm_language=True,
+        )
+
+
+@pytest.mark.parametrize("annotator", [False, True])
+def test_problem_report_is_refused_on_a_correction(rejected, annotator):
+    env = rejected
+    if annotator:
+        _make_annotator(env)
+    correction = start(env)
+    client = logged_in(env.app, "leader")
+    response = client.post(
+        f"/api/v1/assignments/{correction.id}/problem-reports",
+        json={
+            "request_id": "report-correction",
+            "expected_workflow_revision": correction.workflow_revision,
+            "round_id": None,
+            "reason": "Source is wrong",
+        },
+    )
+    assert response.status_code == 403, response.text
+    assert response.json()["code"] == "NOT_ALLOWED"

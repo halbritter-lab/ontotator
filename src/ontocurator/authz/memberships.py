@@ -277,7 +277,7 @@ class MembershipService:
             # Only tasks whose actual required role is being removed need confirmation.
             affected = (
                 unsupported_assignments(conn, project_id, user.id, removed)
-                if removed & {"annotator", "adjudicator"}
+                if removed & {"annotator", "adjudicator", "lead"}
                 else []
             )
             if affected and not revoke_assignments:
