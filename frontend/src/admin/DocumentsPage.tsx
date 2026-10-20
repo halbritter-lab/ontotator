@@ -1,13 +1,15 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   api,
   type AssignmentView,
   type CaseSummary,
   type CurrentUser,
+  type DocumentGroupView,
   type DocumentRowView,
   type DocumentRowsPage,
   type DocumentRowsQuery,
   type Member,
+  type NextStepView,
   type ProjectDocumentSummary,
   type ProjectSettings,
   type RowSubmissions,
@@ -17,7 +19,7 @@ import {
 import { formatDateTime, labelFor, plural } from "../app/labels";
 import { routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
-import { Button, Checkbox, Dialog, EmptyState, InlineMessage, Select, StatusBadge, TextInput, Toolbar, useMediaQuery } from "../ui";
+import { Button, Dialog, EmptyState, InlineMessage, Select, StatusBadge, TextInput, Toast, Toolbar, useMediaQuery, useToast } from "../ui";
 import { DecisionBar } from "../documents/DecisionBar";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, initialExpandedGroups } from "../documents/DocumentsTable";
@@ -26,6 +28,9 @@ import {
   barChanges, failureOf, FinalConfirm, keepRequest, selectionPayload, selectRequest, successMessage,
   type FinalConfirmFailure, type FinalConfirmRequest,
 } from "../documents/FinalConfirm";
+import { STEP_FILTER_GROUPS, STEP_LABELS, stepLabel } from "../documents/nextStepLabels";
+import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
+import { ResolveTranslation } from "../documents/ResolveTranslation";
 import { acknowledgeableItems, type KeepRequest } from "../documents/SelectionNotice";
 import { documentsGroupId, documentsRowId, isPlainClick, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
 import type { TextVersionsTools } from "../documents/TextVersions";
@@ -35,7 +40,6 @@ import { useRowSubmissions } from "../documents/useRowSubmissions";
 import { clearVisits, recordDecision, rememberShown, retainedKeys, rowBadges, type RowBadge } from "../documents/visitState";
 import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
 import { AssignDialog } from "./AssignDialog";
-import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { UploadPanel } from "./UploadPanel";
 import { originLabels, reviewLanguages, translationStatusLabels } from "./variantMetadata";
@@ -60,11 +64,22 @@ export const STATUS_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["
 const TRANSLATION_STATUS_OPTIONS: readonly (readonly [string, string])[] = [
   ...Object.entries(translationStatusLabels), ["accepted_without_review", "Accepted without review"],
 ];
+export const PLAN_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["plan"]>, string])[] = [
+  ["review", "Review"], ["annotate", "Annotate"], ["review_and_annotate", "Review and annotate"], ["not_in_plan", "Not in plan"],
+];
+export const SORT_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["sort"]>, string])[] = [
+  ["case", "Case ID"], ["import", "Import batch"], ["activity", "Last activity"],
+];
 const DECISIONS = new Set(["all", "report-or-pause", "confirm-final", "translation", "missing-final"]);
-const DOCUMENT_FIELDS = ["language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final", "page"] as const;
+const SEGMENTS = new Set(["decision", "assign", "progress"]);
+const STAGES = new Set(["translation_review", "annotation", "final", "done"]);
+const DOCUMENT_FIELDS = [
+  "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
+  "segment", "step", "stage", "owner", "plan", "sort", "page",
+] as const;
 /** The ID filter applies this long after the last keystroke (or at once on Enter and blur). */
 export const ID_FILTER_DELAY_MS = 300;
-const SKELETON_HEADERS = ["Select", "Text · language", "Text version(s)", "Work", "Final result", "Issues", "Last activity"];
+const SKELETON_HEADERS = ["Text · language", "Plan", "Next step", "Owner", "Action", "Last activity"];
 
 /** The Documents fields of a route (the page receives the whole route as `query`). */
 function documentsQuery(query: ProjectDocumentsQuery): ProjectDocumentsQuery {
@@ -74,7 +89,10 @@ function documentsQuery(query: ProjectDocumentsQuery): ProjectDocumentsQuery {
   return result;
 }
 
-/** Server query for the rows endpoint; unknown values are dropped, `decision` wins over `final`. */
+/**
+ * Server query for the rows endpoint; unknown values are dropped. `segment` wins over `decision`;
+ * a decision filter wins over the legacy `final=missing`; `final=none` combines with anything.
+ */
 export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
   const result: DocumentRowsQuery = {};
   if (query.language) result.language = query.language;
@@ -82,8 +100,15 @@ export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
   if (query.q) result.q = query.q;
   if (query.origin && Object.hasOwn(originLabels, query.origin)) result.origin = query.origin as DocumentRowsQuery["origin"];
   if (TRANSLATION_STATUS_OPTIONS.some(([value]) => value === query.translation_status)) result.translation_status = query.translation_status as DocumentRowsQuery["translation_status"];
-  if (query.decision && DECISIONS.has(query.decision)) result.decision = query.decision as DocumentRowsQuery["decision"];
-  else if (query.final === "missing") result.final = "missing";
+  if (query.segment && SEGMENTS.has(query.segment)) result.segment = query.segment as DocumentRowsQuery["segment"];
+  else if (query.decision && DECISIONS.has(query.decision)) result.decision = query.decision as DocumentRowsQuery["decision"];
+  if (query.final === "none") result.final = "none";
+  else if (query.final === "missing" && result.decision === undefined) result.final = "missing";
+  if (query.step && Object.hasOwn(STEP_LABELS, query.step)) result.step = query.step as DocumentRowsQuery["step"];
+  if (query.stage && STAGES.has(query.stage)) result.stage = query.stage as DocumentRowsQuery["stage"];
+  if (query.owner) result.owner = query.owner;
+  if (PLAN_OPTIONS.some(([value]) => value === query.plan)) result.plan = query.plan as DocumentRowsQuery["plan"];
+  if (query.sort && query.sort !== "case" && SORT_OPTIONS.some(([value]) => value === query.sort)) result.sort = query.sort as DocumentRowsQuery["sort"];
   if (query.case) result.case = query.case;
   const page = Number(query.page);
   if (Number.isInteger(page) && page > 1) result.page = page;
@@ -93,20 +118,14 @@ export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
 const caseOfKey = (key: string): string => key.slice(0, Math.max(0, key.lastIndexOf(":")));
 const languageOfKey = (key: string): string => key.slice(key.lastIndexOf(":") + 1);
 const nameOfKey = (key: string): string => `${caseOfKey(key)} · ${languageOfKey(key)}`;
-const rowElement = (key: string, part: "disclosure" | "final-view"): HTMLElement | null =>
+const rowElement = (key: string, part: "disclosure" | "final-view" | "action"): HTMLElement | null =>
   document.getElementById(documentsRowId(caseOfKey(key), languageOfKey(key), part));
 
-/** Document IDs a bulk selection may hold on this page: bulk rows and every version of "Choose in Text versions" rows. */
-function selectableIds(rows: readonly DocumentRowView[]): Set<string> {
-  const result = new Set<string>();
-  for (const row of rows) {
-    if (row.bulk.document_id != null) result.add(row.bulk.document_id);
-    if (row.bulk.mode === "choose_in_versions") for (const version of row.versions) result.add(version.document_id);
-  }
-  return result;
-}
-
-const removedSelections = (count: number): string => `${plural(count, "selection")} removed because the text changed.`;
+/** A row action that needs the row's submissions; it runs once they are loaded (Choose final…, Review changes…). */
+export interface AutoAction { rowKey: string; kind: "choose_final" | "review_changes"; triggerId: string }
+/** Resolve options under a row: rule 4 "Resolve…" or rule 4a "Assign review or accept…". */
+interface RowPanel { rowKey: string; mode: "resolve" | "not_accepted" }
+export type AssignTask = "translation_review" | "annotate" | "review";
 
 /** Previous / Next; at either end an `aria-disabled` link that stays focusable (focus survives the page change). */
 function PagingLink({ route, onNavigate, children }: { route: Route | null; onNavigate: (route: Route) => void; children: ReactNode }): JSX.Element {
@@ -131,6 +150,12 @@ type FocusTarget = { kind: "selected" | "kept" | "row"; rowKey: string } | { kin
 /** The row's acknowledgeable cause ids as a comparable set. */
 const causeSet = (row: DocumentRowView): string => acknowledgeableItems(row).map(item => item.cause_id).sort().join("\n");
 
+/** The report of a paused task without an open report (rule 2): the step's report or the row's pause cause. */
+function pausedReportId(row: DocumentRowView, step: NextStepView): string | null {
+  if (step.report_id) return step.report_id;
+  return [...row.issues, ...row.notes].find(item => item.code === "TASK_PAUSED_WITHOUT_REPORT" && item.report_id)?.report_id ?? null;
+}
+
 export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
   if (!props.canManage) {
     return <section className="documents-page">
@@ -145,15 +170,14 @@ export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
 }
 
 function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTranslationStatus = false, currentUser }: DocumentsPageProps): JSX.Element {
-  const ids = useId();
   const narrow = useMediaQuery(NARROW_DOCUMENTS_QUERY);
   const query = documentsQuery(route);
   const request = rowsQuery(query);
   const requestIdentity = JSON.stringify(request);
   const filterIdentity = JSON.stringify({ ...request, page: undefined, case: undefined });
-  // Visit state (Resolved / Changed badges) exists only under a decision filter; it is keyed by
-  // the filters without page and case, so paging keeps the badges and a filter change starts a new visit.
-  const decisionActive = request.decision !== undefined || request.final === "missing";
+  // Visit state (Resolved / Changed badges) exists only under a decision or segment filter; it is keyed
+  // by the filters without page and case, so paging keeps the badges and a filter change starts a new visit.
+  const decisionActive = request.decision !== undefined || request.final === "missing" || request.segment !== undefined;
   const [retainState, setRetainState] = useState<{ identity: string; keys: readonly string[] } | null>(null);
   const retain = !decisionActive ? []
     : retainState?.identity === filterIdentity ? retainState.keys : retainedKeys(projectKey, filterIdentity);
@@ -266,6 +290,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     }
     onNavigate(documentsRoute({ open: [...next] }), { replace: true });
   };
+  const expandRow = (key: string) => { if (!openKeys.has(key)) toggleRow(key); };
 
   // Visit state: a filter change clears the other visits of the project.
   useEffect(() => { clearVisits(projectKey, filterIdentity); }, [projectKey, filterIdentity]);
@@ -308,56 +333,32 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     if (next.has(caseId)) next.delete(caseId); else next.add(caseId);
     setGroupState({ identity: requestIdentity, groups: next });
   };
+  // Not-in-plan rows always start in the collapsed "not in plan · show" line.
+  const [notInPlanState, setNotInPlanState] = useState<{ identity: string; cases: ReadonlySet<string> } | null>(null);
+  const shownNotInPlan: ReadonlySet<string> = notInPlanState?.identity === requestIdentity ? notInPlanState.cases : new Set();
+  const toggleNotInPlan = (caseId: string) => {
+    const next = new Set(shownNotInPlan);
+    if (next.has(caseId)) next.delete(caseId); else next.add(caseId);
+    setNotInPlanState({ identity: requestIdentity, cases: next });
+  };
 
-  // Bulk selection of exact document IDs; a filter, category or page change starts over.
   const pageRows = useMemo(() => page?.groups.flatMap(group => group.rows) ?? [], [page]);
-  const [selection, setSelection] = useState<{ identity: string; ids: ReadonlySet<string> } | null>(null);
-  const preselected = useMemo(() => {
-    const target = query.select;
-    return new Set(target && pageRows.some(row => row.versions.some(version => version.document_id === target)) ? [target] : []);
-  }, [query.select, pageRows]);
-  const selected: ReadonlySet<string> = selection?.identity === requestIdentity ? selection.ids : preselected;
-  const setSelected = (ids: ReadonlySet<string>) => setSelection({ identity: requestIdentity, ids });
-  const toggleSelect = (documentId: string, checked: boolean) => {
-    const next = new Set(selected);
-    if (checked) next.add(documentId); else next.delete(documentId);
-    setSelected(next);
-  };
-  // A refetch of the same request drops selected IDs the page no longer offers (the text changed).
-  useEffect(() => {
-    if (!page || selection?.identity !== requestIdentity) return;
-    const valid = selectableIds(pageRows);
-    const kept = [...selection.ids].filter(id => valid.has(id));
-    if (kept.length === selection.ids.size) return;
-    setSelected(new Set(kept));
-    announce(removedSelections(selection.ids.size - kept.length));
-    // Only a new page can make a selected ID stale.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
-  const selectable = pageRows.filter(row => row.bulk.mode === "checkbox" && row.bulk.document_id != null);
-  const skipped = pageRows.length - selectable.length;
-  const allSelected = selectable.length > 0 && selectable.every(row => selected.has(row.bulk.document_id!));
-  const selectAll = (checked: boolean) => {
-    if (!checked) { setSelected(new Set()); announce("Selection cleared."); return; }
-    setSelected(new Set([...selected, ...selectable.map(row => row.bulk.document_id!)]));
-    announce(`Selected ${plural(selectable.length, "row")}.${skipped ? ` ${plural(skipped, "row")} ${skipped === 1 ? "needs" : "need"} a choice in Text versions.` : ""}`);
-  };
+  const groupOf = (caseId: string): DocumentGroupView | undefined => page?.groups.find(group => group.case_id === caseId);
 
-  // Assignment dialogs work on the selected versions; a later filter change invalidates them.
-  const [dialog, setDialog] = useState<{ kind: "manual" | "distribution"; documents: ProjectDocumentSummary[]; identity: string } | null>(null);
+  // The row's assign dialog (task preselection comes with the work assign dialog of L3b).
+  const [dialog, setDialog] = useState<{ documents: ProjectDocumentSummary[]; identity: string } | null>(null);
   const currentIdentity = useRef(requestIdentity);
   currentIdentity.current = requestIdentity;
   const visibleDialog = dialog?.identity === requestIdentity ? dialog : null;
-  const assignReasonId = `${ids}-assign-reason`;
-  const assignReason = !selected.size ? "Select text versions first." : !inventory ? "Loading assignment data…" : null;
-  // The dialog gets every selected ID: an ID missing from the inventory (a version created since it
-  // loaded) refetches the documents first; IDs that still do not exist leave the selection.
-  const openDialog = async (kind: "manual" | "distribution") => {
-    if (assignReason || !inventory) { if (assignReason) announce(assignReason); return; }
+  const refreshAll = () => { rows.reload(); setRevision(value => value + 1); };
+  const changedFor = (identity: string) => { if (currentIdentity.current === identity) refreshAll(); };
+  /** Assign dialog for one row; `options.newReviewOfAccepted` marks a new review of an accepted translation (D25). */
+  const onAssign = async (row: DocumentRowView, _task: AssignTask, _options?: { newReviewOfAccepted?: boolean }) => {
+    if (!inventory) { announce("Loading assignment data…"); return; }
     const identity = requestIdentity;
-    const wanted = new Set(selected);
+    const documentId = row.next_step?.document_id ?? row.open.document_id;
     let documents = inventory.documents;
-    if ([...wanted].some(id => !documents.some(document => document.document_id === id))) {
+    if (!documents.some(document => document.document_id === documentId)) {
       try {
         documents = await api.listProjectDocuments(projectKey);
       } catch (failure) {
@@ -367,16 +368,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       setInventory(current => (current ? { ...current, documents } : current));
       if (currentIdentity.current !== identity) return;
     }
-    const chosen = documents.filter(document => wanted.has(document.document_id));
-    if (chosen.length < wanted.size) {
-      setSelection({ identity, ids: new Set(chosen.map(document => document.document_id)) });
-      announce(removedSelections(wanted.size - chosen.length));
-      if (!chosen.length) return;
-    }
-    setDialog({ kind, documents: chosen, identity });
+    const chosen = documents.filter(document => document.document_id === documentId);
+    if (!chosen.length) { announce(`${rowName(row)} changed. Refresh and try again.`); return; }
+    setDialog({ documents: chosen, identity });
   };
-  const refreshAll = () => { rows.reload(); setRevision(value => value + 1); };
-  const changedFor = (identity: string) => { if (currentIdentity.current === identity) refreshAll(); };
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [reviewDocument, setReviewDocument] = useState<string | null>(null);
@@ -392,12 +387,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       requiredLanguages: documentId => reviewLanguages(documentId, variants),
       onAssignmentsChanged: refreshAll,
       onShowTranslationReviews: setReviewDocument,
-      bulkSelected: selected,
-      onToggleBulk: documentId => toggleSelect(documentId, !selected.has(documentId)),
     };
-    // The callbacks close over the current selection; rebuild with it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inventory, currentUser?.username, selected, rows.reload, requestIdentity]);
+  }, [inventory, currentUser?.username, rows.reload]);
 
   // Deep link: focus the named row header (or the group header) once its data is shown.
   const focusedDeepLink = useRef<string | null>(null);
@@ -422,8 +414,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const rowNotice = (row: DocumentRowView): string | null => {
     const named = row.pinned || rowKeyOf(row) === deepKey;
     if (!named) return null;
-    if (request.decision && !row.matches_decision) return "This no longer needs your decision.";
-    if (!request.decision && rowKeyOf(row) === deepKey && !row.final && !row.missing_final.counts) {
+    if ((request.decision || request.segment === "decision") && !row.matches_decision) return "This no longer needs your decision.";
+    if (request.segment && !row.matches_decision) return "This no longer matches the filter.";
+    if (!request.decision && !request.segment && rowKeyOf(row) === deepKey && row.plan_row?.annotate !== false && !row.final && !row.missing_final.counts) {
       return `No final result. Not counted as a decision yet: ${row.missing_final.reason === "work_open" ? `work still open: ${workText(row.work)}` : "no submission"}.`;
     }
     return null;
@@ -439,6 +432,13 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   /** Container of the open confirmation ("is focus inside the confirmation?"). */
   const confirmBox = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  /** Next row under a decision or segment filter ("Next decision:" / "Next:"). */
+  const nextLabel = request.segment ? "Next" : "Next decision";
+  const nextRowAfter = (rowKey: string): DocumentRowView | undefined => {
+    if (request.segment) return pageRows.find(row => rowKeyOf(row) !== rowKey && row.in_plan && row.matches_decision && !row.retained);
+    if (request.decision) return pageRows.find(row => rowKeyOf(row) !== rowKey && row.matches_decision && row.categories.length > 0);
+    return undefined;
+  };
 
   const restoreFocus = (request: FinalConfirmRequest) => (document.getElementById(request.triggerId) ?? rowElement(request.rowKey, "disclosure"))?.focus();
   const openConfirm = (request: FinalConfirmRequest, row: DocumentRowView) => {
@@ -487,8 +487,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       pendingSuccess.current = null;
       const saved = pending.request;
       const text = [successMessage(saved), barChanges(pending.before.bar, page.bar)].filter(Boolean).join(" ");
-      const next = request.decision ? pageRows.find(row => rowKeyOf(row) !== saved.rowKey && row.matches_decision && row.categories.length > 0) : undefined;
-      announce(next ? `${text} Next decision: ${rowName(next)}.` : text);
+      const next = nextRowAfter(saved.rowKey);
+      announce(next ? `${text} ${nextLabel}: ${rowName(next)}.` : text);
       setSuccess({ text, next: next ? rowKeyOf(next) : null });
       setFocusTarget({ kind: saved.kind === "keep" ? "kept" : "selected", rowKey: saved.rowKey });
     }
@@ -543,6 +543,47 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     setFocusTarget({ kind: "row", rowKey: key });
   };
 
+  // Plan chips: one shared queue and toast; a save refetches the rows (the next step updates in place).
+  const { toast, show: showToast, dismiss: dismissToast } = useToast();
+  const latestReload = useRef(rows.reload);
+  latestReload.current = rows.reload;
+  const planSaves = usePlanSaves({ projectKey, onAnnounce: announce, onChanged: () => latestReload.current(), showToast });
+
+  // Row actions.
+  const [autoAction, setAutoAction] = useState<AutoAction | null>(null);
+  const [rowPanel, setRowPanel] = useState<RowPanel | null>(null);
+  const reportRoute = (reportId: string, extra: { section?: "decide"; action?: "resume" }): Route => ({
+    name: "projectProblemReport", key: projectKey, reportId, ...extra, ...(Object.keys(viewQuery).length ? { documents: viewQuery } : {}),
+  });
+  const onAction = (row: DocumentRowView, step: NextStepView) => {
+    const key = rowKeyOf(row);
+    const triggerId = documentsRowId(row.case_id, row.language, "action");
+    switch (step.action) {
+      case "assign_translation_review": void onAssign(row, "translation_review"); return;
+      case "assign_annotation": void onAssign(row, "annotate"); return;
+      case "choose_final":
+      case "review_changes":
+        setAutoAction({ rowKey: key, kind: step.action, triggerId });
+        expandRow(key);
+        return;
+      case "decide_report":
+        if (step.report_id) onNavigate(reportRoute(step.report_id, { section: "decide" })); else expandRow(key);
+        return;
+      case "resume_task": {
+        const reportId = pausedReportId(row, step);
+        if (reportId) onNavigate(reportRoute(reportId, { action: "resume" })); else expandRow(key);
+        return;
+      }
+      case "resolve": setRowPanel({ rowKey: key, mode: "resolve" }); return;
+      case "accept_or_review": setRowPanel({ rowKey: key, mode: "not_accepted" }); return;
+      default: return;
+    }
+  };
+  const closePanel = (key: string, focus: "action" | "disclosure") => {
+    setRowPanel(null);
+    window.setTimeout(() => (rowElement(key, focus) ?? rowElement(key, "disclosure"))?.focus(), 0);
+  };
+
   const confirmElement = (state: ConfirmState) => <FinalConfirm key={state.request.triggerId} ref={confirmBox} request={state.request} busy={state.busy}
     failure={state.failure} onConfirm={submitConfirm} onCancel={cancelConfirm} onReview={reviewAgain} />;
 
@@ -556,7 +597,32 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         onOpenConfirm={request => openConfirm(request, row)}
         renderConfirm={submission => (own && own.request.kind !== "keep" && own.request.submissionId === submission.submission_id ? confirmElement(own) : null)}
         keepConfirm={own?.request.kind === "keep" ? confirmElement(own) : undefined}
-        confirmBusy={confirm?.busy ?? false} layout={options?.layout} />
+        confirmBusy={confirm?.busy ?? false} layout={options?.layout}
+        autoAction={autoAction?.rowKey === rowKeyOf(row) ? autoAction : null} onAutoActionDone={() => setAutoAction(null)} />
+    </>;
+  };
+
+  const renderPlan = (row: DocumentRowView, group: DocumentGroupView) =>
+    <PlanChips row={row} groupRevision={group.plan_revision} saves={planSaves} size={narrow ? "card" : "table"} />;
+
+  const renderRowNotice = (row: DocumentRowView): ReactNode | null => {
+    const key = rowKeyOf(row);
+    const panel = rowPanel?.rowKey === key ? rowPanel : null;
+    if (!panel && !planSaves.noticeOf(row)) return null;
+    const groupRevision = groupOf(row.case_id)?.plan_revision ?? 1;
+    return <>
+      <PlanRowNotice row={row} saves={planSaves} />
+      {panel && <ResolveTranslation key={panel.mode} mode={panel.mode} row={row} projectKey={projectKey}
+        revision={planSaves.revisionOf(row.case_id, groupRevision)}
+        onAssignReview={() => { setRowPanel(null); void onAssign(row, "translation_review"); }}
+        onCorrect={() => onNavigate({ name: "projectCase", key: projectKey, caseId: row.case_id, variant: row.next_step?.document_id ?? row.open.document_id, ...(Object.keys(viewQuery).length ? { documents: viewQuery } : {}) })}
+        onDone={(message, saved) => {
+          planSaves.noteRevision(saved.caseId, saved.revision);
+          announce(message);
+          rows.reload();
+          closePanel(key, "disclosure");
+        }}
+        onCancel={() => closePanel(key, "action")} />}
     </>;
   };
 
@@ -569,8 +635,24 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const status = STATUS_OPTIONS.some(([value]) => value === query.status) ? query.status! : "";
   const origin = query.origin && Object.hasOwn(originLabels, query.origin) ? query.origin : "";
   const translationStatus = TRANSLATION_STATUS_OPTIONS.some(([value]) => value === query.translation_status) ? query.translation_status! : "";
+  const step = request.step ?? "";
+  const plan = request.plan ?? "";
+  const finalFilter = query.final === "none" ? "none" : "";
+  const sort = request.sort ?? "case";
+  const moreActive = status !== "" || origin !== "" || translationStatus !== "" || finalFilter !== "" || sort !== "case";
   const showAll: Route = { name: "projectDocuments", key: projectKey };
   const navigateLink = (target: Route) => onNavigate(target);
+  const hasFilters = Object.keys(request).some(name => name !== "page" && name !== "sort");
+
+  const emptyState = (): JSX.Element => {
+    const showAllLink = <RouteLink route={showAll} onNavigate={navigateLink}>Show all texts</RouteLink>;
+    if (request.segment === "assign") return <EmptyState title="Nothing to assign" action={showAllLink} />;
+    if (request.segment === "progress") return <EmptyState title="Nothing in progress" action={showAllLink} />;
+    if (request.segment === "decision" || request.decision) return <EmptyState title="Nothing needs your decision" action={showAllLink} />;
+    if (request.plan === "not_in_plan") return <EmptyState title="Every language version is in the plan." action={showAllLink} />;
+    if (!hasFilters) return <EmptyState title="No texts yet">Upload texts to start.</EmptyState>;
+    return <EmptyState title="No documents" action={showAllLink}>Try another filter.</EmptyState>;
+  };
 
   let content: JSX.Element;
   if (!page && rows.error != null) {
@@ -581,22 +663,23 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     let body: JSX.Element;
     if (query.case && !page.case_found) {
       body = <EmptyState title={`Text ${query.case} not found`} action={<RouteLink route={showAll} onNavigate={navigateLink}>Show all texts</RouteLink>} />;
-    } else if (page.groups.length === 0 && request.decision) {
-      body = <EmptyState title="Nothing needs your decision" action={<RouteLink route={showAll} onNavigate={navigateLink}>Show all texts</RouteLink>} />;
     } else if (page.groups.length === 0) {
-      body = <EmptyState title="No documents">Try another filter or upload documents to this project.</EmptyState>;
+      body = emptyState();
     } else if (narrow) {
-      body = <DocumentCards page={page} projectKey={projectKey} query={viewQuery} onToggleRow={toggleRow} selected={selected}
-        onToggleSelect={toggleSelect} renderExpanded={renderExpanded} rowBadge={rowBadge} onNavigate={navigateLink} busy={rows.loading} />;
+      body = <DocumentCards page={page} projectKey={projectKey} query={viewQuery} onToggleRow={toggleRow} shownNotInPlan={shownNotInPlan} onToggleNotInPlan={toggleNotInPlan}
+        renderPlan={renderPlan} renderRowNotice={renderRowNotice} renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} />;
     } else {
       body = <DocumentsTable page={page} projectKey={projectKey} query={viewQuery} expandedGroups={expandedGroups} onToggleGroup={toggleGroup}
-        onToggleRow={toggleRow} selected={selected} onToggleSelect={toggleSelect} renderExpanded={renderExpanded} rowBadge={rowBadge} onNavigate={navigateLink} busy={rows.loading} />;
+        onToggleRow={toggleRow} shownNotInPlan={shownNotInPlan} onToggleNotInPlan={toggleNotInPlan} renderPlan={renderPlan} renderRowNotice={renderRowNotice}
+        renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} />;
     }
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh · <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
-      <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} />
+      <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll}
+        exportFinals={page.groups.some(group => group.final_count > 0)} />
       {body}
+      <Toast toast={toast} onDismiss={dismissToast} />
       {page.page_count > 1 && <nav className="documents-paging" aria-label="Pages" aria-busy={rows.stale || undefined}>
         <PagingLink route={page.page > 1 ? documentsRoute({ page: page.page - 1 > 1 ? String(page.page - 1) : undefined }) : null} onNavigate={navigateLink}>Previous</PagingLink>
         <span>Page {page.page} of {page.page_count}</span>
@@ -606,37 +689,45 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   }
 
   return <section className="documents-page">
-    <h1 ref={headingRef} tabIndex={-1}>Documents</h1>
+    <div className="documents-heading">
+      <h1 ref={headingRef} tabIndex={-1}>Documents</h1>
+      <Button variant="quiet" aria-disabled={settings ? undefined : true} onClick={() => { if (settings) setUploadOpen(true); }}>Upload texts…</Button>
+    </div>
     <Toolbar label="Document filters" className="filter-bar documents-filters">
       <Select id="documents-language" label="Language" value={query.language ?? ""} onChange={event => changeFilter({ language: event.target.value || undefined })}>
         <option value="">All languages</option>{languages.map(value => <option key={value} value={value}>{value}</option>)}
       </Select>
-      <Select id="documents-status" label="Status" value={status} onChange={event => changeFilter({ status: event.target.value || undefined })}>
-        <option value="">All statuses</option>{STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      <Select id="documents-step" label="Next step" value={step} onChange={event => changeFilter({ step: event.target.value || undefined })}>
+        <option value="">Any next step</option>
+        {STEP_FILTER_GROUPS.map(([group, codes]) => <optgroup key={group} label={group}>
+          {codes.map(code => <option key={code} value={code}>{stepLabel(code)}</option>)}
+        </optgroup>)}
       </Select>
-      <TextInput id="documents-prefix" label="ID" value={idText} onChange={event => typeId(event.target.value)} onBlur={() => applyId(idText)}
+      <Select id="documents-plan" label="Plan" value={plan} onChange={event => changeFilter({ plan: event.target.value || undefined })}>
+        <option value="">Any plan</option>{PLAN_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </Select>
+      <TextInput id="documents-prefix" label="Case ID" value={idText} onChange={event => typeId(event.target.value)} onBlur={() => applyId(idText)}
         onKeyDown={event => { if (event.key === "Enter") applyId(idText); }} />
-      <details className="documents-more-filters" open={origin !== "" || translationStatus !== "" ? true : undefined}>
+      <details className="documents-more-filters" open={moreActive ? true : undefined}>
         <summary>More filters</summary>
         <div className="documents-more-filters-body">
+          <Select id="documents-final" label="Final result" value={finalFilter} onChange={event => changeFilter({ final: event.target.value || undefined })}>
+            <option value="">Any</option><option value="none">None</option>
+          </Select>
           <Select id="documents-origin" label="Origin" value={origin} onChange={event => changeFilter({ origin: event.target.value || undefined })}>
             <option value="">All origins</option>{Object.entries(originLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
           <Select id="documents-translation-status" label="Translation status" value={translationStatus} onChange={event => changeFilter({ translation_status: event.target.value || undefined })}>
             <option value="">All translation statuses</option>{TRANSLATION_STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
+          <Select id="documents-status" label="Status" value={status} onChange={event => changeFilter({ status: event.target.value || undefined })}>
+            <option value="">All statuses</option>{STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
+          <Select id="documents-sort" label="Sort" value={sort} onChange={event => changeFilter({ sort: event.target.value === "case" ? undefined : event.target.value })}>
+            {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
         </div>
       </details>
-    </Toolbar>
-    <Toolbar label="Document actions" className="documents-actions">
-      <Checkbox id={`${ids}-select-all`} label="Select all" checked={allSelected} aria-disabled={selectable.length === 0 ? true : undefined}
-        onChange={event => { if (selectable.length) selectAll(event.target.checked); }} />
-      <span className="documents-selected-count">{selected.size} selected</span>
-      <Button aria-disabled={settings ? undefined : true} onClick={() => { if (settings) setUploadOpen(true); }}>Upload documents</Button>
-      <Button onClick={refreshAll}>Refresh</Button>
-      <Button aria-disabled={assignReason ? true : undefined} aria-describedby={assignReason ? assignReasonId : undefined} onClick={() => openDialog("manual")}>Assign …</Button>
-      <Button aria-disabled={assignReason ? true : undefined} aria-describedby={assignReason ? assignReasonId : undefined} onClick={() => openDialog("distribution")}>Propose distribution …</Button>
-      {assignReason && <span id={assignReasonId} className="documents-action-reason">{assignReason}</span>}
     </Toolbar>
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}
     {inventoryError !== undefined && <ErrorNotice error={inventoryError} />}
@@ -646,17 +737,17 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         {success.next && <> <a href={routeHref(nextDecisionRoute(success.next))} onClick={event => {
           if (!isPlainClick(event)) return;
           event.preventDefault(); goToRow(success.next!);
-        }}>Next decision: {nameOfKey(success.next)}</a></>}
+        }}>{nextLabel}: {nameOfKey(success.next)}</a></>}
       </div>
     </div>}
     {content}
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
-    <Dialog open={uploadOpen} title="Upload documents" size="lg" onClose={() => setUploadOpen(false)}>
-      {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus} onImported={refreshAll} />}
+    <Dialog open={uploadOpen} title="Upload texts" size="lg" onClose={() => setUploadOpen(false)}>
+      {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus}
+        annotateAcceptedOnly={settings.annotate_accepted_translations_only ?? true} onImported={refreshAll} />}
     </Dialog>
     {reviewDocument !== null && <ReviewHistory key={reviewDocument} projectKey={projectKey} documentId={reviewDocument} onClose={() => setReviewDocument(null)} />}
-    {visibleDialog?.kind === "manual" && <AssignDialog projectKey={projectKey} cases={inventory?.cases ?? null} documents={visibleDialog.documents} onClose={() => setDialog(null)} onChanged={() => changedFor(visibleDialog.identity)} />}
-    {visibleDialog?.kind === "distribution" && <DistributionDialog projectKey={projectKey} cases={inventory?.cases ?? null} documents={visibleDialog.documents} onClose={() => setDialog(null)} onChanged={() => changedFor(visibleDialog.identity)} />}
+    {visibleDialog && <AssignDialog projectKey={projectKey} cases={inventory?.cases ?? null} documents={visibleDialog.documents} onClose={() => setDialog(null)} onChanged={() => changedFor(visibleDialog.identity)} />}
   </section>;
 }
 
@@ -688,10 +779,13 @@ interface ExpandedRowLoaderProps {
   renderConfirm: ExpandedRowProps["renderConfirm"];
   keepConfirm?: ExpandedRowProps["keepConfirm"];
   confirmBusy: boolean;
+  /** A row action to run once the submissions are loaded. */
+  autoAction: AutoAction | null;
+  onAutoActionDone: () => void;
 }
 
 /** Loads the submissions of an open row and reloads them whenever the rows refresh. */
-function ExpandedRowLoader({ row, refresh, projectKey, onOpenConfirm, ...props }: ExpandedRowLoaderProps): JSX.Element {
+function ExpandedRowLoader({ row, refresh, projectKey, onOpenConfirm, autoAction, onAutoActionDone, ...props }: ExpandedRowLoaderProps): JSX.Element {
   const submissions = useRowSubmissions(projectKey, row.case_id, row.language, true);
   const mounted = useRef(false);
   const { reload } = submissions;
@@ -702,6 +796,22 @@ function ExpandedRowLoader({ row, refresh, projectKey, onOpenConfirm, ...props }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh]);
   const data: RowSubmissions | null = submissions.data;
+  // "Choose final…": one eligible submission opens its "Use as final"; several focus Submissions.
+  // "Review changes…": the Keep confirmation for every acknowledgeable cause.
+  useEffect(() => {
+    if (!autoAction || !data || submissions.loading) return;
+    onAutoActionDone();
+    if (autoAction.kind === "review_changes") {
+      const causes = acknowledgeableItems(row).map(item => item.cause_id);
+      if (row.final && causes.length) { onOpenConfirm(keepRequest(row, data, causes, autoAction.triggerId)); return; }
+    } else {
+      const eligible = data.submissions.filter(item => item.submission_id !== row.final?.submission_id && item.is_latest_in_round !== false
+        && !(props.adjudicatorNotAnnotator && item.is_me));
+      if (eligible.length === 1) { onOpenConfirm(selectRequest(row, data, eligible[0], autoAction.triggerId)); return; }
+    }
+    document.getElementById(submissionsHeadingId(row.case_id, row.language))?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoAction, data, submissions.loading]);
   const onSelectFinal = (request: SelectFinalRequest) => onOpenConfirm(selectRequest(row, data, request.submission, request.triggerId));
   const onKeep = (request: KeepRequest) =>
     onOpenConfirm(keepRequest(row, data, request.causeIds, request.triggerId));

@@ -13,6 +13,7 @@ import type {
   DocumentRowsPage,
   DocumentVersionView,
   FinalSelectionSummary,
+  NextStepView,
   OpenTranslationReviewView,
   RowItemView,
   RowRoundView,
@@ -453,4 +454,74 @@ export function scenarioS6(): DocumentsScenario {
       rounds: [round({ round_id: "round-0390-1", assignment_id: 90, document_id: document.document_id, chain_name: "DeepL", author_label: "ann-0005", state: "open", submitted: false })],
     }),
   });
+}
+
+// ---- Lead workflow (L3): next steps and plan rows ----
+
+/** A next step; defaults to "Assign translation review" owned by the viewing lead. */
+export function step(overrides: Partial<NextStepView> = {}): NextStepView {
+  return {
+    code: "assign_translation_review",
+    kind: "assign",
+    stage: "translation_review",
+    action: null,
+    badges: [],
+    assigned: null,
+    target: null,
+    owner: { kind: "you", person: null, count: 0 },
+    detail: null,
+    report_id: null,
+    assignment_id: null,
+    document_id: null,
+    ...overrides,
+  };
+}
+
+/** Default action of a step code (rule table of the spec). */
+const STEP_ACTIONS: Partial<Record<NextStepView["code"], NonNullable<NextStepView["action"]>>> = {
+  decide_report: "decide_report",
+  resume_task: "resume_task",
+  confirm_final: "review_changes",
+  resolve_rejected: "resolve",
+  resolve_queried: "resolve",
+  translation_not_accepted: "accept_or_review",
+  choose_final: "choose_final",
+  assign_translation_review: "assign_translation_review",
+  assign_annotation: "assign_annotation",
+};
+const STEP_KINDS: Record<NextStepView["code"], NextStepView["kind"]> = {
+  decide_report: "decision", resume_task: "decision", confirm_final: "decision", resolve_rejected: "decision", resolve_queried: "decision",
+  translation_not_accepted: "decision", choose_final: "decision", needs_attention: "decision",
+  assign_translation_review: "assign", assign_annotation: "assign",
+  translation_review_in_progress: "in_progress", annotation_in_progress: "in_progress", annotation_review_in_progress: "in_progress", waiting_for_translation_review: "in_progress",
+  done: "done", translation_accepted: "done",
+};
+
+/** A step of `code` with its kind, action and a "You" owner for lead-owned kinds. */
+export function stepOf(code: NextStepView["code"], overrides: Partial<NextStepView> = {}): NextStepView {
+  const kind = STEP_KINDS[code];
+  const owner: NextStepView["owner"] = kind === "decision" || kind === "assign" ? { kind: "you", person: null, count: 0 } : { kind: "none", person: null, count: 0 };
+  return step({ code, kind, action: STEP_ACTIONS[code] ?? null, badges: kind === "decision" ? ["your_decision"] : [], owner, ...overrides });
+}
+
+/** A translation row in the plan with the given next step (Review and Annotate on by default). */
+export function planRow(caseId: string, language: string, next: NextStepView | null, overrides: Partial<DocumentRowView> = {}): DocumentRowView {
+  const isSource = overrides.is_source ?? false;
+  return row({
+    case_id: caseId,
+    language,
+    is_source: isSource,
+    versions: [version({ document_id: `${caseId}-${language}`, chain_name: isSource ? "Source" : "DeepL", origin: isSource ? "native" : "machine_translation", translation_status: isSource ? null : "ready_for_review" })],
+    next_step: next,
+    steps: next ? [next] : [],
+    plan_row: { review: !isSource, annotate: true, review_applicable: !isSource, discarded: false },
+    in_plan: next !== null,
+    ...overrides,
+  });
+}
+
+/** A row that is not in the plan (both flags off). */
+export function notInPlanRow(caseId: string, language: string, overrides: Partial<DocumentRowView> = {}): DocumentRowView {
+  const isSource = overrides.is_source ?? false;
+  return planRow(caseId, language, null, { plan_row: { review: false, annotate: false, review_applicable: !isSource, discarded: false }, in_plan: false, ...overrides });
 }

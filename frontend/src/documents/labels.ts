@@ -58,7 +58,7 @@ export type DecisionCategory = "report-or-pause" | "confirm-final" | "translatio
 export const decisionCategoryLabels: Readonly<Record<DecisionCategory, string>> = {
   "report-or-pause": "Problem report or paused task",
   "confirm-final": "Final result to confirm",
-  translation: "Translation check or review failed",
+  translation: "Translation rejected or queried",
   "missing-final": "Final result missing",
 };
 

@@ -1,9 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, type DocumentRowView, type DocumentRowsPage, type ProjectDocumentSummary, type RowSubmissions } from "../src/api/client";
+import { api, type DocumentRowView, type DocumentRowsPage, type PlanRowResult, type ProjectDocumentSummary, type RowSubmissions } from "../src/api/client";
 import { DocumentsPage, type DocumentsPageProps } from "../src/admin/DocumentsPage";
+import type { ProjectDocumentsQuery, Route } from "../src/app/router";
 import { recordDecision } from "../src/documents/visitState";
-import { group, page, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, submissions, version, work } from "./documents/fixtures";
+import { final, group, item, page, planRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
 
 const { expandedProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[] }));
 vi.mock("../src/documents/ExpandedRow", async importOriginal => {
@@ -25,6 +27,22 @@ function renderPage(props: Partial<DocumentsPageProps> = {}) {
   const view = render(<DocumentsPage projectKey="p" query={{}} canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} {...props} onNavigate={onNavigate} />);
   return { ...view, onNavigate };
 }
+
+/** The page with a real route state: Documents navigations update its query (as the app shell does). */
+function renderStateful(initial: ProjectDocumentsQuery) {
+  const onNavigate = vi.fn();
+  function Host() {
+    const [query, setQuery] = useState(initial);
+    return <DocumentsPage projectKey="p" query={query} canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} onNavigate={(route: Route, options) => {
+      onNavigate(route, options);
+      if (route.name === "projectDocuments") { const { name: _name, key: _key, ...rest } = route; setQuery(rest); }
+    }} />;
+  }
+  return { ...render(<Host />), onNavigate };
+}
+
+const loaded = () => screen.findByRole("navigation", { name: "Segments" });
+const live = () => document.querySelector(".documents-page > p[aria-live='polite']")!;
 
 const summary = (documentId: string, language: string): ProjectDocumentSummary => ({
   document_id: documentId, case_id: documentId, external_id: documentId, version: 1, origin: "native", translation_status: null, status_reason: null,
@@ -65,78 +83,61 @@ it("replaces the bar and table with an error and Retry", async () => {
   vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new Error("Rows failed")).mockResolvedValue(scenarioS1().page);
   renderPage();
   const retry = await screen.findByRole("button", { name: "Retry" });
-  expect(screen.queryByRole("heading", { name: "Needs your decision" })).toBeNull();
+  expect(screen.queryByRole("navigation", { name: "Segments" })).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
   fireEvent.click(retry);
-  await screen.findByRole("heading", { name: "Needs your decision" });
+  await loaded();
   expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
   expect(screen.getByRole("table", { name: "Documents" })).toBeTruthy();
 });
 
-it("offers the filters, pushes filter changes without page and announces the new count", async () => {
+it("filters by Next step, Plan, Language and Case ID; More filters holds Final result, Origin, Translation status, Status, Sort", async () => {
   mockRows(scenarioS1().page);
   const onNavigate = vi.fn();
-  const view = renderPage({ query: { language: "de", decision: "all", page: "2" }, onNavigate });
-  await screen.findByRole("heading", { name: "Needs your decision" });
-  expect(api.listDocumentRows).toHaveBeenCalledWith("p", { language: "de", decision: "all", page: 2 });
-  expect(Array.from((screen.getByLabelText("Status") as HTMLSelectElement).options).map(option => option.textContent))
-    .toEqual(["All statuses", "Unassigned", "Open", "In progress", "Submitted", "Reopened", "Paused"]);
+  const view = renderPage({ query: { language: "de", segment: "assign", page: "2" }, onNavigate });
+  await loaded();
+  expect(api.listDocumentRows).toHaveBeenCalledWith("p", { language: "de", segment: "assign", page: 2 });
+  const filters = screen.getByRole("group", { name: "Document filters" });
+  const step = within(filters).getByLabelText("Next step") as HTMLSelectElement;
+  expect(Array.from(step.querySelectorAll("optgroup")).map(entry => entry.label)).toEqual(["Any stage", "Translation review", "Annotation", "Final result", "Done"]);
+  expect(within(step).getByRole("option", { name: "Assign translation review" })).toBeTruthy();
+  fireEvent.change(step, { target: { value: "assign_translation_review" } });
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", step: "assign_translation_review" });
+  const plan = within(filters).getByLabelText("Plan") as HTMLSelectElement;
+  expect(Array.from(plan.options).map(option => option.textContent)).toEqual(["Any plan", "Review", "Annotate", "Review and annotate", "Not in plan"]);
+  fireEvent.change(plan, { target: { value: "not_in_plan" } });
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", plan: "not_in_plan" });
+  fireEvent.change(within(filters).getByLabelText("Language"), { target: { value: "" } });
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "assign" });
+  fireEvent.change(within(filters).getByLabelText("Case ID"), { target: { value: "case-+/" } });
+  fireEvent.keyDown(within(filters).getByLabelText("Case ID"), { key: "Enter" });
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", q: "case-+/" });
   const more = screen.getByText("More filters").closest("details") as HTMLDetailsElement;
-  expect(within(more).getByLabelText("Origin")).toBeTruthy();
+  expect(Array.from(more.querySelectorAll("label")).map(label => label.textContent)).toEqual(["Final result", "Origin", "Translation status", "Status", "Sort"]);
+  expect(Array.from((within(more).getByLabelText("Final result") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["Any", "None"]);
+  expect(Array.from((within(more).getByLabelText("Sort") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["Case ID", "Import batch", "Last activity"]);
   expect(Array.from((within(more).getByLabelText("Translation status") as HTMLSelectElement).options).map(option => option.textContent)).toContain("Accepted without review");
-  fireEvent.change(screen.getByLabelText("Status"), { target: { value: "held" } });
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", decision: "all", status: "held" });
-  // The ID filter applies on Enter (or after a pause, or on blur), not on every keystroke.
-  fireEvent.change(screen.getByLabelText("ID"), { target: { value: "case-+/" } });
-  expect(onNavigate).not.toHaveBeenLastCalledWith(expect.objectContaining({ q: "case-+/" }));
-  fireEvent.keyDown(screen.getByLabelText("ID"), { key: "Enter" });
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", decision: "all", q: "case-+/" });
-  const live = document.querySelector("p[aria-live='polite']")!;
-  expect(live.textContent).toBe("");
+  fireEvent.change(within(more).getByLabelText("Final result"), { target: { value: "none" } });
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", final: "none" });
+  fireEvent.change(within(more).getByLabelText("Sort"), { target: { value: "activity" } });
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", sort: "activity" });
+  fireEvent.change(within(more).getByLabelText("Status"), { target: { value: "held" } });
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", status: "held" });
+  // A filter change announces the new count once the data arrives.
+  expect(live().textContent).toBe("");
   mockRows(page([scenarioS1().group, scenarioS5().group]));
-  view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} query={{ language: "de", decision: "all", status: "held" }} onNavigate={onNavigate} />);
-  await waitFor(() => expect(live.textContent).toBe("2 texts shown"));
-  // The first request of the new filter carries no retained rows (a filter change starts a new visit).
-  expect(api.listDocumentRows).toHaveBeenCalledWith("p", { language: "de", decision: "all", status: "held" });
-});
-
-it("selects every checkbox row of the page including collapsed groups and opens the dialogs with those versions", async () => {
-  const s0 = scenarioS0();
-  mockRows(page([s0.group, scenarioS1().group, scenarioS4().group], { group_count: 60 }), s0.submissions);
-  vi.mocked(api.listProjectDocuments).mockResolvedValue([summary("synthetic-accepted-en", "en"), summary("synthetic-accepted-de-v2", "de"), summary("case-0042-en", "en"), summary("unrelated", "en")]);
-  renderPage();
-  await screen.findByRole("heading", { name: "Needs your decision" });
-  expect(screen.queryByLabelText("Select case-0042 · en")).toBeNull();
-  const assign = screen.getByRole("button", { name: "Assign …" });
-  expect(assign.getAttribute("aria-disabled")).toBe("true");
-  expect(assign.hasAttribute("disabled")).toBe(false);
-  fireEvent.click(assign);
-  expect(screen.queryByRole("dialog")).toBeNull();
-  fireEvent.click(screen.getByLabelText("Select all"));
-  expect(document.querySelector("p[aria-live='polite']")!.textContent).toBe("Selected 3 rows. 1 row needs a choice in Text versions.");
-  expect(screen.getByText("3 selected")).toBeTruthy();
-  await waitFor(() => expect(screen.getByRole("button", { name: "Assign …" }).getAttribute("aria-disabled")).toBeNull());
-  fireEvent.click(screen.getByRole("button", { name: "Assign …" }));
-  expect(within(await screen.findByRole("dialog", { name: "Assign documents" })).getByText("3 documents selected.")).toBeTruthy();
-  fireEvent.click(within(screen.getByRole("dialog").querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
-  fireEvent.click(screen.getByRole("button", { name: "Propose distribution …" }));
-  expect(await screen.findByRole("dialog")).toBeTruthy();
-});
-
-it("adds per-version checkboxes from Text versions to the bulk selection", async () => {
-  const s4 = scenarioS4();
-  mockRows(s4.page, s4.submissions);
-  renderPage({ query: { open: [rowKey("case-0305", "fr")] } });
-  expect(await screen.findByText("Choose in Text versions")).toBeTruthy();
-  fireEvent.click(await screen.findByLabelText("Select Provider A v1 of case-0305 · fr for assignment"));
-  expect(screen.getByText("1 selected")).toBeTruthy();
+  view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} query={{ plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final" }} onNavigate={onNavigate} />);
+  await waitFor(() => expect(live().textContent).toBe("2 texts shown"));
+  expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final" });
+  expect(screen.queryByRole("checkbox")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Assign …" })).toBeNull();
 });
 
 it("applies the ID filter once after a pause in typing", async () => {
   mockRows(scenarioS1().page);
   const { onNavigate } = renderPage();
-  await screen.findByRole("heading", { name: "Needs your decision" });
-  const input = screen.getByLabelText("ID");
+  await loaded();
+  const input = screen.getByLabelText("Case ID");
   for (const value of ["c", "ca", "cas"]) fireEvent.change(input, { target: { value } });
   expect(onNavigate).not.toHaveBeenCalled();
   await waitFor(() => expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", q: "cas" }));
@@ -146,15 +147,15 @@ it("applies the ID filter once after a pause in typing", async () => {
 });
 
 it("re-announces a repeated message in the live region", async () => {
-  mockRows(scenarioS1().page);
+  mockRows(page([group("case-1", [planRow("case-1", "de", stepOf("assign_translation_review"))])]));
+  vi.mocked(api.listProjectDocuments).mockReturnValue(new Promise(() => {}));
   renderPage();
-  await screen.findByRole("heading", { name: "Needs your decision" });
-  const live = document.querySelector("p[aria-live='polite']")!;
-  fireEvent.click(screen.getByRole("button", { name: "Assign …" }));
-  expect(live.textContent).toBe("Select text versions first.");
-  fireEvent.click(screen.getByRole("button", { name: "Assign …" }));
-  expect(live.textContent).toBe("");
-  await waitFor(() => expect(live.textContent).toBe("Select text versions first."));
+  const assign = await screen.findByRole("button", { name: "Assign translation review…, case-1 · de" });
+  fireEvent.click(assign);
+  expect(live().textContent).toBe("Loading assignment data…");
+  fireEvent.click(assign);
+  expect(live().textContent).toBe("");
+  await waitFor(() => expect(live().textContent).toBe("Loading assignment data…"));
 });
 
 it("keeps the rows and shows Could not refresh when a background refetch fails", async () => {
@@ -166,32 +167,19 @@ it("keeps the rows and shows Could not refresh when a background refetch fails",
   const alert = await screen.findByRole("alert");
   expect(alert.textContent).toContain("Could not refresh");
   expect(screen.getByRole("table", { name: "Documents" })).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "Needs your decision" })).toBeTruthy();
+  expect(screen.getByRole("navigation", { name: "Segments" })).toBeTruthy();
   fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
 
-it("drops selected versions that the refreshed page no longer offers and announces it", async () => {
-  const s1 = scenarioS1();
-  mockRows(s1.page);
+it("assigns from the row: the assign dialog opens with the row's version", async () => {
+  mockRows(page([group("case-1", [planRow("case-1", "de", stepOf("assign_translation_review", { document_id: "case-1-de" }))])]));
+  vi.mocked(api.listProjectDocuments).mockResolvedValueOnce([]).mockResolvedValue([summary("case-1-de", "de")]);
   renderPage();
-  fireEvent.click(await screen.findByLabelText("Select case-0042 · en"));
-  expect(screen.getByText("1 selected")).toBeTruthy();
-  const en = s1.group.rows[0];
-  const replaced = { ...en, versions: [version({ document_id: "case-0042-en-v2" })], bulk: { mode: "checkbox" as const, document_id: "case-0042-en-v2" } };
-  mockRows(page([group("case-0042", [replaced])]));
-  act(() => { window.dispatchEvent(new Event("focus")); });
-  await waitFor(() => expect(screen.getByText("0 selected")).toBeTruthy());
-  expect(document.querySelector("p[aria-live='polite']")!.textContent).toBe("1 selection removed because the text changed.");
-});
-
-it("refetches the documents before opening the dialog when a selected version is not in the inventory", async () => {
-  mockRows(scenarioS1().page);
-  vi.mocked(api.listProjectDocuments).mockResolvedValueOnce([]).mockResolvedValue([summary("case-0042-en", "en")]);
-  renderPage();
-  fireEvent.click(await screen.findByLabelText("Select case-0042 · en"));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Assign …" }).getAttribute("aria-disabled")).toBeNull());
-  fireEvent.click(screen.getByRole("button", { name: "Assign …" }));
+  const assign = await screen.findByRole("button", { name: "Assign translation review…, case-1 · de" });
+  await waitFor(() => expect(api.listMembers).toHaveBeenCalled());
+  await act(async () => { await Promise.resolve(); });
+  fireEvent.click(assign);
   const dialog = await screen.findByRole("dialog", { name: "Assign documents" });
   expect(within(dialog).getByText("1 document selected.")).toBeTruthy();
   expect(api.listProjectDocuments).toHaveBeenCalledTimes(2);
@@ -249,7 +237,7 @@ it("expands and focuses a deep-linked row that no longer needs a decision", asyn
   renderPage({ query: { case: "synthetic-accepted", language: "de", decision: "all" } });
   expect(await screen.findByText("This no longer needs your decision.")).toBeTruthy();
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { case: "synthetic-accepted", language: "de", decision: "all" });
-  const disclosure = screen.getByRole("button", { name: "Show submissions, synthetic-accepted · de" });
+  const disclosure = screen.getByRole("button", { name: "Show details, synthetic-accepted · de" });
   expect(disclosure.getAttribute("aria-expanded")).toBe("true");
   await waitFor(() => expect(document.activeElement).toBe(disclosure));
 });
@@ -267,6 +255,25 @@ it("shows an unknown text and an empty decision filter with Show all texts", asy
   expect(screen.getByRole("link", { name: "Show all texts" })).toBeTruthy();
 });
 
+it("shows the empty states per segment", async () => {
+  mockRows(page([]));
+  const cases: [ProjectDocumentsQuery, string][] = [
+    [{ segment: "assign" }, "Nothing to assign"],
+    [{ segment: "progress" }, "Nothing in progress"],
+    [{ segment: "decision" }, "Nothing needs your decision"],
+    [{ plan: "not_in_plan" }, "Every language version is in the plan."],
+    [{}, "No texts yet"],
+  ];
+  for (const [query, title] of cases) {
+    const { unmount } = renderPage({ query });
+    expect(await screen.findByRole("heading", { name: title })).toBeTruthy();
+    unmount();
+  }
+  renderPage();
+  expect(await screen.findByText("Upload texts to start.")).toBeTruthy();
+});
+
+
 it("explains a preflight-only missing final result on a deep-linked row", async () => {
   const s4 = scenarioS4();
   mockRows(s4.page, s4.submissions);
@@ -282,7 +289,7 @@ it("explains a preflight-only missing final result on a deep-linked row", async 
 it("expands a row with replace navigation", async () => {
   mockRows(scenarioS1().page);
   const { onNavigate } = renderPage({ query: { language: "en" } });
-  fireEvent.click(await screen.findByRole("button", { name: "Show submissions, case-0042 · en" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Show details, case-0042 · en" }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en", open: ["case-0042:en"] }, { replace: true });
 });
 
@@ -335,7 +342,7 @@ describe("Resolved and Changed badges", () => {
     await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
   };
   const lastRequest = () => vi.mocked(api.listDocumentRows).mock.calls.at(-1)?.[1];
-  const disclosure = (name: string) => screen.getByRole("button", { name: `Show submissions, ${name}` });
+  const disclosure = (name: string) => screen.getByRole("button", { name: `Show details, ${name}` });
 
   beforeEach(() => {
     vi.mocked(api.listDocumentRows).mockImplementation(async () => structuredClone(served));
@@ -432,5 +439,122 @@ describe("Resolved and Changed badges", () => {
     await waitFor(() => expect(lastRequest()).toEqual({}));
     await refetch();
     expect(lastRequest()).toEqual({});
+  });
+});
+
+describe("row actions", () => {
+  /** case-0042 en waiting for a final result with one eligible submission. */
+  const chooseFinal = (caseId = "case-0042", language = "en") => planRow(caseId, language, stepOf("choose_final", { detail: { kind: "annotations_submitted", submitted: 1, total: 1, task_paused: false } }), {
+    versions: [version({ document_id: `${caseId}-${language}` })], categories: ["missing-final"], missing_final: { counts: true, reason: null },
+  });
+  const oneSubmission = (caseId = "case-0042", language = "en") => submissions(caseId, language, { submissions: [submission({ submission_id: `sub-${caseId}`, document_id: `${caseId}-${language}`, author_label: "ann-0001" })] });
+
+  it("Choose final… expands the row and opens Use as final for one eligible submission", async () => {
+    mockRows(page([group("case-0042", [chooseFinal()])]), { [rowKey("case-0042", "en")]: oneSubmission() });
+    const { onNavigate } = renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Choose final…, case-0042 · en" }));
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", open: ["case-0042:en"] }, { replace: true });
+    const confirm = await screen.findByRole("group", { name: "Use as final result" });
+    expect(screen.getByRole("button", { name: "Show details, case-0042 · en" }).getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action");
+  });
+
+  it("Choose final… focuses Submissions when several submissions are eligible", async () => {
+    const two = submissions("case-0042", "en", { submissions: [
+      submission({ submission_id: "a", document_id: "case-0042-en" }), submission({ submission_id: "b", document_id: "case-0042-en", author_label: "ann-0002" }),
+    ] });
+    mockRows(page([group("case-0042", [chooseFinal()])]), { [rowKey("case-0042", "en")]: two });
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Choose final…, case-0042 · en" }));
+    await waitFor(() => expect(document.activeElement?.textContent).toBe("Submissions (2)"));
+    expect(screen.queryByRole("group", { name: "Use as final result" })).toBeNull();
+  });
+
+  it("Review changes… expands the row and opens Keep", async () => {
+    const s0 = scenarioS0();
+    const de = { ...s0.group.rows[1], next_step: stepOf("confirm_final"), steps: [stepOf("confirm_final")] };
+    mockRows(page([group("synthetic-accepted", [s0.group.rows[0], de])]), s0.submissions);
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Review changes…, synthetic-accepted · de" }));
+    const keep = await screen.findByRole("group", { name: "Keep final result" });
+    expect(within(keep).getByRole("checkbox", { name: "I reviewed these changes and keep this exact result" })).toBeTruthy();
+  });
+
+  it("Decide on report… navigates to the report with section=decide", async () => {
+    mockRows(page([group("case-0390", [planRow("case-0390", "de", stepOf("decide_report", { report_id: "report-0390" }))])]));
+    const { onNavigate } = renderPage({ query: { segment: "decision" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Decide on report…, case-0390 · de" }));
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectProblemReport", key: "p", reportId: "report-0390", section: "decide", documents: { segment: "decision" } });
+  });
+
+  it("Resume task… navigates with action=resume", async () => {
+    const paused = planRow("case-0391", "de", stepOf("resume_task", { assignment_id: 7 }), {
+      notes: [item({ code: "TASK_PAUSED_WITHOUT_REPORT", cause_id: "p1", report_id: "report-7", assignment_id: 7 })],
+    });
+    mockRows(page([group("case-0391", [paused])]));
+    const { onNavigate } = renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Resume task…, case-0391 · de" }));
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectProblemReport", key: "p", reportId: "report-7", action: "resume" });
+  });
+
+  it("Resolve… shows the three options under the row", async () => {
+    mockRows(page([group("case-1", [planRow("case-1", "de", stepOf("resolve_rejected", { document_id: "case-1-de" }))])]));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
+    const box = screen.getByRole("group", { name: "Resolve rejected translation, case-1 · de" });
+    expect(within(box).getByRole("button", { name: "Discard the de translation…" })).toBeTruthy();
+    fireEvent.click(within(box).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("group", { name: "Resolve rejected translation, case-1 · de" })).toBeNull();
+  });
+
+  it("after success the row updates in place and announces Next: case · language under a segment filter", async () => {
+    const first = chooseFinal();
+    const second = chooseFinal("case-0099", "de");
+    const rowSubmissions = { [rowKey("case-0042", "en")]: oneSubmission(), [rowKey("case-0099", "de")]: oneSubmission("case-0099", "de") };
+    mockRows(page([group("case-0042", [first]), group("case-0099", [second])]), rowSubmissions);
+    vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "sub-case-0042", revision: 1 });
+    renderStateful({ segment: "decision" });
+    fireEvent.click(await screen.findByRole("button", { name: "Choose final…, case-0042 · en" }));
+    const confirm = await screen.findByRole("group", { name: "Use as final result" });
+    const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], matches_decision: false, retained: true, categories: [],
+      final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "sub-case-0042" }) };
+    mockRows(page([group("case-0042", [done]), group("case-0099", [second])]), rowSubmissions);
+    fireEvent.click(within(confirm).getByRole("button", { name: "Use as final" }));
+    await waitFor(() => expect(live().textContent).toContain("Next: case-0099 · de."));
+    expect(screen.getByRole("link", { name: "Next: case-0099 · de" })).toBeTruthy();
+    // Updated in place: the row stays (retained) with its new step.
+    expect(within(screen.getByRole("button", { name: "Show details, case-0042 · en" }).closest("tr")!).getByText("Done")).toBeTruthy();
+  });
+});
+
+describe("plan chips on the page", () => {
+  it("saves a chip, refetches the rows and shows the toast right after the table", async () => {
+    const fr = planRow("case-0101", "fr", stepOf("assign_translation_review"));
+    mockRows(page([group("case-0101", [fr], { plan_revision: 2 })], { page_count: 2 }));
+    vi.spyOn(api, "patchWorkPlan").mockResolvedValue({
+      case_id: "case-0101", language: "fr", flags: { review: false, annotate: true, review_applicable: true, discarded: false }, revision: 3,
+      undo: { rows: [], revisions: { "case-0101": 3 } }, withdrawn: [], accepted_document_ids: [],
+    } as PlanRowResult);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Review, case-0101 · fr" }));
+    expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "fr", { review: false, expected_revision: 2, confirm: false });
+    const message = await screen.findByText("fr of case-0101: Review off");
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
+    const table = screen.getByRole("table", { name: "Documents" });
+    const region = message.closest(".ui-toast-region")!;
+    expect(table.closest(".data-table-scroll")?.nextElementSibling ?? table.nextElementSibling).toBe(region);
+    expect(region.nextElementSibling?.getAttribute("aria-label")).toBe("Pages");
+  });
+
+  it("opens the upload dialog from the heading row", async () => {
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ languages: ["en"], annotate_accepted_translations_only: false } as never);
+    mockRows(scenarioS1().page);
+    renderPage();
+    await loaded();
+    const upload = screen.getByRole("button", { name: "Upload texts…" });
+    await waitFor(() => expect(upload.getAttribute("aria-disabled")).toBeNull());
+    fireEvent.click(upload);
+    expect(await screen.findByRole("dialog", { name: "Upload texts" })).toBeTruthy();
   });
 });

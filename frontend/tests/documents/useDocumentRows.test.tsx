@@ -30,6 +30,16 @@ it("discards a response that resolves after a newer request", async () => {
   expect(vi.mocked(api.listDocumentRows).mock.calls.map(call => call[1])).toEqual([{ q: "a" }, { q: "ab" }]);
 });
 
+it("passes the lead workflow filters and records when the page arrived", async () => {
+  vi.mocked(api.listDocumentRows).mockResolvedValue(page([]));
+  const query: DocumentRowsQuery = { segment: "assign", step: "assign_translation_review", stage: "translation_review", owner: "me", plan: "review_and_annotate", final: "none", sort: "activity" };
+  const { result } = renderHook(() => useDocumentRows("p", query));
+  expect(result.current.updatedAt).toBeNull();
+  await waitFor(() => expect(result.current.page).not.toBeNull());
+  expect(api.listDocumentRows).toHaveBeenCalledWith("p", query);
+  expect(result.current.updatedAt).toBeInstanceOf(Date);
+});
+
 it("refetches on window focus", async () => {
   vi.mocked(api.listDocumentRows).mockResolvedValue(page([]));
   const { result } = renderHook(() => useDocumentRows("p", {}));

@@ -17,6 +17,18 @@ export interface ProjectDocumentsQuery {
   case?: string;
   decision?: string;
   final?: string;
+  /** Bar segment (`decision` | `assign` | `progress`); exclusive with `decision`. */
+  segment?: string;
+  /** Next-step code filter. */
+  step?: string;
+  /** Stage filter (`translation_review` | `annotation` | `final` | `done`). */
+  stage?: string;
+  /** Owner of the next step: `me` or a pseudonym. */
+  owner?: string;
+  /** Plan filter (`review` | `annotate` | `review_and_annotate` | `not_in_plan`). */
+  plan?: string;
+  /** Sort order (`case` | `import` | `activity`); absent means Case ID. */
+  sort?: string;
   /** Expanded rows as `<case>:<language>`; repeatable in the URL. */
   open?: string[];
   page?: string;
@@ -25,7 +37,10 @@ export interface ProjectDocumentsQuery {
 /** Options for in-app navigation; `replace` rewrites the current history entry. */
 export interface NavigateOptions { replace?: boolean }
 
-const DOCUMENT_FIELDS = ["language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final", "page"] as const;
+const DOCUMENT_FIELDS = [
+  "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
+  "segment", "step", "stage", "owner", "plan", "sort", "page",
+] as const;
 
 function readDocumentsQuery(params: URLSearchParams, prefix = ""): ProjectDocumentsQuery {
   const result: ProjectDocumentsQuery = {};
@@ -61,7 +76,7 @@ export type Route =
   | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string; compare?: string; documents?: ProjectDocumentsQuery }
   | { name: "projectProgress"; key: string }
   | { name: "projectExport"; key: string }
-  | { name: "projectProblemReport"; key: string; reportId: string; action?: "resume"; documents?: ProjectDocumentsQuery }
+  | { name: "projectProblemReport"; key: string; reportId: string; action?: "resume"; section?: "decide"; documents?: ProjectDocumentsQuery }
   | { name: "notFound"; hash: string };
 
 export function parseRoute(hash: string): Route {
@@ -97,6 +112,7 @@ export function parseRoute(hash: string): Route {
       const documents = readDocumentsQuery(params, "documents_");
       return { name: "projectProblemReport", key: decodeURIComponent(report[1]), reportId: decodeURIComponent(report[2]),
         ...(params.get("action") === "resume" ? { action: "resume" as const } : {}),
+        ...(params.get("section") === "decide" ? { section: "decide" as const } : {}),
         ...(Object.keys(documents).length ? { documents } : {}) };
     }
     const caseRoute = /^#\/projects\/([^/]+)\/cases\/([^/]+)$/.exec(path);
@@ -156,7 +172,7 @@ export function routeHref(route: Route): string {
     case "projectProgress": return `#/projects/${encodeURIComponent(route.key)}/progress`;
     case "projectExport": return `#/projects/${encodeURIComponent(route.key)}/export`;
     case "projectProblemReport": return `#/projects/${encodeURIComponent(route.key)}/problem-reports/${encodeURIComponent(route.reportId)}${querySuffix([
-      ["action", route.action], ...documentsEntries(route.documents, "documents_"),
+      ["action", route.action], ["section", route.section], ...documentsEntries(route.documents, "documents_"),
     ])}`;
     case "notFound": return route.hash;
   }

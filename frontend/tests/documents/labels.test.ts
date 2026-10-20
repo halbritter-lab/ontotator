@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTime, issueAriaLabel, middleEllipsis, statusBadgeText, versionText, workText, type WorkItemLike } from "../../src/documents/labels";
+import { decisionCategoryLabels, formatTime, issueAriaLabel, middleEllipsis, statusBadgeText, versionText, workText, type WorkItemLike } from "../../src/documents/labels";
 
 describe("documents labels", () => {
   it("re_exports_shared_helpers", () => {
@@ -27,6 +27,9 @@ describe("documents labels", () => {
     expect(issueAriaLabel({ "missing-final": 1 }, {})).toBe("1 issue: final result missing 1");
     expect(issueAriaLabel({}, { "Task paused": 2 })).toBe("2 notes: task paused 2");
     expect(issueAriaLabel({}, {})).toBe("No issues");
+  });
+  it("bar_categories_use_the_lead_workflow_copy", () => {
+    expect(Object.values(decisionCategoryLabels)).toEqual(["Problem report or paused task", "Final result to confirm", "Translation rejected or queried", "Final result missing"]);
   });
   it("work_text_per_assignment_state", () => {
     const item = (over: Partial<WorkItemLike>): WorkItemLike => ({ author_label: "ann-0004", is_me: false, task: "annotate", status: "in_progress", held: false, round_ordinal: 3, version: 1, ...over });

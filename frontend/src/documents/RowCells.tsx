@@ -3,12 +3,14 @@
  * Each renderer takes the row view plus explicit options; none holds state.
  */
 import { useId, type MouseEvent, type ReactNode } from "react";
-import type { DocumentRowView, DocumentVersionView, FinalSelectionSummary } from "../api/client";
+import type { DocumentRowView, DocumentVersionView, FinalSelectionSummary, NextStepView } from "../api/client";
 import { kindLabels, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
+import { Button } from "../ui/Button";
 import { IconCheck, IconChevronRight } from "../ui/icons";
 import { StatusBadge } from "../ui/StatusBadge";
+import { actionLabel, BADGE_LABELS, moreStepsLabel, ownerLabel, secondaryLine, stepLabel } from "./nextStepLabels";
 import {
   decisionCategoryLabels,
   issueAriaLabel,
@@ -74,7 +76,7 @@ export function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
 }
 
 /** Parts of a Documents row with a stable DOM id (focus targets). */
-export type DocumentsRowPart = "disclosure" | "final-view";
+export type DocumentsRowPart = "disclosure" | "final-view" | "action";
 
 /** Stable id of a part of the row `{case}:{language}`, e.g. its disclosure or the Final row's View link. */
 export function documentsRowId(caseId: string, language: string, part: DocumentsRowPart): string {
@@ -237,29 +239,6 @@ export function LastActivityCell({ iso }: { iso: string | null }): JSX.Element {
   return iso ? <Time iso={iso} /> : <span className="documents-muted">No activity</span>;
 }
 
-export interface SelectCellProps {
-  row: DocumentRowView;
-  selected: ReadonlySet<string>;
-  onToggleSelect: (documentId: string, checked: boolean) => void;
-}
-
-/** Bulk checkbox for the row's bulk version, or "Choose in Text versions". */
-export function SelectCell({ row, selected, onToggleSelect }: SelectCellProps): JSX.Element {
-  const id = useId();
-  const documentId = row.bulk.document_id;
-  if (row.bulk.mode !== "checkbox" || documentId == null) return <span className="documents-choose">Choose in Text versions</span>;
-  return (
-    <input
-      id={id}
-      type="checkbox"
-      className="form-checkbox documents-select"
-      aria-label={`Select ${rowName(row)}`}
-      checked={selected.has(documentId)}
-      onChange={event => onToggleSelect(documentId, event.target.checked)}
-    />
-  );
-}
-
 /** The row's "Open" destination and, for parallel translations, which one it opens. */
 export function openLink(row: DocumentRowView, projectKey: string, query: ProjectDocumentsQuery): { route: Route; description: string | null } {
   const documents = Object.keys(query).length ? { documents: query } : {};
@@ -301,7 +280,7 @@ export interface RowHeaderCellProps {
   badge?: ReactNode;
 }
 
-/** Disclosure, language code, visit badge, "Open" and "Open my task". */
+/** Disclosure, language code, "source", visit badge, "Open" and "Open my task". */
 export function RowHeaderCell({ row, projectKey, query, expanded, controls, onToggleRow, onNavigate, badge }: RowHeaderCellProps): JSX.Element {
   return (
     <span className="documents-row-header">
@@ -311,14 +290,56 @@ export function RowHeaderCell({ row, projectKey, query, expanded, controls, onTo
         className="documents-disclosure target-min"
         aria-expanded={expanded}
         aria-controls={controls}
-        aria-label={`Show submissions, ${rowName(row)}`}
+        aria-label={`Show details, ${rowName(row)}`}
         onClick={() => onToggleRow(rowKeyOf(row))}
       >
         <IconChevronRight className="disclosure-chevron" />
         <span className="documents-language">{row.language}</span>
       </button>
+      {row.is_source && <span className="documents-source">source</span>}
       {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
       <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
     </span>
+  );
+}
+
+const BADGE_TONES: Readonly<Record<keyof typeof BADGE_LABELS, "warning" | "info">> = { your_decision: "info", check_failed: "warning", paused: "warning" };
+
+/** Next step: step, badges, muted secondary line and "+1 more step" (opens the row). Rows not in plan read "Not in plan". */
+export function NextStepCell({ row, onToggleRow, strong = false }: { row: DocumentRowView; onToggleRow?: (key: string) => void; strong?: boolean }): JSX.Element {
+  if (!row.in_plan) return <span className="documents-next-step documents-muted">Not in plan</span>;
+  const step = row.next_step;
+  if (!step) return <span className="documents-next-step documents-muted">—</span>;
+  const secondary = secondaryLine(step, row);
+  const more = moreStepsLabel(row);
+  return (
+    <span className="documents-next-step">
+      <span className="documents-step-line">
+        <span className={strong ? "documents-step documents-step--strong" : "documents-step"}>{stepLabel(step.code)}</span>
+        {(step.badges ?? []).map(badge => <StatusBadge key={badge} tone={BADGE_TONES[badge]}>{BADGE_LABELS[badge]}</StatusBadge>)}
+      </span>
+      {secondary && <span className="documents-step-secondary">{secondary}</span>}
+      {more && (
+        <button type="button" className="documents-more-steps" aria-label={`${more}, ${rowName(row)}`} onClick={() => onToggleRow?.(rowKeyOf(row))}>{more}</button>
+      )}
+    </span>
+  );
+}
+
+/** Owner: "You" (strong), a person, "2 annotators", or "—". */
+export function OwnerCell({ row }: { row: DocumentRowView }): JSX.Element {
+  const step = row.in_plan ? row.next_step : null;
+  const label = ownerLabel(step);
+  return step?.owner.kind === "you" ? <strong className="documents-owner">{label}</strong> : <span className="documents-owner">{label}</span>;
+}
+
+/** One small secondary button for a lead-owned step, named "{action}, {case · language}". */
+export function ActionCell({ row, onAction, block = false }: { row: DocumentRowView; onAction?: (row: DocumentRowView, step: NextStepView) => void; block?: boolean }): JSX.Element | null {
+  const step = row.in_plan ? row.next_step : null;
+  if (!step?.action || !onAction) return null;
+  const label = actionLabel(step.action);
+  return (
+    <Button id={documentsRowId(row.case_id, row.language, "action")} size="sm" className={block ? "documents-action documents-action--block" : "documents-action"}
+      aria-label={`${label}, ${rowName(row)}`} onClick={() => onAction(row, step)}>{label}</Button>
   );
 }

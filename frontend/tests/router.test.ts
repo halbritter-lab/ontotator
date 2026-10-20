@@ -154,6 +154,25 @@ describe("Documents deep-link parameters", () => {
     const href = routeHref({ name: "projectCase", key: "p", caseId: "c", documents: { q: "x", open: ["c:de"] }, compare: "b", annotations: "a", variant: "v" });
     expect(href).toBe("#/projects/p/cases/c?variant=v&annotations=a&compare=b&documents_q=x&documents_open=c%3Ade");
   });
+  it("round_trips_lead_workflow_filters_segment_step_stage_owner_plan_sort_and_final_none", () => {
+    const route: Route = { name: "projectDocuments", key: "p", segment: "assign", step: "assign_translation_review", stage: "translation_review", owner: "me", plan: "review_and_annotate", sort: "activity", final: "none", language: "de" };
+    expect(parseRoute(routeHref(route))).toEqual(route);
+    for (const [field, value] of [["segment", "decision"], ["step", "choose_final"], ["stage", "final"], ["owner", "ann-0004"], ["plan", "not_in_plan"], ["sort", "import"], ["final", "none"]] as const) {
+      const single: Route = { name: "projectDocuments", key: "p", [field]: value };
+      expect(routeHref(single)).toBe(`#/projects/p/documents?${field}=${value}`);
+      expect(parseRoute(routeHref(single))).toEqual(single);
+    }
+    const viewer: Route = { name: "projectCase", key: "p", caseId: "c", documents: { segment: "progress", plan: "review", sort: "case" } };
+    expect(parseRoute(routeHref(viewer))).toEqual(viewer);
+  });
+  it("round_trips_the_report_decide_section", () => {
+    const report: Route = { name: "projectProblemReport", key: "p", reportId: "r-1", section: "decide" };
+    expect(routeHref(report)).toBe("#/projects/p/problem-reports/r-1?section=decide");
+    expect(parseRoute(routeHref(report))).toEqual(report);
+    const both: Route = { name: "projectProblemReport", key: "p", reportId: "r-1", section: "decide", documents: { segment: "decision" } };
+    expect(parseRoute(routeHref(both))).toEqual(both);
+    expect(parseRoute("#/projects/p/problem-reports/r?section=other")).toEqual({ name: "projectProblemReport", key: "p", reportId: "r" });
+  });
   it("drops_unknown_report_actions", () => {
     expect(parseRoute("#/projects/p/problem-reports/r?action=restart")).toEqual({ name: "projectProblemReport", key: "p", reportId: "r" });
   });

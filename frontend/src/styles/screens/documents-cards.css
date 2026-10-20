@@ -1,5 +1,7 @@
-/* Documents cards styles; owned by Documents WP D5. Narrow viewports (< 700px): one card per row. */
+/* Documents cards styles. Narrow viewports (< 700px): one case card per case, one article per language row. */
 .document-cards { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.document-case-card { display: grid; gap: var(--space-2); min-width: 0; }
+.document-case-card-title { margin: 0; font-weight: var(--weight-strong); overflow-wrap: anywhere; }
 .document-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -12,11 +14,14 @@
 }
 .document-card-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-width: 0; }
 .document-card-head { flex-wrap: nowrap; align-items: flex-start; }
-.document-card-select { flex: none; display: inline-flex; align-items: center; min-height: 24px; }
 .document-card-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--size-md); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
 .document-card-head .documents-issues,
 .document-card-head .documents-row-badge { flex: none; }
 .document-card-activity { color: var(--text-muted); }
+.document-card-owner { justify-content: space-between; }
+/* The row action spans the card (at least 32px high). */
+.document-card .documents-action--block { width: 100%; min-height: 32px; justify-content: center; white-space: normal; }
+.document-card-notice { min-width: 0; }
 .document-card-toggle { display: inline-flex; align-items: center; gap: var(--space-1); padding: 0; border: 0; color: var(--accent); background: transparent; font: inherit; cursor: pointer; }
 .document-card-expanded { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border); min-width: 0; }
 
