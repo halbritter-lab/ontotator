@@ -181,6 +181,8 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   NOT_IN_WORK_PLAN: "This language version is not planned for this task.",
   CASE_IDS_TOO_MANY: "Paste at most 5000 case IDs.",
   VARIANT_ALREADY_DISCARDED: "This translation was already discarded.",
+  ASSIGNMENT_BATCH_STALE: "The cases or people changed. Check the new preview.",
+  ASSIGNMENT_BATCH_REFUSED: "Some assignments could not be made. Nothing was assigned.",
   DISCARD_REASON_REQUIRED: "Discarding a translation requires a reason.",
 };
 

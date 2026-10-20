@@ -69,6 +69,17 @@ export type AnnotationTargetPreview = components["schemas"]["AnnotationTargetPre
 export type DiscardRequest = Defaulted<components["schemas"]["DiscardRequest"], "confirm">;
 export type DiscardResult = components["schemas"]["DiscardResult"];
 export type UploadWorkPlan = components["schemas"]["UploadWorkPlan"];
+// Batch assignment and selection summary (lead workflow L1b)
+export type DocumentRowFilters = components["schemas"]["DocumentRowFilters"];
+export type BatchAssignRequest = Defaulted<components["schemas"]["BatchAssignRequest"], "sort" | "filters" | "usernames" | "review_accepted_translation">;
+export type BatchAssignBody = BatchAssignRequest & Defaulted<Pick<components["schemas"]["BatchAssignBody"], "expected_preview_digest" | "confirm_language">, "confirm_language">;
+export type BatchSkipView = components["schemas"]["BatchSkipView"];
+export type BatchTargetView = components["schemas"]["BatchTargetView"];
+export type BatchPersonView = components["schemas"]["BatchPersonView"];
+export type BatchPreview = components["schemas"]["BatchPreview"];
+export type BatchAssignResult = components["schemas"]["BatchAssignResult"];
+export type AssignableStepView = components["schemas"]["AssignableStepView"];
+export type SelectionSummary = components["schemas"]["SelectionSummary"];
 /** Optional work-plan part of an upload commit (absent: the old body is sent). */
 export type CommitUploadPlan = Partial<Pick<components["schemas"]["CommitUpload"], "plan_languages" | "plan_cases" | "accept_external_review">>;
 /** Filters of the Documents read API; `retain` keys are "{case_id}:{language}". */
@@ -286,6 +297,9 @@ export class ApiClient {
   async listAssignments(key: string): Promise<AssignmentView[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments`, { method: "GET" }); }
   async createAssignments(key: string, body: AssignRequest): Promise<AssignResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments`, { method: "POST", body: JSON.stringify(body) }); }
   async proposeDistribution(key: string, body: ProposalRequest): Promise<ProposalResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/proposal`, { method: "POST", body: JSON.stringify(body) }); }
+  async previewAssignmentBatch(key: string, body: BatchAssignRequest): Promise<BatchPreview> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/batch/preview`, { method: "POST", body: JSON.stringify(body) }); }
+  async commitAssignmentBatch(key: string, body: BatchAssignBody): Promise<BatchAssignResult> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/batch`, { method: "POST", body: JSON.stringify(body) }); }
+  async selectionSummary(key: string, caseIds: readonly string[], filters?: DocumentRowFilters): Promise<SelectionSummary> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/selection-summary`, { method: "POST", body: JSON.stringify(filters === undefined ? { case_ids: caseIds } : { case_ids: caseIds, filters }) }); }
   async reassign(id: number, body: ReassignRequest): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reassign`, { method: "POST", body: JSON.stringify(body) }); }
   async reopenAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }); }
   async revokeAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/revoke`, { method: "POST", body: JSON.stringify({ reason }) }); }
