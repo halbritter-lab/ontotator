@@ -70,6 +70,11 @@ def test_bar_uses_underscore_keys_and_rows_carry_retained(case_env):
         "missing_final",
         "no_final",
         "shown",
+        "in_plan",
+        "needs_decision",
+        "to_assign",
+        "in_progress",
+        "decision_categories",
     }
     for group in body["groups"]:
         for row in group["rows"]:
@@ -121,7 +126,9 @@ def test_populated_row_validates_against_the_response_models(case_env):
     assert de["final"]["submission_id"] == "german"
     assert de["final"]["is_mine"] is False
     assert de["work"] and de["versions"]
-    assert any(i["category"] == "translation" for i in de["issues"])
+    # The failed check's chain has an open review: in progress, not a decision.
+    assert not any(i["category"] == "translation" for i in de["issues"])
+    assert "translation_review_in_progress" in [s["code"] for s in de["steps"]]
     sub = env.lead.get(f"{BASE}/document-rows/{quote(CASE, safe='')}/de/submissions")
     assert sub.status_code == 200, sub.text
     (item,) = sub.json()["submissions"]

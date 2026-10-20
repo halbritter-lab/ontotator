@@ -226,8 +226,8 @@ def test_paging_keeps_groups_whole_and_orders_by_position(case_env, tmp_path):
     (tmp_path / "many").mkdir()
     result = run_import(env.db, bundle(tmp_path / "many", units))
     assert result.status == "succeeded", result.error
-    first = service(env).page("proj", RowQuery())
-    second = service(env).page("proj", RowQuery(page=2))
+    first = service(env).page("proj", RowQuery(sort="import"))
+    second = service(env).page("proj", RowQuery(page=2, sort="import"))
     assert first["page_count"] == second["page_count"] == 2
     assert first["group_count"] == 51 and len(first["groups"]) == 50
     assert len(second["groups"]) == 1
@@ -312,6 +312,10 @@ ROW_KEYS = {
     "pinned",
     "retained",
     "matches_decision",
+    "next_step",
+    "steps",
+    "plan_row",
+    "in_plan",
 }
 VERSION_KEYS = {
     "document_id",
@@ -381,6 +385,8 @@ GROUP_KEYS = {
     "note_count",
     "last_activity_at",
     "has_issue",
+    "plan_revision",
+    "not_in_plan_languages",
 }
 PAGE_KEYS = {
     "groups",

@@ -39,6 +39,11 @@ export type RowSubmissions = components["schemas"]["RowSubmissions"];
 export type RowSubmissionView = components["schemas"]["RowSubmissionView"];
 export type RowRoundView = components["schemas"]["RowRoundView"];
 export type OpenTranslationReviewView = components["schemas"]["OpenTranslationReviewView"];
+// Next step per Documents row (lead workflow L1)
+export type NextStepView = components["schemas"]["NextStepView"];
+export type StepOwnerView = components["schemas"]["StepOwnerView"];
+export type StepDetailView = components["schemas"]["StepDetailView"];
+export type DocumentCaseIds = components["schemas"]["DocumentCaseIds"];
 // Work plan (lead workflow L0)
 export type PersonRefView = components["schemas"]["PersonRefView"];
 export type PlanFlagsView = components["schemas"]["PlanFlagsView"];
@@ -64,6 +69,8 @@ export type UploadWorkPlan = components["schemas"]["UploadWorkPlan"];
 export type CommitUploadPlan = Partial<Pick<components["schemas"]["CommitUpload"], "plan_languages" | "plan_cases" | "accept_external_review">>;
 /** Filters of the Documents read API; `retain` keys are "{case_id}:{language}". */
 export type DocumentRowsQuery = Omit<NonNullable<operations["document_rows_api_v1_projects__key__document_rows_get"]["parameters"]["query"]>, "retain"> & { retain?: readonly string[] };
+/** Filters of the filtered case IDs (the Documents filters without page and retain). */
+export type DocumentCaseIdsQuery = NonNullable<operations["document_case_ids_api_v1_projects__key__document_rows_case_ids_get"]["parameters"]["query"]>;
 export type SubmissionHistorySummary = components['schemas']['SubmissionHistorySummary'];
 export type SubmissionHistoryDetail = components['schemas']['SubmissionHistoryDetail'];
 export type OpenWorkspaceRequest = components["schemas"]["OpenWorkspaceRequest"];
@@ -301,6 +308,15 @@ export class ApiClient {
     }
     for (const item of filters.retain ?? []) query.append("retain", item);
     return this.request<DocumentRowsPage>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows${query.size ? `?${query}` : ""}`, { method: "GET" });
+  }
+
+  /** Case IDs matching the Documents filters, in list order (at most 2000). */
+  async listDocumentCaseIds(key: string, filters: DocumentCaseIdsQuery = {}): Promise<DocumentCaseIds> {
+    const query = new URLSearchParams();
+    for (const [name, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== null && value !== "") query.set(name, String(value));
+    }
+    return this.request<DocumentCaseIds>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/case-ids${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
 
   async getRowSubmissions(key: string, caseId: string, language: string): Promise<RowSubmissions> {

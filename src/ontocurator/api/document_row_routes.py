@@ -3,22 +3,28 @@
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
 
 from ontocurator.api.document_projection import AssignmentFilter, AssignmentStatus
 from ontocurator.api.encoded_routes import EncodedParameterRoute
 from ontocurator.api.identity import PrincipalDep
+from ontocurator.api.person_views import PersonRefView
 from ontocurator.api.routes import get_access
+from ontocurator.api.work_plan_routes import PlanFlagsView
 from ontocurator.application.document_rows import (
     MAX_RETAIN,
     DocumentRowsService,
+    PlanFilter,
     RowQuery,
+    Segment,
+    Sort,
 )
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Task
 from ontocurator.domain.document_rows import BarCategory
+from ontocurator.domain.next_steps import RowAction, Stage, StepCode, StepKind
 from ontocurator.domain.submission_labels import SubmissionKind
 from ontocurator.domain.variants import TranslationStatus, VariantOrigin
 
@@ -134,6 +140,53 @@ class RowProblemReport(_View):
     active_hold_count: int
 
 
+class StepOwnerView(_View):
+    kind: Literal["you", "person", "people", "none"]
+    person: PersonRefView | None = None
+    count: int = 0
+
+
+class StepDetailView(_View):
+    """Secondary line of a next step (spec "Next step")."""
+
+    kind: Literal[
+        "version",
+        "source_ready",
+        "annotations_submitted",
+        "round",
+        "report",
+        "final",
+        "review_only",
+        "waiting",
+    ]
+    version: int | None = None
+    origin: VariantOrigin | None = None
+    translation_status: TranslationStatus | None = None
+    submitted: int | None = None
+    total: int | None = None
+    round_ordinal: int | None = None
+    excerpt: str | None = None
+    reporter: PersonRefView | None = None
+    task_paused: bool = False
+
+
+class NextStepView(_View):
+    code: StepCode
+    kind: StepKind
+    stage: Stage
+    action: RowAction | None = None
+    badges: list[Literal["your_decision", "check_failed", "paused"]] = Field(
+        default_factory=list
+    )
+    assigned: int | None = None
+    target: int | None = None
+    owner: StepOwnerView
+    detail: StepDetailView | None = None
+    report_id: str | None = None
+    assignment_id: int | None = None
+    document_id: str | None = None
+
+
 class DocumentRowView(_View):
     case_id: str
     language: str
@@ -157,6 +210,12 @@ class DocumentRowView(_View):
     # Every report of the row, newest first. A factory default keeps the field
     # optional in the generated types (older fixtures and clients omit it).
     problem_reports: list[RowProblemReport] = Field(default_factory=list)
+    # Lead workflow: the row's next step (first of ``steps``), every matching
+    # step, its work-plan flags and whether it is in the plan (own fact).
+    next_step: NextStepView | None = None
+    steps: list[NextStepView] = Field(default_factory=list)
+    plan_row: PlanFlagsView | None = None
+    in_plan: bool = True
 
 
 class DocumentGroupView(_View):
@@ -168,6 +227,9 @@ class DocumentGroupView(_View):
     note_count: int
     last_activity_at: datetime | None
     has_issue: bool
+    plan_revision: int = 1
+    # Languages of the case's rows that are not in the plan (source first).
+    not_in_plan_languages: list[str] = Field(default_factory=list)
 
 
 class DecisionBarView(BaseModel):
@@ -181,6 +243,19 @@ class DecisionBarView(BaseModel):
     missing_final: int = Field(validation_alias="missing-final")
     no_final: int
     shown: int
+    # Segments (D21): rows in the plan by the kind of their next step.
+    in_plan: int = 0
+    needs_decision: int = 0
+    to_assign: int = 0
+    in_progress: int = 0
+    # "Needs your decision" rows per category (hyphenated category keys).
+    decision_categories: dict[str, int] = Field(default_factory=dict)
+
+
+class DocumentCaseIds(_View):
+    case_ids: list[str]
+    total: int
+    truncated: bool
 
 
 class DocumentRowsPage(_View):
@@ -254,11 +329,19 @@ def _service(request: Request, principal: Any) -> DocumentRowsService:
     )
 
 
-@router.get("/document-rows", response_model=DocumentRowsPage)
-def document_rows(
-    key: str,
-    principal: PrincipalDep,
-    request: Request,
+def _exclusive(name: str, other: str) -> RequestValidationError:
+    return RequestValidationError(
+        [
+            {
+                "loc": ("query", name),
+                "msg": f"{other} and {name} are mutually exclusive",
+                "type": "value_error",
+            }
+        ]
+    )
+
+
+def _filters(
     language: str | None = None,
     status: AssignmentFilter | None = None,
     q: str | None = None,
@@ -267,36 +350,61 @@ def document_rows(
     | Literal["accepted_without_review"]
     | None = None,
     decision: Decision | None = None,
-    final: Literal["missing"] | None = None,
+    final: Literal["missing", "none"] | None = None,
     case: str | None = None,
+    segment: Segment | None = None,
+    step: StepCode | None = None,
+    stage: Stage | None = None,
+    owner: Annotated[str | None, Query(description='"me" or a pseudonym')] = None,
+    plan: PlanFilter | None = None,
+    sort: Sort = "case",
+) -> dict[str, Any]:
+    """Filters shared by the rows page and the filtered case IDs."""
+    if decision is not None and final is not None:
+        raise _exclusive("final", "decision")
+    if decision is not None and segment is not None:
+        raise _exclusive("segment", "decision")
+    return {
+        "language": language,
+        "status": status,
+        "q": q,
+        "origin": origin,
+        "translation_status": translation_status,
+        "decision": decision,
+        "final": final,
+        "case": case,
+        "segment": segment,
+        "step": step,
+        "stage": stage,
+        "owner": owner,
+        "plan": plan,
+        "sort": sort,
+    }
+
+
+FiltersDep = Annotated[dict[str, Any], Depends(_filters)]
+
+
+@router.get("/document-rows/case-ids", response_model=DocumentCaseIds)
+def document_case_ids(
+    key: str, principal: PrincipalDep, request: Request, filters: FiltersDep
+) -> dict[str, Any]:
+    """Case IDs matching the filters in list order, at most 2000 (leads only)."""
+    return _service(request, principal).case_ids(key, RowQuery(**filters))
+
+
+@router.get("/document-rows", response_model=DocumentRowsPage)
+def document_rows(
+    key: str,
+    principal: PrincipalDep,
+    request: Request,
+    filters: FiltersDep,
     page: Annotated[int, Query(ge=1)] = 1,
     retain: Annotated[list[str] | None, Query(max_length=MAX_RETAIN)] = None,
 ) -> dict[str, Any]:
     """Documents rows grouped by text, with the decision bar (leads only)."""
-    if decision is not None and final is not None:
-        raise RequestValidationError(
-            [
-                {
-                    "loc": ("query", "final"),
-                    "msg": "decision and final are mutually exclusive",
-                    "type": "value_error",
-                }
-            ]
-        )
     return _service(request, principal).page(
-        key,
-        RowQuery(
-            language=language,
-            status=status,
-            q=q,
-            origin=origin,
-            translation_status=translation_status,
-            decision=decision,
-            final=final,
-            case=case,
-            page=page,
-            retain=tuple(retain or ()),
-        ),
+        key, RowQuery(**filters, page=page, retain=tuple(retain or ()))
     )
 
 

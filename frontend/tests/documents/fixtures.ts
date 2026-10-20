@@ -34,7 +34,7 @@ export interface DocumentsScenario {
 export const rowKey = (caseId: string, language: string): string => `${caseId}:${language}`;
 
 export function bar(overrides: Partial<DecisionBarView> = {}): DecisionBarView {
-  return { total: 0, report_or_pause: 0, confirm_final: 0, translation: 0, missing_final: 0, no_final: 0, shown: 0, ...overrides };
+  return { total: 0, report_or_pause: 0, confirm_final: 0, translation: 0, missing_final: 0, no_final: 0, shown: 0, in_plan: 0, needs_decision: 0, to_assign: 0, in_progress: 0, decision_categories: {}, ...overrides };
 }
 
 export function version(overrides: Partial<DocumentVersionView> & Pick<DocumentVersionView, "document_id">): DocumentVersionView {
@@ -124,6 +124,10 @@ export function row(overrides: Partial<DocumentRowView> & Pick<DocumentRowView, 
     pinned: false,
     retained: false,
     matches_decision: true,
+    next_step: null,
+    steps: [],
+    plan_row: { review: false, annotate: true, review_applicable: false, discarded: false },
+    in_plan: true,
     ...overrides,
   };
 }
@@ -139,6 +143,8 @@ export function group(caseId: string, rows: DocumentRowView[], overrides: Partia
     note_count: rows.reduce((sum, entry) => sum + entry.notes.length, 0),
     last_activity_at: activity.length ? activity[activity.length - 1] : null,
     has_issue: rows.some(entry => entry.categories.length > 0),
+    plan_revision: 1,
+    not_in_plan_languages: [],
     ...overrides,
   };
 }

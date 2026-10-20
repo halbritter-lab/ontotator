@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from sqlalchemy import Connection, and_, exists, func, select, union_all
 
-from ontocurator.application.document_row_page import build_page
+from ontocurator.application.document_row_page import build_page, case_ids
 from ontocurator.application.document_row_reports import load_row_reports
 from ontocurator.application.document_row_submissions import build_submissions
 from ontocurator.application.final_causes import (
@@ -20,10 +20,14 @@ from ontocurator.application.final_causes import (
     derive_final_state,
     latest_review_decisions,
 )
+from ontocurator.application.people import person_refs
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain import document_rows as rules
+from ontocurator.domain.next_steps import Stage, StepCode
+from ontocurator.domain.work_plans import PlanFlags, RowKey
+from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
 from ontocurator.storage.final_tables import FinalSelectionRow
 from ontocurator.storage.repository import Repository
@@ -54,6 +58,9 @@ PAGE_SIZE = rules.PAGE_SIZE  # re-export for existing callers
 Decision = Literal[
     "all", "report-or-pause", "confirm-final", "translation", "missing-final"
 ]
+Segment = Literal["decision", "assign", "progress"]
+PlanFilter = Literal["review", "annotate", "review_and_annotate", "not_in_plan"]
+Sort = Literal["case", "import", "activity"]
 MAX_RETAIN = 200
 EXCERPT_LENGTH = 120
 
@@ -66,9 +73,16 @@ class RowQuery:
     origin: str | None = None
     translation_status: str | None = None  # adds accepted_without_review
     decision: Decision | None = None
-    final: Literal["missing"] | None = None
+    # "missing": no final result (any row); "none": Annotate on, no final result.
+    final: Literal["missing", "none"] | None = None
     case: str | None = None
     page: int = 1
+    segment: Segment | None = None  # bar segment of the row's next step
+    step: StepCode | None = None  # any of the row's steps
+    stage: Stage | None = None  # stage of the row's next step
+    owner: str | None = None  # "me" or a pseudonym (owner of the next step)
+    plan: PlanFilter | None = None  # review / annotate: that flag is on
+    sort: Sort = "case"
     # "{case_id}:{language}" keys kept visible this visit (Task 5.9). A key
     # splits at the last ":" (case ids may contain ":"; language codes do not).
     retain: tuple[str, ...] = ()
@@ -76,6 +90,8 @@ class RowQuery:
     def __post_init__(self) -> None:
         if self.decision is not None and self.final is not None:
             raise ValueError("decision and final are mutually exclusive")
+        if self.decision is not None and self.segment is not None:
+            raise ValueError("decision and segment are mutually exclusive")
         if self.page < 1:
             raise ValueError("page starts at 1")
         if len(self.retain) > MAX_RETAIN:
@@ -113,6 +129,7 @@ class ReportFact:
     reporter_label: str
     created_at: datetime
     task_state: Literal["paused", "resumed"]
+    reporter_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +158,16 @@ class RowFacts:
     row_reports: dict[tuple[str, str], list[dict[str, Any]]] = field(
         default_factory=dict
     )
+    # Work plan: effective flags per row, plan revision per case, newest
+    # acceptance and discard record per document.
+    plan: dict[RowKey, PlanFlags] = field(default_factory=dict)
+    revisions: dict[str, int] = field(default_factory=dict)
+    acceptances: dict[str, dict[str, Any]] = field(default_factory=dict)
+    discarded: dict[str, dict[str, Any]] = field(default_factory=dict)
+    annotations_per_text: int = 1
+    rule_on: bool = True  # annotate_accepted_translations_only
+    # user id -> PersonRefView fields (lead viewer: display names included)
+    people: dict[int, dict[str, Any]] = field(default_factory=dict)
 
 
 def load_last_activity(
@@ -433,6 +460,7 @@ def _reports(conn: Connection, pid: int) -> dict[str, ReportFact]:
             reporter_label=row.pseudonym,
             created_at=row.created_at,
             task_state="paused" if row.paused else "resumed",
+            reporter_id=row.reporter_id,
         )
         for row in conn.execute(
             select(
@@ -440,6 +468,7 @@ def _reports(conn: Connection, pid: int) -> dict[str, ReportFact]:
                 ProblemReportRow.assignment_id,
                 ProblemReportRow.reason,
                 ProblemReportRow.created_at,
+                ProblemReportRow.reporter_id,
                 UserRow.pseudonym,
                 paused,
             )
@@ -468,27 +497,43 @@ def load_facts(
     conn: Connection, repo: Repository, key: str, pid: int, viewer_user_id: int
 ) -> RowFacts:
     """All facts of project ``key`` on ``conn``; the caller has authorized it."""
-    rule = conn.execute(
-        select(ProjectRow.adjudicator_not_annotator).where(ProjectRow.id == pid)
-    ).scalar_one()
+    project = conn.execute(
+        select(
+            ProjectRow.adjudicator_not_annotator,
+            ProjectRow.annotate_accepted_translations_only,
+            ProjectRow.annotations_per_text,
+        ).where(ProjectRow.id == pid)
+    ).one()
     viewer = conn.execute(
         select(UserRow.pseudonym).where(UserRow.id == viewer_user_id)
     ).scalar_one()
     last_activity, selection_activity = load_last_activity(conn, pid)
     versions = _versions(conn, pid)
+    assignments = _assignments(conn, pid)
+    reports = _reports(conn, pid)
+    people = person_refs(
+        conn,
+        [
+            viewer_user_id,
+            *(item.user_id for item in assignments),
+            *(item.reporter_id for item in reports.values() if item.reporter_id),
+        ],
+        viewer_id=viewer_user_id,
+        viewer_is_lead=True,  # Documents is lead-only
+    )
     return RowFacts(
         project_key=key,
         viewer_user_id=viewer_user_id,
         viewer_pseudonym=viewer,
-        adjudicator_not_annotator=rule,
+        adjudicator_not_annotator=project.adjudicator_not_annotator,
         versions=versions,
         accepted_without_review=_accepted_without_review(conn, pid),
-        assignments=_assignments(conn, pid),
+        assignments=assignments,
         rounds=_rounds(conn, pid),
         submission_counts=_submission_counts(conn, pid),
         selected_submissions=_selected_submissions(conn, pid),
         open_translation_reviews=_open_translation_reviews(conn, pid),
-        reports=_reports(conn, pid),
+        reports=reports,
         final_state=derive_final_state(conn, repo, key, pid),
         selections=_selections(conn, pid),
         last_activity=last_activity,
@@ -496,6 +541,15 @@ def load_facts(
         row_reports=load_row_reports(
             conn, pid, {(v.case_id, v.language) for v in versions}
         ),
+        plan=work_plan_store.effective_plan(conn, pid),
+        revisions=work_plan_store.revisions(
+            conn, pid, sorted({v.case_id for v in versions})
+        ),
+        acceptances=work_plan_store.acceptances(conn, pid),
+        discarded=work_plan_store.discarded(conn, pid),
+        annotations_per_text=project.annotations_per_text,
+        rule_on=project.annotate_accepted_translations_only,
+        people={uid: ref.model_dump() for uid, ref in people.items()},
     )
 
 
@@ -509,6 +563,14 @@ class DocumentRowsService:
             pid = authorize_final_results(conn, self.actor, key, exclusive=False)
             facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
             return build_page(facts, query)
+
+    def case_ids(self, key: str, query: RowQuery) -> dict[str, Any]:
+        """Case IDs matching ``query`` in list order (header checkbox)."""
+        with self.db.transaction() as conn:
+            pid = authorize_final_results(conn, self.actor, key, exclusive=False)
+            facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
+            ids, total, truncated = case_ids(facts, query)
+            return {"case_ids": ids, "total": total, "truncated": truncated}
 
     def submissions(self, key: str, case_id: str, language: str) -> dict[str, Any]:
         with self.db.transaction() as conn:

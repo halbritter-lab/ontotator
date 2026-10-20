@@ -2415,14 +2415,14 @@
         }
       }
     },
-    "/api/v1/projects/{key}/document-rows": {
+    "/api/v1/projects/{key}/document-rows/case-ids": {
       "get": {
         "tags": [
           "documents"
         ],
-        "summary": "Document Rows",
-        "description": "Documents rows grouped by text, with the decision bar (leads only).",
-        "operationId": "document_rows_api_v1_projects__key__document_rows_get",
+        "summary": "Document Case Ids",
+        "description": "Case IDs matching the filters in list order, at most 2000 (leads only).",
+        "operationId": "document_case_ids_api_v1_projects__key__document_rows_case_ids_get",
         "parameters": [
           {
             "name": "key",
@@ -2568,7 +2568,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "const": "missing",
+                  "enum": [
+                    "missing",
+                    "none"
+                  ],
                   "type": "string"
                 },
                 {
@@ -2592,6 +2595,180 @@
                 }
               ],
               "title": "Case"
+            }
+          },
+          {
+            "name": "segment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "decision",
+                    "assign",
+                    "progress"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Segment"
+            }
+          },
+          {
+            "name": "step",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "decide_report",
+                    "resume_task",
+                    "confirm_final",
+                    "resolve_rejected",
+                    "resolve_queried",
+                    "translation_not_accepted",
+                    "choose_final",
+                    "assign_translation_review",
+                    "translation_review_in_progress",
+                    "assign_annotation",
+                    "annotation_in_progress",
+                    "annotation_review_in_progress",
+                    "waiting_for_translation_review",
+                    "done",
+                    "translation_accepted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Step"
+            }
+          },
+          {
+            "name": "stage",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "translation_review",
+                    "annotation",
+                    "final",
+                    "done"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stage"
+            }
+          },
+          {
+            "name": "owner",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\"me\" or a pseudonym",
+              "title": "Owner"
+            },
+            "description": "\"me\" or a pseudonym"
+          },
+          {
+            "name": "plan",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "review",
+                    "annotate",
+                    "review_and_annotate",
+                    "not_in_plan"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Plan"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "case",
+                "import",
+                "activity"
+              ],
+              "type": "string",
+              "default": "case",
+              "title": "Sort"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentCaseIds"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/document-rows": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Document Rows",
+        "description": "Documents rows grouped by text, with the decision bar (leads only).",
+        "operationId": "document_rows_api_v1_projects__key__document_rows_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
             }
           },
           {
@@ -2623,6 +2800,301 @@
                 }
               ],
               "title": "Retain"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "unassigned",
+                    "open",
+                    "in_progress",
+                    "submitted",
+                    "reopened",
+                    "held"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "native",
+                    "machine_translation",
+                    "human_translation",
+                    "correction"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Origin"
+            }
+          },
+          {
+            "name": "translation_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "translated",
+                    "automatic_check_failed",
+                    "ready_for_review",
+                    "reviewed",
+                    "accepted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "const": "accepted_without_review",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Translation Status"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "all",
+                    "report-or-pause",
+                    "confirm-final",
+                    "translation",
+                    "missing-final"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Decision"
+            }
+          },
+          {
+            "name": "final",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "missing",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Final"
+            }
+          },
+          {
+            "name": "case",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Case"
+            }
+          },
+          {
+            "name": "segment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "decision",
+                    "assign",
+                    "progress"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Segment"
+            }
+          },
+          {
+            "name": "step",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "decide_report",
+                    "resume_task",
+                    "confirm_final",
+                    "resolve_rejected",
+                    "resolve_queried",
+                    "translation_not_accepted",
+                    "choose_final",
+                    "assign_translation_review",
+                    "translation_review_in_progress",
+                    "assign_annotation",
+                    "annotation_in_progress",
+                    "annotation_review_in_progress",
+                    "waiting_for_translation_review",
+                    "done",
+                    "translation_accepted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Step"
+            }
+          },
+          {
+            "name": "stage",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "translation_review",
+                    "annotation",
+                    "final",
+                    "done"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stage"
+            }
+          },
+          {
+            "name": "owner",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\"me\" or a pseudonym",
+              "title": "Owner"
+            },
+            "description": "\"me\" or a pseudonym"
+          },
+          {
+            "name": "plan",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "review",
+                    "annotate",
+                    "review_and_annotate",
+                    "not_in_plan"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Plan"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "case",
+                "import",
+                "activity"
+              ],
+              "type": "string",
+              "default": "case",
+              "title": "Sort"
             }
           }
         ],
@@ -7106,6 +7578,33 @@
           "shown": {
             "type": "integer",
             "title": "Shown"
+          },
+          "in_plan": {
+            "type": "integer",
+            "title": "In Plan",
+            "default": 0
+          },
+          "needs_decision": {
+            "type": "integer",
+            "title": "Needs Decision",
+            "default": 0
+          },
+          "to_assign": {
+            "type": "integer",
+            "title": "To Assign",
+            "default": 0
+          },
+          "in_progress": {
+            "type": "integer",
+            "title": "In Progress",
+            "default": 0
+          },
+          "decision_categories": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Decision Categories"
           }
         },
         "additionalProperties": false,
@@ -7261,6 +7760,33 @@
         "title": "Document",
         "description": "Immutable document containing original text and UTF-8 byte SHA-256."
       },
+      "DocumentCaseIds": {
+        "properties": {
+          "case_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "case_ids",
+          "total",
+          "truncated"
+        ],
+        "title": "DocumentCaseIds"
+      },
       "DocumentGroupView": {
         "properties": {
           "case_id": {
@@ -7305,6 +7831,18 @@
           "has_issue": {
             "type": "boolean",
             "title": "Has Issue"
+          },
+          "plan_revision": {
+            "type": "integer",
+            "title": "Plan Revision",
+            "default": 1
+          },
+          "not_in_plan_languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Not In Plan Languages"
           }
         },
         "additionalProperties": false,
@@ -7451,6 +7989,38 @@
             },
             "type": "array",
             "title": "Problem Reports"
+          },
+          "next_step": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextStepView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/NextStepView"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "plan_row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanFlagsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "in_plan": {
+            "type": "boolean",
+            "title": "In Plan",
+            "default": true
           }
         },
         "additionalProperties": false,
@@ -9175,6 +9745,161 @@
         ],
         "title": "MutationEnvelope",
         "description": "Request envelope identifying a write attempt across retries."
+      },
+      "NextStepView": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "decide_report",
+              "resume_task",
+              "confirm_final",
+              "resolve_rejected",
+              "resolve_queried",
+              "translation_not_accepted",
+              "choose_final",
+              "assign_translation_review",
+              "translation_review_in_progress",
+              "assign_annotation",
+              "annotation_in_progress",
+              "annotation_review_in_progress",
+              "waiting_for_translation_review",
+              "done",
+              "translation_accepted"
+            ],
+            "title": "Code"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "decision",
+              "assign",
+              "in_progress",
+              "done"
+            ],
+            "title": "Kind"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "translation_review",
+              "annotation",
+              "final",
+              "done"
+            ],
+            "title": "Stage"
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "decide_report",
+                  "resume_task",
+                  "review_changes",
+                  "resolve",
+                  "accept_or_review",
+                  "choose_final",
+                  "assign_translation_review",
+                  "assign_annotation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "badges": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "your_decision",
+                "check_failed",
+                "paused"
+              ]
+            },
+            "type": "array",
+            "title": "Badges"
+          },
+          "assigned": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/StepOwnerView"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StepDetailView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Id"
+          },
+          "assignment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "kind",
+          "stage",
+          "owner"
+        ],
+        "title": "NextStepView"
       },
       "OldMentionView": {
         "properties": {
@@ -13836,6 +14561,171 @@
           "reason"
         ],
         "title": "StatusOverride"
+      },
+      "StepDetailView": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "version",
+              "source_ready",
+              "annotations_submitted",
+              "round",
+              "report",
+              "final",
+              "review_only",
+              "waiting"
+            ],
+            "title": "Kind"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "native",
+                  "machine_translation",
+                  "human_translation",
+                  "correction"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "translation_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "translated",
+                  "automatic_check_failed",
+                  "ready_for_review",
+                  "reviewed",
+                  "accepted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation Status"
+          },
+          "submitted": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "reporter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_paused": {
+            "type": "boolean",
+            "title": "Task Paused",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "StepDetailView",
+        "description": "Secondary line of a next step (spec \"Next step\")."
+      },
+      "StepOwnerView": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "you",
+              "person",
+              "people",
+              "none"
+            ],
+            "title": "Kind"
+          },
+          "person": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "StepOwnerView"
       },
       "Submission": {
         "properties": {

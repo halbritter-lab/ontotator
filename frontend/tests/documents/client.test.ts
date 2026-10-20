@@ -35,3 +35,25 @@ it("encodes the case path of a row's submissions", async () => {
   await new ApiClient().getRowSubmissions("p", "case/1 #é", "de");
   expect(String(fetchSpy.mock.calls[0][0])).toBe(`/api/v1/projects/p/document-rows/${encodeURIComponent("case/1 #é")}/de/submissions`);
 });
+
+it("serialises segment, plan, sort and owner filters", async () => {
+  const fetchSpy = stubFetch({ groups: [], page: 1, page_count: 1, group_count: 0, bar: {}, case_found: true, adjudicator_not_annotator: false });
+  await new ApiClient().listDocumentRows("p", { segment: "assign", plan: "not_in_plan", sort: "activity", owner: "me", step: "choose_final", stage: "final", final: "none" });
+  const url = String(fetchSpy.mock.calls[0][0]);
+  for (const part of ["segment=assign", "plan=not_in_plan", "sort=activity", "owner=me", "step=choose_final", "stage=final", "final=none"]) expect(url).toContain(part);
+});
+
+it("requests filtered case ids", async () => {
+  const body = { case_ids: ["c1", "c2"], total: 2, truncated: false };
+  const fetchSpy = stubFetch(body);
+  const result = await new ApiClient().listDocumentCaseIds("p 1", { segment: "decision", language: "de", q: undefined });
+  const url = String(fetchSpy.mock.calls[0][0]);
+  expect(url).toContain("/api/v1/projects/p%201/document-rows/case-ids?");
+  expect(url).toContain("segment=decision");
+  expect(url).toContain("language=de");
+  expect(url).not.toContain("q=");
+  expect(fetchSpy.mock.calls[0][1].method).toBe("GET");
+  expect(result).toEqual(body);
+  await new ApiClient().listDocumentCaseIds("p");
+  expect(String(fetchSpy.mock.calls[1][0])).toBe("/api/v1/projects/p/document-rows/case-ids");
+});

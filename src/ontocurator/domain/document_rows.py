@@ -19,6 +19,8 @@ __all__ = [
     "CATEGORIES",
     "NOT_NEWER",
     "PAGE_SIZE",
+    "SEGMENT_FIELDS",
+    "STEP_CATEGORIES",
     "TRANSLATION_CODES",
     "AssignmentFact",
     "BarCategory",
@@ -36,6 +38,7 @@ __all__ = [
     "open_target",
     "prefix_matches",
     "round_ordinals",
+    "segment_counts",
     "submission_kind",
     "translation_issue",
     "version_label",
@@ -275,3 +278,44 @@ def prefix_matches(q: str, identifiers: Iterable[str]) -> bool:
     return any(
         unicodedata.normalize("NFKC", item).startswith(prefix) for item in identifiers
     )
+
+
+# Bar (D21): "Needs your decision" category of a decision step (rules 1-5, 4a).
+STEP_CATEGORIES: dict[str, BarCategory] = {
+    "decide_report": "report-or-pause",
+    "resume_task": "report-or-pause",
+    "confirm_final": "confirm-final",
+    "resolve_rejected": "translation",
+    "resolve_queried": "translation",
+    "translation_not_accepted": "translation",
+    "choose_final": "missing-final",
+}
+SEGMENT_FIELDS: dict[str, str] = {
+    "decision": "needs_decision",
+    "assign": "to_assign",
+    "progress": "in_progress",
+}
+
+
+def segment_counts(
+    rows: Iterable[tuple[bool, str | None, str | None]],
+) -> dict[str, Any]:
+    """Bar segments from ``(in_plan, segment, next step code)`` per row.
+
+    Every in-plan row counts in ``in_plan`` and in at most one segment (the
+    segment of its next step); decision rows also count in their category.
+    """
+    counts: dict[str, Any] = {
+        "in_plan": 0,
+        **dict.fromkeys(SEGMENT_FIELDS.values(), 0),
+        "decision_categories": dict.fromkeys(CATEGORIES, 0),
+    }
+    for in_plan, segment, code in rows:
+        if not in_plan:
+            continue
+        counts["in_plan"] += 1
+        if segment is not None:
+            counts[SEGMENT_FIELDS[segment]] += 1
+        if segment == "decision" and code in STEP_CATEGORIES:
+            counts["decision_categories"][STEP_CATEGORIES[code]] += 1
+    return counts

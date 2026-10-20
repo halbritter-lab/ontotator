@@ -745,6 +745,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/document-rows/case-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document Case Ids
+         * @description Case IDs matching the filters in list order, at most 2000 (leads only).
+         */
+        get: operations["document_case_ids_api_v1_projects__key__document_rows_case_ids_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/document-rows": {
         parameters: {
             query?: never;
@@ -2415,6 +2435,30 @@ export interface components {
             no_final: number;
             /** Shown */
             shown: number;
+            /**
+             * In Plan
+             * @default 0
+             */
+            in_plan: number;
+            /**
+             * Needs Decision
+             * @default 0
+             */
+            needs_decision: number;
+            /**
+             * To Assign
+             * @default 0
+             */
+            to_assign: number;
+            /**
+             * In Progress
+             * @default 0
+             */
+            in_progress: number;
+            /** Decision Categories */
+            decision_categories?: {
+                [key: string]: number;
+            };
         };
         /** DiscardRequest */
         DiscardRequest: {
@@ -2470,6 +2514,15 @@ export interface components {
             /** Text Sha256 */
             text_sha256: string;
         };
+        /** DocumentCaseIds */
+        DocumentCaseIds: {
+            /** Case Ids */
+            case_ids: string[];
+            /** Total */
+            total: number;
+            /** Truncated */
+            truncated: boolean;
+        };
         /** DocumentGroupView */
         DocumentGroupView: {
             /** Case Id */
@@ -2488,6 +2541,13 @@ export interface components {
             last_activity_at: string | null;
             /** Has Issue */
             has_issue: boolean;
+            /**
+             * Plan Revision
+             * @default 1
+             */
+            plan_revision: number;
+            /** Not In Plan Languages */
+            not_in_plan_languages?: string[];
         };
         /** DocumentRowView */
         DocumentRowView: {
@@ -2527,6 +2587,15 @@ export interface components {
             matches_decision: boolean;
             /** Problem Reports */
             problem_reports?: components["schemas"]["RowProblemReport"][];
+            next_step?: components["schemas"]["NextStepView"] | null;
+            /** Steps */
+            steps?: components["schemas"]["NextStepView"][];
+            plan_row?: components["schemas"]["PlanFlagsView"] | null;
+            /**
+             * In Plan
+             * @default true
+             */
+            in_plan: boolean;
         };
         /** DocumentRowsPage */
         DocumentRowsPage: {
@@ -3186,6 +3255,40 @@ export interface components {
             payload: {
                 [key: string]: unknown;
             };
+        };
+        /** NextStepView */
+        NextStepView: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "decision" | "assign" | "in_progress" | "done";
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "translation_review" | "annotation" | "final" | "done";
+            /** Action */
+            action?: ("decide_report" | "resume_task" | "review_changes" | "resolve" | "accept_or_review" | "choose_final" | "assign_translation_review" | "assign_annotation") | null;
+            /** Badges */
+            badges?: ("your_decision" | "check_failed" | "paused")[];
+            /** Assigned */
+            assigned?: number | null;
+            /** Target */
+            target?: number | null;
+            owner: components["schemas"]["StepOwnerView"];
+            detail?: components["schemas"]["StepDetailView"] | null;
+            /** Report Id */
+            report_id?: string | null;
+            /** Assignment Id */
+            assignment_id?: number | null;
+            /** Document Id */
+            document_id?: string | null;
         };
         /** OldMentionView */
         OldMentionView: {
@@ -4879,6 +4982,51 @@ export interface components {
             version: number;
             /** Reason */
             reason: string;
+        };
+        /**
+         * StepDetailView
+         * @description Secondary line of a next step (spec "Next step").
+         */
+        StepDetailView: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "version" | "source_ready" | "annotations_submitted" | "round" | "report" | "final" | "review_only" | "waiting";
+            /** Version */
+            version?: number | null;
+            /** Origin */
+            origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
+            /** Translation Status */
+            translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | null;
+            /** Submitted */
+            submitted?: number | null;
+            /** Total */
+            total?: number | null;
+            /** Round Ordinal */
+            round_ordinal?: number | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            reporter?: components["schemas"]["PersonRefView"] | null;
+            /**
+             * Task Paused
+             * @default false
+             */
+            task_paused: boolean;
+        };
+        /** StepOwnerView */
+        StepOwnerView: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "you" | "person" | "people" | "none";
+            person?: components["schemas"]["PersonRefView"] | null;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
         };
         /**
          * Submission
@@ -7348,7 +7496,7 @@ export interface operations {
             };
         };
     };
-    document_rows_api_v1_projects__key__document_rows_get: {
+    document_case_ids_api_v1_projects__key__document_rows_case_ids_get: {
         parameters: {
             query?: {
                 language?: string | null;
@@ -7357,10 +7505,64 @@ export interface operations {
                 origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
                 translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
                 decision?: ("all" | "report-or-pause" | "confirm-final" | "translation" | "missing-final") | null;
-                final?: "missing" | null;
+                final?: ("missing" | "none") | null;
                 case?: string | null;
+                segment?: ("decision" | "assign" | "progress") | null;
+                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted") | null;
+                stage?: ("translation_review" | "annotation" | "final" | "done") | null;
+                /** @description "me" or a pseudonym */
+                owner?: string | null;
+                plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan") | null;
+                sort?: "case" | "import" | "activity";
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentCaseIds"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    document_rows_api_v1_projects__key__document_rows_get: {
+        parameters: {
+            query?: {
                 page?: number;
                 retain?: string[] | null;
+                language?: string | null;
+                status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
+                q?: string | null;
+                origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
+                translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
+                decision?: ("all" | "report-or-pause" | "confirm-final" | "translation" | "missing-final") | null;
+                final?: ("missing" | "none") | null;
+                case?: string | null;
+                segment?: ("decision" | "assign" | "progress") | null;
+                step?: ("decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted") | null;
+                stage?: ("translation_review" | "annotation" | "final" | "done") | null;
+                /** @description "me" or a pseudonym */
+                owner?: string | null;
+                plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan") | null;
+                sort?: "case" | "import" | "activity";
             };
             header?: never;
             path: {
