@@ -11258,6 +11258,16 @@
             "type": "string",
             "title": "Owner Label"
           },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "case_id": {
             "type": "string",
             "title": "Case Id"
@@ -12159,6 +12169,16 @@
             "title": "Reporter Label",
             "default": ""
           },
+          "reporter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "case_id": {
             "type": "string",
             "title": "Case Id",
@@ -12250,6 +12270,16 @@
               }
             ],
             "title": "State Changed By Label"
+          },
+          "state_changed_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "withdrawable": {
             "type": "boolean",
@@ -13792,6 +13822,16 @@
             "type": "string",
             "title": "Actor Label"
           },
+          "actor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -13901,6 +13941,16 @@
             "type": "string",
             "title": "Owner Label"
           },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "case_id": {
             "type": "string",
             "title": "Case Id"
@@ -13926,6 +13976,16 @@
           "created_by_label": {
             "type": "string",
             "title": "Created By Label"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "active": {
             "type": "boolean",
@@ -13953,6 +14013,16 @@
               }
             ],
             "title": "Released By Label"
+          },
+          "released_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "release_action": {
             "anyOf": [

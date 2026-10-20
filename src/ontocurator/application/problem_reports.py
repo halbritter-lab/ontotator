@@ -726,7 +726,7 @@ class ProblemReportService:
             _project, _fresh, lead = self._readable(conn, access, report_id)
             if not lead:
                 raise DomainError("REPORT_NOT_FOUND")
-            return build_pause_candidates(conn, report_id)
+            return build_pause_candidates(conn, report_id, viewer_id=access.user_id)
 
     def list(
         self,

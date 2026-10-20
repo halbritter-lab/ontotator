@@ -3770,6 +3770,7 @@ export interface components {
             assignment_id: number;
             /** Owner Label */
             owner_label: string;
+            owner?: components["schemas"]["PersonRefView"] | null;
             /** Case Id */
             case_id: string;
             /** Language */
@@ -4090,6 +4091,7 @@ export interface components {
              * @default
              */
             reporter_label: string;
+            reporter?: components["schemas"]["PersonRefView"] | null;
             /**
              * Case Id
              * @default
@@ -4113,6 +4115,7 @@ export interface components {
             state_changed_at?: string | null;
             /** State Changed By Label */
             state_changed_by_label?: string | null;
+            state_changed_by?: components["schemas"]["PersonRefView"] | null;
             /**
              * Withdrawable
              * @default false
@@ -4733,6 +4736,7 @@ export interface components {
             action: string;
             /** Actor Label */
             actor_label: string;
+            actor?: components["schemas"]["PersonRefView"] | null;
             /**
              * Created At
              * Format: date-time
@@ -4768,6 +4772,7 @@ export interface components {
             assignment_id: number;
             /** Owner Label */
             owner_label: string;
+            owner?: components["schemas"]["PersonRefView"] | null;
             /** Case Id */
             case_id: string;
             /** Language */
@@ -4784,12 +4789,14 @@ export interface components {
             created_at: string;
             /** Created By Label */
             created_by_label: string;
+            created_by?: components["schemas"]["PersonRefView"] | null;
             /** Active */
             active: boolean;
             /** Released At */
             released_at?: string | null;
             /** Released By Label */
             released_by_label?: string | null;
+            released_by?: components["schemas"]["PersonRefView"] | null;
             /** Release Action */
             release_action?: ("resume" | "restart" | "withdraw") | null;
             /** Release Event Id */

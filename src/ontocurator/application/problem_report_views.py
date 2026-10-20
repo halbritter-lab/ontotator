@@ -12,6 +12,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Connection, select
 
+from ontocurator.api.person_views import PersonRefView
+from ontocurator.application.people import person_refs
 from ontocurator.authz.policy import Task
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.problem_reports import EventFact, withdrawable
@@ -52,6 +54,7 @@ class ReportEventView(BaseModel):
     event_id: str
     action: str
     actor_label: str
+    actor: PersonRefView | None = None
     created_at: datetime
     reason: str | None = None
     round_id: str | None = None
@@ -75,14 +78,17 @@ class ReportHoldView(BaseModel):
     hold_id: str
     assignment_id: int
     owner_label: str
+    owner: PersonRefView | None = None
     case_id: str
     language: str
     task: Task
     created_at: datetime
     created_by_label: str
+    created_by: PersonRefView | None = None
     active: bool
     released_at: datetime | None = None
     released_by_label: str | None = None
+    released_by: PersonRefView | None = None
     release_action: Literal["resume", "restart", "withdraw"] | None = None
     release_event_id: str | None = None
     other_active_holds: list[OtherActiveHold] = Field(
@@ -101,6 +107,7 @@ class PauseCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     assignment_id: int
     owner_label: str
+    owner: PersonRefView | None = None
     case_id: str
     language: str
     task: Task
@@ -127,6 +134,7 @@ class ProblemReportView(BaseModel):
     new_round: WorkRoundView | None = None
     created_at: datetime | None = None
     reporter_label: str = ""
+    reporter: PersonRefView | None = None
     case_id: str = ""
     language: str = ""
     task: Task | None = None
@@ -136,26 +144,31 @@ class ProblemReportView(BaseModel):
     submission: ReportSubmissionRef | None = None
     state_changed_at: datetime | None = None
     state_changed_by_label: str | None = None
+    state_changed_by: PersonRefView | None = None
     withdrawable: bool = False
     viewer_label: str = ""
     viewer_is_lead: bool = False
     holds: list[ReportHoldView] = Field(default_factory=list)
 
 
-def _labels(conn: Connection, user_ids: Iterable[int | None]) -> dict[int, str]:
-    ids = {uid for uid in user_ids if uid is not None}
-    if not ids:
-        return {}
-    return {
-        r.id: r.pseudonym
-        for r in conn.execute(
-            select(UserRow.id, UserRow.pseudonym).where(UserRow.id.in_(ids))
-        )
-    }
+def _people(
+    conn: Connection,
+    user_ids: Iterable[int | None],
+    *,
+    viewer_id: int,
+    viewer_is_lead: bool,
+) -> dict[int, PersonRefView]:
+    """One ``person_refs`` call per view: names only as D1 allows."""
+    return person_refs(
+        conn,
+        (uid for uid in user_ids if uid is not None),
+        viewer_id=viewer_id,
+        viewer_is_lead=viewer_is_lead,
+    )
 
 
 def _tasks(conn: Connection, project_id: int, ids: Iterable[int]) -> dict[int, Any]:
-    """Owner label, text identity and task kind of the given assignments."""
+    """Owner, text identity and task kind of the given assignments."""
     wanted = set(ids)
     if not wanted:
         return {}
@@ -165,6 +178,7 @@ def _tasks(conn: Connection, project_id: int, ids: Iterable[int]) -> dict[int, A
             select(
                 AssignmentRow.id,
                 AssignmentRow.task,
+                AssignmentRow.user_id,
                 UserRow.pseudonym,
                 DocumentRow.case_id,
                 DocumentRow.language,
@@ -288,13 +302,17 @@ def build_report_view(
         for r in event_rows:
             task_ids.update(_ids(r.details))
     tasks = _tasks(conn, pid, task_ids)
-    labels = _labels(
+    people = _people(
         conn,
         [reporter_id, viewer_id]
         + [r.actor_id for r in event_rows]
         + [h.created_by for h in hold_rows]
-        + [h.released_by for h in hold_rows],
+        + [h.released_by for h in hold_rows]
+        + [tasks[h.assignment_id].user_id for h in hold_rows],
+        viewer_id=viewer_id,
+        viewer_is_lead=viewer_is_lead,
     )
+    labels = {uid: ref.pseudonym for uid, ref in people.items()}
 
     events: list[ReportEventView] = []
     for r in event_rows:
@@ -315,6 +333,7 @@ def build_report_view(
                 event_id=r.event_id,
                 action=r.action,
                 actor_label=labels.get(r.actor_id, ""),
+                actor=people.get(r.actor_id),
                 created_at=r.created_at,
                 reason=r.details.get("reason"),
                 round_id=round_id,
@@ -362,14 +381,19 @@ def build_report_view(
             hold_id=h.hold_id,
             assignment_id=h.assignment_id,
             owner_label=tasks[h.assignment_id].pseudonym,
+            owner=people.get(tasks[h.assignment_id].user_id),
             case_id=tasks[h.assignment_id].case_id,
             language=tasks[h.assignment_id].language,
             task=tasks[h.assignment_id].task,
             created_at=h.created_at,
             created_by_label=labels.get(h.created_by, ""),
+            created_by=people.get(h.created_by),
             active=h.active,
             released_at=h.released_at,
             released_by_label=labels.get(h.released_by)
+            if h.released_by is not None
+            else None,
+            released_by=people.get(h.released_by)
             if h.released_by is not None
             else None,
             release_action=h.release_action,
@@ -424,6 +448,7 @@ def build_report_view(
         new_round=new_round,
         created_at=row["created_at"],
         reporter_label=labels.get(reporter_id, ""),
+        reporter=people.get(reporter_id),
         case_id=row["case_id"],
         language=row["language"],
         task=row["task"],
@@ -435,6 +460,7 @@ def build_report_view(
         submission=submission,
         state_changed_at=changed.created_at if changed else None,
         state_changed_by_label=labels.get(changed.actor_id) if changed else None,
+        state_changed_by=people.get(changed.actor_id) if changed else None,
         withdrawable=viewer_id == reporter_id
         and withdrawable(row["state"], reporter_id, facts),
         viewer_label=labels.get(viewer_id, ""),
@@ -443,8 +469,14 @@ def build_report_view(
     )
 
 
-def build_pause_candidates(conn: Connection, report_id: str) -> list[PauseCandidate]:
-    """Live tasks of active users in the report's project ("Pause other tasks")."""
+def build_pause_candidates(
+    conn: Connection, report_id: str, *, viewer_id: int | None = None
+) -> list[PauseCandidate]:
+    """Live tasks of active users in the report's project ("Pause other tasks").
+
+    Only leads read this list, so owners carry display names (D1); ``is_me``
+    is set only when ``viewer_id`` is given.
+    """
     report = conn.execute(
         select(
             ProblemReportRow.project_id,
@@ -474,6 +506,7 @@ def build_pause_candidates(conn: Connection, report_id: str) -> list[PauseCandid
         select(
             AssignmentRow.id,
             AssignmentRow.task,
+            AssignmentRow.user_id,
             UserRow.pseudonym,
             DocumentRow.case_id,
             DocumentRow.language,
@@ -489,11 +522,18 @@ def build_pause_candidates(conn: Connection, report_id: str) -> list[PauseCandid
             AssignmentRow.revoked_at.is_(None),
             UserRow.active.is_(True),
         )
+    ).all()
+    people = _people(
+        conn,
+        (r.user_id for r in rows),
+        viewer_id=-1 if viewer_id is None else viewer_id,
+        viewer_is_lead=True,
     )
     candidates = [
         PauseCandidate(
             assignment_id=r.id,
             owner_label=r.pseudonym,
+            owner=people.get(r.user_id),
             case_id=r.case_id,
             language=r.language,
             task=r.task,
