@@ -1,0 +1,248 @@
+# Project guidelines: versioned document, in-task reading, version per submission: design
+
+Status: design proposal, 2026-10-21. Scope and the core decisions (G1 to G9) approved by the user 2026-10-20; the detailed choices G10 to G24 were made while writing this spec and are open to the user's veto before implementation (see "Open questions"). Not implemented.
+Builds on: [T3 admin design](2026-10-14-t3-admin-design.md) (project settings, roles, audit), [problem reports](2026-10-19-problem-reports-design.md) (toolbar entry pattern, shared UI rules), [quick fixes and export](2026-10-19-quick-fixes-and-export-design.md) (final export archive), [lead follow-ups](2026-10-20-lead-followups-design.md) (migration `0017`). Mockups: none; the copy and structure below are binding.
+
+## Goal
+
+Every project can carry its annotation guidelines inside Ontocurator: one text document per project, versioned, uploaded by the project lead. Annotators and reviewers read the version in force from any task without leaving it and learn once, without being blocked, when a new version arrives. Every submitted result states the guideline version it was made under, and exports carry that version, so a result can always be read against the rules that applied to it.
+
+## Current state (verified in code, main `69db7d0`)
+
+- **Data:** a project has two free fields, `guideline_url` and `guideline_version` (`storage/tables.py:103-104`, created in `migrations/versions/0005_admin.py:52-53`). There is no guideline text, no history of versions and no per-user state.
+- **Settings API:** `ProjectSettingsChange.guideline_url` / `guideline_version` (`projects/service.py:59-60`); `validate_guideline` (`projects/service.py:162-175`) requires an HTTP(S) URL and a 1-64 character version together, otherwise `GUIDELINE_INCOMPLETE` (also `domain/admin_error_codes.py:47`, `frontend/src/admin/errors.ts:92`). Called from `update_settings` (`projects/service.py:319`); changes are audited as `project.update` with the field names (`projects/service.py:351-361`).
+- **Export:** `ProjectExport.guideline_ref` (`storage/repository.py:325`) is computed at export time as `f"{url}@{version}"` for the whole project (`storage/repository.py:1450-1455`, `1577-1579`) and stamped on every annotation set (`exchange/jobs.py:319` → `exchange/t1.py:558`, `764`; ontospan `AnnotationSet.guideline_ref: str | None`, `.venv/Lib/site-packages/ontospan/models.py:153`). Frozen final-export snapshots keep it once per snapshot (`exchange/final_content.py:102`, `130`). Consequence: a result made under version 1 and exported after the lead typed version 2 is labelled version 2. The translation review export (`exchange/review_export.py:120`, format `ontocurator-translation-review/v1`) carries no guideline reference.
+- **Submissions:** annotation, review, consolidation and carry-forward results are rows of the append-only `submissions` table (`storage/tables.py:390-419`); the payload is the `Submission` model with `extra="forbid"` (`domain/workspace.py:120-145`). Local submits go through `Repository._insert_submission(..., imported=False)` (`storage/repository.py:2174-2197`, called at `3143-3149`); imported ones use `imported=True` (`storage/repository.py:812`). Consolidation is a `work_rounds.kind` (`storage/workflow_tables.py:20-49`), not a separate table. Translation reviews are append-only `translation_reviews` rows (`storage/tables.py:824-863`), inserted in `application/translation_reviews.py:477`. Append-only tables accept a new nullable column added by the owner (precedent `0003_projects_edit_log.py:110-120`).
+- **Settings UI:** section "Guideline" with two text inputs and "Save guideline" (`frontend/src/admin/ProjectSettingsPage.tsx:41`, `46`, `52`, `58`, `107`, `192-197`; route section `guideline` in `frontend/src/app/router.ts:68-69`). The hint promises "Exported with every annotation set as url@version."
+- **Task screens:** nothing shows guidelines. Both task screens receive their task-level buttons from `tasks/TaskEditor.tsx`: the annotation editor via `CaseScreen`'s `taskActions` prop (`tasks/TaskEditor.tsx:151-155` → `app/CaseScreen.tsx:2676`, inside `Toolbar className="case-toolbar"` at `2600-2698`, between "Keyboard shortcuts" and the pause banner); the translation review via `reportActions` (`tasks/TaskEditor.tsx:40-43` → `translation/TranslationReviewScreen.tsx:395-396`, `div.translation-review-tools`). `TaskProblemActions` (`tasks/TaskProblemActions.tsx:15`) is mounted at both places and is the model for the new entry.
+- **Frontend dependencies:** `react`, `react-dom`, `diff`, two font packages (`frontend/package.json`). No Markdown renderer, no sanitizer. No component renders HTML strings (`dangerouslySetInnerHTML` is unused).
+- **Permissions:** leads and system admins hold `Action.MANAGE_PROJECT_SETTINGS`; every member role and admins hold `Action.VIEW_PROJECT` (`authz/policy.py:72-120`).
+- **Migrations:** main ends at `0016_work_plans.py` (`revision = "0016"`). Branch `feat/lead-followups` (worktree `.worktrees/phase0-implementation`) already contains `0017_lead_corrections.py` (`down_revision = "0016"`).
+- **Per-user state:** `user_preferences` holds one JSON document per user (`storage/tables.py:575-583`); there is no per-project read state.
+
+## Decisions
+
+| #   | Topic                       | Decision                                                                                                                                                                                                                                                                                                                                                          |
+| --- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G1  | What guidelines are         | A text document with a version number, integrated in the app. One document per project. (User 2026-10-20)                                                                                                                                                                                                                                                         |
+| G2  | Authoring                   | Upload only: the lead uploads a `.md` or `.txt` file in Settings. No in-app editor now; the model (immutable text versions) lets an editor be added later as a second way to create a version, without schema change. (User)                                                                                                                                      |
+| G3  | Versions                    | Each upload creates a new immutable version v1, v2, … with an optional short change note. Old versions stay readable. (User)                                                                                                                                                                                                                                      |
+| G4  | Rendering                   | `.md` as sanitized Markdown (no raw HTML, no scripts); `.txt` as preformatted plain text; size limit. (User; renderer and limit: G12, G13)                                                                                                                                                                                                                        |
+| G5  | Reading in tasks            | A "Guidelines vN" button in every task (annotation editor incl. review, consolidation and carry-forward rounds, and translation review incl. the lead's correction) opens a readable panel. (User)                                                                                                                                                                |
+| G6  | New version notice          | On the next task open after a new version: a one-time notice "Guidelines updated to v3" with the change note and a link. No forced acknowledgement. (User; storage: G16)                                                                                                                                                                                          |
+| G7  | Version per submission      | Every submission (annotation, review, consolidation, carry-forward, translation review) records the guideline version it was made under; exports carry it and replace the project-wide `guideline_ref`. (User)                                                                                                                                                    |
+| G8  | Old fields                  | `guideline_url` and `guideline_version` are replaced (migration: G18). (User)                                                                                                                                                                                                                                                                                     |
+| G9  | Permissions                 | Leads and system admins upload; every project member (and system admins) read. (User)                                                                                                                                                                                                                                                                             |
+| G10 | No delete                   | Versions cannot be deleted, edited or restored. A wrong upload is corrected by uploading a new version ("Replaces v4: wrong file"). "Restore v2" is a new upload of v2's file. The tables are append-only like `submissions`.                                                                                                                                     |
+| G11 | Kind by extension           | `.md` and `.markdown` are Markdown, `.txt` is plain text; the extension decides, not the content. Other extensions are refused.                                                                                                                                                                                                                                   |
+| G12 | Renderer                    | `react-markdown` (v9) with `remark-gfm` (tables, strikethrough, autolinks), loaded lazily as its own chunk. Rationale below.                                                                                                                                                                                                                                      |
+| G13 | Limits                      | 256 KiB (262,144 bytes) per file after decoding check; UTF-8 only (a leading BOM is dropped); no NUL bytes; not empty or whitespace-only; change note at most 280 characters, single line.                                                                                                                                                                        |
+| G14 | Preview before publishing   | Choosing a file shows the rendered preview, size and the next version number in Settings before "Publish as v3". The preview is client-side (same renderer); nothing is stored until Publish.                                                                                                                                                                     |
+| G15 | Version recorded            | The version current **at the moment the submit commits**, read in the submit transaction. Not the version the client loaded (the client cannot forge or stale it).                                                                                                                                                                                                |
+| G16 | "Seen" state                | Server-side, per user, project and version (`guideline_reads`), with `notified_at` (the notice was shown) and `opened_at` (the panel showed that version). Rationale below.                                                                                                                                                                                       |
+| G17 | Notice trigger              | Shown once per user and latest version: when the user opens a task (or the open task regains focus) and the latest version is newer than every version the user was notified of or opened. Showing it records `notified_at`; it is not shown again for that version, whether or not the user reads it. The uploader is recorded as notified of their own upload.  |
+| G18 | Migration of the old fields | A complete old pair (`guideline_url`, `guideline_version`) becomes version v1 of kind `link`: no text, external URL and the old version string kept as a label; change note "Converted from the earlier guideline link (version {old})." The columns are dropped. A file upload then becomes v2. Kind `link` can only arise from this migration. Rationale below. |
+| G19 | Older submissions           | Submissions and reviews made before the migration get no version (NULL, "not recorded"); nothing is backfilled, because the old field was never tied to a submission.                                                                                                                                                                                             |
+| G20 | Export reference            | `guideline_ref` per annotation set and per translation review row: `urn:ontocurator:{project_key}:guidelines:v{n}#sha256={hex}` for uploaded versions; `{url}@{label}` for the migrated `link` v1 (byte-identical to today's format); absent for NULL. The final export archive includes the referenced guideline files.                                          |
+| G21 | No guidelines               | The task button is not shown; exports carry no `guideline_ref` (as today). Settings shows an empty state with the upload.                                                                                                                                                                                                                                         |
+| G22 | Panel type                  | A non-modal side drawer on wide screens, so annotators can read and keep working; a full-height sheet below 700 px.                                                                                                                                                                                                                                               |
+| G23 | Lead overview               | The Settings version list shows per version "Seen by n of m task members" (counts only). Names are not shown in this iteration (see "Open questions").                                                                                                                                                                                                            |
+| G24 | Single concurrent upload    | Upload carries `expected_current_version`; a mismatch is refused (`GUIDELINE_VERSION_CONFLICT`) and Settings reloads the list.                                                                                                                                                                                                                                    |
+
+### Rationale
+
+- **Renderer (G12).** There is no Markdown library in the frontend. `react-markdown` turns Markdown into React elements, so no HTML string is ever injected and React escapes all text. Raw HTML in the source is not rendered by default (no `rehype-raw`), and its default `urlTransform` drops `javascript:`, `vbscript:` and `data:` URLs. Alternatives: `markdown-it` and `micromark` produce HTML strings and need `dangerouslySetInnerHTML` (safe only as long as their options and a sanitizer stay correct); server-side rendering with `markdown-it-py` (present only as a transitive dependency) would need a Python sanitizer (`nh3`) and still inject HTML. The cost of `react-markdown` + `remark-gfm` (tens of KB gzipped) is paid only when a guideline is opened or previewed, through `React.lazy`. Additional element rules (component overrides): links open in a new tab with `rel="noopener noreferrer"` and only for `http`, `https` and `mailto`; relative links and in-document anchors render as text with the target shown; images are never loaded (rendered as the link "Image: {alt}" to the URL), so a guideline cannot pull remote content or track readers; headings are shifted by one level inside the panel (`#` becomes `<h3>` under the panel's `<h2>`).
+- **Server-side "seen" (G16).** Annotators switch browsers and machines; a local flag would re-show the notice on each device and would give the lead nothing. The server record is cheap (one row per user and version), makes the notice exactly once, and lets the lead see how far a change has reached (G23). It is not an acknowledgement: nothing is blocked and no audit event is written per read.
+- **Link version (G18).** Today's projects may have a meaningful reference (`https://…/guide.pdf@2.1`). Dropping it would lose it from the app; keeping a separate "external link" field next to versioned text would leave two sources of truth. As v1 it stays readable in the panel, keeps today's export string for submissions made between migration and the first upload, and the numbering simply continues with the first file.
+
+## Data model and migration
+
+Migration `0018_project_guidelines.py`, `revision = "0018"`, `down_revision = "0017"`.
+
+**Ordering.** `0017_lead_corrections` exists only on `feat/lead-followups`. This migration must land after that branch is merged to main. If guidelines are implemented first, the migration takes `0017` with `down_revision = "0016"` and lead follow-ups renumbers to `0018`; whichever merges second rebases its `revision`/`down_revision` pair. Check `git log main -- src/ontocurator/storage/migrations/versions/` before starting WP G0.
+
+**`guideline_versions`** (append-only: `forbid_history_change` triggers as in `0001_initial.py:308-330`; `GRANT SELECT, INSERT` to the app role)
+
+| Column             | Type                                        | Notes                                                                           |
+| ------------------ | ------------------------------------------- | ------------------------------------------------------------------------------- |
+| `project_id`       | bigint, FK `projects.id`                    | PK part                                                                         |
+| `version`          | integer, `>= 1`                             | PK part; next = max + 1 under the project advisory lock                         |
+| `kind`             | text, check in (`markdown`, `text`, `link`) |                                                                                 |
+| `filename`         | text, null                                  | original file name, display only; null for `link`                               |
+| `body`             | text, null                                  | decoded UTF-8 text without BOM; required for `markdown`/`text`, null for `link` |
+| `body_sha256`      | text, null                                  | SHA-256 of `body` encoded as UTF-8; required with `body`                        |
+| `size_bytes`       | integer, null                               | of the encoded `body`; check `<= 262144`                                        |
+| `external_url`     | text, null                                  | only for `link`                                                                 |
+| `source_label`     | text, null                                  | only for `link` (the old version string)                                        |
+| `change_note`      | text, null                                  | `<= 280` characters                                                             |
+| `created_by`       | bigint, FK `users.id`, null                 | null for the migrated version                                                   |
+| `created_by_label` | text                                        | pseudonym of the uploader; `system` for the migration                           |
+| `created_at`       | timestamptz, default `now()`                |                                                                                 |
+
+Checks: `kind = 'link'` ⇔ `external_url IS NOT NULL AND body IS NULL`; `kind IN ('markdown','text')` ⇒ `body`, `body_sha256`, `size_bytes`, `filename` not null.
+
+**`guideline_reads`** (mutable; `GRANT SELECT, INSERT, UPDATE`)
+
+| Column                  | Type                    | Notes                                            |
+| ----------------------- | ----------------------- | ------------------------------------------------ |
+| `project_id`, `version` | FK `guideline_versions` | PK part                                          |
+| `user_id`               | bigint, FK `users.id`   | PK part                                          |
+| `notified_at`           | timestamptz, null       | first time the notice for this version was shown |
+| `opened_at`             | timestamptz, null       | first time the panel showed this version         |
+
+Writes are upserts that only fill a null timestamp (first time wins).
+
+**Version stamp on results** (nullable columns on append-only tables, added by the owner; no row is updated):
+
+- `submissions.guideline_version integer NULL`, FK `(project_id, guideline_version)` → `guideline_versions(project_id, version)`.
+- `translation_reviews.guideline_version integer NULL`, same FK.
+
+The stamp is a column, not part of the `Submission` payload: the payload format (`ontocurator-submission/v2`/`v3`, `extra="forbid"`) and the submission identity stay unchanged, and imported submissions are untouched.
+
+**Data migration (upgrade):**
+
+1. For every project with both `guideline_url` and `guideline_version` set, insert v1: `kind = 'link'`, `external_url = guideline_url`, `source_label = guideline_version`, `change_note = 'Converted from the earlier guideline link (version {guideline_version}).'`, `created_by = NULL`, `created_by_label = 'system'`.
+2. Insert one `audit_events` row per converted project: action `guideline.migrated`, `actor_user_id NULL`, `actor_label 'system'`, target `guideline` / `{project_key}:v1`, details `{url, label}`.
+3. Projects with only one of the two fields (impossible through the API, possible by hand) are not converted; the migration logs them by key.
+4. Drop `projects.guideline_url` and `projects.guideline_version`.
+
+**Downgrade:** re-add the two columns; fill them from each project's `link` v1 if one exists; drop the stamp columns, `guideline_reads` and `guideline_versions` (uploaded texts are lost; the downgrade docstring says so).
+
+## Backend
+
+New module `application/guidelines.py` (`GuidelineService`), storage rows in `storage/guideline_tables.py`.
+
+- **Upload:** validate extension (G11), size, UTF-8, NUL, emptiness, change note (G13); take `pg_advisory_xact_lock(project)` as `update_settings` does (`projects/service.py:313-314`); compare `expected_current_version`; refuse a body identical (`body_sha256`) to the current version (`GUIDELINE_UNCHANGED`); insert v(n+1); upsert the uploader's read row (`notified_at`, `opened_at` = now); audit `guideline.upload`. Authorization: `require_project_management(..., Action.MANAGE_PROJECT_SETTINGS)`.
+- **Stamp at submit:** in the submit transaction of `Repository` (the `Submission` branch at `storage/repository.py:3127-3149`) and of `TranslationReviewService.submit` (`application/translation_reviews.py:391`, insert at `477`), read `max(version)` for the project and pass it into the insert. Imported submissions (`imported=True`) get NULL. A concurrent upload either commits before the submit's read (new version recorded) or after (old version recorded); both are correct statements of "the version in force at submit".
+- **Notice computation** for the task owner: latest version L; the user's highest version with `notified_at` or `opened_at` set, S (or none). Notice when L exists and (S is none or L > S). The notice lists the change notes of all versions in (S, L], newest first, at most 5 (then "and n earlier changes").
+- **Removed:** `ProjectSettingsChange.guideline_url`/`guideline_version`, `validate_guideline`, error code `GUIDELINE_INCOMPLETE` and its frontend message.
+
+## API
+
+All responses through the existing error envelope; `contracts/openapi.json` and `frontend/src/api/generated.ts` are regenerated.
+
+| Endpoint                                              | Who                       | Purpose                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/projects/{key}/guidelines`                  | `VIEW_PROJECT`            | `{ current: GuidelineSummary \| null, versions: GuidelineSummary[] (newest first), my_latest_seen: int \| null }`; leads and admins also get per version `reach: { notified: n, opened: n, members: m }` (task members = users with an annotator or adjudicator role). |
+| `GET /api/projects/{key}/guidelines/{version}`        | `VIEW_PROJECT`            | `GuidelineDocument` = summary + `body` (null for `link`). `ETag` = `body_sha256`; `Cache-Control: private, max-age=31536000, immutable`. Unknown version: `GUIDELINE_NOT_FOUND`.                                                                                       |
+| `POST /api/projects/{key}/guidelines`                 | `MANAGE_PROJECT_SETTINGS` | multipart: `file`, `change_note` (optional), `expected_current_version` (int or empty for none). 201 with `GuidelineSummary`.                                                                                                                                          |
+| `POST /api/projects/{key}/guidelines/{version}/reads` | `VIEW_PROJECT`            | body `{ "event": "notified" \| "opened" }`; idempotent, 204.                                                                                                                                                                                                           |
+
+`GuidelineSummary`: `version`, `kind`, `filename`, `size_bytes`, `sha256`, `external_url`, `source_label`, `change_note`, `created_at`, `created_by` (`PersonRefView` for leads per the lead spec's D1, pseudonym label otherwise).
+
+Additions to existing views:
+
+- `AssignmentView.guideline: { version, kind, created_at } | null` (current version) and `AssignmentView.guideline_notice: { from_version: int \| null, to_version: int, changes: [{ version, change_note, created_at }], more: int } | null` (owner only). Computed when the task metadata loads (`GET /assignments/{id}`), so opening a task needs no extra request.
+- `SubmissionHistorySummary` / `SubmissionHistoryDetail` (`api/submission_history_routes.py:36`, `45`), the translation review view and the Documents submission lines gain `guideline_version: int | null`.
+- `ProjectSettings` loses `guideline_url`/`guideline_version`.
+
+New error codes: `GUIDELINE_FILE_TYPE` ("Upload a .md or .txt file."), `GUIDELINE_TOO_LARGE` ("The file is larger than 256 KB."), `GUIDELINE_ENCODING` ("The file is not UTF-8 text."), `GUIDELINE_EMPTY` ("The file is empty."), `GUIDELINE_UNCHANGED` ("This file is identical to v{n}. Nothing was published."), `GUIDELINE_NOTE_INVALID` ("The change note must be one line of at most 280 characters."), `GUIDELINE_VERSION_CONFLICT` ("Someone published v{n} meanwhile. Review it and try again."), `GUIDELINE_NOT_FOUND`.
+
+## UI: lead (Settings › Guidelines)
+
+The section key stays `guideline` (route compatibility), its label becomes "Guidelines".
+
+1. **Current version** (`<h2>` "Guidelines"): "v3 · annotation-guide.md · 18 KB · published 20 Oct, 14:02 by Jana Popp (ann-0002)", the change note, "Seen by 4 of 6 task members", and "Read v3" (opens the reading view in Settings). Kind `link`: "v1 · External link: {url} (version {label})".
+2. **Publish a new version:** a file input "Guideline file (.md or .txt, up to 256 KB)", a one-line `TextInput` "What changed? (optional)" (hint "Shown to annotators and reviewers with the update notice."). After choosing a file: the preview (rendered as annotators will see it, in a bordered scroll box with `max-height: 60vh`), "Will be published as v4", and the facts "Annotators and reviewers see a notice the next time they open a task. Earlier versions stay readable. Published versions cannot be changed or deleted." Primary "Publish as v4", quiet "Discard". Client-side checks (type, size, empty) run on file choice with the same messages as the server.
+3. **Versions** (`<h2>`): a table, newest first: Version, File, Change note, Published, Seen by; each row "Read" (opens that version in the same reading view; older versions carry the banner "This is v2. The current version is v3.").
+4. **Empty state:** "No guidelines yet. Upload a .md or .txt file. Annotators and reviewers will find it in every task."
+
+Success: `InlineMessage tone="success"` "Published v4. Annotators and reviewers see the update notice when they next open a task." Focus moves to the message. Conflict: the error message, the list reloads, the chosen file and note are kept.
+
+## UI: annotators and reviewers (task screens)
+
+New component `tasks/TaskGuidelines.tsx`, mounted in `tasks/TaskEditor.tsx` next to `TaskProblemActions` in both places (annotation: inside `taskActions`; translation review: inside `reportActions`, or a new `guidelineActions` prop beside it), so `CaseScreen` and `TranslationReviewScreen` only gain the slot they already have.
+
+- **Button:** `Button size="sm"` with `IconBook` (new icon in `ui/icons.tsx`) and the text "Guidelines v3". Placed before "Report problem". When a version newer than the user's last seen exists, the button additionally shows the badge "New" (text, not colour only). Accessible name: "Guidelines v3, open the project guidelines" (+ ", updated" with the badge). Not rendered when the project has no guidelines (G21).
+- **Drawer** (new `ui/Drawer`): non-modal `<aside aria-labelledby>` on the right, width `min(36rem, 45vw)`, over the workspace from 1100 px; full-height sheet below 700 px; between the two a modal `Dialog size="lg"`. Heading `<h2>` "Guidelines v3", meta line "Published 20 Oct · {change note}", then the document in the reading serif at body size (Markdown via the lazy renderer, `.txt` as `<pre>` with `white-space: pre-wrap`, `link` as "This version is an external document:" + link). Footer: "All versions" (opens `#/projects/{key}/guidelines`, in a new tab, so the task stays open) and "Close". Escape closes; focus moves to the heading on open and back to the button on close. Opening records `opened` for that version. Scroll position is kept while the task stays open. Editor shortcuts stay active while focus is outside the drawer.
+- **Notice:** when `guideline_notice` is set, an `InlineMessage tone="info"` below the toolbar (same place as "Submitted…" in `CaseScreen.tsx:2704`; above the bar in the translation review), with a close button:
+  - Update: title "Guidelines updated to v3", then the change notes as a list ("v3: Negations are now annotated with the negated axis." / "v2: …"), "and 2 earlier changes" when cut, link button "Read guidelines v3".
+  - First exposure (no earlier read): title "This project has guidelines (v3)", text "Read them before you start; they are available at any time under Guidelines in the toolbar.", link button "Read guidelines v3".
+  - Rendering the notice records `notified` (G17). Closing it only hides it. It never blocks saving or submitting.
+- **Refresh:** like the problem-report count, the current version is re-read on window focus (`GET …/guidelines`); a newer version while a task is open updates the button and shows the notice in place.
+- **Read-only route** `#/projects/{key}/guidelines` and `#/projects/{key}/guidelines/v{n}`: `AppShell`, the current (or chosen) version and the versions list without "Seen by" for non-leads. Linked from the drawer and from "My tasks" (one quiet link "Project guidelines v3" per project group).
+- **Submitted results:** submission lines in Documents (expanded row) and the submission history show "Guidelines v2"; when the version is older than the current one: "Guidelines v2 (current: v3)". Not recorded: "Guidelines: not recorded".
+
+## Copy
+
+| Place                  | Text                                                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Settings section label | "Guidelines"                                                                                                                                                                          |
+| File input             | "Guideline file (.md or .txt, up to 256 KB)"                                                                                                                                          |
+| Change note            | "What changed? (optional)"; hint "Shown to annotators and reviewers with the update notice."                                                                                          |
+| Preview facts          | "Will be published as v4." "Annotators and reviewers see a notice the next time they open a task." "Earlier versions stay readable. Published versions cannot be changed or deleted." |
+| Publish                | "Publish as v4"; success "Published v4. Annotators and reviewers see the update notice when they next open a task."                                                                   |
+| Empty state            | "No guidelines yet. Upload a .md or .txt file. Annotators and reviewers will find it in every task."                                                                                  |
+| Version list           | columns "Version", "File", "Change note", "Published", "Seen by"; "Seen by 4 of 6 task members"                                                                                       |
+| Older version banner   | "This is v2. The current version is v3."                                                                                                                                              |
+| Link version           | "v1 · External link: {url} (version {label})"; in the drawer "This version is an external document:"                                                                                  |
+| Task button            | "Guidelines v3"; badge "New"                                                                                                                                                          |
+| Notice (update)        | "Guidelines updated to v3" · change notes · "Read guidelines v3"                                                                                                                      |
+| Notice (first)         | "This project has guidelines (v3)" · "Read them before you start; they are available at any time under Guidelines in the toolbar."                                                    |
+| Submission label       | "Guidelines v2", "Guidelines v2 (current: v3)", "Guidelines: not recorded"                                                                                                            |
+| Image placeholder      | "Image: {alt}" (link)                                                                                                                                                                 |
+
+## Permissions and audit
+
+- Upload: `MANAGE_PROJECT_SETTINGS` (leads, system admins). Read versions, record own reads: `VIEW_PROJECT` (all members, system admins). `reach` counts: leads and admins only. A user's reads are written only for themselves.
+- Audit events (`auth/audit.py:42`): `guideline.upload` (target `guideline` / `{key}:v{n}`, details `version`, `kind`, `filename`, `size_bytes`, `sha256`, `change_note`, `previous_version`), `guideline.migrated` (migration, see above). Reads and notices are not audit events; they live in `guideline_reads`. `project.update` no longer lists guideline fields.
+
+## Export
+
+- **T1 bundles** (`exchange/jobs.py:300-330`, own-work and all-work exports, final export): `ProjectExport.guideline_ref` is replaced by `guideline_refs: dict[submission_id, str]` built from each submission's stamp (G20); `submission_to_unit` receives the submission's reference. Submissions without a stamp get `guideline_ref = None`.
+- **Frozen snapshots** (`exchange/final_content.py:16`, `106`): new snapshots store `guideline_refs`; `thaw_content` still accepts the old single `guideline_ref` and applies it to every submission, so re-downloads of existing snapshots stay byte-identical.
+- **Final export archive** (`exchange/final_export.py:150-182`): adds `guidelines/v{n}.md` or `guidelines/v{n}.txt` (the stored `body`) for each uploaded version referenced by a selected or provenance submission; `receipt.json` hashes them through `files` automatically and gains `guidelines: [{version, kind, sha256, external_url, label}]`. `index.csv` gains the last column `guideline_version` (empty when not recorded). README (`exchange/final_export_guide.py:200-235`) gains the line "guidelines/ The guideline versions the results were made under." and one paragraph explaining `guideline_ref`.
+- **Translation review export** (`exchange/review_export.py:120`): each row gains `guideline_version` and `guideline_ref` (null when not recorded). The format stays `ontocurator-translation-review/v1` because the change is additive (see "Open questions").
+
+## Edge cases
+
+- **Version published while a task is open:** the button and notice update on focus; a submit after that records the new version even if the person never opened it (G15). The submission label then honestly shows the version in force.
+- **Draft started under v2, submitted under v3:** records v3. Only submission time counts; drafts carry no stamp.
+- **Reopened task, restarted round, carry-forward or consolidation round:** each new submission records the version at its own submit; earlier submissions keep theirs.
+- **Lead correction of a translation (lead follow-ups FD1):** an ordinary translation review row; stamped like any other.
+- **External acceptance (lead spec D20) and imported submissions:** not submitted in Ontocurator; no stamp.
+- **Project with no guidelines:** no button, no notice, stamps NULL, no `guideline_ref`. The first upload produces the first-exposure notice for everyone.
+- **Skipped versions:** a user last notified of v1 who opens a task after v2 and v3 sees one notice for v3 listing both change notes.
+- **Member added after v3:** sees the first-exposure notice for v3 on their first task.
+- **Same file uploaded again:** refused (`GUIDELINE_UNCHANGED`); a deliberate "restore" of an older file is allowed because it differs from the current version.
+- **Wrong or confidential file published:** cannot be deleted in the app (G10); the lead publishes a correcting version. Physical removal requires an operator with database owner rights (open question).
+- **Very long Markdown or wide tables:** the drawer scrolls vertically; tables scroll horizontally inside their own container; long words wrap (`overflow-wrap: anywhere`).
+- **Markdown with HTML, scripts, `javascript:` links, images:** HTML shown as literal text or dropped, unsafe links removed, images not loaded (G12). Covered by tests.
+- **CRLF line endings:** stored as uploaded (after BOM removal); the renderer and `<pre>` treat them as line breaks.
+- **System admin without membership:** can read and upload; gets no notice (no tasks).
+- **Projects with only one old field set:** not converted; reported by the migration.
+
+## Testing
+
+- **Unit (backend):** upload validation for each error code (extension, 256 KiB boundary, invalid UTF-8, NUL, BOM removal, whitespace-only, note length and newline); version numbering under concurrent uploads (advisory lock, `GUIDELINE_VERSION_CONFLICT`); `GUIDELINE_UNCHANGED`; notice computation (none, first exposure, skipped versions, more than 5, uploader auto-read); reads upsert keeps the first timestamp; `guideline_ref` formats for `markdown`, `text`, `link`, NULL.
+- **Migration:** upgrade with projects having both, neither and one field; link v1 and audit row created; columns dropped; downgrade restores the pair; append-only triggers refuse UPDATE/DELETE on `guideline_versions`; stamp columns accept inserts on the append-only tables.
+- **Contract/API:** permissions (annotator upload → forbidden; non-member read → not found; lead sees `reach`, annotator does not); `AssignmentView.guideline` and `guideline_notice`; settings API refuses `guideline_url` (`extra="forbid"`); every submit path stamps the current version (independent, assisted, review, consolidation, carry-forward, translation review, lead correction); imported submissions stay NULL; export `guideline_ref` per annotation set differs for two submissions made under v1 and v2; thawed legacy snapshot is byte-identical; final archive contains `guidelines/v{n}.*`, `index.csv` column and receipt entries; translation review export rows carry the fields.
+- **Component (frontend):** Markdown renderer: raw HTML, `<script>`, `javascript:`/`data:` links, images, relative links, heading shift, tables; `.txt` in `<pre>`; Settings: empty state, preview after file choice, client-side errors, publish success and conflict (file and note kept), version list and "Read"; task button text, badge and accessible name, hidden without guidelines; drawer open/close focus, Escape, `opened` call; notice variants, `notified` call once, close only hides; focus refresh shows a new version.
+- **Browser (Playwright):** lead publishes v1 (.md) → annotator opens a task, sees the first-exposure notice, opens the drawer, submits → lead publishes v2 with a note → annotator's next task shows "Guidelines updated to v2" once, not on the following task → export shows v1 and v2 on the respective annotation sets and the archive contains both files; translation review shows the button and stamps the version; migrated link v1 shown in drawer and Settings; drawer at 1280 px non-modal (editor still operable), dialog at 900 px, sheet at 390 px, 320 px reflow; keyboard-only path; axe check of drawer and Settings.
+
+## Work packages
+
+| WP  | Content                                                                                                                                                                                                                                                                                                                              | Size | Review                                |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---- | ------------------------------------- |
+| G0  | Migration `0018` (tables, stamp columns, link conversion, audit rows, column drop, downgrade; ordering check against `0017`), `GuidelineService` (upload, reads, notice), endpoints, `AssignmentView` fields, removal of the old settings fields and `GUIDELINE_INCOMPLETE`; OpenAPI and generated types; backend and contract tests | L    | yes (backend-critical)                |
+| G1  | Version stamp in every submit path (`Repository` submission branch, `TranslationReviewService.submit`), `guideline_refs` in `ProjectExport`, freeze/thaw compatibility, final export archive files, `index.csv` column, README and receipt, translation review export fields, `guideline_version` in submission views; tests         | L    | yes (backend-critical, export format) |
+| G2  | `ui/GuidelineDocument` (lazy `react-markdown` + `remark-gfm`, element rules, `.txt`, link kind), dependency addition, security component tests                                                                                                                                                                                       | S    | yes (sanitization)                    |
+| G3  | Settings › Guidelines: current version, file choice with preview, publish, conflict handling, versions table with reach, reading view, empty state; remove old inputs and error message                                                                                                                                              | M    | —                                     |
+| G4  | `ui/Drawer`, `IconBook`, `tasks/TaskGuidelines` (button, badge, drawer, notice, reads, focus refresh) mounted in `TaskEditor` for both task screens                                                                                                                                                                                  | M    | —                                     |
+| G5  | Route `#/projects/{key}/guidelines[/v{n}]`, "My tasks" link, submission labels "Guidelines v2 (current: v3)" in Documents and history                                                                                                                                                                                                | S    | —                                     |
+| G6  | Browser verification of the flows above, viewports, keyboard, axe; evidence in the worktree evidence directory                                                                                                                                                                                                                       | M    | per finished plan                     |
+
+Order: G0 → (G1, G2 in parallel) → (G3, G4 in parallel) → G5 → G6. G0 starts only after `feat/lead-followups` is merged, or takes `0017` and the other branch renumbers (see "Data model and migration").
+
+## Out of scope and future
+
+In-app editor (a second way to create a version: the editor saves a `markdown` version with the same service; no schema change); guidelines per language or per task type; several documents per project; attachments and images; forced acknowledgement or quizzes; per-person read lists for leads; copying guidelines between projects; diff view between versions (the `diff` package is available for a later "What changed" view).
+
+## Open questions
+
+1. **Lead visibility of reads (G23):** counts only, or also the list of who has not yet seen the current version (useful to remind people, but a form of monitoring)?
+2. **Translation review export format:** additive fields under `ontocurator-translation-review/v1`, or bump to `v2` for strict consumers?
+3. **Older submissions (G19):** keep "not recorded", or backfill submissions made while a `link` v1 existed (today's export would have stamped them with `url@version`, so leaving them NULL changes their export output)?
+4. **Removing a published version** that must not exist (wrong or confidential file): accept an operator-only procedure outside the app, or add a lead action "Withdraw v4" that hides the body but keeps the version number and audit trail?
+5. **Notice on read-only tasks:** show the update notice also when opening a submitted task (current design), or only in editable tasks?
+6. **Drawer vs. dialog (G22):** the non-modal drawer needs a new `ui/Drawer`; a modal dialog would reuse `Dialog` but blocks the editor while reading. Confirm the drawer.
