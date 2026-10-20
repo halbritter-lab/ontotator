@@ -56,7 +56,7 @@ it("opens the exact source, inherited run and correction baseline with no defaul
   fireEvent.click(within(band).getByRole("button", { name: "Details" }));
   expect(screen.getAllByText(/A unit changed/)).toHaveLength(2);
   expect(screen.getAllByRole("radio").every(n => !(n as HTMLInputElement).checked)).toBe(true);
-  expect(submitButton().disabled).toBe(true);
+  expect(submitButton().getAttribute("aria-disabled")).toBe("true");
   expect(screen.getByText("Choose a decision to submit.")).toBeDefined();
   expect(screen.queryByText(/Selection intent/)).toBeNull();
   vi.useFakeTimers(); await clock(1600);
@@ -112,7 +112,7 @@ it.each<ReviewDecisionCode>(["accepted_unchanged", "accepted_corrected", "query"
   await clock();
   expect(save).toHaveBeenCalledTimes(1);
   expect(save).toHaveBeenCalledWith(17, expect.objectContaining({ text, form: expect.objectContaining({ decision }) }));
-  expect(submitButton().disabled).toBe(false);
+  expect(submitButton().getAttribute("aria-disabled")).toBeNull();
   await confirmSubmit();
   expect(submit).toHaveBeenCalledWith(17, 41);
   expect(screen.getByText("Review submitted")).toBeDefined();
@@ -130,7 +130,7 @@ it("retains invalid raw form values while changing a visual field and blocks unk
   // Accepted with corrections keeps clinical change and categories, so the invalid raw values stay untouched.
   fireEvent.click(screen.getByRole("radio", { name: "Accepted with corrections" })); await clock();
   expect(save.mock.calls[0][1].form).toEqual({ decision: "accepted_corrected", clinical_change: "stored-invalid", categories: ["unknown"], rationale: { invalid: true }, extra: "keep" });
-  expect(submitButton().disabled).toBe(true);
+  expect(submitButton().getAttribute("aria-disabled")).toBe("true");
 });
 it("retains latest edits after an ordinary save error and retries explicitly", async () => {
   const { save } = setup(); save.mockRejectedValueOnce(new TypeError("Offline"));
@@ -242,7 +242,7 @@ it("refreshes current qualification after server refusal while preserving edited
   await confirmSubmit();
   expect(profile).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("link", { name: "Add your qualification in your profile" }).getAttribute("href")).toBe("#/me");
-  expect(submitButton().disabled).toBe(true);
+  expect(submitButton().getAttribute("aria-disabled")).toBe("true");
   expect((screen.getByRole("textbox", { name: "Translation (de)" }) as HTMLTextAreaElement).value).toBe("Changed 😀\nraw");
 });
 it("clinical-off clears categories through the actual controlled form but retains rationale", async () => {
@@ -311,7 +311,7 @@ it("always lists Ctrl+Enter in help; it explains a blocked submit and otherwise 
   expect(document.activeElement?.textContent).toBe("Choose a decision to submit.");
   vi.useFakeTimers();
   fireEvent.click(screen.getByRole("radio", { name: "Accepted unchanged" })); await clock();
-  expect(submitButton().disabled).toBe(false);
+  expect(submitButton().getAttribute("aria-disabled")).toBeNull();
   (document.activeElement as HTMLElement | null)?.blur();
   fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
   const dialog = screen.getByRole("dialog", { name: "Submit this review?" });
@@ -352,7 +352,7 @@ it("explains a blocked submit right at the button with the rules' own issues", a
   expect(within(issues).getAllByRole("listitem").map(item => item.textContent)).toEqual([issueMessages.CATEGORY_REQUIRED, issueMessages.RATIONALE_REQUIRED]);
   expect(issues.closest(".translation-decision-footer")?.contains(submitButton())).toBe(true);
   expect(screen.getAllByRole("list", { name: "Review issues" })).toHaveLength(1);
-  expect(submitButton().disabled).toBe(true);
+  expect(submitButton().getAttribute("aria-disabled")).toBe("true");
 });
 
 it('allows explicit coupling on a submitted read-only target',async()=>{
@@ -563,4 +563,91 @@ it("keeps Skip to decision", async () => {
   await screen.findByRole("textbox", { name: "Translation (de)" });
   fireEvent.click(screen.getByRole("button", { name: "Skip to decision" }));
   expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Your review" }));
+});
+const viewportOf = (width: number) => {
+  const viewport = { width, listeners: new Set<() => void>() };
+  const resize = (next: number) => act(() => { viewport.width = next; viewport.listeners.forEach(listener => listener()); });
+  return { viewport, resize };
+};
+it("keeps one Submit, one reason and the focus while crossing 1100 px", async () => {
+  const { viewport, resize } = viewportOf(1440);
+  setup(undefined, false, viewport);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  submitButton().focus();
+  resize(800);
+  expect(screen.getAllByRole("button", { name: "Submit review…" })).toHaveLength(1);
+  expect(document.querySelectorAll("#review-submit-reason")).toHaveLength(1);
+  expect(submitButton().closest(".translation-pinned-bar")).not.toBeNull();
+  expect(document.activeElement).toBe(submitButton());
+  (document.getElementById("review-submit-reason") as HTMLElement).focus();
+  resize(1440);
+  expect(screen.getAllByRole("button", { name: "Submit review…" })).toHaveLength(1);
+  expect(document.querySelectorAll("#review-submit-reason")).toHaveLength(1);
+  expect(submitButton().closest(".translation-decision-footer")).not.toBeNull();
+  expect(document.activeElement).toBe(document.getElementById("review-submit-reason"));
+});
+it("renders no pinned bar on a read-only review at 800 px", async () => {
+  setup(reviewWorkspace({ read_only: true, submitted_record: reviewRecord() }), false, viewportOf(800).viewport);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(document.querySelector(".translation-pinned-bar")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Submit review…" })).toBeNull();
+});
+it("scrolls the decision legend to the start for Change ↓", async () => {
+  setup(undefined, false, viewportOf(800).viewport);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  const legend = document.querySelector<HTMLElement>("[data-decision-legend]")!;
+  const scroll = vi.fn(); legend.scrollIntoView = scroll;
+  fireEvent.click(screen.getByRole("button", { name: "Change ↓" }));
+  expect(scroll).toHaveBeenCalledWith({ block: "start" });
+  expect(document.activeElement).toBe(legend);
+});
+it("shows one reason line in the pinned bar and the full issue list in the decision form", async () => {
+  setup(undefined, false, viewportOf(800).viewport);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(screen.getByRole("radio", { name: "Query" }));
+  const reason = document.getElementById(submitButton().getAttribute("aria-describedby")!)!;
+  expect(reason.closest(".translation-pinned-bar")).not.toBeNull();
+  expect(reason.textContent).toBe(`${issueMessages.CATEGORY_REQUIRED} and 1 more`);
+  expect(within(reason).queryByRole("list")).toBeNull();
+  const lists = screen.getAllByRole("list", { name: "Review issues" });
+  expect(lists).toHaveLength(1);
+  expect(lists[0].closest(".translation-decision")).not.toBeNull();
+  expect(within(lists[0]).getAllByRole("listitem")).toHaveLength(2);
+});
+it("keeps an unavailable Submit focusable and only points at the reason when activated", async () => {
+  const { submit } = setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(submitButton().disabled).toBe(false);
+  expect(submitButton().getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(submitButton());
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(document.activeElement).toBe(document.getElementById("review-submit-reason"));
+  expect(submit).not.toHaveBeenCalled();
+});
+it("closes the translation details popover on Escape and on a click outside", async () => {
+  setup();
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  const summary = screen.getByText("Translation details");
+  const details = summary.closest("details") as HTMLDetailsElement;
+  details.open = true;
+  fireEvent.keyDown(details, { key: "Escape" });
+  expect(details.open).toBe(false);
+  expect(document.activeElement).toBe(summary);
+  details.open = true;
+  fireEvent.pointerDown(details.querySelector("dl")!);
+  expect(details.open).toBe(true);
+  fireEvent.pointerDown(document.body);
+  expect(details.open).toBe(false);
+});
+it("measures the bands and the pinned bar into inline custom properties", async () => {
+  const callbacks: (() => void)[] = [];
+  vi.stubGlobal("ResizeObserver", class { constructor(callback: () => void) { callbacks.push(callback); } observe() {} unobserve() {} disconnect() {} });
+  setup(undefined, false, viewportOf(800).viewport);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  const bar = document.querySelector<HTMLElement>(".translation-pinned-bar")!;
+  vi.spyOn(bar, "getBoundingClientRect").mockReturnValue({ height: 72, top: 0, bottom: 72, left: 0, right: 0, width: 0, x: 0, y: 0, toJSON: () => ({}) });
+  act(() => callbacks.forEach(callback => callback()));
+  const root = screen.getByRole("region", { name: "Translation review" });
+  expect(root.style.getPropertyValue("--review-bar")).toBe("72px");
+  expect(root.style.getPropertyValue("--review-bands")).toMatch(/^\d+(\.\d+)?px$/);
 });

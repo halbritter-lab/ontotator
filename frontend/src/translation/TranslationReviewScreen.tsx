@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from "react";
 import { api, ApiError, type ReviewWorkspace, type TranslationReviewRecord, type SourceObligationView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
@@ -95,7 +95,10 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const [serverIssues, setServerIssues] = useState<string[]>([]);
   const [showChanges, setShowChanges] = useState(false), [confirming, setConfirming] = useState(false);
   const decisionHeading = useRef<HTMLHeadingElement | null>(null), submitReason = useRef<HTMLDivElement | null>(null);
-  const screenRoot = useRef<HTMLElement | null>(null);
+  const screenRoot = useRef<HTMLElement | null>(null), submitControl = useRef<HTMLButtonElement | null>(null);
+  const detailsRef = useRef<HTMLDetailsElement | null>(null), detailsSummary = useRef<HTMLElement | null>(null);
+  /** Submit or its reason when one of them was the last focused element; restored when crossing 1100 px. */
+  const focusedControl = useRef<"submit" | "reason" | null>(null);
   const [comparisonId, setComparisonId] = useState(workspace.comparisons[0]?.variant.document_id ?? "");
   const [sourceElement, setSourceElement] = useState<HTMLDivElement | null>(null), [targetElement, setTargetElement] = useState<HTMLDivElement | null>(null), [comparisonElement, setComparisonElement] = useState<HTMLDivElement | null>(null);
   const record = submitted ?? (immutableReadOnly ? workspace.submitted_record : null);
@@ -259,6 +262,56 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   useShortcut("3", () => chooseOption(decisionKeys[2]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[2]]}` });
   useShortcut("4", () => chooseOption(decisionKeys[3]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[3]]}` });
   useShortcut("Ctrl+Enter", requestSubmit, { scope: "screen", group: "Translation review", description: "Submit review (asks for confirmation)", enabled: !readOnly, allowInInputs: true });
+  useEffect(() => {
+    const track = (event: FocusEvent) => {
+      const target = event.target;
+      focusedControl.current = target === submitControl.current ? "submit"
+        : target instanceof Element && target.id === "review-submit-reason" ? "reason" : null;
+    };
+    // Click outside the translation details popover closes it.
+    const outside = (event: Event) => {
+      const details = detailsRef.current;
+      if (details?.open && !(event.target instanceof Node && details.contains(event.target))) details.open = false;
+    };
+    document.addEventListener("focusin", track); document.addEventListener("pointerdown", outside);
+    return () => { document.removeEventListener("focusin", track); document.removeEventListener("pointerdown", outside); };
+  }, []);
+  /** Submit and its reason move between rail footer and pinned bar; a focused one keeps the focus. */
+  const wideMounted = useRef(false);
+  useLayoutEffect(() => {
+    if (!wideMounted.current) { wideMounted.current = true; return; }
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    if (focusedControl.current === "submit") submitControl.current?.focus({ preventScroll: true });
+    else if (focusedControl.current === "reason") submitReason.current?.focus({ preventScroll: true });
+  }, [wide]);
+  /** Heights of the bands above and below the texts and of the pinned bar, for the text height below 1100 px. */
+  useEffect(() => {
+    const root = screenRoot.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const bar = root.querySelector<HTMLElement>(".translation-pinned-bar");
+      root.style.setProperty("--review-bar", `${Math.round(bar?.getBoundingClientRect().height ?? 0)}px`);
+      const texts = root.querySelector<HTMLElement>(".translation-texts");
+      const box = texts?.querySelector<HTMLElement>(".translation-column > .translation-text, .translation-column > .translation-editor, .translation-column > .translation-diff");
+      if (!texts || !box) return;
+      // Neither value depends on the text height itself, so setting it cannot loop.
+      const rootTop = root.getBoundingClientRect().top, boxRect = box.getBoundingClientRect();
+      const above = Math.max(0, rootTop) + boxRect.top - rootTop + root.scrollTop;
+      const below = texts.getBoundingClientRect().bottom - boxRect.bottom;
+      root.style.setProperty("--review-bands", `${Math.max(0, Math.round(above + below))}px`);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    root.querySelectorAll(".translation-review > .notice, .translation-review-bar, .translation-checks, .translation-pinned-bar, .translation-column-head, .translation-column-note")
+      .forEach(element => observer.observe(element));
+    return () => observer.disconnect();
+  }, [wide, readOnly, showChanges, comparisonId]);
+  const closeDetails = (event: KeyboardEvent<HTMLDetailsElement>) => {
+    if (event.key !== "Escape" || !event.currentTarget.open) return;
+    event.preventDefault(); event.stopPropagation();
+    event.currentTarget.open = false; detailsSummary.current?.focus({ preventScroll: true });
+  };
   const focusDecision = () => { decisionHeading.current?.scrollIntoView?.({ block: "nearest" }); decisionHeading.current?.focus(); };
   /** "Change ↓" in the pinned bar: bring the decision legend into view and move focus to it. */
   const focusDecisionLegend = () => {
@@ -289,13 +342,19 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const paneNames: Record<string, string> = { source: "Source", target: "Translation", comparison: "Comparison" };
   const reasonShown = submitBlocker !== null || issues.length > 0;
   /** Reason, key hint and Submit: in the rail footer when wide, in the pinned bar otherwise; one of each in the DOM. */
+  const listedIssues = issues.length > 0 && !busy;
+  /** Pinned bar: one line (first issue or blocker, "and n more"); the full list then stays in the decision form. */
+  const reasonFirst = listedIssues ? issueMessages[issues[0]] : submitBlocker, reasonMore = listedIssues ? issues.length - 1 : 0;
   const submitReasonElement = reasonShown && <div id="review-submit-reason" ref={submitReason} tabIndex={-1} className="translation-submit-reason" aria-live="polite">
-    {issues.length > 0 && !busy
-      ? <><p>Before submitting:</p><ol className="review-issues" aria-label="Review issues">{issues.map((issue, index) => <li key={`${issue}-${index}`}>{issueMessages[issue]}</li>)}</ol></>
-      : <p>{submitBlocker}</p>}
+    {!wide ? <p className="translation-submit-reason-line" title={`${reasonFirst ?? ""}${reasonMore > 0 ? ` and ${reasonMore} more` : ""}`}>
+        <span className="translation-submit-reason-first">{reasonFirst}</span>{reasonMore > 0 && <span className="translation-submit-reason-more">{` and ${reasonMore} more`}</span>}</p>
+      : listedIssues
+        ? <><p>Before submitting:</p><ol className="review-issues" aria-label="Review issues">{issues.map((issue, index) => <li key={`${issue}-${index}`}>{issueMessages[issue]}</li>)}</ol></>
+        : <p>{submitBlocker}</p>}
   </div>;
   const qualificationNote = !nonblank(qualification) && <p className="translation-submit-note">{navigateLink({ name: "me" }, "Add your qualification in your profile")}</p>;
-  const submitButton = <Button variant="primary" aria-describedby={reasonShown ? "review-submit-reason" : undefined} disabled={!canSubmit} loading={busy} onClick={requestSubmit}>Submit review…</Button>;
+  const submitButton = <Button ref={submitControl} variant="primary" aria-describedby={reasonShown ? "review-submit-reason" : undefined}
+    aria-disabled={canSubmit ? undefined : true} loading={busy} onClick={requestSubmit}>Submit review…</Button>;
 
   return <section className="translation-review" aria-label="Translation review" ref={screenRoot}>
     {held && <InlineMessage tone="warning">Task paused: {props.holdReason ?? workspace.assignment.hold_reason ?? "A project problem needs attention."} Your local translation and review input are kept.</InlineMessage>}
@@ -304,8 +363,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
       <h1>{workspace.variant.external_id}</h1>
       <div className="translation-review-meta">
         <p>{languageName(sourceLanguage)} <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> {languageName(targetLanguage)}</p>
-        <details className="translation-details">
-          <summary>Translation details</summary>
+        <details className="translation-details" ref={detailsRef} onKeyDown={closeDetails}>
+          <summary ref={detailsSummary}>Translation details</summary>
           <dl>
             {run?.provider != null && <div><dt>Machine translation</dt><dd>{String(run.provider)}</dd></div>}
             {run?.model != null && <div><dt>Model</dt><dd>{String(run.model)}</dd></div>}
@@ -375,7 +434,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
             : readOnly ? <InlineMessage tone="info">This review can no longer be edited.</InlineMessage>
             : <>
               {decision(rawForm.decision) && !form && <InlineMessage tone="error">The review form contains unsupported values. Update the affected fields before submitting.</InlineMessage>}
-              <ReviewForm value={visualForm(rawForm)} issues={[]} readOnly={busy} failedCheckCount={workspace.failed_checks.length}
+              <ReviewForm value={visualForm(rawForm)} issues={!wide && !busy ? issues : []} readOnly={busy} failedCheckCount={workspace.failed_checks.length}
                 autoNote={autoNoteText(decisionState.note)} onChooseDecision={chooseOption} onChange={next => {
                 const current = draftRef.current;
                 edit({ ...current, form: { ...(!has(current.form, "clinical_change") ? { clinical_change: false } : {}), ...current.form, ...next } });

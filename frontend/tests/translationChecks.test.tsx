@@ -73,3 +73,12 @@ it("lists every check with its code on its own labelled line under Show all chec
   expect(item.textContent).toContain("Numbers changed in translation");
   expect(item.querySelector("dt")?.textContent).toBe("Technical code");
 });
+it("offers Details whenever the band reports a failure, with a failed count that never undercounts", () => {
+  const { rerender } = render(<ChecksSummary failed={[{ code: "units_added", passed: false }]} all={[]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Details" }));
+  expect(screen.getByRole("heading", { level: 3, name: "Units added in translation" })).toBeTruthy();
+  expect(screen.getByText("All checks: 0 passed, 1 failed")).toBeTruthy();
+  expect(screen.queryByText("Show all checks")).toBeNull();
+  rerender(<ChecksSummary failed={[{ code: "units_added", passed: false }]} all={[{ code: "numbers_changed", passed: true }]} />);
+  expect(screen.getByText("All checks: 1 passed, 1 failed")).toBeTruthy();
+});

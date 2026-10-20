@@ -20,7 +20,8 @@
 .translation-review-bar h1 { margin: 0; font-family: var(--font-serif); font-size: var(--size-xl); line-height: var(--leading-xl); overflow-wrap: anywhere; }
 .translation-review-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); color: var(--text-muted); font-size: var(--size-md); line-height: var(--leading-md); }
 .translation-review-meta p { margin: 0; }
-.translation-review-meta p::after { content: "·"; margin-left: var(--space-2); }
+/* The separator is decoration: the alternative text after "/" keeps it out of the accessible name. */
+.translation-review-meta p::after { content: "·"; content: "·" / ""; margin-left: var(--space-2); }
 .translation-review-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-left: auto; }
 .translation-save-status .status-pill { font-weight: var(--weight-regular); }
 .translation-review-bar .translation-details { position: relative; }
@@ -102,7 +103,11 @@
 .translation-pinned-bar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-height: 60px; padding: var(--space-2) var(--space-5); border-top: 1px solid var(--border); background: var(--surface-raised); }
 .translation-pinned-decision { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); }
 .translation-pinned-bar > .btn-primary { margin-left: auto; }
-.translation-pinned-bar .translation-submit-reason { flex: 1 1 14rem; max-height: 6rem; overflow: auto; }
+/* One reason line keeps the bar at about 60 px; the full issue list stays in the decision form. */
+.translation-pinned-bar .translation-submit-reason { flex: 1 1 14rem; min-width: 0; }
+.translation-submit-reason-line { display: flex; min-width: 0; white-space: nowrap; }
+.translation-submit-reason-first { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.translation-submit-reason-more { flex: none; }
 .translation-pinned-bar .translation-submit-reason + .btn-primary { margin-left: 0; }
 .translation-submit-reason,
 .translation-submit-note { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); color: var(--text-muted); }
@@ -165,17 +170,24 @@
   .translation-review .translation-decision-body { flex: 1; min-height: 0; overflow: auto; }
 }
 @media (max-width: 1099px) {
-  /* Texts side by side; their height leaves room for the bands above and the pinned bar. */
+  /* Keyboard focus scrolled into view is never hidden behind the pinned bar. */
+  .translation-review { scroll-padding-bottom: calc(var(--review-bar, 60px) + var(--space-3)); }
+  /* Texts side by side; their height leaves room for the measured bands and the pinned bar
+     (inline --review-bands and --review-bar from a ResizeObserver on the screen root). */
   .translation-texts .translation-column > .translation-text,
   .translation-texts .translation-column > .translation-diff,
-  .translation-texts .translation-column > .translation-editor { height: calc(100dvh - var(--review-bands, 13rem) - 60px); min-height: 18rem; }
+  .translation-texts .translation-column > .translation-editor {
+    height: calc(100vh - var(--review-bands, 13rem) - var(--review-bar, 60px));
+    height: calc(100dvh - var(--review-bands, 13rem) - var(--review-bar, 60px));
+    min-height: 18rem;
+  }
   .source-obligation-review .translation-columns { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 699px) {
   .translation-texts .translation-columns, .translation-texts .translation-columns--comparison { grid-template-columns: minmax(0, 1fr); }
   .translation-texts .translation-column > .translation-text,
   .translation-texts .translation-column > .translation-diff,
-  .translation-texts .translation-column > .translation-editor { height: auto; min-height: 12rem; max-height: 50dvh; }
+  .translation-texts .translation-column > .translation-editor { height: auto; min-height: 12rem; max-height: 50vh; max-height: 50dvh; }
   .translation-review-bar, .translation-checks-band, .translation-check-details { padding-inline: var(--space-4); }
   .translation-texts { padding-inline: var(--space-4); }
   .translation-decision-body, .translation-decision-footer, .translation-pinned-bar { padding-inline: var(--space-4); }

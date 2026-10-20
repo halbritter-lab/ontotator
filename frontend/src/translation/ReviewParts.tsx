@@ -24,6 +24,9 @@ export function ChecksSummary({ failed, all }: { failed: readonly unknown[]; all
   const [open, setOpen] = useState(false);
   const failures = checkRows(failed), every = checkRows(all ?? failed);
   const passed = every.filter(check => check.passed).length;
+  // The band and Details agree: whenever the band names a failure, Details exists and counts it.
+  const hasDetails = failures.length > 0 || every.length > 0;
+  const failedCount = Math.max(failures.length, every.length - passed);
   const bandText = failures.length > 0 ? checkBandText(failures.map(check => check.code)) : "";
   const split = bandText.indexOf(": ");
   return <section className={`translation-checks${failures.length > 0 ? " translation-checks--failed" : ""}`} aria-labelledby={`${id}-heading`}>
@@ -34,10 +37,10 @@ export function ChecksSummary({ failed, all }: { failed: readonly unknown[]; all
         : every.length > 0
           ? <p className="translation-checks-line translation-checks-calm"><IconCheck /><span>{calmCheckText(every.length)}</span></p>
           : <p className="translation-checks-line translation-checks-calm">No automatic checks were recorded for this translation.</p>}
-      {every.length > 0 && <Button variant="quiet" size="sm" className="translation-checks-toggle" aria-expanded={open} aria-controls={`${id}-details`}
+      {hasDetails && <Button variant="quiet" size="sm" className="translation-checks-toggle" aria-expanded={open} aria-controls={`${id}-details`}
         icon={<IconChevronRight className="translation-checks-chevron" />} onClick={() => setOpen(value => !value)}>{open ? "Hide details" : "Details"}</Button>}
     </div>
-    {every.length > 0 && <div id={`${id}-details`} className="translation-check-details" hidden={!open}>
+    {hasDetails && <div id={`${id}-details`} className="translation-check-details" hidden={!open}>
       {open && <>
         {failures.map((check, index) => <section key={index} className="translation-check" aria-labelledby={`${id}-check-${index}`}>
           <h3 id={`${id}-check-${index}`}>{checkLabel(check.code)}</h3>
@@ -50,15 +53,15 @@ export function ChecksSummary({ failed, all }: { failed: readonly unknown[]; all
             <p>Technical code: <code className="translation-check-code">{check.code}</code></p></details>}
         </section>)}
         <div className="translation-checks-all-line">
-          <span>{allChecksLine(passed, every.length - passed)}</span><span aria-hidden="true">·</span>
-          <details className="translation-checks-all">
+          <span>{allChecksLine(passed, failedCount)}</span>
+          {every.length > 0 && <><span aria-hidden="true">·</span><details className="translation-checks-all">
             <summary>Show all checks</summary>
             <ul className="translation-check-list">{every.map((check, index) => <li key={index}>
               <StatusBadge tone={check.passed ? "success" : "warning"}>{check.passed ? "Passed" : "Failed"}</StatusBadge>{" "}
               {checkLabel(check.code)}{check.detail ? <span className="translation-check-detail">: {check.detail}</span> : null}
               {check.code && <dl className="translation-check-code-line"><dt>Technical code</dt><dd><code className="translation-check-code">{check.code}</code></dd></dl>}
             </li>)}</ul>
-          </details>
+          </details></>}
         </div>
       </>}
     </div>}
