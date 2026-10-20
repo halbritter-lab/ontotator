@@ -351,14 +351,43 @@ def spanless_decisions_package() -> ValidatedPackage:
     return pkg
 
 
+# Spec files that work in the small browser fixture project. Each gets its own
+# copy (``browser-fixture-<spec>``), so parallel Playwright workers never share
+# its settings, members, assignments or progress counts.
+FIXTURE_SPECS = (
+    "decision-semantics",
+    "design",
+    "quick-fixes",
+    "spans",
+    "spans-resize",
+    "tree",
+    "workflow",
+)
+
+
+def fixture_project(spec: str) -> str:
+    """The isolated browser fixture project of one spec file."""
+    return f"browser-fixture-{spec}"
+
+
+def decision_scenario_package() -> ValidatedPackage:
+    """decision-semantics.spec.ts's own copy of layers.spec.ts's multi-layer project."""
+    pkg = scenario_package("multi_editable")
+    pkg.manifest.package_id = "pkg-scenario-c-decisions"
+    return pkg
+
+
 def seed_packages() -> list[ValidatedPackage]:
     """Every project the specs use, oldest first."""
     return [
-        fixture_package(),
+        *(fixture_package(project_key=fixture_project(spec)) for spec in FIXTURE_SPECS),
         fixture_package(project_key="pkg-unresolved-export", canonical=True),
         decision_semantics_package(),
         spanless_decisions_package(),
-        fixture_package(project_key="pkg-many-proposals", proposals=MANY_PROPOSALS),
+        *(
+            fixture_package(project_key=key, proposals=MANY_PROPOSALS)
+            for key in ("pkg-many-proposals", "pkg-many-proposals-design")
+        ),
         fixture_package(project_key="translation-fixture"),
         design_package(),
         *(
@@ -370,6 +399,7 @@ def seed_packages() -> list[ValidatedPackage]:
                 "review_references",
             )
         ),
+        decision_scenario_package(),
     ]
 
 
