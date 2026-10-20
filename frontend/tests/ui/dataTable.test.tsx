@@ -76,3 +76,49 @@ describe("groups_expansion_and_row_headers", () => {
     expect(header.className).toContain("data-table-group"); expect(header.className).toContain("custom");
   });
 });
+describe("group_selection", () => {
+  type Row = { id: string; name: string };
+  const columns: Column<Row>[] = [{ id: "name", header: "Language", cell: r => r.name, rowHeader: true }];
+  const groups = ["g1", "g2", "g3"].map((key) => ({ key, header: <span>{key}</span>, rows: [{ id: `${key}-de`, name: "de" }], expanded: true }));
+  const renderTable = (onSelect = vi.fn(), selected: (key: string) => boolean = (key) => key === "g2") => {
+    render(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id} groups={groups}
+      groupSelection={{ selected, onSelect, checkboxLabel: (key) => `Select ${key} (1 language)` }} />);
+    return onSelect;
+  };
+  const box = (key: string) => screen.getByRole("checkbox", { name: `Select ${key} (1 language)` }) as HTMLInputElement;
+
+  it("group_selection_renders_a_named_checkbox_in_each_group_header", () => {
+    renderTable();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(box("g1").checked).toBe(false);
+    expect(box("g2").checked).toBe(true);
+    expect(box("g1").closest("th")?.getAttribute("scope")).toBe("rowgroup");
+    expect(box("g1").className).toContain("data-table-group-select");
+  });
+  it("group_selection_reports_toggle_range_and_keep_anchor_modes", () => {
+    const onSelect = renderTable();
+    fireEvent.click(box("g1"));
+    fireEvent.click(box("g2"), { shiftKey: true });
+    fireEvent.click(box("g3"), { ctrlKey: true });
+    fireEvent.click(box("g1"), { metaKey: true });
+    expect(onSelect.mock.calls).toEqual([["g1", "toggle"], ["g2", "range"], ["g3", "toggle-keep-anchor"], ["g1", "toggle-keep-anchor"]]);
+  });
+  it("shift_arrow_moves_focus_to_the_next_group_checkbox_and_selects_it", () => {
+    const onSelect = renderTable();
+    box("g1").focus();
+    fireEvent.keyDown(box("g1"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(box("g2"));
+    expect(onSelect).toHaveBeenLastCalledWith("g2", "select");
+    fireEvent.keyDown(box("g2"), { key: "ArrowUp", shiftKey: true });
+    expect(document.activeElement).toBe(box("g1"));
+    expect(onSelect).toHaveBeenLastCalledWith("g1", "select");
+    onSelect.mockClear();
+    fireEvent.keyDown(box("g1"), { key: "ArrowUp", shiftKey: true });
+    expect(document.activeElement).toBe(box("g1"));
+    box("g3").focus();
+    fireEvent.keyDown(box("g3"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(box("g3"));
+    fireEvent.keyDown(box("g3"), { key: "ArrowDown" });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+});

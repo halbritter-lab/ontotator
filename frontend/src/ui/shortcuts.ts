@@ -127,7 +127,9 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el || typeof el !== "object") return false;
   const tag = el.tagName?.toLowerCase();
-  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  // Checkboxes and radios take no text, so screen shortcuts (Ctrl+Z, Shift+arrows) still reach them.
+  if (tag === "input") return !["checkbox", "radio"].includes((el as HTMLInputElement).type?.toLowerCase());
+  if (tag === "textarea" || tag === "select") return true;
   if (el.isContentEditable) return true;
   const editable = el.getAttribute?.("contenteditable");
   return editable !== null && editable !== undefined && editable !== "false";

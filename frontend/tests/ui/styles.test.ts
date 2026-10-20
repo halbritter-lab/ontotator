@@ -47,3 +47,31 @@ it("imports_the_documents_screen_stylesheets", () => {
     expect(read(`../../src/styles/screens/${name}.css`)).toBeTypeOf("string");
   }
 });
+
+it("declares_plan_chip_tristate_and_toast_rules", () => {
+  expect(css).toMatch(/\.ui-plan-chip[^{]*\{[^}]*min-height: 24px/);
+  expect(css).toMatch(/\.ui-plan-chip\[aria-pressed="true"\]\s*\{[^}]*background: var\(--success-light\)/);
+  expect(css).toMatch(/\.ui-plan-chip\[aria-pressed="true"\]\s*\{[^}]*border-color: var\(--success\)/);
+  expect(css).toContain(".ui-tristate {");
+  expect(css).toContain(".ui-toast-region {");
+  expect(css).toContain(".data-table-group-select");
+});
+
+it("gives_pressed_chips_a_canvastext_border_under_forced_colors", () => {
+  const blocks = [...css.matchAll(/@media \(forced-colors: active\) \{([\s\S]*?)\n\}/g)].map(match => match[1]).join("\n");
+  expect(blocks).toMatch(/\.ui-plan-chip\[aria-pressed="true"\][^{]*\{[^}]*border: [^;]*CanvasText/);
+});
+
+it("shows_the_toast_without_animation_under_reduced_motion", () => {
+  expect(css).toMatch(/\.ui-toast \{[^}]*animation:/);
+  const blocks = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/g)].map(match => match[1]).join("\n");
+  expect(blocks).toMatch(/\.ui-toast \{[^}]*animation: none/);
+});
+
+it("imports_the_lead_workflow_screen_stylesheets", () => {
+  const index = read("../../src/styles/index.css");
+  for (const name of ["work-plan", "assign", "progress", "selection"]) {
+    expect(index).toContain(`@import "./screens/${name}.css";`);
+    expect(read(`../../src/styles/screens/${name}.css`)).toBeTypeOf("string");
+  }
+});

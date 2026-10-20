@@ -263,3 +263,18 @@ it("a_handler_returning_false_lets_the_event_through", () => {
   expect(inner).toHaveBeenCalledOnce();
   expect(outer).toHaveBeenCalledOnce();
 });
+
+it("does not treat checkboxes and radios as typing targets", () => {
+  const handler = vi.fn();
+  render(<><Binding keys="Ctrl+z" handler={handler} options={{ scope: "screen" }} />
+    <input type="checkbox" aria-label="Select case-0101" /><input type="radio" aria-label="Round robin" />
+    <input type="text" aria-label="Name" /><textarea aria-label="Note" /><select aria-label="Choice" /><div contentEditable data-testid="editable" /></>);
+  expect(isTypingTarget(screen.getByRole("checkbox"))).toBe(false);
+  expect(isTypingTarget(screen.getByRole("radio"))).toBe(false);
+  for (const name of ["Name", "Note", "Choice"]) expect(isTypingTarget(screen.getByLabelText(name))).toBe(true);
+  expect(isTypingTarget(screen.getByTestId("editable"))).toBe(true);
+  const box = screen.getByRole("checkbox");
+  box.focus();
+  expect(press("z", { ctrlKey: true }, box).defaultPrevented).toBe(true);
+  expect(handler).toHaveBeenCalledTimes(1);
+});

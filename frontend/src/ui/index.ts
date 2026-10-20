@@ -16,4 +16,7 @@ export * from "./ConfirmDialog";
 export * from "./InlineConfirm";
 export * from "./ShortcutHelp";
 export * from "./DataTable";
+export * from "./PlanChip";
+export * from "./TriStateButton";
+export * from "./Toast";
 export * from "./useMediaQuery";

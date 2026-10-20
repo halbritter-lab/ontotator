@@ -812,3 +812,99 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
   .shell-project-link:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
   .segment[aria-current="page"] { border-bottom-color: Highlight; color: Highlight; }
 }
+
+/* Lead workflow primitives: plan chip, tri-state cell, undo toast, group selection checkbox. */
+.ui-plan-chip,
+.ui-tristate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-strong);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ui-plan-chip + .ui-plan-chip { margin-inline-start: var(--space-1); }
+.ui-plan-chip[data-size="card"] { min-height: 32px; padding-inline: var(--space-3); font-size: var(--size-sm); }
+.ui-plan-chip[aria-pressed="true"] {
+  background: var(--success-light);
+  border-color: var(--success);
+  color: var(--success);
+}
+.ui-plan-chip .icon,
+.ui-tristate .icon { width: 12px; height: 12px; }
+.ui-plan-chip[aria-disabled="true"],
+.ui-tristate[aria-disabled="true"] { cursor: default; }
+.ui-plan-chip[data-busy] { cursor: progress; }
+.ui-plan-chip:focus-visible,
+.ui-tristate:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
+.ui-tristate {
+  min-width: 4.5rem;
+  justify-content: center;
+}
+.ui-tristate[data-state="keep"] { background: var(--surface-sunken); border-style: dashed; }
+.ui-tristate[data-state="mixed"] { background: repeating-linear-gradient(45deg, var(--surface-raised), var(--surface-raised) 4px, var(--surface-sunken) 4px, var(--surface-sunken) 8px); }
+.ui-tristate[data-state="on"] { background: var(--success-light); border-color: var(--success); color: var(--success); }
+.ui-tristate[data-state="off"] { background: var(--danger-light); border-color: var(--danger); color: var(--danger); }
+.ui-toast-region {
+  position: fixed;
+  inset-inline: 0;
+  bottom: var(--space-5);
+  z-index: 900;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.ui-toast {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  max-width: min(40rem, calc(100vw - var(--space-6)));
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--text);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-2);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  pointer-events: auto;
+  animation: toast-in 150ms ease;
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.ui-toast-note { color: var(--border); }
+.ui-toast .btn,
+.ui-toast .btn-quiet { color: var(--on-accent); }
+.ui-toast .btn:hover { background: var(--text-muted); color: var(--on-accent); }
+.ui-toast .btn:focus-visible { outline: var(--focus-width) solid var(--accent-light); outline-offset: var(--focus-offset); }
+.ui-toast-action { text-decoration: underline; }
+.data-table-group-select {
+  width: 16px;
+  height: 16px;
+  margin: 4px var(--space-2) 4px 0;
+  vertical-align: middle;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+@media (max-width: 699px) {
+  .ui-toast-region { bottom: var(--space-3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-toast { animation: none; }
+}
+@media (forced-colors: active) {
+  .ui-plan-chip[aria-pressed="true"],
+  .ui-tristate[data-state="on"] { border: 2px solid CanvasText; }
+  .ui-plan-chip:focus-visible,
+  .ui-tristate:focus-visible,
+  .ui-toast .btn:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  .ui-toast { border: 1px solid CanvasText; }
+}
