@@ -79,13 +79,16 @@ describe("structure", () => {
     expect(screen.queryByRole("button", { name: "Show details, case-0101 · fr" })).toBeNull();
     const line = screen.getByText(/not in plan ·/).closest("th")!;
     expect(line.textContent).toBe("en, fr, es not in plan · show");
-    const show = within(line).getByRole("button", { name: "show" });
+    const show = within(line).getByRole("button", { name: "Show en, fr, es not in plan, case-0101" });
+    expect(show.textContent).toBe("show");
+    expect(show.id).toBe("documents-group-case-0101-not-in-plan");
     expect(show.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(show);
     expect(onToggleNotInPlan).toHaveBeenCalledWith("case-0101");
     unmount();
     renderTable(page([view]), { shownNotInPlan: new Set(["case-0101"]), renderPlan });
     expect(screen.getByText(/not in plan ·/).closest("th")!.textContent).toBe("en, fr, es not in plan · hide");
+    expect(screen.getByRole("button", { name: "Hide en, fr, es not in plan, case-0101" }).getAttribute("aria-expanded")).toBe("true");
     expect(within(rowOf("case-0101 · fr")).getByText("chips fr")).toBeTruthy();
     expect(cellsOf("case-0101 · fr")[2].textContent).toBe("Not in plan");
   });

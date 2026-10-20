@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError, type DiscardResult, type PlanRowResult } from "../../src/api/client";
 import { ResolveTranslation, type ResolveTranslationProps } from "../../src/documents/ResolveTranslation";
@@ -14,7 +14,7 @@ const notAccepted = () => planRow("case-0101", "de", stepOf("translation_not_acc
 function renderResolve(overrides: Partial<ResolveTranslationProps> = {}) {
   const props: ResolveTranslationProps = {
     mode: "resolve", row: rejected(), projectKey: "p", revision: 3,
-    onAssignReview: vi.fn(), onCorrect: vi.fn(), onDone: vi.fn(), onCancel: vi.fn(),
+    onAssignReview: vi.fn(), onCorrect: vi.fn(), onDone: vi.fn(), onChanged: vi.fn(), onAnnounce: vi.fn(), onCancel: vi.fn(),
     ...overrides,
   };
   render(<ResolveTranslation {...props} />);
@@ -62,6 +62,11 @@ it("discards with a required reason and shows consequences", async () => {
   fireEvent.click(discard);
   await waitFor(() => expect(api.discardVariant).toHaveBeenCalledWith("p", "case-0101-de", { reason: "Wrong source", confirm: false }));
   expect(await within(confirm).findByText("1 open annotation will be withdrawn (Ana Weber, ann-0004; draft kept).")).toBeTruthy();
+  // The reason stays readable and focusable (read-only, not disabled) while the consequences are shown.
+  const reason = within(confirm).getByLabelText("Reason (required)") as HTMLTextAreaElement;
+  expect(reason.disabled).toBe(false);
+  expect(reason.readOnly).toBe(true);
+  expect(reason.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(discard);
   expect(api.discardVariant).toHaveBeenCalledTimes(1);
   fireEvent.click(within(confirm).getByRole("checkbox", { name: "I understand — withdraw the open tasks" }));
@@ -96,4 +101,40 @@ it("Assign review or accept… offers Turn Review on or the external-review acce
     annotate: true, expected_revision: 3, confirm: false, accept_external_review: { reason: "Clinic review" },
   }));
   await waitFor(() => expect(second.onDone).toHaveBeenCalledWith("case-0101 · de accepted as reviewed outside Ontocurator.", { caseId: "case-0101", revision: 4 }));
+});
+
+it("Cancel in the discard step returns to the three options with focus on Discard", async () => {
+  const props = renderResolve();
+  fireEvent.click(screen.getByRole("button", { name: "Discard the de translation…" }));
+  const confirm = screen.getByRole("group", { name: "Discard the de translation of case-0101" });
+  fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+  expect(props.onCancel).not.toHaveBeenCalled();
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  expect(within(box).getAllByRole("button")).toHaveLength(4);
+  await waitFor(() => expect(document.activeElement).toBe(within(box).getByRole("button", { name: "Discard the de translation…" })));
+});
+
+it("announces Saving… through the page and has no status region of its own", async () => {
+  let finish!: (value: PlanRowResult) => void;
+  vi.mocked(api.patchWorkPlan).mockImplementation(() => new Promise(done => { finish = done; }));
+  const props = renderResolve({ mode: "not_accepted", row: notAccepted() });
+  fireEvent.click(screen.getByRole("button", { name: "Turn Review on" }));
+  expect(props.onAnnounce).toHaveBeenLastCalledWith("Saving…");
+  expect(document.querySelector("[role='status']")).toBeNull();
+  await act(async () => {
+    finish({ case_id: "case-0101", language: "de", flags: { review: true, annotate: true, review_applicable: true, discarded: false }, revision: 4,
+      undo: { rows: [], revisions: {} }, withdrawn: [], accepted_document_ids: [] } as PlanRowResult);
+  });
+  expect(props.onDone).toHaveBeenCalled();
+});
+
+it("reports a plan changed elsewhere with the current revisions and the message", async () => {
+  vi.mocked(api.patchWorkPlan).mockRejectedValueOnce(new ApiError(409, "changed", "WORK_PLAN_CHANGED", { cases: [{ case_id: "case-0101", revision: 7 }] }));
+  const props = renderResolve({ mode: "not_accepted", row: notAccepted() });
+  fireEvent.click(screen.getByRole("button", { name: "Turn Review on" }));
+  expect(await screen.findByText("This plan changed. Reloaded the current plan.")).toBeTruthy();
+  expect(props.onChanged).toHaveBeenCalledWith("case-0101", 7);
+  expect(props.onAnnounce).toHaveBeenLastCalledWith("");
+  expect(props.onDone).not.toHaveBeenCalled();
+  expect(screen.queryByRole("alert")).toBeNull();
 });

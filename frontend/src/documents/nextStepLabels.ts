@@ -50,7 +50,7 @@ export const BADGE_LABELS: Readonly<Record<StepBadge, string>> = {
 
 /** Next-step filter options grouped by stage (spec "Filters": Next step grouped by stage). */
 export const STEP_FILTER_GROUPS: readonly (readonly [string, readonly StepCode[]])[] = [
-  ["Any stage", ["decide_report", "resume_task"]],
+  ["Problem reports and paused tasks", ["decide_report", "resume_task"]],
   ["Translation review", ["resolve_rejected", "resolve_queried", "translation_not_accepted", "assign_translation_review", "translation_review_in_progress", "waiting_for_translation_review"]],
   ["Annotation", ["assign_annotation", "annotation_in_progress", "annotation_review_in_progress"]],
   ["Final result", ["choose_final", "confirm_final"]],

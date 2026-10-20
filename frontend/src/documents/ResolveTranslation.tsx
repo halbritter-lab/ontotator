@@ -8,9 +8,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type ConsequencesView, type DocumentRowView } from "../api/client";
 import { textLabel } from "../app/identity";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { Button, Checkbox, InlineConfirm, Textarea } from "../ui";
+import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea } from "../ui";
 import { stepLabel } from "./nextStepLabels";
-import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, WITHDRAW_CHECKBOX } from "./PlanChips";
+import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, PLAN_CHANGED_MESSAGE, WITHDRAW_CHECKBOX } from "./PlanChips";
 
 export interface ResolveTranslationProps {
   mode: "resolve" | "not_accepted";
@@ -24,10 +24,31 @@ export interface ResolveTranslationProps {
   onCorrect: () => void;
   /** Saved: the announcement and the case's new plan revision. */
   onDone: (message: string, saved: { caseId: string; revision: number }) => void;
+  /** The plan changed elsewhere (409 `WORK_PLAN_CHANGED`): a case's current revision; the page refetches. */
+  onChanged: (caseId: string, revision: number) => void;
+  /** The page's one shared polite live region ("Saving…"). */
+  onAnnounce: (message: string) => void;
   onCancel: () => void;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * A 409 `WORK_PLAN_CHANGED`: report each case's current revision from `details.cases` (at least
+ * the row's case, so the page refetches) and return true; any other failure returns false.
+ */
+function reportPlanChanged(failure: unknown, props: Pick<ResolveTranslationProps, "row" | "revision" | "onChanged">): boolean {
+  if (!(failure instanceof ApiError) || failure.code !== "WORK_PLAN_CHANGED") return false;
+  const cases = isRecord(failure.details) && Array.isArray(failure.details.cases) ? failure.details.cases : [];
+  const revisions = cases.flatMap(item => (isRecord(item) && typeof item.case_id === "string" && typeof item.revision === "number" ? [[item.case_id, item.revision] as const] : []));
+  if (!revisions.length) props.onChanged(props.row.case_id, props.revision);
+  for (const [caseId, revision] of revisions) props.onChanged(caseId, revision);
+  return true;
+}
+
+function ChangedMessage(): JSX.Element {
+  return <InlineMessage tone="info">{PLAN_CHANGED_MESSAGE}</InlineMessage>;
+}
 
 /** The version the options act on: the step's version, else the newest version of the row. */
 function targetDocument(row: DocumentRowView): string {
@@ -44,30 +65,49 @@ function useHeadingFocus() {
   return heading;
 }
 
-function ResolveOptions({ row, projectKey, onAssignReview, onCorrect, onDone, onCancel }: ResolveTranslationProps): JSX.Element {
+function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
+  const { row, projectKey, onAssignReview, onCorrect, onDone, onAnnounce, onCancel } = props;
   const id = useId();
   const heading = useHeadingFocus();
+  const discardButton = useRef<HTMLButtonElement>(null);
   const [discarding, setDiscarding] = useState(false);
+  const [backToOptions, setBackToOptions] = useState(false);
   const [reason, setReason] = useState("");
   const [consequences, setConsequences] = useState<ConsequencesView | null>(null);
   const [understood, setUnderstood] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
+  const [changed, setChanged] = useState(false);
   const title = `${stepLabel(row.next_step?.code ?? "resolve_rejected")}, ${textLabel(row)}`;
   const discardLabel = `Discard the ${row.language} translation`;
+
+  // Cancel in the discard step returns to the three options with focus on "Discard…".
+  useEffect(() => {
+    if (!backToOptions || discarding) return;
+    setBackToOptions(false);
+    discardButton.current?.focus();
+  }, [backToOptions, discarding]);
 
   const discard = async () => {
     if (busy || !reason.trim()) return;
     const confirm = consequences !== null;
-    setBusy(true); setError(undefined);
+    setBusy(true); setError(undefined); setChanged(false);
+    onAnnounce("Saving…");
     try {
       const result = await api.discardVariant(projectKey, targetDocument(row), { reason: reason.trim(), confirm });
       onDone(`The ${row.language} translation of ${row.case_id} was discarded.`, { caseId: result.case_id, revision: result.revision });
     } catch (failure: unknown) {
+      onAnnounce("");
       if (failure instanceof ApiError && failure.code === "WORK_PLAN_CONFIRMATION_REQUIRED" && isRecord(failure.details)) {
         setConsequences(failure.details as unknown as ConsequencesView); setUnderstood(false);
+      } else if (reportPlanChanged(failure, props)) {
+        setConsequences(null); setUnderstood(false); setChanged(true);
       } else setError(failure);
     } finally { setBusy(false); }
+  };
+  const backFromDiscard = () => {
+    setDiscarding(false); setConsequences(null); setUnderstood(false); setError(undefined); setChanged(false);
+    setBackToOptions(true);
   };
 
   if (discarding) {
@@ -77,11 +117,14 @@ function ResolveOptions({ row, projectKey, onAssignReview, onCorrect, onDone, on
       <InlineConfirm title={`${discardLabel} of ${row.case_id}`} tone="danger" busy={busy} confirmLabel="Discard"
         message={<p>Its versions are marked as discarded. Nothing is deleted.</p>}
         confirmUnavailable={unavailable} onConfirm={() => { void discard(); }}
-        onCancel={() => { setDiscarding(false); setConsequences(null); onCancel(); }}>
-        <Textarea id={`${id}-reason`} label="Reason" required maxLength={2000} value={reason} disabled={consequences !== null}
-          onChange={event => setReason(event.target.value)} />
+        onCancel={backFromDiscard}>
+        {/* Read-only (not disabled) once the consequences are shown: it stays focusable and readable. */}
+        <Textarea id={`${id}-reason`} label="Reason" required maxLength={2000} value={reason}
+          readOnly={consequences !== null} aria-disabled={consequences !== null || undefined}
+          onChange={event => { if (consequences === null) setReason(event.target.value); }} />
         {consequences && <ul className="documents-plan-consequences">{consequenceLines(consequences).map(line => <li key={line}>{line}</li>)}</ul>}
         {withdrawing && <Checkbox id={`${id}-understood`} label={WITHDRAW_CHECKBOX} checked={understood} onChange={event => setUnderstood(event.target.checked)} />}
+        {changed && <ChangedMessage />}
         {error !== undefined && <ErrorNotice error={error} />}
       </InlineConfirm>
     </div>;
@@ -91,23 +134,26 @@ function ResolveOptions({ row, projectKey, onAssignReview, onCorrect, onDone, on
     <div className="documents-resolve-actions">
       <Button size="sm" onClick={onAssignReview}>Assign a new review…</Button>
       <Button size="sm" onClick={onCorrect}>Correct the translation…</Button>
-      <Button size="sm" onClick={() => setDiscarding(true)}>{discardLabel}…</Button>
+      <Button ref={discardButton} size="sm" onClick={() => setDiscarding(true)}>{discardLabel}…</Button>
       <Button size="sm" variant="quiet" onClick={onCancel}>Cancel</Button>
     </div>
   </div>;
 }
 
-function NotAcceptedOptions({ row, projectKey, revision, onDone, onCancel }: ResolveTranslationProps): JSX.Element {
+function NotAcceptedOptions(props: ResolveTranslationProps): JSX.Element {
+  const { row, projectKey, revision, onDone, onAnnounce, onCancel } = props;
   const id = useId();
   const heading = useHeadingFocus();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
+  const [changed, setChanged] = useState(false);
   const name = textLabel(row);
 
   const save = async (kind: "review" | "accept") => {
     if (busy || (kind === "accept" && !reason.trim())) return;
-    setBusy(true); setError(undefined);
+    setBusy(true); setError(undefined); setChanged(false);
+    onAnnounce("Saving…");
     try {
       const result = kind === "review"
         ? await api.patchWorkPlan(projectKey, row.case_id, row.language, { review: true, expected_revision: revision, confirm: false })
@@ -115,7 +161,8 @@ function NotAcceptedOptions({ row, projectKey, revision, onDone, onCancel }: Res
       onDone(kind === "review" ? `Review on for ${name}. Next: Assign translation review.` : `${name} accepted as reviewed outside Ontocurator.`,
         { caseId: result.case_id, revision: result.revision });
     } catch (failure: unknown) {
-      setError(failure);
+      onAnnounce("");
+      if (reportPlanChanged(failure, props)) setChanged(true); else setError(failure);
     } finally { setBusy(false); }
   };
 
@@ -130,8 +177,8 @@ function NotAcceptedOptions({ row, projectKey, revision, onDone, onCancel }: Res
     <Textarea id={`${id}-reason`} label="Reason" required maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} />
     <p className="field-hint">{ACCEPTANCE_RECORDED}</p>
     {missing && <p id={`${id}-missing`} className="action-reason">Enter a reason.</p>}
+    {changed && <ChangedMessage />}
     {error !== undefined && <ErrorNotice error={error} />}
-    <p className="visually-hidden" role="status">{busy ? "Saving…" : ""}</p>
     <div className="documents-resolve-actions">
       <Button size="sm" variant="quiet" onClick={onCancel}>Cancel</Button>
       <Button size="sm" aria-disabled={missing || busy ? true : undefined} aria-describedby={missing ? `${id}-missing` : undefined}

@@ -88,6 +88,16 @@ export function documentsGroupId(caseId: string): string {
   return `documents-group-${encodeURIComponent(caseId)}-toggle`;
 }
 
+/** Stable id of a case's "not in plan · show" toggle. */
+export function documentsNotInPlanId(caseId: string): string {
+  return `documents-group-${encodeURIComponent(caseId)}-not-in-plan`;
+}
+
+/** Accessible name of a case's "not in plan · show/hide" toggle (starts with the visible text). */
+export function notInPlanToggleLabel(caseId: string, languages: readonly string[], shown: boolean): string {
+  return `${shown ? "Hide" : "Show"} ${languages.join(", ")} not in plan, ${caseId}`;
+}
+
 /** A link with a real `href`; plain left clicks go through `onNavigate` when given. */
 export function RouteLink({ route, onNavigate, children, className, ...rest }: {
   route: Route;

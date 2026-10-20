@@ -11,6 +11,7 @@ import { plural } from "../app/labels";
 import { errorMessage } from "../admin/errors";
 import { Button, Checkbox, InlineConfirm, InlineMessage, PlanChip, Textarea, type ToastMessage } from "../ui";
 import { runPlanUndo } from "./planUndo";
+import { documentsGroupId, documentsNotInPlanId } from "./RowCells";
 
 export type PlanFlag = "review" | "annotate";
 export interface PlanFlagState { review: boolean; annotate: boolean }
@@ -99,6 +100,11 @@ export interface PlanSaves {
   noteRevision: (caseId: string, revision: number) => void;
   /** Latest plan revision known for a case (the group's or a newer saved one). */
   revisionOf: (caseId: string, groupRevision: number) => number;
+  /**
+   * The rows refetched: drop local flags older than the group's revision and, when a save moved
+   * the row out of view and focus fell to the body, focus the case's "not in plan · show" or header.
+   */
+  refreshed: (groups: readonly { case_id: string; plan_revision: number }[]) => void;
 }
 
 const keyOf = (row: Pick<DocumentRowView, "case_id" | "language">): string => `${row.case_id}:${row.language}`;
@@ -112,9 +118,12 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
   const queues = useRef(new Map<string, Promise<void>>());
   const revisions = useRef(new Map<string, number>());
   const [overrides, setOverrides] = useState<ReadonlyMap<string, { flags: PlanFlagState; revision: number }>>(new Map());
-  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+  // Requests in flight per key (a counter, so a queued second request keeps the key busy).
+  const [busy, setBusy] = useState<ReadonlyMap<string, number>>(new Map());
   const [notices, setNotices] = useState<ReadonlyMap<string, PlanNotice>>(new Map());
-  const [sendingKeys, setSendingKeys] = useState<ReadonlySet<string>>(new Set());
+  const [sendingKeys, setSendingKeys] = useState<ReadonlyMap<string, number>>(new Map());
+  /** The row whose chip gets focus after a confirmed save or an undo, until the rows refetched. */
+  const pendingFocus = useRef<{ caseId: string; language: string; flag: PlanFlag | null } | null>(null);
 
   const setNotice = useCallback((key: string, notice: PlanNotice | null) => setNotices(current => {
     const next = new Map(current);
@@ -122,10 +131,20 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
     return next;
   }), []);
   const mark = (setter: typeof setBusy, key: string, on: boolean) => setter(current => {
-    const next = new Set(current);
-    if (on) next.add(key); else next.delete(key);
+    const next = new Map(current);
+    const count = (next.get(key) ?? 0) + (on ? 1 : -1);
+    if (count > 0) next.set(key, count); else next.delete(key);
     return next;
   });
+  /** Focus the row's chip once the notice or toast is gone (deferred to after the re-render). */
+  const focusAfterSave = (caseId: string, language: string, flag: PlanFlag | null) => {
+    pendingFocus.current = { caseId, language, flag };
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      const lost = active == null || active === document.body || active.closest(".ui-toast-region, .documents-plan-notice") !== null;
+      if (lost) focusChip({ case_id: caseId, language }, flag);
+    }, 0);
+  };
   const noteRevision = useCallback((caseId: string, revision: number) => {
     revisions.current.set(caseId, Math.max(revisions.current.get(caseId) ?? 0, revision));
   }, []);
@@ -148,7 +167,9 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
 
   const undo = (key: string, payload: UndoView, confirm: boolean) => {
     const caseId = payload.rows[0]?.case_id ?? key.slice(0, key.lastIndexOf(":"));
+    const language = key.slice(key.lastIndexOf(":") + 1);
     mark(setSendingKeys, key, true);
+    latest.current.onAnnounce("Saving…");
     enqueue(caseId, async () => {
       try {
         const outcome = await runPlanUndo(projectKey, payload, { confirm });
@@ -157,15 +178,19 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
           for (const item of payload.rows) setOverride(keyOf(item), { review: item.review, annotate: item.annotate }, outcome.revisions[item.case_id] ?? 0);
           setNotice(key, null);
           latest.current.onAnnounce("Plan change undone.");
+          focusAfterSave(caseId, language, null);
           latest.current.onChanged();
         } else if (outcome.kind === "needs_confirm") {
+          latest.current.onAnnounce("");
           setNotice(key, { kind: "undo_conflict", undo: payload, consequences: outcome.consequences });
         } else {
+          latest.current.onAnnounce("");
           for (const item of outcome.cases) noteRevision(item.case_id, item.revision);
           setNotice(key, { kind: "changed" });
           latest.current.onChanged();
         }
       } catch (error: unknown) {
+        latest.current.onAnnounce("");
         setNotice(key, { kind: "error", error, retry: () => undo(key, payload, confirm) });
       } finally {
         mark(setSendingKeys, key, false);
@@ -192,6 +217,8 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
         setOverride(key, { review: result.flags.review, annotate: result.flags.annotate }, result.revision);
         setNotice(key, null);
         latest.current.onAnnounce("");
+        // A confirmed save or an acceptance closes the inline notice: its chip takes focus.
+        if (options.confirm || options.reason !== undefined) focusAfterSave(request.caseId, request.language, request.flag);
         latest.current.showToast({
           message: `${request.language} of ${request.caseId}: ${flagName(request.flag)} ${request.value ? "on" : "off"}`,
           actionLabel: "Undo",
@@ -223,8 +250,29 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
     return { review: row.plan_row?.review ?? false, annotate: row.plan_row?.annotate ?? false };
   };
 
+  const refreshed = (groups: readonly { case_id: string; plan_revision: number }[]) => {
+    const groupRevisions = new Map(groups.map(group => [group.case_id, group.plan_revision]));
+    setOverrides(current => {
+      const stale = [...current].filter(([key, value]) => value.revision < (groupRevisions.get(key.slice(0, key.lastIndexOf(":"))) ?? -Infinity));
+      if (!stale.length) return current;
+      const next = new Map(current);
+      for (const [key] of stale) next.delete(key);
+      return next;
+    });
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    pendingFocus.current = null;
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      if (active != null && active !== document.body) return;
+      if (focusChip({ case_id: pending.caseId, language: pending.language }, pending.flag)) return;
+      (document.getElementById(documentsNotInPlanId(pending.caseId)) ?? document.getElementById(documentsGroupId(pending.caseId)))?.focus();
+    }, 0);
+  };
+
   return {
     flagsOf,
+    refreshed,
     isBusy: (row, flag) => busy.has(`${keyOf(row)}:${flag}`),
     sending: row => sendingKeys.has(keyOf(row)),
     toggle: (row, flag, groupRevision) => {
@@ -275,12 +323,14 @@ export function PlanChips({ row, groupRevision, saves, size = "table" }: PlanChi
   </span>;
 }
 
-/** Focus the row's chip after an inline notice closes. */
-function focusChip(row: Pick<DocumentRowView, "case_id" | "language">, flag: PlanFlag | null): void {
-  const container = document.querySelector(`[data-plan-row="${CSS.escape(`${row.case_id}:${row.language}`)}"]`);
+/** Focus the row's chip (the given flag's, else the first); false when the row has no chip in view. */
+function focusChip(row: Pick<DocumentRowView, "case_id" | "language">, flag: PlanFlag | null): boolean {
+  const key = `${row.case_id}:${row.language}`;
+  const container = Array.from(document.querySelectorAll("[data-plan-row]")).find(element => element.getAttribute("data-plan-row") === key);
   const chips = container ? Array.from(container.querySelectorAll<HTMLButtonElement>("button.ui-plan-chip")) : [];
-  const target = chips.find(chip => chip.getAttribute("aria-label")?.startsWith(flag === "review" ? "Review," : "Annotate,")) ?? chips[0];
+  const target = (flag ? chips.find(chip => chip.getAttribute("aria-label")?.startsWith(flag === "review" ? "Review," : "Annotate,")) : undefined) ?? chips[0];
   target?.focus();
+  return target !== undefined;
 }
 
 /** Inline confirmation, acceptance, Undo conflict or error under a row; nothing without a notice. */

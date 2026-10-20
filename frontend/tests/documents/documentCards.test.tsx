@@ -37,7 +37,8 @@ describe("cards", () => {
     const { props } = renderCards(page([case0101()]));
     const list = screen.getByRole("list", { name: "Documents" });
     const caseCard = within(list).getByRole("listitem");
-    expect(within(caseCard).getByText("case-0101 · en source + 2 translations")).toBeTruthy();
+    expect(within(caseCard).getByRole("heading", { level: 2, name: "case-0101 · en source + 2 translations" })).toBeTruthy();
+    expect(within(caseCard).queryByText(/decision/)).toBeNull();
     expect(within(caseCard).getAllByRole("article")).toHaveLength(2);
     const de = cardOf("case-0101 · de");
     expect(within(de).getByRole("heading", { name: "case-0101 · de" })).toBeTruthy();
@@ -64,11 +65,20 @@ describe("cards", () => {
     expect(screen.queryByRole("article", { name: "case-0101 · en" })).toBeNull();
     const line = screen.getByText(/not in plan ·/);
     expect(line.textContent).toBe("en not in plan · show");
-    fireEvent.click(within(line).getByRole("button", { name: "show" }));
+    fireEvent.click(within(line).getByRole("button", { name: "Show en not in plan, case-0101" }));
     expect(onToggleNotInPlan).toHaveBeenCalledWith("case-0101");
     unmount();
     renderCards(page([case0101()]), { shownNotInPlan: new Set(["case-0101"]) });
     expect(cardOf("case-0101 · en").textContent).toContain("Not in plan");
+  });
+
+  it("shows the case's decision count next to the case card heading", () => {
+    renderCards(page([group("case-0102", [
+      planRow("case-0102", "de", stepOf("decide_report")),
+      planRow("case-0102", "fr", stepOf("choose_final")),
+    ])]));
+    const heading = screen.getByRole("heading", { level: 2, name: "case-0102 · 2 languages" });
+    expect(heading.parentElement!.textContent).toContain("2 decisions");
   });
 
   it("stacks the row notice and expanded content inside the article and toggles the row", () => {

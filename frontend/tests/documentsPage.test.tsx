@@ -1,11 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, type DocumentRowView, type DocumentRowsPage, type PlanRowResult, type ProjectDocumentSummary, type RowSubmissions } from "../src/api/client";
+import { api, ApiError, type DocumentRowView, type DocumentRowsPage, type PlanRowResult, type ProjectDocumentSummary, type RowSubmissions } from "../src/api/client";
 import { DocumentsPage, type DocumentsPageProps } from "../src/admin/DocumentsPage";
 import type { ProjectDocumentsQuery, Route } from "../src/app/router";
 import { recordDecision } from "../src/documents/visitState";
-import { final, group, item, page, planRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
+import { final, group, item, notInPlanRow, page, planRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
 
 const { expandedProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[] }));
 vi.mock("../src/documents/ExpandedRow", async importOriginal => {
@@ -72,7 +72,10 @@ it("tells non-leads that Documents is for project leads without loading anything
 });
 
 it("shows skeleton rows in a busy table while the first page loads", () => {
-  vi.mocked(api.listDocumentRows).mockReturnValue(new Promise(() => {}));
+  // Nothing resolves during the test (no state update after it ends).
+  for (const method of ["listDocumentRows", "getProjectSettings", "listProjectDocuments", "listCases", "listAssignments", "listMembers"] as const) {
+    vi.mocked(api[method]).mockReturnValue(new Promise(() => {}) as never);
+  }
   renderPage();
   const table = screen.getByRole("table", { name: "Documents" });
   expect(table.getAttribute("aria-busy")).toBe("true");
@@ -99,7 +102,7 @@ it("filters by Next step, Plan, Language and Case ID; More filters holds Final r
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { language: "de", segment: "assign", page: 2 });
   const filters = screen.getByRole("group", { name: "Document filters" });
   const step = within(filters).getByLabelText("Next step") as HTMLSelectElement;
-  expect(Array.from(step.querySelectorAll("optgroup")).map(entry => entry.label)).toEqual(["Any stage", "Translation review", "Annotation", "Final result", "Done"]);
+  expect(Array.from(step.querySelectorAll("optgroup")).map(entry => entry.label)).toEqual(["Problem reports and paused tasks", "Translation review", "Annotation", "Final result", "Done"]);
   expect(within(step).getByRole("option", { name: "Assign translation review" })).toBeTruthy();
   fireEvent.change(step, { target: { value: "assign_translation_review" } });
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", step: "assign_translation_review" });
@@ -221,7 +224,7 @@ it("keeps the page busy with focus on the paging link while the next page loads,
 });
 
 it("renders Submissions of an open card as a list, not the table", async () => {
-  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
   const s1 = scenarioS1();
   mockRows(s1.page, s1.submissions);
   renderPage({ query: { open: [rowKey("case-0042", "en")] } });
@@ -325,7 +328,7 @@ it("opens the translation review history of a version from Text versions", async
 });
 
 it("renders cards on narrow viewports", async () => {
-  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
   mockRows(page([group("case-1", [row({ case_id: "case-1", language: "en", versions: [version({ document_id: "case-1-en" })] })])]));
   renderPage();
   const list = await screen.findByRole("list", { name: "Documents" });
@@ -556,5 +559,110 @@ describe("plan chips on the page", () => {
     await waitFor(() => expect(upload.getAttribute("aria-disabled")).toBeNull());
     fireEvent.click(upload);
     expect(await screen.findByRole("dialog", { name: "Upload texts" })).toBeTruthy();
+  });
+});
+
+describe("lead review fixes", () => {
+  const planResult = (caseId: string, language: string, flags: { review: boolean; annotate: boolean }, revision: number) => ({
+    case_id: caseId, language, flags: { ...flags, review_applicable: true, discarded: false }, revision,
+    undo: { rows: [{ case_id: caseId, language, review: true, annotate: true, restored_revision: null }], revisions: { [caseId]: revision } },
+    withdrawn: [], accepted_document_ids: [],
+  } as PlanRowResult);
+
+  it("keeps a group expanded after its decision is resolved when more than 50 cases match", async () => {
+    const plain = (caseId: string) => group(caseId, [planRow(caseId, "de", stepOf("assign_annotation"))]);
+    const many = Array.from({ length: 50 }, (_, index) => plain(`case-${String(index).padStart(3, "0")}`));
+    mockRows(page([group("case-d", [planRow("case-d", "de", stepOf("decide_report"))]), ...many]));
+    renderPage();
+    await loaded();
+    const toggle = () => document.getElementById("documents-group-case-d-toggle")!;
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById("documents-group-case-000-toggle")!.getAttribute("aria-expanded")).toBe("false");
+    // The decision is resolved and the rows reload: the group keeps its expansion.
+    mockRows(page([plain("case-d"), ...many]));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText("1 decision")).toBeNull());
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById("documents-group-case-000-toggle")!.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("leaves More filters to the lead and opens it only when one of its filters becomes active", async () => {
+    mockRows(scenarioS1().page);
+    const onNavigate = vi.fn();
+    const view = renderPage({ query: { sort: "activity" }, onNavigate });
+    await loaded();
+    const more = () => screen.getByText("More filters").closest("details") as HTMLDetailsElement;
+    expect(more().open).toBe(true);
+    const rerender = (query: ProjectDocumentsQuery) => view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} query={query} onNavigate={onNavigate} />);
+    act(() => { more().open = false; fireEvent(more(), new Event("toggle")); });
+    rerender({ sort: "activity", language: "de" });
+    expect(more().open).toBe(false);
+    rerender({});
+    expect(more().open).toBe(false);
+    rerender({ status: "held" });
+    expect(more().open).toBe(true);
+    // Clearing its filter does not close it under the lead.
+    rerender({});
+    expect(more().open).toBe(true);
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", {}));
+  });
+
+  it("shows the not-in-plan rows expanded under the Plan filter Not in plan", async () => {
+    mockRows(page([group("case-1", [notInPlanRow("case-1", "en", { is_source: true }), notInPlanRow("case-1", "fr")])]));
+    renderPage({ query: { plan: "not_in_plan" } });
+    const hide = await screen.findByRole("button", { name: "Hide en, fr not in plan, case-1" });
+    expect(hide.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "Show details, case-1 · fr" })).toBeTruthy();
+    fireEvent.click(hide);
+    expect(screen.getByRole("button", { name: "Show en, fr not in plan, case-1" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: "Show details, case-1 · fr" })).toBeNull();
+  });
+
+  it("Assign review or accept… saves through the panel and later chip saves use the returned revision", async () => {
+    const de = planRow("case-1", "de", stepOf("translation_not_accepted", { document_id: "case-1-de" }), { plan_row: { review: false, annotate: true, review_applicable: true, discarded: false } });
+    mockRows(page([group("case-1", [de], { plan_revision: 2 })]));
+    vi.spyOn(api, "patchWorkPlan").mockResolvedValueOnce(planResult("case-1", "de", { review: true, annotate: true }, 5)).mockImplementation(() => new Promise(() => {}));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Assign review or accept…, case-1 · de" }));
+    const box = screen.getByRole("group", { name: "Translation not accepted, case-1 · de" });
+    fireEvent.click(within(box).getByRole("button", { name: "Turn Review on" }));
+    expect(live().textContent).toBe("Saving…");
+    expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-1", "de", { review: true, expected_revision: 2, confirm: false });
+    await waitFor(() => expect(live().textContent).toBe("Review on for case-1 · de. Next: Assign translation review."));
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Translation not accepted, case-1 · de" })).toBeNull());
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "Annotate, case-1 · de" }));
+    expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-1", "de", { annotate: false, expected_revision: 5, confirm: false });
+  });
+
+  it("a plan changed elsewhere in Assign review or accept… notes the revision, reloads and says so", async () => {
+    const de = planRow("case-1", "de", stepOf("translation_not_accepted", { document_id: "case-1-de" }), { plan_row: { review: false, annotate: true, review_applicable: true, discarded: false } });
+    mockRows(page([group("case-1", [de], { plan_revision: 2 })]));
+    vi.spyOn(api, "patchWorkPlan").mockRejectedValueOnce(new ApiError(409, "changed", "WORK_PLAN_CHANGED", { cases: [{ case_id: "case-1", revision: 8 }] }))
+      .mockImplementation(() => new Promise(() => {}));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Assign review or accept…, case-1 · de" }));
+    fireEvent.click(screen.getByRole("button", { name: "Turn Review on" }));
+    expect(await screen.findByText("This plan changed. Reloaded the current plan.")).toBeTruthy();
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "Turn Review on" }));
+    expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-1", "de", { review: true, expected_revision: 8, confirm: false });
+  });
+
+  it("focuses the case's not-in-plan toggle when a confirmed save moved the row out of view", async () => {
+    const en = notInPlanRow("case-1", "en", { is_source: true });
+    const de = planRow("case-1", "de", stepOf("assign_translation_review"), { plan_row: { review: true, annotate: false, review_applicable: true, discarded: false } });
+    mockRows(page([group("case-1", [en, de], { plan_revision: 2 })]));
+    const consequences = { withdrawn: [], finals_leaving: [], restored: [], open_reports: [{ case_id: "case-1", language: "de", held: false }] };
+    vi.spyOn(api, "patchWorkPlan").mockRejectedValueOnce(new ApiError(409, "confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences))
+      .mockResolvedValueOnce(planResult("case-1", "de", { review: false, annotate: false }, 3));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Review, case-1 · de" }));
+    const box = await screen.findByRole("group", { name: "Change the plan of case-1 · de" });
+    mockRows(page([group("case-1", [en, notInPlanRow("case-1", "de")], { plan_revision: 3 })]));
+    fireEvent.click(within(box).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(document.activeElement?.id).toBe("documents-group-case-1-not-in-plan"));
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Show en, de not in plan, case-1");
   });
 });

@@ -80,13 +80,17 @@ it("undo restores the previous flags with the returned revision", async () => {
   vi.mocked(api.setWorkPlanRows).mockResolvedValue(bulk({ "case-0101": 5 }));
   render(<Harness rows={[row]} />);
   fireEvent.click(chip("Review, case-0101 · fr"));
-  fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
+  const undoButton = await screen.findByRole("button", { name: "Undo" });
+  act(() => { undoButton.focus(); });
+  fireEvent.click(undoButton);
+  expect(live().textContent).toBe("Saving…");
   await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledWith("p", {
     rows: [{ case_id: "case-0101", language: "fr", review: true, annotate: true, restored_revision: null }],
     expected_revisions: { "case-0101": 4 }, undo: true, confirm: false,
   }));
   await waitFor(() => expect(chip("Review, case-0101 · fr").getAttribute("aria-pressed")).toBe("true"));
   expect(live().textContent).toBe("Plan change undone.");
+  await waitFor(() => expect(document.activeElement).toBe(chip("Review, case-0101 · fr")));
   // The next save uses the revision returned by the undo.
   vi.mocked(api.patchWorkPlan).mockResolvedValue(result(row, { review: false, annotate: true }, 6));
   fireEvent.click(chip("Review, case-0101 · fr"));
@@ -111,6 +115,7 @@ it("undo after an intervening assignment shows the message and the normal confir
   fireEvent.click(undoAnyway);
   await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenLastCalledWith("p", expect.objectContaining({ undo: true, confirm: true })));
   await waitFor(() => expect(screen.queryByRole("group", { name: "Undo the plan change" })).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(chip("Review, case-0101 · fr")));
 });
 
 it("serialises two quick toggles on one case and sends the revision of the first response", async () => {
@@ -166,10 +171,12 @@ it("opens an inline confirmation with consequences instead of saving", async () 
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-0101", "fr", { annotate: false, expected_revision: 3, confirm: true }));
   expect(await screen.findByText("fr of case-0101: Annotate off")).toBeTruthy();
   expect(screen.queryByRole("group", { name: "Change the plan of case-0101 · fr" })).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(chip("Annotate, case-0101 · fr")));
 });
 
 it("offers the external-review acceptance for an invalid combination", async () => {
-  const row = planRow("case-0101", "fr", stepOf("assign_translation_review"), { plan_row: { review: true, annotate: false, review_applicable: true, discarded: false } });
+  const row = fr();
+  expect(row.plan_row).toMatchObject({ review: true, annotate: true });
   vi.mocked(api.patchWorkPlan)
     .mockRejectedValueOnce(new ApiError(422, "invalid", "WORK_PLAN_INVALID", { reason: "annotate_not_accepted", rows: [{ case_id: "case-0101", language: "fr" }] }))
     .mockResolvedValueOnce(result(row, { review: false, annotate: true }, 4));
@@ -187,6 +194,7 @@ it("offers the external-review acceptance for an invalid combination", async () 
     review: false, expected_revision: 3, confirm: false, accept_external_review: { reason: "Reviewed by the clinic" },
   }));
   await waitFor(() => expect(screen.queryByRole("group", { name: "Annotate without review" })).toBeNull());
+  await waitFor(() => expect(document.activeElement).toBe(chip("Review, case-0101 · fr")));
 });
 
 it("keeps focus while saving and shows an inline error with Retry", async () => {
@@ -228,4 +236,43 @@ it("shows only Annotate on the source row", () => {
   render(<Harness rows={[en()]} />);
   expect(chip("Annotate, case-0101 · en").getAttribute("aria-pressed")).toBe("true");
   expect(screen.queryByRole("button", { name: "Review, case-0101 · en" })).toBeNull();
+});
+
+it("sends a queued second save after a 409 confirmation and the confirmed save with the latest revision", async () => {
+  const rowFr = fr();
+  const rowDe = de();
+  const consequences = { withdrawn: [], finals_leaving: [{ case_id: "case-0101", language: "fr" }], restored: [], open_reports: [] };
+  let rejectFirst!: (error: unknown) => void;
+  vi.mocked(api.patchWorkPlan)
+    .mockImplementationOnce(() => new Promise((_, reject) => { rejectFirst = reject; }))
+    .mockResolvedValueOnce(result(rowDe, { review: true, annotate: false }, 4))
+    .mockResolvedValueOnce(result(rowFr, { review: true, annotate: false }, 5));
+  render(<Harness rows={[rowFr, rowDe]} />);
+  fireEvent.click(chip("Annotate, case-0101 · fr"));
+  fireEvent.click(chip("Annotate, case-0101 · de"));
+  expect(api.patchWorkPlan).toHaveBeenCalledTimes(1);
+  await act(async () => { rejectFirst(new ApiError(409, "confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences)); });
+  // The queued save runs once the first request settled, still with the page's revision.
+  await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledTimes(2));
+  expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-0101", "de", { annotate: false, expected_revision: 3, confirm: false });
+  expect(await screen.findByText("de of case-0101: Annotate off")).toBeTruthy();
+  const box = screen.getByRole("group", { name: "Change the plan of case-0101 · fr" });
+  fireEvent.click(within(box).getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-0101", "fr", { annotate: false, expected_revision: 4, confirm: true }));
+  expect(await screen.findByText("fr of case-0101: Annotate off")).toBeTruthy();
+});
+
+it("keeps a chip busy while a second request for it is queued", async () => {
+  const row = fr();
+  let resolveFirst!: (value: PlanRowResult) => void;
+  vi.mocked(api.patchWorkPlan)
+    .mockImplementationOnce(() => new Promise(done => { resolveFirst = done; }))
+    .mockImplementationOnce(() => new Promise(() => {}));
+  render(<Harness rows={[row]} />);
+  fireEvent.click(chip("Annotate, case-0101 · fr"));
+  fireEvent.click(chip("Review, case-0101 · fr"));
+  await act(async () => { resolveFirst(result(row, { review: true, annotate: false }, 4)); });
+  await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledTimes(2));
+  expect(chip("Review, case-0101 · fr").getAttribute("aria-disabled")).toBe("true");
+  expect(chip("Annotate, case-0101 · fr").getAttribute("aria-disabled")).toBeNull();
 });

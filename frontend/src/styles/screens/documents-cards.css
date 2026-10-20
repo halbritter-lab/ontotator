@@ -1,7 +1,8 @@
-/* Documents cards styles. Narrow viewports (< 700px): one case card per case, one article per language row. */
+/* Documents cards styles. Narrow viewports (<= 700px): one case card per case, one article per language row. */
 .document-cards { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
 .document-case-card { display: grid; gap: var(--space-2); min-width: 0; }
-.document-case-card-title { margin: 0; font-weight: var(--weight-strong); overflow-wrap: anywhere; }
+.document-case-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); min-width: 0; }
+.document-case-card-title { margin: 0; font-size: var(--size-md); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
 .document-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

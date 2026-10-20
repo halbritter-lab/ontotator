@@ -55,7 +55,7 @@ export interface DocumentsPageProps {
 }
 
 /** Narrow viewports render cards instead of the table. */
-export const NARROW_DOCUMENTS_QUERY = "(max-width: 699px)";
+export const NARROW_DOCUMENTS_QUERY = "(max-width: 700px)";
 
 export const STATUS_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["status"]>, string])[] = [
   ["unassigned", "Unassigned"], ["open", "Open"], ["in_progress", "In progress"],
@@ -318,26 +318,48 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // Group expansion: initial rule per filter set, then the lead's own toggles.
-  const [groupState, setGroupState] = useState<{ identity: string; groups: ReadonlySet<string> } | null>(null);
+  // Group expansion: the initial rule once per request (filters and page), then the lead's own
+  // toggles; a refetch never re-applies the rule to cases already seen (a resolved decision keeps
+  // its group open), only cases new to the request are added by the rule.
+  const [groupState, setGroupState] = useState<{ identity: string; groups: ReadonlySet<string>; seen: ReadonlySet<string> } | null>(null);
+  const ownGroups = groupState?.identity === requestIdentity ? groupState : null;
+  const expandByRule = (groups: readonly DocumentGroupView[], rule: ReadonlySet<string>, into: Set<string>) => {
+    const open = new Set([...openKeys].map(caseOfKey));
+    for (const group of groups) if (rule.has(group.case_id) || open.has(group.case_id) || group.case_id === query.case) into.add(group.case_id);
+    return into;
+  };
   const expandedGroups = useMemo(() => {
     if (!page) return new Set<string>();
-    if (groupState?.identity === requestIdentity) return groupState.groups;
-    const initial = initialExpandedGroups(page);
-    for (const key of openKeys) initial.add(caseOfKey(key));
-    if (query.case) initial.add(query.case);
-    return initial;
-  }, [page, groupState, requestIdentity, openKeys, query.case]);
+    const rule = initialExpandedGroups(page);
+    if (!ownGroups) return expandByRule(page.groups, rule, new Set());
+    const added = page.groups.filter(group => !ownGroups.seen.has(group.case_id));
+    return added.length ? expandByRule(added, rule, new Set(ownGroups.groups)) : ownGroups.groups;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, ownGroups, openKeys, query.case]);
+  const groupsSeen = (): ReadonlySet<string> => new Set([...(ownGroups?.seen ?? []), ...(page?.groups.map(group => group.case_id) ?? [])]);
+  useEffect(() => {
+    // Remember the expansion of this request's pages (a stale page belongs to the previous request).
+    if (!page || rows.stale) return;
+    if (ownGroups && page.groups.every(group => ownGroups.seen.has(group.case_id))) return;
+    setGroupState({ identity: requestIdentity, groups: expandedGroups, seen: groupsSeen() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, rows.stale, requestIdentity]);
+  const setGroups = (groups: ReadonlySet<string>) => setGroupState({ identity: requestIdentity, groups, seen: groupsSeen() });
   const toggleGroup = (caseId: string) => {
     const next = new Set(expandedGroups);
     if (next.has(caseId)) next.delete(caseId); else next.add(caseId);
-    setGroupState({ identity: requestIdentity, groups: next });
+    setGroups(next);
   };
-  // Not-in-plan rows always start in the collapsed "not in plan · show" line.
+  // Not-in-plan rows start in the collapsed "not in plan · show" line, except under the Plan filter
+  // "Not in plan", where they are what the lead asked for and start shown. The state holds the toggles.
   const [notInPlanState, setNotInPlanState] = useState<{ identity: string; cases: ReadonlySet<string> } | null>(null);
-  const shownNotInPlan: ReadonlySet<string> = notInPlanState?.identity === requestIdentity ? notInPlanState.cases : new Set();
+  const toggledNotInPlan: ReadonlySet<string> = notInPlanState?.identity === requestIdentity ? notInPlanState.cases : new Set();
+  const shownNotInPlan: ReadonlySet<string> = useMemo(() => {
+    if (request.plan !== "not_in_plan") return toggledNotInPlan;
+    return new Set((page?.groups ?? []).map(group => group.case_id).filter(caseId => !toggledNotInPlan.has(caseId)));
+  }, [request.plan, toggledNotInPlan, page]);
   const toggleNotInPlan = (caseId: string) => {
-    const next = new Set(shownNotInPlan);
+    const next = new Set(toggledNotInPlan);
     if (next.has(caseId)) next.delete(caseId); else next.add(caseId);
     setNotInPlanState({ identity: requestIdentity, cases: next });
   };
@@ -538,7 +560,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   const nextDecisionRoute = (key: string) => documentsRoute({ open: [...new Set([...openKeys, key])] });
   const goToRow = (key: string) => {
-    setGroupState({ identity: requestIdentity, groups: new Set([...expandedGroups, caseOfKey(key)]) });
+    setGroups(new Set([...expandedGroups, caseOfKey(key)]));
     onNavigate(nextDecisionRoute(key), { replace: true });
     setFocusTarget({ kind: "row", rowKey: key });
   };
@@ -548,6 +570,12 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const latestReload = useRef(rows.reload);
   latestReload.current = rows.reload;
   const planSaves = usePlanSaves({ projectKey, onAnnounce: announce, onChanged: () => latestReload.current(), showToast });
+  // Each new rows page: drop local chip flags the server has caught up with; restore focus after a save.
+  useEffect(() => {
+    if (page) planSaves.refreshed(page.groups);
+    // Only a new page carries new plan revisions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   // Row actions.
   const [autoAction, setAutoAction] = useState<AutoAction | null>(null);
@@ -622,6 +650,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
           rows.reload();
           closePanel(key, "disclosure");
         }}
+        onChanged={(caseId, revision) => { planSaves.noteRevision(caseId, revision); rows.reload(); }}
+        onAnnounce={announce}
         onCancel={() => closePanel(key, "action")} />}
     </>;
   };
@@ -640,6 +670,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const finalFilter = query.final === "none" ? "none" : "";
   const sort = request.sort ?? "case";
   const moreActive = status !== "" || origin !== "" || translationStatus !== "" || finalFilter !== "" || sort !== "case";
+  // "More filters" is the lead's to open and close; it opens by itself only when one of its filters becomes active.
+  const [moreOpen, setMoreOpen] = useState(moreActive);
+  useEffect(() => { if (moreActive) setMoreOpen(true); }, [moreActive]);
   const showAll: Route = { name: "projectDocuments", key: projectKey };
   const navigateLink = (target: Route) => onNavigate(target);
   const hasFilters = Object.keys(request).some(name => name !== "page" && name !== "sort");
@@ -708,7 +741,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       </Select>
       <TextInput id="documents-prefix" label="Case ID" value={idText} onChange={event => typeId(event.target.value)} onBlur={() => applyId(idText)}
         onKeyDown={event => { if (event.key === "Enter") applyId(idText); }} />
-      <details className="documents-more-filters" open={moreActive ? true : undefined}>
+      <details className="documents-more-filters" open={moreOpen} onToggle={event => setMoreOpen(event.currentTarget.open)}>
         <summary>More filters</summary>
         <div className="documents-more-filters-body">
           <Select id="documents-final" label="Final result" value={finalFilter} onChange={event => changeFilter({ final: event.target.value || undefined })}>

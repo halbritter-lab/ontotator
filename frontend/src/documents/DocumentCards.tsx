@@ -7,10 +7,12 @@
 import { useId, useMemo, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
+import { plural } from "../app/labels";
 import { IconChevronRight } from "../ui/icons";
-import { caseHeaderText, notInPlanLanguages } from "./DocumentsTable";
+import { StatusBadge } from "../ui/StatusBadge";
+import { caseHeaderText, decisionCount, notInPlanLanguages } from "./DocumentsTable";
 import { ownerLabel } from "./nextStepLabels";
-import { ActionCell, documentsRowId, LastActivityCell, NextStepCell, RowOpenLinks, ShortId, rowKeyOf, rowName } from "./RowCells";
+import { ActionCell, documentsNotInPlanId, documentsRowId, LastActivityCell, notInPlanToggleLabel, NextStepCell, RowOpenLinks, ShortId, rowKeyOf, rowName } from "./RowCells";
 
 export interface DocumentCardsProps {
   page: DocumentRowsPage;
@@ -96,16 +98,21 @@ export function DocumentCards({ page, busy, empty, query, shownNotInPlan, onTogg
         const hidden = notInPlanLanguages(group);
         const shown = shownNotInPlan.has(group.case_id);
         const rows = group.rows.filter(row => row.in_plan || shown);
+        const decisions = decisionCount(group);
         return (
           <li key={group.case_id} className="document-case-card">
-            <p className="document-case-card-title">{caseHeaderText(group)}</p>
+            <div className="document-case-card-head">
+              <h2 className="document-case-card-title">{caseHeaderText(group)}</h2>
+              {decisions > 0 && <StatusBadge tone="warning">{plural(decisions, "decision")}</StatusBadge>}
+            </div>
             {rows.filter(row => row.in_plan).map(row => (
               <DocumentCard key={rowKeyOf(row)} {...rest} row={row} group={group} query={query} expanded={open.has(rowKeyOf(row))} />
             ))}
             {hidden.length > 0 && (
               <p className="documents-not-in-plan">
                 {`${hidden.join(", ")} not in plan · `}
-                <button type="button" className="documents-not-in-plan-toggle" aria-expanded={shown} onClick={() => onToggleNotInPlan(group.case_id)}>{shown ? "hide" : "show"}</button>
+                <button type="button" id={documentsNotInPlanId(group.case_id)} className="documents-not-in-plan-toggle" aria-expanded={shown}
+                  aria-label={notInPlanToggleLabel(group.case_id, hidden, shown)} onClick={() => onToggleNotInPlan(group.case_id)}>{shown ? "hide" : "show"}</button>
               </p>
             )}
             {rows.filter(row => !row.in_plan).map(row => (

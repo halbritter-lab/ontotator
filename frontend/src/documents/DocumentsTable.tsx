@@ -14,7 +14,9 @@ import { StatusBadge } from "../ui/StatusBadge";
 import {
   ActionCell,
   documentsGroupId,
+  documentsNotInPlanId,
   LastActivityCell,
+  notInPlanToggleLabel,
   NextStepCell,
   OwnerCell,
   RowHeaderCell,
@@ -107,7 +109,8 @@ export function DocumentsTable({
       cell: line => (line.kind === "hidden"
         ? <span className="documents-not-in-plan">
           {`${line.languages.join(", ")} not in plan · `}
-          <button type="button" className="documents-not-in-plan-toggle" aria-expanded={line.shown} onClick={() => onToggleNotInPlan(line.caseId)}>{line.shown ? "hide" : "show"}</button>
+          <button type="button" id={documentsNotInPlanId(line.caseId)} className="documents-not-in-plan-toggle" aria-expanded={line.shown}
+            aria-label={notInPlanToggleLabel(line.caseId, line.languages, line.shown)} onClick={() => onToggleNotInPlan(line.caseId)}>{line.shown ? "hide" : "show"}</button>
         </span>
         : <RowHeaderCell
           row={line.row}
