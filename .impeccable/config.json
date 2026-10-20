@@ -48,6 +48,15 @@
         ],
         "createdAt": "2026-10-20T09:19:42.754Z",
         "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/ui/guidelineDocument.css"
+        ],
+        "createdAt": "2026-10-20T23:38:59.003Z",
+        "reason": "orchestrator: neutral border-strong left rule on Markdown blockquote is standard quote typography in rendered guideline text, not a coloured card accent"
       }
     ]
   }
