@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { assignmentStatusLabels, formatDateTime, taskCrumbLabel, humanize, jobStatusLabels, labelFor, plural, roleLabels, taskLabels, uploadKindLabels, uploadStatusLabels } from "../src/app/labels";
 import { taskActionLabels, taskDescription } from "../src/tasks/MyTasks";

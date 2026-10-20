@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SearchManager } from "../src/editor/searchState";
 import type { ApiClient, SearchCandidate, SearchResult } from "../src/api/client";

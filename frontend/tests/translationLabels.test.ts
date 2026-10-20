@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { clinicalChangeFacts, decisionDescriptions, decisionKeyHint, rationaleHint, allChecksLine, calmCheckText, checkBandText, checkDeviationGuidance, checkExplanation, checkLabel, checkNoLocation, failedChecksTitle, shortCheckLabel, unknownCheckExplanation, formatReviewDate, languageName, translationStatusLabel } from "../src/translation/labels";
 

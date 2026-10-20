@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { components } from '../src/api/generated';
 import { annotationOptions, languagesOf, pickVariant, refForKey, refKey, versionsOf } from '../src/variants/versionState';

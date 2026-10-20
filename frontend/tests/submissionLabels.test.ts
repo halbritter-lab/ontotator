@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { formatTime, fullTimestamp, kindLabels, personLabel, roundCell, submissionLabel } from "../src/app/submissionLabels";
 

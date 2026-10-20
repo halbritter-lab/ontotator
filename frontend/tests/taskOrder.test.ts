@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { TaskSummary } from "../src/api/client";
 import { nextOpenTask, orderTasks } from "../src/app/caseOrder";

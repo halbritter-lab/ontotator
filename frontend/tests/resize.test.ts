@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { resizeSegment, stepOffset, wordBoundary } from "../src/spans/resize";
 

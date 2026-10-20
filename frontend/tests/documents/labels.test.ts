@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { decisionCategoryLabels, formatTime, issueAriaLabel, middleEllipsis, statusBadgeText, versionText, workText, type WorkItemLike } from "../../src/documents/labels";
 

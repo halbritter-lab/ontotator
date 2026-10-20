@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../src/api/client";
 import { ERROR_MESSAGES, errorMessage } from "../src/admin/errors";

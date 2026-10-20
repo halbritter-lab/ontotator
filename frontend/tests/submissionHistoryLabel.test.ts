@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { submissionHistoryLabel } from "../src/editor/submissionHistoryLabel";
 

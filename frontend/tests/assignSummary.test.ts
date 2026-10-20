@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { caseRange, memberReason, needsPeopleMessage, onePersonSummary, partlyAssignedLines, resultMessage, skippedLines, splitSummary, stepLabel } from "../src/admin/assignSummary";
 

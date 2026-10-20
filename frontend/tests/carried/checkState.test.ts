@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { carriedChosenAxisIds, carriedListOrder, checkStateBadge, deriveCarriedStates, nextUncheckedKey, progressText, rowKeyOf } from "../../src/editor/carried/checkState";
 
