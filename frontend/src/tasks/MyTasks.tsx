@@ -4,6 +4,8 @@ import { routeHref, type Route } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { assignmentStatusLabels, formatDateTime, taskLabels } from "../app/labels";
 import { textLabel } from "../app/identity";
+import { failedChecksTitle } from "../translation/labels";
+import { IconWarning } from "../ui/icons";
 import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, Toolbar, type Column } from "../ui";
 
 export interface MyTasksProps {
@@ -23,6 +25,10 @@ export function taskDescription(task: Pick<TaskSummary, "task" | "language" | "s
   if (task.task !== "translation_review") return taskLabels[task.task];
   return `${taskLabels.translation_review} (${task.source_language ?? "unknown language"} to ${task.target_language ?? task.language})`;
 }
+
+/** Failed automatic checks of a translation review task, or 0 for other tasks and servers that do not send a count. */
+const failedChecks = (task: Pick<TaskSummary, "task" | "failed_check_count">): number =>
+  task.task === "translation_review" ? task.failed_check_count ?? 0 : 0;
 
 const projectLabel = (name: string, key: string): string => name === key ? name : `${name} (${key})`;
 
@@ -75,7 +81,10 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
   const columns: Column<TaskSummary>[] = [
     { id: "text", header: "Text", cell: task => taskText(task) },
     { id: "project", header: "Project", cell: task => projectLabel(task.project_name, task.project_key) },
-    { id: "task", header: "Task", cell: task => taskDescription(task) },
+    { id: "task", header: "Task", cell: task => <>
+      {taskDescription(task)}
+      {failedChecks(task) > 0 && <span className="task-check-flag"><IconWarning /> {failedChecksTitle(failedChecks(task))}</span>}
+    </> },
     { id: "status", header: "Status", cell: task => <>
       <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>
       {task.held && <><StatusBadge tone="warning">Paused</StatusBadge><p>{task.hold_reason ?? "A project problem needs attention."}</p></>}
@@ -114,7 +123,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
         <li>Submitted: {count(task => task.status === "submitted")}</li>
         <li>of which paused: {count(task => task.held)}</li>
       </ul>}
-      {filtered.length === 0 ? empty : <DataTable label="My tasks" className="data-table--pin-end" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${taskText(task)}` })} />}
+      {filtered.length === 0 ? empty : <DataTable label="My tasks" className="data-table--pin-end" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${taskText(task)}${failedChecks(task) > 0 ? `, ${failedChecksTitle(failedChecks(task))}` : ""}` })} />}
     </>}
   </section>;
 }

@@ -264,6 +264,26 @@ describe("My tasks component", () => {
     act(() => { notifySessionRestored(); });
     expect(await screen.findByText("doc-8 · de")).toBeDefined();
   });
+  it("adds a failed-check line with an icon to translation review rows and to their accessible name", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([
+      { ...task(7, "open"), task: "translation_review", source_language: "en", target_language: "de", failed_check_count: 1 },
+      { ...task(8, "open"), task: "translation_review", source_language: "en", target_language: "de", failed_check_count: 0 },
+      { ...task(9, "open"), failed_check_count: null },
+    ]);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    const rows = await screen.findAllByTestId("task-row");
+    const line = within(rows[0]).getByText("1 automatic check failed");
+    expect(line.closest(".task-check-flag")?.querySelector("svg")).not.toBeNull();
+    expect(rows[0].getAttribute("aria-label")).toBe("Project P (p): doc-7 · de, 1 automatic check failed");
+    expect(within(rows[1]).queryByText(/automatic check/)).toBeNull();
+    expect(rows[1].getAttribute("aria-label")).toBe("Project P (p): doc-8 · de");
+    expect(within(rows[2]).queryByText(/automatic check/)).toBeNull();
+  });
+  it("pluralises the failed-check line", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([{ ...task(7, "open"), task: "translation_review", failed_check_count: 3 }]);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    expect(await screen.findByText("3 automatic checks failed")).toBeDefined();
+  });
 });
 
 describe("My tasks text label", () => {
