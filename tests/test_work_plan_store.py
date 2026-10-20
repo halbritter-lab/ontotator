@@ -291,6 +291,15 @@ def test_revisions_default_to_1_and_write_rows_stores_current_plus_one(env) -> N
     assert env.run(store.plan_rows, ["c2"]) == {}
 
 
+def test_bump_revisions_stores_current_plus_one_without_touching_flags(env) -> None:
+    de = RowKey("c1", "de")
+    env.run(store.write_rows, {de: ON_OFF}, actor_id=env.lead)
+    assert env.run(store.bump_revisions, ["c1", "c2"]) == {"c1": 3, "c2": 2}
+    assert env.run(store.bump_revisions, []) == {}
+    assert env.run(store.revisions, ["c1", "c2", "c3"]) == {"c1": 3, "c2": 2, "c3": 1}
+    assert env.run(store.plan_rows) == {de: ON_OFF}
+
+
 def test_write_rows_sets_and_clears_restored_revision_exactly(env) -> None:
     de, fr = RowKey("c1", "de"), RowKey("c1", "fr")
     env.run(

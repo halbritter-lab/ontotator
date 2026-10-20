@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from ontocurator.domain.canonical import canonical_hash
@@ -51,10 +52,31 @@ def marked_reviewed(translation: Mapping[str, Any] | None) -> bool:
     return isinstance(review, Mapping) and review.get("status") == "reviewed"
 
 
-def package_review(translation: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Reviewer, time and note of a package review, as given."""
-    review = (translation or {}).get("review") or {}
-    return {k: review[k] for k in ("reviewer", "reviewed_at", "note") if k in review}
+PACKAGE_REVIEW_MAX = 500
+
+
+def package_review(translation: Mapping[str, Any] | None) -> dict[str, str]:
+    """Reviewer, time and note of a package review, sanitized for storage.
+
+    Values become strings capped at ``PACKAGE_REVIEW_MAX`` characters;
+    ``reviewed_at`` is kept only if it parses as an ISO date-time.
+    """
+    review = (translation or {}).get("review")
+    if not isinstance(review, Mapping):
+        return {}
+    result: dict[str, str] = {}
+    for name in ("reviewer", "reviewed_at", "note"):
+        value = review.get(name)
+        if value is None:
+            continue
+        text = str(value)[:PACKAGE_REVIEW_MAX]
+        if name == "reviewed_at":
+            try:
+                datetime.fromisoformat(text)
+            except ValueError:
+                continue
+        result[name] = text
+    return result
 
 
 def identity(unit: IncomingUnit) -> Identity:

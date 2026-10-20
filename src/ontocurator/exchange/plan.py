@@ -131,6 +131,8 @@ class UploadPlanLanguage(BaseModel):
 
     key: str  # "source" or a language code
     source_languages: list[str]  # for "source": the languages of the new sources
+    # New rows (language versions) of this key: the total the upload step shows.
+    rows: int = 0
     versions: int  # new versions in the bundle for the new rows of this key
     review: bool | None  # None for "source"
     annotate: bool
@@ -145,6 +147,8 @@ class UploadPlanCase(BaseModel):
     review: bool | None  # None for a source row
     annotate: bool
     new_row: bool  # False: an existing row that keeps its plan
+    accepted: bool = False  # every root's newest version is accepted
+    marked_in_package: bool = False  # ... carries a package acceptance / marking
 
 
 class UploadWorkPlan(BaseModel):
@@ -246,6 +250,7 @@ def upload_work_plan(
                 source_languages=sorted({r.version.language for r in items})
                 if source
                 else [],
+                rows=len(items),
                 versions=sum(r.added for r in items),
                 review=None if source else on,
                 annotate=on,
@@ -266,6 +271,8 @@ def upload_work_plan(
                 review=None if row.version.is_source else flags.review,
                 annotate=flags.annotate,
                 new_row=row.new,
+                accepted=row.version.accepted,
+                marked_in_package=row.version.marked_in_package,
             )
         )
     return UploadWorkPlan(

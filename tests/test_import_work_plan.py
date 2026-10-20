@@ -2,25 +2,31 @@
 
 from __future__ import annotations
 
+import json
+
 import ontospan
 import pytest
 from auth_harness import logged_in
-from sqlalchemy import insert, select, update
+from sqlalchemy import func, insert, select, update
 from t1_builders import bundle, native_unit, translation_unit
 from t1_fixtures import create_project, run_import
 from test_auth_api import _app
 from test_uploads_api import BASE, _run
-from test_variant_import import commit, override, preview, units
+from test_variant_import import audit_rows, commit, override, preview, units
 
 from ontocurator.auth.audit import Actor
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.work_plans import PlanFlags, RowKey
 from ontocurator.exchange.t1 import ImportedDocument, document_from_unit
-from ontocurator.exchange.uploads import PlanChoice, UploadService
+from ontocurator.exchange.uploads import PlanChoice, UploadService, _require_override
+from ontocurator.exchange.variant_plan import package_review
 from ontocurator.storage import work_plan_store as store
-from ontocurator.storage.plan_tables import DiscardedVariantRow
+from ontocurator.storage.plan_tables import (
+    DiscardedVariantRow,
+    TranslationAcceptanceRow,
+)
 from ontocurator.storage.repository import Repository
-from ontocurator.storage.tables import ProjectRow, UserRow
+from ontocurator.storage.tables import JobRow, ProjectRow, UserRow
 
 
 @pytest.fixture
@@ -40,14 +46,15 @@ REVIEWED = {
 }
 
 
-def marked(item, review):
-    """``translation.review`` is not in the format-1.2 schema yet (D20): a newer
-    minor version is read leniently and keeps the extra field."""
+def marked(item, review, *, version=NEWER_MINOR):
+    """``translation.review`` is read only from format >= 1.3 (D20); ontospan
+    1.2.0 reads a newer minor version leniently and keeps the extra field, and
+    rejects the field in a 1.2 unit."""
     translation = item.document.translation.model_dump(mode="json")
     translation["review"] = review
     return item.model_copy(
         update={
-            "schema_version": NEWER_MINOR,
+            "schema_version": version,
             "document": item.document.model_copy(
                 update={"translation": ontospan.Translation.model_validate(translation)}
             ),
@@ -186,6 +193,7 @@ def test_preview_returns_default_plan_by_language(staged, tmp_path):
     assert languages["source"] == {
         "key": "source",
         "source_languages": ["en"],
+        "rows": 2,
         "versions": 2,
         "review": None,
         "annotate": True,
@@ -197,6 +205,7 @@ def test_preview_returns_default_plan_by_language(staged, tmp_path):
         assert languages[lang] == {
             "key": lang,
             "source_languages": [],
+            "rows": 2,
             "versions": 2,
             "review": True,
             "annotate": True,
@@ -212,6 +221,8 @@ def test_preview_returns_default_plan_by_language(staged, tmp_path):
         "review": None,
         "annotate": False,
         "new_row": True,
+        "accepted": False,
+        "marked_in_package": False,
     }
     assert cases[("c2", "de")]["review"] is cases[("c2", "de")]["annotate"] is True
     set_import_plan(application, "nothing")
@@ -267,12 +278,17 @@ def test_existing_rows_keep_their_plan(staged, tmp_path):
     assert cases[("c1", "de")]["review"] is True
     assert cases[("c1", "de")]["annotate"] is False
     assert cases[("c1", "es")]["review"] is cases[("c1", "es")]["annotate"] is True
+    with application.state.repo.db.transaction() as conn:
+        assert store.revisions(conn, project_id(application), ["c1"]) == {"c1": 2}
     commit(application, admin, upload)
     assert stored_rows(application) == {
         RowKey("c1", "en"): PlanFlags(False, False),
         RowKey("c1", "de"): PlanFlags(True, False),
         RowKey("c1", "es"): PlanFlags(True, True),
     }
+    # A new row in an existing case changes its plan: open dialogs go stale.
+    with application.state.repo.db.transaction() as conn:
+        assert store.revisions(conn, project_id(application), ["c1"]) == {"c1": 3}
 
 
 def test_existing_source_without_stored_row_keeps_its_effective_plan(staged, tmp_path):
@@ -315,6 +331,14 @@ def test_commit_refuses_annotate_without_accepted_translation_when_rule_on(
     assert {(r["case_id"], r["language"]) for r in error.value.details["rows"]} == {
         ("c1", "de"),
         ("c2", "de"),
+    }
+    assert error.value.details["rows"][0] == {
+        "case_id": "c1",
+        "language": "de",
+        "reason": "annotate_not_accepted",
+        "not_accepted": True,
+        "not_acceptable": False,
+        "marked_in_package": False,
     }
     assert application.state.repo.list_documents("proj") == []
     commit_plan(
@@ -396,8 +420,12 @@ def test_annotator_cannot_accept_external_review(staged, tmp_path):
 
 def test_plan_hash_covers_project_import_setting(staged, tmp_path):
     application, admin, _ = staged
-    upload = preview(application, admin, bundle(tmp_path, two_cases()))
+    path = bundle(tmp_path, two_cases())
+    upload = preview(application, admin, path)
     set_import_plan(application, "nothing")
+    # The project state hash itself covers the setting, not only work_plan.
+    again = preview(application, admin, path)["preview"]
+    assert again["state_sha256"] != upload["preview"]["state_sha256"]
     response = enqueue_plan(admin, upload)
     if response.status_code == 200:
         job = _run(application, response.json()["job_id"])
@@ -462,3 +490,145 @@ def test_import_override_writes_override_acceptance_with_upload(staged, tmp_path
     assert record["reason"] == "Clinically reviewed"
     assert record["accepted_by"] == user_id(application, "root")
     assert record["upload_id"] == upload["id"]
+    assert (
+        audit_rows(application, "variant.status_override")[-1]["upload_id"]
+        == (upload["id"])
+    )
+
+
+def test_override_of_an_earlier_imported_variant_writes_no_acceptance(staged, tmp_path):
+    application, admin, _ = staged
+    path = bundle(tmp_path, list(units(failed=True)))
+    commit(application, admin, preview(application, admin, path))
+    commit(application, admin, preview(application, admin, path), [override()])
+    variant = application.state.repo.get_variant("proj", "case~de~v1")
+    assert variant.translation_status == "accepted"
+    assert acceptances(application) == {}
+
+
+def test_format_1_2_package_with_translation_review_is_invalid(staged, tmp_path):
+    application, admin, _ = staged
+    _, (de,) = case_units("c1", ("de",))
+    # The bundle writer refuses such a unit, so write the single file directly.
+    data = json.loads(ontospan.dump_json(marked(de, REVIEWED)))
+    data["schema_version"] = "1.2.0"
+    path = tmp_path / "unit.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    upload = preview(application, admin, path)
+    assert upload["status"] == "invalid"
+    assert any(
+        error["code"] == "schema" and "document.translation" in error["message"]
+        for error in upload["preview"]["errors"]
+    ), upload["preview"]["errors"]
+
+
+def test_package_review_metadata_is_sanitized():
+    long = "x" * 600
+    assert package_review(
+        {"review": {"status": "reviewed", "reviewer": long, "note": 12}}
+    ) == {"reviewer": "x" * 500, "note": "12"}
+    assert package_review({"review": {"reviewed_at": "yesterday"}}) == {}
+    assert package_review({"review": {"reviewed_at": "2026-10-01T10:00:00Z"}}) == {
+        "reviewed_at": "2026-10-01T10:00:00Z"
+    }
+    assert package_review({"review": "reviewed"}) == {}
+    assert package_review(None) == {}
+
+
+def test_reimporting_a_marked_package_adds_no_second_acceptance(staged, tmp_path):
+    application, admin, _ = staged
+    source, (de,) = case_units("c1", ("de",))
+    path = bundle(tmp_path, [source, marked(de, REVIEWED)])
+    commit(application, admin, preview(application, admin, path))
+    again = commit(application, admin, preview(application, admin, path))
+    assert again.result["documents_added"] == 0
+    with application.state.repo.db.transaction() as conn:
+        assert (
+            conn.execute(
+                select(func.count()).select_from(TranslationAcceptanceRow)
+            ).scalar_one()
+            == 1
+        )
+
+
+def test_external_acceptance_skips_rows_with_review_on(staged, tmp_path):
+    application, admin, _ = staged
+    upload = preview(application, admin, bundle(tmp_path, two_cases()))
+    commit_plan(
+        application,
+        admin,
+        upload,
+        plan_cases=[
+            {"case_id": "c1", "language": "de", "review": False, "annotate": True}
+        ],
+        accept_external_review={"languages": ["de"], "reason": "external QA"},
+    )
+    assert set(acceptances(application)) == {"c1~de~v1"}
+    repo = application.state.repo
+    assert repo.get_variant("proj", "c2~de~v1").translation_status == (
+        "ready_for_review"
+    )
+    (details,) = audit_rows(application, "work_plan.import")
+    assert details["accepted_documents"] == ["c1~de~v1"]
+    accepted = audit_rows(application, "translation.accept_external_review")
+    assert [d["document_id"] for d in accepted] == ["c1~de~v1"]
+
+
+def test_external_acceptance_without_eligible_rows_is_refused(staged, tmp_path):
+    application, admin, _ = staged
+    upload = preview(application, admin, bundle(tmp_path, two_cases()))
+    # Review stays on for every de row: nothing to accept.
+    response = enqueue_plan(
+        admin,
+        upload,
+        accept_external_review={"languages": ["de"], "reason": "external QA"},
+    )
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["code"] == "WORK_PLAN_INVALID"
+    assert body["details"]["reason"] == "not_acceptable"
+    assert body["details"]["languages"] == ["de"]
+    assert application.state.repo.list_documents("proj") == []
+
+
+def test_override_requires_a_user_or_the_cli_operator(staged):
+    application, _, _ = staged
+    pid = project_id(application)
+    reader = logged_in(
+        application, "reader", projects={"proj": ["annotator"]}, assignments=[]
+    )
+    assert reader is not None
+    db = application.state.repo.db
+    with db.transaction() as conn, pytest.raises(DomainError) as error:
+        _require_override(conn, Actor(None, "system:worker"), "proj", pid)
+    assert error.value.code == "NOT_ALLOWED"
+    with db.transaction() as conn:
+        _require_override(conn, Actor.cli(), "proj", pid)
+        _require_override(
+            conn, Actor.user(user_id(application, "leader"), "l"), "proj", pid
+        )
+    with db.transaction() as conn, pytest.raises(DomainError) as error:
+        _require_override(
+            conn, Actor.user(user_id(application, "reader"), "reader"), "proj", pid
+        )
+    assert error.value.code == "NOT_ALLOWED"
+
+
+def test_invalid_plan_at_job_time_writes_no_documents(staged, tmp_path):
+    application, admin, _ = staged
+    upload = preview(application, admin, bundle(tmp_path, two_cases()))
+    response = enqueue_plan(admin, upload)
+    assert response.status_code == 200, response.text
+    job_id = response.json()["job_id"]
+    # A payload that skipped the service check (e.g. an older queued job).
+    with application.state.repo.db.transaction() as conn:
+        payload = conn.execute(
+            select(JobRow.payload).where(JobRow.id == job_id)
+        ).scalar_one()
+        payload["plan_languages"] = {"de": {"review": False, "annotate": True}}
+        conn.execute(update(JobRow).where(JobRow.id == job_id).values(payload=payload))
+    job = _run(application, job_id)
+    assert job.status == "failed" and "WORK_PLAN_INVALID" in job.error
+    assert application.state.repo.list_documents("proj") == []
+    assert stored_rows(application) == {}
+    assert admin.get(f"{BASE}/{upload['id']}").json()["status"] == "failed"

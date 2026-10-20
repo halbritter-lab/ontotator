@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Literal, cast
 
@@ -475,7 +475,14 @@ def _apply_overrides(
     *,
     upload_id: int | None = None,
 ) -> None:
+    """Accept-without-review overrides.
+
+    ``validate_targets`` also allows variants imported earlier (re-delivered in
+    this upload); their status changes as before, but only documents this
+    upload adds get an ``override`` acceptance record.
+    """
     variants = {v.document_id: v for v in plan.variants}
+    added = added_documents(plan)
     for document_id, reason in accepted.items():
         previous = variants[document_id]
         if previous.status == "accepted" and previous.status_reason == reason:
@@ -488,15 +495,16 @@ def _apply_overrides(
             )
             .values(translation_status="accepted", status_reason=reason)
         )
-        work_plan_store.add_acceptance(
-            conn,
-            project_id,
-            document_id,
-            source="override",
-            reason=reason,
-            accepted_by=actor.user_id,
-            upload_id=upload_id,
-        )
+        if document_id in added:
+            work_plan_store.add_acceptance(
+                conn,
+                project_id,
+                document_id,
+                source="override",
+                reason=reason,
+                accepted_by=actor.user_id,
+                upload_id=upload_id,
+            )
         record_audit(
             conn,
             actor,
@@ -509,6 +517,7 @@ def _apply_overrides(
                 "from": previous.status,
                 "to": "accepted",
                 "reason": reason,
+                "upload_id": upload_id,
             },
         )
 
@@ -526,6 +535,15 @@ def _row_order(key: RowKey) -> tuple[str, str]:
     return key.case_id, key.language
 
 
+@dataclass(frozen=True)
+class ResolvedWorkPlan:
+    """The validated plan of an import's new rows, resolved once per job."""
+
+    flags: dict[RowKey, PlanFlags]  # new rows only
+    rows: dict[RowKey, PlannedRow]  # every row the upload touches
+    accepting: frozenset[RowKey]  # rows the lead accepts as reviewed outside
+
+
 def _resolve_work_plan(
     conn: Connection,
     actor: Actor,
@@ -535,11 +553,12 @@ def _resolve_work_plan(
     ctx: WorkPlanContext,
     choices: PlanChoices,
     overridden: Mapping[str, str],
-) -> tuple[dict[RowKey, PlanFlags], dict[RowKey, PlannedRow], frozenset[RowKey]]:
+) -> ResolvedWorkPlan:
     """Flags of the new rows: default, then language choice, then case choice.
 
-    Returns the flags, the touched rows and the rows the lead accepts as
-    reviewed outside Ontocurator; refuses an invalid plan before any write.
+    Refuses an invalid plan before any write. A language named in
+    ``accept_external_review`` without any eligible row (a new, not accepted
+    translation row with Annotate on and Review off) is ``not_acceptable``.
     """
     rows = planned_rows(plan.variants, added_documents(plan), ctx)
     if overridden:
@@ -595,6 +614,14 @@ def _resolve_work_plan(
             and flags[row_key].annotate
             and not flags[row_key].review
         )
+        empty = sorted(
+            set(acceptance.languages) - {row_key.language for row_key in accepting}
+        )
+        if empty:
+            raise DomainError(
+                "WORK_PLAN_INVALID",
+                {"reason": "not_acceptable", "languages": empty, "rows": []},
+            )
     invalid = validate(
         flags,
         {k: r.version for k, r in new.items()},
@@ -610,17 +637,16 @@ def _resolve_work_plan(
                     {
                         "case_id": item.key.case_id,
                         "language": item.key.language,
-                        "not_accepted": int(not new[item.key].version.accepted),
-                        "not_acceptable": int(item.reason == "not_acceptable"),
-                        "marked_in_package": int(
-                            new[item.key].version.marked_in_package
-                        ),
+                        "reason": item.reason,
+                        "not_accepted": not new[item.key].version.accepted,
+                        "not_acceptable": item.reason == "not_acceptable",
+                        "marked_in_package": new[item.key].version.marked_in_package,
                     }
                     for item in invalid
                 ],
             },
         )
-    return flags, rows, accepting
+    return ResolvedWorkPlan(flags, rows, accepting)
 
 
 def _apply_work_plan(
@@ -631,6 +657,7 @@ def _apply_work_plan(
     plan: ImportPlan,
     ctx: WorkPlanContext,
     choices: PlanChoices,
+    resolved: ResolvedWorkPlan,
     overridden: Mapping[str, str],
     *,
     upload_id: int | None,
@@ -638,11 +665,16 @@ def _apply_work_plan(
     """Plan rows plus package and lead acceptances, inside the import transaction.
 
     Existing rows keep their (effective) flags, now stored; a fully discarded
-    row that gets a new root is overwritten with its new flags.
+    row that gets a new root is overwritten with its new flags. A case that
+    existed before and gets new rows has its plan revision bumped, so open
+    plan dialogs see ``WORK_PLAN_CHANGED``.
     """
-    flags, rows, accepting = _resolve_work_plan(
-        conn, actor, key, project_id, plan, ctx, choices, overridden
-    )
+    flags, rows, accepting = resolved.flags, resolved.rows, resolved.accepting
+    overwrite = {k: v for k, v in flags.items() if rows[k].stored}
+    grown = {k.case_id for k in flags} & {k.case_id for k in ctx.versions}
+    grown -= {k.case_id for k in overwrite}  # write_rows bumps those
+    if grown:
+        work_plan_store.bump_revisions(conn, project_id, grown)
     kept = {
         row_key: value
         for row_key, value in ctx.flags.items()
@@ -653,7 +685,6 @@ def _apply_work_plan(
         project_id,
         {**kept, **{k: v for k, v in flags.items() if not rows[k].stored}},
     )
-    overwrite = {k: v for k, v in flags.items() if rows[k].stored}
     if overwrite:
         work_plan_store.write_rows(conn, project_id, overwrite, actor_id=actor.user_id)
     added = added_documents(plan)
@@ -670,6 +701,7 @@ def _apply_work_plan(
                 metadata=package_review(variant.translation),
             )
     acceptance = choices.accept_external_review
+    accepted_documents: list[str] = []
     for row_key in sorted(accepting, key=_row_order):
         assert acceptance is not None
         reason = acceptance.reason.strip()
@@ -684,6 +716,7 @@ def _apply_work_plan(
                 )
                 .values(translation_status="accepted", status_reason=reason)
             )
+            accepted_documents.append(target.document_id)
             work_plan_store.add_acceptance(
                 conn,
                 project_id,
@@ -720,6 +753,7 @@ def _apply_work_plan(
                 "upload_id": upload_id,
                 "setting": ctx.setting,
                 **choices.model_dump(mode="json"),
+                "accepted_documents": accepted_documents,
                 "rows": [
                     {
                         "case_id": k.case_id,
@@ -791,9 +825,13 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
         accepted = _overrides(
             conn, actor, key, project_id, plan, job.payload.get("status_overrides", [])
         )
+        # Without a preview the new rows get the project default.
+        choices = PlanChoices()
+        resolved = _resolve_work_plan(
+            conn, actor, key, project_id, plan, plan_ctx, choices, accepted
+        )
         counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
         _apply_overrides(conn, actor, project_id, plan, accepted)
-        # Without a preview the new rows get the project default.
         _apply_work_plan(
             conn,
             actor,
@@ -801,7 +839,8 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
             project_id,
             plan,
             plan_ctx,
-            PlanChoices(),
+            choices,
+            resolved,
             accepted,
             upload_id=None,
         )
@@ -871,7 +910,7 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                     }
                 )
                 # Refuse an invalid plan before any document is written.
-                _resolve_work_plan(
+                resolved = _resolve_work_plan(
                     conn, actor, key, project_id, plan, plan_ctx, choices, accepted
                 )
                 counts = apply_plan(db, key, plan, sources, actor, job_id=job.id)
@@ -886,6 +925,7 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                     plan,
                     plan_ctx,
                     choices,
+                    resolved,
                     accepted,
                     upload_id=upload_id,
                 )

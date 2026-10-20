@@ -46,6 +46,7 @@ from ontocurator.storage.workflow_tables import (
 __all__ = [
     "acceptances",
     "add_acceptance",
+    "bump_revisions",
     "discarded",
     "effective_plan",
     "ensure_rows",
@@ -301,6 +302,20 @@ def _bump(conn: Connection, project_id: int, case_ids: Iterable[str]) -> dict[st
         set_={"revision": WorkPlanRow.revision + 1, "updated_at": func.now()},
     ).returning(WorkPlanRow.case_id, WorkPlanRow.revision)
     return {row.case_id: row.revision for row in conn.execute(stmt)}
+
+
+def bump_revisions(
+    conn: Connection, project_id: int, case_ids: Iterable[str]
+) -> dict[str, int]:
+    """Store current revision + 1 for each case (missing row = 1, so 2).
+
+    For changes to a case's rows other than ``write_rows`` (e.g. an import
+    adding rows), so open plan dialogs see ``WORK_PLAN_CHANGED``.
+    """
+    case_ids = list(case_ids)
+    if not case_ids:
+        return {}
+    return _bump(conn, project_id, case_ids)
 
 
 def write_rows(
