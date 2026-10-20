@@ -38,7 +38,8 @@ async function continueFrom(rounds: Locator, submissionId: string) {
 const carriedProgress = (page: Page) => page.locator('.carried-progress__status');
 /** The View link of one exact submission in a Documents submissions table (its href carries the submission ref). */
 const viewSubmission = (page: Page, submissionId: string) => {
-  const ref = new URLSearchParams({ annotations: JSON.stringify(['submission', submissionId]) }).toString();
+  // Route hrefs keep commas literal (router querySuffix).
+  const ref = new URLSearchParams({ annotations: JSON.stringify(['submission', submissionId]) }).toString().replace(/%2C/gi, ',');
   return page.locator(`a[aria-label^="View "][href*="${ref}"]`);
 };
 async function finding(page: Page, assignment: Assignment, note: string) {

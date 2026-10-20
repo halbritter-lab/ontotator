@@ -11,6 +11,9 @@ import type { components } from "../src/api/generated";
 import { authenticatedRequest, loginExisting } from "./helpers";
 import { problemReportScenario, type ProblemReportScenario } from "./problemReportHelpers";
 
+/** Leads see display names with the pseudonym (F4): "Name (ann-…)"; others keep pseudonyms. */
+const leadSees = (s: ProblemReportScenario, role: string) => `${s.users[role]} (${s.labels[role]})`;
+
 type ProblemReport = components["schemas"]["ProblemReportView"];
 
 test.setTimeout(180_000);
@@ -144,14 +147,14 @@ test("report, resume with a reason, lead sees it and closes, reporter sees Close
   const lead = await actor(browser, s.users.lead);
   try {
     await openLeadPage(lead.page, s);
-    await expect(pausedTasks(lead.page)).toContainText(`Resumed by reporter (${s.labels.reporter})`);
+    await expect(pausedTasks(lead.page)).toContainText(`Resumed by reporter ${leadSees(s, "reporter")}`);
     await expect(pausedTasks(lead.page)).toContainText('"upsi"');
     await expect(lead.page.getByRole("region", { name: "History", exact: true })).toContainText("upsi");
     await expect(decide(lead.page).getByRole("button", { name: "Close report", exact: true })).toBeVisible();
-    await leadAct(lead.page, /^Close report$/, "Close report", new RegExp(`Outcome for ${s.labels.reporter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+    await leadAct(lead.page, /^Close report$/, "Close report", new RegExp(`Outcome for ${leadSees(s, "reporter").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
       "Fixed in the source text; no change needed.", "Close report",
       "Report closed. No task was paused by it. The final result did not change.");
-    await expect(reportState(lead.page)).toContainText(`Closed by ${s.labels.lead}`);
+    await expect(reportState(lead.page)).toContainText(`Closed by ${s.users.lead} (${s.labels.lead}, you)`);
   } finally {
     await lead.close();
   }
@@ -229,7 +232,7 @@ test("a lead releases the pause in another window: the open dialog and editor up
     await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task} · `) })).toBeChecked();
     await release.getByRole("textbox", { name: /^Reason/ }).fill("Source checked; continue.");
     await release.getByRole("button", { name: "Release pause", exact: true }).click();
-    await expect(lead.page.locator(".lead-outcome")).toContainText(`Released the pause on Task ${task} (${s.labels.reporter}). The report is still open.`);
+    await expect(lead.page.locator(".lead-outcome")).toContainText(`Released the pause on Task ${task} · ${leadSees(s, "reporter")}. The report is still open.`);
   } finally {
     await lead.close();
   }
@@ -265,7 +268,7 @@ test("the lead pauses the same-text task: its owner sees only the lead's reason,
     await candidate.check();
     await pause.getByRole("textbox", { name: /Reason shown to the task owners/ }).fill(leadReason);
     await pause.getByRole("button", { name: "Pause 1 task", exact: true }).click();
-    await expect(lead.page.locator(".lead-outcome")).toContainText(`Paused Task ${other} (${s.labels.same_text}). Their owners see your reason.`);
+    await expect(lead.page.locator(".lead-outcome")).toContainText(`Paused Task ${other} · ${leadSees(s, "same_text")}. Their owners see your reason.`);
   } finally {
     await lead.close();
   }
