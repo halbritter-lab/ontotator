@@ -193,3 +193,22 @@ describe("cells", () => {
     expect(disclosure.textContent).not.toContain("Resolved");
   });
 });
+
+describe("case selection", () => {
+  it("puts the case checkbox first in each case header and passes the click mode", () => {
+    const onSelect = vi.fn();
+    renderTable(page([case0101(), group("case-0102", [planRow("case-0102", "de", stepOf("assign_annotation"))])]), {
+      groupSelection: { selected: caseId => caseId === "case-0102", onSelect, checkboxLabel: caseId => `Select ${caseId}` },
+    });
+    const first = screen.getByRole("checkbox", { name: "Select case-0101" }) as HTMLInputElement;
+    expect(first.closest("th")?.firstElementChild).toBe(first);
+    expect(first.checked).toBe(false);
+    expect((screen.getByRole("checkbox", { name: "Select case-0102" }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(first, { shiftKey: true });
+    expect(onSelect).toHaveBeenLastCalledWith("case-0101", "range");
+    fireEvent.click(first, { metaKey: true });
+    expect(onSelect).toHaveBeenLastCalledWith("case-0101", "toggle-keep-anchor");
+    // Rows themselves have no bulk checkboxes.
+    expect(within(rowOf("case-0101 · de")).queryByRole("checkbox")).toBeNull();
+  });
+});

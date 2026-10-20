@@ -2,13 +2,13 @@
  * Documents table under the work plan (spec "Screens › Documents" item 6): one `<tbody>` per case
  * with a case header, one row per language with six columns (Text · language, Plan, Next step,
  * Owner, Action, Last activity). Rows that are not in the plan collapse into one line per case
- * ("en, fr not in plan · show"). Expansion state is owned by the page; this component renders it.
+ * ("en, fr not in plan · show"). Expansion and case selection are owned by the page; this component renders them.
  */
 import { useId, useMemo, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import { plural } from "../app/labels";
-import { DataTable, type Column, type DataTableGroup } from "../ui/DataTable";
+import { DataTable, type Column, type DataTableGroup, type GroupSelection } from "../ui/DataTable";
 import { IconChevronRight } from "../ui/icons";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
@@ -79,11 +79,13 @@ export interface DocumentsTableProps {
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
+  /** Case checkboxes in the case header rows (spec D17); the page owns the selection. */
+  groupSelection?: GroupSelection;
 }
 
 export function DocumentsTable({
   page, projectKey, query, expandedGroups, onToggleGroup, onToggleRow, shownNotInPlan, onToggleNotInPlan,
-  renderPlan, renderRowNotice, renderExpanded, rowBadge, onAction, onNavigate, busy, empty,
+  renderPlan, renderRowNotice, renderExpanded, rowBadge, onAction, onNavigate, busy, empty, groupSelection,
 }: DocumentsTableProps): JSX.Element {
   const baseId = useId();
   const open = useMemo(() => new Set(query.open ?? []), [query.open]);
@@ -195,6 +197,7 @@ export function DocumentsTable({
       renderExpanded={below}
       busy={busy}
       empty={empty}
+      groupSelection={groupSelection}
     />
   );
 }

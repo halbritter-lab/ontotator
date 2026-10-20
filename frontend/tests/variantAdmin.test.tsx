@@ -8,7 +8,6 @@ import { ProjectSettingsPage } from "../src/admin/ProjectSettingsPage";
 import { UploadPreview } from "../src/admin/UploadPreview";
 import { UsersPage } from "../src/admin/UsersPage";
 import { UploadPanel } from "../src/admin/UploadPanel";
-import { AssignDialog } from "../src/admin/AssignDialog";
 import { DistributionDialog } from "../src/admin/DistributionDialog";
 import { reviewLanguages } from "../src/admin/variantMetadata";
 import * as downloads from "../src/api/download";
@@ -59,13 +58,13 @@ it("shows the server-owned override label and sends controlled filters without r
   const view = render(<DocumentsPage projectKey="p" canManage query={{ origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
   expect(await screen.findByText(/Accepted without review/)).toBeTruthy();
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { origin: "machine_translation", translation_status: "accepted" });
-  const prefix = screen.getByLabelText("ID"); prefix.focus();
+  const prefix = screen.getByLabelText("Case ID"); prefix.focus();
   fireEvent.change(prefix, { target: { value: "abc" } });
   fireEvent.keyDown(prefix, { key: "Enter" });
   expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({ origin: "machine_translation", translation_status: "accepted", q: "abc" }));
   view.rerender(<DocumentsPage projectKey="p" canManage query={{ q: "abc", origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
   await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });
-  expect(screen.getByLabelText("ID")).toBe(prefix);
+  expect(screen.getByLabelText("Case ID")).toBe(prefix);
   expect(document.activeElement).toBe(prefix);
   expect(api.getProjectSettings).toHaveBeenCalledTimes(1);
   expect(api.listCases).toHaveBeenCalledTimes(1);
@@ -85,34 +84,6 @@ it("resolves exact correction ancestry without guessing source language or newes
   expect(reviewLanguages(correction.document_id, map)).toBeNull();
   map.set(translated.document_id, { ...translated, origin: "native", translation: null });
   expect(reviewLanguages(correction.document_id, map)).toBeNull();
-});
-
-it("uses annotator membership for translation review, both languages and only failed-row retry", async () => {
-  vi.mocked(api.listMembers).mockResolvedValue(members);
-  vi.mocked(api.listCases).mockResolvedValue(inventory);
-  vi.spyOn(api, "createAssignments").mockResolvedValueOnce({ created: [{ ...assignment, username: "bob", task: "translation_review" }], refused: [{ document_id: readyTarget.document_id, username: "alice", code: "LANGUAGE_CONFIRMATION_REQUIRED" }] }).mockResolvedValueOnce({ created: [{ ...assignment, username: "alice", task: "translation_review" }], refused: [] });
-  render(<AssignDialog projectKey="p" documents={[readyTarget]} onClose={vi.fn()} onChanged={vi.fn()} />);
-  await waitFor(() => expect((screen.getByRole("option", { name: "Translation review" }) as HTMLOptionElement).disabled).toBe(false));
-  fireEvent.change(screen.getByLabelText("Task"), { target: { value: "translation_review" } });
-  fireEvent.click(screen.getByLabelText(/^Alice \(alice\)/)); fireEvent.click(screen.getByLabelText(/^Bob \(bob\)/));
-  expect(screen.getByText(/not listed in this profile: de/)).toBeTruthy();
-  expect(screen.queryByLabelText(/^Lead \(lead\)/)).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Assign" }));
-  const confirmation = await screen.findByRole("region", { name: "Confirm document languages" });
-  expect(confirmation.textContent).toContain("en, de");
-  fireEvent.click(within(confirmation).getByRole("button", { name: "Assign anyway" }));
-  await waitFor(() => expect(api.createAssignments).toHaveBeenCalledTimes(2));
-  expect(api.createAssignments).toHaveBeenLastCalledWith("p", { task: "translation_review", confirm_language: true, rows: [{ document_id: readyTarget.document_id, username: "alice" }] });
-  expect(api.listCases).toHaveBeenCalledTimes(1);
-});
-
-it("disables translation review for native corrections and accepted current rows", async () => {
-  const nativeCorrection = { ...translated, origin: "correction" as const, version: 2, derived_from: source.document_id, translation: null };
-  const view = render(<AssignDialog projectKey="p" documents={[readyTarget]} cases={[{ case_id: target.case_id, variants: [source, nativeCorrection] }]} onClose={vi.fn()} onChanged={vi.fn()} />);
-  expect(screen.queryByRole("option", { name: "Translation review" })).toBeNull();
-  view.rerender(<AssignDialog projectKey="p" documents={[target]} cases={inventory} onClose={vi.fn()} onChanged={vi.fn()} />);
-  await act(async () => {});
-  expect(screen.queryByRole("option", { name: "Translation review" })).toBeNull();
 });
 
 it("keeps translation distribution context exact through partial language retry", async () => {
@@ -184,8 +155,9 @@ it("reads immutable review history for the actual internal ID and discards super
 
 it("does not infer manual acceptance from a descriptive reason", async () => {
   vi.mocked(api.listDocumentRows).mockImplementation(async () => targetPage({ accepted_without_review: false }));
-  render(<DocumentsPage projectKey="p" canManage query={{}} onNavigate={vi.fn()} />);
-  expect(await screen.findByText("v1 · Machine translation · Accepted")).toBeTruthy();
+  render(<DocumentsPage projectKey="p" canManage query={openTarget} onNavigate={vi.fn()} />);
+  // The expanded row's Text versions shows the version's status badge.
+  expect((await screen.findAllByText("Accepted", { selector: ".status-pill" })).length).toBeGreaterThan(0);
   expect(within(screen.getByRole("table", { name: "Documents" })).queryByText(/Accepted without review/)).toBeNull();
 });
 

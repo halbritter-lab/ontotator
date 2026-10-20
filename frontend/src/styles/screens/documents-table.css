@@ -95,3 +95,8 @@
   .documents-paging a[aria-disabled="true"] { color: GrayText; }
   .documents-more-steps, .documents-not-in-plan-toggle { color: LinkText; }
 }
+
+/* Case selection tools above the table (L3b) */
+.documents-selection-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-bottom: var(--space-2); }
+.documents-selection-tools .form-group { margin: 0; }
+.documents-table .documents-group > th > .data-table-group-select + .documents-group-header { display: inline-flex; vertical-align: middle; }

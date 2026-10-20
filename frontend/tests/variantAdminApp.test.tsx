@@ -28,11 +28,11 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, "", "#/"); });
 
 async function preview() {
-  const upload = await screen.findByRole("button", { name: "Upload documents" });
+  const upload = await screen.findByRole("button", { name: "Upload texts…" });
   // Upload is unavailable until the project settings are loaded.
   await waitFor(() => expect(upload.getAttribute("aria-disabled")).toBeNull());
   fireEvent.click(upload);
-  const dialog = within(await screen.findByRole("dialog", { name: "Upload documents" }));
+  const dialog = within(await screen.findByRole("dialog", { name: "Upload texts" }));
   fireEvent.click(await dialog.findByRole("button", { name: "Resume upload 7" }));
   await dialog.findByRole("table", { name: "Variants" });
   return dialog;
@@ -41,7 +41,7 @@ async function preview() {
 /** Non-leads get the lead-only notice: no upload controls (and so no override) at all. */
 async function leadOnlyNotice() {
   expect(await screen.findByRole("heading", { name: "Documents is for project leads" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Upload documents" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
   expect(screen.queryByLabelText(/^Accept without review:/)).toBeNull();
 }
 
@@ -75,7 +75,7 @@ it("keeps controls absent while current project inventory is loading", async () 
   vi.mocked(api.listProjects).mockReturnValue(pending.promise);
   render(<App user={lead} />);
   expect(await screen.findByText("Loading project access…")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Upload documents" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
   await act(async () => pending.resolve([project]));
   expect(await (await preview()).findByLabelText(/^Accept without review:/)).toBeTruthy();
 });
@@ -99,8 +99,8 @@ it("replaces session identity without carrying former user's project rights or u
   const dialog = await preview();
   fireEvent.click(await dialog.findByLabelText(/^Accept without review:/));
   view.rerender(<App user={testUser("reader", { is_system_admin: false })} />);
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Upload documents" })).toBeNull());
-  expect(screen.queryByRole("button", { name: "Upload documents" })).toBeNull();
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Upload texts" })).toBeNull());
+  expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
   expect(dialog.queryByLabelText(/^Accept without review:/)).toBeNull();
   await act(async () => pending.resolve([ordinaryProject]));
   await leadOnlyNotice();
@@ -112,7 +112,7 @@ it("rejects a late former-user project response while the new session inventory 
   const view = render(<App user={lead} />);
   view.rerender(<App user={testUser("reader", { is_system_admin: false })} />);
   await act(async () => previous.resolve([project]));
-  expect(screen.queryByRole("button", { name: "Upload documents" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
   expect(screen.queryByLabelText(/^Accept without review:/)).toBeNull();
   expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
   await act(async () => current.resolve([ordinaryProject]));
@@ -137,11 +137,11 @@ it("retains controlled variant filters through real App navigation", async () =>
   render(<App user={lead} />);
   await screen.findByRole("link", { name: "Open z/doc · en" });
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { origin: "correction", translation_status: "accepted", status: "submitted" });
-  const prefix = screen.getByLabelText("ID"); prefix.focus();
+  const prefix = screen.getByLabelText("Case ID"); prefix.focus();
   fireEvent.change(prefix, { target: { value: "ID +/ß" } });
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { origin: "correction", translation_status: "accepted", status: "submitted", q: "ID +/ß" }));
   expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?status=submitted&q=ID+%2B%2F%C3%9F&origin=correction&translation_status=accepted");
-  expect(screen.getByLabelText("ID")).toBe(prefix);
+  expect(screen.getByLabelText("Case ID")).toBe(prefix);
   expect(document.activeElement).toBe(prefix);
   expect(api.listProjects).toHaveBeenCalledTimes(1);
 });
@@ -150,7 +150,7 @@ it("does not treat a failed current-project request as override authority and ca
   vi.mocked(api.listProjects).mockRejectedValueOnce(new ApiError(403, "Project rights changed", "NOT_ALLOWED")).mockResolvedValueOnce([project]);
   render(<App user={lead} />);
   const retry = await screen.findByRole("button", { name: "Retry projects" });
-  expect(screen.queryByRole("button", { name: "Upload documents" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
   expect(screen.queryByLabelText(/^Accept without review:/)).toBeNull();
   fireEvent.click(retry);
   expect(await (await preview()).findByLabelText(/^Accept without review:/)).toBeTruthy();

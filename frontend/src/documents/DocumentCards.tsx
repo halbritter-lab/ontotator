@@ -4,10 +4,11 @@
  * (strong) with badges and secondary line, "Owner: …", the row action full width, "Open" and
  * "Details". Not-in-plan rows collapse into one line per case card, as in the table.
  */
-import { useId, useMemo, type ReactNode } from "react";
+import { useId, useMemo, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import { plural } from "../app/labels";
+import type { GroupSelection, GroupSelectMode } from "../ui/DataTable";
 import { IconChevronRight } from "../ui/icons";
 import { StatusBadge } from "../ui/StatusBadge";
 import { caseHeaderText, decisionCount, notInPlanLanguages } from "./DocumentsTable";
@@ -34,9 +35,11 @@ export interface DocumentCardsProps {
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
+  /** Case checkbox in each case card header (spec D17); the page owns the selection. */
+  groupSelection?: GroupSelection;
 }
 
-interface DocumentCardProps extends Omit<DocumentCardsProps, "page" | "busy" | "empty" | "shownNotInPlan" | "onToggleNotInPlan"> {
+interface DocumentCardProps extends Omit<DocumentCardsProps, "page" | "busy" | "empty" | "shownNotInPlan" | "onToggleNotInPlan" | "groupSelection"> {
   row: DocumentRowView;
   group: DocumentGroupView;
   expanded: boolean;
@@ -89,7 +92,10 @@ function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, re
   );
 }
 
-export function DocumentCards({ page, busy, empty, query, shownNotInPlan, onToggleNotInPlan, ...rest }: DocumentCardsProps): JSX.Element {
+const selectModeOf = (event: MouseEvent<HTMLInputElement>): GroupSelectMode =>
+  event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle-keep-anchor" : "toggle";
+
+export function DocumentCards({ page, busy, empty, query, shownNotInPlan, onToggleNotInPlan, groupSelection, ...rest }: DocumentCardsProps): JSX.Element {
   const open = useMemo(() => new Set(query.open ?? []), [query.open]);
   if (page.groups.length === 0) return <div className="document-cards-empty">{empty}</div>;
   return (
@@ -102,6 +108,9 @@ export function DocumentCards({ page, busy, empty, query, shownNotInPlan, onTogg
         return (
           <li key={group.case_id} className="document-case-card">
             <div className="document-case-card-head">
+              {groupSelection && <input type="checkbox" className="document-case-card-select" aria-label={groupSelection.checkboxLabel(group.case_id)}
+                checked={groupSelection.selected(group.case_id)} onChange={() => undefined}
+                onClick={event => groupSelection.onSelect(group.case_id, selectModeOf(event))} />}
               <h2 className="document-case-card-title">{caseHeaderText(group)}</h2>
               {decisions > 0 && <StatusBadge tone="warning">{plural(decisions, "decision")}</StatusBadge>}
             </div>

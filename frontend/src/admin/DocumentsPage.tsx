@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   api,
   type AssignmentView,
+  type DocumentCaseIdsQuery,
+  type DocumentRowFilters,
   type CaseSummary,
   type CurrentUser,
   type DocumentGroupView,
@@ -19,7 +21,7 @@ import {
 import { formatDateTime, labelFor, plural } from "../app/labels";
 import { routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
-import { Button, Dialog, EmptyState, InlineMessage, Select, StatusBadge, TextInput, Toast, Toolbar, useMediaQuery, useToast } from "../ui";
+import { Button, Checkbox, Dialog, EmptyState, InlineMessage, Select, StatusBadge, TextInput, Toast, Toolbar, useMediaQuery, useToast, type GroupSelection, type GroupSelectMode } from "../ui";
 import { DecisionBar } from "../documents/DecisionBar";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, initialExpandedGroups } from "../documents/DocumentsTable";
@@ -30,16 +32,20 @@ import {
 } from "../documents/FinalConfirm";
 import { STEP_FILTER_GROUPS, STEP_LABELS, stepLabel } from "../documents/nextStepLabels";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
+import { useShortcutHint } from "../ui/shortcuts";
 import { ResolveTranslation } from "../documents/ResolveTranslation";
+import { SelectByIdsDialog } from "../documents/SelectByIdsDialog";
+import { SelectionBar } from "../documents/SelectionBar";
 import { acknowledgeableItems, type KeepRequest } from "../documents/SelectionNotice";
 import { documentsGroupId, documentsRowId, isPlainClick, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
+import { MAX_SELECTION, useCaseSelection } from "../documents/useCaseSelection";
 import { useDocumentRows } from "../documents/useDocumentRows";
 import { useRowSubmissions } from "../documents/useRowSubmissions";
 import { clearVisits, recordDecision, rememberShown, retainedKeys, rowBadges, type RowBadge } from "../documents/visitState";
 import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
-import { AssignDialog } from "./AssignDialog";
+import { AssignWorkDialog, type AssignWorkDialogProps } from "./AssignWorkDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { UploadPanel } from "./UploadPanel";
 import { originLabels, reviewLanguages, translationStatusLabels } from "./variantMetadata";
@@ -114,6 +120,17 @@ export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsQuery {
   if (Number.isInteger(page) && page > 1) result.page = page;
   return result;
 }
+
+/** The Documents filters for the selection summary and the batch assign dialog (no paging, no ID prefix). */
+export function selectionFilters(request: DocumentRowsQuery): DocumentRowFilters {
+  const { language, case: caseId, segment, step, stage, owner, plan, final, origin, translation_status: translationStatus, status } = request;
+  const filters: DocumentRowFilters = { language, case: caseId, segment, step, stage, owner, plan, final, origin, translation_status: translationStatus, status };
+  for (const name of Object.keys(filters) as (keyof DocumentRowFilters)[]) if (filters[name] === undefined) delete filters[name];
+  return filters;
+}
+
+/** "Selection is limited to 2000 cases. Selected the first 2000." */
+export const SELECTION_LIMITED = `Selection is limited to ${MAX_SELECTION} cases. Selected the first ${MAX_SELECTION}.`;
 
 const caseOfKey = (key: string): string => key.slice(0, Math.max(0, key.lastIndexOf(":")));
 const languageOfKey = (key: string): string => key.slice(key.lastIndexOf(":") + 1);
@@ -367,32 +384,16 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const pageRows = useMemo(() => page?.groups.flatMap(group => group.rows) ?? [], [page]);
   const groupOf = (caseId: string): DocumentGroupView | undefined => page?.groups.find(group => group.case_id === caseId);
 
-  // The row's assign dialog (task preselection comes with the work assign dialog of L3b).
-  const [dialog, setDialog] = useState<{ documents: ProjectDocumentSummary[]; identity: string } | null>(null);
-  const currentIdentity = useRef(requestIdentity);
-  currentIdentity.current = requestIdentity;
-  const visibleDialog = dialog?.identity === requestIdentity ? dialog : null;
   const refreshAll = () => { rows.reload(); setRevision(value => value + 1); };
-  const changedFor = (identity: string) => { if (currentIdentity.current === identity) refreshAll(); };
+  // Assign dialog: one row (task preselected) or the selected cases (selection bar).
+  const [assignDialog, setAssignDialog] = useState<AssignWorkDialogProps | null>(null);
   /** Assign dialog for one row; `options.newReviewOfAccepted` marks a new review of an accepted translation (D25). */
-  const onAssign = async (row: DocumentRowView, _task: AssignTask, _options?: { newReviewOfAccepted?: boolean }) => {
-    if (!inventory) { announce("Loading assignment data…"); return; }
-    const identity = requestIdentity;
-    const documentId = row.next_step?.document_id ?? row.open.document_id;
-    let documents = inventory.documents;
-    if (!documents.some(document => document.document_id === documentId)) {
-      try {
-        documents = await api.listProjectDocuments(projectKey);
-      } catch (failure) {
-        setInventoryError(failure);
-        return;
-      }
-      setInventory(current => (current ? { ...current, documents } : current));
-      if (currentIdentity.current !== identity) return;
-    }
-    const chosen = documents.filter(document => document.document_id === documentId);
-    if (!chosen.length) { announce(`${rowName(row)} changed. Refresh and try again.`); return; }
-    setDialog({ documents: chosen, identity });
+  const onAssign = (row: DocumentRowView, task: AssignTask, options?: { newReviewOfAccepted?: boolean }) => {
+    setAssignDialog({
+      mode: "row", projectKey, row, task, newReviewOfAccepted: options?.newReviewOfAccepted,
+      onClose: () => setAssignDialog(null),
+      onAssigned: message => { setAssignDialog(null); showToast({ message }); announce(message); refreshAll(); },
+    });
   };
 
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -577,6 +578,96 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
+  // Case selection (spec D17): a set of case IDs that survives paging and filter changes.
+  const selection = useCaseSelection();
+  const [limitNote, setLimitNote] = useState<string | null>(null);
+  const [idsDialogOpen, setIdsDialogOpen] = useState(false);
+  const [allFiltered, setAllFiltered] = useState<{ identity: string; ids: readonly string[] } | null>(null);
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [selectionError, setSelectionError] = useState<unknown>();
+  // A user action changed the selection: announce the new count once the state is applied.
+  const announceSelection = useRef(false);
+  useEffect(() => {
+    if (!announceSelection.current) return;
+    announceSelection.current = false;
+    announce(selection.ids.size ? `${plural(selection.ids.size, "case")} selected` : "Selection cleared.");
+    // Only a selection change is announced.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection.ids]);
+  const applyLimit = (truncated: boolean) => setLimitNote(truncated ? SELECTION_LIMITED : null);
+  const pageOrder = useMemo(() => page?.groups.map(group => group.case_id) ?? [], [page]);
+  const groupSelection: GroupSelection = {
+    selected: caseId => selection.ids.has(caseId),
+    onSelect: (caseId: string, mode: GroupSelectMode) => {
+      announceSelection.current = true;
+      applyLimit(selection.select(caseId, mode, pageOrder).truncated);
+    },
+    checkboxLabel: caseId => `Select ${caseId} (${plural(groupOf(caseId)?.language_count ?? 0, "language")})`,
+  };
+  const clearSelection = () => {
+    announceSelection.current = true;
+    selection.clear(); setLimitNote(null); setAllFiltered(null);
+  };
+  // Header checkbox: every case matching the current filters, across pages (server list, at most 2000).
+  const filteredTotal = page?.group_count ?? 0;
+  const allSelected = allFiltered !== null && allFiltered.identity === filterIdentity && allFiltered.ids.length > 0 && allFiltered.ids.every(caseId => selection.ids.has(caseId));
+  const selectAllLabel = filteredTotal > MAX_SELECTION
+    ? `Select the first ${MAX_SELECTION} of ${filteredTotal} filtered cases` : `Select all ${plural(filteredTotal, "filtered case")}`;
+  const toggleAll = async () => {
+    if (selectingAll) return;
+    setSelectionError(undefined);
+    if (allSelected) {
+      announceSelection.current = true;
+      selection.remove(allFiltered.ids); setAllFiltered(null); setLimitNote(null);
+      return;
+    }
+    const identity = filterIdentity;
+    const { page: _page, ...filters } = request;
+    setSelectingAll(true);
+    try {
+      const result = await api.listDocumentCaseIds(projectKey, filters as DocumentCaseIdsQuery);
+      announceSelection.current = true;
+      applyLimit(selection.add(result.case_ids).truncated || result.truncated);
+      setAllFiltered({ identity, ids: result.case_ids });
+    } catch (failure: unknown) {
+      setSelectionError(failure);
+    } finally {
+      setSelectingAll(false);
+    }
+  };
+  const selectByIds = (ids: readonly string[], mode: "replace" | "add") => {
+    setIdsDialogOpen(false);
+    announceSelection.current = true;
+    applyLimit((mode === "replace" ? selection.replace(ids) : selection.add(ids)).truncated);
+    setAllFiltered(null);
+  };
+  const filters = useMemo(() => selectionFilters(request), [requestIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openAssignCases = () => {
+    const caseIds = [...selection.ids];
+    if (!caseIds.length) return;
+    setAssignDialog({
+      mode: "cases", projectKey, caseIds, sort: request.sort ?? "case", filters,
+      onClose: () => setAssignDialog(null),
+      onAssigned: (message, skipped) => {
+        // The planned work is done for this selection; the skipped cases stay one click away.
+        setAssignDialog(null);
+        selection.clear(); setLimitNote(null); setAllFiltered(null);
+        const rest = [...new Set(skipped)];
+        showToast({
+          message,
+          ...(rest.length ? {
+            actionLabel: `Select the ${plural(rest.length, "skipped case")}`,
+            onAction: () => { announceSelection.current = true; applyLimit(selection.replace(rest).truncated); },
+          } : {}),
+        });
+        announce(message);
+        refreshAll();
+      },
+    });
+  };
+  useShortcutHint(["Shift + ↓", "Shift + ↑"], "Move to the next or previous case and select it", { group: "Selection", enabled: !narrow && !!page?.groups.length });
+  useShortcutHint(["Space"], "Select or deselect the focused case", { group: "Selection", enabled: !!page?.groups.length });
+
   // Row actions.
   const [autoAction, setAutoAction] = useState<AutoAction | null>(null);
   const [rowPanel, setRowPanel] = useState<RowPanel | null>(null);
@@ -699,19 +790,31 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     } else if (page.groups.length === 0) {
       body = emptyState();
     } else if (narrow) {
-      body = <DocumentCards page={page} projectKey={projectKey} query={viewQuery} onToggleRow={toggleRow} shownNotInPlan={shownNotInPlan} onToggleNotInPlan={toggleNotInPlan}
+      body = <DocumentCards page={page} projectKey={projectKey} query={viewQuery} groupSelection={groupSelection} onToggleRow={toggleRow} shownNotInPlan={shownNotInPlan} onToggleNotInPlan={toggleNotInPlan}
         renderPlan={renderPlan} renderRowNotice={renderRowNotice} renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} />;
     } else {
-      body = <DocumentsTable page={page} projectKey={projectKey} query={viewQuery} expandedGroups={expandedGroups} onToggleGroup={toggleGroup}
+      body = <DocumentsTable page={page} projectKey={projectKey} query={viewQuery} expandedGroups={expandedGroups} onToggleGroup={toggleGroup} groupSelection={groupSelection}
         onToggleRow={toggleRow} shownNotInPlan={shownNotInPlan} onToggleNotInPlan={toggleNotInPlan} renderPlan={renderPlan} renderRowNotice={renderRowNotice}
         renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} />;
     }
+    // Sticky above the table; below 700 px after the cards, so it can stick to the bottom of the viewport.
+    const selectionBar = <SelectionBar projectKey={projectKey} ids={selection.ids} filters={filters} refresh={page} narrow={narrow} limitNote={limitNote}
+      onClear={clearSelection} onAssign={openAssignCases} showToast={showToast} onAnnounce={announce} onChanged={() => latestReload.current()}
+      onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }} />;
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh · <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
       <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll}
         exportFinals={page.groups.some(group => group.final_count > 0)} />
+      <div className="documents-selection-tools">
+        {page.groups.length > 0 && <Checkbox id="documents-select-all" label={selectAllLabel} checked={allSelected}
+          aria-busy={selectingAll || undefined} onChange={() => { void toggleAll(); }} />}
+        <Button variant="quiet" size="sm" onClick={() => setIdsDialogOpen(true)}>Select by case IDs…</Button>
+      </div>
+      {selectionError !== undefined && <ErrorNotice error={selectionError} />}
+      {!narrow && selectionBar}
       {body}
+      {narrow && selectionBar}
       <Toast toast={toast} onDismiss={dismissToast} />
       {page.page_count > 1 && <nav className="documents-paging" aria-label="Pages" aria-busy={rows.stale || undefined}>
         <PagingLink route={page.page > 1 ? documentsRoute({ page: page.page - 1 > 1 ? String(page.page - 1) : undefined }) : null} onNavigate={navigateLink}>Previous</PagingLink>
@@ -780,7 +883,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         annotateAcceptedOnly={settings.annotate_accepted_translations_only ?? true} onImported={refreshAll} />}
     </Dialog>
     {reviewDocument !== null && <ReviewHistory key={reviewDocument} projectKey={projectKey} documentId={reviewDocument} onClose={() => setReviewDocument(null)} />}
-    {visibleDialog && <AssignDialog projectKey={projectKey} cases={inventory?.cases ?? null} documents={visibleDialog.documents} onClose={() => setDialog(null)} onChanged={() => changedFor(visibleDialog.identity)} />}
+    {assignDialog && <AssignWorkDialog {...assignDialog} />}
+    {idsDialogOpen && <SelectByIdsDialog projectKey={projectKey} current={selection.ids} onClose={() => setIdsDialogOpen(false)} onSelect={selectByIds} />}
   </section>;
 }
 

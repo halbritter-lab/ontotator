@@ -56,13 +56,13 @@ it("keeps pending issuance and visible one-time code through shell/hash/logout u
 });
 
 it("uses controlled document query routes and actual managed-project documents", async () => {
-  window.history.replaceState(null, "", "#/projects/p%2Fkey/documents?language=de&status=invalid&q=ID&select=ID%20%2B%2F%C3%9F");
+  window.history.replaceState(null, "", "#/projects/p%2Fkey/documents?language=de&status=invalid&q=ID");
   const documentRow = row({ case_id: "ID", language: "de", versions: [version({ document_id: "ID +/ß" })] });
   vi.spyOn(api, "listDocumentRows").mockResolvedValue(page([group("ID", [documentRow])]));
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   render(<App user={user} />);
-  expect(await screen.findByLabelText("Select ID · de")).toHaveProperty("checked", true);
+  expect(await screen.findByLabelText("Select ID (1 language)")).toHaveProperty("checked", false);
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { language: "de", q: "ID" });
   expect(screen.getByRole("link", { name: "Documents" }).getAttribute("aria-current")).toBe("page");
   fireEvent.change(screen.getByLabelText("Status"), { target: { value: "open" } });

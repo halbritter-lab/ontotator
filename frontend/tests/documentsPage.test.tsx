@@ -1,13 +1,20 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, type DocumentRowView, type DocumentRowsPage, type PlanRowResult, type ProjectDocumentSummary, type RowSubmissions } from "../src/api/client";
+import { api, ApiError, type DocumentRowView, type DocumentRowsPage, type PlanRowResult, type RowSubmissions } from "../src/api/client";
+import type { AssignWorkDialogProps } from "../src/admin/AssignWorkDialog";
 import { DocumentsPage, type DocumentsPageProps } from "../src/admin/DocumentsPage";
 import type { ProjectDocumentsQuery, Route } from "../src/app/router";
 import { recordDecision } from "../src/documents/visitState";
+import { useRegisteredShortcuts } from "../src/ui/shortcuts";
 import { final, group, item, notInPlanRow, page, planRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
 
-const { expandedProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[] }));
+const { expandedProps, assignProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[], assignProps: [] as unknown[] }));
+// The assign dialog has its own tests; here only its wiring (props in, onAssigned / onClose out) matters.
+vi.mock("../src/admin/AssignWorkDialog", () => ({
+  AssignWorkDialog: (props: AssignWorkDialogProps) => { assignProps.push(props); return <div role="dialog" aria-label="Assign stub" />; },
+}));
+const lastAssign = () => assignProps.at(-1) as AssignWorkDialogProps;
 vi.mock("../src/documents/ExpandedRow", async importOriginal => {
   const actual = await importOriginal<typeof import("../src/documents/ExpandedRow")>();
   return {
@@ -44,10 +51,13 @@ function renderStateful(initial: ProjectDocumentsQuery) {
 const loaded = () => screen.findByRole("navigation", { name: "Segments" });
 const live = () => document.querySelector(".documents-page > p[aria-live='polite']")!;
 
-const summary = (documentId: string, language: string): ProjectDocumentSummary => ({
-  document_id: documentId, case_id: documentId, external_id: documentId, version: 1, origin: "native", translation_status: null, status_reason: null,
-  accepted_without_review: false, language, position: 1, text_length: 10, status: "not_started", assignees: [],
-});
+/** `count` cases "case-0101"… with one de row each (next step Assign translation review). */
+const casesPage = (count: number, overrides: Partial<DocumentRowsPage> = {}) => page(Array.from({ length: count }, (_, index) => {
+  const caseId = `case-${String(101 + index).padStart(4, "0")}`;
+  return group(caseId, [planRow(caseId, "de", stepOf("assign_translation_review"))]);
+}), overrides);
+const caseBox = (caseId: string) => screen.getByRole("checkbox", { name: new RegExp(`^Select ${caseId} \\(`) });
+const selectionRegion = () => screen.getByRole("region", { name: "Selection" });
 
 beforeEach(() => {
   expandedProps.length = 0;
@@ -59,6 +69,8 @@ beforeEach(() => {
   vi.spyOn(api, "listAssignments").mockResolvedValue([]);
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listUploads").mockResolvedValue([]);
+  vi.spyOn(api, "selectionSummary").mockResolvedValue({ cases: 0, steps: [], skipped: {}, common: null, not_shown: 0 });
+  assignProps.length = 0;
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); });
 
@@ -132,7 +144,8 @@ it("filters by Next step, Plan, Language and Case ID; More filters holds Final r
   view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} query={{ plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final" }} onNavigate={onNavigate} />);
   await waitFor(() => expect(live().textContent).toBe("2 texts shown"));
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final" });
-  expect(screen.queryByRole("checkbox")).toBeNull();
+  // Only case checkboxes and the header checkbox select; no per-row bulk checkboxes, no old "Assign …".
+  expect(screen.getAllByRole("checkbox").every(box => box.getAttribute("aria-label")?.startsWith("Select ") || box.id === "documents-select-all")).toBe(true);
   expect(screen.queryByRole("button", { name: "Assign …" })).toBeNull();
 });
 
@@ -150,15 +163,15 @@ it("applies the ID filter once after a pause in typing", async () => {
 });
 
 it("re-announces a repeated message in the live region", async () => {
-  mockRows(page([group("case-1", [planRow("case-1", "de", stepOf("assign_translation_review"))])]));
-  vi.mocked(api.listProjectDocuments).mockReturnValue(new Promise(() => {}));
+  mockRows(casesPage(2));
   renderPage();
-  const assign = await screen.findByRole("button", { name: "Assign translation review…, case-1 · de" });
-  fireEvent.click(assign);
-  expect(live().textContent).toBe("Loading assignment data…");
-  fireEvent.click(assign);
+  await loaded();
+  fireEvent.click(caseBox("case-0101"), { shiftKey: true });
+  await waitFor(() => expect(live().textContent).toBe("1 case selected"));
+  // The same range again: the same message is cleared and set again.
+  fireEvent.click(caseBox("case-0101"), { shiftKey: true });
   expect(live().textContent).toBe("");
-  await waitFor(() => expect(live().textContent).toBe("Loading assignment data…"));
+  await waitFor(() => expect(live().textContent).toBe("1 case selected"));
 });
 
 it("keeps the rows and shows Could not refresh when a background refetch fails", async () => {
@@ -175,17 +188,185 @@ it("keeps the rows and shows Could not refresh when a background refetch fails",
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
 
-it("assigns from the row: the assign dialog opens with the row's version", async () => {
-  mockRows(page([group("case-1", [planRow("case-1", "de", stepOf("assign_translation_review", { document_id: "case-1-de" }))])]));
-  vi.mocked(api.listProjectDocuments).mockResolvedValueOnce([]).mockResolvedValue([summary("case-1-de", "de")]);
-  renderPage();
-  const assign = await screen.findByRole("button", { name: "Assign translation review…, case-1 · de" });
-  await waitFor(() => expect(api.listMembers).toHaveBeenCalled());
-  await act(async () => { await Promise.resolve(); });
-  fireEvent.click(assign);
-  const dialog = await screen.findByRole("dialog", { name: "Assign documents" });
-  expect(within(dialog).getByText("1 document selected.")).toBeTruthy();
-  expect(api.listProjectDocuments).toHaveBeenCalledTimes(2);
+describe("case selection", () => {
+  it("case checkbox is named with the case and its language count", async () => {
+    mockRows(page([group("case-0101", [planRow("case-0101", "en", stepOf("assign_annotation"), { is_source: true }), planRow("case-0101", "de", stepOf("assign_translation_review")), notInPlanRow("case-0101", "fr")])]));
+    renderPage();
+    await loaded();
+    const box = screen.getByRole("checkbox", { name: "Select case-0101 (3 languages)" });
+    expect(box.closest("th")?.getAttribute("scope")).toBe("rowgroup");
+    expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
+    fireEvent.click(box);
+    expect((box as HTMLInputElement).checked).toBe(true);
+    expect(within(selectionRegion()).getByText("1 case selected")).toBeTruthy();
+  });
+
+  it("Shift-click selects a range and announces the count", async () => {
+    mockRows(casesPage(25));
+    renderPage();
+    await loaded();
+    fireEvent.click(caseBox("case-0101"));
+    fireEvent.click(caseBox("case-0120"), { shiftKey: true });
+    await waitFor(() => expect(live().textContent).toBe("20 cases selected"));
+    expect(within(selectionRegion()).getByText("20 cases selected")).toBeTruthy();
+    expect((caseBox("case-0110") as HTMLInputElement).checked).toBe(true);
+    expect((caseBox("case-0121") as HTMLInputElement).checked).toBe(false);
+    // Ctrl-click removes one case and keeps the anchor.
+    fireEvent.click(caseBox("case-0110"), { ctrlKey: true });
+    await waitFor(() => expect(live().textContent).toBe("19 cases selected"));
+    fireEvent.click(caseBox("case-0122"), { shiftKey: true });
+    await waitFor(() => expect(live().textContent).toBe("22 cases selected"));
+  });
+
+  it("Shift+ArrowDown moves and selects; Space toggles; listed in ? help under Selection", async () => {
+    let help: ReturnType<typeof useRegisteredShortcuts> = [];
+    function Help() { help = useRegisteredShortcuts(); return null; }
+    mockRows(casesPage(3));
+    render(<Help />);
+    renderPage();
+    await loaded();
+    const first = caseBox("case-0101");
+    first.focus();
+    fireEvent.click(first); // Space on a focused checkbox is a click
+    fireEvent.keyDown(first, { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(caseBox("case-0102"));
+    expect((caseBox("case-0102") as HTMLInputElement).checked).toBe(true);
+    await waitFor(() => expect(live().textContent).toBe("2 cases selected"));
+    fireEvent.keyDown(caseBox("case-0102"), { key: "ArrowUp", shiftKey: true });
+    expect(document.activeElement).toBe(first);
+    fireEvent.click(first);
+    expect((first as HTMLInputElement).checked).toBe(false);
+    expect(help.filter(row => row.group === "Selection").map(row => row.description)).toEqual(
+      expect.arrayContaining(["Move to the next or previous case and select it", "Select or deselect the focused case"]));
+  });
+
+  it("Ctrl+Z and Meta+Z undo the last plan change while a case checkbox has focus", async () => {
+    const fr = planRow("case-0101", "fr", stepOf("assign_translation_review"));
+    mockRows(page([group("case-0101", [fr], { plan_revision: 2 })]));
+    const saved = (revision: number) => ({
+      case_id: "case-0101", language: "fr", flags: { review: false, annotate: true, review_applicable: true, discarded: false }, revision,
+      undo: { rows: [{ case_id: "case-0101", language: "fr", review: true, annotate: true }], revisions: { "case-0101": revision } }, withdrawn: [], accepted_document_ids: [],
+    } as PlanRowResult);
+    vi.spyOn(api, "patchWorkPlan").mockResolvedValueOnce(saved(3)).mockResolvedValueOnce(saved(5));
+    vi.spyOn(api, "setWorkPlanRows").mockResolvedValue({ changed_rows: 1, revisions: { "case-0101": 4 }, undo: { rows: [], revisions: {} }, withdrawn: [] });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Review, case-0101 · fr" }));
+    await screen.findByText("fr of case-0101: Review off");
+    const box = caseBox("case-0101");
+    box.focus();
+    fireEvent.keyDown(box, { key: "z", ctrlKey: true });
+    await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(1));
+    expect(api.setWorkPlanRows).toHaveBeenLastCalledWith("p", expect.objectContaining({ undo: true }));
+    await waitFor(() => expect(screen.queryByText("fr of case-0101: Review off")).toBeNull());
+    fireEvent.click(await screen.findByRole("button", { name: /^Review, case-0101 · fr/ }));
+    await screen.findByText(/fr of case-0101: Review/);
+    caseBox("case-0101").focus();
+    fireEvent.keyDown(caseBox("case-0101"), { key: "z", metaKey: true });
+    await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(2));
+  });
+
+  it("header checkbox selects all filtered cases across pages", async () => {
+    mockRows(casesPage(3, { group_count: 50, page_count: 17 }));
+    const all = Array.from({ length: 50 }, (_, index) => `case-${String(101 + index).padStart(4, "0")}`);
+    vi.spyOn(api, "listDocumentCaseIds").mockResolvedValueOnce({ case_ids: all, total: 50, truncated: false });
+    const view = renderPage({ query: { language: "de", segment: "assign", page: "2" } });
+    await loaded();
+    const header = screen.getByRole("checkbox", { name: "Select all 50 filtered cases" });
+    fireEvent.click(header);
+    await waitFor(() => expect(within(selectionRegion()).getByText("50 cases selected")).toBeTruthy());
+    expect(api.listDocumentCaseIds).toHaveBeenCalledWith("p", { language: "de", segment: "assign" });
+    expect((header as HTMLInputElement).checked).toBe(true);
+    await waitFor(() => expect(live().textContent).toBe("50 cases selected"));
+    fireEvent.click(header);
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Selection" })).toBeNull());
+    view.unmount();
+    // More than 2000 match: the first 2000 are selected and the bar says so.
+    mockRows(casesPage(3, { group_count: 2500, page_count: 50 }));
+    const first = Array.from({ length: 2000 }, (_, index) => `c-${index}`);
+    vi.mocked(api.listDocumentCaseIds).mockResolvedValueOnce({ case_ids: first, total: 2500, truncated: true });
+    renderPage();
+    await loaded();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select the first 2000 of 2500 filtered cases" }));
+    await waitFor(() => expect(within(selectionRegion()).getByText("2000 cases selected")).toBeTruthy());
+    expect(within(selectionRegion()).getByText("Selection is limited to 2000 cases. Selected the first 2000.")).toBeTruthy();
+  });
+
+  it("Select by case IDs… replaces the selection and the selection survives paging and filters", async () => {
+    mockRows(casesPage(3, { page_count: 2 }));
+    vi.spyOn(api, "lookupCaseIds").mockResolvedValue({ found: ["case-0102", "case-0999"], unknown: [] });
+    renderStateful({});
+    await loaded();
+    fireEvent.click(caseBox("case-0101"));
+    fireEvent.click(screen.getByRole("button", { name: "Select by case IDs…" }));
+    const dialog = screen.getByRole("dialog", { name: "Select by case IDs" });
+    fireEvent.change(within(dialog).getByLabelText("Paste case IDs"), { target: { value: "case-0102\ncase-0999" } });
+    await within(dialog).findByText("2 found · 0 unknown");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Select 2" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Select by case IDs" })).toBeNull());
+    expect(within(selectionRegion()).getByText("2 cases selected")).toBeTruthy();
+    expect((caseBox("case-0101") as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(within(screen.getByRole("group", { name: "Document filters" })).getByLabelText("Plan"), { target: { value: "review" } });
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review" }));
+    fireEvent.click(screen.getByRole("link", { name: "Next" }));
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review", page: 2 }));
+    expect(within(selectionRegion()).getByText("2 cases selected")).toBeTruthy();
+    await waitFor(() => expect(api.selectionSummary).toHaveBeenLastCalledWith("p", ["case-0102", "case-0999"], { plan: "review" }));
+  });
+
+  it("Assign… opens the many-cases dialog with the current sort and filters and clears the selection after success", async () => {
+    mockRows(casesPage(3));
+    renderPage({ query: { language: "de", segment: "assign", sort: "import", q: "case-01" } });
+    await loaded();
+    fireEvent.click(caseBox("case-0101"));
+    fireEvent.click(caseBox("case-0103"), { shiftKey: true });
+    fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Assign…" }));
+    const props = lastAssign();
+    expect(props).toMatchObject({ mode: "cases", projectKey: "p", caseIds: ["case-0101", "case-0102", "case-0103"], sort: "import", filters: { language: "de", segment: "assign" } });
+    expect(screen.getByRole("dialog", { name: "Assign stub" })).toBeTruthy();
+    const calls = vi.mocked(api.listDocumentRows).mock.calls.length;
+    act(() => { if (props.mode === "cases") props.onAssigned("3 translation reviews assigned to Ana Weber", []); });
+    expect(screen.queryByRole("dialog", { name: "Assign stub" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
+    expect(await screen.findByText("3 translation reviews assigned to Ana Weber", { selector: ".ui-toast-message" })).toBeTruthy();
+    await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
+    // Cancel closes without touching the selection.
+    fireEvent.click(caseBox("case-0102"));
+    fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Assign…" }));
+    act(() => { lastAssign().onClose(); });
+    expect(screen.queryByRole("dialog", { name: "Assign stub" })).toBeNull();
+    expect(within(selectionRegion()).getByText("1 case selected")).toBeTruthy();
+  });
+
+  it("offers Select the 6 skipped cases in the toast", async () => {
+    mockRows(casesPage(8));
+    renderPage();
+    await loaded();
+    fireEvent.click(caseBox("case-0101"));
+    fireEvent.click(caseBox("case-0108"), { shiftKey: true });
+    fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Assign…" }));
+    const skipped = ["case-0103", "case-0104", "case-0105", "case-0105", "case-0106", "case-0107", "case-0108"];
+    act(() => { const props = lastAssign(); if (props.mode === "cases") props.onAssigned("2 translation reviews assigned to Ana Weber", skipped); });
+    fireEvent.click(await screen.findByRole("button", { name: "Select the 6 skipped cases" }));
+    expect(within(selectionRegion()).getByText("6 cases selected")).toBeTruthy();
+    expect((caseBox("case-0103") as HTMLInputElement).checked).toBe(true);
+    expect((caseBox("case-0101") as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("row Assign actions open the row dialog", async () => {
+    mockRows(page([group("case-1", [planRow("case-1", "de", stepOf("assign_translation_review")), planRow("case-1", "fr", stepOf("assign_annotation"))])]));
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Assign translation review…, case-1 · de" }));
+    expect(lastAssign()).toMatchObject({ mode: "row", projectKey: "p", task: "translation_review", row: { case_id: "case-1", language: "de" } });
+    act(() => { lastAssign().onClose(); });
+    fireEvent.click(screen.getByRole("button", { name: "Assign annotation…, case-1 · fr" }));
+    const props = lastAssign();
+    expect(props).toMatchObject({ mode: "row", task: "annotate", row: { case_id: "case-1", language: "fr" } });
+    const calls = vi.mocked(api.listDocumentRows).mock.calls.length;
+    act(() => { if (props.mode === "row") props.onAssigned("1 annotation assigned to Ana Weber"); });
+    expect(screen.queryByRole("dialog", { name: "Assign stub" })).toBeNull();
+    expect(await screen.findByText("1 annotation assigned to Ana Weber", { selector: ".ui-toast-message" })).toBeTruthy();
+    await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
+  });
 });
 
 it("pages with Previous and Next links", async () => {
