@@ -1989,16 +1989,16 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 /* Values block (spec B.2): one row per axis, the axis name in a 96 px column, compact segmented options. */
 .values-section .axis-field {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: calc(2 * var(--space-7)) minmax(0, 1fr);
   align-items: center;
-  column-gap: 8px;
-  margin: 0 0 6px;
+  column-gap: var(--space-2);
+  margin: 0 0 var(--space-1);
 }
 .values-section .axis-legend {
   /* A floated legend takes part in the grid like any other child. */
   float: left;
   padding: 0;
-  font-size: 0.8rem;
+  font-size: var(--size-sm);
   font-weight: 500;
   color: var(--text);
 }
@@ -2007,8 +2007,8 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   font-weight: 400;
 }
 .values-section .axis-option {
-  min-height: 24px;
-  min-width: 24px;
+  min-height: var(--space-5);
+  min-width: var(--space-5);
   border-style: solid;
 }
 /* An unconfirmed default: dashed border plus the word "default" (never colour alone). */
@@ -2027,10 +2027,10 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   outline: none;
 }
 .values-section .values-confirm {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 .values-section .form-hint {
-  margin: 6px 0 0;
+  margin: var(--space-1) 0 0;
 }
 @media (forced-colors: active) {
   .values-section .axis-option {
@@ -2046,8 +2046,8 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-top: 1px solid var(--border);
   background: var(--surface-raised);
 }
@@ -2059,5 +2059,5 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   white-space: nowrap;
 }
 .back-to-text {
-  margin: 8px 12px 0;
+  margin: var(--space-2) var(--space-3) 0;
 }

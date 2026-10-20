@@ -945,6 +945,8 @@ describe("CaseScreen integration", () => {
                 provenance: { actor: { actor_id: "user-test", kind: "human" }, method: "manual", source_refs: [] } },
               evidence: [evidence] }] as any;
           }
+          // Like Annotation.with_axes plus _set_axes in the backend: a changed value and a chosen id
+          // both leave axes_defaulted; an unchanged, unchosen default stays.
           if (p.command === "set_axes") {
             current.annotations = current.annotations!.map(snapshot => snapshot.annotation.annotation_id !== p.annotation_id ? snapshot
               : { ...snapshot, annotation: { ...snapshot.annotation, axes_values: p.axes_values,
@@ -1059,6 +1061,10 @@ describe("CaseScreen integration", () => {
         fireEvent.keyDown(document.activeElement!, { key: "/" });
         expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Search term" }));
         expect(screen.getByRole("button", { name: "Close search" })).toBeDefined();
+        // With the search already open, "/" focuses it again.
+        (document.activeElement as HTMLElement).blur();
+        fireEvent.keyDown(document.body, { key: "/" });
+        expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Search term" }));
       });
 
       it("never fires / V D in text fields, with Shift for D and V, or in read-only and proposal views", async () => {
@@ -1084,7 +1090,7 @@ describe("CaseScreen integration", () => {
         expect(screen.queryByRole("combobox", { name: "Search term" })).toBeNull();
       });
 
-      it("never fires D for a selected proposal in review mode", () => {
+      it("never fires D for a selected proposal in review mode", async () => {
         const { view, proposal } = proposalView();
         proposal.annotation.axes_values = { assertion: "present" }; proposal.annotation.axes_defaulted = ["assertion"];
         const apply = vi.spyOn(api, "applyCommand");
@@ -1092,6 +1098,7 @@ describe("CaseScreen integration", () => {
         fireEvent.keyDown(window, { key: "j" });
         fireEvent.keyDown(document.body, { key: "d" });
         fireEvent.keyDown(document.body, { key: "v" });
+        await act(async () => { await Promise.resolve(); });
         expect(apply).not.toHaveBeenCalled();
       });
 
@@ -1151,7 +1158,129 @@ describe("CaseScreen integration", () => {
           fireEvent.click(back);
           expect(layout().classList.contains("mobile-pane-text")).toBe(true);
           await waitFor(() => expect(document.activeElement).toBe(text));
+          expect(screen.queryByRole("button", { name: "Back to text" })).toBeNull();
         } finally { window.matchMedia = original; }
+      });
+
+      it("at 700 px with nothing to confirm focuses Back to text after adding a term", async () => {
+        const original = window.matchMedia;
+        window.matchMedia = ((query: string) => ({
+          matches: query === "(max-width: 700px)", media: query, onchange: null,
+          addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+        })) as unknown as typeof window.matchMedia;
+        try {
+          vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+          const view = loopView({});
+          loopServer(view);
+          const rendered = render(<CaseScreen view={view} workspaceId="ws-narrow-empty" onClose={vi.fn()} />);
+          markThe(rendered.container);
+          fireEvent.click(within(rendered.container.querySelector<HTMLElement>(".pending-bar")!).getByRole("button", { name: "Choose term" }));
+          const input = screen.getByRole("combobox", { name: "Search term" });
+          await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBe(screen.getAllByRole("option")[1].id));
+          fireEvent.keyDown(input, { key: "Enter" });
+          await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Back to text" })));
+        } finally { window.matchMedia = original; }
+      });
+
+      /** Two saved findings with unconfirmed defaults, selectable from the findings list. */
+      const twoFindings = () => {
+        const view = withEditableFinding(loopView());
+        const a = view.draft.annotations![0];
+        a.annotation.annotation_id = "finding-a";
+        a.annotation.axes_values = { ...allDefaults }; a.annotation.axes_defaulted = ["assertion", "experiencer", "temporality"];
+        const b = structuredClone(a); b.annotation.annotation_id = "finding-b";
+        view.draft.annotations = [a, b];
+        return view;
+      };
+      const selectFinding = (id: string) => fireEvent.click(document.querySelector(`[data-list-key="annotation:${id}"]`)!);
+      const arrowTo = (from: RegExp, to: string) => {
+        fireEvent.keyDown(screen.getByRole("radio", { name: from }), { key: "ArrowRight" });
+        fireEvent.click(screen.getByRole("radio", { name: to }));
+      };
+
+      it("sends a pending arrow change to its own finding when another finding is selected within 300 ms", async () => {
+        const view = twoFindings();
+        const apply = loopServer(view);
+        render(<CaseScreen view={view} workspaceId="ws-switch" onClose={vi.fn()} />);
+        selectFinding("finding-a");
+        vi.useFakeTimers();
+        try {
+          arrowTo(/^Present/, "Absent");
+          act(() => { vi.advanceTimersByTime(100); });
+          selectFinding("finding-b");
+          await act(async () => { vi.advanceTimersByTime(400); });
+        } finally { vi.useRealTimers(); }
+        await waitFor(() => expect(setAxesCalls(apply)).toHaveLength(1));
+        expect((setAxesCalls(apply)[0][1] as any).payload).toEqual(expect.objectContaining({
+          annotation_id: "finding-a", axes_values: { ...allDefaults, assertion: "absent" }, chosen_axis_ids: ["assertion"] }));
+      });
+
+      it("V, an arrow change and D within 300 ms send the change first and then confirm the remaining defaults", async () => {
+        const view = twoFindings();
+        const apply = loopServer(view);
+        render(<CaseScreen view={view} workspaceId="ws-vd" onClose={vi.fn()} />);
+        selectFinding("finding-a");
+        vi.useFakeTimers();
+        try {
+          fireEvent.keyDown(document.body, { key: "v" });
+          const present = document.activeElement as HTMLInputElement;
+          expect(present.closest('[data-axis-field="assertion"]')).not.toBeNull();
+          fireEvent.keyDown(present, { key: "ArrowRight" });
+          fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
+          fireEvent.keyDown(document.body, { key: "d" });
+          await act(async () => { vi.advanceTimersByTime(400); });
+        } finally { vi.useRealTimers(); }
+        await waitFor(() => expect(setAxesCalls(apply)).toHaveLength(2));
+        const [first, second] = setAxesCalls(apply).map(call => (call[1] as any).payload);
+        const shown = { ...allDefaults, assertion: "absent" };
+        expect(first).toEqual(expect.objectContaining({ axes_values: shown, chosen_axis_ids: ["assertion"] }));
+        expect(second).toEqual(expect.objectContaining({ axes_values: shown, chosen_axis_ids: ["experiencer", "temporality"] }));
+      });
+
+      it("a failed confirmation shows the inline error and keeps the focus on Confirm defaults", async () => {
+        const view = twoFindings();
+        vi.spyOn(api, "applyCommand").mockRejectedValue(new ValidationError("Save refused"));
+        render(<CaseScreen view={view} workspaceId="ws-confirm-fail" onClose={vi.fn()} />);
+        selectFinding("finding-a");
+        const button = screen.getByRole("button", { name: "Confirm defaults (3)" });
+        button.focus();
+        fireEvent.click(button);
+        const section = document.querySelector<HTMLElement>("[data-values-section]")!;
+        await waitFor(() => expect(within(section).getByRole("alert").textContent).toContain("The values could not be confirmed. Try again."));
+        expect(document.activeElement).toBe(screen.getByRole("button", { name: "Confirm defaults (3)" }));
+        expect(document.querySelector("[data-carried-announcer]")?.textContent ?? "").not.toContain("Confirmed:");
+      });
+
+      it("queues a pending arrow change before the logout guard looks at the queue", async () => {
+        const view = twoFindings();
+        let release!: () => void;
+        const hold = new Promise<void>(resolve => { release = resolve; });
+        const server = loopServer(view);
+        const inner = server.getMockImplementation()!;
+        server.mockImplementation(async (...args) => { await hold; return inner(...args); });
+        const leaveGuardRef = { current: null as ((proceed: () => void) => void) | null };
+        render(<CaseScreen view={view} workspaceId="ws-guard-flush" onClose={vi.fn()} leaveGuardRef={leaveGuardRef} />);
+        selectFinding("finding-a");
+        arrowTo(/^Present/, "Absent");
+        const proceed = vi.fn();
+        act(() => { leaveGuardRef.current!(proceed); });
+        expect(proceed).not.toHaveBeenCalled();
+        expect(await screen.findByRole("dialog", { name: "Unsaved changes" })).toBeDefined();
+        await act(async () => { release(); await hold; });
+        await waitFor(() => expect(setAxesCalls(server)).toHaveLength(1));
+      });
+
+      it("queues a pending arrow change before leaving the case", async () => {
+        const view = twoFindings();
+        const apply = loopServer(view);
+        const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
+        render(<CaseScreen view={view} workspaceId="ws-leave-flush" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
+        selectFinding("finding-a");
+        arrowTo(/^Present/, "Absent");
+        let left!: Promise<boolean>;
+        act(() => { left = routeLeaveRef.current!(); });
+        expect(await left).toBe(true);
+        expect(setAxesCalls(apply)).toHaveLength(1);
       });
     });
   });

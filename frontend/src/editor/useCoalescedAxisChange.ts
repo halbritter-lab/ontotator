@@ -6,10 +6,11 @@ type AxisValues = Record<string, string | null>;
  * Local axis choices that reach the server coalesced: a change is sent `delayMs` after the last change
  * within the same axis, a change of another axis sends the pending one first. Sent values stay shown
  * until the base (the saved values) changes, so the radios never flicker back while a save runs.
+ * A failed save (rejected promise from `send`) drops the sent values, so the saved value shows again.
  */
 export function useCoalescedAxisChange(
   base: Readonly<AxisValues>,
-  send: (values: AxisValues) => void,
+  send: (values: AxisValues) => void | Promise<unknown>,
   delayMs = 300,
 ): {
   values: AxisValues;
@@ -25,7 +26,9 @@ export function useCoalescedAxisChange(
   const sent = useRef<{ key: string; values: AxisValues }>({ key: baseKey, values: {} });
   const pending = useRef<{ axisId: string; value: string | null } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const mounted = useRef(true);
   const [, rerender] = useReducer((count: number) => count + 1, 0);
+  const refresh = () => { if (mounted.current) rerender(); };
 
   const sentFor = (key: string) => (sent.current.key === key ? sent.current.values : {});
 
@@ -36,10 +39,23 @@ export function useCoalescedAxisChange(
     if (!choice) return;
     pending.current = null;
     const key = JSON.stringify(baseRef.current);
-    const local = { ...sentFor(key), [choice.axisId]: choice.value };
+    const already = sentFor(key);
+    // Back to the saved value with nothing sent: there is nothing to save.
+    if (Object.keys(already).length === 0 && (baseRef.current[choice.axisId] ?? null) === choice.value) {
+      refresh();
+      return;
+    }
+    const local = { ...already, [choice.axisId]: choice.value };
     sent.current = { key, values: local };
-    sendRef.current({ ...baseRef.current, ...local });
-    rerender();
+    const result = sendRef.current({ ...baseRef.current, ...local });
+    if (result && typeof (result as Promise<unknown>).then === "function") {
+      (result as Promise<unknown>).then(undefined, () => {
+        if (sent.current.key !== key) return;
+        sent.current = { key, values: {} };
+        refresh();
+      });
+    }
+    refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -52,7 +68,10 @@ export function useCoalescedAxisChange(
   }, [flush, delayMs]);
 
   // A choice still waiting is sent when the panel goes away (another finding, closing the editor).
-  useEffect(() => () => flush(), [flush]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; flush(); };
+  }, [flush]);
 
   const values: AxisValues = {
     ...base,

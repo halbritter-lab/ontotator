@@ -289,6 +289,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const selectedAnnotationIdRef = useRef(selectedAnnotationId);
+  selectedAnnotationIdRef.current = selectedAnnotationId;
+  // Flush of the Values block's coalesced axis change still waiting (set by AnnotationPanel).
+  const pendingAxesFlush = useRef<(() => void) | null>(null);
+  /** Queues a waiting axis change, so guards that look at the save queue see it. */
+  const flushPendingAxes = () => { pendingAxesFlush.current?.(); };
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   // A carried input without a finding on this text (placeholder row); exclusive with the others.
@@ -658,6 +664,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   useEffect(() => {
     if (!leaveGuardRef) return;
     leaveGuardRef.current = (proceed) => {
+      flushPendingAxes();
       if (pausedLocalInput.current()) {
         void askConfirm("Paused task has local input", "Logging out discards the local input kept in this paused editor. Saved work is kept.", "Discard local input and log out").then(discard => { if (discard) proceed(); }); return;
       }
@@ -702,6 +709,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
    */
   const leaveInProgress = useRef(false);
   const leaveCase = async (action: () => void | Promise<void>): Promise<boolean> => {
+    flushPendingAxes();
     // Local version changes and App routes share the same unsaved-work dialog.
     // A concurrent transition must not replace its resolver and orphan the first.
     if (leaveInProgress.current) return false;
@@ -1402,6 +1410,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   useEffect(() => {
     if (!saveBeforeReportRef) return;
     const flush = async () => {
+      flushPendingAxes();
       await flushAnnotationNotes();
       await queueRef.current.flush();
       if (unsavedAnnotationNotes().length || invalidAnnotationNotes().length) throw new Error("Some annotation notes are not saved. Your input is kept in this editor.");
@@ -1538,7 +1547,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const item=activeReanchor ?? pendingAnnotation?.reanchorItem;
     setPendingAnnotation(null); setActiveReanchor(null); setActiveCarried(null); searchManager.clear();
     if(item) [...(sidebarScrollRef.current?.querySelectorAll<HTMLElement>('[data-reanchor-item]') ?? [])]
-      .find(row=>row.dataset.reanchorItem===reanchorKey(item))?.querySelector<HTMLButtonElement>('button')?.focus();
+      .find(row=>row.dataset.reanchorItem===reanchorKey(item))?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
   };
 
   const createPendingAnnotation = async (termId: string, searchId?: string, termText?: string) => {
@@ -1593,7 +1602,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       }
       if(pending.reanchorItem) requestAnimationFrame(() => {
         const next = inspectorRef.current?.querySelector<HTMLElement>('[data-confirm-defaults]') ?? inspectorRef.current?.querySelector<HTMLElement>('button, input, textarea, select');
-        next?.focus();
+        next?.focus({ preventScroll: true });
       });
     } catch (error) { reportError(error); }
     finally { creatingPending.current = false; }
@@ -1748,20 +1757,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followAnnotationId]);
 
-  const handleUpdateAxes = async (axesValues: Partial<AxesValues>, confirmedAxisIds?: string[]) => {
-    if (readOnlyRef.current) return;
-    if (!selectedAnnotationId || !selectedAnnotation) return;
-    const annotationId = selectedAnnotationId;
+  /** One set_axes for `annotationId` (default: the selected finding); false when nothing was sent. */
+  const handleUpdateAxes = async (axesValues: Partial<AxesValues>, confirmedAxisIds?: string[], annotationId = selectedAnnotationId): Promise<boolean> => {
+    if (readOnlyRef.current || !annotationId) return false;
+    const snapshot = annotationId === selectedAnnotationId && selectedAnnotation ? selectedAnnotation
+      : latestDraft.current.annotations?.find(candidate => candidate.annotation.annotation_id === annotationId);
+    if (!snapshot) return false;
     await mutateAnnotationAndSyncDecision(annotationId, () =>
       enqueueMutation({
         command: "set_axes",
         annotation_id: annotationId,
         axes_values: axesValues as Record<string, string | null>,
         chosen_axis_ids: confirmedAxisIds ?? Object.keys(axesValues).filter(
-          (axis) => axesValues[axis] != null && axesValues[axis] !== "" && axesValues[axis] !== selectedAnnotation.annotation.axes_values?.[axis]
+          (axis) => axesValues[axis] != null && axesValues[axis] !== "" && axesValues[axis] !== snapshot.annotation.axes_values?.[axis]
         ),
       })
     );
+    return true;
   };
 
   const handleDetachMention = async (evidenceId: string) => {
@@ -2213,6 +2225,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Step 1: save pending edits, validate the saved draft and open the confirmation dialog.
   const handleSubmitWorkspace = async () => {
     if (readOnlyRef.current) return;
+    flushPendingAxes();
     setSubmitError(null);
     if (invalidAnnotationNotes().length > 0) { setActionError(null); setSubmitError("A reason is required for findings without a text span."); return; }
     if (blockInvalidUnresolvedNotes()) return;
@@ -2396,7 +2409,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       .find(element => element.dataset.axisField === requiredEmpty.id) : undefined;
     if (focusInspector(field?.querySelector<HTMLElement>('input[type="radio"]:not(:disabled), select:not(:disabled)'))) return;
     if (focusInspector(inspector?.querySelector<HTMLElement>("[data-confirm-defaults]"))) return;
-    if (!panesLayout) setTextFocusRequest({ offset: markEndOf(snapshot, selectedEvidenceId) });
+    if (panesLayout) focusInspector(inspector?.querySelector<HTMLElement>("[data-back-to-text]"));
+    else setTextFocusRequest({ offset: markEndOf(snapshot, selectedEvidenceId) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loopFocus, selectedAnnotation, selectedAnnotationId]);
   useEffect(() => {
@@ -2406,7 +2420,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     input.focus({ preventScroll: true });
     input.select();
   }, [searchFocusRequest]);
-  useEffect(() => { setValuesError(null); }, [selectedAnnotationId]);
+  useEffect(() => {
+    setValuesError(null);
+    // Selecting another finding ends the loop of the new one.
+    setLoopAnnotationId(current => current === selectedAnnotationId ? current : null);
+  }, [selectedAnnotationId]);
 
   /** "Confirm defaults (n)": one set_axes with the shown values; then back to the text after the mark. */
   const handleConfirmDefaults = async (axisIds: string[], values?: AxesValues) => {
@@ -2417,13 +2435,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (ids.length === 0) return;
     setValuesError(null);
     try {
-      await handleUpdateAxes(current, ids);
+      if (!await handleUpdateAxes(current, ids, annotationId)) return;
     } catch (error) {
       if (!(error instanceof DiscardedChangesError)) setValuesError({ annotationId, message: "The values could not be confirmed. Try again." });
       return;
     }
     const axisLabel = (id: string) => currentAxesConfig.find(axis => axis.id === id)?.label ?? id;
     announceCarried(`Confirmed: ${ids.map(id => `${axisLabel(id)} ${axisOptionLabel(current[id])}`).join(", ")}.`);
+    // Move focus only while the same finding is selected and the user has not gone elsewhere meanwhile.
+    const active = document.activeElement as HTMLElement | null;
+    const focusUntouched = !active || active === document.body || active.hasAttribute("data-confirm-defaults")
+      || !!active.closest("[data-values-section]");
+    if (selectedAnnotationIdRef.current !== annotationId || !focusUntouched) return;
     if (panesLayout && mobilePane === "details") {
       focusInspector(inspectorRef.current?.querySelector<HTMLElement>("[data-back-to-text]"));
       return;
@@ -2431,6 +2454,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setTextFocusRequest({ offset: markEndOf(snapshot, selectedEvidenceId) });
   };
   const backToText = () => {
+    setLoopAnnotationId(null);
     setMobilePane("text");
     setTextFocusRequest({ offset: selectedAnnotation ? markEndOf(selectedAnnotation, selectedEvidenceId) : null });
   };
@@ -2508,6 +2532,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
     if (!ownFindingActive) return false;
     if (panesLayout) setMobilePane("details");
+    const open = inspectorRef.current?.querySelector<HTMLInputElement>("#search-input");
+    if (open) { open.focus({ preventScroll: true }); return; }
     setChangeTermRequest(count => count + 1);
   }, { ...shortcutOptions, enabled: pendingSearchable || ownFindingActive, group: "Finding", description: "Focus the term search" });
   useShortcut("v", event => {
@@ -3151,7 +3177,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onShowInTree={handleShowInTree}
               onSelectEvidence={(evId) => setSelectedEvidenceId(evId)}
               onUpdateTerm={(...args) => { void handleUpdateTerm(...args).catch(reportError); }}
-              onUpdateAxes={(axesValues) => { void handleUpdateAxes(axesValues).catch(reportError); }}
+              onUpdateAxes={(axesValues) => handleUpdateAxes(axesValues, undefined, selectedAnnotationId)
+                .catch(error => { reportError(error); throw error; })}
+              axesFlushRef={pendingAxesFlush}
               onConfirmDefaults={(axisIds, values) => { void handleConfirmDefaults(axisIds, values); }}
               valuesError={valuesError && valuesError.annotationId === selectedAnnotationId ? valuesError.message : null}
               searchRequest={changeTermRequest}

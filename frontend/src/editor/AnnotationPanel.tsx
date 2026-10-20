@@ -52,7 +52,10 @@ export interface AnnotationPanelProps {
   onSaveNote?: () => void;
   detachLastBlockedReason?: string;
   onUpdateTerm: (termId: string, searchId?: string) => void;
-  onUpdateAxes: (axes: Partial<Axes>) => void;
+  /** Saves the axis values; a returned promise that rejects shows the saved values again. */
+  onUpdateAxes: (axes: Partial<Axes>) => void | Promise<unknown>;
+  /** Receives the flush of a coalesced axis change still waiting, so leaving can queue it first. */
+  axesFlushRef?: React.MutableRefObject<(() => void) | null>;
   /** "Confirm defaults (n)": the defaulted axes to confirm and the values shown (one set_axes). */
   onConfirmDefaults?: (axisIds: string[], values?: AxesValues) => void;
   /** Error of the last confirmation, shown inside the Values section. */
@@ -104,6 +107,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   onConfirmDefaults,
   valuesError,
   searchRequest,
+  axesFlushRef,
   onDetachMention,
   onDeleteAnnotation,
   deleteConfirmMessage = "Delete this annotation and all its mentions?",
@@ -121,6 +125,12 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   const arrowChange = useRef(false);
   const savedAxes: AxesValues = annotation?.annotation.axes_values ?? (annotation?.annotation as any)?.axes?.values ?? {};
   const axes = useCoalescedAxisChange(savedAxes, values => onUpdateAxes(values));
+  const axesFlush = axes.flush;
+  useEffect(() => {
+    if (!axesFlushRef) return;
+    axesFlushRef.current = axesFlush;
+    return () => { if (axesFlushRef.current === axesFlush) axesFlushRef.current = null; };
+  }, [axesFlushRef, axesFlush]);
   const searchRequestSeen = useRef(searchRequest);
   useEffect(() => {
     if (searchRequest === searchRequestSeen.current) return;
@@ -265,7 +275,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
       {/* 2. Values (hidden if the type has no axes) */}
       {axesConfig && axesConfig.length > 0 && (
         <section className="detail-section values-section" data-values-section data-testid="axes-section" tabIndex={-1}
-          aria-labelledby={valuesHeadingId}
+          aria-labelledby={valuesHeadingId} aria-keyshortcuts={readOnly ? undefined : "v"}
           onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) axes.flush(); }}>
           <h3 id={valuesHeadingId}>Values{!readOnly && <span aria-hidden="true"> <Kbd>V</Kbd></span>}</h3>
           {axesConfig.map((axis) => {

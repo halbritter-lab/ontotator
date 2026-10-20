@@ -96,6 +96,30 @@ describe("Values block", () => {
     expect(within(section).getByRole("button", { name: "Confirm defaults (3)" })).toBeDefined();
   });
 
+  it("names V as the Values shortcut and hands its flush to axesFlushRef", () => {
+    vi.useFakeTimers();
+    const onUpdateAxes = vi.fn(), axesFlushRef = { current: null as (() => void) | null };
+    const { container, unmount } = render(<AnnotationPanel {...props({ onUpdateAxes, axesFlushRef })} />);
+    expect(container.querySelector("[data-values-section]")!.getAttribute("aria-keyshortcuts")).toBe("v");
+    fireEvent.keyDown(screen.getByRole("radio", { name: "Present · default" }), { key: "ArrowRight" });
+    fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
+    expect(onUpdateAxes).not.toHaveBeenCalled();
+    act(() => { axesFlushRef.current!(); });
+    expect(onUpdateAxes).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(axesFlushRef.current).toBeNull();
+    expect(onUpdateAxes).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the saved default again when the coalesced save fails", async () => {
+    const onUpdateAxes = vi.fn().mockRejectedValue(new Error("refused"));
+    render(<AnnotationPanel {...props({ onUpdateAxes })} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
+    expect(onUpdateAxes).toHaveBeenCalledTimes(1);
+    const present = await screen.findByRole("radio", { name: "Present · default" }) as HTMLInputElement;
+    expect(present.checked).toBe(true);
+  });
+
   it("opens Change term and focuses the search when searchRequest increments", () => {
     const { rerender } = render(<AnnotationPanel {...props({ searchRequest: 0 })} />);
     expect(screen.queryByRole("combobox", { name: "Search term" })).toBeNull();
