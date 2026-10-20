@@ -1,7 +1,7 @@
 import { StrictMode, useMemo, type ReactNode } from 'react';
 import { act, cleanup, fireEvent, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useCoupledScroll, type CoupledScrollPane } from '../src/variants/useCoupledScroll';
+import { mapParagraph, useCoupledScroll, type CoupledScrollOptions, type CoupledScrollPane } from '../src/variants/useCoupledScroll';
 let width = 1280;
 const changes = new Set<() => void>();
 function pane(id: string, offsets: number[], height = 2000): CoupledScrollPane {
@@ -19,7 +19,7 @@ function pane(id: string, offsets: number[], height = 2000): CoupledScrollPane {
 function scroll(p: CoupledScrollPane, offset: number) { act(() => { p.element!.scrollTop = offset; fireEvent.scroll(p.element!); }); }
 beforeEach(() => {
   width = 1280;
-  vi.stubGlobal('matchMedia', () => ({ get matches() { return width >= 1100; }, addEventListener: (_: string, cb: () => void) => changes.add(cb), removeEventListener: (_: string, cb: () => void) => changes.delete(cb) }));
+  vi.stubGlobal('matchMedia', (query: string) => ({ get matches() { return width >= Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? NaN); }, addEventListener: (_: string, cb: () => void) => changes.add(cb), removeEventListener: (_: string, cb: () => void) => changes.delete(cb) }));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); changes.clear(); });
 it('keeps panes independent when the environment cannot detect viewport support', () => {
@@ -125,4 +125,180 @@ it('decorates replacement markers before any scroll without rewriting clinical t
   expect(source.element!.textContent).toBe('µ ± α 😀');expect(selection.toString()).toBe('µ ± α 😀');
   expect(source.element!.scrollTop).toBe(250);expect(follower.element!.scrollTop).toBe(previous);
   mounted.unmount();expect(replacement.hasAttribute('data-paragraph-number')).toBe(false);source.element!.remove();
+});
+
+function trackWrites(p: CoupledScrollPane) {
+  let value = 0; const writes = vi.fn();
+  Object.defineProperty(p.element!, 'scrollTop', { configurable: true, get: () => value, set: (next: number) => { value = next; writes(next); } });
+  return writes;
+}
+function moveMarker(p: CoupledScrollPane, index: number, offset: number) {
+  const marker = p.element!.querySelector<HTMLElement>(`[data-paragraph="${index}"]`)!;
+  marker.getBoundingClientRect = () => ({ top: 100 + offset - p.element!.scrollTop } as DOMRect);
+}
+function addMarker(p: CoupledScrollPane, index: number, offset: number) {
+  const marker = document.createElement('span'); marker.dataset.paragraph = String(index);
+  marker.getBoundingClientRect = () => ({ top: 100 + offset - p.element!.scrollTop } as DOMRect);
+  p.element!.append(marker); return marker;
+}
+
+it('minWidth 700 makes coupling available at 800 px; the default stays 1100', () => {
+  width = 800;
+  const a = pane('a', [0, 200]), b = pane('b', [0, 400]); const panes = [a, b];
+  const narrow = renderHook(() => useCoupledScroll(panes, { enabled: true, minWidth: 700 }));
+  expect(narrow.result.current.available).toBe(true);
+  scroll(a, 100); expect(b.element!.scrollTop).toBe(200);
+  const defaults = renderHook(() => useCoupledScroll(panes, { enabled: false }));
+  expect(defaults.result.current.available).toBe(false);
+  act(() => { width = 699; changes.forEach(cb => cb()); });
+  expect(narrow.result.current.available).toBe(false);
+});
+
+it('with fixedLeader, wheel and scroll on a follower never make it leader and never move the leader', () => {
+  const source = pane('source', [0, 200, 400]), target = pane('target', [0, 400, 800]); const panes = [source, target];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: true, fixedLeader: 'target' }));
+  fireEvent.wheel(source.element!); scroll(source, 100);
+  expect(target.element!.scrollTop).toBe(0); expect(source.element!.scrollTop).toBe(100);
+  fireEvent.keyDown(source.element!, { key: 'PageDown' }); scroll(source, 150);
+  expect(target.element!.scrollTop).toBe(0); expect(result.current.leaderId).not.toBe('source');
+  scroll(target, 400); expect(source.element!.scrollTop).toBe(200); expect(result.current.leaderId).toBe('target');
+  fireEvent.pointerDown(source.element!); scroll(source, 300); expect(target.element!.scrollTop).toBe(400);
+  scroll(target, 500); expect(source.element!.scrollTop).toBe(250);
+});
+
+it('a startsRevision change re-reads lazy starts without unbinding, without resetting the leader and without writing scrollTop', () => {
+  const source = pane('source', [0, 200, 400]), target = pane('target', [0, 400, 800]);
+  let targetStarts: readonly number[] = [0, 400];
+  const panes = [source, { ...target, starts: () => targetStarts }];
+  const sourceWrites = trackWrites(source), targetWrites = trackWrites(target);
+  const removeSource = vi.spyOn(source.element!, 'removeEventListener'), removeTarget = vi.spyOn(target.element!, 'removeEventListener');
+  const { result, rerender } = renderHook(({ revision }) => useCoupledScroll(panes, { enabled: true, startsRevision: revision }), { initialProps: { revision: 0 } });
+  const third = target.element!.querySelector('[data-paragraph="2"]')!;
+  expect(third.hasAttribute('data-paragraph-number')).toBe(false);
+  scroll(source, 250); expect(result.current.leaderId).toBe('source');
+  sourceWrites.mockClear(); targetWrites.mockClear();
+  targetStarts = [0, 400, 800];
+  rerender({ revision: 1 });
+  expect(third.getAttribute('data-paragraph-number')).toBe('3');
+  expect(removeSource).not.toHaveBeenCalled(); expect(removeTarget).not.toHaveBeenCalled();
+  expect(sourceWrites).not.toHaveBeenCalled(); expect(targetWrites).not.toHaveBeenCalled();
+  expect(result.current.leaderId).toBe('source');
+  expect(result.current.pairs).toEqual([{ paneId: 'source', paragraph: 1 }, { paneId: 'target', paragraph: 1 }]);
+});
+
+it('marker mutations inside the frozen pane do not refresh pairs until the next revision', async () => {
+  const source = pane('source', [0, 200, 400]), target = pane('target', [0, 400, 800]);
+  let targetStarts: readonly number[] = [0, 400, 800];
+  const panes = [source, { ...target, starts: () => targetStarts }];
+  const options = (revision: number): CoupledScrollOptions => ({ enabled: true, fixedLeader: 'target', frozenPaneId: 'target', startsRevision: revision });
+  const { result, rerender } = renderHook(({ revision }) => useCoupledScroll(panes, options(revision)), { initialProps: { revision: 0 } });
+  scroll(target, 450);
+  const before = [{ paneId: 'source', paragraph: 1 }, { paneId: 'target', paragraph: 1 }];
+  expect(result.current.pairs).toEqual(before);
+  const sourcePosition = source.element!.scrollTop;
+  moveMarker(target, 1, 600);
+  await act(async () => { addMarker(target, 3, 1000); });
+  expect(result.current.pairs).toEqual(before);
+  targetStarts = [0, 600, 800, 1000];
+  rerender({ revision: 1 });
+  expect(result.current.pairs).toEqual([{ paneId: 'source', paragraph: 0 }, { paneId: 'target', paragraph: 0 }]);
+  expect(source.element!.scrollTop).toBe(sourcePosition);
+});
+
+it('type then scroll within 300 ms uses the geometry of the last revision', async () => {
+  const source = pane('source', [0, 200, 400]), target = pane('target', [0, 400, 800]);
+  let targetStarts: readonly number[] = [0, 400, 800];
+  const panes = [source, { ...target, starts: () => targetStarts }];
+  const { rerender } = renderHook(({ revision }) => useCoupledScroll(panes, { enabled: true, fixedLeader: 'target', frozenPaneId: 'target', startsRevision: revision }), { initialProps: { revision: 0 } });
+  // Typing moves the mirror markers and adds a paragraph before the debounced recompute.
+  moveMarker(target, 1, 500); moveMarker(target, 2, 900);
+  await act(async () => { addMarker(target, 3, 1300); });
+  scroll(target, 500);
+  expect(source.element!.scrollTop).toBe(250);
+  targetStarts = [0, 500, 900, 1300];
+  rerender({ revision: 1 });
+  scroll(target, 600);
+  expect(source.element!.scrollTop).toBe(250);
+  scroll(target, 700);
+  expect(source.element!.scrollTop).toBe(300);
+});
+
+it('align scrolls each target once so its paired paragraph sits at the anchor offset, clamped', () => {
+  const source = pane('source', [0, 200, 400, 600]), target = pane('target', [0, 400, 800, 1200]), comparison = pane('comparison', [0, 300, 600, 900], 700);
+  const panes = [source, target, comparison];
+  const targetWrites = trackWrites(target), comparisonWrites = trackWrites(comparison);
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: true }));
+  let outcome!: ReturnType<typeof result.current.align>;
+  act(() => { outcome = result.current.align({ anchor: { paneId: 'source', paragraph: 3 }, targets: ['target', 'comparison'], anchorOffset: 30, topInset: 12 }); });
+  expect(target.element!.scrollTop).toBe(1170);
+  expect(comparison.element!.scrollTop).toBe(600);
+  expect(targetWrites).toHaveBeenCalledTimes(1); expect(comparisonWrites).toHaveBeenCalledTimes(1);
+  expect(source.element!.scrollTop).toBe(0);
+  expect(outcome).toEqual({ pairs: [{ paneId: 'source', paragraph: 3 }, { paneId: 'target', paragraph: 3 }, { paneId: 'comparison', paragraph: 3 }], estimate: false });
+  expect(result.current.pairs).toEqual(outcome.pairs);
+});
+
+it('align uses topInset when the anchor paragraph starts above the visible area', () => {
+  const source = pane('source', [0, 200, 400, 600]), target = pane('target', [0, 400, 800, 1200]); const panes = [source, target];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: true }));
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 2 }, targets: ['target'], anchorOffset: -50, topInset: 12 }); });
+  expect(target.element!.scrollTop).toBe(788);
+});
+
+it('align marks the paired markers and reports estimate when counts differ', () => {
+  const source = pane('source', [0, 200, 400, 600]), target = pane('target', [0, 200, 400, 600, 800, 1000, 1200], 2200); const panes = [source, target];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: false }));
+  let outcome!: ReturnType<typeof result.current.align>;
+  act(() => { outcome = result.current.align({ anchor: { paneId: 'source', paragraph: 2 }, targets: ['target'], anchorOffset: 0, topInset: 12 }); });
+  expect(outcome).toEqual({ pairs: [{ paneId: 'source', paragraph: 2 }, { paneId: 'target', paragraph: 4 }], estimate: true });
+  expect(target.element!.querySelector('[data-coupled-active]')?.getAttribute('data-paragraph')).toBe('4');
+  expect(target.element!.querySelector('[data-coupled-active]')?.getAttribute('data-paragraph-number')).toBe('5');
+  expect(source.element!.querySelector('[data-coupled-active]')?.getAttribute('data-paragraph')).toBe('2');
+  act(() => { outcome = result.current.align({ anchor: { paneId: 'source', paragraph: 1 }, targets: ['target'], anchorOffset: 0, topInset: 12 }); });
+  expect(target.element!.querySelectorAll('[data-coupled-active]')).toHaveLength(1);
+  expect(target.element!.querySelector('[data-coupled-active]')?.getAttribute('data-paragraph')).toBe('2');
+  const equal = pane('equal', [0, 300, 600, 900]); const equalPanes = [source, equal];
+  const second = renderHook(() => useCoupledScroll(equalPanes, { enabled: false }));
+  act(() => { outcome = second.result.current.align({ anchor: { paneId: 'source', paragraph: 1 }, targets: ['equal'], anchorOffset: 0, topInset: 12 }); });
+  expect(outcome.estimate).toBe(false);
+});
+
+it('positions written by align never make the target leader and never feed back', () => {
+  const source = pane('source', [0, 200, 400, 600]), target = pane('target', [0, 400, 800, 1200]); const panes = [source, target];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: true }));
+  scroll(source, 50); expect(result.current.leaderId).toBe('source');
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 2 }, targets: ['target'], anchorOffset: 10, topInset: 12 }); });
+  expect(target.element!.scrollTop).toBe(790);
+  fireEvent.scroll(target.element!);
+  expect(source.element!.scrollTop).toBe(50); expect(result.current.leaderId).toBe('source');
+  scroll(source, 300); expect(target.element!.scrollTop).toBe(600);
+});
+
+it('align works while coupling is off', () => {
+  const source = pane('source', [0, 200, 400]), target = pane('target', [0, 400, 800]); const panes = [source, target];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: false }));
+  act(() => { result.current.align({ anchor: { paneId: 'target', paragraph: 1 }, targets: ['source'], anchorOffset: 20, topInset: 12 }); });
+  expect(source.element!.scrollTop).toBe(180);
+  expect(result.current.leaderId).toBeNull();
+  scroll(source, 300); expect(target.element!.scrollTop).toBe(0);
+});
+
+it('mapParagraph maps linearly and returns 0 for single-paragraph sides', () => {
+  expect(mapParagraph(2, 4, 7)).toBe(4);
+  expect(mapParagraph(3, 4, 4)).toBe(3);
+  expect(mapParagraph(5, 7, 4)).toBe(3);
+  expect(mapParagraph(0, 1, 5)).toBe(0);
+  expect(mapParagraph(3, 5, 1)).toBe(0);
+  expect(mapParagraph(0, 0, 0)).toBe(0);
+});
+
+it('ComparePane defaults are unchanged', () => {
+  width = 1099;
+  const a = pane('a', [0, 200, 400]), b = pane('b', [0, 400, 800]); const panes = [a, b];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: true }));
+  expect(result.current.available).toBe(false);
+  act(() => { width = 1100; changes.forEach(cb => cb()); });
+  expect(result.current.available).toBe(true);
+  scroll(a, 100); expect(b.element!.scrollTop).toBe(200); expect(result.current.leaderId).toBe('a');
+  fireEvent.wheel(b.element!); scroll(b, 400); expect(a.element!.scrollTop).toBe(200); expect(result.current.leaderId).toBe('b');
 });
