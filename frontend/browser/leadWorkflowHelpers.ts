@@ -7,7 +7,8 @@ export type LeadScenarioName =
   | "ANNOTATION_BATCH"
   | "FR_OFF"
   | "ACCEPTANCE"
-  | "ROWS";
+  | "ROWS"
+  | "REJECTED_TRANSLATION_FOR_LEAD";
 
 /** The people of every lead workflow scenario. */
 export type LeadPerson = "lead" | "ana" | "ben" | "annotator";
@@ -41,9 +42,13 @@ export interface LeadScenario {
   /** ACCEPTANCE: fr cases marked as reviewed in the package, and the others. */
   marked?: string[];
   not_marked?: string[];
-  /** ROWS: the case of each row action (de rows; "chip" and "acceptance" are fr rows). */
+  /**
+   * ROWS: the case of each row action (de rows; "chip" and "acceptance" are fr rows).
+   * REJECTED_TRANSLATION_FOR_LEAD: "rejected", "queried" and "to_assign" (de rows, Review and Annotate on).
+   */
   cases?: Record<
-    "chip" | "acceptance" | "rejected" | "report" | "choose_final" | "review_changes" | "not_in_plan",
+    | "chip" | "acceptance" | "rejected" | "report" | "choose_final" | "review_changes" | "not_in_plan"
+    | "queried" | "to_assign",
     string
   >;
   report_id?: string;

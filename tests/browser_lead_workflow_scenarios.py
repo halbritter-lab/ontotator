@@ -422,6 +422,36 @@ def build_rows(app: FastAPI) -> dict[str, Any]:
     )
 
 
+LEAD_CORRECTION_CASES = {
+    "rejected": "case-0101",
+    "queried": "case-0102",
+    "to_assign": "case-0103",
+}
+
+
+def rejected_translation_for_lead(app: FastAPI) -> dict[str, Any]:
+    """Rule on, 3 cases with de review + annotate (spec F1): Ana rejected the
+    de translation of case-0101 and queried case-0102 (both "your decision",
+    no open review), case-0103 waits for its review. The lead (en, de, fr, es)
+    has a qualification, so a lead correction starts without a prompt."""
+    scenario = lead_project(app, "REJECTED_TRANSLATION_FOR_LEAD")
+    scenario.app.state.accounts.update_profile(
+        Actor.cli(), scenario.users["lead"], qualification="Physician"
+    )
+    case_ids = cases(101, 3)
+    docs = import_units(scenario, case_units(case_ids, ("de",)))
+    plan(scenario, case_ids, {"de": REVIEW_AND_ANNOTATE})
+    for name, decision in (("rejected", "rejected"), ("queried", "query")):
+        case = LEAD_CORRECTION_CASES[name]
+        review_translation(scenario, docs[(case, "de")], "ana", decision)
+    return result(
+        scenario,
+        all_rows(case_ids, ("de",)),
+        case_ids={"de": list(case_ids)},
+        cases=dict(LEAD_CORRECTION_CASES),
+    )
+
+
 BUILDERS: dict[str, Builder] = {
     "D15": build_d15,
     "DEFAULT_IMPORT": build_default_import,
@@ -429,6 +459,7 @@ BUILDERS: dict[str, Builder] = {
     "FR_OFF": build_fr_off,
     "ACCEPTANCE": build_acceptance,
     "ROWS": build_rows,
+    "REJECTED_TRANSLATION_FOR_LEAD": rejected_translation_for_lead,
 }
 
 

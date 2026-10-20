@@ -7,6 +7,7 @@
  */
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { authenticatedRequest, TEST_PASSWORD } from "./helpers";
 import { leadScenario, pasteCaseIds, type LeadPerson, type LeadScenario } from "./leadWorkflowHelpers";
@@ -421,8 +422,10 @@ test("ROWS: row actions within three clicks", async ({ page }) => {
   // Resolve…: the three options exactly; discarding takes 3 (+ typing the reason).
   clicks = counter(page);
   await clicks.click(page.getByRole("button", { name: `Resolve…, ${cases.rejected} · de`, exact: true }));
+  // The options render in the expanded row's Translation review block, whose heading takes focus (F5).
   const resolve = page.getByRole("group", { name: `Resolve rejected translation, ${cases.rejected} · de`, exact: true });
-  await expect(resolve.getByRole("heading", { name: `Resolve rejected translation, ${cases.rejected} · de` })).toBeFocused();
+  await expect(page.getByRole("region", { name: `${cases.rejected} · de`, exact: true })
+    .getByRole("heading", { name: "Translation review", level: 3 })).toBeFocused();
   await expect(resolve.getByRole("button")).toHaveText(["Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel"]);
   await clicks.click(resolve.getByRole("button", { name: "Discard the de translation…", exact: true }));
   const discard = page.getByRole("group", { name: `Discard the de translation of ${cases.rejected}`, exact: true });
@@ -517,4 +520,109 @@ test("lead lands on Documents of the last project (D7)", async ({ page }) => {
   await page.goto("about:blank");
   await page.goto("/#/");
   await expect(page).toHaveURL(new RegExp(`#/projects/${esc(other)}/documents`));
+});
+
+async function axeViolations(page: Page, include: string): Promise<string[]> {
+  const results = await new AxeBuilder({ page }).include(include).analyze();
+  return results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}: ${n.failureSummary ?? ""}`));
+}
+
+test("lead corrects a rejected translation and annotation becomes assignable", async ({ page }) => {
+  const s = await leadScenario(page, "REJECTED_TRANSLATION_FOR_LEAD");
+  const caseId = s.cases!.rejected;
+  await loginLead(page, s);
+
+  // Resolve… expands the row and focuses its Translation review block, which holds the options (F5).
+  await page.getByRole("button", { name: `Resolve…, ${caseId} · de`, exact: true }).click();
+  const area = page.getByRole("region", { name: `${caseId} · de`, exact: true });
+  await expect(area.getByRole("heading", { name: "Translation review", level: 3 })).toBeFocused();
+  const resolve = area.getByRole("group", { name: `Resolve rejected translation, ${caseId} · de`, exact: true });
+  await expect(resolve.getByRole("button")).toHaveText(["Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel"]);
+
+  // Correct the translation…: the panel explains the outcome; its heading takes focus.
+  await resolve.getByRole("button", { name: "Correct the translation…", exact: true }).click();
+  const panel = area.getByRole("group", { name: `Correct the translation, ${caseId} · de`, exact: true });
+  await expect(panel.getByRole("heading", { name: `Correct the translation, ${caseId} · de` })).toBeFocused();
+  await expect(panel).toContainText("You review v1 yourself and submit it as Accepted with corrections. The corrected text becomes v2 and counts as accepted.");
+  // No language confirmation: the lead reads de and has a qualification.
+  await expect(panel.getByRole("checkbox")).toHaveCount(0);
+  expect(await axeViolations(page, ".documents-resolve"), "Correct the translation panel").toEqual([]);
+  await evidence(page, "lead-correction-panel", panel);
+
+  // Open translation review: the ordinary review screen of v1, in lead-correction mode.
+  await panel.getByRole("button", { name: "Open translation review", exact: true }).click();
+  await expect(page).toHaveURL(/#\/tasks\/\d+$/);
+  const text = page.getByRole("textbox", { name: "Translation (de)", exact: true });
+  await expect(text).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("You are correcting this translation as project lead.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("radio")).toHaveCount(1);
+  await expect(page.getByRole("radio", { name: "Accepted with corrections", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: /Report a problem/ })).toHaveCount(0);
+  const before = await text.inputValue();
+  const corrected = `${before} The second seizure episode is included.`;
+  await text.fill(corrected);
+  const review = page.getByRole("region", { name: "Translation review", exact: true });
+  await expect(review.locator(".translation-save-status")).toHaveText("Saved");
+
+  // Submit review…, confirm: the corrected text becomes v2 (accepted).
+  await page.getByRole("button", { name: "Submit review…", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Submit this review?", exact: true });
+  await confirm.getByRole("button", { name: "Submit review", exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(page.getByText("A corrected version v2 was created.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Next task|^Back to My tasks/ })).toHaveCount(0);
+  await evidence(page, "lead-correction-submitted");
+
+  // Back to Documents: the row's next step is Assign annotation (rule on, the translation is accepted).
+  await page.getByRole("link", { name: "Back to Documents", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Documents", level: 1 })).toBeVisible();
+  await expect(row(page, caseId, "de")).toContainText("Assign annotation");
+  await expect(page.getByRole("button", { name: `Resolve…, ${caseId} · de`, exact: true })).toHaveCount(0);
+});
+
+test("every Progress count opens Documents with the same number of rows", async ({ page }) => {
+  const s = await leadScenario(page, "ROWS");
+  await loginLead(page, s);
+  const progressUrl = `/#/projects/${encodeURIComponent(s.project)}/progress`;
+  await page.goto(progressUrl);
+  await expect(page.getByRole("heading", { name: "Progress", level: 1 })).toBeVisible();
+  const counts = page.locator(".progress-counts a");
+  await expect(counts.first()).toBeVisible();
+  const links = await counts.evaluateAll(anchors => anchors.map(anchor => ({
+    label: anchor.getAttribute("aria-label") ?? "",
+    href: anchor.getAttribute("href") ?? "",
+  })));
+  expect(links.length).toBeGreaterThanOrEqual(12);
+  const checked: string[] = [];
+  for (const [index, link] of links.entries()) {
+    const match = /^(.*): (\d+)$/.exec(link.label);
+    expect(match, link.label).not.toBeNull();
+    const [, label, count] = match!;
+    // Click the count on the Progress page (the same link, found again after each return).
+    await page.locator(".progress-counts a").nth(index).click();
+    await expect(page.getByRole("heading", { name: "Documents", level: 1 })).toBeVisible();
+    expect(page.url().endsWith(link.href), `${label}: ${page.url()}`).toBeTruthy();
+    await expect(page.locator("table.documents-skeleton")).toHaveCount(0, { timeout: 30_000 });
+    const shown = page.getByRole("button", { name: /^Show details, case-\d{4} · [a-z]{2}$/ });
+    if (Number(count) === 0) await expect(page.getByText("No documents", { exact: true }), label).toBeVisible();
+    await expect(shown, `${label} (${link.href})`).toHaveCount(Number(count));
+    checked.push(`${label}: ${count}`);
+    await page.goto(progressUrl);
+    await expect(page.locator(".progress-counts a").first()).toBeVisible();
+  }
+  // The fixture has work in every card, so most counts are non-zero.
+  expect(checked.filter(entry => !entry.endsWith(": 0")).length, checked.join("\n")).toBeGreaterThanOrEqual(6);
+});
+
+test("problem report shows Name (ann-…) to the lead", async ({ page }) => {
+  const s = await leadScenario(page, "ROWS");
+  await loginLead(page, s);
+  await page.getByRole("button", { name: `Decide on report…, ${s.cases!.report} · de`, exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
+  const reporter = person(s, "annotator");
+  await expect(page.getByRole("region", { name: "History", exact: true })).toContainText(`${reporter} reported the problem.`);
+  await page.getByRole("button", { name: "Close report (pauses stay)", exact: true }).click();
+  const close = page.getByRole("group", { name: "Close report", exact: true });
+  await expect(close.getByRole("textbox", { name: new RegExp(`^Outcome for ${esc(reporter)}`) })).toBeVisible();
+  await expect(close).toContainText(`${reporter} sees this in the report.`);
 });

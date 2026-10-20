@@ -113,7 +113,7 @@ def codes(row: dict[str, Any]) -> list[str]:
     return [step["code"] for step in row["steps"]]
 
 
-def test_registry_has_six_scenarios_and_unknown_is_404(client):
+def test_registry_has_seven_scenarios_and_unknown_is_404(client):
     assert set(BUILDERS) == {
         "D15",
         "DEFAULT_IMPORT",
@@ -121,6 +121,7 @@ def test_registry_has_six_scenarios_and_unknown_is_404(client):
         "FR_OFF",
         "ACCEPTANCE",
         "ROWS",
+        "REJECTED_TRANSLATION_FOR_LEAD",
     }
     response = client.post("/__test_lead_workflow__", params={"scenario": "S99"})
     assert response.status_code == 404
@@ -231,3 +232,37 @@ def test_rows_mixed_plans_report_rejected_and_row_actions(client):
     assert {(True, True), (True, False), (False, True), (False, False)} <= plans
     assert not rows[(cases["not_in_plan"], "en")]["in_plan"]
     assert bar["needs_decision"] >= 4 and bar["to_assign"] > 0
+
+
+def test_rejected_translation_for_lead_builds(client):
+    built = scenario(client, "REJECTED_TRANSLATION_FOR_LEAD")
+    cases = built["cases"]
+    assert set(cases) == {"rejected", "queried", "to_assign"}
+    assert built["case_ids"] == {"de": sorted(cases.values())}
+    bar, rows = lead_rows(client, built)
+    de = {case: row for (case, lang), row in rows.items() if lang == "de"}
+    assert len(de) == 3
+    assert all(flags(row) == (True, True) for row in de.values())
+    expected = {
+        "rejected": ("resolve_rejected", "rejected"),
+        "queried": ("resolve_queried", "query"),
+    }
+    for name, (code, decision) in expected.items():
+        row = de[cases[name]]
+        assert (row["next_step"]["code"], row["next_step"]["action"]) == (
+            code,
+            "resolve",
+        ), name
+        (version,) = row["versions"]
+        assert version["translation_status"] == "reviewed"
+        assert version["latest_review_decision"] == decision
+        # Nobody holds an open translation review: the lead may correct it.
+        assert not [w for w in row["work"] if w["status"] != "submitted"]
+    assert de[cases["to_assign"]]["next_step"]["code"] == "assign_translation_review"
+    assert bar["needs_decision"] == 2
+    # The lead reviews de (FD6: languages and a qualification at start).
+    app: Any = client.app
+    accounts = app.state.accounts
+    lead = accounts.get_by_username(built["users"]["lead"])
+    assert lead.qualification
+    assert "de" in accounts.languages_of([lead.id])[lead.id]

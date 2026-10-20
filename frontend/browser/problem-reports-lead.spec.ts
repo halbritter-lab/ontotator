@@ -23,6 +23,12 @@ const REPORT_TEXT = "The German text misses the sentence about the muscle tone."
 const OTHER_REPORT_TEXT = "The heading of the second paragraph is cut off.";
 
 const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/**
+ * A person as the lead reads it on the report page (follow-up spec F4, D1): "Name (ann-…)". The fixture's
+ * display names are the usernames; the lead's own record reads "Name (lead-…, you)".
+ */
+const asLeadSees = (s: ProblemReportScenario, role: "reporter") => `${s.users[role]} (${s.labels[role]})`;
+const leadSelf = (s: ProblemReportScenario) => `${s.users.lead} (${s.labels.lead}, you)`;
 const requestId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 /** Another user's API session (own cookie jar and CSRF token). */
@@ -153,13 +159,13 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await openLeadPage(page, s, report);
 
   // Close while the reporter's task is paused: the pause stays.
-  await expect(fact(page, "Paused tasks")).toContainText(`Task ${task} · ${s.labels.reporter}`);
+  await expect(fact(page, "Paused tasks")).toContainText(`Task ${task} · ${asLeadSees(s, "reporter")}`);
   const close = await openIntent(page, "Close report (pauses stay)", "Close report");
   await expect(close).toContainText(`Task ${task} stays paused. Release it separately with Release pause.`);
-  await close.getByRole("textbox", { name: new RegExp(`^Outcome for ${esc(s.labels.reporter)}`) }).fill("Source corrected; continue later.");
+  await close.getByRole("textbox", { name: new RegExp(`^Outcome for ${esc(asLeadSees(s, "reporter"))}`) }).fill("Source corrected; continue later.");
   await close.getByRole("button", { name: "Close report", exact: true }).click();
   await expect(outcome(page)).toContainText(`Report closed. Task ${task} is still paused by this report; release it when work can continue.`);
-  await expect(fact(page, "Report")).toContainText(`Closed by ${s.labels.lead}`);
+  await expect(fact(page, "Report")).toContainText(`Closed by ${leadSelf(s)}`);
   await expect(page.locator(".lead-summary")).toHaveText("1 task is paused by this report. The report is closed; release the pause when work can continue.");
 
   // Documents: the row needs a decision as "Problem report or paused task".
@@ -181,7 +187,7 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await expect(fact(page, "Paused tasks")).toContainText("Paused");
   await release.getByRole("textbox", { name: /^Reason/ }).fill("Source corrected; continue the annotation.");
   await release.getByRole("button", { name: "Release pause", exact: true }).click();
-  await expect(outcome(page)).toContainText(`Released the pause on Task ${task} (${s.labels.reporter}). The report is still closed.`);
+  await expect(outcome(page)).toContainText(`Released the pause on Task ${task} · ${asLeadSees(s, "reporter")}. The report is still closed.`);
   await expect(page.locator(".lead-summary")).toHaveText("Nothing left to decide.");
 
   // Back in Documents: the row is decided, has no problem issue, and the report is listed as Closed.
@@ -228,7 +234,7 @@ test("restart is refused while another report pauses the task, succeeds after th
   const finalStays = restart.getByRole("listitem").filter({ hasText: /^Final result stays: / });
   for (const part of final.label_parts) await expect(finalStays).toContainText(part);
   await expect(finalStays).not.toContainText("None");
-  await confirmRestart(restart, s.labels.reporter, "Agreed with the reporter: start over.");
+  await confirmRestart(restart, asLeadSees(s, "reporter"), "Agreed with the reporter: start over.");
   await expect(restart).toContainText(`Task ${task} is also paused by another report. Nothing changed. Release that pause first.`);
   await expect(outcome(page)).toHaveCount(0);
   await expect(fact(page, "Report")).toHaveText("Open");
@@ -245,7 +251,7 @@ test("restart is refused while another report pauses the task, succeeds after th
   await expect(release).toContainText("Also paused by another report: stays paused");
   await release.getByRole("textbox", { name: /^Reason/ }).fill("Second report can wait; the restart goes first.");
   await release.getByRole("button", { name: "Release pause", exact: true }).click();
-  await expect(outcome(page)).toContainText(`Released the pause on Task ${task} (${s.labels.reporter}). The report is still open. Task ${task} is still paused by another report.`);
+  await expect(outcome(page)).toContainText(`Released the pause on Task ${task} · ${asLeadSees(s, "reporter")}. The report is still open. Task ${task} is still paused by another report.`);
   expect(other.report_id).not.toBe(report.report_id);
 
   // Back on the first report: the restart now succeeds and the final result is unchanged.
@@ -253,10 +259,10 @@ test("restart is refused while another report pauses the task, succeeds after th
   await expect(fact(page, "Paused tasks")).not.toContainText("Also paused by another report");
   restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
   for (const part of final.label_parts) await expect(restart.getByRole("listitem").filter({ hasText: /^Final result stays: / })).toContainText(part);
-  await confirmRestart(restart, s.labels.reporter, "Agreed with the reporter: start over.");
+  await confirmRestart(restart, asLeadSees(s, "reporter"), "Agreed with the reporter: start over.");
   await expect(outcome(page)).toContainText(/^Task \d+ restarted with an empty Round \d+\. Round \d+ is kept in the history\. Report closed\. The final result did not change\./);
   await expect(outcome(page)).toContainText(`Task ${task} restarted`);
-  await expect(fact(page, "Report")).toContainText(`Closed by ${s.labels.lead}`);
+  await expect(fact(page, "Report")).toContainText(`Closed by ${leadSelf(s)}`);
   for (const part of final.label_parts) await expect(fact(page, "Final result")).toContainText(part);
   await expect(fact(page, "Final result")).not.toContainText("None");
   expect(await finalSubmissionOf(page, s)).toBe(final.submission_id);
@@ -275,7 +281,7 @@ test("restart, reopen, restart again: the second confirmation and the history na
   // First restart: the reported round is the current one.
   let restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
   await expect(restart).toContainText(`Round ${n} is abandoned and kept; Round ${n + 1} starts empty.`);
-  await confirmRestart(restart, s.labels.reporter, "First restart agreed.");
+  await confirmRestart(restart, asLeadSees(s, "reporter"), "First restart agreed.");
   await expect(outcome(page)).toContainText(`Task ${task} restarted with an empty Round ${n + 1}. Round ${n} is kept in the history. Report closed. The final result did not change.`);
 
   // Reopen: nothing is paused again.
@@ -291,7 +297,7 @@ test("restart, reopen, restart again: the second confirmation and the history na
   restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
   await expect(restart).toContainText(`Round ${n + 1} is abandoned and kept; Round ${n + 2} starts empty.`);
   await expect(restart).not.toContainText(`Round ${n} is abandoned`);
-  await confirmRestart(restart, s.labels.reporter, "Second restart agreed.");
+  await confirmRestart(restart, asLeadSees(s, "reporter"), "Second restart agreed.");
   await expect(outcome(page)).toContainText(`Task ${task} restarted with an empty Round ${n + 2}. Round ${n + 1} is kept in the history. Report closed. The final result did not change.`);
 
   // History: both restarts with their actual abandoned rounds, and the reopen in between.
@@ -317,7 +323,7 @@ test("restart of a translation review keeps the old draft in the history; the re
 
   const restart = await openIntent(page, "Agree empty restart…", restartTitle(task));
   await expect(restart).toContainText("The current translation draft is kept in the report history; the text and form start fresh.");
-  await confirmRestart(restart, s.labels.reporter, "Agreed: review the translation again from scratch.");
+  await confirmRestart(restart, asLeadSees(s, "reporter"), "Agreed: review the translation again from scratch.");
   await expect(outcome(page)).toContainText(`Task ${task} restarted with`);
   await expect(outcome(page)).toContainText("Report closed. The final result did not change.");
 
