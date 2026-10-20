@@ -15,8 +15,8 @@ import { notifyFinalSelectionChanged } from '../variants/finalSelectionState';
 import { ChecksSummary, ReviewSummary, SubmitSummary } from "./ReviewParts";
 import { ReviewForm } from "./ReviewForm";
 import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type DecisionState } from "./decisionOrigin";
-import { categoryLabels, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, nextTaskLabel, remainingTasksText } from "./labels";
-import { checkReview, type ClinicalCategory, type IssueCode, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
+import { categoryLabels, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, nextTaskLabel, remainingTasksText, reviewIssueMessage } from "./labels";
+import { checkReview, type ClinicalCategory, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
 
 export interface TranslationReviewScreenProps {
   assignmentId: number; username: string; onNavigate: (route: Route) => void;
@@ -53,6 +53,8 @@ const withClinicalDefault = (form: Record<string, unknown>): Record<string, unkn
 const lacksImpliedClinical = (form: Record<string, unknown>): boolean =>
   (form.decision === "query" || form.decision === "rejected") && form.clinical_change !== true;
 const decisionKeys: readonly ReviewDecisionCode[] = ["accepted_unchanged", "accepted_corrected", "query", "rejected"];
+/** A lead correction (spec F1, FD4) is submitted only as Accepted with corrections. */
+const leadDecisions: readonly ReviewDecisionCode[] = ["accepted_corrected"];
 const recordForm = (record: TranslationReviewRecord): Record<string, unknown> => ({ decision: record.decision, clinical_change: record.clinical_change, categories: record.categories, rationale: record.rationale });
 
 export function TranslationReviewScreen(props: TranslationReviewScreenProps): JSX.Element {
@@ -78,10 +80,17 @@ export function TranslationReviewScreen(props: TranslationReviewScreenProps): JS
 function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreenProps & { workspace: ReviewWorkspace; onReload: () => void }): JSX.Element {
   const immutableReadOnly = workspace.read_only && (!workspace.assignment.held || workspace.assignment.status === "submitted" || workspace.submitted_record !== null);
   const held = props.held ?? workspace.assignment.held;
+  const leadCorrection = workspace.lead_correction;
+  const editable = !immutableReadOnly && !held;
   // A stored Query/Rejected draft without the implied clinical change is normalised once on open (and saved).
-  const [normaliseOnOpen] = useState(() => !immutableReadOnly && !held && lacksImpliedClinical(workspace.draft.form));
+  // A lead correction preselects Accepted with corrections; a stored other decision is replaced and saved.
+  const [normaliseOnOpen] = useState(() => editable && (leadCorrection
+    ? decision(workspace.draft.form.decision) && workspace.draft.form.decision !== "accepted_corrected"
+    : lacksImpliedClinical(workspace.draft.form)));
   const [draft, setDraft] = useState<RawDraft>(() => {
     const form = structuredClone(workspace.draft.form);
+    if (editable && leadCorrection && form.decision !== "accepted_corrected")
+      return { text: workspace.draft.text, form: withClinicalDefault(chooseDecision(form, "accepted_corrected")) };
     return { text: workspace.draft.text, form: normaliseOnOpen && decision(form.decision) ? chooseDecision(form, form.decision) : form };
   });
   /** Client-side origin of the decision (spec A.4); a stored decision counts as the user's. */
@@ -214,14 +223,14 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   /** After a successful submit: a fresh My tasks list, so a task assigned meanwhile counts. */
   const projectKey = workspace.assignment.project_key;
   useEffect(() => {
-    if (!submitted) return;
+    if (!submitted || leadCorrection) return;
     let active = true;
     setNextTask({ kind: "loading" });
     api.listMyTasks().then(tasks => {
       if (active) setNextTask({ kind: "ready", ...nextOpenTask(tasks, props.assignmentId, projectKey) });
     }, failure => { if (active) setNextTask({ kind: "error", error: failure }); });
     return () => { active = false; };
-  }, [submitted, nextTaskLoad, props.assignmentId, projectKey]);
+  }, [submitted, nextTaskLoad, props.assignmentId, projectKey, leadCorrection]);
   const nextTaskId = nextTask?.kind === "ready" ? nextTask.next?.assignment_id : undefined;
   useEffect(() => { if (nextTaskId !== undefined) nextTaskButton.current?.focus({ preventScroll: true }); }, [nextTaskId]);
   const saveState = saver.current?.state ?? "saved";
@@ -274,7 +283,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     edit({ text: nextText, form: result.form === current.form ? result.form : withClinicalDefault(result.form) });
     decisionStateRef.current = result.state; setDecisionState(result.state);
   };
-  const keyOptions = { scope: "screen", group: "Translation review", enabled: !readOnly } as const;
+  const keyOptions = { scope: "screen", group: "Translation review", enabled: !readOnly && !leadCorrection } as const;
   useShortcut("1", () => chooseOption(decisionKeys[0]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[0]]}` });
   useShortcut("2", () => chooseOption(decisionKeys[1]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[1]]}` });
   useShortcut("3", () => chooseOption(decisionKeys[2]), { ...keyOptions, description: `Choose ${decisionLabels[decisionKeys[2]]}` });
@@ -393,7 +402,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
         </details>
       </div>
       <div className="translation-review-tools">
-        {props.reportActions}
+        {!leadCorrection && props.reportActions}
         <span role="status" className="translation-save-status"><StatusBadge tone={statusTone}>{status}</StatusBadge></span>
         <Button variant="quiet" size="sm" icon={<IconRetry />} onClick={() => { void reload(); }}
           title="Load the latest saved state of this review. Unsaved edits are saved first; if that fails, you choose whether to discard them.">Reload from server</Button>
@@ -447,7 +456,10 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           {submitted && <InlineMessage tone="success" title="Review submitted"><p>{decisionOutcomes[submitted.decision]}</p>
             {createdVersion !== null && <p>A corrected version v{createdVersion} was created.</p>}
             {submitted.created_variant_id && createdVersion === null && <Button size="sm" onClick={() => { void loadCreated(submitted); }}>Retry corrected version metadata</Button>}</InlineMessage>}
-          {submitted && nextTask && <div className="translation-next-task">
+          {submitted && leadCorrection && <div className="translation-next-task">
+            {navigateLink({ name: "projectDocuments", key: projectKey, case: workspace.variant.case_id, language: workspace.variant.language }, "Back to Documents")}
+          </div>}
+          {submitted && !leadCorrection && nextTask && <div className="translation-next-task">
             {nextTask.kind === "loading" && <Button variant="primary" loading>Next task</Button>}
             {nextTask.kind === "ready" && nextTask.next && <Button ref={nextTaskButton} variant="primary"
               onClick={() => props.onNavigate({ name: "task", assignmentId: nextTask.next!.assignment_id })}>{nextTaskLabel(nextTask.next)}</Button>}
@@ -461,15 +473,16 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
             : held ? <><InlineMessage tone="info">This task is paused. Your review choices are kept.</InlineMessage><ReviewForm value={visualForm(rawForm)} issues={[]} failedCheckCount={workspace.failed_checks.length} readOnly onChange={() => {}} /></>
             : readOnly ? <InlineMessage tone="info">This review can no longer be edited.</InlineMessage>
             : <>
+              {leadCorrection && <InlineMessage tone="info">{leadCorrectionNote}</InlineMessage>}
               {decision(rawForm.decision) && !form && <InlineMessage tone="error">The review form contains unsupported values. Update the affected fields before submitting.</InlineMessage>}
-              <ReviewForm value={visualForm(rawForm)} issues={!wide && !busy ? issues : []} readOnly={busy} failedCheckCount={workspace.failed_checks.length}
+              <ReviewForm value={visualForm(rawForm)} issues={!wide && !busy ? issues : []} readOnly={busy} decisions={leadCorrection ? leadDecisions : undefined} failedCheckCount={workspace.failed_checks.length}
                 autoNote={autoNoteText(decisionState.note)} onChooseDecision={chooseOption} onChange={next => {
                 const current = draftRef.current;
                 edit({ ...current, form: { ...(!has(current.form, "clinical_change") ? { clinical_change: false } : {}), ...current.form, ...next } });
               }} />
             </>}
           {(error ?? saver.current?.error) != null && <ErrorNotice error={error ?? saver.current?.error} />}
-          {serverIssues.length > 0 && <ol className="review-issues" aria-label="Server review issues">{serverIssues.map((code, index) => <li key={index}>{has(issueMessages, code) ? issueMessages[code as IssueCode] : `Review issue: ${code}`}</li>)}</ol>}
+          {serverIssues.length > 0 && <ol className="review-issues" aria-label="Server review issues">{serverIssues.map((code, index) => <li key={index}>{reviewIssueMessage(code)}</li>)}</ol>}
           {!readOnly && saveState === "error" && <Button onClick={() => { void retrySave(); }}>Retry save</Button>}
           {earlier.length > 0 && <section className="review-history" aria-labelledby="review-history-heading">
             <h2 id="review-history-heading" className="translation-section-title">Previous reviews</h2>
@@ -483,7 +496,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           {qualificationNote}
           {/* Why Submit is unavailable, right next to it; the review rules' issues are listed here too. */}
           {submitReasonElement}
-          <p className="translation-key-hint">{decisionKeyHint}</p>
+          <p className="translation-key-hint">{leadCorrection ? leadCorrectionKeyHint : decisionKeyHint}</p>
           {submitButton}
         </div>}
       </aside>

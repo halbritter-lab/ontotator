@@ -30,6 +30,22 @@ export const issueMessages: Readonly<Record<IssueCode, string>> = {
   CATEGORIES_WITHOUT_CHANGE: "Categories need a clinical change.",
 };
 
+/** Issue codes only the server reports (no client-side counterpart in checkReview). */
+const serverIssueMessages: Readonly<Record<string, string>> = {
+  LEAD_CORRECTION_DECISION: "A lead correction is submitted as Accepted with corrections.",
+};
+
+/** Message for an issue code from a REVIEW_INVALID refusal; unknown codes stay visible as codes. */
+export function reviewIssueMessage(code: string): string {
+  if (Object.prototype.hasOwnProperty.call(issueMessages, code)) return issueMessages[code as IssueCode];
+  if (Object.prototype.hasOwnProperty.call(serverIssueMessages, code)) return serverIssueMessages[code];
+  return `Review issue: ${code}`;
+}
+
+/** Lead-correction mode (spec F1): the lead submits only Accepted with corrections. */
+export const leadCorrectionNote = "You are correcting this translation as project lead.";
+export const leadCorrectionKeyHint = "Ctrl + Enter submits";
+
 /** Short hint shown under each decision option; the confirmation dialog keeps `decisionConsequences`. */
 export const decisionDescriptions: Readonly<Record<ReviewDecisionCode, string>> = {
   accepted_unchanged: "Correct as it stands. No edits.",

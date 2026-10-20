@@ -10,7 +10,7 @@ import { ShortcutHelpHost, openShortcutHelp } from "../src/ui/ShortcutHelp";
 import type { ReviewDecisionCode } from "../src/translation/reviewRules";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }) {
+function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }, reportActions?: JSX.Element) {
   vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
   const width = () => viewport?.width ?? 1440;
@@ -26,7 +26,7 @@ function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width
   const routeLeaveRef: { current: RouteLeaveGuard | null } = { current: null };
   const leaveGuardRef: { current: ((proceed: () => void) => void) | null } = { current: null };
   const navigate = vi.fn();
-  const element = <TranslationReviewScreen assignmentId={17} username="alice" onNavigate={navigate} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} />;
+  const element = <TranslationReviewScreen assignmentId={17} username="alice" onNavigate={navigate} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} reportActions={reportActions} />;
   const rendered = render(strict ? <StrictMode>{element}</StrictMode> : element);
   return { ...rendered, open, save, submit, routeLeaveRef, leaveGuardRef, navigate };
 }
@@ -725,4 +725,64 @@ it("shows loading and an error with Retry for the task list", async () => {
   expect(tasks).toHaveBeenCalledTimes(2);
   expect(screen.getByRole("button", { name: "Next task: case-2 (de)" })).toBeDefined();
   expect(screen.queryByText(/Network down/)).toBeNull();
+});
+const leadWorkspace = () => reviewWorkspace({ lead_correction: true, assignment: { ...reviewWorkspace().assignment, lead_correction: true } });
+it("lead correction shows only Accepted with corrections, preselected, with the lead note", async () => {
+  const { save } = setup(leadWorkspace());
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+  expect(radios).toHaveLength(1);
+  expect(radios[0].checked).toBe(true);
+  expect(screen.getByRole("radio", { name: "Accepted with corrections" })).toBe(radios[0]);
+  expect(screen.getByText("You are correcting this translation as project lead.")).toBeDefined();
+  expect(screen.getByText(issueMessages.TEXT_UNCHANGED, { selector: "#review-submit-reason *" })).toBeDefined();
+  expect(screen.queryByText(/1–4 choose a decision/)).toBeNull();
+  vi.useFakeTimers();
+  fireEvent.keyDown(document.body, { key: "3" });
+  expect((screen.getByRole("radio", { name: "Accepted with corrections" }) as HTMLInputElement).checked).toBe(true);
+  fireEvent.change(screen.getByRole("textbox", { name: "Translation (de)" }), { target: { value: "Lead fix" } });
+  await clock();
+  expect(save).toHaveBeenLastCalledWith(17, { expected_revision: 6, text: "Lead fix", form: { decision: "accepted_corrected", clinical_change: false } });
+  expect(submitButton().getAttribute("aria-disabled")).toBeNull();
+});
+it("lead correction turns a stored other decision into Accepted with corrections", async () => {
+  const workspace = leadWorkspace();
+  const { save } = setup({ ...workspace, draft: { ...workspace.draft, form: { decision: "query", clinical_change: true } } });
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect((screen.getByRole("radio", { name: "Accepted with corrections" }) as HTMLInputElement).checked).toBe(true);
+  await waitFor(() => expect(save).toHaveBeenCalledWith(17, expect.objectContaining({ form: expect.objectContaining({ decision: "accepted_corrected" }) })));
+});
+it("lead correction hides Report a problem and offers Back to Documents after submit", async () => {
+  const { submit, navigate } = setup(leadWorkspace(), false, undefined, <button type="button">Report a problem</button>);
+  const tasks = vi.mocked(api.listMyTasks);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(screen.queryByRole("button", { name: "Report a problem" })).toBeNull();
+  vi.useFakeTimers();
+  fireEvent.change(screen.getByRole("textbox", { name: "Translation (de)" }), { target: { value: "Lead fix" } });
+  await clock();
+  await confirmSubmit();
+  expect(submit).toHaveBeenCalledWith(17, 41);
+  expect(screen.getByText("Review submitted")).toBeDefined();
+  expect(tasks).not.toHaveBeenCalled();
+  expect(screen.queryByRole("button", { name: /^Next task/ })).toBeNull();
+  expect(screen.queryByText("Back to my tasks")).toBeNull();
+  const back = screen.getByRole("link", { name: "Back to Documents" });
+  expect(back.getAttribute("href")).toContain("documents");
+  fireEvent.click(back);
+  expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "proj", case: "case", language: "de" });
+});
+it("a normal review keeps Report a problem", async () => {
+  setup(undefined, false, undefined, <button type="button">Report a problem</button>);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(screen.getByRole("button", { name: "Report a problem" })).toBeDefined();
+});
+it("shows the lead correction refusal from the server", async () => {
+  const { submit } = setup(leadWorkspace());
+  submit.mockRejectedValue(new ApiError(422, "Invalid review", "REVIEW_INVALID", { issues: ["LEAD_CORRECTION_DECISION"] }));
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  vi.useFakeTimers();
+  fireEvent.change(screen.getByRole("textbox", { name: "Translation (de)" }), { target: { value: "Lead fix" } });
+  await clock();
+  await confirmSubmit();
+  expect(within(screen.getByRole("list", { name: "Server review issues" })).getByText("A lead correction is submitted as Accepted with corrections.")).toBeDefined();
 });

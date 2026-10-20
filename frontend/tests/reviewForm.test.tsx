@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReviewForm } from "../src/translation/ReviewForm";
 import type { ReviewForm as ReviewFormValue } from "../src/translation/reviewRules";
-import { clinicalChangeFacts, clinicalChangeHints, decisionDescriptions, issueMessages } from "../src/translation/labels";
+import { clinicalChangeFacts, clinicalChangeHints, decisionDescriptions, issueMessages, reviewIssueMessage } from "../src/translation/labels";
 
 afterEach(cleanup);
 
@@ -205,5 +205,18 @@ describe("ReviewForm", () => {
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(list.getAttribute("aria-live")).toBeNull();
     expect(list.closest("[aria-live]")).toBeNull();
+  });
+  it("maps LEAD_CORRECTION_DECISION to its message", () => {
+    expect(reviewIssueMessage("LEAD_CORRECTION_DECISION")).toBe("A lead correction is submitted as Accepted with corrections.");
+    expect(reviewIssueMessage("TEXT_UNCHANGED")).toBe(issueMessages.TEXT_UNCHANGED);
+    expect(reviewIssueMessage("SOMETHING_NEW")).toBe("Review issue: SOMETHING_NEW");
+  });
+
+  it("offers only the given decisions without number keys", () => {
+    render(<ReviewForm value={{ decision: "accepted_corrected", clinical_change: false }} decisions={["accepted_corrected"]} issues={[]} onChange={vi.fn()} />);
+    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+    expect(radios).toHaveLength(1);
+    expect(radios[0].checked).toBe(true);
+    expect(document.querySelector("kbd")).toBeNull();
   });
 });

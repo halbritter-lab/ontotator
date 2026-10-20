@@ -20,9 +20,11 @@ export interface ReviewFormProps {
   /** Text of the auto-selection note (autoNoteText), rendered as role="status" under "Accepted with corrections". */
   autoNote?: string | null;
   readOnly?: boolean;
+  /** Offered decisions; default all four with their number keys. A restricted set shows no number keys. */
+  decisions?: readonly ReviewDecisionCode[];
 }
 
-const decisions = Object.keys(decisionLabels) as ReviewDecisionCode[];
+const allDecisions = Object.keys(decisionLabels) as ReviewDecisionCode[];
 const categories = Object.keys(categoryLabels) as ClinicalCategory[];
 
 /**
@@ -39,7 +41,8 @@ const categories = Object.keys(categoryLabels) as ClinicalCategory[];
  * (**) The hint asks for a note when automatic checks failed.
  * The rationale also stays visible whenever it holds text.
  */
-export function ReviewForm({ value, issues, onChange, onChooseDecision, failedCheckCount = 0, autoNote = null, readOnly = false }: ReviewFormProps) {
+export function ReviewForm({ value, issues, onChange, onChooseDecision, failedCheckCount = 0, autoNote = null, readOnly = false, decisions = allDecisions }: ReviewFormProps) {
+  const numberKeys = decisions === allDecisions;
   const id = useId();
   const decision = value.decision;
   const implied = decision === "query" || decision === "rejected";
@@ -75,7 +78,7 @@ export function ReviewForm({ value, issues, onChange, onChooseDecision, failedCh
               <span className="review-decision-label" id={`${id}-${option}-label`}>{decisionLabels[option]}</span>
               <span className="review-decision-hint" id={`${id}-${option}-hint`}>{decisionDescriptions[option]}</span>
             </span>
-            <Kbd>{index + 1}</Kbd>
+            {numberKeys && <Kbd>{index + 1}</Kbd>}
           </label>,
           option === "accepted_corrected" && <p key="auto-note" role="status" className="review-auto-note">{autoNote ?? ""}</p>,
         ])}
