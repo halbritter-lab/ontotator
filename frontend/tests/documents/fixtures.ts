@@ -67,6 +67,7 @@ export function work(overrides: Partial<WorkItemView> & Pick<WorkItemView, "assi
     held: false,
     round_ordinal: null,
     round_state: null,
+    lead_correction: false,
     ...overrides,
   };
 }
@@ -554,7 +555,7 @@ export function rejectedRow(caseId: string, language: string, options: { decisio
     : stepOf(decision === "rejected" ? "resolve_rejected" : "resolve_queried", { document_id: documentId });
   return planRow(caseId, language, next, {
     versions: [version({ document_id: documentId, version: versionNumber, chain_name: "DeepL", origin: "machine_translation", translation_status: "reviewed", latest_review_decision: decision })],
-    work: correcting ? [work({ assignment_id: 41, document_id: documentId, version: versionNumber, task: "translation_review", status: "in_progress", is_me: true, author_label: "lead-0002" })] : [],
+    work: correcting ? [work({ assignment_id: 41, document_id: documentId, version: versionNumber, task: "translation_review", status: "in_progress", is_me: true, author_label: "lead-0002", lead_correction: true })] : [],
     own_open_assignment_id: correcting ? 41 : null,
   });
 }

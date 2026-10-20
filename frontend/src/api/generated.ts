@@ -6322,6 +6322,11 @@ export interface components {
             /** Round State */
             round_state: string | null;
             person?: components["schemas"]["PersonRefView"] | null;
+            /**
+             * Lead Correction
+             * @default false
+             */
+            lead_correction: boolean;
         };
         /** WorkRoundView */
         WorkRoundView: {

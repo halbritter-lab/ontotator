@@ -348,6 +348,7 @@ WORK_KEYS = {
     "held",
     "round_ordinal",
     "round_state",
+    "lead_correction",
 }
 FINAL_KEYS = {
     "author",

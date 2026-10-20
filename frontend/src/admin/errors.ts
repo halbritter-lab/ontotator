@@ -69,7 +69,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   AMBIGUOUS_SUBMISSION_ORIGIN: "Work from multiple origins cannot be restored into one draft.",
   ASSIGNEE_INACTIVE: "This user is inactive. Choose an active assignee.",
   ASSIGNEE_ROLE_MISSING: "This user needs the matching project role before assignment.",
-  ASSIGNMENT_EXISTS: "This person already has this task for the document.",
+  ASSIGNMENT_EXISTS: "This task already exists for the document: this person has it, or a lead is correcting the translation.",
   ASSIGNMENT_NOT_SUBMITTED: "Only submitted work can be reopened.",
   ASSIGNMENT_REVOKED: "This assignment has been revoked.",
   ASSIGNMENT_SUBMITTED: "This assignment is submitted. A lead must reopen it before further changes.",

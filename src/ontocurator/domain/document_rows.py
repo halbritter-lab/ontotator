@@ -129,6 +129,8 @@ class AssignmentFact:
     pseudonym: str
     user_id: int
     active_round_id: str | None
+    # F1 (FD1): the lead's own correction of a rejected or queried version.
+    lead_correction: bool = False
 
 
 def base_chain_name(root: Version) -> str:

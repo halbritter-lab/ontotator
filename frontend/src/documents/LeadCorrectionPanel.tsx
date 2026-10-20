@@ -5,7 +5,7 @@
  * ("Correct the translation…") and from the Translation review block ("Correct the translation yourself…").
  */
 import { createContext, useEffect, useId, useRef, useState } from "react";
-import { api, ApiError, type DocumentRowView, type DocumentVersionView } from "../api/client";
+import { api, ApiError, type DocumentRowView } from "../api/client";
 import { textLabel } from "../app/identity";
 import type { Route } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
@@ -28,16 +28,9 @@ export function correctionDocumentId(row: DocumentRowView): string {
   return row.next_step?.document_id ?? row.versions.find(entry => entry.is_newest_in_chain)?.document_id ?? row.open.document_id;
 }
 
-const isRejectedOrQueried = (version: DocumentVersionView | undefined): boolean =>
-  version?.translation_status === "reviewed" && (version.latest_review_decision === "rejected" || version.latest_review_decision === "query");
-
-/**
- * The lead's own open translation review of a rejected or queried version of the row (an open lead
- * correction; the row view carries no flag, so a lead who also reviews as annotator matches as well).
- */
+/** The lead's own open lead correction of the row (`lead_correction` on the work item, FD1). */
 export function openLeadCorrection(row: DocumentRowView): DocumentRowView["work"][number] | null {
-  return row.work.find(item => item.task === "translation_review" && item.is_me && item.status !== "submitted"
-    && isRejectedOrQueried(row.versions.find(version => version.document_id === item.document_id))) ?? null;
+  return row.work.find(item => item.lead_correction && item.is_me && item.status !== "submitted") ?? null;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -47,6 +40,13 @@ const NOT_AVAILABLE: Readonly<Record<string, string>> = {
   not_newest: "A newer version of this translation exists. Reload the row to see it.",
   not_rejected_or_queried: "This version is no longer rejected or queried. Reload the row to see its current state.",
   review_open: "A translation review of this version is open. Withdraw it under Assignment actions before you correct the translation yourself.",
+};
+
+/** Refusals whose generic admin message does not fit starting a correction. */
+const START_REFUSED: Readonly<Record<string, string>> = {
+  TASK_HELD: "Your earlier review of this version is paused. Resume it under Assignment actions before you correct the translation yourself.",
+  NOT_IN_WORK_PLAN: "This translation was discarded. Reload the row to see its current state.",
+  VARIANT_REVIEW_STALE: "The text of this version changed. Reload the row to see the current text.",
 };
 
 type Failure =
@@ -69,6 +69,7 @@ function failureOf(error: unknown): Failure {
     const reason = isRecord(error.details) && typeof error.details.reason === "string" ? error.details.reason : "";
     if (Object.hasOwn(NOT_AVAILABLE, reason)) return { kind: "not_available", text: NOT_AVAILABLE[reason] };
   }
+  if (error instanceof ApiError && error.code && Object.hasOwn(START_REFUSED, error.code)) return { kind: "not_available", text: START_REFUSED[error.code] };
   return { kind: "error", error };
 }
 

@@ -224,15 +224,15 @@ class TranslationWorkflowService:
             existing = assignments.active_for(
                 conn, pid, document_id, lead, "translation_review"
             )
-            if existing is not None and existing.lead_correction:
+            if (
+                existing is not None
+                and existing.lead_correction
+                and existing.status != "submitted"
+            ):
+                # Idempotent (FD3), a paused correction included: nothing is
+                # written, so its hold does not apply.
                 assignments._locked(conn, existing.id)
-                from ontocurator.application.workflow_guards import (
-                    require_task_writable,
-                )
-
-                require_task_writable(conn, existing.id)
-                if existing.status != "submitted":
-                    return existing
+                return existing
             self._require_lead_correction_available(conn, pid, variant, variants, lead)
             if existing is not None and existing.status != "submitted":
                 # The lead's own ordinary review (as annotator) is still open.

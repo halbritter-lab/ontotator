@@ -455,6 +455,28 @@ class AssignmentService:
                 allow_accepted_translation_review=allow,
             )
 
+    @staticmethod
+    def _require_no_open_lead_correction(
+        conn: Connection, project_id: int, document_id: str
+    ) -> None:
+        """An open lead correction is the version's one review (FD3)."""
+        if (
+            conn.execute(
+                select(AssignmentRow.id)
+                .where(
+                    AssignmentRow.project_id == project_id,
+                    AssignmentRow.document_id == document_id,
+                    AssignmentRow.task == "translation_review",
+                    AssignmentRow.lead_correction.is_(True),
+                    AssignmentRow.status != "submitted",
+                    AssignmentRow.revoked_at.is_(None),
+                )
+                .limit(1)
+            ).first()
+            is not None
+        ):
+            raise DomainError("ASSIGNMENT_EXISTS", {"reason": "lead_correction_open"})
+
     def _assign_locked(
         self,
         conn: Connection,
@@ -485,6 +507,8 @@ class AssignmentService:
         if existing is not None:
             self._require_target(conn, project, target, task)
             return existing
+        if task == "translation_review":
+            self._require_no_open_lead_correction(conn, project["id"], document_id)
         eligibility = self.check_assignable(
             conn,
             project,
@@ -589,6 +613,10 @@ class AssignmentService:
                     "LEAD_CORRECTION_NOT_AVAILABLE", {"reason": "not_newest"}
                 )
             self._require_target(conn, project, target, cast(Task, old["task"]))
+            if old["task"] == "translation_review":
+                self._require_no_open_lead_correction(
+                    conn, project["id"], old["document_id"]
+                )
             now = self._now()
             conn.execute(
                 update(AssignmentRow)

@@ -470,7 +470,9 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
             {nextTask.kind === "error" && <><ErrorNotice error={nextTask.error} /><Button onClick={() => setNextTaskLoad(n => n + 1)}>Retry</Button></>}
           </div>}
           {record ? <ReviewSummary record={record} heading="Submitted review" />
-            : held ? <><InlineMessage tone="info">This task is paused. Your review choices are kept.</InlineMessage><ReviewForm value={visualForm(rawForm)} issues={[]} failedCheckCount={workspace.failed_checks.length} readOnly onChange={() => {}} /></>
+            : held ? <><InlineMessage tone="info">This task is paused. Your review choices are kept.</InlineMessage>
+              {leadCorrection && <InlineMessage tone="info">{leadCorrectionNote}</InlineMessage>}
+              <ReviewForm value={visualForm(rawForm)} issues={[]} failedCheckCount={workspace.failed_checks.length} readOnly decisions={leadCorrection ? leadDecisions : undefined} onChange={() => {}} /></>
             : readOnly ? <InlineMessage tone="info">This review can no longer be edited.</InlineMessage>
             : <>
               {leadCorrection && <InlineMessage tone="info">{leadCorrectionNote}</InlineMessage>}

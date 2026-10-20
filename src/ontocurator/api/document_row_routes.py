@@ -96,6 +96,8 @@ class WorkItemView(_View):
     round_state: str | None
     # Lead workflow (D1): the assignee as a person reference.
     person: PersonRefView | None = None
+    # F1 (FD1): the lead's own correction of a rejected or queried version.
+    lead_correction: bool = False
 
 
 class ReportIssueView(_View):

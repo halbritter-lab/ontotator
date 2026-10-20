@@ -18541,6 +18541,11 @@
                 "type": "null"
               }
             ]
+          },
+          "lead_correction": {
+            "type": "boolean",
+            "title": "Lead Correction",
+            "default": false
           }
         },
         "additionalProperties": false,

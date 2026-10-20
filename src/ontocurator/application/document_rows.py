@@ -354,6 +354,7 @@ def _assignments(conn: Connection, pid: int) -> list[rules.AssignmentFact]:
             pseudonym=row.pseudonym,
             user_id=row.user_id,
             active_round_id=row.active_round_id,
+            lead_correction=row.lead_correction,
         )
         for row in conn.execute(
             select(
@@ -365,6 +366,7 @@ def _assignments(conn: Connection, pid: int) -> list[rules.AssignmentFact]:
                 AssignmentRow.revoked_at,
                 AssignmentRow.user_id,
                 AssignmentRow.active_round_id,
+                AssignmentRow.lead_correction,
                 UserRow.pseudonym,
             )
             .join(UserRow, UserRow.id == AssignmentRow.user_id)

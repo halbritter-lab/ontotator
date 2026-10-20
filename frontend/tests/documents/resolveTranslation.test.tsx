@@ -76,6 +76,15 @@ it("reads Continue your correction while the lead holds one", () => {
   expect(api.startLeadCorrection).not.toHaveBeenCalled();
 });
 
+it("an ordinary open review of the lead (also an annotator) is not their correction", () => {
+  const held = rejectedRow("case-0101", "de", { correcting: true });
+  const row = { ...held, next_step: stepOf("resolve_rejected", { document_id: "case-0101-de" }), work: held.work.map(item => ({ ...item, lead_correction: false })) };
+  renderResolve({ row });
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  expect(within(box).queryByRole("button", { name: "Continue your correction" })).toBeNull();
+  expect(within(box).getByRole("button", { name: "Correct the translation…" })).toBeTruthy();
+});
+
 it("discards with a required reason and shows consequences", async () => {
   const consequences = {
     withdrawn: [{ assignment_id: 9, case_id: "case-0101", language: "de", task: "annotate", person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } }],

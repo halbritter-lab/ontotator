@@ -75,3 +75,19 @@ it("shows LEAD_CORRECTION_NOT_AVAILABLE reasons in words", async () => {
     cleanup();
   }
 });
+
+it("explains TASK_HELD, NOT_IN_WORK_PLAN and VARIANT_REVIEW_STALE for the correction", async () => {
+  const cases: Array<[string, string]> = [
+    ["TASK_HELD", "Your earlier review of this version is paused. Resume it under Assignment actions before you correct the translation yourself."],
+    ["NOT_IN_WORK_PLAN", "This translation was discarded. Reload the row to see its current state."],
+    ["VARIANT_REVIEW_STALE", "The text of this version changed. Reload the row to see the current text."],
+  ];
+  for (const [code, text] of cases) {
+    vi.mocked(api.startLeadCorrection).mockRejectedValueOnce(new ApiError(409, "nope", code, {}));
+    const props = renderPanel();
+    fireEvent.click(open());
+    expect(await within(panel()).findByText(text)).toBeTruthy();
+    expect(props.onNavigate).not.toHaveBeenCalled();
+    cleanup();
+  }
+});

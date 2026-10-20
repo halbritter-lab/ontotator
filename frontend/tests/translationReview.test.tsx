@@ -786,3 +786,13 @@ it("shows the lead correction refusal from the server", async () => {
   await confirmSubmit();
   expect(within(screen.getByRole("list", { name: "Server review issues" })).getByText("A lead correction is submitted as Accepted with corrections.")).toBeDefined();
 });
+it("a paused lead correction shows only Accepted with corrections and the lead note", async () => {
+  const workspace = leadWorkspace();
+  setup({ ...workspace, read_only: true, assignment: { ...workspace.assignment, held: true } });
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(screen.getByText("This task is paused. Your review choices are kept.")).toBeDefined();
+  const radios = screen.getAllByRole("radio");
+  expect(radios).toHaveLength(1);
+  expect(screen.getByRole("radio", { name: "Accepted with corrections" })).toBe(radios[0]);
+  expect(screen.getByText("You are correcting this translation as project lead.")).toBeDefined();
+});

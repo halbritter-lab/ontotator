@@ -590,3 +590,127 @@ def test_problem_report_is_refused_on_a_correction(rejected, annotator):
     )
     assert response.status_code == 403, response.text
     assert response.json()["code"] == "NOT_ALLOWED"
+
+
+def test_ordinary_review_is_refused_while_a_correction_is_open(rejected):
+    env = rejected
+    start(env)
+    with pytest.raises(DomainError) as caught:
+        AssignmentService(env.db).assign(
+            HARNESS,
+            "proj",
+            "target",
+            "bob",
+            "translation_review",
+            confirm_language=True,
+        )
+    assert caught.value.code == "ASSIGNMENT_EXISTS"
+    assert caught.value.details == {"reason": "lead_correction_open"}
+
+
+def test_submitted_correction_no_longer_blocks_ordinary_reviews(rejected):
+    env = rejected
+    correction = start(env)
+    submit_as_lead(env, correction.id, "accepted_corrected", "Korrigiert")
+    created = AssignmentService(env.db).assign(
+        HARNESS,
+        "proj",
+        "target",
+        "bob",
+        "translation_review",
+        confirm_language=True,
+    )
+    assert created.lead_correction is False
+
+
+def test_idempotent_start_returns_a_paused_correction(rejected):
+    env = rejected
+    first = start(env)
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == first.id)
+            .values(held=True, hold_reason="Wait")
+        )
+    again = start(env)
+    assert again.id == first.id
+    assert len(audits(env, "translation.lead_correction_started")) == 1
+
+
+def test_lead_starts_correction_of_queried_version(review_env):
+    env = review_env
+    AssignmentService(env.db).revoke(HARNESS, env.ids["bob"])
+    decide(env, "query")
+    client = logged_in(env.app, "leader")
+    response = client.get(f"{BASE}/document-rows", params={"case": "case"})
+    (row,) = [
+        row
+        for group in response.json()["groups"]
+        for row in group["rows"]
+        if row["language"] == "de"
+    ]
+    assert row["next_step"]["code"] == "resolve_queried"
+    assignment = start(env)
+    assert assignment.lead_correction is True
+    record = submit_as_lead(env, assignment.id, "accepted_corrected", "Korrigiert")
+    assert record.decision == "accepted_corrected"
+
+
+def test_reassigned_correction_becomes_an_ordinary_review(rejected):
+    env = rejected
+    correction = start(env)
+    moved = AssignmentService(env.db).reassign(
+        HARNESS, correction.id, "bob", confirm_language=True
+    )
+    assert moved.user_id == env.accesses["bob"].user_id
+    assert moved.task == "translation_review"
+    assert moved.lead_correction is False
+    with env.db.transaction() as conn:
+        revoked = conn.execute(
+            select(AssignmentRow.revoked_at).where(AssignmentRow.id == correction.id)
+        ).scalar_one()
+    assert revoked is not None
+
+
+def test_withdrawn_correction_can_be_started_again(rejected):
+    env = rejected
+    correction = start(env)
+    AssignmentService(env.db).revoke(HARNESS, correction.id)
+    assert AssignmentService(env.db).my_tasks(env.accesses["leader"].user_id) == []
+    again = start(env)
+    assert again.id != correction.id and again.lead_correction
+
+
+def test_row_work_item_flags_the_lead_correction(rejected):
+    env = rejected
+    _make_annotator(env)
+    plain = AssignmentService(env.db).assign(
+        HARNESS,
+        "proj",
+        "comparison",
+        "leader",
+        "translation_review",
+        confirm_language=True,
+    )
+    correction = start(env)
+    response = logged_in(env.app, "leader").get(
+        f"{BASE}/document-rows", params={"case": "case"}
+    )
+    assert response.status_code == 200, response.text
+    flags = {
+        item["assignment_id"]: item["lead_correction"]
+        for group in response.json()["groups"]
+        for row in group["rows"]
+        for item in row["work"]
+    }
+    assert flags[correction.id] is True
+    assert flags[plain.id] is False
+
+
+def test_ordinary_review_is_not_reopened_while_a_correction_is_open(rejected):
+    env = rejected
+    start(env)
+    with pytest.raises(DomainError) as caught:
+        AssignmentService(env.db).reopen(HARNESS, env.ids["alice"])
+    assert caught.value.code == "ASSIGNMENT_EXISTS"
+    assert caught.value.details == {"reason": "lead_correction_open"}

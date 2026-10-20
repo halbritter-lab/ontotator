@@ -428,6 +428,7 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
                 "task": item.task,
                 "status": item.status,
                 "held": item.held,
+                "lead_correction": item.lead_correction,
                 "round_ordinal": (
                     ctx.ordinals.get(item.active_round_id)
                     if item.active_round_id is not None
