@@ -164,11 +164,11 @@ describe("ReviewForm", () => {
     expect(onChange).toHaveBeenCalledWith({ ...value, rationale: "  exact rationale\n" });
   });
 
-  it("announces supplied issues in their supplied order without inferring new issues", () => {
+  it("lists supplied issues in their supplied order without inferring new issues", () => {
     const issues = Object.freeze(["RATIONALE_REQUIRED", "TEXT_EMPTY"] as const);
     render(<ReviewForm value={{}} issues={issues} onChange={vi.fn()} />);
     const list = screen.getByRole("list", { name: "Review issues" });
-    expect(list.getAttribute("aria-live")).toBe("polite");
+    expect(list.getAttribute("aria-live")).toBeNull();
     expect(within(list).getAllByRole("listitem").map((item) => item.textContent)).toEqual([issueMessages.RATIONALE_REQUIRED, issueMessages.TEXT_EMPTY]);
     expect(issues).toEqual(["RATIONALE_REQUIRED", "TEXT_EMPTY"]);
   });
@@ -198,5 +198,12 @@ describe("ReviewForm", () => {
     radios[0].focus();
     await userEvent.setup().keyboard(" ");
     expect(first).toHaveBeenCalledWith({ decision: "query", clinical_change: true });
+  });
+  it("issue list is not a live region", () => {
+    render(<ReviewForm value={{ decision: "query", clinical_change: true }} issues={["CATEGORY_REQUIRED", "RATIONALE_REQUIRED"]} onChange={vi.fn()} />);
+    const list = screen.getByRole("list", { name: "Review issues" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    expect(list.getAttribute("aria-live")).toBeNull();
+    expect(list.closest("[aria-live]")).toBeNull();
   });
 });

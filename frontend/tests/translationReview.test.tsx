@@ -615,6 +615,25 @@ it("shows one reason line in the pinned bar and the full issue list in the decis
   expect(lists[0].closest(".translation-decision")).not.toBeNull();
   expect(within(lists[0]).getAllByRole("listitem")).toHaveLength(2);
 });
+const liveRegionsWith = (text: string) => [...document.querySelectorAll("[aria-live]")].filter(node => node.textContent?.includes(text));
+it("below 1100 px exactly one live region carries the submit reason", async () => {
+  setup(undefined, false, viewportOf(800).viewport);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(screen.getByRole("radio", { name: "Query" }));
+  expect(screen.getAllByRole("list", { name: "Review issues" })).toHaveLength(1);
+  const regions = liveRegionsWith(issueMessages.CATEGORY_REQUIRED);
+  expect(regions).toHaveLength(1);
+  expect(regions[0].id).toBe("review-submit-reason");
+});
+it("at 1100 px and wider the reason is announced once in the rail", async () => {
+  setup(undefined, false, viewportOf(1100).viewport);
+  await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(screen.getByRole("radio", { name: "Query" }));
+  const regions = liveRegionsWith(issueMessages.CATEGORY_REQUIRED);
+  expect(regions).toHaveLength(1);
+  expect(regions[0].id).toBe("review-submit-reason");
+  expect(regions[0].closest(".translation-pinned-bar")).toBeNull();
+});
 it("keeps an unavailable Submit focusable and only points at the reason when activated", async () => {
   const { submit } = setup();
   await screen.findByRole("textbox", { name: "Translation (de)" });

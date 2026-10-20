@@ -130,7 +130,7 @@ export function ReviewForm({ value, issues, onChange, onChooseDecision, failedCh
         />
       )}
       {issues.length > 0 && (
-        <ol className="review-issues" aria-label="Review issues" aria-live="polite">
+        <ol className="review-issues" aria-label="Review issues">
           {issues.map((issue, index) => <li key={`${issue}-${index}`}>{issueMessages[issue]}</li>)}
         </ol>
       )}
