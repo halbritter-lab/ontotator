@@ -137,6 +137,8 @@ export function rowsOf(group: ConsolidationGroupView, people: readonly Consolida
     const note = noteOf(first);
     return { key: note ?? "", label: `${note ? quoted(note) : "No note"} · ${namesOf(holding)}`, inputId: first.input_id, value: note, people: holding };
   });
+  // "No note" is always a choice (a person's note or none; "both" needs backend support).
+  if (notes.length && !notes.some(option => option.key === "")) notes.push({ key: "", label: "No note", inputId: members[0].input_id, value: null, people: [] });
   if (notes.length) rows.push({ id: "note", kind: "note", label: "Note", options: notes });
   return rows;
 }
@@ -174,7 +176,7 @@ export function choiceSummary(rows: readonly ChoiceRow[], choices: Choices, term
     const option = row.options.find(value => value.key === choices[row.id]);
     if (!option) continue;
     const what = row.kind === "axis" ? valueWords(option.value) : row.kind === "span" ? option.label.split(" · ")[0] : option.value ? "their note" : "no note";
-    parts.push(`${what} (${namesOf(option.people)})`);
+    parts.push(option.people.length ? `${what} (${namesOf(option.people)})` : what);
   }
   return parts.join(", ");
 }

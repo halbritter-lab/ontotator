@@ -104,6 +104,22 @@ describe("GroupCard", () => {
     expect(props.onResolve).toHaveBeenCalledWith(expect.objectContaining({ note: "Shorter span is enough.", guidelines_unclear: true, action: "choose" }), "“development” (Tom Reis)");
   });
 
+  it("places note and flag of an open group above its choices, so they are set before the last chip", () => {
+    renderCard(byId("g-dd"));
+    const note = screen.getByRole("button", { name: "+ note" });
+    const flag = screen.getByLabelText("Guidelines unclear here");
+    const chip = screen.getByRole("button", { name: "“development” · Tom Reis" });
+    expect(note.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(flag.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders no text node inside a table row", () => {
+    renderCard(byId("g-hypo"));
+    for (const row of screen.getByRole("table").querySelectorAll("tr")) {
+      expect([...row.childNodes].every(node => node.nodeType === Node.ELEMENT_NODE)).toBe(true);
+    }
+  });
+
   it("flags an automatically kept group through annotate", () => {
     const props = renderCard(byId("g-seiz"));
     expect(screen.getByText("✓ kept automatically")).toBeTruthy();

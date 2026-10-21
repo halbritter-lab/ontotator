@@ -81,7 +81,7 @@ function Comparison({ group, people, text }: { group: ConsolidationGroupView; pe
   return <>
     <table className="cons-compare">
       <caption className="visually-hidden">Comparison of {groupTitle(group)}</caption>
-      <thead><tr><td /> {holders.map((person, index) => <th key={`${person.person_id}-${index}`} scope="col">{person.label}</th>)}</tr></thead>
+      <thead><tr><td />{holders.map((person, index) => <th key={`${person.person_id}-${index}`} scope="col">{person.label}</th>)}</tr></thead>
       <tbody>{rows.map(row => <tr key={row.label} className={row.differs ? "cons-differs" : undefined}>
         <th scope="row">{row.label}{row.differs && <span className="cons-differs-word"> · differs</span>}</th>
         {row.cells.map((cell, index) => <td key={index}>{cell}</td>)}
@@ -203,6 +203,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     {(group.members.length > 1 || !partial) ? <Comparison group={group} people={people} text={text} />
       : <p className="cons-muted">{termLabel(group.members[0])} · {Object.values(group.members[0].axes).map(valueWords).join(" · ") || "no values"}</p>}
     {!readOnly && <>
+      {/* Note and flag go with the decision, so they come before the chips (the last chip resolves). */}
+      {noteAndFlag(false)}
       {needsTerm(group) && <div className="cons-choice-row" role="group" aria-label="Term">
         <span className="cons-choice-label">Term:</span>
         {terms.map(option => <Chip key={option.termId} selected={term === option.termId} disabled={busy}
@@ -221,7 +223,6 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
           {props.onEditInEditor && <Button variant="quiet" onClick={props.onEditInEditor}>Edit in editor…</Button>}
         </div>}
       {!keepReady && (partial || matchOnly) && <p id={`${noteId}-keep-reason`} className="action-reason">Choose one option in each row first.</p>}
-      {noteAndFlag(false)}
       {workspace && <TermPicker open={picking} anchorRef={otherTermRef} label="Other term" workspace={workspace} layerId={group.members[0].layer_id}
         onClose={() => setPicking(false)} onPick={candidate => {
           setPicking(false);

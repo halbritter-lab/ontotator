@@ -9,9 +9,9 @@ export function namesOf(people: readonly Pick<ConsolidationPersonView, "label">[
   return people.map(person => personName(person.label)).join(", ");
 }
 
-/** Header: "Consolidate case-107 · de v2 · Luc Martin, Tom Reis · 4 open". */
-export function headerTitle(view: Pick<ConsolidationView, "case_id" | "language" | "document_version">): string {
-  return `Consolidate ${view.case_id} · ${view.language} v${view.document_version}`;
+/** Header: "Consolidate case-107 · de v2"; read-only "Consolidation of case-107 · de v2". */
+export function headerTitle(view: Pick<ConsolidationView, "case_id" | "language" | "document_version">, readOnly = false): string {
+  return `${readOnly ? "Consolidation of" : "Consolidate"} ${view.case_id} · ${view.language} v${view.document_version}`;
 }
 
 export function headerDetail(view: Pick<ConsolidationView, "people">, open: number): string {
@@ -52,6 +52,17 @@ export const READ_ONLY_REASONS: Readonly<Record<string, string>> = {
   not_assigned: "This consolidation is no longer assigned to you. It is read-only.",
 };
 
+/** After submitting: a lead accepts their own consolidation in Documents. */
+export function submittedText(lead: boolean): string {
+  return lead ? "Consolidation submitted. Accept it as final in Documents." : "Consolidation submitted. The lead accepts it as the final result.";
+}
+
+/** Heading of the findings added outside the groups. */
+export function addedHeading(own: boolean, addedBy: string | null | undefined): string {
+  if (own) return "Added by you";
+  return addedBy ? `Added by ${personName(addedBy)}` : "Added findings";
+}
+
 export const REOPEN_EDITED_WARNING = "Reopening drops your edit from the editor.";
 
 /** Number of findings a resolved group yields. */
@@ -63,11 +74,12 @@ function findingsOf(group: ConsolidationGroupView): number {
 
 /**
  * Summary before submitting (X12): "8 decisions → 7 findings: 4 kept automatically (all matched) · 2 decided ·
- * 1 kept from Luc Martin · 1 left out · 1 note · 1 flagged". Zero parts are left out.
+ * 1 kept from Luc Martin · 1 left out · 1 added · 1 note · 1 flagged". Zero parts are left out; findings added
+ * outside the groups count towards the findings.
  */
-export function summaryText(groups: readonly ConsolidationGroupView[], people: readonly ConsolidationPersonView[]): string {
+export function summaryText(groups: readonly ConsolidationGroupView[], people: readonly ConsolidationPersonView[], added = 0): string {
   const decided = groups.filter(group => group.state !== "open");
-  const findings = decided.reduce((sum, group) => sum + findingsOf(group), 0);
+  const findings = decided.reduce((sum, group) => sum + findingsOf(group), 0) + added;
   const auto = decided.filter(group => group.state === "auto").length;
   const keptFrom = new Map<string, number>();
   let chosen = 0;
@@ -88,6 +100,7 @@ export function summaryText(groups: readonly ConsolidationGroupView[], people: r
     chosen ? `${chosen} decided` : "",
     ...[...keptFrom].map(([name, count]) => `${count} kept from ${name}`),
     leftOut ? `${leftOut} left out` : "",
+    added ? `${added} added` : "",
     notes ? plural(notes, "note", "notes") : "",
     flagged ? `${flagged} flagged` : "",
   ].filter(Boolean);
