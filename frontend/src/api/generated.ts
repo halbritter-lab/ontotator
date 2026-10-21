@@ -2910,7 +2910,7 @@ export interface components {
              * @default ordinary
              * @enum {string}
              */
-            kind: "ordinary" | "carry_forward" | "clean_restart" | "consolidation" | "text_change" | "handover";
+            kind: "ordinary" | "carry_forward" | "clean_restart" | "consolidation";
             /** Source Submission Ids */
             source_submission_ids?: string[];
             /** Reason */

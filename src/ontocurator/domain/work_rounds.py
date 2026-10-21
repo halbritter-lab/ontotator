@@ -1,6 +1,6 @@
 """Explicit attempts and private immutable human inputs, independent of proposal sets."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import Any, ClassVar, Literal
 from urllib.parse import quote
@@ -35,7 +35,45 @@ RoundKind = Literal[
 CARRY_ROUND_KINDS: frozenset[str] = frozenset(
     {"carry_forward", "text_change", "handover"}
 )
+# Round kinds only the text-change operations create (``TextChangeService``).
+TEXT_CHANGE_ROUND_KINDS: frozenset[str] = frozenset({"text_change", "handover"})
+# Round kinds a person or lead may create directly (``POST .../rounds``).
+CreatableRoundKind = Literal[
+    "ordinary", "carry_forward", "clean_restart", "consolidation"
+]
 RoundState = Literal["editable", "submitted", "superseded", "abandoned"]
+
+
+def is_exact_ancestor(
+    variants: Mapping[str, VariantInfo], target_id: str, source_id: str
+) -> bool:
+    """Whether ``source_id`` is ``target_id`` or an exact correction ancestor.
+
+    Every step is a correction of the same case, external ID and language
+    whose version is one higher than its parent's.
+    """
+    current = variants[target_id]
+    seen: set[str] = set()
+    while current.document_id != source_id:
+        parent = current.derived_from
+        if (
+            current.document_id in seen
+            or current.origin != "correction"
+            or parent is None
+            or parent not in variants
+        ):
+            return False
+        seen.add(current.document_id)
+        previous = variants[parent]
+        if (
+            previous.case_id,
+            previous.external_id,
+            previous.language,
+            previous.version + 1,
+        ) != (current.case_id, current.external_id, current.language, current.version):
+            return False
+        current = previous
+    return True
 
 
 class RoundInputView(BaseModel):

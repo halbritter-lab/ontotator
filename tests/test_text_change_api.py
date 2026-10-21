@@ -218,3 +218,19 @@ def test_language_confirmation_for_carry_other(client):
     assert body["resolution"] == "handed_over"
     assert body["round"]["kind"] == "handover"
     assert body["assignment"]["username"] == env.user("max")
+
+
+@pytest.mark.parametrize("kind", ["text_change", "handover"])
+def test_generic_round_creation_does_not_offer_text_change_kinds(client, kind):
+    env = _env(_app(client))
+    waiting = assign(env.scenario, env.docs[1], "tom", "annotate")
+    _login(client, env, "lead")
+    refused = client.post(
+        f"/api/v1/assignments/{waiting}/rounds",
+        json={
+            "request_id": f"round-{kind}",
+            "expected_workflow_revision": _revision(env, waiting),
+            "kind": kind,
+        },
+    )
+    assert refused.status_code == 422, refused.text

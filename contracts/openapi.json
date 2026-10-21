@@ -9247,9 +9247,7 @@
               "ordinary",
               "carry_forward",
               "clean_restart",
-              "consolidation",
-              "text_change",
-              "handover"
+              "consolidation"
             ],
             "title": "Kind",
             "default": "ordinary"

@@ -19,12 +19,14 @@ from sqlalchemy import Connection, RowMapping, func, insert, select
 from ontocurator.application.work_plans import _chains
 from ontocurator.application.work_plans import _target as _row_target
 from ontocurator.application.work_rounds import WorkRoundService, require_independent
+from ontocurator.application.workflow_guards import require_task_writable
 from ontocurator.assignments.eligibility import (
     check_work_plan,
     load_variants,
     require_annotation_gate,
 )
 from ontocurator.assignments.service import AssignmentService
+from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.auth.authority import lock_user_authority
 from ontocurator.authz.policy import Access, Action, can
@@ -34,9 +36,16 @@ from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.reanchor import NeedsReview, reanchor_annotation, text_map
 from ontocurator.domain.scopes import build_scope
+from ontocurator.domain.serialization import decode_snapshot
 from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.work_plans import RowKey
-from ontocurator.domain.work_rounds import DraftSnapshotPayload, WorkRoundView
+from ontocurator.domain.work_rounds import (
+    CARRY_ROUND_KINDS,
+    DraftSnapshotPayload,
+    WorkRoundView,
+    is_exact_ancestor,
+)
+from ontocurator.domain.workspace import Draft, Submission
 from ontocurator.projects.assignments import revoke_assignments
 from ontocurator.storage.database import Database
 from ontocurator.storage.final_tables import FinalSelectionRow
@@ -54,7 +63,10 @@ from ontocurator.storage.tables import (
     SubmissionRow,
     UserRow,
 )
-from ontocurator.storage.workflow_tables import WorkflowCommandReceiptRow
+from ontocurator.storage.workflow_tables import (
+    RoundInputRow,
+    WorkflowCommandReceiptRow,
+)
 
 # Unplaced findings whose marked text the correction changed (preview).
 _CHANGED_REASONS = frozenset({"changed_segment", "changed_cue"})
@@ -109,39 +121,6 @@ def _not_applicable(reason: str) -> DomainError:
     return DomainError("TEXT_CHANGE_NOT_APPLICABLE", {"reason": reason})
 
 
-def is_exact_ancestor(
-    variants: Mapping[str, VariantInfo], target_id: str, source_id: str
-) -> bool:
-    """Whether ``source_id`` is ``target_id`` or an exact correction ancestor.
-
-    The same walk as round creation (``WorkRoundService.create_in``): every
-    step is a correction of the same case, external ID and language whose
-    version is one higher than its parent's.
-    """
-    current = variants[target_id]
-    seen: set[str] = set()
-    while current.document_id != source_id:
-        parent = current.derived_from
-        if (
-            current.document_id in seen
-            or current.origin != "correction"
-            or parent is None
-            or parent not in variants
-        ):
-            return False
-        seen.add(current.document_id)
-        previous = variants[parent]
-        if (
-            previous.case_id,
-            previous.external_id,
-            previous.language,
-            previous.version + 1,
-        ) != (current.case_id, current.external_id, current.language, current.version):
-            return False
-        current = previous
-    return True
-
-
 class TextChangeService:
     def __init__(self, db: Database, repo: Repository) -> None:
         self.db = db
@@ -150,14 +129,26 @@ class TextChangeService:
     # --- shared checks -------------------------------------------------------- #
 
     def _begin(
-        self, conn: Connection, access: Access, actor: Actor, project: str
+        self,
+        conn: Connection,
+        access: Access,
+        actor: Actor,
+        project: str,
+        *,
+        target_user_id: int | None = None,
     ) -> RowMapping:
-        """Locks (members shared, project exclusive) and the lead check."""
+        """Locks (members shared, project exclusive) and the lead check.
+
+        ``target_user_id`` is the assignee the operation gives work to; their
+        user row is locked like ``AssignmentService._prepare`` does, so a
+        deactivation or language change waits for this write. The caller
+        re-derives the assignee after the lock and refuses on a mismatch.
+        """
         conn.execute(
             select(func.pg_advisory_xact_lock_shared(_lock_id("members", project)))
         )
         conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", project))))
-        lock_user_authority(conn, access.user_id)
+        lock_user_authority(conn, access.user_id, target_user_id=target_user_id)
         return self._lead_project(conn, access, actor, project)
 
     def _lead_project(
@@ -202,8 +193,11 @@ class TextChangeService:
             RowKey(source.case_id, source.language), []
         )
         chain = next(
-            c for c in chains if any(v.document_id == from_id for v in c.versions)
+            (c for c in chains if any(v.document_id == from_id for v in c.versions)),
+            None,
         )
+        if chain is None:
+            raise DomainError("DOCUMENT_NOT_FOUND")
         target_id = _row_target(chain).document_id
         if from_id == target_id:
             raise _not_applicable("already_on_target")
@@ -236,6 +230,17 @@ class TextChangeService:
         if assignment["task"] != "annotate":
             raise _not_applicable("not_annotation")
         if assignment["status"] == "submitted":
+            raise _not_applicable("not_open")
+
+    @staticmethod
+    def _require_movable(assignment: Mapping[Any, Any]) -> None:
+        """Open work a move can carry: a round, or nothing started yet.
+
+        Started work without a round (legacy drafts before rounds) cannot be
+        frozen into a snapshot; moving it would lose the draft (``not_open``).
+        """
+        TextChangeService._require_open_annotation(assignment)
+        if assignment["active_round_id"] is None and assignment["status"] != "open":
             raise _not_applicable("not_open")
 
     @staticmethod
@@ -418,6 +423,25 @@ class TextChangeService:
             raise _not_applicable("not_latest_in_round")
         return int(found)
 
+    def _check_submission(
+        self,
+        conn: Connection,
+        key: str,
+        pid: int,
+        submission_id: str,
+        submission: Submission,
+    ) -> None:
+        """The carry checks of a submission that need no target (rule 3b).
+
+        Shared by ``carry`` and ``preview``: an annotation submission that is
+        its round's current result, on a task that is not held.
+        """
+        if submission.origin_key.mode != "independent":
+            raise _not_applicable("not_annotation")
+        source_assignment = self._source_state(conn, key, pid, submission_id)
+        if source_assignment is not None:
+            require_task_writable(conn, source_assignment)
+
     # --- operations ------------------------------------------------------------- #
 
     def preview(
@@ -430,7 +454,11 @@ class TextChangeService:
         submission_id: str | None,
         target_document_id: str,
     ) -> TextChangePreview:
-        """Counts of a move or carry, computed without writing anything."""
+        """Counts of a move or carry, computed without writing anything.
+
+        Runs the source checks of the operation it previews: a move's open
+        work, a carry's current annotation result on a task that is not held.
+        """
         if (assignment_id is None) == (submission_id is None):
             # The route validates this; a caller naming neither or both is a bug.
             raise ValueError("Name either an assignment or a submission")
@@ -451,7 +479,7 @@ class TextChangeService:
                 )
                 if assignment is None:
                     raise DomainError("ASSIGNMENT_NOT_FOUND")
-                self._require_open_annotation(assignment)
+                self._require_movable(assignment)
                 from_id = assignment["document_id"]
                 author = conn.execute(
                     select(UserRow.pseudonym).where(UserRow.id == assignment["user_id"])
@@ -462,6 +490,7 @@ class TextChangeService:
                 submission = self.repo.get_submission(submission_id, key)
                 if submission is None:
                     raise DomainError("SUBMISSION_NOT_FOUND")
+                self._check_submission(conn, key, pid, submission_id, submission)
                 from_id = submission.origin_key.document_id
                 author = submission.origin_key.annotator_id
                 snapshots = list(submission.snapshots)
@@ -492,20 +521,51 @@ class TextChangeService:
                 persons=self._persons(conn, pid, source, author),
             )
 
+    @staticmethod
+    def _findings(
+        conn: Connection, pid: int, round_view: WorkRoundView, draft: Draft
+    ) -> list[AnnotationSnapshot]:
+        """A round's work: the draft's findings and its undecided unplaced inputs.
+
+        An input of a carry round (``CARRY_ROUND_KINDS``) that could not be
+        placed is not in the draft; until the person decides it, it belongs to
+        the work. It is kept as its original snapshot, so a move offers it
+        again on the new text (re-anchored, or again to be decided).
+        """
+        findings = list(draft.annotations)
+        if round_view.kind not in CARRY_ROUND_KINDS:
+            return findings
+        decided = {r.input_id for r in draft.round_input_resolutions}
+        for row in conn.execute(
+            select(RoundInputRow.input_id, RoundInputRow.payload)
+            .where(
+                RoundInputRow.project_id == pid,
+                RoundInputRow.round_id == round_view.round_id,
+            )
+            .order_by(RoundInputRow.position)
+        ):
+            if row.input_id in decided or row.payload["target_snapshot"] is not None:
+                continue
+            findings.append(decode_snapshot(row.payload["source_snapshot"]))
+        return findings
+
     def _current_draft(
         self, conn: Connection, key: str, pid: int, assignment: Mapping[Any, Any]
     ) -> list[AnnotationSnapshot]:
-        """The findings of the assignment's active round draft (none if unstarted)."""
+        """The work of the assignment's active round (none if unstarted)."""
         round_id = assignment["active_round_id"]
         if round_id is None:
             return []
-        workspace = self.repo.work_round_in(conn, key, pid, round_id).workspace_key
+        round_view = self.repo.work_round_in(conn, key, pid, round_id)
+        workspace = round_view.workspace_key
         if (
             workspace is None
             or self.repo._draft_row(conn, pid, _key_str(workspace)) is None
         ):
             return []
-        return list(self.repo._open_draft(conn, workspace, None).annotations)
+        return self._findings(
+            conn, pid, round_view, self.repo._open_draft(conn, workspace, None)
+        )
 
     def move_to_version(
         self,
@@ -529,23 +589,31 @@ class TextChangeService:
         actor_key = str(access.user_id)
         with self.db.transaction() as conn:
             key = AssignmentService._locate(conn, assignment_id)
-            project_row = self._begin(conn, access, actor, key)
+            # The assignee, read before the locks; re-checked on the locked row.
+            user_id = int(
+                conn.execute(
+                    select(AssignmentRow.user_id).where(
+                        AssignmentRow.id == assignment_id
+                    )
+                ).scalar_one()
+            )
+            project_row = self._begin(conn, access, actor, key, target_user_id=user_id)
             pid = int(project_row["id"])
             stored = self._replay(conn, pid, actor_key, request_id, request_hash)
             if stored is not None:
                 return MoveResult.model_validate(stored)
             self._require_undecided(conn, pid, assignment_id)
             old = AssignmentService._locked(conn, assignment_id)
-            if old["workflow_revision"] != expected_workflow_revision:
+            if (
+                old["workflow_revision"] != expected_workflow_revision
+                or old["user_id"] != user_id
+            ):
                 raise DomainError("WORKFLOW_REVISION_CONFLICT")
-            self._require_open_annotation(old)
-            from ontocurator.application.workflow_guards import require_task_writable
-
+            self._require_movable(old)
             require_task_writable(conn, assignment_id)
             source, target = self._check_target(
                 conn, key, pid, old["document_id"], target_document_id
             )
-            user_id = int(old["user_id"])
             if (
                 AssignmentService.active_for(
                     conn, pid, target.document_id, user_id, "annotate"
@@ -638,7 +706,11 @@ class TextChangeService:
         assignment: Mapping[Any, Any],
         source: VariantInfo,
     ) -> int | None:
-        """Store the active round's draft in ``draft_snapshots`` (immutable)."""
+        """Store the active round's work in ``draft_snapshots`` (immutable).
+
+        None for an open assignment that has not started a round (nothing to
+        carry); ``_require_movable`` refuses started work without a round.
+        """
         round_id = assignment["active_round_id"]
         if round_id is None:
             return None
@@ -652,7 +724,7 @@ class TextChangeService:
             scope=build_scope(self.repo.get_task_profile(key), workspace.mode),
             document_version=source.version,
             text_sha256=source.text_sha256,
-            snapshots=list(draft.annotations),
+            snapshots=self._findings(conn, pid, round_view, draft),
         )
         snapshot_id: int = conn.execute(
             insert(DraftSnapshotRow)
@@ -701,8 +773,6 @@ class TextChangeService:
                 raise _not_applicable("already_resolved")
             old = AssignmentService._locked(conn, assignment_id)
             self._require_open_annotation(old)
-            from ontocurator.application.workflow_guards import require_task_writable
-
             require_task_writable(conn, assignment_id)
             source, target = self._check_target(
                 conn, key, pid, old["document_id"], target_document_id
@@ -770,7 +840,10 @@ class TextChangeService:
         )
         actor_key = str(access.user_id)
         with self.db.transaction() as conn:
-            project_row = self._begin(conn, access, actor, key)
+            # The person who gets the work, read before the locks (None when
+            # there is none or it is unknown); ``_carry_round`` re-checks it.
+            assignee = self._carry_assignee(conn, key, submission_id, mode, username)
+            project_row = self._begin(conn, access, actor, key, target_user_id=assignee)
             pid = int(project_row["id"])
             stored = self._replay(conn, pid, actor_key, request_id, request_hash)
             if stored is not None:
@@ -778,15 +851,7 @@ class TextChangeService:
             submission = self.repo.get_submission(submission_id, key)
             if submission is None:
                 raise DomainError("SUBMISSION_NOT_FOUND")
-            if submission.origin_key.mode != "independent":
-                raise _not_applicable("not_annotation")
-            source_assignment = self._source_state(conn, key, pid, submission_id)
-            if source_assignment is not None:
-                from ontocurator.application.workflow_guards import (
-                    require_task_writable,
-                )
-
-                require_task_writable(conn, source_assignment)
+            self._check_submission(conn, key, pid, submission_id, submission)
             source, target = self._check_target(
                 conn, key, pid, submission.origin_key.document_id, target_document_id
             )
@@ -829,6 +894,7 @@ class TextChangeService:
                     target,
                     mode=mode,
                     username=username,
+                    locked_user_id=assignee,
                     confirm_language=confirm_language,
                     now=now,
                 )
@@ -866,6 +932,35 @@ class TextChangeService:
             )
             return result
 
+    @staticmethod
+    def _carry_assignee(
+        conn: Connection,
+        key: str,
+        submission_id: str,
+        mode: Literal["author", "other", "dismiss"],
+        username: str | None,
+    ) -> int | None:
+        """The user a carry gives work to, if known (an unlocked read)."""
+        if mode == "other":
+            try:
+                name = normalize_username(username or "")
+            except DomainError:
+                return None
+            return conn.execute(
+                select(UserRow.id).where(UserRow.username == name)
+            ).scalar_one_or_none()
+        if mode == "author":
+            return conn.execute(
+                select(UserRow.id)
+                .join(SubmissionRow, SubmissionRow.annotator_id == UserRow.pseudonym)
+                .join(ProjectRow, ProjectRow.id == SubmissionRow.project_id)
+                .where(
+                    ProjectRow.project_key == key,
+                    SubmissionRow.submission_id == submission_id,
+                )
+            ).scalar_one_or_none()
+        return None
+
     def _carry_round(
         self,
         conn: Connection,
@@ -878,6 +973,7 @@ class TextChangeService:
         *,
         mode: Literal["author", "other"],
         username: str | None,
+        locked_user_id: int | None,
         confirm_language: bool,
         now: datetime,
     ) -> CarryResult:
@@ -890,19 +986,30 @@ class TextChangeService:
             if user_id is None:
                 raise DomainError("USER_NOT_FOUND")
             owner = author
-            existing = AssignmentService.active_for(
-                conn, pid, target.document_id, user_id, "annotate"
-            )
-            if existing is not None and (
-                existing.active_round_id is not None
-                or existing.status != "open"
-                or existing.lead_correction
-            ):
-                raise DomainError("ASSIGNMENT_EXISTS")
         else:
             if not username:
                 raise DomainError("USER_NOT_FOUND")
             user_id = AssignmentService._target(conn, username)
+        if user_id != locked_user_id:
+            # The person changed between the read and the user lock.
+            raise DomainError("WORKFLOW_REVISION_CONFLICT")
+        if mode == "author":
+            existing = AssignmentService.active_for(
+                conn, pid, target.document_id, user_id, "annotate"
+            )
+            if existing is not None:
+                # Only an untouched waiting assignment takes the carried work.
+                if (
+                    existing.active_round_id is not None
+                    or existing.status != "open"
+                    or existing.lead_correction
+                    or existing.last_submission_id is not None
+                ):
+                    raise DomainError("ASSIGNMENT_EXISTS")
+                AssignmentService._require_target(
+                    conn, project_row, user_id, "annotate"
+                )
+        else:
             owner = conn.execute(
                 select(UserRow.pseudonym).where(UserRow.id == user_id)
             ).scalar_one()

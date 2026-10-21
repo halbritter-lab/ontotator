@@ -11,6 +11,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Connection, func, insert, select, update
 
+from ontocurator.application.workflow_guards import require_task_writable
 from ontocurator.assignments.eligibility import require_annotation_gate
 from ontocurator.assignments.service import MODE_FOR_TASK, AssignmentService
 from ontocurator.auth.audit import Actor, record_audit
@@ -37,9 +38,11 @@ from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.serialization import encode_snapshot
 from ontocurator.domain.work_rounds import (
     CARRY_ROUND_KINDS,
+    TEXT_CHANGE_ROUND_KINDS,
     DraftSnapshotPayload,
     RoundKind,
     WorkRoundView,
+    is_exact_ancestor,
 )
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.storage.database import Database
@@ -99,17 +102,11 @@ def _input_payload(
     return payload
 
 
-# Round kinds only the text-change operations create (``TextChangeService``).
-TEXT_CHANGE_ROUND_KINDS = frozenset({"text_change", "handover"})
-
-
 @dataclass(frozen=True)
 class RoundSource:
     """One round source: a submission, or a frozen draft (kind ``text_change``)."""
 
     snapshots: list[AnnotationSnapshot]
-    # Document version of a frozen draft's text; None for a submission.
-    version: int | None
     origin_key: WorkspaceKey
     scope: TaskScope | None
     source_submission_id: str | None
@@ -400,7 +397,6 @@ class WorkRoundService:
                 raise DomainError("SUBMISSION_NOT_FOUND")
             return RoundSource(
                 snapshots=list(submission.snapshots),
-                version=None,
                 origin_key=submission.origin_key,
                 scope=submission.scope,
                 source_submission_id=source,
@@ -416,7 +412,6 @@ class WorkRoundService:
         payload = DraftSnapshotPayload.model_validate(stored)
         return RoundSource(
             snapshots=payload.snapshots,
-            version=payload.document_version,
             origin_key=payload.origin_key,
             scope=payload.scope,
             source_submission_id=None,
@@ -465,8 +460,6 @@ class WorkRoundService:
             raise DomainError(
                 "ROUND_ACTIVE", "Finish or explicitly restart existing work first"
             )
-        from ontocurator.application.workflow_guards import require_task_writable
-
         require_task_writable(conn, assignment_id)
         if kind == "clean_restart" and not lead:
             raise AccessDenied("RESTART_AGREEMENT_REQUIRED")
@@ -583,33 +576,13 @@ class WorkRoundService:
                         if kind == "handover"
                         else "Carry-forward is private to its author",
                     )
-                current = variants[document.document_id]
-                seen = set()
-                while current.document_id != source.origin_key.document_id:
-                    if (
-                        current.document_id in seen
-                        or current.origin != "correction"
-                        or current.derived_from not in variants
-                    ):
-                        raise DomainError(
-                            "ROUND_INPUT_INVALID",
-                            "Source must be an exact correction ancestor",
-                        )
-                    seen.add(current.document_id)
-                    previous = variants[current.derived_from]
-                    if (
-                        previous.case_id,
-                        previous.external_id,
-                        previous.language,
-                        previous.version + 1,
-                    ) != (
-                        current.case_id,
-                        current.external_id,
-                        current.language,
-                        current.version,
-                    ):
-                        raise DomainError("ROUND_INPUT_INVALID")
-                    current = previous
+                if not is_exact_ancestor(
+                    variants, document.document_id, source.origin_key.document_id
+                ):
+                    raise DomainError(
+                        "ROUND_INPUT_INVALID",
+                        "Source must be an exact correction ancestor",
+                    )
             elif source.origin_key.document_id != document.document_id or any(
                 s.text_sha256 != document.text_sha256 for s in source.snapshots
             ):

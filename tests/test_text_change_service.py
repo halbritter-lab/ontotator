@@ -800,3 +800,248 @@ def test_nothing_is_deleted(env):
             assert later[name] >= earlier[name], name
     assert len(_draft(env, moved["round"].workspace_key).annotations) == 2
     assert len(_draft(env, withdrawn["round"].workspace_key).annotations) == 2
+
+
+# --- review fixes (O2b) ------------------------------------------------------- #
+
+
+def _preview(env: Env, **source: Any) -> Any:
+    access, actor = env.lead()
+    arguments: dict[str, Any] = {"assignment_id": None, "submission_id": None}
+    arguments.update(source)
+    return env.service().preview(
+        access, actor, env.key, target_document_id=env.docs[-1], **arguments
+    )
+
+
+def _third_version(env: Env) -> None:
+    """The text changes again: v3 arrives after work was moved to v2."""
+    from t1_builders import correction_unit, native_unit
+
+    v1 = native_unit(CASE, "de", TEXT_DE, case_id=CASE)
+    v2 = correction_unit(v1, CORRECTED_DE)
+    docs = import_texts(env.scenario, [correction_unit(v2, THIRD_DE)])
+    env.docs.append(docs[(CASE, "de", 3)])
+
+
+def test_move_of_a_moved_round_keeps_its_undecided_unplaced_inputs(env):
+    from ontocurator.domain.work_rounds import DraftSnapshotPayload
+
+    work = _started(env)
+    first = _move(env, work["assignment_id"])
+    inventory = env.repo.get_round_input_inventory(env.key, first.round.round_id)
+    [unplaced] = [i for i in inventory if i["target_snapshot"] is None]
+    _third_version(env)
+    preview = _preview(env, assignment_id=first.assignment_id)
+    assert (preview.findings, preview.placed, preview.unplaced) == (2, 1, 1)
+    second = _move(env, first.assignment_id)
+    with env.db.transaction() as conn:
+        stored = conn.execute(
+            sa_select(DraftSnapshotRow.payload).where(
+                DraftSnapshotRow.project_id == _pid(env),
+                DraftSnapshotRow.assignment_id == first.assignment_id,
+            )
+        ).scalar_one()
+    payload = DraftSnapshotPayload.model_validate(stored)
+    assert len(payload.snapshots) == 2
+    assert unplaced["source_ref"]["annotation_id"] in {
+        s.annotation.annotation_id for s in payload.snapshots
+    }
+    again = env.repo.get_round_input_inventory(env.key, second.round.round_id)
+    assert sorted(i["mapping_status"] for i in again) == ["carried", "needs_review"]
+    [still] = [i for i in again if i["target_snapshot"] is None]
+    assert still["source_ref"] == unplaced["source_ref"]
+
+
+def test_move_of_a_carry_round_drops_decided_inputs(env):
+    from ontocurator.application.work_rounds import RoundInputResolutionService
+    from ontocurator.domain.workspace import MutationEnvelope
+
+    work = _started(env)
+    first = _move(env, work["assignment_id"])
+    key = first.round.workspace_key
+    scoped = _scoped(env, "tom")
+    [unplaced] = [
+        i
+        for i in env.repo.get_round_input_inventory(env.key, first.round.round_id)
+        if i["target_snapshot"] is None
+    ]
+    RoundInputResolutionService(scoped).resolve(
+        key,
+        MutationEnvelope(
+            mutation_id=f"m-{uuid4().hex}",
+            expected_revision=scoped.open_draft(key).revision,
+            payload={
+                "input_id": unplaced["input_id"],
+                "outcome": "dismissed",
+                "reason": "Not on the corrected text",
+            },
+        ),
+    )
+    _third_version(env)
+    second = _move(env, first.assignment_id)
+    again = env.repo.get_round_input_inventory(env.key, second.round.round_id)
+    assert [i["mapping_status"] for i in again] == ["carried"]
+
+
+def test_move_refuses_started_work_without_a_round(env):
+    legacy = assign(env.scenario, env.docs[0], "tom", "annotate")
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == legacy)
+            .values(status="in_progress")
+        )
+    before = _counts(env)
+    with pytest.raises(DomainError) as refused:
+        _move(env, legacy)
+    assert refused.value.code == "TEXT_CHANGE_NOT_APPLICABLE"
+    assert refused.value.details == {"reason": "not_open"}
+    with pytest.raises(DomainError) as refused:
+        _preview(env, assignment_id=legacy)
+    assert refused.value.details == {"reason": "not_open"}
+    assert _counts(env) == before
+    # Open work that has not started moves without a round.
+    waiting = assign(env.scenario, env.docs[0], "ana", "annotate")
+    moved = _move(env, waiting)
+    assert moved.round is None
+    assert _assignment(env, moved.assignment_id).document_id == env.docs[1]
+
+
+def test_move_refused_when_the_person_holds_the_target(env):
+    work = _started(env)
+    assign(env.scenario, env.docs[1], "tom", "annotate")
+    before = _counts(env)
+    with pytest.raises(DomainError, match="ASSIGNMENT_EXISTS"):
+        _move(env, work["assignment_id"])
+    assert _counts(env) == before
+
+
+def test_carry_refused_from_a_held_source_assignment(env):
+    work = _submitted(env)
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == work["assignment_id"])
+            .values(held=True, hold_reason="problem_report")
+        )
+    before = _counts(env)
+    with pytest.raises(DomainError, match="TASK_HELD"):
+        _carry(env, work["submission_id"])
+    with pytest.raises(DomainError, match="TASK_HELD"):
+        _preview(env, submission_id=work["submission_id"])
+    assert _counts(env) == before
+
+
+def test_preview_of_a_submission_runs_the_carry_source_checks(env):
+    from ontocurator.assignments.service import AssignmentService
+    from ontocurator.auth.audit import Actor
+
+    work = _submitted(env)
+    AssignmentService(env.db).reopen(Actor.cli(), work["assignment_id"])
+    newer = finish_round(env.scenario, "tom", work["round"].workspace_key)
+    with pytest.raises(DomainError) as refused:
+        _preview(env, submission_id=work["submission_id"])
+    assert refused.value.details == {"reason": "not_latest_in_round"}
+    assert _preview(env, submission_id=newer).findings == 2
+
+
+def test_carry_refused_to_a_discarded_version(env):
+    from ontocurator.storage.plan_tables import DiscardedVariantRow
+
+    work = _submitted(env)
+    with env.db.transaction() as conn:
+        conn.execute(
+            DiscardedVariantRow.__table__.insert().values(
+                project_id=_pid(env),
+                document_id=env.docs[1],
+                reason="test",
+                discarded_by=env.lead()[1].user_id,
+            )
+        )
+    before = _counts(env)
+    with pytest.raises(DomainError, match="NOT_IN_WORK_PLAN"):
+        _carry(env, work["submission_id"])
+    assert _counts(env) == before
+
+
+def test_carry_refused_when_the_target_is_not_annotatable(env, monkeypatch):
+    from ontocurator.application import text_changes
+
+    work = _submitted(env)
+
+    def not_accepted(*_args: Any) -> None:
+        raise DomainError("TRANSLATION_NOT_ACCEPTED")
+
+    monkeypatch.setattr(text_changes, "require_annotation_gate", not_accepted)
+    with pytest.raises(DomainError) as refused:
+        _carry(env, work["submission_id"])
+    assert refused.value.code == "TEXT_CHANGE_NOT_APPLICABLE"
+    assert refused.value.details == {"reason": "target_not_annotatable"}
+
+
+def test_carry_author_refused_when_the_author_left_the_project(env):
+    from ontocurator.storage.tables import ProjectMembershipRow
+
+    work = _submitted(env)
+    tom = identity(env.scenario, "tom")[0].user_id
+    with env.db.transaction() as conn:
+        conn.execute(
+            ProjectMembershipRow.__table__.delete().where(
+                ProjectMembershipRow.project_id == _pid(env),
+                ProjectMembershipRow.user_id == tom,
+            )
+        )
+    before = _counts(env)
+    with pytest.raises(DomainError, match="NOT_A_MEMBER"):
+        _carry(env, work["submission_id"])
+    # Also when a waiting target assignment would take the work.
+    with env.db.transaction() as conn:
+        conn.execute(
+            AssignmentRow.__table__.insert().values(
+                project_id=_pid(env),
+                document_id=env.docs[1],
+                user_id=tom,
+                task="annotate",
+                status="open",
+                created_by=env.lead()[1].user_id,
+                created_at=func.now(),
+                updated_at=func.now(),
+            )
+        )
+    with pytest.raises(DomainError, match="NOT_A_MEMBER"):
+        _carry(env, work["submission_id"])
+    assert _counts(env)["resolutions"] == before["resolutions"]
+
+
+def test_carry_author_refuses_a_target_assignment_with_a_result(env):
+    work = _submitted(env)
+    waiting = assign(env.scenario, env.docs[1], "tom", "annotate")
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == waiting)
+            .values(last_submission_id=work["submission_id"])
+        )
+    with pytest.raises(DomainError, match="ASSIGNMENT_EXISTS"):
+        _carry(env, work["submission_id"])
+
+
+def test_operations_lock_the_assignee(env, monkeypatch):
+    from ontocurator.application import text_changes
+
+    work = _submitted(env)
+    locked: list[int | None] = []
+    original = text_changes.lock_user_authority
+
+    def spy(conn: Any, actor_user_id: int, *, target_user_id: Any = None) -> Any:
+        locked.append(target_user_id)
+        return original(conn, actor_user_id, target_user_id=target_user_id)
+
+    monkeypatch.setattr(text_changes, "lock_user_authority", spy)
+    _carry(env, work["submission_id"], mode="other", username=env.user("ana"))
+    assert locked == [identity(env.scenario, "ana")[0].user_id]
+    moved = _started(env, "eva")
+    locked.clear()
+    _move(env, moved["assignment_id"])
+    assert locked == [identity(env.scenario, "eva")[0].user_id]

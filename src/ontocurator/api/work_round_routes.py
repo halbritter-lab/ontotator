@@ -28,7 +28,11 @@ from ontocurator.assignments.service import AssignmentService
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Action, can
 from ontocurator.domain.errors import DomainError
-from ontocurator.domain.work_rounds import RoundInputView, RoundKind, WorkRoundView
+from ontocurator.domain.work_rounds import (
+    CreatableRoundKind,
+    RoundInputView,
+    WorkRoundView,
+)
 from ontocurator.domain.workspace import Draft, MutationEnvelope
 from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import ProjectRow
@@ -68,7 +72,7 @@ class CreateRoundRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     request_id: str = Field(min_length=1, max_length=128)
     expected_workflow_revision: int = Field(ge=0)
-    kind: RoundKind = "ordinary"
+    kind: CreatableRoundKind = "ordinary"
     source_submission_ids: list[str] = Field(default_factory=list)
     reason: str | None = None
 
