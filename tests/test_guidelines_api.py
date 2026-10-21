@@ -115,8 +115,26 @@ def test_withdrawn_document_has_no_body_and_withdrawn_etag(team) -> None:
     assert document.status_code == 200
     assert document.json()["body"] is None
     assert document.json()["filename"] is None
-    assert document.headers["etag"] == '"withdrawn"'
+    assert document.headers["etag"].startswith('W/"')
     assert team.annotator.get(BASE).json()["current"] is None
+
+
+def test_etag_depends_on_the_viewer(team) -> None:
+    publish(team.lead, b"# Rules")
+    lead = team.lead.get(f"{BASE}/1")
+    member = team.annotator.get(f"{BASE}/1")
+    # Display names are shown to leads only: the bodies differ, so do the tags.
+    assert lead.json() != member.json()
+    assert lead.headers["etag"] != member.headers["etag"]
+    other = team.annotator.get(
+        f"{BASE}/1", headers={"If-None-Match": lead.headers["etag"]}
+    )
+    assert other.status_code == 200
+    assert other.json() == member.json()
+    own = team.annotator.get(
+        f"{BASE}/1", headers={"If-None-Match": member.headers["etag"]}
+    )
+    assert own.status_code == 304
 
 
 def test_etag_and_cache_control(team) -> None:
@@ -126,7 +144,8 @@ def test_etag_and_cache_control(team) -> None:
     assert first.headers["cache-control"] == "private, no-cache"
     assert first.headers["vary"] == "Cookie"
     etag = first.headers["etag"]
-    assert etag == f'"{first.json()["sha256"]}"'
+    # A weak tag over the viewer's body, not only the file's content.
+    assert etag.startswith('W/"') and first.json()["sha256"] not in etag
     assert first.json()["body"] == "# Rules"
     cached = team.annotator.get(f"{BASE}/1", headers={"If-None-Match": etag})
     assert cached.status_code == 304

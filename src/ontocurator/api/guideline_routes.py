@@ -1,5 +1,6 @@
 """Versioned project guidelines: list, read, publish, withdraw, record reads."""
 
+import hashlib
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Form, Request, Response, UploadFile
@@ -22,7 +23,7 @@ from ontocurator.domain.guidelines import MAX_GUIDELINE_BYTES
 router = APIRouter(prefix="/api/v1/projects", tags=["guidelines"])
 
 CACHE_CONTROL = "private, no-cache"
-# The body depends on the viewer (display names, ``is_me``); the ETag does not.
+# The body depends on the viewer (display names, ``is_me``), and so does the ETag.
 VARY = "Cookie"
 # A leading UTF-8 BOM is dropped before the size check (G13).
 _READ_LIMIT = MAX_GUIDELINE_BYTES + 3
@@ -61,7 +62,10 @@ def list_guidelines(
 
 
 def _etag(document: GuidelineDocument) -> str:
-    return '"withdrawn"' if document.withdrawn is not None else f'"{document.sha256}"'
+    """A weak tag over the viewer's serialized body: it changes with every
+    viewer-dependent field (display names for leads, ``is_me``, withdrawal)."""
+    digest = hashlib.sha256(document.model_dump_json().encode("utf-8")).hexdigest()
+    return f'W/"{digest}"'
 
 
 @router.get(
@@ -80,8 +84,9 @@ def get_guideline(
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL, "Vary": VARY}
     wanted = request.headers.get("if-none-match")
     if wanted is not None:
+        # Weak comparison (RFC 9110): the W/ prefix does not count.
         tags = {tag.strip().removeprefix("W/") for tag in wanted.split(",")}
-        if etag in tags or "*" in tags:
+        if etag.removeprefix("W/") in tags or "*" in tags:
             return Response(status_code=304, headers=headers)  # type: ignore[return-value]
     response.headers.update(headers)
     return document
