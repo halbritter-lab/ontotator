@@ -43,8 +43,13 @@ export interface SpanEditorHandle {
     intent: "new_mention" | "extend_mention",
     evidenceId?: string,
   ) => void;
-  /** Evidence ids whose segments get drag handles. */
-  setResizable: (evidenceIds: string[]) => void;
+  /** Evidence ids whose segments get drag handles; `labels` optionally names an id's handles. */
+  setResizable: (
+    evidenceIds: string[],
+    labels?: Record<string, { start: string; end: string }>,
+  ) => void;
+  /** Reports a keyboard resize that still waits for its pause, at once. */
+  flushResize: () => void;
   /** Scrolls the first mark of the evidence to the middle of the text; unknown ids do nothing. */
   scrollToEvidence: (evidenceId: string) => void;
   destroy: () => void;
@@ -185,8 +190,14 @@ export function mountSpanEditor(
       currentIntent = intent;
       currentEvidenceId = evidenceId;
     },
-    setResizable: (evidenceIds: string[]) => {
-      editor.setResizable(evidenceIds);
+    setResizable: (
+      evidenceIds: string[],
+      labels?: Record<string, { start: string; end: string }>,
+    ) => {
+      editor.setResizable(evidenceIds, labels);
+    },
+    flushResize: () => {
+      editor.flushResize();
     },
     scrollToEvidence: (evidenceId: string) => {
       // The vendor editor renders one `.run` per text run, listing its mention ids in `data-mentions`.

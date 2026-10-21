@@ -83,6 +83,7 @@ export class SpanEditor {
     this.activeIds = new Set();
     this.readOnly = false;
     this.resizableIds = new Set();
+    this.resizableLabels = {};
     this._pendingKeyResize = null;
     this._keyResizeTimer = null;
     this._onFocusOutBound = (e) => this._onFocusOut(e);
@@ -198,14 +199,23 @@ export class SpanEditor {
     this.render();
   }
 
-  /** Mentions whose segments get draggable start/end handles. */
-  setResizable(mentionIds) {
+  /**
+   * Mentions whose segments get draggable start/end handles. `labels` optionally
+   * names the handles per mention: { [mentionId]: { start, end } }.
+   */
+  setResizable(mentionIds, labels) {
     this.resizableIds = new Set(mentionIds || []);
+    this.resizableLabels = labels || {};
     // The selection moved on while a keyboard change was still waiting: report it
     // now, before its handles disappear.
     const pending = this._pendingKeyResize;
     if (pending && !this.resizableIds.has(pending.mentionId)) this._flushKeyResize();
     this.render();
+  }
+
+  /** Reports a keyboard resize that still waits for its pause (before a term is chosen). */
+  flushResize() {
+    this._flushKeyResize();
   }
 
   _clearKeyResize() {
@@ -246,7 +256,8 @@ export class SpanEditor {
     node.dataset.offset = String(handle.offset);
     node.tabIndex = 0;
     node.setAttribute("role", "separator");
-    node.setAttribute("aria-label", handle.edge === "start" ? "Start of mention" : "End of mention");
+    const label = this.resizableLabels?.[handle.mentionId]?.[handle.edge];
+    node.setAttribute("aria-label", label || (handle.edge === "start" ? "Start of mention" : "End of mention"));
     node.title = handle.edge === "start"
       ? "Drag to move the start of this mention (or focus it and use the arrow keys)"
       : "Drag to move the end of this mention (or focus it and use the arrow keys)";

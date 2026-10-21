@@ -43,6 +43,72 @@ async function createHypotonia(page: Page, annotator: string) {
   await expect(mentionWithOffsets(page, "[0:9]")).toBeVisible();
 }
 
+/** Resolves with the payload of the next ``create_annotation`` command the page posts. */
+const nextCreate = (page: Page) => page.waitForRequest(request => request.method() === "POST" && request.url().endsWith("/commands")
+  && (request.postDataJSON() as { payload?: { command?: string } } | null)?.payload?.command === "create_annotation")
+  .then(request => (request.postDataJSON() as { payload: { segments: Array<{ start: number; end: number }> } }).payload);
+
+/** Commands posted from now on (none may be sent before a term is chosen). */
+function recordCommands(page: Page) {
+  const commands: string[] = [];
+  page.on("request", request => {
+    if (request.method() === "POST" && request.url().endsWith("/commands")) commands.push(String((request.postDataJSON() as { payload?: { command?: string } } | null)?.payload?.command));
+  });
+  return commands;
+}
+
+test.describe("adjusting a pending mark", () => {
+  test("pending mark: drag the end handle, choose a term, saved segments equal the adjusted span", async ({ page }) => {
+    await importFixture(page, "pending-drag");
+    await openCase(page, { task: "annotate" });
+    const commands = recordCommands(page);
+    await selectText(page, 0, 9);
+    const end = page.getByRole("separator", { name: "End of marked text" });
+    // Handles are empty inline boxes (Playwright calls them hidden): check they exist.
+    await expect(end).toHaveCount(1);
+    await expect(page.getByRole("separator", { name: "Start of marked text" })).toHaveCount(1);
+    await dragHandle(page, end, 17);
+    await expect(page.locator(".pending-quote")).toHaveText("“Hypotonia and sei”");
+    // The search follows the span while the user has not typed.
+    await expect(page.getByLabel("Search term", { exact: true })).toHaveValue("Hypotonia and sei");
+    expect(commands).toEqual([]);
+    await expect(page.getByLabel("New finding")).toBeVisible();
+
+    await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");
+    const created = nextCreate(page);
+    await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
+    expect((await created).segments).toEqual([{ start: 0, end: 17 }]);
+    await expect(mentionWithOffsets(page, "[0:17]")).toBeVisible();
+  });
+
+  test("pending mark: keyboard Tab to the handle, → twice, Enter in the search", async ({ page }) => {
+    await importFixture(page, "pending-keys");
+    await openCase(page, { task: "annotate" });
+    const commands = recordCommands(page);
+    await selectText(page, 0, 9);
+    await expect(page.getByLabel("Search term", { exact: true })).toBeFocused();
+    await page.locator(".text-container").focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("separator", { name: "Start of marked text" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("separator", { name: "End of marked text" })).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator(".pending-quote")).toHaveText("“Hypotonia an”");
+    expect(commands).toEqual([]);
+    // "/" reports the waiting step and goes to the search, which follows the span.
+    await page.keyboard.press("/");
+    const search = page.getByLabel("Search term", { exact: true });
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue("Hypotonia an");
+    await search.fill("Hypotonia");
+    await expect(page.locator('[role="option"][aria-selected="true"]')).toContainText("HP:0001252");
+    const created = nextCreate(page);
+    await page.keyboard.press("Enter");
+    expect((await created).segments).toEqual([{ start: 0, end: 12 }]);
+  });
+});
+
 test.describe("resizing mention spans", () => {
   test("dragging the end handle extends the mention and saves once", async ({ page }) => {
     await createHypotonia(page, "resize-drag");

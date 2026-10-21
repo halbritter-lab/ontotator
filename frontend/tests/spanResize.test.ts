@@ -92,6 +92,37 @@ describe("span editor resize handles", () => {
     el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init }));
   const focused = () => document.activeElement as HTMLElement;
 
+  it("setResizable labels name the handles", () => {
+    const { handle } = mount();
+    handle.setResizable(["ev-a", "ev-b"], { "ev-a": { start: "Start of marked text", end: "End of marked text" } });
+    const named = handles().map((el) => `${el.dataset.mention}:${el.getAttribute("aria-label")}`);
+    expect(named).toEqual([
+      "ev-b:Start of mention",
+      "ev-b:End of mention",
+      "ev-a:Start of marked text",
+      "ev-a:End of marked text",
+      "ev-b:Start of mention",
+      "ev-b:End of mention",
+    ]);
+    // Labels apply only while given.
+    handle.setResizable(["ev-a"]);
+    expect(handles().map((el) => el.getAttribute("aria-label"))).toEqual(["Start of mention", "End of mention"]);
+  });
+
+  it("flushResize reports a waiting keyboard step at once", () => {
+    vi.useFakeTimers();
+    const { handle, onResize } = mount();
+    handle.setResizable(["ev-a"]);
+    handles()[1].focus(); // end of "muscular" at 15
+    press(focused(), "ArrowLeft");
+    expect(onResize).not.toHaveBeenCalled();
+    handle.flushResize();
+    expect(onResize).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith("ev-a", [{ start: 7, end: 14 }]);
+    vi.advanceTimersByTime(1000);
+    expect(onResize).toHaveBeenCalledTimes(1);
+  });
+
   it("moves the focused edge with the arrow keys and reports once after a pause", () => {
     vi.useFakeTimers();
     const { handle, onResize } = mount();

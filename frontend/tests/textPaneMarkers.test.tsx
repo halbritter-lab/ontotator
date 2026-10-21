@@ -58,3 +58,35 @@ it("Escape inside an open drawer or dialog closes that, not the pending mention 
   press(mounted.container.querySelector(".text-container")!);
   expect(cancel).toHaveBeenCalledTimes(1);
 });
+
+it("resizableLabels reach the handles", () => {
+  const mentions = [{ evidence_id: "ev", segments: [{ start: 0, end: 4 }] }];
+  const mounted = render(<TextPane {...base} text="Some text" mentions={mentions} resizableEvidenceIds={["ev"]}
+    resizableLabels={{ ev: { start: "Start of marked text", end: "End of marked text" } }} />);
+  const labels = () => Array.from(mounted.container.querySelectorAll(".resize-handle")).map((h) => h.getAttribute("aria-label"));
+  expect(labels()).toEqual(["Start of marked text", "End of marked text"]);
+  mounted.rerender(<TextPane {...base} text="Some text" mentions={mentions} resizableEvidenceIds={["ev"]} />);
+  expect(labels()).toEqual(["Start of mention", "End of mention"]);
+});
+
+it("flushResizeRef flushes the editor", () => {
+  vi.useFakeTimers();
+  try {
+    const onResize = vi.fn();
+    const flush: { current: (() => void) | null } = { current: null };
+    const mentions = [{ evidence_id: "ev", segments: [{ start: 0, end: 4 }] }];
+    const mounted = render(<TextPane {...base} text="Some text" mentions={mentions} resizableEvidenceIds={["ev"]}
+      onResizeMention={onResize} flushResizeRef={flush} />);
+    expect(flush.current).toBeTypeOf("function");
+    const end = mounted.container.querySelector<HTMLElement>('.resize-handle[data-edge="end"]')!;
+    end.focus();
+    end.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, cancelable: true }));
+    expect(onResize).not.toHaveBeenCalled();
+    flush.current!();
+    expect(onResize).toHaveBeenCalledWith("ev", [{ start: 0, end: 3 }]);
+    mounted.unmount();
+    expect(flush.current).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
