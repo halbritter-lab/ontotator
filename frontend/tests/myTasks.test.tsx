@@ -395,6 +395,18 @@ describe("My tasks guideline links", () => {
     expect(api.listGuidelines).toHaveBeenCalledTimes(3);
   });
 
+  it("re-reads the guideline links when the tasks reload on a visibility change", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([task(3, "open")]);
+    vi.mocked(api.listGuidelines).mockResolvedValue(guidelineListing([guidelineSummary(1)]));
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    expect((await screen.findByRole("link", { name: /^Project guidelines/ })).textContent).toBe("Project guidelines v1");
+    vi.mocked(api.listGuidelines).mockResolvedValue(guidelineListing([guidelineSummary(2), guidelineSummary(1)]));
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    fireEvent(document, new Event("visibilitychange"));
+    await waitFor(() => expect(screen.getByRole("link", { name: /^Project guidelines/ }).textContent).toBe("Project guidelines v2"));
+    expect(api.listGuidelines).toHaveBeenCalledTimes(2);
+  });
+
   it("shows no guideline link when the request fails or no project has guidelines", async () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
     vi.mocked(api.listGuidelines).mockImplementation(async key => { if (key === "p") throw new Error("Network down"); return guidelineListing([]); });

@@ -126,7 +126,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
     { id: "file", header: "File", cell: item => item.withdrawn ? "—" : item.filename ?? "—" },
     { id: "note", header: "Change note", cell: item => withdrawnNote(item) ?? item.change_note ?? "" },
     { id: "published", header: "Published", cell: published },
-    { id: "seen", header: "Seen by", cell: item => !item.withdrawn && item.reach ? `${item.reach.opened} of ${item.reach.members}` : "—" },
+    { id: "seen", header: "Seen by", cell: item => !item.withdrawn && item.reach ? `Seen by ${item.reach.opened} of ${item.reach.members} task members` : "—" },
     { id: "actions", header: "Actions", cell: item => item.withdrawn ? null : <div className="guidelines-row-actions">
       <Button size="sm" aria-label={`Read v${item.version}`} onClick={() => setReading(item.version)}>Read</Button>
       <Button size="sm" variant="quiet" onClick={() => openWithdraw(item.version)}>Withdraw v{item.version}…</Button>

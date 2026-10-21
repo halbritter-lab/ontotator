@@ -1,3 +1,5 @@
+import { GUIDELINE_FILE_ERRORS } from "../admin/errors";
+
 /**
  * Client-side checks of a guideline file before the preview, with the same messages as the
  * server's refusals (`GUIDELINE_FILE_TYPE`, `GUIDELINE_TOO_LARGE`, `GUIDELINE_EMPTY`,
@@ -6,10 +8,10 @@
 export const GUIDELINE_MAX_BYTES = 262_144;
 
 export const GUIDELINE_FILE_MESSAGES = {
-  type: "Upload a .md or .txt file.",
-  size: "The file is larger than 256 KB.",
-  empty: "The file is empty.",
-  encoding: "The file is not UTF-8 text.",
+  type: GUIDELINE_FILE_ERRORS.GUIDELINE_FILE_TYPE,
+  size: GUIDELINE_FILE_ERRORS.GUIDELINE_TOO_LARGE,
+  empty: GUIDELINE_FILE_ERRORS.GUIDELINE_EMPTY,
+  encoding: GUIDELINE_FILE_ERRORS.GUIDELINE_ENCODING,
 } as const;
 
 export type GuidelineKind = "markdown" | "text";

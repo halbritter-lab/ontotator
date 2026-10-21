@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import { api, type GuidelineDocument as GuidelineDocumentView, type GuidelineSummary } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { personLabel } from "../app/identity";
+import { MONTHS } from "../app/submissionLabels";
 import { GuidelineDocument, InlineMessage } from "../ui";
 import "./guidelines.css";
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
 /** Local day, e.g. "20 Oct"; the year is added outside the current year ("2 Mar 2025"). Invalid input is returned unchanged. */
 export function formatGuidelineDay(value: string, now: Date = new Date()): string {

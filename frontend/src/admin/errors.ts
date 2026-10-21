@@ -1,5 +1,13 @@
 import { ApiError } from "../api/client";
 
+/** The server's guideline file refusals; the client-side file checks reuse them verbatim. */
+export const GUIDELINE_FILE_ERRORS = {
+  GUIDELINE_FILE_TYPE: "Upload a .md or .txt file.",
+  GUIDELINE_TOO_LARGE: "The file is larger than 256 KB.",
+  GUIDELINE_ENCODING: "The file is not UTF-8 text.",
+  GUIDELINE_EMPTY: "The file is empty.",
+} as const;
+
 /** Coverage is checked against the committed backend administration catalog. */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   AXIS_CONFIRMATION_WARNING: "Review the unconfirmed axis values, then explicitly acknowledge the warning to submit them unchanged.",
@@ -89,10 +97,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   DUPLICATE_TEXT: "The upload contains conflicting copies of the same document.",
   EXPORT_UNRESOLVED_INVALID: "A historical unresolved finding is invalid. No export was created. Reopen the affected review assignment, replace or reject the finding, submit the corrected review, then create the export again.",
   EXPORT_EMPTY: "There are no submitted results to export.",
-  GUIDELINE_FILE_TYPE: "Upload a .md or .txt file.",
-  GUIDELINE_TOO_LARGE: "The file is larger than 256 KB.",
-  GUIDELINE_ENCODING: "The file is not UTF-8 text.",
-  GUIDELINE_EMPTY: "The file is empty.",
+  ...GUIDELINE_FILE_ERRORS,
   GUIDELINE_UNCHANGED: "This file is identical to the current version. Nothing was published.",
   GUIDELINE_NOTE_INVALID: "The change note must be one line of at most 280 characters.",
   GUIDELINE_VERSION_CONFLICT: "Someone published or withdrew a version meanwhile. Review the list and try again.",

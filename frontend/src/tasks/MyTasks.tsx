@@ -39,6 +39,8 @@ export const taskText = (task: Pick<TaskSummary, "case_id" | "external_id" | "do
 export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.Element {
   const [state, setState] = useState<TaskState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
+  // Bumped by every successful task load, so the guideline links are re-read with the tasks.
+  const [loads, setLoads] = useState(0);
   useEffect(() => {
     let active = true;
     let generation = 0;
@@ -47,7 +49,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
       setState({ kind: "loading" });
       try {
         const tasks = await api.listMyTasks();
-        if (active && request === generation) setState({ kind: "ready", tasks });
+        if (active && request === generation) { setState({ kind: "ready", tasks }); setLoads(value => value + 1); }
       } catch (error: unknown) {
         if (active && request === generation) setState({ kind: "error", error });
       }
@@ -79,7 +81,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
       setGuidelines({ identity: projectIdentity, versions: inForce });
     });
     return () => { active = false; };
-  }, [projectIdentity]);
+  }, [projectIdentity, loads]);
 
   const tasks = state.kind === "ready" ? state.tasks : [];
   const filtered = project === undefined ? tasks : tasks.filter(task => task.project_key === project);

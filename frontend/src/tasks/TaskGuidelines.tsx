@@ -9,14 +9,22 @@ export interface TaskGuidelinesProps {
   /** The task's real read-only state (submitted, held, read-only round): no notice and nothing recorded. */
   readOnly: boolean;
   children: (parts: { button: ReactNode; notice: ReactNode; drawer: ReactNode }) => ReactNode;
+  /**
+   * Only where no other part of the screen reloads the task metadata on window focus (the translation
+   * review's lead-correction mode has no problem reporter): the focus reload then also re-reads the task
+   * and hands it here when its guideline state changed.
+   */
+  onRefresh?: (assignment: AssignmentView) => void;
 }
+
+const guidelineState = (value: AssignmentView) => JSON.stringify([value.guideline ?? null, value.guideline_notice ?? null]);
 
 /**
  * "Guidelines vN" in a task: the toolbar button (with "New" while a version newer than the user's last
  * opened one is in force), the one-time update notice on editable tasks and the reading drawer. The
  * caller places the three parts. Showing the notice records `notified`; the drawer's reader records `opened`.
  */
-export function TaskGuidelines({ assignment, readOnly, children }: TaskGuidelinesProps): JSX.Element {
+export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: TaskGuidelinesProps): JSX.Element {
   const projectKey = assignment.project_key;
   const current = assignment.guideline?.version ?? null;
   const [latestSeen, setLatestSeen] = useState<{ key: string; version: number | null } | null>(null);
@@ -24,6 +32,12 @@ export function TaskGuidelines({ assignment, readOnly, children }: TaskGuideline
   const [notice, setNotice] = useState<{ key: string; value: GuidelineNotice } | null>(null);
   const recorded = useRef(new Set<string>());
   const button = useRef<HTMLButtonElement>(null);
+  // Bumped by a focus reload while the drawer is open, so its reader fetches the text again.
+  const [readerLoad, setReaderLoad] = useState(0);
+  const drawerOpen = useRef(false);
+  drawerOpen.current = drawer.open;
+  const latest = useRef({ assignment, onRefresh });
+  latest.current = { assignment, onRefresh };
 
   // The user's latest opened version, for the badge; re-read on window focus like the task metadata.
   useEffect(() => {
@@ -33,9 +47,19 @@ export function TaskGuidelines({ assignment, readOnly, children }: TaskGuideline
         if (active) setLatestSeen(seen => ({ key: projectKey, version: Math.max(listing.my_latest_seen ?? 0, seen?.key === projectKey ? seen.version ?? 0 : 0) || null }));
       }, () => undefined);
     };
+    const onFocus = () => {
+      load();
+      if (drawerOpen.current) setReaderLoad(value => value + 1);
+      const { assignment: shown, onRefresh: refresh } = latest.current;
+      if (!refresh) return;
+      void api.getAssignmentMetadata(shown.id).then(fresh => {
+        // A failed load keeps the shown task; an unchanged guideline state is not handed on (no refresh loop).
+        if (active && guidelineState(fresh) !== guidelineState(latest.current.assignment)) latest.current.onRefresh?.(fresh);
+      }, () => undefined);
+    };
     load();
-    window.addEventListener("focus", load);
-    return () => { active = false; window.removeEventListener("focus", load); };
+    window.addEventListener("focus", onFocus);
+    return () => { active = false; window.removeEventListener("focus", onFocus); };
   }, [projectKey]);
 
   // The notice is shown (and `notified` recorded) once per version; later reloads without it keep it until closed.
@@ -72,9 +96,9 @@ export function TaskGuidelines({ assignment, readOnly, children }: TaskGuideline
       <a className="btn btn-secondary" href={routeHref({ name: "projectGuidelines", key: projectKey })} target="_blank" rel="noopener noreferrer">All versions</a>
       <Button variant="quiet" onClick={closeDrawer}>Close</Button>
     </>}>
-    {/* Remounted when the version in force changes, so a withdrawal of the shown version replaces its text. */}
+    {/* Remounted when the version in force changes or a focus reload runs, so a withdrawal of the shown version replaces its text. */}
     <div className="task-guidelines-reader">
-      <GuidelineReader key={`${version}:${current ?? "none"}`} projectKey={projectKey} version={version} currentVersion={current} headingLevel={2} showHeading={false} />
+      <GuidelineReader key={`${version}:${current ?? "none"}:${readerLoad}`} projectKey={projectKey} version={version} currentVersion={current} headingLevel={2} showHeading={false} />
     </div>
   </Drawer>;
 

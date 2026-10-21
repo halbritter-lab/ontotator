@@ -232,9 +232,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await expect(row.locator(".submission-guideline")).toHaveText(["Guidelines v1 (current: v2)"]);
     row = await documentsRow(page, s, "guide-0002", "en");
     await expect(row.locator(".submission-guideline")).toHaveText(["Guidelines v2"]);
-    // Ben's review records v2. The Documents "Translation reviews" dialog does not label reviews with
-    // their guideline version (no UI for TranslationReviewRecord.guideline_version), so the stamp is read
-    // from the same records the dialog lists.
+    // Ben's review records v2: in the records and as the guideline line of the Documents "Translation reviews" dialog.
     const review = await value<Assignment>(ben.page, `/api/v1/assignments/${s.assignments["review-de"]}`);
     const reviews = () => value<TranslationReview[]>(page, `${root(s)}/documents/${encodeURIComponent(review.document_id)}/translation-reviews`);
     expect((await reviews()).map(record => [record.guideline_version, record.guideline_withdrawn])).toEqual([[2, false]]);
@@ -242,6 +240,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await row.getByRole("button", { name: "Translation reviews", exact: true }).click();
     const reviewDialog = page.getByRole("dialog", { name: `Translation reviews: ${review.document_id}`, exact: true });
     await expect(reviewDialog.getByRole("listitem").first()).toBeVisible();
+    await expect(reviewDialog.locator(".review-guideline")).toHaveText(["Guidelines v2"]);
     await evidence(page, "documents-translation-reviews-v2");
     await reviewDialog.getByRole("button", { name: "Close", exact: true }).last().click();
 

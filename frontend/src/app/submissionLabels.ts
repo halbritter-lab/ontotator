@@ -13,7 +13,8 @@ export const kindLabels: Readonly<Record<SubmissionKind, string>> = {
   carry_forward: "Carry-forward",
 };
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+/** Short month names, shared with the guideline day labels. */
+export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
 function toDate(value: string | number | Date): Date | null {
   const date = value instanceof Date ? value : new Date(value);

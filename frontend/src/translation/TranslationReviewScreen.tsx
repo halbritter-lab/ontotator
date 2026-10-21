@@ -389,7 +389,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
 
   return <section className="translation-review" aria-label="Translation review" ref={screenRoot}>
     {held && <InlineMessage tone="warning">Task paused: {props.holdReason ?? workspace.assignment.hold_reason ?? "A project problem needs attention."} Your local translation and review input are kept.</InlineMessage>}
-    {props.guidelineNotice}
+    {/* Gone once the review is submitted here: the notice belongs to editable tasks. */}
+    {!readOnly && props.guidelineNotice}
     <Button className="translation-skip" onClick={focusDecision}>Skip to decision</Button>
     <div className="translation-review-bar density-compact">
       <h1>{workspace.variant.external_id}</h1>

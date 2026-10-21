@@ -224,6 +224,37 @@ describe("task guidelines in the task screens", () => {
     expect(screen.queryByRole("button", { name: /^Report problem/ })).toBeNull();
   });
 
+  it("a focus reload in lead-correction mode re-reads the task and shows the new version and its notice once", async () => {
+    const workspace = reviewWorkspace({ lead_correction: true, assignment: { ...reviewWorkspace().assignment, lead_correction: true } });
+    const { metadata, assignment } = translationTask(workspace);
+    await screen.findByRole("textbox", { name: "Translation (de)" });
+    await screen.findByRole("button", { name: /^Guidelines v3, open the project guidelines/ });
+    const calls = metadata.mock.calls.length;
+    metadata.mockResolvedValue({ ...assignment, guideline: inForce(4), guideline_notice: { ...update, from_version: 3, to_version: 4, more: 0,
+      changes: [{ version: 4, change_note: "Units are checked.", created_at: T, withdrawn: false }] } } as AssignmentView);
+    vi.mocked(api.listGuidelines).mockResolvedValue(guidelineListing([guidelineSummary(4), guidelineSummary(3)], { my_latest_seen: 3 }));
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    expect(await screen.findByRole("button", { name: "Guidelines v4, open the project guidelines, updated" })).toBeDefined();
+    expect(await screen.findByText("Guidelines updated to v4")).toBeDefined();
+    // One metadata request per focus: no problem reporter runs a second one.
+    expect(metadata.mock.calls.length).toBe(calls + 1);
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    await settle();
+    expect(screen.getAllByText("Guidelines updated to v4")).toHaveLength(1);
+    expect(notified()).toEqual([["proj", 4, "notified"]]);
+  });
+
+  it("a focus reload refetches the text of an open drawer", async () => {
+    render(<Harness assignment={task()} />);
+    fireEvent.click(entry());
+    expect(await screen.findByText("Annotate negations.")).toBeDefined();
+    expect(api.getGuideline).toHaveBeenCalledTimes(1);
+    vi.mocked(api.getGuideline).mockResolvedValue({ ...guidelineDocument(guidelineSummary(3)), body: "Corrected text." });
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    expect(await screen.findByText("Corrected text.")).toBeDefined();
+    expect(api.getGuideline).toHaveBeenCalledTimes(2);
+  });
+
   it("a focus reload with a new version updates the button and shows the notice in place", async () => {
     const { metadata, assignment } = translationTask();
     await screen.findByRole("textbox", { name: "Translation (de)" });

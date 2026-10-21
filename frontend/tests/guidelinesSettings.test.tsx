@@ -145,7 +145,9 @@ describe("Settings › Guidelines", () => {
   it("lists versions newest first with Seen by and Read", async () => {
     renderSection(guidelineListing([guidelineSummary(3, { not_seen: [] }), guidelineSummary(2, { reach: { notified: 0, opened: 2, members: 6 } }), guidelineSummary(1)]));
     expect(await screen.findByText(`v3 · guide-v3.md · 18 KB · published 13 Oct, 14:02 by Jana Popp (ann-0002)`)).toBeDefined();
-    expect(screen.getByText("Seen by 4 of 6 task members")).toBeDefined();
+    // The current-version summary and the v3 row of the table.
+    expect(screen.getAllByText("Seen by 4 of 6 task members").filter(line => !line.closest("table"))).toHaveLength(1);
+    expect(within(row(3)).getByText("Seen by 4 of 6 task members")).toBeDefined();
     expect(screen.queryByText(/^Not yet seen by/)).toBeNull();
     const table = versionsTable();
     expect(screen.getByRole("heading", { level: 2, name: "Versions" })).toBeDefined();
@@ -153,7 +155,7 @@ describe("Settings › Guidelines", () => {
     expect(within(table).getAllByRole("rowheader").map(cell => cell.textContent)).toEqual(["v3", "v2", "v1"]);
     expect(within(row(2)).getByText("guide-v2.md")).toBeDefined();
     expect(within(row(2)).getByText("Change 2")).toBeDefined();
-    expect(within(row(2)).getByText("2 of 6")).toBeDefined();
+    expect(within(row(2)).getByText("Seen by 2 of 6 task members")).toBeDefined();
     expect(within(row(2)).getByText(/^12 Oct, 14:02/)).toBeDefined();
 
     fireEvent.click(within(row(2)).getByRole("button", { name: "Read v2" }));
@@ -251,7 +253,8 @@ describe("Settings › Guidelines", () => {
   it("shows No guideline is in force when the current version is withdrawn", async () => {
     renderSection(guidelineListing([withdrawnGuideline(4), guidelineSummary(3)]));
     expect(await screen.findByText("No guideline is in force. v4 was withdrawn on 21 Oct by Jana Popp (ann-0002). Publish a new version; to restore earlier rules, upload that version's file again.")).toBeDefined();
-    expect(screen.queryByText(/^Seen by \d/)).toBeNull();
+    // No current-version summary; only the v3 row of the table states its reach.
+    expect(screen.getAllByText(/^Seen by \d/).map(line => line.closest("table"))).toEqual([versionsTable()]);
     expect(screen.queryByText(/^No guidelines yet/)).toBeNull();
     choose(markdown());
     expect(await screen.findByRole("button", { name: "Publish as v5" })).toBeDefined();

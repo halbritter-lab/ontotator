@@ -40,7 +40,9 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
     <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate({ name: "tasks" })}>Back to my tasks</Button></section>;
   if (state.assignment?.task === "translation_review") {
     const assignment = state.assignment;
-    return <TaskGuidelines assignment={assignment} readOnly={assignment.status === "submitted" || assignment.held}>{guidelines => <>
+    // Lead correction shows no problem reporter, whose focus reload otherwise refreshes the task metadata.
+    return <TaskGuidelines assignment={assignment} readOnly={assignment.status === "submitted" || assignment.held}
+      onRefresh={assignment.lead_correction ? value => setState({ identity, assignment: value }) : undefined}>{guidelines => <>
       <TranslationReviewScreen key={identity} assignmentId={props.assignmentId} username={props.user.username}
         held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
         guidelineActions={guidelines.button} guidelineNotice={guidelines.notice}
