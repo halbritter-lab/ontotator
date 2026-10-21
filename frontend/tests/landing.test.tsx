@@ -117,6 +117,18 @@ describe("landing (D7)", () => {
     await waitFor(() => expect(api.listProjects).toHaveBeenCalled());
     expect(window.location.hash).toBe("#/?project=p1");
   });
+
+  it("does not redirect #/?status=all", async () => {
+    window.localStorage.setItem("ontocurator.lastProject.v1:lead", "p1");
+    window.history.replaceState(null, "", "#/?status=all");
+    vi.spyOn(api, "listProjects").mockResolvedValue([project("p1", ["lead"])]);
+    render(<App user={lead} />);
+    expect(await screen.findByRole("heading", { name: "My tasks" })).toBeDefined();
+    await waitFor(() => expect(api.listProjects).toHaveBeenCalled());
+    expect(api.documentsSummary).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe("#/?status=all");
+    expect(screen.queryByRole("heading", { name: "Documents of p1" })).toBeNull();
+  });
 });
 
 describe("last project storage", () => {

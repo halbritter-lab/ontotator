@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
 import { authenticatedRequest, importPackage, loginExisting, mentionWithOffsets, openCase, selectText, submitCase } from './helpers';
@@ -240,4 +241,55 @@ test('Q4: export preflight has one primary, Cancel, and tight warning items', as
   await section.getByRole('button', { name: 'Check again', exact: true }).click();
   await expect(section.getByRole('heading', { name: 'Export preflight' })).toBeVisible();
   await expect(section.locator('.btn-primary')).toHaveCount(1);
+});
+
+test('F7: status tabs switch and survive a reload', async ({ page, browser }) => {
+  const response = await page.request.post('/__test_translation_review__?workflow=true&assignment=target', { timeout: 60_000 });
+  expect(response.ok(), await response.text()).toBeTruthy();
+  const s = await response.json() as Scenario;
+  // The reviewer has the open translation review and an annotate task, submitted through the API.
+  const lead = await actor(browser, s.users.lead);
+  let annotate: Assignment;
+  try { annotate = await assign(lead.page, s, s.users.reviewer); }
+  finally { await lead.close(); }
+  await loginExisting(page, s.users.reviewer);
+  const workspace = await value<components['schemas']['AssignmentOpenResponse']>(page, `/api/v1/assignments/${annotate.id}/open`, 'POST');
+  const path = `/api/v1/workspaces/${encodeURIComponent(workspace.workspace_id)}`;
+  const draft = await value<components['schemas']['Draft']>(page, `${path}/commands`, 'POST', {
+    mutation_id: randomUUID(), expected_revision: workspace.view.draft.revision,
+    payload: { command: 'create_annotation', annotation_id: randomUUID(), evidence_id: randomUUID(),
+      layer_id: 'hpo', type_id: 'phenotype', term_id: 'HP:0001252', segments: [{ start: 0, end: 9 }],
+      axes_values: { assertion: 'present', experiencer: 'patient', temporality: 'current' } },
+  });
+  await value(page, `${path}/submit`, 'POST', {
+    mutation_id: randomUUID(), expected_revision: draft.revision,
+    payload: { command: 'submit_workspace', document_checked: true, checked_layer_ids: ['hpo'] },
+  });
+
+  // A hash-only goto keeps the task list loaded at login; reload to read the submission.
+  await page.goto('/#/');
+  await page.reload();
+  const tabs = page.getByRole('tablist', { name: 'Task status' });
+  const rows = page.getByTestId('task-row');
+  // D3: no status in the URL opens on All.
+  await expect(tabs.getByRole('tab', { name: 'All, 2' })).toHaveAttribute('aria-selected', 'true');
+  await expect(rows).toHaveCount(2);
+  await tabs.getByRole('tab', { name: 'Submitted, 1' }).click();
+  await expect(page).toHaveURL(/#\/\?status=submitted$/);
+  await expect(tabs.getByRole('tab', { name: 'Submitted, 1' })).toHaveAttribute('aria-selected', 'true');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Submitted');
+  await page.reload();
+  await expect(page).toHaveURL(/#\/\?status=submitted$/);
+  await expect(tabs.getByRole('tab', { name: 'Submitted, 1' })).toHaveAttribute('aria-selected', 'true');
+  await expect(rows).toHaveCount(1);
+  await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'my-tasks-panel-tab-submitted');
+  // Keyboard: arrows move focus, Enter selects.
+  await tabs.getByRole('tab', { name: 'Submitted, 1' }).focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(tabs.getByRole('tab', { name: 'To do, 1' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#\/\?status=todo$/);
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Translation review');
 });

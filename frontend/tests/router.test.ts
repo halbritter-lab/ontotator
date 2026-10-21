@@ -14,6 +14,9 @@ describe("hash route parsing and links", () => {
     { name: "tasks" },
     { name: "tasks", project: "study-a" },
     { name: "tasks", project: "" },
+    { name: "tasks", status: "submitted" },
+    { name: "tasks", project: "p1", status: "todo" },
+    { name: "tasks", status: "all" },
     { name: "task", assignmentId: 1 },
     { name: "task", assignmentId: Number.MAX_SAFE_INTEGER },
     { name: "me" },
@@ -32,6 +35,17 @@ describe("hash route parsing and links", () => {
 
   it.each(routes)("round trips $name %j", (route) => {
     expect(parseRoute(routeHref(route))).toEqual(route);
+  });
+
+  it("reads and writes the My tasks status tab (F7)", () => {
+    expect(parseRoute("#/?status=submitted")).toEqual({ name: "tasks", status: "submitted" });
+    expect(routeHref({ name: "tasks", status: "submitted" })).toBe("#/?status=submitted");
+    expect(parseRoute("#/?project=p1&status=todo")).toEqual({ name: "tasks", project: "p1", status: "todo" });
+    expect(routeHref({ name: "tasks", project: "p1", status: "todo" })).toBe("#/?project=p1&status=todo");
+    expect(parseRoute("#/?status=all")).toEqual({ name: "tasks", status: "all" });
+    expect(routeHref({ name: "tasks", status: "all" })).toBe("#/?status=all");
+    expect(parseRoute("#/?status=bogus")).toEqual({ name: "tasks" });
+    expect(parseRoute("#/?project=p1&status=bogus")).toEqual({ name: "tasks", project: "p1" });
   });
 
   it.each(["", "#/"])("opens My tasks for the root hash %j", (hash) => {

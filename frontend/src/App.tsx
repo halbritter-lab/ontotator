@@ -47,7 +47,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
   // Landing (D7): only the first view of plain `#/` after login redirects a lead;
   // a later visit to My tasks stays there.
-  const [landing, setLanding] = useState(() => route.name === "tasks" && route.project === undefined);
+  const [landing, setLanding] = useState(() => route.name === "tasks" && route.project === undefined && route.status === undefined);
   // The landing redirect waits for the Documents summary; My tasks keeps its loading line meanwhile.
   const [landingSummary, setLandingSummary] = useState(false);
   const [taskProject, setTaskProject] = useState<{ identity: string; key: string } | null>(null);
@@ -169,7 +169,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const projectsReady = !!baseUser && projectContext?.identity === projectIdentity;
   useEffect(() => {
     if (!landing) return;
-    if (route.name !== "tasks" || route.project !== undefined || projectError) { setLanding(false); return; }
+    if (route.name !== "tasks" || route.project !== undefined || route.status !== undefined || projectError) { setLanding(false); return; }
     if (!projectsReady || !baseUser) return;
     setLanding(false);
     const key = landingProject(baseUser.username, projects);
@@ -228,7 +228,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   let content: JSX.Element;
   switch (route.name) {
     case "tasks": content = landing || landingSummary ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
-      : <MyTasks project={route.project} projects={projects} onNavigate={go} />; break;
+      : <MyTasks project={route.project} status={route.status} projects={projects} onNavigate={go} />; break;
     // The view is part of the key: switching between the consolidation view and the editor reopens the task fresh.
     case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId, route.view ?? null])} assignmentId={route.assignmentId} view={route.view}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef}

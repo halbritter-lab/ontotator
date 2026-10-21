@@ -1,18 +1,29 @@
 import { useEffect, useState } from "react";
 import { api, onSessionRestored, type ProjectSummary, type TaskSummary } from "../api/client";
-import { routeHref, type Route } from "../app/router";
+import { routeHref, type Route, type TaskStatusTab } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { assignmentStatusLabels, formatDateTime, taskLabels } from "../app/labels";
 import { textLabel } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
 import { IconWarning } from "../ui/icons";
-import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, Toolbar, type Column } from "../ui";
+import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, tabId, Tabs, Toolbar, type Column } from "../ui";
 
 export interface MyTasksProps {
   project?: string;
+  /** Status tab (F7); absent means All. */
+  status?: TaskStatusTab;
   projects: ProjectSummary[];
   onNavigate: (route: Route) => void;
 }
+
+/** Status tabs in order; "To do" is the same set as the nav count (every status but submitted, paused included). */
+const statusTabs: { id: TaskStatusTab; label: string; empty: string; matches: (task: TaskSummary) => boolean }[] = [
+  { id: "todo", label: "To do", empty: "Nothing to do here.", matches: task => task.status !== "submitted" },
+  { id: "paused", label: "Paused", empty: "No paused tasks.", matches: task => task.held },
+  { id: "submitted", label: "Submitted", empty: "No submitted tasks yet.", matches: task => task.status === "submitted" },
+  { id: "all", label: "All", empty: "No tasks.", matches: () => true },
+];
+const STATUS_PANEL = "my-tasks-panel";
 
 type TaskState = { kind: "loading" } | { kind: "ready"; tasks: TaskSummary[] } | { kind: "error"; error: unknown };
 
@@ -36,7 +47,7 @@ const projectLabel = (name: string, key: string): string => name === key ? name 
 export const taskText = (task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language">): string =>
   textLabel({ case_id: task.case_id ?? task.external_id ?? task.document_id, language: task.language });
 
-export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.Element {
+export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps): JSX.Element {
   const [state, setState] = useState<TaskState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
   // Bumped by every successful task load, so the guideline links are re-read with the tasks.
@@ -95,8 +106,16 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
   let allProjectsValue = "";
   while (options.has(allProjectsValue)) allProjectsValue += "_";
   const showFilter = new Set(tasks.map(task => task.project_key)).size >= 2 || project !== undefined;
-  const count = (predicate: (task: TaskSummary) => boolean) => filtered.filter(predicate).length;
-  const countsLabel = project === undefined ? "Task counts" : `Task counts in ${options.get(project) ?? project}`;
+  const active = status ?? "all";
+  const activeTab = statusTabs.find(tab => tab.id === active) ?? statusTabs[statusTabs.length - 1];
+  const shown = filtered.filter(activeTab.matches);
+  const tabRoute = (id: TaskStatusTab): Route => ({ name: "tasks", ...(project === undefined ? {} : { project }), status: id });
+  // Paused only appears with paused tasks, or while it is the active tab (an old link).
+  const tabs = statusTabs
+    .map(tab => ({ id: tab.id, label: tab.label, count: filtered.filter(tab.matches).length, href: routeHref(tabRoute(tab.id)) }))
+    .filter(tab => tab.id !== "paused" || tab.count > 0 || active === "paused");
+  const selectProject = (value: string) => onNavigate({ name: "tasks",
+    ...(value === allProjectsValue ? {} : { project: value }), ...(status === undefined ? {} : { status }) });
   const managed = projects.filter(item => item.can_manage && (project === undefined || item.project_key === project));
   const guidelineVersions = guidelines?.identity === projectIdentity ? guidelines.versions : new Map<string, number>();
   const listedProjects = new Set(filtered.map(task => task.project_key));
@@ -136,6 +155,12 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
       }}>{managed.length > 1 ? `Go to Documents in ${projectLabel(item.name, item.project_key)}` : "Go to Documents"}</a>;
     })}</Toolbar>
   }>{managed.length > 0 && "As a project lead, you assign documents to people, yourself included, on the Documents page."}</EmptyState>;
+  const allRoute = tabRoute("all");
+  const tabEmpty = <EmptyState title={activeTab.empty} action={<a href={routeHref(allRoute)} onClick={event => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault(); onNavigate(allRoute);
+  }}>Show all tasks</a>} />;
+  const table = <DataTable label="My tasks" className="data-table--pin-end" rows={shown} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${taskText(task)}${failedChecks(task) > 0 ? `, ${failedChecksTitle(failedChecks(task))}` : ""}` })} />;
   return <section aria-label="My tasks">
     <h1>My tasks</h1>
     {state.kind === "loading" && <InlineMessage tone="info">Loading tasks…</InlineMessage>}
@@ -144,20 +169,19 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
       <Button onClick={() => setRetry(value => value + 1)}>Try again</Button>
     </>}
     {state.kind === "ready" && <>
-      {showFilter && <Select id="project-select" label="Filter my tasks by project" value={project ?? allProjectsValue} onChange={event => onNavigate(event.target.value === allProjectsValue ? { name: "tasks" } : { name: "tasks", project: event.target.value })}>
+      {showFilter && <Select id="project-select" label="Filter my tasks by project" value={project ?? allProjectsValue} onChange={event => selectProject(event.target.value)}>
         <option value={allProjectsValue}>All my tasks</option>
         {[...options].map(([key, name]) => <option key={key} value={key}>{name}</option>)}
       </Select>}
-      {tasks.length > 0 && <ul className="task-counts" aria-label={countsLabel}>
-        <li>Open: {count(task => task.status === "open" || task.status === "reopened")}</li>
-        <li>In progress: {count(task => task.status === "in_progress")}</li>
-        <li>Submitted: {count(task => task.status === "submitted")}</li>
-        <li>of which paused: {count(task => task.held)}</li>
-      </ul>}
       {guidelineLinks.length > 0 && <ul className="task-counts" aria-label="Project guidelines">
         {guidelineLinks.map(key => <li key={key}>{guidelineLink(key)}</li>)}
       </ul>}
-      {filtered.length === 0 ? empty : <DataTable label="My tasks" className="data-table--pin-end" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${taskText(task)}${failedChecks(task) > 0 ? `, ${failedChecksTitle(failedChecks(task))}` : ""}` })} />}
+      {tasks.length === 0 ? empty : <>
+        <Tabs label="Task status" tabs={tabs} active={active} panelId={STATUS_PANEL} onSelect={id => onNavigate(tabRoute(id as TaskStatusTab))} />
+        <div role="tabpanel" id={STATUS_PANEL} aria-labelledby={tabId(STATUS_PANEL, active)}>
+          {filtered.length === 0 ? empty : shown.length === 0 ? tabEmpty : table}
+        </div>
+      </>}
     </>}
   </section>;
 }

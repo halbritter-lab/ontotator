@@ -95,8 +95,14 @@ export type SettingsSection = "general" | "guideline" | "rules" | "workflow" | "
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = ["general", "guideline", "rules", "workflow", "defaults", "profile", "members"];
 const isSettingsSection = (value: string): value is SettingsSection => (SETTINGS_SECTIONS as readonly string[]).includes(value);
 
+/** Status tabs of My tasks (route `status`); absent means All. */
+export type TaskStatusTab = "todo" | "paused" | "submitted" | "all";
+export const TASK_STATUS_TABS: readonly TaskStatusTab[] = ["todo", "paused", "submitted", "all"];
+export const isTaskStatusTab = (value: string): value is TaskStatusTab => (TASK_STATUS_TABS as readonly string[]).includes(value);
+
 export type Route =
-  | { name: "tasks"; project?: string }
+  /** `status` absent means All; an explicit `all` is kept so a reload never triggers the landing redirect. */
+  | { name: "tasks"; project?: string; status?: TaskStatusTab }
   /** `view: "editor"` opens the editor of a consolidation task instead of the consolidation view (acceptance fixes WP-E). */
   | { name: "task"; assignmentId: number; view?: "editor" }
   | { name: "me" }
@@ -130,7 +136,8 @@ export function parseRoute(hash: string): Route {
     const params = new URLSearchParams(query);
     if (path === "#/") {
       const project = params.get("project");
-      return project === null ? { name: "tasks" } : { name: "tasks", project };
+      const status = params.get("status");
+      return { name: "tasks", ...(project === null ? {} : { project }), ...(status !== null && isTaskStatusTab(status) ? { status } : {}) };
     }
     switch (path) {
       case "#/me": return { name: "me" };
@@ -209,7 +216,7 @@ function querySuffix(entries: [string, string | undefined][]): string {
 
 export function routeHref(route: Route): string {
   switch (route.name) {
-    case "tasks": return `#/${querySuffix([["project", route.project]])}`;
+    case "tasks": return `#/${querySuffix([["project", route.project], ["status", route.status]])}`;
     case "task":
       if (!Number.isSafeInteger(route.assignmentId) || route.assignmentId <= 0) {
         throw new RangeError("Assignment ID must be a positive safe integer");

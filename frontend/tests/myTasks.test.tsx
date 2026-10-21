@@ -11,6 +11,8 @@ const task = (id: number, status: TaskSummary["status"], key = "p", name = "Proj
   assignment_id: id, workflow_revision: 0, held: false, project_key: key, project_name: name, document_id: `doc-${id}`, language: "de", task: id === 2 ? "review" : "annotate", status, updated_at: "2026-10-15T10:30:00Z",
 });
 const tasks = [task(4, "reopened"), task(2, "in_progress", "q", "Project Q"), task(3, "open"), task(1, "submitted")];
+/** Accessible names of the status tabs ("To do, 3"), in order. */
+const tabNames = () => screen.queryAllByRole("tab").map(tab => tab.getAttribute("aria-label"));
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
@@ -67,16 +69,16 @@ describe("My tasks component", () => {
     view.rerender(<MyTasks {...props} project="q" />);
     expect(select.value).toBe("q");
     expect(screen.getAllByTestId("task-row")).toHaveLength(1);
-    expect(screen.getByRole("list", { name: /^Task counts/ }).textContent).toMatch(/Open: 0.*In progress: 1.*Submitted: 0/);
+    expect(tabNames()).toEqual(["To do, 1", "Submitted, 0", "All, 1"]);
     fireEvent.change(select, { target: { value: "" } });
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks" });
     expect(api.listMyTasks).toHaveBeenCalledTimes(1);
   });
 
-  it("counts reopened as Open without altering its visible status", async () => {
+  it("counts reopened as To do without altering its visible status", async () => {
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
     await screen.findAllByTestId("task-row");
-    expect(screen.getByRole("list", { name: /^Task counts/ }).textContent).toMatch(/Open: 2.*In progress: 1.*Submitted: 1/);
+    expect(tabNames()).toEqual(["To do, 3", "Submitted, 1", "All, 4"]);
     expect(screen.getByText("Reopened")).toBeDefined();
   });
 
@@ -95,13 +97,13 @@ describe("My tasks component", () => {
     expect(within(rows[0]).queryByRole("link", { name: "Start" })).toBeNull();
     expect(within(rows[1]).getByText("Submitted")).toBeDefined();
     expect(within(rows[1]).getByText("Paused")).toBeDefined();
-    expect(screen.getByRole("list", { name: /^Task counts/ }).textContent).toMatch(/Open: 1.*In progress: 1.*Submitted: 1.*of which paused: 2/);
+    expect(tabNames()).toEqual(["To do, 2", "Paused, 2", "Submitted, 1", "All, 3"]);
     const action = within(rows[0]).getByRole("link", { name: "View paused task" });
     expect(action.getAttribute("href")).toBe("#/tasks/11");
     fireEvent.click(action);
     expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 11 });
     rendered.rerender(<MyTasks project="q" projects={[]} onNavigate={onNavigate} />);
-    expect(screen.getByRole("list", { name: /^Task counts/ }).textContent).toMatch(/Open: 0.*In progress: 1.*Submitted: 0.*of which paused: 0/);
+    expect(tabNames()).toEqual(["To do, 1", "Submitted, 0", "All, 1"]);
   });
 
   it("distinguishes duplicate project names for filters and same-document task context", async () => {
@@ -323,14 +325,13 @@ describe("My tasks text label", () => {
 
 describe("My tasks filter and counts", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-  const counts = () => screen.getByRole("list", { name: /^Task counts/ });
 
   it("hides filter and counts for a lead without tasks", async () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
     render(<MyTasks projects={[project("p", "Project P", true)]} onNavigate={vi.fn()} />);
     await screen.findByText("No documents are assigned to you yet.");
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.queryByRole("list", { name: /^Task counts/ })).toBeNull();
+    expect(screen.queryByRole("tablist")).toBeNull();
   });
 
   it("hides the filter for tasks in one project until a filter is active", async () => {
@@ -352,22 +353,114 @@ describe("My tasks filter and counts", () => {
     expect(within(select).getAllByRole("option").map(o => o.textContent)).toEqual(["All my tasks", "Project P (p)", "Project Q (q)"]);
   });
 
-  it("renders four count items without glyph separators that add up", async () => {
+  it("renders the status tabs in order with counts that add up", async () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue([{ ...task(1, "open"), held: true }, task(2, "in_progress"), task(3, "submitted"), task(4, "reopened")]);
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
     await screen.findAllByTestId("task-row");
-    expect(within(counts()).getAllByRole("listitem").map(item => item.textContent)).toEqual([
-      "Open: 2", "In progress: 1", "Submitted: 1", "of which paused: 1",
-    ]);
-    expect(counts().textContent).not.toContain("·");
-    expect(counts().getAttribute("aria-label")).toBe("Task counts");
+    expect(tabNames()).toEqual(["To do, 3", "Paused, 1", "Submitted, 1", "All, 4"]);
+    expect(screen.getByRole("tablist").textContent).not.toContain("·");
+    expect(screen.queryByRole("list", { name: /^Task counts/ })).toBeNull();
   });
 
-  it("names the filtered scope in the counts label", async () => {
+  it("keeps the tablist label when a project filter is active", async () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
     render(<MyTasks project="q" projects={[]} onNavigate={vi.fn()} />);
     await screen.findAllByTestId("task-row");
-    expect(counts().getAttribute("aria-label")).toBe("Task counts in Project Q (q)");
+    expect(screen.getByRole("tablist", { name: "Task status" })).toBeDefined();
+    expect(tabNames()).toEqual(["To do, 1", "Submitted, 0", "All, 1"]);
+  });
+});
+
+describe("My tasks status tabs", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  const rowTexts = () => screen.getAllByTestId("task-row").map(row => within(row).getByText(/^doc-/).textContent);
+
+  it("opens on All and labels the table panel by the active tab", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    const tablist = screen.getByRole("tablist", { name: "Task status" });
+    expect(within(tablist).getAllByRole("tab").map(tab => tab.querySelector(".ui-tab-label")?.textContent)).toEqual(["To do", "Submitted", "All"]);
+    const all = screen.getByRole("tab", { name: "All, 4" });
+    expect(all.getAttribute("aria-selected")).toBe("true");
+    const panel = screen.getByRole("tabpanel");
+    expect(panel.getAttribute("aria-labelledby")).toBe(all.id);
+    expect(within(panel).getByRole("table", { name: "My tasks" })).toBeDefined();
+    expect(rowTexts()).toHaveLength(4);
+  });
+
+  it("filters the rows client-side by the active tab", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([...tasks, { ...task(5, "open"), held: true }]);
+    const view = render(<MyTasks status="submitted" projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    expect(rowTexts()).toEqual(["doc-1 · de"]);
+    expect(screen.getByRole("tab", { name: "Submitted, 1" }).getAttribute("aria-selected")).toBe("true");
+    view.rerender(<MyTasks status="todo" projects={[]} onNavigate={vi.fn()} />);
+    expect(rowTexts()).toEqual(["doc-4 · de", "doc-2 · de", "doc-3 · de", "doc-5 · de"]);
+    view.rerender(<MyTasks status="paused" projects={[]} onNavigate={vi.fn()} />);
+    expect(rowTexts()).toEqual(["doc-5 · de"]);
+    view.rerender(<MyTasks status="all" project="p" projects={[]} onNavigate={vi.fn()} />);
+    expect(rowTexts()).toEqual(["doc-4 · de", "doc-3 · de", "doc-1 · de", "doc-5 · de"]);
+    expect(tabNames()).toEqual(["To do, 3", "Paused, 1", "Submitted, 1", "All, 4"]);
+    expect(api.listMyTasks).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows Paused only with paused tasks or while it is active", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
+    const view = render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    expect(screen.queryByRole("tab", { name: /^Paused/ })).toBeNull();
+    view.rerender(<MyTasks status="paused" projects={[]} onNavigate={vi.fn()} />);
+    expect(screen.getByRole("tab", { name: "Paused, 0" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("No paused tasks.")).toBeDefined();
+  });
+
+  it("navigates through the tabs and keeps the project filter in every link", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
+    const onNavigate = vi.fn();
+    render(<MyTasks project="q" projects={[]} onNavigate={onNavigate} />);
+    await screen.findAllByTestId("task-row");
+    expect(screen.getByRole("tab", { name: "To do, 1" }).getAttribute("href")).toBe("#/?project=q&status=todo");
+    expect(screen.getByRole("tab", { name: "All, 1" }).getAttribute("href")).toBe("#/?project=q&status=all");
+    fireEvent.click(screen.getByRole("tab", { name: "Submitted, 0" }));
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q", status: "submitted" });
+  });
+
+  it("keeps the active tab when the project filter changes", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
+    const onNavigate = vi.fn();
+    render(<MyTasks status="todo" projects={[]} onNavigate={onNavigate} />);
+    await screen.findAllByTestId("task-row");
+    const select = screen.getByRole("combobox", { name: "Filter my tasks by project" });
+    fireEvent.change(select, { target: { value: "q" } });
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks", project: "q", status: "todo" });
+    fireEvent.change(select, { target: { value: "" } });
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks", status: "todo" });
+  });
+
+  it("shows a tab-specific empty state with a link to all tasks", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([task(1, "submitted"), task(2, "open", "q", "Project Q")]);
+    const onNavigate = vi.fn();
+    const view = render(<MyTasks status="todo" project="p" projects={[]} onNavigate={onNavigate} />);
+    expect(await screen.findByText("Nothing to do here.")).toBeDefined();
+    expect(screen.queryByText("No documents are assigned to you yet.")).toBeNull();
+    const panel = screen.getByRole("tabpanel");
+    const showAll = within(panel).getByRole("link", { name: "Show all tasks" });
+    expect(showAll.getAttribute("href")).toBe("#/?project=p&status=all");
+    fireEvent.click(showAll);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "p", status: "all" });
+    view.rerender(<MyTasks status="submitted" project="q" projects={[]} onNavigate={onNavigate} />);
+    expect(screen.getByText("No submitted tasks yet.")).toBeDefined();
+    expect(screen.getByRole("link", { name: "Show all tasks" }).getAttribute("href")).toBe("#/?project=q&status=all");
+  });
+
+  it("keeps the no-assignments notice without tabs when there are no tasks at all", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
+    render(<MyTasks status="todo" projects={[]} onNavigate={vi.fn()} />);
+    expect(await screen.findByText("No documents are assigned to you yet.")).toBeDefined();
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.queryByText("Nothing to do here.")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Show all tasks" })).toBeNull();
   });
 });
 
