@@ -256,8 +256,9 @@ def build_readme(
         *_wrap(
             "guideline_ref in each annotation set names the project guideline version "
             "the result was made under, as urn:ontocurator:{project}:guidelines:v{n}"
-            "#sha256={hash}; guideline_version in index.csv gives the number. Both are "
-            "empty when no version was recorded. The guideline texts are not part of "
+            "#sha256={hash}; guideline_version in index.csv gives the number. When no "
+            "version was recorded, guideline_ref is null and guideline_version is "
+            "empty. The guideline texts are not part of "
             "this archive; read them in Ontocurator.",
             "- ",
             "  ",
