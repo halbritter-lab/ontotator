@@ -29,6 +29,7 @@ INDEX_COLUMNS = (
     "annotation_set_id",
     "source_text_line",
     "warning_codes",
+    "guideline_version",
 )
 _ROW_ORDER = {"selected": 0, "omitted": 1, "provenance": 2}
 _WIDTH = 76
@@ -69,6 +70,7 @@ def build_index_csv(
     lines = {doc_id: number for number, doc_id in enumerate(documents, start=1)}
     recorded: Mapping[str, str] = payload.get("submission_recorded_at", {})
     round_kinds: Mapping[str, str] = payload["round_kinds"]
+    guideline_versions: Mapping[str, int] = content["guideline_versions"]
     codes = _warning_codes(payload)
 
     def codes_for(case_id: str, language: str) -> str:
@@ -102,6 +104,7 @@ def build_index_csv(
             "annotation_set_id": f"submission-{sid}",
             "source_text_line": str(lines[document_id]),
             "warning_codes": codes_for(case_id, language),
+            "guideline_version": str(guideline_versions.get(sid, "")),
         }
 
     selected_index = {sid: index for index, sid in enumerate(selected_order)}
@@ -247,6 +250,15 @@ def build_readme(
         *_wrap(
             '"provenance" rows are earlier submissions referenced by carried or merged '
             "findings, not final results.",
+            "- ",
+            "  ",
+        ),
+        *_wrap(
+            "guideline_ref in each annotation set names the project guideline version "
+            "the result was made under, as urn:ontocurator:{project}:guidelines:v{n}"
+            "#sha256={hash}; guideline_version in index.csv gives the number. Both are "
+            "empty when no version was recorded. The guideline texts are not part of "
+            "this archive; read them in Ontocurator.",
             "- ",
             "  ",
         ),

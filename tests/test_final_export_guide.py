@@ -103,6 +103,7 @@ def payload(**extra):
                 _sub("earlier", "de/v1", author="reader-0002"),
                 _sub("final", "de/v1", findings=3),
             ],
+            "guideline_versions": {},
         },
         "round_kinds": {"final": "consolidation", "earlier": "ordinary"},
         "selected_submission_ids": ["final"],
@@ -155,6 +156,7 @@ def test_index_has_one_row_per_selection_omission_and_provenance_in_order():
         "annotation_set_id": "submission-final",
         "source_text_line": "2",
         "warning_codes": "OPEN_PROBLEM_REPORT;SELECTED_ROUND_SUPERSEDED",
+        "guideline_version": "",
     }
     assert provenance["archive_file"] == "provenance.t1.zip"
     assert provenance["bundle_entry"] == "documents/00000.json"

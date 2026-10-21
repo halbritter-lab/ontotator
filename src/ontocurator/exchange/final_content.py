@@ -99,7 +99,9 @@ def freeze_content(
             if key in refs
         ],
         "contributors": content.contributors,
-        "guideline_ref": content.guideline_ref,
+        # References only, never guideline texts (G20).
+        "guideline_refs": content.guideline_refs,
+        "guideline_versions": content.guideline_versions,
     }
 
 
@@ -127,5 +129,6 @@ def thaw_content(payload: dict[str, Any]) -> ProjectExport:
             for entry in payload["proposals"]
         },
         contributors=[tuple(entry) for entry in payload["contributors"]],
-        guideline_ref=payload["guideline_ref"],
+        guideline_refs=payload["guideline_refs"],
+        guideline_versions=payload["guideline_versions"],
     )
