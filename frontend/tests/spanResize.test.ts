@@ -104,6 +104,11 @@ describe("span editor resize handles", () => {
       "ev-b:Start of mention",
       "ev-b:End of mention",
     ]);
+    // Tooltips follow the label.
+    const titles = handles().map((el) => `${el.dataset.mention}:${el.title}`);
+    expect(titles[2]).toBe("ev-a:Drag to move the start of the marked text (or focus it and use the arrow keys)");
+    expect(titles[3]).toBe("ev-a:Drag to move the end of the marked text (or focus it and use the arrow keys)");
+    expect(titles[0]).toBe("ev-b:Drag to move the start of this mention (or focus it and use the arrow keys)");
     // Labels apply only while given.
     handle.setResizable(["ev-a"]);
     expect(handles().map((el) => el.getAttribute("aria-label"))).toEqual(["Start of mention", "End of mention"]);

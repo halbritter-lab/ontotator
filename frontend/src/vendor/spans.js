@@ -258,9 +258,9 @@ export class SpanEditor {
     node.setAttribute("role", "separator");
     const label = this.resizableLabels?.[handle.mentionId]?.[handle.edge];
     node.setAttribute("aria-label", label || (handle.edge === "start" ? "Start of mention" : "End of mention"));
-    node.title = handle.edge === "start"
-      ? "Drag to move the start of this mention (or focus it and use the arrow keys)"
-      : "Drag to move the end of this mention (or focus it and use the arrow keys)";
+    // The tooltip names what the label names: "End of marked text" -> "the end of the marked text".
+    const subject = /^(?:Start|End) of (.+)$/.exec(label || "")?.[1];
+    node.title = `Drag to move the ${handle.edge} of ${subject ? `the ${subject}` : "this mention"} (or focus it and use the arrow keys)`;
     if (handle.crowded) node.classList.add("resize-handle--crowded");
     return node;
   }
