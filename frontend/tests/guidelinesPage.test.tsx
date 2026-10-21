@@ -22,7 +22,8 @@ describe("GuidelinesPage", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Project guidelines" })).toBeDefined();
     expect(await screen.findByRole("heading", { level: 2, name: "Guidelines v3" })).toBeDefined();
     expect(api.listGuidelines).toHaveBeenCalledWith("p/key");
-    expect(api.getGuideline).toHaveBeenCalledWith("p/key", 3);
+    // The heading commits before the reader's passive effect fetches the text; under load findByRole can return in between.
+    await waitFor(() => expect(api.getGuideline).toHaveBeenCalledWith("p/key", 3));
     expect(screen.queryByText(/The current version is/)).toBeNull();
     const items = within(versionList()).getAllByRole("listitem");
     expect(items.map(item => item.textContent)).toEqual([
