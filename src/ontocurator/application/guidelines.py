@@ -8,6 +8,7 @@ update notice (``guideline_notice``).
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -322,6 +323,13 @@ class GuidelineService:
     ) -> None:
         """Record the caller's own read; first time wins, withdrawn ones ignored."""
         with self.db.transaction() as conn:
+            # Shared against withdraw's exclusive lock: no read on a version
+            # being withdrawn.
+            conn.execute(
+                select(
+                    func.pg_advisory_xact_lock_shared(advisory_lock_id("project", key))
+                )
+            )
             pid = self._visible_project(conn, access, key)
             exists = conn.execute(
                 select(GuidelineVersionRow.version).where(
@@ -354,6 +362,7 @@ class GuidelineService:
         change_note: str | None,
         expected_latest_version: int | None,
     ) -> GuidelineSummary:
+        filename = _clean_filename(filename)
         kind = kind_for_filename(filename)
         body = decode_body(data)
         note = validate_note(change_note, field="change_note")
@@ -425,10 +434,10 @@ class GuidelineService:
         reason: str | None,
         expected_latest_version: int,
     ) -> GuidelineSummary:
-        cleaned = validate_note(reason, field="reason")
         user_id = _user_id(actor)
         with self.db.transaction() as conn:
             pid = self._manage(conn, actor, key)
+            cleaned = validate_note(reason, field="reason")
             versions = _versions(conn, pid)
             latest = versions[0].version if versions else None
             if expected_latest_version != latest:
@@ -537,9 +546,12 @@ def _summaries(
     if overview:
         members = set(
             conn.execute(
-                select(ProjectMembershipRow.user_id).where(
+                select(ProjectMembershipRow.user_id)
+                .join(UserRow, UserRow.id == ProjectMembershipRow.user_id)
+                .where(
                     ProjectMembershipRow.project_id == pid,
                     ProjectMembershipRow.role.in_(TASK_ROLES),
+                    UserRow.active.is_(True),
                 )
             ).scalars()
         )
@@ -611,6 +623,21 @@ def _summaries(
             )
         )
     return result
+
+
+MAX_FILENAME_LENGTH = 255
+
+
+def _clean_filename(filename: str) -> str:
+    """The base name of an upload; control characters or overlong names refused."""
+    name = filename.replace("\\", "/").rsplit("/", 1)[-1]
+    if len(name) > MAX_FILENAME_LENGTH or any(
+        unicodedata.category(char) == "Cc" for char in name
+    ):
+        raise DomainError(
+            "GUIDELINE_FILE_TYPE", {"filename": name[:MAX_FILENAME_LENGTH]}
+        )
+    return name
 
 
 def _user_id(actor: Actor) -> int:

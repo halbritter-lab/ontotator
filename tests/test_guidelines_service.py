@@ -8,12 +8,13 @@ from types import SimpleNamespace
 
 import pytest
 from pg_harness import database_for
-from sqlalchemy import insert, select
+from sqlalchemy import delete, func, insert, select, update
 
 from ontocurator.application.guidelines import GuidelineService, guideline_notice
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Access
 from ontocurator.domain.errors import AccessDenied, DomainError
+from ontocurator.storage.database import advisory_lock_id
 from ontocurator.storage.guideline_tables import (
     GuidelineContentRow,
     GuidelineReadRow,
@@ -453,3 +454,82 @@ def test_system_admin_without_membership_can_upload_and_gets_no_notice(world) ->
     assert error.value.code == "PROJECT_NOT_FOUND"
     with pytest.raises(AccessDenied):
         upload(world, "v2", expected=1, name="alice")
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["ru\x00les.md", "ru\nles.md", "ru\x7fles.md", "a" * 253 + ".md"],
+    ids=["nul", "newline", "del", "too-long"],
+)
+def test_upload_refuses_unsafe_filenames(world, filename) -> None:
+    with pytest.raises(DomainError) as error:
+        upload(world, "ok", expected=None, filename=filename)
+    assert error.value.code == "GUIDELINE_FILE_TYPE"
+    with world.db.transaction() as conn:
+        assert conn.execute(select(GuidelineVersionRow)).first() is None
+
+
+def test_upload_stores_the_base_filename(world) -> None:
+    assert upload(world, "A", expected=None, filename="C:\\x\\y/rules.md").filename == (
+        "rules.md"
+    )
+    assert upload(world, "B", expected=1, filename="a" * 252 + ".md").version == 2
+
+
+def test_withdraw_checks_rights_before_the_reason(world) -> None:
+    upload(world, "A", expected=None)
+    with pytest.raises(AccessDenied):
+        world.svc.withdraw(
+            actor(world, "alice"), "p", 1, reason="a\nb", expected_latest_version=1
+        )
+    with pytest.raises(DomainError) as error:
+        world.svc.withdraw(
+            actor(world, "outsider"), "p", 1, reason="a\nb", expected_latest_version=1
+        )
+    assert error.value.code == "PROJECT_NOT_FOUND"
+
+
+def test_record_read_waits_for_the_project_lock(world) -> None:
+    upload(world, "A", expected=None)
+    holding = Barrier(2)
+    with ThreadPoolExecutor(1) as pool, world.db.transaction() as conn:
+        conn.execute(
+            select(func.pg_advisory_xact_lock(advisory_lock_id("project", "p")))
+        )
+
+        def read() -> None:
+            holding.wait()
+            world.svc.record_read(access(world, "alice"), "p", 1, "opened")
+
+        pending = pool.submit(read)
+        holding.wait()
+        with pytest.raises(TimeoutError):
+            pending.result(timeout=0.5)
+        # Withdraw within the lock holder: the read then sees the withdrawal.
+        conn.execute(
+            delete(GuidelineContentRow).where(GuidelineContentRow.version == 1)
+        )
+        conn.execute(
+            insert(GuidelineWithdrawalRow).values(
+                project_id=world.project,
+                version=1,
+                withdrawn_by=world.ids["lead"],
+                withdrawn_by_label="ann-0001",
+                withdrawn_at=world.clock(),
+            )
+        )
+    pending.result(timeout=10)
+    assert (1, world.ids["alice"]) not in reads(world)
+
+
+def test_deactivated_members_are_not_counted(world) -> None:
+    upload(world, "v1", expected=None)
+    with world.db.transaction() as conn:
+        conn.execute(
+            update(UserRow).where(UserRow.id == world.ids["bob"]).values(active=False)
+        )
+    current = world.svc.listing(access(world, "lead"), "p").current
+    assert current is not None and current.reach is not None
+    assert current.reach.members == 2
+    assert current.not_seen is not None
+    assert "ann-0003" not in [item.person.pseudonym for item in current.not_seen]

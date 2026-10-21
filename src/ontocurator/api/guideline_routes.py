@@ -22,6 +22,8 @@ from ontocurator.domain.guidelines import MAX_GUIDELINE_BYTES
 router = APIRouter(prefix="/api/v1/projects", tags=["guidelines"])
 
 CACHE_CONTROL = "private, no-cache"
+# The body depends on the viewer (display names, ``is_me``); the ETag does not.
+VARY = "Cookie"
 # A leading UTF-8 BOM is dropped before the size check (G13).
 _READ_LIMIT = MAX_GUIDELINE_BYTES + 3
 _CHUNK = 65536
@@ -75,7 +77,7 @@ def get_guideline(
 ) -> GuidelineDocument:
     document = _service(request).document(get_access(request), key, version)
     etag = _etag(document)
-    headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
+    headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL, "Vary": VARY}
     wanted = request.headers.get("if-none-match")
     if wanted is not None:
         tags = {tag.strip().removeprefix("W/") for tag in wanted.split(",")}

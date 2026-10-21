@@ -61,6 +61,10 @@ def test_permissions(team) -> None:
     )
     assert withdraw.status_code == 403
     assert withdraw.json()["code"] == "NOT_ALLOWED"
+    invalid_reason = team.annotator.post(
+        f"{BASE}/1/withdraw", json={"reason": "a\nb", "expected_latest_version": 1}
+    )
+    assert invalid_reason.status_code == 403
     for path in (BASE, f"{BASE}/1"):
         hidden = team.outsider.get(path)
         assert hidden.status_code == 404
@@ -120,6 +124,7 @@ def test_etag_and_cache_control(team) -> None:
     first = team.annotator.get(f"{BASE}/1")
     assert first.status_code == 200
     assert first.headers["cache-control"] == "private, no-cache"
+    assert first.headers["vary"] == "Cookie"
     etag = first.headers["etag"]
     assert etag == f'"{first.json()["sha256"]}"'
     assert first.json()["body"] == "# Rules"
@@ -127,6 +132,7 @@ def test_etag_and_cache_control(team) -> None:
     assert cached.status_code == 304
     assert cached.headers["etag"] == etag
     assert cached.headers["cache-control"] == "private, no-cache"
+    assert cached.headers["vary"] == "Cookie"
     team.lead.post(
         f"{BASE}/1/withdraw", json={"reason": None, "expected_latest_version": 1}
     )
