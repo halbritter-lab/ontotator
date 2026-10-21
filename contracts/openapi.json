@@ -636,6 +636,59 @@
         }
       }
     },
+    "/api/v1/projects/{key}/document-rows/keys": {
+      "post": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Document Row Keys",
+        "description": "Text keys matching the filters in list order, of at most 2000 cases.",
+        "operationId": "document_row_keys_api_v1_projects__key__document_rows_keys_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentRowKeysRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRowKeys"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assignments/{assignment_id}/rounds": {
       "post": {
         "tags": [
@@ -7375,8 +7428,15 @@
             },
             "type": "array",
             "maxItems": 2000,
-            "minItems": 1,
             "title": "Case Ids"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "maxItems": 20000,
+            "title": "Rows"
           },
           "sort": {
             "type": "string",
@@ -7427,7 +7487,6 @@
         "required": [
           "task",
           "language",
-          "case_ids",
           "mode",
           "expected_preview_digest"
         ],
@@ -7454,8 +7513,15 @@
             },
             "type": "array",
             "maxItems": 2000,
-            "minItems": 1,
             "title": "Case Ids"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "maxItems": 20000,
+            "title": "Rows"
           },
           "sort": {
             "type": "string",
@@ -7497,7 +7563,6 @@
         "required": [
           "task",
           "language",
-          "case_ids",
           "mode"
         ],
         "title": "BatchAssignRequest"
@@ -7852,8 +7917,15 @@
             },
             "type": "array",
             "maxItems": 2000,
-            "minItems": 1,
             "title": "Case Ids"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "maxItems": 20000,
+            "title": "Rows"
           },
           "languages": {
             "additionalProperties": {
@@ -7909,9 +7981,6 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "case_ids"
-        ],
         "title": "BulkPlanRequest"
       },
       "BulkPreview": {
@@ -7958,6 +8027,13 @@
           "rule_on": {
             "type": "boolean",
             "title": "Rule On"
+          },
+          "skipped_rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Skipped Rows"
           }
         },
         "type": "object",
@@ -7995,6 +8071,13 @@
             },
             "type": "array",
             "title": "Withdrawn"
+          },
+          "skipped_rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Skipped Rows"
           }
         },
         "type": "object",
@@ -8988,6 +9071,12 @@
                 "type": "string"
               },
               {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -9033,6 +9122,18 @@
                   "human_translation",
                   "correction"
                 ]
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "native",
+                    "machine_translation",
+                    "human_translation",
+                    "correction"
+                  ]
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -9114,7 +9215,8 @@
                 "enum": [
                   "decision",
                   "assign",
-                  "progress"
+                  "progress",
+                  "done"
                 ]
               },
               {
@@ -9263,12 +9365,225 @@
               }
             ],
             "title": "Paused"
+          },
+          "review_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "source",
+                  "not_planned",
+                  "undecided",
+                  "unassigned",
+                  "check_failed",
+                  "in_progress",
+                  "re_review",
+                  "paused",
+                  "rejected",
+                  "query",
+                  "not_accepted",
+                  "source_changed",
+                  "accepted"
+                ]
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "source",
+                    "not_planned",
+                    "undecided",
+                    "unassigned",
+                    "check_failed",
+                    "in_progress",
+                    "re_review",
+                    "paused",
+                    "rejected",
+                    "query",
+                    "not_accepted",
+                    "source_changed",
+                    "accepted"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review State"
+          },
+          "annotation_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "not_planned",
+                  "undecided",
+                  "after_review",
+                  "blocked",
+                  "unassigned",
+                  "partly_assigned",
+                  "in_progress",
+                  "paused",
+                  "in_review",
+                  "consolidating",
+                  "old_text_open",
+                  "old_text_submitted",
+                  "finishing_on_old",
+                  "submitted"
+                ]
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "not_planned",
+                    "undecided",
+                    "after_review",
+                    "blocked",
+                    "unassigned",
+                    "partly_assigned",
+                    "in_progress",
+                    "paused",
+                    "in_review",
+                    "consolidating",
+                    "old_text_open",
+                    "old_text_submitted",
+                    "finishing_on_old",
+                    "submitted"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation State"
+          },
+          "final_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "after_annotation",
+                  "after_review",
+                  "choose",
+                  "confirm",
+                  "old_text",
+                  "may_be_outdated",
+                  "final"
+                ]
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "after_annotation",
+                    "after_review",
+                    "choose",
+                    "confirm",
+                    "old_text",
+                    "may_be_outdated",
+                    "final"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final State"
+          },
+          "waiting_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting On"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "DocumentRowFilters",
-        "description": "The Documents filters, same names and values as its query parameters.\n\n``step``, ``stage`` and ``plan`` take one value or a list (OR within one\nfilter, AND across filters). Filters never change batch targets, their\norder, ``steps``, ``common`` or ``skipped``; they drive ``not_shown``."
+        "description": "The Documents filters, same names and values as its query parameters\n(``document_row_routes._filters`` without ``sort``).\n\n``language``, ``origin``, ``step``, ``stage``, ``plan``, the stage states\nand ``waiting_on`` take one value or a list (OR within one filter, AND\nacross filters). Filters never change batch targets, their order,\n``steps``, ``common`` or ``skipped``; they drive ``not_shown``."
+      },
+      "DocumentRowKeys": {
+        "properties": {
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Keys"
+          },
+          "cases": {
+            "type": "integer",
+            "title": "Cases"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "keys",
+          "cases",
+          "total",
+          "truncated"
+        ],
+        "title": "DocumentRowKeys",
+        "description": "Text keys in list order, of at most 2000 cases (``truncated``);\n``cases`` and ``total`` count every matching case and text."
+      },
+      "DocumentRowKeysRequest": {
+        "properties": {
+          "filters": {
+            "$ref": "#/components/schemas/DocumentRowFilters"
+          },
+          "case_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 5000,
+            "title": "Case Ids"
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "case",
+              "-case",
+              "import",
+              "activity",
+              "-activity"
+            ],
+            "title": "Sort",
+            "default": "case"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DocumentRowKeysRequest",
+        "description": "Texts matching the filters; with ``case_ids`` only texts of these cases\n(Select by case IDs, VD4)."
       },
       "DocumentRowView": {
         "properties": {
@@ -16311,6 +16626,13 @@
             "type": "integer",
             "title": "Not Shown",
             "default": 0
+          },
+          "skipped_rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Skipped Rows"
           }
         },
         "type": "object",
@@ -16321,7 +16643,7 @@
           "common"
         ],
         "title": "SelectionSummary",
-        "description": "Assignable steps of the selected cases (D21).\n\n``steps``: per (task, language) the versions and cases whose row has that\ntask's assign step, most versions first (then most cases, then task and\nlanguage). ``common`` is the first of ``steps`` (None when nothing is\nassignable), the step the dialog preselects; ``skipped`` counts the\nselected cases that ``common`` does not reach, by skip reason.\n``not_shown`` counts selected cases the current filters hide; filters\nnever change ``steps``, ``common`` or ``skipped``."
+        "description": "Assignable steps of the selected cases or texts (D21, VD21).\n\n``steps``: per (task, language) the versions and cases whose row has that\ntask's assign step, most versions first (then most cases, then task and\nlanguage). ``common`` is the first of ``steps`` (None when nothing is\nassignable), the step the dialog preselects; ``skipped`` counts the\nselected cases that ``common`` does not reach, by skip reason.\n``not_shown`` counts selected cases the current filters hide; filters\nnever change ``steps``, ``common`` or ``skipped``.\n\nWith ``rows`` only the selected texts count: ``steps`` count those texts,\n``skipped`` counts the selected texts in the language of ``common`` that\nit does not reach, ``skipped_rows`` names them and ``not_shown`` counts\nselected texts the filters hide."
       },
       "SelectionSummaryRequest": {
         "properties": {
@@ -16331,8 +16653,15 @@
             },
             "type": "array",
             "maxItems": 2000,
-            "minItems": 1,
             "title": "Case Ids"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "maxItems": 20000,
+            "title": "Rows"
           },
           "filters": {
             "$ref": "#/components/schemas/DocumentRowFilters"
@@ -16340,9 +16669,6 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "case_ids"
-        ],
         "title": "SelectionSummaryRequest"
       },
       "SourceObligationView": {

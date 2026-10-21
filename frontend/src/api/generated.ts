@@ -201,6 +201,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/document-rows/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Document Row Keys
+         * @description Text keys matching the filters in list order, of at most 2000 cases.
+         */
+        post: operations["document_row_keys_api_v1_projects__key__document_rows_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{assignment_id}/rounds": {
         parameters: {
             query?: never;
@@ -2268,7 +2288,9 @@ export interface components {
             /** Language */
             language: string;
             /** Case Ids */
-            case_ids: string[];
+            case_ids?: string[];
+            /** Rows */
+            rows?: components["schemas"]["RowRefView"][];
             /**
              * Sort
              * @default case
@@ -2306,7 +2328,9 @@ export interface components {
             /** Language */
             language: string;
             /** Case Ids */
-            case_ids: string[];
+            case_ids?: string[];
+            /** Rows */
+            rows?: components["schemas"]["RowRefView"][];
             /**
              * Sort
              * @default case
@@ -2436,7 +2460,9 @@ export interface components {
         /** BulkPlanRequest */
         BulkPlanRequest: {
             /** Case Ids */
-            case_ids: string[];
+            case_ids?: string[];
+            /** Rows */
+            rows?: components["schemas"]["RowRefView"][];
             /** Languages */
             languages?: {
                 [key: string]: components["schemas"]["LanguageChangeView"];
@@ -2475,6 +2501,8 @@ export interface components {
             };
             /** Rule On */
             rule_on: boolean;
+            /** Skipped Rows */
+            skipped_rows?: components["schemas"]["RowRefView"][];
         };
         /** BulkResult */
         BulkResult: {
@@ -2487,6 +2515,8 @@ export interface components {
             undo: components["schemas"]["UndoView"];
             /** Withdrawn */
             withdrawn: components["schemas"]["WithdrawnTaskView"][];
+            /** Skipped Rows */
+            skipped_rows?: components["schemas"]["RowRefView"][];
         };
         /** BulkTargetView */
         BulkTargetView: {
@@ -2851,21 +2881,23 @@ export interface components {
         };
         /**
          * DocumentRowFilters
-         * @description The Documents filters, same names and values as its query parameters.
+         * @description The Documents filters, same names and values as its query parameters
+         *     (``document_row_routes._filters`` without ``sort``).
          *
-         *     ``step``, ``stage`` and ``plan`` take one value or a list (OR within one
-         *     filter, AND across filters). Filters never change batch targets, their
-         *     order, ``steps``, ``common`` or ``skipped``; they drive ``not_shown``.
+         *     ``language``, ``origin``, ``step``, ``stage``, ``plan``, the stage states
+         *     and ``waiting_on`` take one value or a list (OR within one filter, AND
+         *     across filters). Filters never change batch targets, their order,
+         *     ``steps``, ``common`` or ``skipped``; they drive ``not_shown``.
          */
         DocumentRowFilters: {
             /** Language */
-            language?: string | null;
+            language?: string | string[] | null;
             /** Status */
             status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
             /** Q */
             q?: string | null;
             /** Origin */
-            origin?: ("native" | "machine_translation" | "human_translation" | "correction") | null;
+            origin?: ("native" | "machine_translation" | "human_translation" | "correction") | ("native" | "machine_translation" | "human_translation" | "correction")[] | null;
             /** Translation Status */
             translation_status?: ("translated" | "automatic_check_failed" | "ready_for_review" | "reviewed" | "accepted") | "accepted_without_review" | null;
             /** Decision */
@@ -2875,7 +2907,7 @@ export interface components {
             /** Case */
             case?: string | null;
             /** Segment */
-            segment?: ("decision" | "assign" | "progress") | null;
+            segment?: ("decision" | "assign" | "progress" | "done") | null;
             /** Step */
             step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
             /** Stage */
@@ -2886,6 +2918,45 @@ export interface components {
             plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan" | "not_decided") | ("review" | "annotate" | "review_and_annotate" | "not_in_plan" | "not_decided")[] | null;
             /** Paused */
             paused?: ("yes" | "no") | null;
+            /** Review State */
+            review_state?: ("source" | "not_planned" | "undecided" | "unassigned" | "check_failed" | "in_progress" | "re_review" | "paused" | "rejected" | "query" | "not_accepted" | "source_changed" | "accepted") | ("source" | "not_planned" | "undecided" | "unassigned" | "check_failed" | "in_progress" | "re_review" | "paused" | "rejected" | "query" | "not_accepted" | "source_changed" | "accepted")[] | null;
+            /** Annotation State */
+            annotation_state?: ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "in_review" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted") | ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "in_review" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted")[] | null;
+            /** Final State */
+            final_state?: ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final") | ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final")[] | null;
+            /** Waiting On */
+            waiting_on?: string | string[] | null;
+        };
+        /**
+         * DocumentRowKeys
+         * @description Text keys in list order, of at most 2000 cases (``truncated``);
+         *     ``cases`` and ``total`` count every matching case and text.
+         */
+        DocumentRowKeys: {
+            /** Keys */
+            keys: components["schemas"]["RowRefView"][];
+            /** Cases */
+            cases: number;
+            /** Total */
+            total: number;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /**
+         * DocumentRowKeysRequest
+         * @description Texts matching the filters; with ``case_ids`` only texts of these cases
+         *     (Select by case IDs, VD4).
+         */
+        DocumentRowKeysRequest: {
+            filters?: components["schemas"]["DocumentRowFilters"];
+            /** Case Ids */
+            case_ids?: string[];
+            /**
+             * Sort
+             * @default case
+             * @enum {string}
+             */
+            sort: "case" | "-case" | "import" | "activity" | "-activity";
         };
         /** DocumentRowView */
         DocumentRowView: {
@@ -5420,7 +5491,7 @@ export interface components {
         };
         /**
          * SelectionSummary
-         * @description Assignable steps of the selected cases (D21).
+         * @description Assignable steps of the selected cases or texts (D21, VD21).
          *
          *     ``steps``: per (task, language) the versions and cases whose row has that
          *     task's assign step, most versions first (then most cases, then task and
@@ -5429,6 +5500,11 @@ export interface components {
          *     selected cases that ``common`` does not reach, by skip reason.
          *     ``not_shown`` counts selected cases the current filters hide; filters
          *     never change ``steps``, ``common`` or ``skipped``.
+         *
+         *     With ``rows`` only the selected texts count: ``steps`` count those texts,
+         *     ``skipped`` counts the selected texts in the language of ``common`` that
+         *     it does not reach, ``skipped_rows`` names them and ``not_shown`` counts
+         *     selected texts the filters hide.
          */
         SelectionSummary: {
             /** Cases */
@@ -5445,11 +5521,15 @@ export interface components {
              * @default 0
              */
             not_shown: number;
+            /** Skipped Rows */
+            skipped_rows?: components["schemas"]["RowRefView"][];
         };
         /** SelectionSummaryRequest */
         SelectionSummaryRequest: {
             /** Case Ids */
-            case_ids: string[];
+            case_ids?: string[];
+            /** Rows */
+            rows?: components["schemas"]["RowRefView"][];
             filters?: components["schemas"]["DocumentRowFilters"];
         };
         /** SourceObligationView */
@@ -6985,6 +7065,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SelectionSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    document_row_keys_api_v1_projects__key__document_rows_keys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentRowKeysRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentRowKeys"];
                 };
             };
             /** @description Validation Error */

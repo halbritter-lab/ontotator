@@ -233,6 +233,7 @@ def test_lookup_and_discard_routes(case_env):
         "annotate": False,
         "review_applicable": True,
         "discarded": True,
+        "decided": True,
     }
     again = env.lead.post(url, json={"reason": "Wrong language", "confirm": True})
     assert again.status_code == 409, again.text

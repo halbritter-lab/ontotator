@@ -1,9 +1,10 @@
 """Work plan endpoints: chips, plan dialog, Undo, case IDs, discard (lead only)."""
 
-from typing import Any
+from collections.abc import Sequence
+from typing import Any, Self
 
 from fastapi import APIRouter, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.person_views import PersonRefView
@@ -31,6 +32,21 @@ class PlanFlagsView(BaseModel):
 class RowRefView(BaseModel):
     case_id: str
     language: str
+
+
+# A selection holds at most this many cases (lead spec D17), as case IDs or as
+# the texts of these cases (documents overview VD21).
+MAX_SELECTED_CASES = 2000
+MAX_SELECTED_ROWS = 20000
+
+
+def require_one_selection(case_ids: Sequence[str], rows: Sequence[RowRefView]) -> None:
+    """Exactly one of ``case_ids`` and ``rows`` is non-empty; ``rows`` name at
+    most ``MAX_SELECTED_CASES`` distinct cases (``CASE_IDS_TOO_MANY``)."""
+    if bool(case_ids) == bool(rows):
+        raise ValueError("send exactly one of case_ids and rows")
+    if len({row.case_id for row in rows}) > MAX_SELECTED_CASES:
+        raise DomainError("CASE_IDS_TOO_MANY", {"max": MAX_SELECTED_CASES})
 
 
 class WithdrawnTaskView(BaseModel):
@@ -107,13 +123,20 @@ class BulkAcceptance(BaseModel):
 
 class BulkPlanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    case_ids: list[str] = Field(min_length=1, max_length=2000)
+    # The selection: whole cases, or single texts (VD21); exactly one is sent.
+    case_ids: list[str] = Field(default_factory=list, max_length=MAX_SELECTED_CASES)
+    rows: list[RowRefView] = Field(default_factory=list, max_length=MAX_SELECTED_ROWS)
     # "source" = each case's source row(s).
     languages: dict[str, LanguageChangeView] = Field(default_factory=dict)
     preset: Preset | None = None
     accept_external_review: BulkAcceptance | None = None
     expected_revisions: dict[str, int] | None = None
     confirm: bool = False
+
+    @model_validator(mode="after")
+    def _one_selection(self) -> Self:
+        require_one_selection(self.case_ids, self.rows)
+        return self
 
 
 class MixedCountView(BaseModel):
@@ -143,6 +166,9 @@ class BulkPreview(BaseModel):
     invalid: list[RowRefView]
     revisions: dict[str, int]
     rule_on: bool
+    # With ``rows``: selected texts the change does not reach (unknown, fully
+    # discarded, or no change for their language), in (case, language) order.
+    skipped_rows: list[RowRefView] = Field(default_factory=list)
 
 
 class BulkResult(BaseModel):
@@ -150,6 +176,8 @@ class BulkResult(BaseModel):
     revisions: dict[str, int]
     undo: UndoView
     withdrawn: list[WithdrawnTaskView]
+    # As ``BulkPreview.skipped_rows`` (bulk saves with ``rows`` only).
+    skipped_rows: list[RowRefView] = Field(default_factory=list)
 
 
 class PlanRowsSet(BaseModel):

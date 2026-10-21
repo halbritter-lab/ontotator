@@ -12,17 +12,28 @@ from ontocurator.api.document_projection import AssignmentFilter
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.person_views import PersonRefView
 from ontocurator.api.routes import get_access
+from ontocurator.api.work_plan_routes import (
+    MAX_SELECTED_CASES,
+    MAX_SELECTED_ROWS,
+    RowRefView,
+    require_one_selection,
+)
 from ontocurator.application.document_rows import (
     Decision,
     FinalFilter,
     Paused,
     PlanFilter,
     RowQuery,
+    Segment,
+    Sort,
 )
+from ontocurator.application.work_plans import MAX_CASE_IDS
 from ontocurator.assignments.batch import BatchAssignmentService, BatchSpec
 from ontocurator.auth.audit import Actor
-from ontocurator.domain.next_steps import Segment, Stage, StepCode
+from ontocurator.domain.next_steps import Stage, StepCode
+from ontocurator.domain.stage_cells import AnnotationState, FinalState, ReviewState
 from ontocurator.domain.variants import TranslationStatus, VariantOrigin
+from ontocurator.domain.work_plans import RowKey
 
 router = APIRouter(prefix="/api/v1/projects/{key}", tags=["assignments"])
 
@@ -30,18 +41,20 @@ BatchTask = Literal["translation_review", "annotate", "review"]
 
 
 class DocumentRowFilters(BaseModel):
-    """The Documents filters, same names and values as its query parameters.
+    """The Documents filters, same names and values as its query parameters
+    (``document_row_routes._filters`` without ``sort``).
 
-    ``step``, ``stage`` and ``plan`` take one value or a list (OR within one
-    filter, AND across filters). Filters never change batch targets, their
-    order, ``steps``, ``common`` or ``skipped``; they drive ``not_shown``.
+    ``language``, ``origin``, ``step``, ``stage``, ``plan``, the stage states
+    and ``waiting_on`` take one value or a list (OR within one filter, AND
+    across filters). Filters never change batch targets, their order,
+    ``steps``, ``common`` or ``skipped``; they drive ``not_shown``.
     """
 
     model_config = ConfigDict(extra="forbid")
-    language: str | None = None
+    language: str | list[str] | None = None
     status: AssignmentFilter | None = None
     q: str | None = None
-    origin: VariantOrigin | None = None
+    origin: VariantOrigin | list[VariantOrigin] | None = None
     translation_status: (
         TranslationStatus | Literal["accepted_without_review"] | None
     ) = None
@@ -54,6 +67,11 @@ class DocumentRowFilters(BaseModel):
     owner: str | None = None
     plan: PlanFilter | list[PlanFilter] | None = None
     paused: Paused | None = None
+    review_state: ReviewState | list[ReviewState] | None = None
+    annotation_state: AnnotationState | list[AnnotationState] | None = None
+    final_state: FinalState | list[FinalState] | None = None
+    # "me" or a pseudonym.
+    waiting_on: str | list[str] | None = None
 
     @model_validator(mode="after")
     def _exclusive(self) -> Self:
@@ -72,8 +90,11 @@ class BatchAssignRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     task: BatchTask
     language: str
-    # The selection; the server orders it by ``sort`` (Documents order).
-    case_ids: list[str] = Field(min_length=1, max_length=2000)
+    # The selection, whole cases or single texts (VD21; exactly one is sent);
+    # the server orders it by ``sort`` (Documents order). With ``rows`` only
+    # the selected texts in ``language`` are targeted.
+    case_ids: list[str] = Field(default_factory=list, max_length=MAX_SELECTED_CASES)
+    rows: list[RowRefView] = Field(default_factory=list, max_length=MAX_SELECTED_ROWS)
     sort: Literal["case", "import", "activity"] = "case"
     # The Documents filters of the dialog; the case order depends on ``sort``
     # only, and every selected case keeps its place whatever the filters hide.
@@ -85,6 +106,7 @@ class BatchAssignRequest(BaseModel):
 
     @model_validator(mode="after")
     def _one_person(self) -> Self:
+        require_one_selection(self.case_ids, self.rows)
         if self.mode == "one" and len(self.usernames) > 1:
             raise ValueError("mode 'one' takes at most one username")
         return self
@@ -98,6 +120,7 @@ class BatchAssignRequest(BaseModel):
             usernames=tuple(self.usernames),
             sort=self.sort,
             review_accepted_translation=self.review_accepted_translation,
+            rows=tuple(RowKey(row.case_id, row.language) for row in self.rows),
         )
 
 
@@ -167,8 +190,38 @@ class BatchAssignResult(BaseModel):
 
 class SelectionSummaryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    case_ids: list[str] = Field(min_length=1, max_length=2000)
+    # Whole cases or single texts (VD21); exactly one is sent.
+    case_ids: list[str] = Field(default_factory=list, max_length=MAX_SELECTED_CASES)
+    rows: list[RowRefView] = Field(default_factory=list, max_length=MAX_SELECTED_ROWS)
     filters: DocumentRowFilters = Field(default_factory=DocumentRowFilters)
+
+    @model_validator(mode="after")
+    def _one_selection(self) -> Self:
+        require_one_selection(self.case_ids, self.rows)
+        return self
+
+    def keys(self) -> tuple[RowKey, ...]:
+        return tuple(RowKey(row.case_id, row.language) for row in self.rows)
+
+
+class DocumentRowKeysRequest(BaseModel):
+    """Texts matching the filters; with ``case_ids`` only texts of these cases
+    (Select by case IDs, VD4)."""
+
+    model_config = ConfigDict(extra="forbid")
+    filters: DocumentRowFilters = Field(default_factory=DocumentRowFilters)
+    case_ids: list[str] = Field(default_factory=list, max_length=MAX_CASE_IDS)
+    sort: Sort = "case"
+
+
+class DocumentRowKeys(BaseModel):
+    """Text keys in list order, of at most 2000 cases (``truncated``);
+    ``cases`` and ``total`` count every matching case and text."""
+
+    keys: list[RowRefView]
+    cases: int
+    total: int
+    truncated: bool
 
 
 class AssignableStepView(BaseModel):
@@ -179,7 +232,7 @@ class AssignableStepView(BaseModel):
 
 
 class SelectionSummary(BaseModel):
-    """Assignable steps of the selected cases (D21).
+    """Assignable steps of the selected cases or texts (D21, VD21).
 
     ``steps``: per (task, language) the versions and cases whose row has that
     task's assign step, most versions first (then most cases, then task and
@@ -188,6 +241,11 @@ class SelectionSummary(BaseModel):
     selected cases that ``common`` does not reach, by skip reason.
     ``not_shown`` counts selected cases the current filters hide; filters
     never change ``steps``, ``common`` or ``skipped``.
+
+    With ``rows`` only the selected texts count: ``steps`` count those texts,
+    ``skipped`` counts the selected texts in the language of ``common`` that
+    it does not reach, ``skipped_rows`` names them and ``not_shown`` counts
+    selected texts the filters hide.
     """
 
     cases: int
@@ -195,6 +253,7 @@ class SelectionSummary(BaseModel):
     skipped: dict[str, int]
     common: AssignableStepView | None
     not_shown: int = 0
+    skipped_rows: list[RowRefView] = Field(default_factory=list)
 
 
 def _service(request: Request, principal: Any) -> BatchAssignmentService:
@@ -236,5 +295,16 @@ def selection_summary(
     """Assignable steps of the selected cases and the common one."""
     _guard(request, key)
     return _service(request, principal).selection_summary(
-        key, body.case_ids, body.filters.query()
+        key, body.case_ids, body.filters.query(), body.keys()
+    )
+
+
+@router.post("/document-rows/keys", response_model=DocumentRowKeys)
+def document_row_keys(
+    key: str, body: DocumentRowKeysRequest, request: Request, principal: PrincipalDep
+) -> dict[str, Any]:
+    """Text keys matching the filters in list order, of at most 2000 cases."""
+    _guard(request, key)
+    return _service(request, principal).row_keys(
+        key, body.filters.query(body.sort), body.case_ids
     )

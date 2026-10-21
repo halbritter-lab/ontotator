@@ -18,6 +18,7 @@ from typing import Any, Literal, cast
 
 from sqlalchemy import Connection, func, or_, select
 
+from ontocurator.application import document_row_keys
 from ontocurator.application import document_row_page as page
 from ontocurator.application.document_rows import RowFacts, RowQuery, load_facts
 from ontocurator.application.people import person_refs
@@ -32,6 +33,7 @@ from ontocurator.domain import document_rows as rules
 from ontocurator.domain.batch_layout import TooFewPeople, layout
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.next_steps import REVIEWER_NEEDED_STATUSES
+from ontocurator.domain.work_plans import RowKey
 from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import _lock_id
@@ -76,6 +78,20 @@ class BatchSpec:
     usernames: tuple[str, ...] = ()
     sort: str = "case"
     review_accepted_translation: bool = False
+    # Row-level selection (VD21): only these texts; replaces ``case_ids``.
+    # Texts of another language than ``language`` are not targeted.
+    rows: tuple[RowKey, ...] = ()
+
+    def selected_cases(self) -> tuple[str, ...]:
+        """The cases the batch looks at: with ``rows`` the cases of the
+        selected texts in ``language``, else ``case_ids``."""
+        if not self.rows:
+            return self.case_ids
+        return tuple(
+            dict.fromkeys(
+                row.case_id for row in self.rows if row.language == self.language
+            )
+        )
 
 
 @dataclass
@@ -316,22 +332,38 @@ class BatchAssignmentService:
             return self._batch(conn, key, pid, spec).view
 
     def selection_summary(
-        self, key: str, case_ids: Sequence[str], query: RowQuery
+        self,
+        key: str,
+        case_ids: Sequence[str],
+        query: RowQuery,
+        rows: Sequence[RowKey] = (),
     ) -> dict[str, Any]:
+        """Assignable steps of the selection: whole cases (``case_ids``) or
+        single texts (``rows``, VD21: only these texts count, ``skipped``,
+        ``skipped_rows`` and ``not_shown`` count texts)."""
         with self.db.transaction() as conn:
             pid = self._authorize(conn, key)
             facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
-            rows = _Rows(conn, pid, facts)
-        selected = list(dict.fromkeys(case_ids))
+            matcher = _Rows(conn, pid, facts)
+        texts = list(dict.fromkeys((row.case_id, row.language) for row in rows))
+        selected = (
+            list(dict.fromkeys(case_id for case_id, _ in texts))
+            if texts
+            else list(dict.fromkeys(case_ids))
+        )
+        candidates = texts or [
+            (case_id, language)
+            for case_id in selected
+            for language in matcher.languages_of(case_id)
+        ]
         counts: dict[tuple[Task, str], list[int]] = {}
-        for case_id in selected:
-            for language in rows.languages_of(case_id):
-                for task in ASSIGN_STEPS:
-                    match = rows.match(case_id, language, task, accepted_review=False)
-                    if match.targets:
-                        entry = counts.setdefault((task, language), [0, 0])
-                        entry[0] += len(match.targets)
-                        entry[1] += 1
+        for case_id, language in candidates:
+            for task in ASSIGN_STEPS:
+                match = matcher.match(case_id, language, task, accepted_review=False)
+                if match.targets:
+                    entry = counts.setdefault((task, language), [0, 0])
+                    entry[0] += len(match.targets)
+                    entry[1] += 1
         steps: list[dict[str, Any]] = [
             {"task": task, "language": language, "versions": v, "cases": c}
             for (task, language), (v, c) in sorted(
@@ -340,22 +372,56 @@ class BatchAssignmentService:
         ]
         common = steps[0] if steps else None
         skipped: Counter[str] = Counter()
+        skipped_rows: list[dict[str, str]] = []
         if common is not None:
-            for case_id in selected:
-                match = rows.match(
-                    case_id,
-                    common["language"],
-                    cast(Task, common["task"]),
-                    accepted_review=False,
+            reach = (
+                [text for text in texts if text[1] == common["language"]]
+                if texts
+                else [(case_id, common["language"]) for case_id in selected]
+            )
+            for case_id, language in reach:
+                match = matcher.match(
+                    case_id, language, cast(Task, common["task"]), accepted_review=False
                 )
                 if match.reason is not None:
                     skipped[match.reason] += 1
+                    if texts:
+                        skipped_rows.append({"case_id": case_id, "language": language})
+        ctx = matcher.ctx
+        not_shown = (
+            sum(
+                1
+                for text in texts
+                if text not in ctx.rows
+                or not page.row_matches(ctx, ctx.rows[text], query)
+            )
+            if texts
+            else ctx.cases_not_shown(selected, query)
+        )
         return {
             "cases": len(selected),
             "steps": steps,
             "skipped": dict(skipped),
+            "skipped_rows": skipped_rows,
             "common": common,
-            "not_shown": rows.ctx.cases_not_shown(selected, query),
+            "not_shown": not_shown,
+        }
+
+    def row_keys(
+        self, key: str, query: RowQuery, case_ids: Sequence[str] = ()
+    ) -> dict[str, Any]:
+        """Text keys matching ``query`` in list order (``document_row_keys``)."""
+        with self.db.transaction() as conn:
+            pid = self._authorize(conn, key)
+            facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
+        found, cases, total, truncated = document_row_keys.row_keys(
+            page.row_context(facts), query, case_ids, facts=facts
+        )
+        return {
+            "keys": [{"case_id": k.case_id, "language": k.language} for k in found],
+            "cases": cases,
+            "total": total,
+            "truncated": truncated,
         }
 
     # -- the batch ----------------------------------------------------------
@@ -411,7 +477,7 @@ class BatchAssignmentService:
         facts = rows.facts
         task = spec.task
         names = self._names(conn, spec.usernames)
-        order = page.sorted_case_ids(facts, spec.case_ids, spec.sort)
+        order = page.sorted_case_ids(facts, spec.selected_cases(), spec.sort)
         targets: dict[str, tuple[_Target, ...]] = {}
         skipped: dict[str, SkipReason] = {}
         holders: dict[str, frozenset[str]] = {}

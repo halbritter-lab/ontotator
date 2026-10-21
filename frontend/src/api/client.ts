@@ -76,7 +76,8 @@ export type DiscardResult = components["schemas"]["DiscardResult"];
 export type UploadWorkPlan = components["schemas"]["UploadWorkPlan"];
 // Batch assignment and selection summary (lead workflow L1b)
 export type DocumentRowFilters = components["schemas"]["DocumentRowFilters"];
-export type BatchAssignRequest = Defaulted<components["schemas"]["BatchAssignRequest"], "sort" | "filters" | "usernames" | "review_accepted_translation">;
+/** `case_ids` stays required for callers (`[]` when sending `rows`, VD21); the server takes exactly one non-empty selection. */
+export type BatchAssignRequest = Defaulted<Omit<components["schemas"]["BatchAssignRequest"], "case_ids"> & { case_ids: string[] }, "sort" | "filters" | "usernames" | "review_accepted_translation" | "rows">;
 export type BatchAssignBody = BatchAssignRequest & Defaulted<Pick<components["schemas"]["BatchAssignBody"], "expected_preview_digest" | "confirm_language">, "confirm_language">;
 export type BatchSkipView = components["schemas"]["BatchSkipView"];
 export type BatchTargetView = components["schemas"]["BatchTargetView"];
@@ -85,6 +86,12 @@ export type BatchPreview = components["schemas"]["BatchPreview"];
 export type BatchAssignResult = components["schemas"]["BatchAssignResult"];
 export type AssignableStepView = components["schemas"]["AssignableStepView"];
 export type SelectionSummary = components["schemas"]["SelectionSummary"];
+/** A text of a case: one Documents row (documents overview VD4). */
+export type RowRefView = components["schemas"]["RowRefView"];
+/** A selection: whole cases (case IDs) or single texts (`rows`, VD21). */
+export type RowSelection = readonly string[] | { readonly rows: readonly RowRefView[] };
+export type DocumentRowKeysRequest = Defaulted<components["schemas"]["DocumentRowKeysRequest"], "sort">;
+export type DocumentRowKeys = components["schemas"]["DocumentRowKeys"];
 /** Optional work-plan part of an upload commit (absent: the old body is sent). */
 export type CommitUploadPlan = Partial<Pick<components["schemas"]["CommitUpload"], "plan_languages" | "plan_cases" | "accept_external_review">>;
 type RowsParameters = Omit<NonNullable<operations["document_rows_api_v1_projects__key__document_rows_get"]["parameters"]["query"]>, "retain">;
@@ -114,6 +121,10 @@ function filterParams(filters: Readonly<Record<string, unknown>>, skip: readonly
     }
   }
   return query;
+}
+
+function isCaseIds(selection: RowSelection): selection is readonly string[] {
+  return Array.isArray(selection);
 }
 export type SubmissionHistorySummary = components['schemas']['SubmissionHistorySummary'];
 export type SubmissionHistoryDetail = components['schemas']['SubmissionHistoryDetail'];
@@ -329,7 +340,13 @@ export class ApiClient {
   async proposeDistribution(key: string, body: ProposalRequest): Promise<ProposalResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/proposal`, { method: "POST", body: JSON.stringify(body) }); }
   async previewAssignmentBatch(key: string, body: BatchAssignRequest): Promise<BatchPreview> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/batch/preview`, { method: "POST", body: JSON.stringify(body) }); }
   async commitAssignmentBatch(key: string, body: BatchAssignBody): Promise<BatchAssignResult> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/batch`, { method: "POST", body: JSON.stringify(body) }); }
-  async selectionSummary(key: string, caseIds: readonly string[], filters?: DocumentRowFilters): Promise<SelectionSummary> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/selection-summary`, { method: "POST", body: JSON.stringify(filters === undefined ? { case_ids: caseIds } : { case_ids: caseIds, filters }) }); }
+  /** Assignable steps of a selection of cases (case IDs) or texts (`{ rows }`). */
+  async selectionSummary(key: string, selection: RowSelection, filters?: DocumentRowFilters): Promise<SelectionSummary> {
+    const chosen = isCaseIds(selection) ? { case_ids: selection } : { rows: selection.rows };
+    return this.request(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/selection-summary`, { method: "POST", body: JSON.stringify(filters === undefined ? chosen : { ...chosen, filters }) });
+  }
+  /** Text keys matching the Documents filters in list order (at most 2000 cases); with `case_ids` only texts of these cases. */
+  async documentRowKeys(key: string, body: DocumentRowKeysRequest = {}): Promise<DocumentRowKeys> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/keys`, { method: "POST", body: JSON.stringify(body) }); }
   async reassign(id: number, body: ReassignRequest): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reassign`, { method: "POST", body: JSON.stringify(body) }); }
   async reopenAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }); }
   async revokeAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/revoke`, { method: "POST", body: JSON.stringify({ reason }) }); }

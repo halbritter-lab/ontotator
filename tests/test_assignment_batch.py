@@ -397,6 +397,7 @@ def test_selection_summary_lists_assignable_steps_and_common_step(env):
         "skipped": {"waiting_for_review": 6},
         "common": step,
         "not_shown": 0,
+        "skipped_rows": [],
     }
 
 

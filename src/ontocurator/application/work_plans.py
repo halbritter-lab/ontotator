@@ -273,6 +273,8 @@ class _Plan:
     revisions: dict[str, int]
     accepting: frozenset[RowKey] = frozenset()
     invalid: list[Invalid] = field(default_factory=list)
+    # Row-level selection (VD21): selected texts the change does not reach.
+    skipped: list[RowKey] = field(default_factory=list)
 
 
 class WorkPlanService:
@@ -643,8 +645,20 @@ class WorkPlanService:
         self, conn: Connection, project: RowMapping, request: BulkPlanRequest
     ) -> _Plan:
         pid = project["id"]
-        selected = list(dict.fromkeys(request.case_ids))
+        # With ``rows`` (VD21) only the selected texts count: the preset's
+        # languages, the preview groups and the changed rows.
+        picked = list(
+            dict.fromkeys(RowKey(r.case_id, r.language) for r in request.rows)
+        )
+        selected = (
+            list(dict.fromkeys(k.case_id for k in picked))
+            if picked
+            else list(dict.fromkeys(request.case_ids))
+        )
         versions = store.language_versions(conn, pid, selected)
+        if picked:
+            wanted = set(picked)
+            versions = {k: v for k, v in versions.items() if k in wanted}
         present = {k.case_id for k in versions}
         cases = [case_id for case_id in selected if case_id in present]
         current = store.effective_plan(conn, pid, cases)
@@ -657,6 +671,7 @@ class WorkPlanService:
         }
         merged = merge(current, versions, cases, changes)
         new = {k: f for k, f in merged.items() if f != current.get(k, OFF)}
+        skipped = sorted((k for k in picked if k not in merged), key=_row_order)
         languages = (
             set(request.accept_external_review.languages)
             if request.accept_external_review is not None
@@ -676,6 +691,7 @@ class WorkPlanService:
             new,
             store.revisions(conn, pid, cases),
             accepting,
+            skipped=skipped,
         )
         plan.invalid = validate(new, versions, rule_on=rule_on, accepting=accepting)
         return plan
@@ -760,6 +776,7 @@ class WorkPlanService:
                 ],
                 "revisions": plan.revisions,
                 "rule_on": plan.rule_on,
+                "skipped_rows": [_ref(k) for k in plan.skipped],
             }
 
     def bulk_save(self, key: str, request: BulkPlanRequest) -> dict[str, Any]:
@@ -774,12 +791,14 @@ class WorkPlanService:
                     plan.revisions, {c: expected.get(c) for c in plan.revisions}
                 )
             self._require_valid(plan)
+            skipped_rows = [_ref(k) for k in plan.skipped]
             if not plan.new:
                 return {
                     "changed_rows": 0,
                     "revisions": {},
                     "undo": {"rows": [], "revisions": {}},
                     "withdrawn": [],
+                    "skipped_rows": skipped_rows,
                 }
             result = self._consequences(conn, plan, lock=True)
             self._require_confirmed(
@@ -799,6 +818,7 @@ class WorkPlanService:
                 "revisions": applied["revisions"],
                 "undo": applied["undo"],
                 "withdrawn": applied["withdrawn"],
+                "skipped_rows": skipped_rows,
             }
 
     def set_rows(self, key: str, request: PlanRowsSet) -> dict[str, Any]:
