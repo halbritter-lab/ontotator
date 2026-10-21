@@ -330,6 +330,46 @@ def test_review_changes_causes_and_changed_passages(env):
     assert cause["document_id"] == "c1-en-v2" and cause["version"] == 2
 
 
+def test_replace_a_final_on_the_old_text(env):
+    """A final in state ``old_text`` (chosen on v1, text corrected to v2) is
+    replaced by a newer submission: a plain selection at the current
+    revision, no acknowledged causes (the panel's "Use as final")."""
+    old = doc("c1", "en")
+    submit_findings(
+        env, assign(env, old, "anno", "annotate"), "s1", [finding("a1", SEIZURE, None)]
+    )
+    first = select_final(env, old, "s1")
+    accepted_correction(env, old, "c1-en-v2")
+    submit_findings(
+        env,
+        assign(env, "c1-en-v2", "anno2", "annotate"),
+        "s2",
+        [finding("b1", SEIZURE, None)],
+    )
+
+    def final_cell() -> dict[str, Any]:
+        page = rows_service(env).page("proj", RowQuery())
+        return dict(rows_of(page)[("c1", "en")]["stages"]["final"])
+
+    assert final_cell()["state"] == "old_text"
+    response = env.lead.put(
+        f"{BASE}/final-selections",
+        json={
+            "document_id": "c1-en-v2",
+            "submission_id": "s2",
+            "expected_revision": first["revision"],
+            "acknowledged_cause_ids": [],
+        },
+    )
+    assert response.status_code == 200, response.text
+    replaced = response.json()
+    assert (replaced["document_id"], replaced["submission_id"]) == ("c1-en-v2", "s2")
+    assert replaced["revision"] == first["revision"] + 1
+    cell = final_cell()
+    assert cell["state"] == "final"
+    assert "SELECTED_TEXT_CORRECTED" not in [c["code"] for c in panel(env)["causes"]]
+
+
 def test_panel_is_lead_only_and_uses_shared_lock(env, monkeypatch):
     from ontocurator.application import document_rows
 
