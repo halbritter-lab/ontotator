@@ -67,23 +67,34 @@ class Finding:
     modifiers: frozenset[str]
     spans: tuple[Span, ...]
     order: int
-    type_id: str = ""            # new; groups() bucket (layer, type, term)
-    note: str | None = None      # new; compared by groups() only
+    type_id: str = ""  # new; groups() bucket (layer, type, term)
+    note: str | None = None  # new; compared by groups() only
     cues: tuple[Span, ...] = ()  # new; cue segments, compared with spans
 
-GroupKind = Literal["match", "values_differ", "span_differs", "notes_differ", "term_differs", "partial"]
+
+GroupKind = Literal[
+    "match", "values_differ", "span_differs", "notes_differ", "term_differs", "partial"
+]
+
 
 @dataclass(frozen=True)
 class Group:
-    members: Mapping[str, str]            # submission id -> finding key
-    kinds: frozenset[GroupKind]           # {"match"} alone, or a set of the others
-    differing_axes: tuple[str, ...]       # sorted axis names whose values differ among members
-    terms: tuple[str, ...]                # distinct term ids, in order of first member
-    keep: str                             # submission id of the default member (earliest in order)
-    start: int | None                     # first span start; None = spanless
-    majority: Mapping[str, str]           # axis -> value held by > half of >= 3 members (label only)
+    members: Mapping[str, str]  # submission id -> finding key
+    kinds: frozenset[GroupKind]  # {"match"} alone, or a set of the others
+    differing_axes: tuple[
+        str, ...
+    ]  # sorted axis names whose values differ among members
+    terms: tuple[str, ...]  # distinct term ids, in order of first member
+    keep: str  # submission id of the default member (earliest in order)
+    start: int | None  # first span start; None = spanless
+    majority: Mapping[
+        str, str
+    ]  # axis -> value held by > half of >= 3 members (label only)
 
-def groups(findings: Mapping[str, Sequence[Finding]], order: Sequence[str]) -> tuple[Group, ...]: ...
+
+def groups(
+    findings: Mapping[str, Sequence[Finding]], order: Sequence[str]
+) -> tuple[Group, ...]: ...
 ```
 
 `compare()` and `match()` keep their bucket `(layer_id, term_id)` and results.
@@ -93,15 +104,21 @@ def groups(findings: Mapping[str, Sequence[Finding]], order: Sequence[str]) -> t
 ```python
 ConsolidationAction = Literal["auto", "keep", "choose", "keep_both", "leave_out"]
 
+
 class ConsolidationMark(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: ConsolidationAction
     guidelines_unclear: bool = False
-    content_sha256: str | None = None  # hash of the created annotation content; None for leave_out
+    content_sha256: str | None = (
+        None  # hash of the created annotation content; None for leave_out
+    )
+
 
 class ReviewDecision(BaseModel):
     ...
-    consolidation: ConsolidationMark | None = Field(default=None, exclude_if=lambda v: v is None)
+    consolidation: ConsolidationMark | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
 ```
 
 ### API
@@ -118,10 +135,13 @@ class ReviewDecision(BaseModel):
 `ConsolidationView` (pydantic, `api/consolidation_routes.py`):
 
 ```python
-class ConsolidationPersonView(_View):   # display name only for leads and the assignee (U8)
-    person_id: str          # pseudonym, e.g. "ann-0004"
-    label: str              # "Luc Martin (ann-0004)" or the pseudonym
-    lane: int               # 1..4 (lane 4 also for every further person)
+class ConsolidationPersonView(
+    _View
+):  # display name only for leads and the assignee (U8)
+    person_id: str  # pseudonym, e.g. "ann-0004"
+    label: str  # "Luc Martin (ann-0004)" or the pseudonym
+    lane: int  # 1..4 (lane 4 also for every further person)
+
 
 class ConsolidationMemberView(_View):
     input_id: str
@@ -136,8 +156,9 @@ class ConsolidationMemberView(_View):
     cues: list[tuple[int, int]]
     note: str | None = None
 
+
 class ConsolidationGroupView(_View):
-    group_id: str                        # sha256 of sorted input ids, first 16 hex
+    group_id: str  # sha256 of sorted input ids, first 16 hex
     kinds: list[str]
     differing_axes: list[str]
     majority: dict[str, str]
@@ -150,11 +171,14 @@ class ConsolidationGroupView(_View):
     guidelines_unclear: bool = False
     annotation_ids: list[str] = []
 
+
 class ConsolidationView(_View):
     round_id: str
-    workspace_id: str | None             # None in read-only mode
+    workspace_id: str | None  # None in read-only mode
     read_only: bool
-    read_only_reason: str | None = None  # "submitted", "input_withdrawn", "not_assigned"
+    read_only_reason: str | None = (
+        None  # "submitted", "input_withdrawn", "not_assigned"
+    )
     case_id: str
     language: str
     document_version: int
