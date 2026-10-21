@@ -156,6 +156,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   REPLACEMENT_NOT_FOUND: "The replacement annotation could not be found.",
   REVISION_CONFLICT: "This work changed elsewhere. Reload the latest revision before retrying.",
   REANCHOR_ITEMS_UNRESOLVED: "Re-create pending findings after text correction or dismiss them with a reason before submitting.",
+  CONSOLIDATION_GROUPS_OPEN: "Resolve the open groups first.",
   UNSUPPORTED_REVIEW_RESOLUTION: "Bundles with reviewer flags cannot currently be re-imported into proposal storage.",
   REVIEW_NOTE_REQUIRED: "Add a reviewer note before marking a proposal as unresolved or submitting it.",
   REVIEW_ROUND_NOT_FOUND: "The requested review round is unavailable. Reload the task.",
@@ -208,6 +209,10 @@ export function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.code === "REANCHOR_ITEMS_UNRESOLVED" && typeof error.details === "object" && error.details !== null) {
     const count = error.details.count;
     if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) return `${count} finding(s) after text correction still need review. Re-create them or dismiss them with a reason before submitting.`;
+  }
+  if (error instanceof ApiError && error.code === "CONSOLIDATION_GROUPS_OPEN" && typeof error.details === "object" && error.details !== null) {
+    const count = error.details.count;
+    if (typeof count === "number" && Number.isSafeInteger(count) && count > 0) return `Resolve the open groups first (${count} open).`;
   }
   const guideline = guidelineMessage(error);
   if (guideline) return guideline;

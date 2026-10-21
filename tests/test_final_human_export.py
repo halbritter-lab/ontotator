@@ -25,6 +25,7 @@ from ontocurator.application.work_rounds import MergeRoundInputsService
 from ontocurator.application.workspaces import WorkspaceService
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Access
+from ontocurator.domain.errors import DomainError
 from ontocurator.domain.workspace import MutationEnvelope
 from ontocurator.exchange.jobs import HANDLERS
 from ontocurator.jobs.queue import JobQueue
@@ -102,6 +103,29 @@ def test_final_export_freezes_human_sources_notes_and_unresolved_collision(
                     },
                 ),
             )
+        # An uncertain decision leaves its consolidation group open (T10).
+        with pytest.raises(DomainError) as refused:
+            SubmissionService(reviewer, ontology).submit(
+                work_round.workspace_key,
+                MutationEnvelope(
+                    mutation_id="submit-open",
+                    expected_revision=draft.revision,
+                    payload={"document_checked": True},
+                ),
+            )
+        assert refused.value.code == "CONSOLIDATION_GROUPS_OPEN"
+        assert refused.value.details == {"count": 1}
+        draft = ReviewService(reviewer).decide(
+            work_round.workspace_key,
+            MutationEnvelope(
+                mutation_id="decision-kept",
+                expected_revision=draft.revision,
+                payload={
+                    "target": view.targets.targets[1].model_dump(),
+                    "outcome": "confirmed",
+                },
+            ),
+        )
     result = SubmissionService(reviewer, ontology).submit(
         work_round.workspace_key,
         MutationEnvelope(
@@ -157,10 +181,8 @@ def test_final_export_freezes_human_sources_notes_and_unresolved_collision(
         assert len(annotation.provenance.source_refs) == 2
         assert "Combined finding" in annotation.provenance.notes
     else:
-        assert any(
-            a.review_resolution and a.review_resolution.note == "Reviewer uncertainty"
-            for a in unit.annotation_set.annotations
-        )
+        # Both kept: no unresolved collision reaches a consolidation's result.
+        assert not any(a.review_resolution for a in unit.annotation_set.annotations)
     assert all(
         any(
             f"provenance-{receipt['snapshot_id']}" in ref

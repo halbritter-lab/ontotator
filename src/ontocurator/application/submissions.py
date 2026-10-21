@@ -330,11 +330,32 @@ class SubmissionService:
             )
         return sub
 
+    def _require_resolved_groups(self, key: WorkspaceKey, draft: Draft) -> None:
+        """A consolidation submits once no group is open (T10); the rule of
+        the consolidation read (``consolidation.is_open``)."""
+        from ontocurator.application.consolidation import open_group_count
+
+        assert key.round_id is not None
+        # Joins the submit's transaction.
+        with self.repo.db.transaction() as conn:
+            pid = self.repo._require_project(conn, key.project_key)
+            count = open_group_count(conn, pid, key.round_id, draft.decisions)
+        if count:
+            raise DomainError("CONSOLIDATION_GROUPS_OPEN", {"count": count})
+
     def _create_submission(
         self, draft: Draft, cmd: SubmitCommand, key: WorkspaceKey
     ) -> Submission:
         if cmd.checked_layer_ids is not None:
             draft.checked_layer_ids = list(cmd.checked_layer_ids)
+
+        round_view = (
+            self.repo.get_work_round(key.project_key, key.round_id)
+            if key.round_id is not None
+            else None
+        )
+        if round_view is not None and round_view.kind == "consolidation":
+            self._require_resolved_groups(key, draft)
 
         from ontocurator.application.reanchor_resolutions import validate_resolution
 
@@ -519,11 +540,6 @@ class SubmissionService:
                         },
                     )
 
-        round_view = (
-            self.repo.get_work_round(key.project_key, key.round_id)
-            if key.round_id is not None
-            else None
-        )
         if round_view is not None and round_view.kind in CARRY_ROUND_KINDS:
             from ontocurator.application.work_rounds import (
                 validate_round_input_resolutions,
