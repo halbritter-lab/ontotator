@@ -6,7 +6,7 @@ import type { ProjectDocumentsQuery } from "../../src/app/router";
 import { barChanges, currentFinalLabel, failureOf, successMessage } from "../../src/documents/FinalConfirm";
 import { rowSubmissionLabel } from "../../src/documents/SubmissionsTable";
 import { FINAL_SELECTION_CHANGED } from "../../src/variants/finalSelectionState";
-import { bar, final, group, item, page, row, rowKey, scenarioS0, scenarioS1, submission, submissions, version, work } from "./fixtures";
+import { bar, final, group, item, page, row, rowKey, scenarioS0, scenarioS1, stepOf, submission, submissions, version, work } from "./fixtures";
 
 const OWN_REASON = "This project keeps adjudication separate from annotation. Another lead must choose this result.";
 
@@ -33,10 +33,22 @@ const refetch = async () => {
   await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBe(calls + 1));
 };
 
-/** case-0042 en without a final result: two submitted annotations. */
+/** The row's next step is the given final-result action (Compare results… / Review changes…). */
+function withStep(target: DocumentRowView, code: "choose_final" | "confirm_final"): DocumentRowView {
+  const step = stepOf(code);
+  return { ...target, next_step: step, steps: [step] };
+}
+
+/** Opens the interim final-result choice under a row through its row action. */
+async function openChoice(caseId: string, language: string, action = "Compare results…") {
+  fireEvent.click(await screen.findByRole("button", { name: `${action}, ${caseId} · ${language}` }));
+  return screen.findByRole("region", { name: `Final result · ${caseId} · ${language}` });
+}
+
+/** case-0042 en without a final result: two submitted annotations, next step Compare results…. */
 function openRow(overrides: Partial<DocumentRowView> = {}) {
   const s1 = scenarioS1();
-  const en = { ...s1.group.rows[0], final: null, missing_final: { counts: true, reason: null }, categories: ["missing-final" as const], ...overrides };
+  const en = withStep({ ...s1.group.rows[0], final: null, missing_final: { counts: true, reason: null }, categories: ["missing-final" as const], ...overrides }, "choose_final");
   return { s1, en, page: page([group("case-0042", [en])]) };
 }
 
@@ -59,11 +71,15 @@ it("uses a submission as the first final result and focuses the new Final row's 
   serve(initial, s1.submissions);
   const changed = vi.fn();
   window.addEventListener(FINAL_SELECTION_CHANGED, changed);
-  renderPage({ open: [rowKey("case-0042", "en")] });
-  const [first] = await screen.findAllByRole("button", { name: "Use as final…" });
+  renderPage({});
+  const choice = await openChoice("case-0042", "en");
+  // Two eligible submissions: the choice focuses Submissions instead of opening a confirmation.
+  await waitFor(() => expect(document.activeElement?.textContent).toBe("Submissions (2)"));
+  const [first] = await within(choice).findAllByRole("button", { name: "Use as final…" });
   fireEvent.click(first);
   const label = rowSubmissionLabel(s1.submissions[rowKey("case-0042", "en")].submissions[0], "en", false);
   const confirm = confirmGroup("Use as final result");
+  expect(choice.contains(confirm)).toBe(true);
   expect(document.activeElement).toBe(within(confirm).getByRole("heading", { name: "Use as final result" }));
   expect(within(confirm).getByText(`Use ${label} as the final result for case-0042 · en?`)).toBeTruthy();
   serve(page([group("case-0042", [{ ...en, final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "sub-0042-a", revision: 1 }), categories: [] }])], { bar: bar({ total: 0, missing_final: 0 }) }));
@@ -81,12 +97,14 @@ it("uses a submission as the first final result and focuses the new Final row's 
 
 it("replaces the final result with the captured revision", async () => {
   const s1 = scenarioS1();
-  const en = { ...s1.group.rows[0], final: { ...s1.group.rows[0].final!, revision: 4 } };
+  const en = withStep({ ...s1.group.rows[0], final: { ...s1.group.rows[0].final!, revision: 4 } }, "choose_final");
   serve(page([group("case-0042", [en])]), s1.submissions);
-  renderPage({ open: [rowKey("case-0042", "en")] });
-  fireEvent.click(await screen.findByRole("button", { name: "Replace…" }));
+  renderPage({});
+  const choice = await openChoice("case-0042", "en");
+  fireEvent.click(await within(choice).findByRole("button", { name: "Replace…" }));
   const [a, b] = s1.submissions[rowKey("case-0042", "en")].submissions;
   const group1 = confirmGroup("Replace final result");
+  expect(choice.contains(group1)).toBe(true);
   expect(within(group1).getByText(`Replace ${rowSubmissionLabel(a, "en", false)} with ${rowSubmissionLabel(b, "en", false)}? The previous choice stays in the history.`)).toBeTruthy();
   fireEvent.click(within(group1).getByRole("button", { name: "Replace" }));
   expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-0042-en", submission_id: "sub-0042-b", expected_revision: 4, acknowledged_cause_ids: [] });
@@ -96,10 +114,11 @@ it("adds still-open work, the abandoned-round note and the own-result note to Us
   const s1 = scenarioS1();
   const data = s1.submissions[rowKey("case-0042", "en")];
   const mine = { ...data, submissions: [submission({ ...data.submissions[0], is_me: true, round_id: "r1", round_ordinal: 1, round_state: "abandoned" }), data.submissions[1]] };
-  const en = { ...s1.group.rows[0], final: null, work: [work({ assignment_id: 3, document_id: "case-0042-en", author_label: "ann-0009", status: "in_progress" })] };
+  const en = withStep({ ...s1.group.rows[0], final: null, work: [work({ assignment_id: 3, document_id: "case-0042-en", author_label: "ann-0009", status: "in_progress" })] }, "choose_final");
   serve(page([group("case-0042", [en])]), { [rowKey("case-0042", "en")]: mine });
-  renderPage({ open: [rowKey("case-0042", "en")] });
-  fireEvent.click((await screen.findAllByRole("button", { name: "Use as final…" }))[0]);
+  renderPage({});
+  const choice = await openChoice("case-0042", "en");
+  fireEvent.click((await within(choice).findAllByRole("button", { name: "Use as final…" }))[0]);
   const confirm = confirmGroup("Use as final result");
   expect(within(confirm).getByText("Still open: ann-0009 annotating.")).toBeTruthy();
   expect(within(confirm).getByText("This result belongs to an abandoned round; you will be asked to confirm it again after choosing.")).toBeTruthy();
@@ -110,9 +129,14 @@ it("keeps own results unselectable while the current project rule is on", async 
   const s1 = scenarioS1();
   const data = s1.submissions[rowKey("case-0042", "en")];
   const mine = { ...data, submissions: [submission({ ...data.submissions[0], is_me: true }), data.submissions[1]] };
-  serve(page([group("case-0042", [{ ...s1.group.rows[0], final: null }])], { adjudicator_not_annotator: true }), { [rowKey("case-0042", "en")]: mine });
-  renderPage({ open: [rowKey("case-0042", "en")] });
-  const [own] = await screen.findAllByRole("button", { name: "Use as final…" });
+  serve(page([group("case-0042", [withStep({ ...s1.group.rows[0], final: null }, "choose_final")])], { adjudicator_not_annotator: true }), { [rowKey("case-0042", "en")]: mine });
+  renderPage({});
+  const choice = await openChoice("case-0042", "en");
+  // The own result is not eligible, so the row action opens Use for the only other submission; close it first.
+  const auto = await screen.findByRole("group", { name: "Use as final result" });
+  expect(within(auto).getByText(`Use ${rowSubmissionLabel(mine.submissions[1], "en", false)} as the final result for case-0042 · en?`)).toBeTruthy();
+  fireEvent.click(within(auto).getByRole("button", { name: "Cancel" }));
+  const [own] = await within(choice).findAllByRole("button", { name: "Use as final…" });
   expect(own.getAttribute("aria-disabled")).toBe("true");
   expect(document.getElementById(own.getAttribute("aria-describedby")!.split(" ").at(-1)!)?.textContent).toBe(OWN_REASON);
   fireEvent.click(own);
@@ -122,10 +146,13 @@ it("keeps own results unselectable while the current project rule is on", async 
 
 it("makes Keep unavailable when the rule is switched on after the selection", async () => {
   const s0 = scenarioS0();
-  const de = { ...s0.group.rows[1], final: { ...s0.group.rows[1].final!, is_mine: true, adjudicator_not_annotator: false } };
+  const de = withStep({ ...s0.group.rows[1], final: { ...s0.group.rows[1].final!, is_mine: true, adjudicator_not_annotator: false } }, "confirm_final");
   serve(page([group("synthetic-accepted", [de])]), s0.submissions);
-  renderPage({ open: [rowKey("synthetic-accepted", "de")] });
-  const keep = await screen.findByRole("button", { name: "Keep final result…" });
+  renderPage({});
+  const choice = await openChoice("synthetic-accepted", "de", "Review changes…");
+  // Review changes… opens Keep right away; close it to reach the notice's own Keep trigger.
+  fireEvent.click(within(await screen.findByRole("group", { name: "Keep final result" })).getByRole("button", { name: "Cancel" }));
+  const keep = within(choice).getByRole("button", { name: "Keep final result…" });
   expect(keep.getAttribute("aria-disabled")).toBeNull();
   serve(page([group("synthetic-accepted", [de])], { adjudicator_not_annotator: true }));
   await refetch();
@@ -139,11 +166,12 @@ it("keeps the final result only with the checkbox and acknowledges every cause s
   const s0 = scenarioS0();
   const de = s0.group.rows[1];
   const second = item({ code: "SELECTED_ROUND_SUPERSEDED", cause_id: "SELECTED_ROUND_SUPERSEDED:round-s0-1", category: "confirm-final" });
-  const withTwo = { ...de, issues: [...de.issues, second] };
+  const withTwo = withStep({ ...de, issues: [...de.issues, second] }, "confirm_final");
   serve(page([group("synthetic-accepted", [withTwo])]), s0.submissions);
-  renderPage({ open: [rowKey("synthetic-accepted", "de")] });
-  fireEvent.click(await screen.findByRole("button", { name: "Keep final result…" }));
-  const confirm = confirmGroup("Keep final result");
+  renderPage({});
+  const choice = await openChoice("synthetic-accepted", "de", "Review changes…");
+  const confirm = await screen.findByRole("group", { name: "Keep final result" });
+  expect(choice.contains(confirm)).toBe(true);
   expect(within(confirm).getByText(/^Keep Annotation · Round 1 · ann-0004 · de v1 · .+ as the final result for synthetic-accepted · de\?$/)).toBeTruthy();
   expect(within(confirm).getByText("v2 (Ready for review) corrects the text of the final result.")).toBeTruthy();
   expect(within(confirm).getByText("Round 1 (ann-0004) has been superseded by Round 2.")).toBeTruthy();
@@ -172,11 +200,11 @@ it("keeps the final result only with the checkbox and acknowledges every cause s
 
 it("closes the confirmation when the row's revision or cause set changes on refresh", async () => {
   const s0 = scenarioS0();
-  const de = s0.group.rows[1];
+  const de = withStep(s0.group.rows[1], "confirm_final");
   serve(page([group("synthetic-accepted", [de])]), s0.submissions);
-  renderPage({ open: [rowKey("synthetic-accepted", "de")] });
-  fireEvent.click(await screen.findByRole("button", { name: "Keep final result…" }));
-  expect(confirmGroup("Keep final result")).toBeTruthy();
+  renderPage({});
+  const choice = await openChoice("synthetic-accepted", "de", "Review changes…");
+  expect(choice.contains(await screen.findByRole("group", { name: "Keep final result" }))).toBe(true);
   serve(page([group("synthetic-accepted", [{ ...de, final: { ...de.final!, revision: 2 } }])]));
   await refetch();
   await waitFor(() => expect(screen.queryByRole("group", { name: "Keep final result" })).toBeNull());
@@ -185,8 +213,9 @@ it("closes the confirmation when the row's revision or cause set changes on refr
 it("allows one confirmation per page and blocks other triggers while busy", async () => {
   const { s1, page: initial } = openRow();
   serve(initial, s1.submissions);
-  renderPage({ open: [rowKey("case-0042", "en")] });
-  const [first, second] = await screen.findAllByRole("button", { name: "Use as final…" });
+  renderPage({});
+  const choice = await openChoice("case-0042", "en");
+  const [first, second] = await within(choice).findAllByRole("button", { name: "Use as final…" });
   fireEvent.click(first);
   fireEvent.click(second);
   expect(screen.getAllByRole("group", { name: "Use as final result" })).toHaveLength(1);
@@ -203,9 +232,11 @@ it("allows one confirmation per page and blocks other triggers while busy", asyn
 it("returns focus to the trigger on Cancel and Escape", async () => {
   const { s1, page: initial } = openRow();
   serve(initial, s1.submissions);
-  renderPage({ open: [rowKey("case-0042", "en")] });
-  const [first] = await screen.findAllByRole("button", { name: "Use as final…" });
+  renderPage({});
+  const choice = await openChoice("case-0042", "en");
+  const [first] = await within(choice).findAllByRole("button", { name: "Use as final…" });
   fireEvent.click(first);
+  expect(choice.contains(confirmGroup("Use as final result"))).toBe(true);
   fireEvent.click(within(confirmGroup("Use as final result")).getByRole("button", { name: "Cancel" }));
   expect(screen.queryByRole("group", { name: "Use as final result" })).toBeNull();
   expect(document.activeElement).toBe(first);
@@ -218,8 +249,9 @@ it("returns focus to the trigger on Cancel and Escape", async () => {
 it("shows a conflict with who changed it and reloads the row on Review again", async () => {
   const { s1, page: initial } = openRow();
   serve(initial, s1.submissions);
-  renderPage({ open: [rowKey("case-0042", "en")] });
-  fireEvent.click((await screen.findAllByRole("button", { name: "Use as final…" }))[0]);
+  renderPage({});
+  const choice = await openChoice("case-0042", "en");
+  fireEvent.click((await within(choice).findAllByRole("button", { name: "Use as final…" }))[0]);
   vi.mocked(api.selectFinalResult).mockRejectedValue(new ConflictError("conflict", "REVISION_CONFLICT", { current_revision: 1, selected_by: "lead-0003", updated_at: "2026-10-19T08:00:00Z" }));
   fireEvent.click(within(confirmGroup("Use as final result")).getByRole("button", { name: "Use as final" }));
   const notice = await within(confirmGroup("Use as final result")).findByText(/The final result or its warnings changed since you opened this\. Nothing was saved\./);
@@ -233,8 +265,9 @@ it("shows a conflict with who changed it and reloads the row on Review again", a
 it("offers Retry after a network error and keeps the confirmation after a session end", async () => {
   const { s1, page: initial } = openRow();
   serve(initial, s1.submissions);
-  renderPage({ open: [rowKey("case-0042", "en")] });
-  fireEvent.click((await screen.findAllByRole("button", { name: "Use as final…" }))[0]);
+  renderPage({});
+  const choice = await openChoice("case-0042", "en");
+  fireEvent.click((await within(choice).findAllByRole("button", { name: "Use as final…" }))[0]);
   vi.mocked(api.selectFinalResult).mockRejectedValueOnce(new ApiError(500, "boom"));
   fireEvent.click(within(confirmGroup("Use as final result")).getByRole("button", { name: "Use as final" }));
   expect(await within(confirmGroup("Use as final result")).findByText("Could not save. Nothing changed.")).toBeTruthy();
@@ -252,7 +285,8 @@ it("links the next decision while a decision filter is active", async () => {
   const other = row({ case_id: "case-0099", language: "de", versions: [version({ document_id: "case-0099-de" })], categories: ["missing-final"], missing_final: { counts: true, reason: null } });
   serve(page([group("case-0042", [en]), group("case-0099", [other])]), s1.submissions);
   const { onNavigate } = renderPage({ decision: "all", open: [rowKey("case-0042", "en")] });
-  fireEvent.click((await screen.findAllByRole("button", { name: "Use as final…" }))[0]);
+  const choice = await openChoice("case-0042", "en");
+  fireEvent.click((await within(choice).findAllByRole("button", { name: "Use as final…" }))[0]);
   serve(page([group("case-0042", [{ ...en, final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "sub-0042-a" }), categories: [] }]), group("case-0099", [other])]));
   fireEvent.click(within(confirmGroup("Use as final result")).getByRole("button", { name: "Use as final" }));
   const next = await screen.findByRole("link", { name: "Next decision: case-0099 · de" });
@@ -276,8 +310,9 @@ it("maps errors, success messages and bar changes", () => {
 it("reports a save whose reload failed and keeps the shown rows with Could not refresh", async () => {
   const { s1, page: initial } = openRow();
   serve(initial, s1.submissions);
-  renderPage({ open: [rowKey("case-0042", "en")] });
-  fireEvent.click((await screen.findAllByRole("button", { name: "Use as final…" }))[0]);
+  renderPage({});
+  const choice = await openChoice("case-0042", "en");
+  fireEvent.click((await within(choice).findAllByRole("button", { name: "Use as final…" }))[0]);
   const label = rowSubmissionLabel(s1.submissions[rowKey("case-0042", "en")].submissions[0], "en", false);
   vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new Error("offline"));
   fireEvent.click(within(confirmGroup("Use as final result")).getByRole("button", { name: "Use as final" }));
@@ -291,11 +326,12 @@ it("reports a save whose reload failed and keeps the shown rows with Could not r
 
 it("announces a confirmation whose row vanished and moves focus to the page heading", async () => {
   const s0 = scenarioS0();
-  const [en, de] = s0.group.rows;
+  const [en] = s0.group.rows;
+  const de = withStep(s0.group.rows[1], "confirm_final");
   serve(page([group("synthetic-accepted", [en, de])]), s0.submissions);
-  renderPage({ open: [rowKey("synthetic-accepted", "de")] });
-  fireEvent.click(await screen.findByRole("button", { name: "Keep final result…" }));
-  const box = within(confirmGroup("Keep final result")).getByRole("checkbox");
+  renderPage({});
+  await openChoice("synthetic-accepted", "de", "Review changes…");
+  const box = within(await screen.findByRole("group", { name: "Keep final result" })).getByRole("checkbox");
   box.focus();
   serve(page([group("synthetic-accepted", [en])]));
   await refetch();
