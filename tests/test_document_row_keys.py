@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from auth_harness import logged_in
 from work_plan_support import BASE, plan_env
 
 from ontocurator.application import document_row_keys
@@ -44,8 +45,6 @@ def test_keys_follow_filters_and_list_order(env):
     assert filtered["cases"] == 2 and filtered["total"] == 4
     one = keys(env, filters={"q": "c2", "language": "en"})
     assert pairs(one) == [("c2", "en")]
-    from auth_harness import logged_in
-
     ana = logged_in(env.app, "ana", assignments=[])
     assert ana.post(f"{BASE}/document-rows/keys", json={}).status_code == 403
     bad = env.lead.post(
@@ -63,14 +62,12 @@ def test_keys_for_case_ids_return_every_matching_text(env):
 
 
 def test_keys_truncate_at_2000_cases(env, monkeypatch):
+    assert document_row_keys.MAX_CASES == 2000
     monkeypatch.setattr(document_row_keys, "MAX_CASES", 1)
     result = keys(env)
     assert pairs(result) == [("c1", "en"), ("c1", "de"), ("c1", "fr")]
     assert result["cases"] == 2 and result["total"] == 6
     assert result["truncated"] is True
-    assert document_row_keys.MAX_CASES != 2000  # patched
-    monkeypatch.undo()
-    assert document_row_keys.MAX_CASES == 2000
 
 
 def test_case_ids_endpoint_still_answers(env):

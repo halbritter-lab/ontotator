@@ -29,15 +29,23 @@ class PlanFlagsView(BaseModel):
     decided: bool = Field(default_factory=lambda: True)
 
 
+# Abuse guards for a text key; generous, well above real case IDs and
+# language codes.
+MAX_CASE_ID_LENGTH = 512
+MAX_LANGUAGE_LENGTH = 64
+
+
 class RowRefView(BaseModel):
-    case_id: str
-    language: str
+    case_id: str = Field(max_length=MAX_CASE_ID_LENGTH)
+    language: str = Field(max_length=MAX_LANGUAGE_LENGTH)
 
 
 # A selection holds at most this many cases (lead spec D17), as case IDs or as
-# the texts of these cases (documents overview VD21).
+# the texts of these cases (documents overview VD21). The case count is the
+# limit (``require_one_selection``); the row cap only guards against abuse and
+# stays well above any real number of languages per case.
 MAX_SELECTED_CASES = 2000
-MAX_SELECTED_ROWS = 20000
+MAX_SELECTED_ROWS = MAX_SELECTED_CASES * 100
 
 
 def require_one_selection(case_ids: Sequence[str], rows: Sequence[RowRefView]) -> None:

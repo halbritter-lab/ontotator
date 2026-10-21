@@ -5750,7 +5750,9 @@ export interface components {
          *     With ``rows`` only the selected texts count: ``steps`` count those texts,
          *     ``skipped`` counts the selected texts in the language of ``common`` that
          *     it does not reach, ``skipped_rows`` names them and ``not_shown`` counts
-         *     selected texts the filters hide.
+         *     selected texts the filters hide. ``cases`` counts the cases with at
+         *     least one selected text the project knows. Selected texts outside the
+         *     language of ``common`` are not counted in ``skipped``.
          */
         SelectionSummary: {
             /** Cases */

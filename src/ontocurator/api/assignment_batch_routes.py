@@ -105,7 +105,7 @@ class BatchAssignRequest(BaseModel):
     review_accepted_translation: bool = False
 
     @model_validator(mode="after")
-    def _one_person(self) -> Self:
+    def _valid(self) -> Self:
         require_one_selection(self.case_ids, self.rows)
         if self.mode == "one" and len(self.usernames) > 1:
             raise ValueError("mode 'one' takes at most one username")
@@ -245,7 +245,9 @@ class SelectionSummary(BaseModel):
     With ``rows`` only the selected texts count: ``steps`` count those texts,
     ``skipped`` counts the selected texts in the language of ``common`` that
     it does not reach, ``skipped_rows`` names them and ``not_shown`` counts
-    selected texts the filters hide.
+    selected texts the filters hide. ``cases`` counts the cases with at
+    least one selected text the project knows. Selected texts outside the
+    language of ``common`` are not counted in ``skipped``.
     """
 
     cases: int

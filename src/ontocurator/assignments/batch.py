@@ -398,8 +398,13 @@ class BatchAssignmentService:
             if texts
             else ctx.cases_not_shown(selected, query)
         )
+        cases = (
+            len({text[0] for text in texts if text in ctx.rows})
+            if texts
+            else len(selected)
+        )
         return {
-            "cases": len(selected),
+            "cases": cases,
             "steps": steps,
             "skipped": dict(skipped),
             "skipped_rows": skipped_rows,

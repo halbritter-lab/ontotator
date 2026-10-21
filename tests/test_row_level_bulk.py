@@ -7,6 +7,7 @@ import typing
 from typing import Any
 
 import pytest
+from auth_harness import logged_in
 from work_plan_support import BASE, assign, doc, flags_of, plan_env, revision_of, write
 
 from ontocurator.api import assignment_batch_routes, document_row_routes
@@ -95,12 +96,43 @@ def test_rows_over_2000_cases_refused(env):
         response = getattr(env.lead, method)(f"{BASE}/{path}", json=body)
         assert response.status_code == 422, (path, response.text)
         assert response.json()["code"] == "CASE_IDS_TOO_MANY", path
-    # 2000 cases with several texts each are fine.
-    many = [ref(f"x{n}", lang) for n in range(2000) for lang in ("de", "fr")]
+    # 2000 cases with a text in each of 11 languages are fine: the limit
+    # counts cases, not texts.
+    languages = [f"l{n}" for n in range(11)]
+    many = [ref(f"x{n}", lang) for n in range(2000) for lang in languages]
     response = env.lead.post(
         f"{BASE}/document-rows/selection-summary", json={"rows": many}
     )
     assert response.status_code == 200, response.text
+    # None of these texts exists, so no case counts.
+    assert response.json()["cases"] == 0
+
+
+def test_row_keys_post_unchanged_as_rows(env):
+    annotate_translations(env)
+    found = env.lead.post(f"{BASE}/document-rows/keys", json={})
+    assert found.status_code == 200, found.text
+    rows = found.json()["keys"]
+    assert len(rows) == 6
+    calls = (
+        ("work-plans/bulk/preview", {"rows": rows, "preset": "annotate_only"}),
+        ("assignments/batch/preview", batch("annotate", "de", rows=rows)),
+        ("document-rows/selection-summary", {"rows": rows}),
+    )
+    for path, body in calls:
+        response = env.lead.post(f"{BASE}/{path}", json=body)
+        assert response.status_code == 200, (path, response.text)
+
+
+def test_row_selection_endpoints_refuse_non_leads(env):
+    anno = logged_in(env.app, "anno", assignments=[])
+    rows = [ref("c1", "de")]
+    for path, body in (
+        ("work-plans/bulk/preview", {"rows": rows, "preset": "annotate_only"}),
+        ("assignments/batch/preview", batch("annotate", "de", rows=rows)),
+    ):
+        response = anno.post(f"{BASE}/{path}", json=body)
+        assert response.status_code == 403, (path, response.text)
 
 
 def test_selection_summary_with_rows_counts_texts(env):

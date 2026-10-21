@@ -7745,7 +7745,7 @@
               "$ref": "#/components/schemas/RowRefView"
             },
             "type": "array",
-            "maxItems": 20000,
+            "maxItems": 200000,
             "title": "Rows"
           },
           "sort": {
@@ -7830,7 +7830,7 @@
               "$ref": "#/components/schemas/RowRefView"
             },
             "type": "array",
-            "maxItems": 20000,
+            "maxItems": 200000,
             "title": "Rows"
           },
           "sort": {
@@ -8259,7 +8259,7 @@
               "$ref": "#/components/schemas/RowRefView"
             },
             "type": "array",
-            "maxItems": 20000,
+            "maxItems": 200000,
             "title": "Rows"
           },
           "languages": {
@@ -16584,10 +16584,12 @@
         "properties": {
           "case_id": {
             "type": "string",
+            "maxLength": 512,
             "title": "Case Id"
           },
           "language": {
             "type": "string",
+            "maxLength": 64,
             "title": "Language"
           }
         },
@@ -17403,7 +17405,7 @@
           "common"
         ],
         "title": "SelectionSummary",
-        "description": "Assignable steps of the selected cases or texts (D21, VD21).\n\n``steps``: per (task, language) the versions and cases whose row has that\ntask's assign step, most versions first (then most cases, then task and\nlanguage). ``common`` is the first of ``steps`` (None when nothing is\nassignable), the step the dialog preselects; ``skipped`` counts the\nselected cases that ``common`` does not reach, by skip reason.\n``not_shown`` counts selected cases the current filters hide; filters\nnever change ``steps``, ``common`` or ``skipped``.\n\nWith ``rows`` only the selected texts count: ``steps`` count those texts,\n``skipped`` counts the selected texts in the language of ``common`` that\nit does not reach, ``skipped_rows`` names them and ``not_shown`` counts\nselected texts the filters hide."
+        "description": "Assignable steps of the selected cases or texts (D21, VD21).\n\n``steps``: per (task, language) the versions and cases whose row has that\ntask's assign step, most versions first (then most cases, then task and\nlanguage). ``common`` is the first of ``steps`` (None when nothing is\nassignable), the step the dialog preselects; ``skipped`` counts the\nselected cases that ``common`` does not reach, by skip reason.\n``not_shown`` counts selected cases the current filters hide; filters\nnever change ``steps``, ``common`` or ``skipped``.\n\nWith ``rows`` only the selected texts count: ``steps`` count those texts,\n``skipped`` counts the selected texts in the language of ``common`` that\nit does not reach, ``skipped_rows`` names them and ``not_shown`` counts\nselected texts the filters hide. ``cases`` counts the cases with at\nleast one selected text the project knows. Selected texts outside the\nlanguage of ``common`` are not counted in ``skipped``."
       },
       "SelectionSummaryRequest": {
         "properties": {
@@ -17420,7 +17422,7 @@
               "$ref": "#/components/schemas/RowRefView"
             },
             "type": "array",
-            "maxItems": 20000,
+            "maxItems": 200000,
             "title": "Rows"
           },
           "filters": {
