@@ -38,7 +38,7 @@ Mockup: `a-pending-selection.html` (bar position, mouse and keyboard adjustment 
 2. **Search follows the span.** While the user has not typed into the search field (`SearchPanel`'s `userTyped`), an adjusted span re-prefills the query from the new text and searches (normal 250 ms debounce). After the user typed, the query is left alone.
 3. **Pending bar at the mark (≥ 700 px).** A small bar anchored below the last line of the pending mark, positioned over the text (absolute, never reflowing it), placed like `Popover` (`ui/Popover.tsx:36-41`, re-placed on scroll and resize, flipped above the mark near the pane bottom). Content: "Drag the edges to adjust" (muted, `size-xs`) and a quiet `Button size="sm"` "Discard" with `Kbd` Esc. Not modal, no focus trap, not in the Tab order before the search field (it follows the text pane in DOM order).
 4. **Inspector.** The "New finding" heading row gets "Discard" (quiet, `Kbd` Esc) on its right; the bottom "Cancel" (`:3083`) is removed for marked spans (it stays for spanless, re-anchor and carried, where it means cancel, not discard a mark). Under the quote: "Adjust the marked text with its edge handles, or mark new text to replace it."
-5. **Esc anywhere in the editor** (text pane, inspector, search field) discards a pending marked span, unless a dialog, drawer or popover owns the key (same rule as `TextPane.tsx:177-178`). Added as the first branch of the Escape shortcut at `:2494`. Focus returns to the text at the end of the discarded span (today's `setTextFocusRequest`).
+5. **Esc anywhere in the editor** (text pane, inspector, search field) discards a pending marked span, unless a dialog, drawer or popover owns the key (same rule as `TextPane.tsx:177-178`). Added as the first branch of the Escape shortcut at `:2494`. Text fields keep their own Escape (the search field discards itself); a `select` or another non-text control does not take Escape, so the discard runs from there too (`isTextEntryTarget`, `ui/shortcuts.ts`). Focus returns to the text at the end of the discarded span (today's `setTextFocusRequest`).
 6. Below 700 px: the existing "New finding" bar gets the same "Discard" wording (replacing "Cancel"); handles work by touch with the vendor's grab areas. No floating bar (the bottom bar is already at hand).
 
 ### Copy
@@ -191,7 +191,7 @@ Mockup: `c-submit-unconfirmed.html` (opened with three findings, after one Confi
 Mockup: `d-term-search.html` (first hit active and third hit active side by side; row positions unchanged).
 
 1. **Constant row heights.** Every row renders the same parts whatever its state: header (label, HPO code, a reserved Enter slot that is `visibility: hidden` unless active), optional match line, and the definition clamped to **two lines** (`-webkit-line-clamp: 2`, replacing the one-line `nowrap` clamp). Activity changes only fill and the inset accent bar (`editor.css:1080-1083`), never layout.
-2. **Fixed detail area.** Between the hint line and the list, a box of fixed height (5 lines of `size-sm`, `overflow-y: auto`, `surface-sunken`, `radius-sm`) shows the active hit: label, HPO code, full definition, match line ("Matched: {matched_term}"), and "Obsolete term (assignment not allowed)" where applicable. Without hits the box is not rendered at all (no empty reserved space). Its height never depends on content.
+2. **Fixed detail area.** Between the hint line and the list, a box of fixed height (5 lines of `size-sm`, `overflow-y: auto`, `surface-sunken`, `radius-sm`) shows the active hit: label, HPO code, full definition, match line ("Matched: {matched_term}"), and "Obsolete term (assignment not allowed)" where applicable. Without hits the box is not rendered at all (no empty reserved space). Its height never depends on content. The first usable hit is active by default (the one Enter adds); when no hit can be active (all obsolete, or the user cannot assign), the box shows the first hit for reference.
 3. Pointer hover still moves the active hit (the detail area follows); since rows no longer change, the pointer stays on its row.
 
 ### Keyboard and accessibility
@@ -222,7 +222,7 @@ Mockup: `d-term-search.html` (first hit active and third hit active side by side
 
 ### Target behaviour
 
-- The counts list becomes status tabs (existing `ui/Tabs.tsx`, link-driven, with counts): **"To do (n)"** (open, reopened, in progress; the same set as the nav count) · **"Paused (n)"** (held; shown only when n > 0) · **"Submitted (n)"** · **"All (n)"**. Counts respect the project filter.
+- The counts list becomes status tabs (existing `ui/Tabs.tsx`, link-driven, with counts): **"To do (n)"** (every status but submitted: open, reopened, in progress, and paused ones; the same set as the nav count) · **"Paused (n)"** (held; shown only when n > 0) · **"Submitted (n)"** · **"All (n)"**. Counts respect the project filter.
 - Route: `#/?status=todo|paused|submitted|all` next to `project` (`app/router.ts:88`, `:119`, `:190`); absent means **"All"** (D3). Unknown values fall back to the default.
 - The table is the tabpanel (`aria-labelledby={tabId(...)}`); the Status column stays (it distinguishes Open / In progress / Reopened inside "To do").
 - Empty tab: `EmptyState` "Nothing to do here." / "No submitted tasks yet." / "No paused tasks." with the link "Show all tasks" (to `status=all`). The existing "No documents are assigned to you yet." stays for zero tasks overall.
@@ -290,6 +290,7 @@ The pattern of GitHub, Linear, Vercel and GitLab: the current project is named a
 3. **Submit dialog primary label:** always "Submit case" (no "Continue and submit").
 4. **Q3 (quick fixes spec):** the header project picker is replaced by the sidebar switcher (combobox with listbox instead of a disclosure of links; arrows still never navigate, links kept inside the options for modified clicks).
 5. **D7 (lead workflow spec):** landing is the last-used project for every role, the Projects page when there is none (D4, confirmed).
+6. **F7 route:** every "My tasks" link carries `status=all` explicitly (`MY_TASKS`, `app/router.ts`), so a reload or a new tab never runs the last-used landing. An absent `status` still means "All".
 
 DESIGN.md rows for the values block, term search, submit dialog and shell navigation are updated with the implementation.
 

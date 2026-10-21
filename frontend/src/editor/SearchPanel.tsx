@@ -299,6 +299,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         </InlineMessage>
       )}
 
+      {/* The active hit (the first usable one by default); with none usable, the first hit for reference (spec F4.2). */}
       {expanded && <SearchDetail hit={candidates[shownActive >= 0 ? shownActive : 0]} />}
 
       {expanded && (
