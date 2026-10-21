@@ -212,7 +212,7 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
   await evidence(page, "320-documents-selection-toast");
 
   await showPlanLine(page, "case-0101", "de");
-  await expect(historyRegion(page, "case-0101", "de").getByRole("heading", { name: "History", level: 3 })).toBeVisible();
+  await expect(historyRegion(page, "case-0101", "de").getByRole("heading", { name: "History", level: 5 })).toBeVisible();
   expect(await overflow(page), "expanded card").toMatchObject({ scrollWidth: 320, outside: [] });
   await evidence(page, "320-expanded-card", historyRegion(page, "case-0101", "de"));
 
