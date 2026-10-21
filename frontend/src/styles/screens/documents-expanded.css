@@ -70,7 +70,13 @@
 .final-panel-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .final-panel-agreement { display: grid; gap: var(--space-1); justify-items: start; }
 .final-panel-agreement-bar { width: 100%; max-width: 16rem; height: 8px; }
-.final-panel-table { width: 100%; }
+.final-panel-table { width: 100%; overflow-wrap: normal; }
+.final-panel-table thead th { white-space: nowrap; }
+.final-panel-table th[scope="row"] .cell-secondary { white-space: nowrap; }
+.final-panel-table-group th { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
+/* The compare table needs room: the panel widens to 640 px (the full width below 700 px). */
+.ui-dialog--side:has(.final-panel-compare) { width: min(640px, 100vw); }
+.final-panel-decided { display: grid; gap: var(--space-3); min-width: 0; }
 .final-panel-table th[scope="row"] { font-weight: var(--weight-strong); }
 .final-panel-row-actions { white-space: nowrap; text-align: end; }
 .final-panel-row-actions > * { vertical-align: middle; }
@@ -81,7 +87,7 @@
   .final-panel-row-actions { white-space: normal; text-align: start; }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 699px) {
   .technical-details { grid-template-columns: minmax(0, 1fr); }
   .technical-details dd { margin-bottom: var(--space-1); }
 }

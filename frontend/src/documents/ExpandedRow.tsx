@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { type DocumentRowView, type RowSubmissionView, type RowSubmissions, type SubmissionHistorySummary } from "../api/client";
+import { type DocumentRowView, type RowSubmissions } from "../api/client";
+import { consolidationInputs } from "./finalPanelText";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Time } from "../app/Time";
 import { Button } from "../ui";
@@ -39,10 +40,6 @@ export interface ExpandedRowProps {
   revealTextVersions?: boolean;
   onTextVersionsRevealed?: () => void;
   now?: Date;
-}
-
-function toHistorySummary(row: RowSubmissionView): SubmissionHistorySummary {
-  return { submission_id: row.submission_id, document_id: row.document_id, author_label: row.author_label, created_at: row.recorded_at, mode: row.mode, round_id: row.round_id, guideline_version: row.guideline_version ?? null, guideline_withdrawn: row.guideline_withdrawn };
 }
 
 function useLink(onNavigate: (route: Route) => void) {
@@ -86,6 +83,8 @@ export function ExpandedRow({
   }, [revealTextVersions]);
 
   const lines = historyLines(row, data ? rows : null, { me, now });
+  /** A reporter's display name (members by pseudonym); the label itself without one. */
+  const personOf = (label: string) => textVersionTools?.members.find(member => member.pseudonym === label)?.display_name?.trim() || label;
   const problemReports = row.problem_reports ?? [];
   const reviewable = onAssign && row.work.some(item => item.task === "annotate" && item.status === "submitted" && item.moved_to_version == null);
   // D25: a new review of a translation the lead (or the import override) accepted without one.
@@ -124,13 +123,14 @@ export function ExpandedRow({
             : consolidationDocuments.map(documentId => <div key={documentId} className="expanded-row-consolidation">
               {consolidationDocuments.length > 1 && <h4>{nameOf(documentId)}</h4>}
               <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={textVersionTools?.username ?? ""}
-                rows={rows.filter(item => item.document_id === documentId).map(toHistorySummary)} />
+                rows={consolidationInputs(rows.filter(item => item.document_id === documentId), now)}
+                defaultSelected={rows.filter(item => item.document_id === documentId && item.is_latest_in_round !== false).map(item => item.submission_id)} />
             </div>)}
       </details>
       {problemReports.length > 0 && <details className="expanded-row-more">
         <summary>Problem reports ({problemReports.length})</summary>
         <ul className="expanded-row-issues">{problemReports.map(report => <li key={report.report_id}>
-          {report.title}{" · "}{report.reporter_label}{" · "}<Time iso={report.created_at} now={now} />
+          {report.title}{" · "}{personOf(report.reporter_label)}{" · "}<Time iso={report.created_at} now={now} />
           {" · "}Report: {REPORT_STATE_TEXT[report.state]}{" · "}Paused tasks: {report.active_hold_count}{" · "}{link(reportRoute(report.report_id), "Open report")}
         </li>)}</ul>
       </details>}
