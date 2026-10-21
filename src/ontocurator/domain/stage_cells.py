@@ -348,7 +348,7 @@ def _review(facts: StageFacts, codes: frozenset[str]) -> StageCell:
     if "translation_not_accepted" in codes:
         return _cell("not_accepted", "decision", note="review_off")
     # Rule 6 assigns a not-yet-reviewed translation's review instead of 6a.
-    if facts.source_changed_from is not None and "review_source_change" in codes:
+    if step.source_changed and "review_source_change" in codes:
         return _cell(
             "source_changed", "decision", from_version=facts.source_changed_from
         )
@@ -540,7 +540,7 @@ def _final(facts: StageFacts, codes: frozenset[str]) -> StageCell:
         )
         return _cell("choose", "decision", submitted=submissions)
     if step.has_final:
-        if facts.source_changed_from is not None:
+        if step.source_changed:
             return _cell(
                 "may_be_outdated",
                 "waiting",

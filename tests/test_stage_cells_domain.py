@@ -1186,3 +1186,16 @@ def test_open_old_work_while_the_correction_awaits_review_is_running() -> None:
     assert (cell.state, cell.tone) == ("in_progress", "running")
     assert cell.detail.note == "text_change_waiting"
     assert cell.detail.people == (TOM,)
+
+
+def test_source_change_without_a_known_old_source_version() -> None:
+    # The old source version is not among the row facts: the cells still
+    # show the source change (no from_version).
+    c = cells(facts(source_changed=True, source_changed_from=None))
+    assert (c.review.state, c.review.tone) == ("source_changed", "decision")
+    assert c.review.detail.from_version is None
+    done = cells(facts(source_changed=True, source_changed_from=None, has_final=True))
+    assert (done.final.state, done.final.detail.note) == (
+        "may_be_outdated",
+        "source_changed",
+    )
