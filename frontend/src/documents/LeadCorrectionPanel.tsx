@@ -68,9 +68,12 @@ export interface LeadCorrectionPanelProps {
   /** Opens the task (`{ name: "task", assignmentId }`) or the profile (`{ name: "me" }`). */
   onNavigate: (route: Route) => void;
   onCancel: () => void;
+  /** Heading level under the row: 3 in the table (below the hidden h2 "Texts"), 5 in a card. */
+  headingLevel?: 3 | 5;
 }
 
-export function LeadCorrectionPanel({ row, projectKey, onNavigate, onCancel }: LeadCorrectionPanelProps): JSX.Element {
+export function LeadCorrectionPanel({ row, projectKey, onNavigate, onCancel, headingLevel = 3 }: LeadCorrectionPanelProps): JSX.Element {
+  const Heading = `h${headingLevel}` as "h3";
   const id = useId();
   const heading = useRef<HTMLHeadingElement>(null);
   const writing = useRef(false);
@@ -99,7 +102,7 @@ export function LeadCorrectionPanel({ row, projectKey, onNavigate, onCancel }: L
   };
 
   return <div className="documents-resolve" role="group" aria-labelledby={`${id}-title`}>
-    <h4 id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{`Correct the translation, ${textLabel(row)}`}</h4>
+    <Heading id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{`Correct the translation, ${textLabel(row)}`}</Heading>
     <p>{`You review v${version} yourself and submit it as Accepted with corrections. The corrected text becomes v${version + 1} and counts as accepted.`}</p>
     {missing !== null && <Checkbox id={`${id}-language`} label={`Correct despite missing ${missing.join(", ")} in your profile`}
       checked={confirmLanguage} onChange={event => setConfirmLanguage(event.target.checked)} />}

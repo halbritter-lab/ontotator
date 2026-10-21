@@ -36,6 +36,8 @@ export interface ExpandedRowProps {
   plan?: ReactNode;
   /** Pseudonym of the signed-in lead ("Final: chosen by you"). */
   me?: string | null;
+  /** Level of the "History" heading: 3 under the table's "Texts", 5 inside a card (case 3, text 4). */
+  headingLevel?: 3 | 5;
   /** Opens Text versions and focuses its summary (interim target of the text-change actions until O7). */
   revealTextVersions?: boolean;
   onTextVersionsRevealed?: () => void;
@@ -56,7 +58,10 @@ function useLink(onNavigate: (route: Route) => void) {
  */
 export function ExpandedRow({
   row, projectKey, query, submissions, onNavigate, id, textVersionTools, planRevision, onAssign, plan, me, revealTextVersions = false, onTextVersionsRevealed, now,
+  headingLevel = 3,
 }: ExpandedRowProps): JSX.Element {
+  const Heading = `h${headingLevel}` as "h3";
+  const SubHeading = `h${headingLevel + 1}` as "h4";
   const ownId = useId();
   const textVersionsRef = useRef<HTMLDetailsElement>(null);
   const [textVersionsOpen, setTextVersionsOpen] = useState(revealTextVersions);
@@ -97,7 +102,7 @@ export function ExpandedRow({
 
   return <section role="region" id={id} aria-label={`History, ${row.case_id} · ${row.language}`} className="expanded-row">
     <div className="expanded-row-section">
-      <h3 id={`${ownId}-history`}>History</h3>
+      <Heading id={`${ownId}-history`}>History</Heading>
       {lines.length > 0
         ? <ul className="expanded-row-issues" aria-labelledby={`${ownId}-history`}>{lines.map(line => <li key={line.key}>
           {line.text}{line.reportId && <>{" · "}{link(reportRoute(line.reportId), "Open report")}</>}
@@ -121,7 +126,7 @@ export function ExpandedRow({
         {!data ? <p className="cell-secondary">Submissions are not loaded.</p>
           : consolidationDocuments.length === 0 ? <p className="cell-secondary">Consolidation needs at least two submissions on one text version.</p>
             : consolidationDocuments.map(documentId => <div key={documentId} className="expanded-row-consolidation">
-              {consolidationDocuments.length > 1 && <h4>{nameOf(documentId)}</h4>}
+              {consolidationDocuments.length > 1 && <SubHeading>{nameOf(documentId)}</SubHeading>}
               <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={textVersionTools?.username ?? ""}
                 rows={consolidationInputs(rows.filter(item => item.document_id === documentId), now)}
                 defaultSelected={rows.filter(item => item.document_id === documentId && item.is_latest_in_round !== false).map(item => item.submission_id)} />

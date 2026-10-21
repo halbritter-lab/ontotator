@@ -87,10 +87,10 @@ function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, re
       <div className="document-card-line document-card-head">
         {select && <input type="checkbox" className="document-card-select checkbox-target" aria-label={`Select ${name}`} checked={select.checked}
           onChange={() => undefined} onClick={event => select.onSelect(selectModeOf(event))} />}
-        <h3 id={headingId} tabIndex={-1} className="document-card-title">
+        <h4 id={headingId} tabIndex={-1} className="document-card-title">
           <span aria-hidden="true"><ShortId value={row.case_id} />{` · ${row.language}`}</span>
           <span className="visually-hidden">{name}</span>
-        </h3>
+        </h4>
         {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
         {row.is_source && <span className="documents-source">source</span>}
         <VersionMarker row={row} />
@@ -129,7 +129,7 @@ export function DocumentCards({ page, busy, empty, query, selection, ...rest }: 
                 ref={element => { if (element) element.indeterminate = state === "some"; }}
                 checked={state === "all"} onChange={() => undefined}
                 onClick={event => selection.selectCase(keys, selectModeOf(event), order)} />}
-              <h2 id={documentsGroupId(group.case_id)} tabIndex={-1} className="document-case-card-title">{caseHeaderText(group)}</h2>
+              <h3 id={documentsGroupId(group.case_id)} tabIndex={-1} className="document-case-card-title">{caseHeaderText(group)}</h3>
             </div>
             {group.rows.map(row => (
               <DocumentCard key={rowKeyOf(row)} {...rest} row={row} group={group} query={query} expanded={open.has(rowKeyOf(row))}

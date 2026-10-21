@@ -204,3 +204,13 @@ it("focus goes to the inline panel heading (F5)", async () => {
   renderResolve({ mode: "not_accepted", row: notAccepted() });
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Translation not accepted, case-0101 · de" })));
 });
+
+it("heads the options at level 3 under the table and at level 5 in a card (heading order)", () => {
+  renderResolve();
+  expect(screen.getByRole("heading", { level: 3, name: "Resolve rejected translation, case-0101 · de" })).toBeTruthy();
+  cleanup();
+  renderResolve({ headingLevel: 5 });
+  expect(screen.getByRole("heading", { level: 5, name: "Resolve rejected translation, case-0101 · de" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Correct the translation…" }));
+  expect(screen.getByRole("heading", { level: 5, name: "Correct the translation, case-0101 · de" })).toBeTruthy();
+});

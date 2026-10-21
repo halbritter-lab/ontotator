@@ -52,7 +52,7 @@ describe("cards", () => {
   it("renders one article per text with stage lines, Waiting on and a full-width action; not-in-plan texts are muted, never collapsed", () => {
     const { props } = renderCards(page([case106()]));
     const caseCard = within(screen.getByRole("list", { name: "Documents" })).getByRole("listitem");
-    expect(within(caseCard).getByRole("heading", { level: 2, name: "case-106 · en source + 2 translations" })).toBeTruthy();
+    expect(within(caseCard).getByRole("heading", { level: 3, name: "case-106 · en source + 2 translations" })).toBeTruthy();
     expect(within(caseCard).getAllByRole("article")).toHaveLength(3);
     expect(cardOf("case-106 · en").className).toContain("document-card--muted");
     const de = cardOf("case-106 · de");
@@ -102,12 +102,12 @@ describe("cards", () => {
     renderCards(page([case106()]));
     const caseCard = within(screen.getByRole("list", { name: "Documents" })).getByRole("listitem");
     expect(within(caseCard).getByRole("checkbox", { name: "Select case-106 (3 texts)" })).toBeTruthy();
-    const caseHeading = within(caseCard).getByRole("heading", { level: 2 });
+    const caseHeading = within(caseCard).getByRole("heading", { level: 3 });
     // The case heading is the focus fallback of plan saves (same id as the table's group label).
     expect(caseHeading.id).toBe("documents-group-case-106-toggle");
     expect(caseHeading.tabIndex).toBe(-1);
     const de = cardOf("case-106 · de");
-    const heading = within(de).getByRole("heading", { level: 3, name: "case-106 · de" });
+    const heading = within(de).getByRole("heading", { level: 4, name: "case-106 · de" });
     // Deep links and the panel focus the card heading like the table's row header.
     expect(heading.id).toBe("documents-row-case-106-de-header");
     const lines = [...de.querySelectorAll<HTMLElement>(".document-card-stage")];
