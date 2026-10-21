@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
+import { documentsTab, rowAction } from "./documentsHelpers";
 import { selectText, submitCase, TEST_PASSWORD } from "./helpers";
 
 interface Actor { username: string; code: string }
@@ -112,28 +113,28 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
 }
 
 async function selectProject(page: Page, key: string) {
+  // D7: a lead of one project already lands on its Documents (with or without the decision tab, VD7).
+  if (new RegExp(`#/projects/${key}/documents(\\?|$)`).test(page.url())) return;
   await page.locator(".shell-project-trigger").click();
   await page.locator(`#shell-project-panel a[href="#/projects/${encodeURIComponent(key)}/documents"]`).click();
   await expect(page).toHaveURL(new RegExp(`#/projects/${key}/documents$`));
   await expect(page.locator("#shell-project-panel")).toBeHidden();
 }
 
-/** Disclosure of the Documents row of one text in English ("Show details, {text} · en"). */
-const rowDisclosure = (page: Page, caseId: string) =>
-  page.getByRole("button", { name: `Show details, ${caseId} · en`, exact: true });
+/** The navigation link "Documents", with the decision counter "Documents, n need your decision" once O8 shows it (V3). */
+const DOCUMENTS_LINK = /^Documents(, \d+ needs? your decision)?$/;
 
-/** Rows not in the work plan sit behind the case's "en not in plan · show" line. */
-async function showNotInPlan(page: Page, caseId: string) {
-  const toggle = page.getByRole("button", { name: `Show en not in plan, ${caseId}`, exact: true });
-  if (await toggle.count()) await toggle.click();
-}
+/** Disclosure of the Documents row of one text in English ("Show history, {text} · en"). */
+const rowDisclosure = (page: Page, caseId: string) =>
+  page.getByRole("button", { name: `Show history, ${caseId} · en`, exact: true });
 
 /** Expand the Documents row of a text and open its "Text versions" list (one version per text here). */
 async function openTextVersions(page: Page, caseId: string) {
-  await showNotInPlan(page, caseId);
+  // "Documents" opens "Needs your decision" while anything waits for the lead (VD7); the row is under All.
+  await documentsTab(page, "All").click();
   const disclosure = rowDisclosure(page, caseId);
   if ((await disclosure.getAttribute("aria-expanded")) !== "true") await disclosure.click();
-  const area = page.getByRole("region", { name: `${caseId} · en`, exact: true });
+  const area = page.getByRole("region", { name: `History, ${caseId} · en`, exact: true });
   await area.locator("summary").filter({ hasText: /^Text versions \(\d+\)$/ }).click();
   const version = area.locator("li.text-version");
   await expect(version).toHaveCount(1);
@@ -153,31 +154,38 @@ async function importTwoDocuments(page: Page) {
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
   await expect(preview).toContainText("2 documents added");
   await expect(preview).toContainText("1 with normalized text");
-  const rows = page.getByRole("button", { name: /^Show details, / });
+  const rows = page.getByRole("button", { name: /^Show history, / });
   await expect(rows).toHaveCount(0);
   await upload.getByRole("button", { name: "Import 2 texts", exact: true }).click();
   // The upload dialog closes itself after the import; Documents reports the result.
   await expect(upload).toHaveCount(0);
   await expect(page.locator(".ui-toast-message")).toHaveText("Imported 2 documents and 0 proposals.");
-  // One row per text and language ("Nothing planned": behind "en not in plan · show"), both collapsed.
-  for (const caseId of ["one", "two"]) await showNotInPlan(page, caseId);
+  // One row per text and language, both collapsed, each with its lead action: "Assign annotation…" when the
+  // project's import plan annotates sources, else "Plan…" (VD1, VD2, VD3).
+  await documentsTab(page, "All").click();
   await expect(rows).toHaveCount(2);
-  for (const caseId of ["one", "two"]) await expect(rowDisclosure(page, caseId)).toHaveAttribute("aria-expanded", "false");
+  for (const caseId of ["one", "two"]) {
+    await expect(rowDisclosure(page, caseId)).toHaveAttribute("aria-expanded", "false");
+    await expect(rowAction(page, "Assign annotation…", caseId, "en").or(rowAction(page, "Plan…", caseId, "en"))).toBeVisible();
+  }
 }
 
 async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await logout(page);
   await redeemCode(page, setup.lead);
   await selectProject(page, setup.key);
-  await page.getByRole("link", { name: "Documents", exact: true }).click();
+  await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
   await importTwoDocuments(page);
-  // Plan annotation for "one" (its row is not in the plan after the import), then assign it
-  // through the row's Assign dialog and its seeded "Random distribution…".
-  const table = page.getByRole("table", { name: "Documents", exact: true });
-  const annotate = table.getByRole("button", { name: "Annotate, one · en", exact: true });
-  if ((await annotate.getAttribute("aria-pressed")) !== "true") await annotate.click();
-  await expect(annotate).toHaveAttribute("aria-pressed", "true");
-  await table.getByRole("button", { name: "Assign annotation…, one · en", exact: true }).click();
+  // Plan annotation for "one" if the import left it outside the plan (the row's "Plan…" popover, VD2), then
+  // assign it through the row's Assign dialog and its seeded "Random distribution…".
+  if (await rowAction(page, "Plan…", "one", "en").count()) {
+    await rowAction(page, "Plan…", "one", "en").click();
+    const annotate = page.getByRole("dialog", { name: "Plan, one · en", exact: true }).getByRole("button", { name: "Annotate, one · en", exact: true });
+    if ((await annotate.getAttribute("aria-pressed")) !== "true") await annotate.click();
+    await expect(annotate).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+  }
+  await rowAction(page, "Assign annotation…", "one", "en").click();
   const assign = page.getByRole("dialog", { name: "Assign annotation", exact: true });
   await assign.getByRole("button", { name: "Random distribution…", exact: true }).click();
   const distribution = page.getByRole("dialog", { name: "Propose distribution", exact: true });
@@ -210,6 +218,8 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
 }
 
 test.describe("Administration through real accounts and jobs", () => {
+  // Setup codes, an import, a distribution and a submission in one test: slower with three workers.
+  test.setTimeout(90_000);
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
   test("admin sets up a project with real setup-code handovers", async ({ page }) => {
@@ -237,7 +247,7 @@ test.describe("Administration through real accounts and jobs", () => {
     });
     await redeemCode(page, setup.lead);
     await selectProject(page, setup.key);
-    await page.getByRole("link", { name: "Documents", exact: true }).click();
+    await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
     await importTwoDocuments(page);
     expect(adminRequests).toEqual([]);
   });
@@ -267,7 +277,7 @@ test.describe("Administration through real accounts and jobs", () => {
     // The person is the row header, not a cell: cells start after it.
     const headers = await row.getByRole("rowheader").count();
     await expect(row.getByRole("cell").nth(submittedColumn - headers)).toHaveText("1");
-    await page.getByRole("link", { name: "Documents", exact: true }).click();
+    await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
     const document = await openTextVersions(page, "one");
     await document.locator('summary[aria-label^="Actions for "]').click();
     await document.getByRole("button", { name: "Reopen", exact: true }).click();

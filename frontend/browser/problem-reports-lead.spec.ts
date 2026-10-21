@@ -9,6 +9,7 @@
  */
 import { expect, request as playwrightRequest, test, type APIRequestContext, type Browser, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
+import { documentsReady, expandHistory, historyToggle, rowAction, rowCell, textRow } from "./documentsHelpers";
 import { authenticatedRequest, loginExisting, TEST_PASSWORD } from "./helpers";
 import { problemReportScenario, type ProblemReportScenario } from "./problemReportHelpers";
 
@@ -85,7 +86,7 @@ async function openLeadPage(page: Page, s: ProblemReportScenario, report: Proble
 
 async function openDocuments(page: Page, s: ProblemReportScenario, query = "") {
   await page.goto(documentsUrl(s, query));
-  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
+  await documentsReady(page);
 }
 
 /** Sorted ``name=value`` pairs of the hash query (order-independent comparison). */
@@ -121,24 +122,10 @@ async function confirmRestart(box: Locator, reporter: string, reason: string) {
   await box.getByRole("button", { name: "Restart with empty round", exact: true }).click();
 }
 
-/** Documents table helpers (same accessible names as the Documents specs). */
-const table = (page: Page) => page.getByRole("table", { name: "Documents", exact: true });
-const disclosure = (page: Page, caseId: string, language: string) =>
-  page.getByRole("button", { name: `Show details, ${caseId} · ${language}`, exact: true });
-const languageRow = (page: Page, caseId: string, language: string): Locator =>
-  table(page).getByRole("row").filter({ has: disclosure(page, caseId, language) });
-const region = (page: Page, caseId: string, language: string) => page.getByRole("region", { name: `${caseId} · ${language}`, exact: true });
-
-async function expand(page: Page, caseId: string, language: string): Promise<Locator> {
-  const button = disclosure(page, caseId, language);
-  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
-  await expect(button).toHaveAttribute("aria-expanded", "true");
-  const area = region(page, caseId, language);
-  // Submissions (n) is shown only with submissions or a final result; the More section always is.
-  await expect(area.getByRole("heading", { name: "More", level: 3 })).toBeVisible();
-  await expect(area.getByText("Loading submissions…")).toHaveCount(0);
-  return area;
-}
+/** Documents table helpers (documentsHelpers.ts; the same accessible names as the Documents specs). */
+const disclosure = historyToggle;
+const languageRow = textRow;
+const expand = expandHistory;
 
 /** The final result's submission id of the reporter's row (A de), read by the lead. */
 async function finalSubmissionOf(page: Page, s: ProblemReportScenario): Promise<string | null> {
@@ -172,12 +159,10 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await openDocuments(page, s, "?decision=report-or-pause");
   const row = languageRow(page, caseId, "de");
   await expect(row).toBeVisible();
-  // The orphaned pause is the row's next step (a decision for the lead).
-  await expect(row).toContainText("Resume paused task");
-  const area = await expand(page, caseId, "de");
-  const orphan = area.getByRole("listitem").filter({ hasText: `${s.labels.reporter}'s task is paused, but its report is resolved.` });
-  await expect(orphan).toBeVisible();
-  await orphan.getByRole("link", { name: "Resume task", exact: true }).click();
+  // The orphaned pause is the row's next step (a decision for the lead): "Resume task…" in the Action column.
+  await expect(row).toHaveClass(/data-table-row--decision/);
+  await expect(rowCell(row, "annotation")).toContainText("Paused");
+  await rowAction(page, "Resume task…", caseId, "de").click();
 
   // The report page opens "Release pause" with the reporter's task preselected; nothing was sent yet.
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
@@ -197,8 +182,9 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await openDocuments(page, s);
   const plain = languageRow(page, caseId, "de");
   await expect(plain).toBeVisible();
-  await expect(plain).not.toContainText("Resume paused task");
-  await expect(plain).not.toContainText("Decide on problem report");
+  await expect(rowAction(page, "Resume task…", caseId, "de")).toHaveCount(0);
+  await expect(rowAction(page, "Decide on report…", caseId, "de")).toHaveCount(0);
+  await expect(rowCell(plain, "annotation")).not.toContainText("Paused");
   const expanded = await expand(page, caseId, "de");
   await expect(expanded.getByText(/task is paused, but its report is resolved/)).toHaveCount(0);
   await expect(expanded.getByRole("link", { name: "Resume task" })).toHaveCount(0);
@@ -376,7 +362,7 @@ test("the back link restores the full Documents query (decision, open, page)", a
   await expect(page).toHaveURL(new RegExp(`/problem-reports/${esc(report.report_id)}\\?`));
   const back = page.getByRole("link", { name: "Back to Documents" }).first();
   await back.click();
-  await expect(page.getByRole("navigation", { name: "Segments", exact: true })).toBeVisible();
+  await documentsReady(page);
   expect(hashQueryOf(page.url())).toEqual(query);
   await expect(disclosure(page, caseId, "de")).toHaveAttribute("aria-expanded", "true");
 

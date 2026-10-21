@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
+import { openFilters } from './documentsHelpers';
 import { authenticatedRequest, loginExisting, selectText, TEST_PASSWORD } from './helpers';
 
 test.setTimeout(120_000);
@@ -71,12 +72,10 @@ async function documentRow(page: Page, id: string) {
   const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
   const name = `${doc.case_id} · ${doc.language}`;
-  const disclosure = page.getByRole('button', { name: `Show details, ${name}`, exact: true });
-  // Rows not in the work plan sit behind the case's "… not in plan · show" line.
-  const notInPlan = page.locator(`button.documents-not-in-plan-toggle[aria-expanded="false"][aria-label$=" not in plan, ${doc.case_id}"]`);
-  if (!await disclosure.count() && await notInPlan.count()) await notInPlan.click();
+  // Rows not in the work plan are ordinary (muted) rows under All (VD1).
+  const disclosure = page.getByRole('button', { name: `Show history, ${name}`, exact: true });
   if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
-  const versions = page.getByRole('region', { name, exact: true }).locator('details').filter({ has: page.locator('summary', { hasText: /^Text versions \(\d+\)$/ }) });
+  const versions = page.getByRole('region', { name: `History, ${name}`, exact: true }).locator('details').filter({ has: page.locator('summary', { hasText: /^Text versions \(\d+\)$/ }) });
   if (!await versions.evaluate(node => (node as HTMLDetailsElement).open)) await versions.locator(':scope > summary').click();
   const version = versions.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
   await expect(version).toHaveCount(1);
@@ -125,11 +124,13 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   const inventory = await (await authenticatedRequest(page, `${root(s)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const target = inventory.find(d => d.external_id === s.external_id && d.language === 'de')!;
   expect(target.accepted_without_review).toBe(true); expect(target.translation_status).toBe('accepted'); expect(target.status_reason).toBe(reason);
-  await page.locator('summary').filter({ hasText: /^More filters$/ }).click();
-  await page.getByLabel('Origin', { exact: true }).selectOption('machine_translation');
-  await page.getByLabel('Translation status', { exact: true }).selectOption('accepted');
+  // The filter popover replaces "More filters" (V4): Origin "Machine translation" and Review "Accepted" (the translation status).
+  const filters = await openFilters(page);
+  await filters.getByRole('checkbox', { name: /^Machine translation, / }).check();
+  await filters.getByRole('group', { name: 'Review', exact: true }).getByRole('checkbox', { name: /^Accepted, / }).check();
+  await page.keyboard.press('Escape');
   const row = await documentRow(page, target.document_id); await expect(row).toContainText('Accepted without review');
-  expect(new URL(page.url()).hash).toContain('origin=machine_translation'); expect(new URL(page.url()).hash).toContain('translation_status=accepted');
+  expect(new URL(page.url()).hash).toContain('origin=machine_translation'); expect(new URL(page.url()).hash).toContain('review_state=accepted');
   // Text versions show the status; the recorded reason is read in the text's translation details.
   await row.getByRole('link', { name: /^View text / }).click();
   await page.getByText('Translation details', { exact: true }).click();

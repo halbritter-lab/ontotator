@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
+import { documentsReady, expandHistory, finalPanel, textRow } from './documentsHelpers';
 import { authenticatedRequest, loginExisting, selectText, submitCase } from './helpers';
 
 type Assignment = components['schemas']['AssignmentView'];
@@ -36,11 +37,11 @@ async function continueFrom(rounds: Locator, submissionId: string) {
 }
 /** Sidebar progress of a carry-forward round ("0 of 1 checked", "All carried findings checked"). */
 const carriedProgress = (page: Page) => page.locator('.carried-progress__status');
-/** The View link of one exact submission in a Documents submissions table (its href carries the submission ref). */
-const viewSubmission = (page: Page, submissionId: string) => {
+/** The "Open in editor" link of one exact submission in the final-result panel (its href carries the submission ref). */
+const editorLink = (panel: Locator, submissionId: string) => {
   // Route hrefs keep commas literal (router querySuffix).
   const ref = new URLSearchParams({ annotations: JSON.stringify(['submission', submissionId]) }).toString().replace(/%2C/gi, ',');
-  return page.locator(`a[aria-label^="View "][href*="${ref}"]`);
+  return panel.locator(`a[href*="${ref}"]`);
 };
 async function finding(page: Page, assignment: Assignment, note: string) {
   await page.goto(`/#/tasks/${assignment.id}`);
@@ -93,19 +94,14 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await submitCase(author.page);
     const carried = await value<Opened>(author.page, `/api/v1/assignments/${first.id}/open`, 'POST');
     const carriedId = carried.assignment.last_submission_id!; expect(carriedId).not.toBe(initialId);
-    // Consolidation and the final selection happen in the Documents row of this text and language.
+    // Consolidation starts in the Documents row's expansion; the final selection happens in the final-result panel (V6).
     const docs = await value<components['schemas']['ProjectDocumentSummary'][]>(page, `${root(s)}/documents`);
     const language = docs.find(doc => doc.document_id === s.documents.source)!.language;
-    const openRow = async () => {
-      const disclosure = page.getByRole('button', { name: `Show details, ${s.case_id} · ${language}`, exact: true });
-      if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
-      await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
-      const area = page.getByRole('region', { name: `${s.case_id} · ${language}`, exact: true });
-      await expect(area.getByRole('heading', { name: /^Submissions \(\d+\)$/, level: 3 })).toBeVisible();
-      return area;
-    };
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
-    let area = await openRow();
+    await documentsReady(page);
+    const area = await expandHistory(page, s.case_id, language);
+    // History: the three submissions (initial, independent second, carried) with their finding counts.
+    await expect(area.getByRole('listitem').filter({ hasText: /^Annotation: .* · \d+ findings? · / })).toHaveCount(3);
     await area.getByText('Start consolidation…', { exact: true }).click();
     await area.getByRole('button', { name: 'Consolidate results', exact: true }).click();
     const launcher = area.getByRole('region', { name: 'Consolidate submitted results', exact: true });
@@ -128,17 +124,25 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await submitCase(reviewer.page);
     const consolidated = await value<Opened>(reviewer.page, `/api/v1/assignments/${consolidation.assignment_id}/open`, 'POST');
     const finalId = consolidated.assignment.last_submission_id!;
-    await page.reload(); area = await openRow();
-    const submissions = area.getByRole('table', { name: `Submissions, ${s.case_id} · ${language}`, exact: true });
-    const finalRow = submissions.getByRole('row').filter({ has: viewSubmission(page, finalId) });
-    await expect(finalRow).toHaveCount(1);
-    await finalRow.getByRole('button', { name: 'Use as final…', exact: true }).click();
-    const use = page.getByRole('group', { name: 'Use as final result', exact: true });
+    await page.reload(); await documentsReady(page);
+    // "Accept result…" (the consolidation alone) or "Compare results…" opens the panel; choose the exact consolidation.
+    await page.getByRole('button', { name: new RegExp(`^(Accept|Compare) results?…, ${s.case_id} · ${language}$`) }).click();
+    const panel = finalPanel(page, s.case_id, language);
+    await expect(editorLink(panel, finalId)).toHaveCount(1);
     const selecting = page.waitForResponse(r => r.request().method() !== 'GET' && /\/final/.test(new URL(r.url()).pathname));
-    await use.getByRole('button', { name: 'Use as final', exact: true }).click();
+    const accept = panel.getByRole('button', { name: 'Accept as final', exact: true });
+    if (await accept.count()) {
+      await expect(panel.getByText(/^Accept the consolidation by .+ as final\?$/)).toBeVisible();
+      await accept.click();
+    } else {
+      await panel.getByRole('row').filter({ has: editorLink(panel, finalId) }).getByRole('button', { name: 'Use as final', exact: true }).click();
+    }
     expect((await selecting).ok()).toBeTruthy();
-    await expect(use).toHaveCount(0);
-    await expect(finalRow.getByRole('cell').first()).toHaveText('Final');
+    const body = (await selecting).request().postDataJSON() as { submission_id: string };
+    expect(body.submission_id).toBe(finalId);
+    await expect(panel.locator('.final-panel-success')).toContainText(`Final result saved for ${s.case_id} · ${language}.`);
+    await panel.getByRole('button', { name: 'Close', exact: true }).last().click();
+    await expect(textRow(page, s.case_id, language).getByRole('cell').nth(3)).toContainText('Consolidation');
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
     // D8: the preflight runs on opening Export.
     await expect(page.getByRole('heading', { name: 'Export preflight' })).toBeVisible();

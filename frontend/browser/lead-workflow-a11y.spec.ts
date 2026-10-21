@@ -2,12 +2,14 @@
  * Lead workflow accessibility in the browser (plan L10b; spec "Accessibility", "States" › Narrow).
  *
  * Every test builds a fresh ``ROWS`` project through ``POST /__test_lead_workflow__`` (L10a) and logs
- * in as its lead: 30 cases (en, de, fr) with mixed plans, groups expanded (at most 50 cases).
+ * in as its lead: 30 cases (en, de, fr) with mixed plans, under the All tab (groups never collapse, VD5).
+ * In-plan rows show their plan chips in the expansion's Plan line (VD2), so chip checks expand rows first.
  */
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { documentsReady, documentsTab, expandHistory, historyRegion, rowAction, rowBox, textRow } from "./documentsHelpers";
 import { TEST_PASSWORD } from "./helpers";
 import { leadScenario, type LeadScenario } from "./leadWorkflowHelpers";
 
@@ -34,7 +36,10 @@ async function openRows(page: Page): Promise<LeadScenario> {
   await form.getByRole("button", { name: "Log in", exact: true }).click();
   await expect(page.getByTestId("current-user")).toContainText(s.display_names.lead);
   await expect(page).toHaveURL(new RegExp(`#/projects/${esc(s.project)}/documents`));
-  await expect(page.getByRole("navigation", { name: "Segments" })).toBeVisible();
+  await documentsReady(page);
+  // The landing opens "Needs your decision" (VD7); these checks use every row (All).
+  await documentsTab(page, "All").click();
+  await expect(documentsTab(page, "All")).toHaveAttribute("aria-selected", "true");
   await expect(caseBox(page, "case-0101")).toBeVisible();
   return s;
 }
@@ -42,7 +47,7 @@ async function openRows(page: Page): Promise<LeadScenario> {
 const bar = (page: Page) => page.getByRole("region", { name: "Selection", exact: true });
 const toast = (page: Page) => page.locator(".ui-toast");
 const live = (page: Page) => page.locator(".documents-page > p[role=\"status\"]");
-const caseBox = (page: Page, caseId: string) => page.getByRole("checkbox", { name: `Select ${caseId} (3 languages)`, exact: true });
+const caseBox = (page: Page, caseId: string) => page.getByRole("checkbox", { name: `Select ${caseId} (3 texts)`, exact: true });
 const chip = (page: Page, flag: "Review" | "Annotate", caseId: string, language: string) =>
   page.getByRole("button", { name: `${flag}, ${caseId} · ${language}`, exact: true });
 
@@ -51,8 +56,19 @@ async function axeViolations(page: Page, include: string): Promise<string[]> {
   return results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}: ${n.failureSummary ?? ""}`));
 }
 
+/** Show the Plan line of a row: the table's ▸ or the card's "History". */
+async function showPlanLine(page: Page, caseId: string, language: string) {
+  const card = page.getByRole("article", { name: `${caseId} · ${language}`, exact: true });
+  if (await card.count()) {
+    const toggle = card.getByRole("button", { name: "History", exact: true });
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    await expect(historyRegion(page, caseId, language)).toBeVisible();
+  } else await expandHistory(page, caseId, language);
+}
+
 /** Toggle Review off on a Review-only fr row (case-0111…0120): saves at once and shows the Undo toast. */
 async function chipToast(page: Page, caseId = "case-0112") {
+  await showPlanLine(page, caseId, "fr");
   await chip(page, "Review", caseId, "fr").click();
   await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Review off`);
 }
@@ -61,7 +77,10 @@ async function chipToast(page: Page, caseId = "case-0112") {
 async function overflow(page: Page) {
   return page.evaluate(() => {
     const width = window.innerWidth;
+    // The tab strip scrolls on its own (a horizontal scroller inside the page); its tabs may sit outside the
+    // viewport while the page itself does not scroll. TODO(O9): revisit with the narrow tab layout.
     const outside = [...document.querySelectorAll("main *, [role=dialog] *")]
+      .filter(element => !element.closest("[role=tablist]"))
       .filter(element => {
         const box = element.getBoundingClientRect();
         return box.width > 0 && box.height > 0 && (box.right > width + 0.5 || box.left < -0.5);
@@ -78,29 +97,41 @@ function overlap(a: { x: number; y: number; width: number; height: number }, b: 
 
 test("keyboard-only range selection", async ({ page }) => {
   await openRows(page);
-  // From "Select by case IDs…", Tab reaches the first case checkbox.
+  // From "Select by case IDs…", Tab passes the sortable headers (VD10) and reaches the first case checkbox,
+  // then the first row checkbox (VD4).
   await page.getByRole("button", { name: "Select by case IDs…", exact: true }).focus();
+  const table = page.getByRole("table", { name: "Documents", exact: true });
+  await page.keyboard.press("Tab");
+  await expect(table.getByRole("columnheader", { name: "Text" }).getByRole("button")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(table.getByRole("columnheader", { name: "Last activity" }).getByRole("button")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(caseBox(page, "case-0101")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(rowBox(page, "case-0101", "en")).toBeFocused();
   await page.keyboard.press("Space");
-  await expect(caseBox(page, "case-0101")).toBeChecked();
+  await expect(rowBox(page, "case-0101", "en")).toBeChecked();
+  // Shift+ArrowDown moves to the next row in list order and selects it.
   for (let index = 0; index < 4; index += 1) await page.keyboard.press("Shift+ArrowDown");
-  await expect(caseBox(page, "case-0105")).toBeFocused();
-  for (const caseId of ["case-0101", "case-0102", "case-0103", "case-0104", "case-0105"]) await expect(caseBox(page, caseId)).toBeChecked();
-  await expect(caseBox(page, "case-0106")).not.toBeChecked();
-  await expect(bar(page).getByText("5 cases selected", { exact: true })).toBeVisible();
-  await expect(live(page)).toHaveText("5 cases selected");
+  await expect(rowBox(page, "case-0102", "de")).toBeFocused();
+  for (const [caseId, language] of [["case-0101", "en"], ["case-0101", "de"], ["case-0101", "fr"], ["case-0102", "en"], ["case-0102", "de"]]) {
+    await expect(rowBox(page, caseId, language)).toBeChecked();
+  }
+  await expect(rowBox(page, "case-0102", "fr")).not.toBeChecked();
+  await expect(caseBox(page, "case-0101")).toBeChecked();
+  await expect(bar(page).getByText("5 texts in 2 cases selected", { exact: true })).toBeVisible();
+  await expect(live(page)).toHaveText("5 texts in 2 cases selected");
   // Shift+ArrowUp moves back and keeps the range.
   await page.keyboard.press("Shift+ArrowUp");
-  await expect(caseBox(page, "case-0104")).toBeFocused();
+  await expect(rowBox(page, "case-0102", "en")).toBeFocused();
 
   // "?" help lists the group "Selection".
   await page.keyboard.press("?");
   const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
   await expect(help).toBeVisible();
   await expect(help.getByText("Selection", { exact: true })).toBeVisible();
-  await expect(help.getByText("Move to the next or previous case and select it", { exact: true })).toBeVisible();
-  await expect(help.getByText("Select or deselect the focused case", { exact: true })).toBeVisible();
+  await expect(help.getByText("Move to the next or previous row and select it", { exact: true })).toBeVisible();
+  await expect(help.getByText("Select or deselect the focused row", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(help).toHaveCount(0);
 });
@@ -108,8 +139,7 @@ test("keyboard-only range selection", async ({ page }) => {
 test("axe has no violations on Documents with selection bar, plan dialog, assign dialog, Progress", async ({ page }) => {
   const s = await openRows(page);
   await caseBox(page, "case-0101").check();
-  await expect(bar(page).getByText("1 case selected", { exact: true })).toBeVisible();
-  await expect(bar(page)).toContainText("next step:");
+  await expect(bar(page).getByText("3 texts in 1 case selected", { exact: true })).toBeVisible();
   expect(await axeViolations(page, "main"), "Documents with selection bar").toEqual([]);
 
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();
@@ -119,7 +149,7 @@ test("axe has no violations on Documents with selection bar, plan dialog, assign
   await plan.getByRole("button", { name: "Cancel", exact: true }).click();
 
   await bar(page).getByRole("button", { name: "Assign…", exact: true }).click();
-  const assign = page.getByRole("dialog", { name: /^Assign · 1 cases?$/ });
+  const assign = page.getByRole("dialog", { name: /^Assign · / });
   await expect(assign.getByRole("table", { name: "Members" })).toBeVisible();
   await assign.getByRole("radio", { name: new RegExp(`^${esc(s.display_names.ana)}`) }).click();
   await expect(assign.getByRole("status", { name: "Summary" })).not.toBeEmpty();
@@ -135,17 +165,19 @@ test("axe has no violations on Documents with selection bar, plan dialog, assign
 test("390 px cards and bottom-sticky selection bar", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openRows(page);
-  // One article per language row in plan, inside case cards with the case checkbox in the card header.
+  // One article per text, inside case cards with the case checkbox in the card header.
   await expect(page.getByRole("table", { name: "Documents" })).toHaveCount(0);
   const card = page.getByRole("article", { name: "case-0101 · de", exact: true });
   await expect(card.getByRole("heading", { name: "case-0101 · de" })).toBeVisible();
-  await expect(card.getByRole("button", { name: "Review, case-0101 · de", exact: true })).toBeVisible();
-  await expect(card.getByRole("button", { name: "Assign translation review…, case-0101 · de", exact: true })).toBeVisible();
+  await expect(card.getByRole("checkbox", { name: "Select case-0101 · de", exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Assign review…, case-0101 · de", exact: true })).toBeVisible();
+  // Undecided rows offer "Plan…" in the card (VD2).
+  await expect(rowAction(page, "Plan…", "case-0101", "en")).toBeVisible();
   await expect(caseBox(page, "case-0101")).toBeVisible();
   expect(await overflow(page)).toMatchObject({ scrollWidth: 390, outside: [] });
 
   await caseBox(page, "case-0106").check();
-  await expect(bar(page).getByText("1 case selected", { exact: true })).toBeVisible();
+  await expect(bar(page).getByText("3 texts in 1 case selected", { exact: true })).toBeVisible();
   const box = (await bar(page).boundingBox())!;
   expect(await bar(page).evaluate(element => getComputedStyle(element).position)).toBe("sticky");
   // Sticks to the bottom of the viewport.
@@ -179,10 +211,10 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
   expect(await overflow(page), "selection bar and toast").toMatchObject({ scrollWidth: 320, outside: [] });
   await evidence(page, "320-documents-selection-toast");
 
-  await page.getByRole("button", { name: "Show details, case-0101 · de", exact: true }).click();
-  await expect(page.getByRole("region", { name: "case-0101 · de", exact: true }).getByRole("group", { name: "Translation review" })).toBeVisible();
+  await showPlanLine(page, "case-0101", "de");
+  await expect(historyRegion(page, "case-0101", "de").getByRole("heading", { name: "History", level: 3 })).toBeVisible();
   expect(await overflow(page), "expanded card").toMatchObject({ scrollWidth: 320, outside: [] });
-  await evidence(page, "320-stage-blocks", page.getByRole("region", { name: "case-0101 · de", exact: true }));
+  await evidence(page, "320-expanded-card", historyRegion(page, "case-0101", "de"));
 
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();
   const plan = page.getByRole("dialog", { name: "Work plan · 1 case" });
@@ -192,14 +224,16 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
   await plan.getByRole("button", { name: "Cancel", exact: true }).click();
 
   await bar(page).getByRole("button", { name: "Assign…", exact: true }).click();
-  const assign = page.getByRole("dialog", { name: /^Assign · 1 cases?$/ });
+  const assign = page.getByRole("dialog", { name: /^Assign · / });
   await expect(assign.getByRole("radio", { name: new RegExp(`^${esc(s.display_names.ana)}`) })).toBeVisible();
   expect(await overflow(page), "assign dialog").toMatchObject({ scrollWidth: 320, outside: [] });
   await evidence(page, "320-assign-dialog");
 });
 
-test("forced colours keep pressed chips and the current stage visible", async ({ page }) => {
+test("forced colours keep pressed chips and the decision edge visible", async ({ page }) => {
   await openRows(page);
+  // In-plan chips sit in the expansion's Plan line (VD2).
+  for (const language of ["de", "fr"]) await expandHistory(page, "case-0101", language);
   await page.emulateMedia({ forcedColors: "active" });
   expect(await page.evaluate(() => matchMedia("(forced-colors: active)").matches)).toBe(true);
 
@@ -228,29 +262,28 @@ test("forced colours keep pressed chips and the current stage visible", async ({
     expect(item.icon, item.name ?? "").toBe(true);
   }
 
-  // The current pipeline block: a CanvasText top border.
-  await page.getByRole("button", { name: "Show details, case-0101 · de", exact: true }).click();
-  const area = page.getByRole("region", { name: "case-0101 · de", exact: true });
-  await expect(area.getByRole("group", { name: "Translation review" })).toBeVisible();
-  const current = area.locator(".stage-block--current");
-  await expect(current).toHaveCount(1);
-  const border = await current.evaluate(element => {
+  // The stage blocks are gone (V1); the decision edge marks the rows that need the lead: a CanvasText left border.
+  const edge = async (caseId: string, language: string) => textRow(page, caseId, language).locator("> :first-child").evaluate(element => {
     const probe = document.createElement("span");
     probe.style.color = "CanvasText";
     document.body.append(probe);
     const canvasText = getComputedStyle(probe).color;
     probe.remove();
     const style = getComputedStyle(element);
-    return { width: parseFloat(style.borderTopWidth), style: style.borderTopStyle, colour: style.borderTopColor, canvasText, others: parseFloat(getComputedStyle(element.parentElement!.querySelector(".stage-block:not(.stage-block--current)")!).borderTopWidth) };
+    return { width: parseFloat(style.borderLeftWidth), style: style.borderLeftStyle, colour: style.borderLeftColor, canvasText };
   });
-  expect(border.width).toBeGreaterThan(border.others);
-  expect(border.style).toBe("solid");
-  expect(border.colour).toBe(border.canvasText);
-  await evidence(page, "forced-colours-stage-blocks", area);
+  const decision = await edge("case-0102", "de");
+  const other = await edge("case-0101", "de");
+  expect(decision.width).toBeGreaterThan(other.width);
+  expect(decision.style).toBe("solid");
+  expect(decision.colour).toBe(decision.canvasText);
+  await evidence(page, "forced-colours-decision-edge", textRow(page, "case-0102", "de"));
 });
 
 test("targets are at least 24 × 24 px (chips, checkboxes) and card actions at least 32 px high", async ({ page }) => {
   await openRows(page);
+  // In-plan chips sit in the expansion's Plan line (VD2): show six rows' chips.
+  for (const caseId of ["case-0101", "case-0106", "case-0107"]) for (const language of ["de", "fr"]) await expandHistory(page, caseId, language);
   const sizes = async (selector: string) => page.locator(selector).evaluateAll(elements => elements
     .filter(element => element.getBoundingClientRect().width > 0)
     .map(element => {
