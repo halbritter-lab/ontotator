@@ -116,6 +116,9 @@ describe("CaseScreen integration", () => {
     return view;
   };
   const selectEditableFinding = () => fireEvent.click(document.querySelector('[data-list-key="annotation:pending-finding"]')!);
+  /** The hit row of a term in the search list (the detail area may repeat its label). */
+  const candidateCard = async (label: string) =>
+    (await screen.findAllByText(label)).map(element => element.closest<HTMLElement>(".candidate-card")).find(Boolean)!;
   const editFinding = () => fireEvent.click(screen.getByRole("radio", { name: "Present" }));
 
   beforeEach(() => {
@@ -282,7 +285,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
-    const candidate = (await screen.findByText("Hypotonia")).closest(".candidate-card")!;
+    const candidate = await candidateCard("Hypotonia");
     fireEvent.click(candidate);
     expect(apply).not.toHaveBeenCalled();
     const reason = screen.getByLabelText(/Reason for no text span/);
@@ -301,54 +304,138 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="presets" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
-    fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
+    fireEvent.click(await candidateCard("Hypotonia"));
     await waitFor(() => expect(apply).toHaveBeenCalledWith("presets", expect.objectContaining({ payload: expect.objectContaining({
       axes_values: { assertion: "absent", experiencer: "other", temporality: null }, chosen_axis_ids: [],
     }) })));
   });
 
-  it("requires explicit server-bound warning acknowledgement without confirming clinical values", async () => {
-    const view = withEditableFinding(structuredClone(sampleView)); view.require_spanless_note = false;
-    view.annotation_policy_revision = 7;
-    view.draft.annotations![0].annotation.axes_defaulted = ["experiencer"];
-    const acknowledgement = { draft_revision: view.draft.revision, policy_revision: 7, warning_digest: "exact-server-digest" };
-    const renewed = { ...acknowledgement, policy_revision: 8, warning_digest: "renewed-server-digest" };
-    const submission = { format_version: "ontocurator-submission/v2", submission_id: "warning-submitted", origin_key: view.key, targets: view.targets!, draft_revision: view.draft.revision, snapshots: view.draft.annotations!, decisions: [], document_checked: true, created_at: "2026-10-18T12:00:00Z" };
-    const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(new ApiError(422, "Review defaults", "AXIS_CONFIRMATION_WARNING", { acknowledgement, warnings: [{ annotation_id: view.draft.annotations![0].annotation.annotation_id, rule: "axis_not_chosen", detail: { axis: "experiencer" } }] }))
-      .mockRejectedValueOnce(new ApiError(422, "Policy changed", "AXIS_CONFIRMATION_WARNING", { acknowledgement: renewed, warnings: [] })).mockResolvedValue(submission);
-    const update = vi.spyOn(api, "applyCommand");
-    render(<CaseScreen view={view} workspaceId="warning" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
-    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
-    const acknowledgementBox = await within(dialog).findByRole("checkbox", { name: "Submit with these unconfirmed values" });
-    expect(within(dialog).getByRole("button", { name: "Continue and submit" }).getAttribute("aria-disabled")).toBe("true");
-    fireEvent.click(acknowledgementBox);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Continue and submit" }));
-    await waitFor(() => expect(acknowledgementBox).toHaveProperty("checked", false));
-    expect(screen.queryByRole("dialog", { name: "Case submitted" })).toBeNull();
-    fireEvent.click(acknowledgementBox);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Continue and submit" }));
-    await screen.findByRole("dialog", { name: "Case submitted" });
-    expect(submit).toHaveBeenLastCalledWith("warning", expect.objectContaining({ payload: expect.objectContaining({ warning_acknowledgement: renewed }) }));
-    expect(update).not.toHaveBeenCalled();
-    expect(view.draft.annotations![0].annotation.axes_defaulted).toEqual(["experiencer"]);
-  });
+  describe("submit with unconfirmed values", () => {
+    const shown = { assertion: "present", experiencer: "patient", temporality: "current" };
+    const unconfirmedView = (defaulted: string[] = ["experiencer"]) => {
+      const view = withEditableFinding(structuredClone(sampleView)); view.require_spanless_note = false;
+      view.annotation_policy_revision = 7;
+      view.draft.annotations![0].annotation.axes_values = { ...shown };
+      view.draft.annotations![0].annotation.axes_defaulted = defaulted;
+      return view;
+    };
+    const acknowledgementOf = (view: WorkspaceView, digest = "exact-server-digest") =>
+      ({ draft_revision: view.draft.revision, policy_revision: 7, warning_digest: digest });
+    const axisWarning = (view: WorkspaceView, axes: string[], acknowledgement = acknowledgementOf(view)) =>
+      new ApiError(422, "Review defaults", "AXIS_CONFIRMATION_WARNING", { acknowledgement,
+        warnings: axes.map(axis => ({ annotation_id: "pending-finding", rule: "axis_not_chosen", detail: { axis } })) });
+    const submissionOf = (view: WorkspaceView) => ({ format_version: "ontocurator-submission/v2", submission_id: "warning-submitted", origin_key: view.key,
+      targets: view.targets!, draft_revision: view.draft.revision, snapshots: view.draft.annotations!, decisions: [], document_checked: true,
+      created_at: "2026-10-18T12:00:00Z" });
+    const openSubmit = async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
+      return screen.findByRole("dialog", { name: "Submit case" });
+    };
+    const submitTicked = (dialog: HTMLElement, n: number) => {
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: `Submit with ${n} unconfirmed values` }));
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+    };
+    const statusOf = (dialog: HTMLElement) => dialog.querySelector("[data-submit-status]")!.textContent;
 
-  it("allows leaving after cancelling a submission warning without treating it as a rejected edit", async () => {
-    const view = withEditableFinding(structuredClone(sampleView)); view.require_spanless_note = false;
-    vi.spyOn(api, "submitWorkspace").mockRejectedValue(new ApiError(422, "Review defaults", "AXIS_CONFIRMATION_WARNING", { acknowledgement: { draft_revision: view.draft.revision, policy_revision: 1, warning_digest: "warning" }, warnings: [] }));
-    const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
-    render(<CaseScreen view={view} workspaceId="cancel-warning" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
-    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
-    await within(dialog).findByRole("checkbox", { name: "Submit with these unconfirmed values" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
-    expect(screen.queryByRole("dialog")).toBeNull();
+    it("auto-resends once when the warning lists exactly the ticked values", async () => {
+      const view = unconfirmedView();
+      const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(axisWarning(view, ["experiencer"]))
+        .mockResolvedValue(submissionOf(view) as any);
+      const update = vi.spyOn(api, "applyCommand");
+      render(<CaseScreen view={view} workspaceId="resend" onClose={vi.fn()} />);
+      const dialog = await openSubmit();
+      expect(within(dialog).getByRole("heading", { name: "Unconfirmed values · 1 finding" })).toBeDefined();
+      submitTicked(dialog, 1);
+      await screen.findByRole("dialog", { name: "Case submitted" });
+      expect(submit).toHaveBeenCalledTimes(2);
+      const [firstBody, secondBody] = submit.mock.calls.map(call => call[1] as any);
+      expect(firstBody.payload.warning_acknowledgement).toBeUndefined();
+      expect(secondBody.payload.warning_acknowledgement).toEqual(acknowledgementOf(view));
+      expect(firstBody.mutation_id).not.toBe(secondBody.mutation_id);
+      expect(update).not.toHaveBeenCalled();
+      expect(view.draft.annotations![0].annotation.axes_defaulted).toEqual(["experiencer"]);
+    });
+
+    it("does not resend when the warning set differs", async () => {
+      const view = unconfirmedView();
+      const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValue(axisWarning(view, ["experiencer", "temporality"]));
+      render(<CaseScreen view={view} workspaceId="differs" onClose={vi.fn()} />);
+      const dialog = await openSubmit();
+      submitTicked(dialog, 1);
+      await waitFor(() => expect(statusOf(dialog)).toBe("The unconfirmed values changed. Check the list again."));
+      expect(submit).toHaveBeenCalledTimes(1);
+      const box = within(dialog).getByRole("checkbox", { name: "Submit with 2 unconfirmed values" }) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      expect(within(dialog).getByText("Betroffene Person (Experiencer): Patient · Zeitlicher Bezug (Temporality): Current")).toBeDefined();
+    });
+
+    it("sends no acknowledgement when no rows remain", async () => {
+      const view = unconfirmedView([]);
+      const submit = vi.spyOn(api, "submitWorkspace").mockResolvedValue(submissionOf(view) as any);
+      render(<CaseScreen view={view} workspaceId="no-rows" onClose={vi.fn()} />);
+      const dialog = await openSubmit();
+      expect(within(dialog).queryByRole("checkbox", { name: /unconfirmed values/ })).toBeNull();
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+      await screen.findByRole("dialog", { name: "Case submitted" });
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect((submit.mock.calls[0][1] as any).payload.warning_acknowledgement).toBeUndefined();
+    });
+
+    it("row Confirm sends one set_axes with the row's defaulted axes", async () => {
+      const view = unconfirmedView(["assertion", "experiencer"]);
+      const confirmed = structuredClone(view.draft); confirmed.revision += 1;
+      confirmed.annotations![0].annotation.axes_defaulted = [];
+      const apply = vi.spyOn(api, "applyCommand").mockResolvedValue(confirmed);
+      render(<CaseScreen view={view} workspaceId="row-confirm" onClose={vi.fn()} />);
+      const dialog = await openSubmit();
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Confirm values of / }));
+      await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+      expect((apply.mock.calls[0][1] as any).payload).toEqual(expect.objectContaining({ command: "set_axes",
+        annotation_id: "pending-finding", axes_values: shown, chosen_axis_ids: ["assertion", "experiencer"] }));
+      await waitFor(() => expect(within(dialog).getByRole("status").textContent).toBe("All values are confirmed."));
+      expect(dialog.querySelector("[data-unconfirmed-values]")).toBeNull();
+      expect(document.activeElement).toBe(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
+    });
+
+    it("a second warning after the resend clears the checkbox without a third request", async () => {
+      const view = unconfirmedView();
+      const renewed = { ...acknowledgementOf(view), policy_revision: 8, warning_digest: "renewed-server-digest" };
+      const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(axisWarning(view, ["experiencer"]))
+        .mockRejectedValueOnce(new ApiError(422, "Policy changed", "AXIS_CONFIRMATION_WARNING", { acknowledgement: renewed, warnings: [] }))
+        .mockResolvedValue(submissionOf(view) as any);
+      const update = vi.spyOn(api, "applyCommand");
+      render(<CaseScreen view={view} workspaceId="warning" onClose={vi.fn()} />);
+      const dialog = await openSubmit();
+      submitTicked(dialog, 1);
+      const box = within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed values" }) as HTMLInputElement;
+      await waitFor(() => expect(statusOf(dialog)).toBe("The unconfirmed values changed. Check the list again."));
+      expect(box.checked).toBe(false);
+      expect(submit).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole("dialog", { name: "Case submitted" })).toBeNull();
+      fireEvent.click(box);
+      expect(statusOf(dialog)).toBe("");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+      await screen.findByRole("dialog", { name: "Case submitted" });
+      expect(submit).toHaveBeenCalledTimes(3);
+      expect(submit).toHaveBeenLastCalledWith("warning", expect.objectContaining({ payload: expect.objectContaining({ warning_acknowledgement: renewed }) }));
+      expect(update).not.toHaveBeenCalled();
+      expect(view.draft.annotations![0].annotation.axes_defaulted).toEqual(["experiencer"]);
+    });
+
+    it("allows leaving after cancelling a submission warning without treating it as a rejected edit", async () => {
+      const view = withEditableFinding(structuredClone(sampleView)); view.require_spanless_note = false;
+      vi.spyOn(api, "submitWorkspace").mockRejectedValue(new ApiError(422, "Review defaults", "AXIS_CONFIRMATION_WARNING", { acknowledgement: { draft_revision: view.draft.revision, policy_revision: 1, warning_digest: "warning" }, warnings: [] }));
+      const routeLeaveRef = { current: null as (() => Promise<boolean>) | null };
+      render(<CaseScreen view={view} workspaceId="cancel-warning" onClose={vi.fn()} routeLeaveRef={routeLeaveRef} />);
+      const dialog = await openSubmit();
+      submitTicked(dialog, 3);
+      await waitFor(() => expect(statusOf(dialog)).toBe("The unconfirmed values changed. Check the list again."));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+      await act(async () => { expect(await routeLeaveRef.current!()).toBe(true); });
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
   });
 
   it("creates a finding without a reason when the enforced workspace makes it optional", async () => {
@@ -359,7 +446,7 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
     expect((screen.getByLabelText(/Reason for no text span/) as HTMLTextAreaElement).required).toBe(false);
     fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
-    fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
+    fireEvent.click(await candidateCard("Hypotonia"));
     await waitFor(() => expect(apply).toHaveBeenCalledOnce());
     expect(apply.mock.calls[0][1].payload).toMatchObject({ command: "create_annotation", segments: [], term_id: "HP:0001252" });
     expect(apply.mock.calls[0][1].payload).not.toHaveProperty("note");
@@ -565,7 +652,7 @@ describe("CaseScreen integration", () => {
     // Shows search panel for new annotation
     expect(screen.getByRole("heading", { name: "New finding without a text span" })).toBeDefined();
     fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Hypotonia" } });
-    fireEvent.click((await screen.findByText("Hypotonia")).closest(".candidate-card")!);
+    fireEvent.click(await candidateCard("Hypotonia"));
 
     await waitFor(() => {
       expect(applyCommandSpy).toHaveBeenCalledWith(
@@ -823,7 +910,7 @@ describe("CaseScreen integration", () => {
     expect(screen.getByRole("region", { name: "New finding" })).toBeDefined();
     expect(mutate).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "Custom" } });
-    fireEvent.click((await screen.findByText("Custom finding")).closest(".candidate-card")!);
+    fireEvent.click(await candidateCard("Custom finding"));
     await waitFor(() => expect(mutate).toHaveBeenCalledWith("ws-custom", expect.objectContaining({
       expected_revision: 0,
       payload: expect.objectContaining({ command: "create_annotation", layer_id: "phenotype",
@@ -1424,6 +1511,7 @@ describe("CaseScreen integration", () => {
     expect(screen.getByText("No previous submissions yet.")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const confirm = await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.click(within(confirm).getByRole("checkbox", { name: "Submit with 3 unconfirmed values" }));
     fireEvent.click(within(confirm).getByRole("checkbox", { name: /Entire text checked/ }));
     fireEvent.click(within(confirm).getByRole("button", { name: "Submit case" }));
     const receipt = await screen.findByRole("dialog", { name: "Case submitted" });
@@ -1464,7 +1552,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="legacy-rules" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(within(dialog).getByRole("checkbox"));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
     expect(within(dialog).getByRole("button", { name: "Submit case" }).getAttribute("aria-disabled")).toBe("true");
     expect(within(dialog).getByText(new RegExp(reason.replace(".", "\\.")))).toBeDefined();
     fireEvent.click(within(dialog).getAllByRole("button", { name: /^Go to / })[0]);
@@ -1523,7 +1611,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="invalid-proposal" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     return screen.findByRole("dialog", { name: "Submit case" }).then(async dialog => {
-      fireEvent.click(within(dialog).getByRole("checkbox"));
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       expect(within(dialog).getByRole("button", { name: "Submit case" }).getAttribute("aria-disabled")).toBe("true");
       expect(within(dialog).getByText(/Reject this proposal or use Edit & Replace/)).toBeDefined();
       expect(within(dialog).getByText(new RegExp(`term is ${status}`))).toBeDefined();
@@ -1539,7 +1627,9 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="stale-policy" onClose={vi.fn()} onReload={reload} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(within(dialog).getByRole("checkbox")); fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 3 unconfirmed values" }));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
     await screen.findByText(/Reload the case to load the current rules/);
     expect(screen.getAllByText(/Submission failed:/)).toHaveLength(1);
     expect(screen.queryByText(/highlighted values/)).toBeNull();
@@ -1567,7 +1657,7 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="legacy-optional" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(within(dialog).getByRole("checkbox"));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
     expect(within(dialog).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
   });
 
@@ -1630,8 +1720,9 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }));
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
-    expect(await screen.findByText(/1 annotation has defaulted axis values/)).toBeDefined();
-    fireEvent.click(document.querySelector<HTMLElement>('[data-open-item="defaulted"] button')!);
+    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
+    expect(within(dialog).getByRole("heading", { name: "Unconfirmed values · 1 finding" })).toBeDefined();
+    fireEvent.click(within(dialog.querySelector<HTMLElement>("[data-unconfirmed-row]")!).getByRole("button", { name: /^Go to / }));
     await waitFor(() => expect((document.activeElement as HTMLElement).closest('[data-axis-field="assertion"]')).not.toBeNull());
     expect((screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText("Defaults to confirm")).toBeDefined();

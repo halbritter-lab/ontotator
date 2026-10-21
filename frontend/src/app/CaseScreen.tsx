@@ -59,6 +59,7 @@ import { FindingRow } from "../editor/FindingRow";
 import { SubmitCaseDialog } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
 import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
+import { pairKey, rowPairs, sameSet, unconfirmedRows, type UnconfirmedRow } from "../editor/unconfirmedValues";
 import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
 import { fromSubmission } from "../editor/historicalSubmission";
 import { MySubmissions } from "../editor/MySubmissions";
@@ -326,8 +327,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [textCheckedConfirmed, setTextCheckedConfirmed] = useState(false);
   const [axisWarning, setAxisWarning] = useState<AxisWarning | null>(null);
   const [axisWarningAcknowledged, setAxisWarningAcknowledged] = useState(false);
+  /** The (finding, axis) pairs listed when "Submit with {n} unconfirmed values" was ticked. */
+  const [ackSeen, setAckSeen] = useState<ReadonlySet<string> | null>(null);
+  /** Polite status of the submit dialog, e.g. after the server listed other values. */
+  const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const submittingWorkspace = useRef(false);
-  useEffect(() => { setAxisWarning(null); setAxisWarningAcknowledged(false); }, [draft.revision, view.annotation_policy_revision]);
+  // A warning's acknowledgement is bound to the draft revision; the ticked checkbox stays while the
+  // list only shrinks (new pairs untick it, see the effect on `pairsKey`).
+  useEffect(() => { setAxisWarning(null); }, [draft.revision, view.annotation_policy_revision]);
   const [isReloading, setIsReloading] = useState(false);
   // Reviewer notes typed in the UI, keyed by target; kept even when a decision is reset.
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
@@ -2134,6 +2141,51 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     return { annotationId: snapshot.annotation.annotation_id, term: snapshotTerm(snapshot),
       ...(target ? { targetKey: refKey(target) } : {}), evidenceId: firstEvidenceId(snapshot) };
   };
+  /** Segments of the snapshot's first mark: the draft's evidence for own findings, the snapshot's for proposals. */
+  const firstSegments = (snapshot: AnnotationSnapshot) => {
+    const own = reviewTargetOf(snapshot) ? undefined : allEvidenceMap[snapshot.annotation.evidence_refs?.[0]?.evidence_id ?? ""];
+    return (own ?? snapshot.evidence?.[0])?.mention.segments ?? [];
+  };
+  // F2: the Submit dialog's "Unconfirmed values" rows, computed locally; a current server warning adds its pairs.
+  const unconfirmed = unconfirmedRows({
+    snapshots: completionResults,
+    axes: axisDefinitions,
+    targetKeyOf: snapshot => { const target = reviewTargetOf(snapshot); return target ? refKey(target) : undefined; },
+    editableLayerIds,
+    term: snapshotTerm,
+    quote: snapshot => { const segments = firstSegments(snapshot); return segments.length ? quoteSegments(view.document.text, segments, 40) : ""; },
+    evidenceId: firstEvidenceId,
+    serverPairs: axisWarning && axisWarning.acknowledgement.draft_revision === draft.revision ? axisWarning.warnings : undefined,
+  });
+  const unconfirmedPairs = rowPairs(unconfirmed);
+  const pairsKey = [...unconfirmedPairs].sort().join(",");
+  const setAcknowledged = (checked: boolean) => {
+    setAxisWarningAcknowledged(checked);
+    setAckSeen(checked ? unconfirmedPairs : null);
+    setSubmitStatus(null);
+  };
+  // A value the user did not see when ticking the acknowledgement unticks it.
+  useEffect(() => {
+    if (!axisWarningAcknowledged || !ackSeen) return;
+    if ([...unconfirmedPairs].some(pair => !ackSeen.has(pair))) {
+      setAxisWarningAcknowledged(false);
+      setAckSeen(null);
+      setSubmitStatus("The unconfirmed values changed. Check the list again.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pairsKey]);
+  /** "Confirm" of a row: one set_axes with the finding's current values; false when nothing was confirmed. */
+  const confirmUnconfirmedRow = async (row: UnconfirmedRow): Promise<boolean> => {
+    const snapshot = (latestDraft.current.annotations ?? []).find(candidate => candidate.annotation.annotation_id === row.annotationId);
+    if (!snapshot || row.confirmableAxisIds.length === 0) return false;
+    try {
+      return await handleUpdateAxes({ ...snapshot.annotation.axes_values }, row.confirmableAxisIds, row.annotationId);
+    } catch (error) {
+      reportError(error);
+      return false;
+    }
+  };
+  const confirmUnavailableReason = queueState === "conflict" || queueState === "error" || isOffline ? statusText : null;
   // Server axis warnings that still apply: the value is empty or still a default (as the server checks).
   const unconfirmedEntries = axisWarning ? completionResults.flatMap(snapshot => {
     const warned = new Set(axisWarning.warnings.filter(warning => warning.annotationId === snapshot.annotation.annotation_id).map(warning => warning.axis));
@@ -2200,6 +2252,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
     setFocusRequest({ key: listKey, find: openItemControl(item) });
   };
+  /** "Go to" of an unconfirmed row: the finding's first open axis. */
+  const goToRow = (row: UnconfirmedRow) =>
+    goToOpenItem({
+      key: `unconfirmed:${row.targetKey ?? row.annotationId}`,
+      kind: "unconfirmed-values",
+      blocking: false,
+      term: row.term,
+      line: "",
+      listKey: row.listKey,
+      focus: "[data-axis-field]",
+      axisId: row.values[0]?.axisId,
+      evidenceId: row.evidenceId,
+    });
   const goToNextOpenItem = () => {
     const item = nextOpenItem(openItems, selectedListKey, lastOpenItem.current);
     if (item) goToOpenItem(item);
@@ -2267,12 +2332,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
     if (blockInvalidUnresolvedNotes()) return;
     setTextCheckedConfirmed(false); setAxisWarning(null); setAxisWarningAcknowledged(false);
+    setAckSeen(null); setSubmitStatus(null);
     setSubmitDialogOpen(true);
   };
 
   // Step 2: submit after the explicit "entire text checked" confirmation.
   const confirmSubmit = async () => {
-    if (readOnlyRef.current || submittingWorkspace.current || (axisWarning && !axisWarningAcknowledged)) return;
+    const rowsRemain = unconfirmed.length > 0;
+    if (readOnlyRef.current || submittingWorkspace.current || (rowsRemain && (view.require_chosen_axes || !axisWarningAcknowledged))) return;
     if (!textCheckedConfirmed || blockInvalidUnresolvedNotes() || submissionIssues.length || unresolvedReanchorCount || pendingCarriedCount) return;
     if (view.key.mode === "review") {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
@@ -2284,32 +2351,53 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       }
     }
     submittingWorkspace.current = true;
+    // The values the user saw when submitting; a warning listing exactly these is acknowledged at once (D1).
+    const expected = unconfirmedPairs;
+    const acknowledged = rowsRemain && axisWarningAcknowledged;
+    const held = acknowledged ? axisWarning?.acknowledgement : undefined;
     try {
-      const mutationId = crypto.randomUUID();
-      let envelope: Parameters<typeof api.submitWorkspace>[1] | undefined;
+      const submitEnvelope = (expectedRevision: number, acknowledgement?: AxisWarning["acknowledgement"]) => ({
+        mutation_id: crypto.randomUUID(),
+        expected_revision: expectedRevision,
+        payload: {
+          command: "submit_workspace" as const,
+          // Explicitly confirmed by the user in the submit dialog.
+          document_checked: true,
+          ...(acknowledgement ? { warning_acknowledgement: acknowledgement } : {}),
+        },
+      });
+      let first: ReturnType<typeof submitEnvelope> | undefined;
+      let resend: ReturnType<typeof submitEnvelope> | undefined;
       const submission = await queueRef.current.enqueue(async (expectedRevision) => {
         assertWritable();
-        envelope ??= {
-          mutation_id: mutationId,
-          expected_revision: expectedRevision,
-          payload: {
-            command: "submit_workspace",
-            // Explicitly confirmed by the user in the submit dialog.
-            document_checked: true,
-            ...(axisWarning && axisWarningAcknowledged ? { warning_acknowledgement: axisWarning.acknowledgement } : {}),
-          },
-        };
-        try { return await api.submitWorkspace(workspaceId, envelope).catch(assignmentFailure); }
+        first ??= submitEnvelope(expectedRevision, held);
+        try { return await api.submitWorkspace(workspaceId, first).catch(assignmentFailure); }
         catch (error) {
           const warning = submissionAxisWarning(error);
           // An advisory response applies no mutation and must not count as a
           // rejected edit, which would incorrectly prevent later navigation.
-          if (warning) return { revision: expectedRevision, axisWarning: warning };
-          throw error;
+          if (!warning) throw error;
+          const answered = new Set(warning.warnings.map(item => pairKey(item.annotationId, item.axis)));
+          // D1: the user ticked exactly these values; resend once with the fresh acknowledgement.
+          if (acknowledged && sameSet(answered, expected)) {
+            resend ??= submitEnvelope(expectedRevision, warning.acknowledgement);
+            try { return await api.submitWorkspace(workspaceId, resend).catch(assignmentFailure); }
+            catch (again) {
+              const next = submissionAxisWarning(again);
+              if (next) return { revision: expectedRevision, axisWarning: next };
+              throw again;
+            }
+          }
+          return { revision: expectedRevision, axisWarning: warning };
         }
       });
       if ("axisWarning" in submission) {
-        setAxisWarning(submission.axisWarning); setAxisWarningAcknowledged(false); setSubmitDialogOpen(true); return;
+        setAxisWarning(submission.axisWarning);
+        setAxisWarningAcknowledged(false);
+        setAckSeen(null);
+        setSubmitStatus("The unconfirmed values changed. Check the list again.");
+        setSubmitDialogOpen(true);
+        return;
       }
       setSubmitDialogOpen(false);
       setAcceptedSubmission({ identity: versionIdentity, value: structuredClone(submission) });
@@ -3307,14 +3395,19 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         pendingReanchorCount={pendingReanchorItems.length}
         unresolvedReanchorCount={unresolvedReanchorCount}
         items={openItems}
-        axisWarning={axisWarning}
-        axisWarningAcknowledged={axisWarningAcknowledged}
+        unconfirmed={unconfirmed}
+        requireChosenAxes={view.require_chosen_axes === true}
+        confirmUnavailableReason={confirmUnavailableReason}
+        onConfirmValues={confirmUnconfirmedRow}
+        acknowledged={axisWarningAcknowledged}
+        setAcknowledged={setAcknowledged}
+        submitStatus={submitStatus}
         textChecked={textCheckedConfirmed}
         saving={queueState === "saving"}
         readOnly={readOnly}
         setTextChecked={setTextCheckedConfirmed}
-        setAxisWarningAcknowledged={setAxisWarningAcknowledged}
         onGoTo={goToOpenItem}
+        onGoToRow={goToRow}
         onConfirm={() => { void confirmSubmit(); }}
         onCancel={() => setSubmitDialogOpen(false)}
       />

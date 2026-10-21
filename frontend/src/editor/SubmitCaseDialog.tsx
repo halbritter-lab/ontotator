@@ -1,9 +1,13 @@
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "../ui/Button";
 import { Checkbox } from "../ui/Checkbox";
 import { Dialog } from "../ui/Dialog";
 import { InlineMessage } from "../ui/InlineMessage";
-import { submitBlockedReason, summaryLine, type OpenItem } from "./openItems";
+import { axisOptionLabel } from "./axisLabels";
+import { dialogItems, submitBlockedReason, summaryLine, type OpenItem } from "./openItems";
+import { UnconfirmedValuesSection } from "./UnconfirmedValuesSection";
+import { valueCount, type UnconfirmedRow } from "./unconfirmedValues";
+import "./submitDialog.css";
 
 /** At most this many open items are listed; the rest are reached with "Next open item". */
 const LISTED_ITEMS = 5;
@@ -22,15 +26,26 @@ export interface SubmitCaseDialogProps {
   unresolvedReanchorCount: number;
   /** Everything still open, in dialog order (`collectOpenItems`). */
   items: readonly OpenItem[];
-  axisWarning: { warnings: { annotationId: string; axis: string }[] } | null;
-  axisWarningAcknowledged: boolean;
+  /** Findings with empty or defaulted values (`unconfirmedRows`), shown in their own section. */
+  unconfirmed: readonly UnconfirmedRow[];
+  /** Project rule `require_chosen_axes` (`view.require_chosen_axes`): rows block, no checkbox. */
+  requireChosenAxes: boolean;
+  /** Why "Confirm" is unavailable (queue conflict, error, offline), else null. */
+  confirmUnavailableReason: string | null;
+  /** One set_axes for the row; resolves false (never rejects) when nothing was confirmed. */
+  onConfirmValues: (row: UnconfirmedRow) => Promise<boolean>;
+  acknowledged: boolean;
+  setAcknowledged: (checked: boolean) => void;
+  /** Polite status from the submit flow, e.g. "The unconfirmed values changed. Check the list again." */
+  submitStatus: string | null;
   textChecked: boolean;
   saving: boolean;
   readOnly: boolean;
   setTextChecked: (checked: boolean) => void;
-  setAxisWarningAcknowledged: (acknowledged: boolean) => void;
   /** Closes the dialog and goes to the item: selects it, scrolls to its mark and focuses its control. */
   onGoTo: (item: OpenItem) => void;
+  /** "Go to" of an unconfirmed row: like `onGoTo`, at the row's first open axis. */
+  onGoToRow: (row: UnconfirmedRow) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -38,18 +53,30 @@ export interface SubmitCaseDialogProps {
 /** Final confirmation before a case is submitted, listing everything that blocks or warns. */
 export function SubmitCaseDialog({
   open, documentId, reviewMode, resultCount, confirmedCount, unresolvedDecisionCount, savedFindingsCount,
-  reviewTargetCount, openReviewTargetCount, pendingReanchorCount, unresolvedReanchorCount, items, axisWarning,
-  axisWarningAcknowledged, textChecked, saving, readOnly, setTextChecked, setAxisWarningAcknowledged, onGoTo,
-  onConfirm, onCancel,
+  reviewTargetCount, openReviewTargetCount, pendingReanchorCount, unresolvedReanchorCount, items: allItems,
+  unconfirmed, requireChosenAxes, confirmUnavailableReason, onConfirmValues, acknowledged, setAcknowledged, submitStatus,
+  textChecked, saving, readOnly, setTextChecked, onGoTo, onGoToRow, onConfirm, onCancel,
 }: SubmitCaseDialogProps) {
   const reasonId = useId();
   const [announcement, setAnnouncement] = useState<{ text: string; count: number } | null>(null);
   useEffect(() => { if (!open) setAnnouncement(null); }, [open]);
+  const textCheckedInput = useRef<HTMLInputElement>(null);
+  const submitButton = useRef<HTMLButtonElement>(null);
+  // No confirmable row left to focus: "Entire text checked" while unchecked, else "Submit case".
+  const focusAfterRows = useCallback(() => {
+    const input = textCheckedInput.current;
+    (input && !input.checked ? input : submitButton.current)?.focus();
+  }, []);
 
+  // Defaulted and unconfirmed values have their own section; the generic list keeps the other kinds.
+  const items = dialogItems(allItems);
+  const n = valueCount(unconfirmed);
+  const rowsRemain = unconfirmed.length > 0;
+  const showAcknowledgement = rowsRemain && !requireChosenAxes;
   const blockedReason = readOnly ? "This case is read-only."
-    : submitBlockedReason(items)
+    : submitBlockedReason(items, requireChosenAxes ? n : 0)
     ?? (!textChecked ? "Confirm that the entire text was checked before submitting."
-      : axisWarning !== null && !axisWarningAcknowledged ? "Confirm “Submit with these unconfirmed values” before submitting."
+      : rowsRemain && !acknowledged ? `Confirm the values or tick “Submit with ${n} unconfirmed values” before submitting.`
       : null);
   const blocking = items.some(item => item.blocking);
   const firstCarried = items.find(item => item.kind === "carried");
@@ -68,6 +95,7 @@ export function SubmitCaseDialog({
     <Dialog open={open} title="Submit case" heading={<>Submit case {documentId}?</>} onClose={onCancel}
       footer={<>
         <Button
+          ref={submitButton}
           type="button"
           variant="primary"
           loading={saving}
@@ -75,7 +103,7 @@ export function SubmitCaseDialog({
           aria-describedby={blockedReason ? reasonId : undefined}
           onClick={submit}
         >
-          {axisWarning ? "Continue and submit" : "Submit case"}
+          Submit case
         </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
@@ -109,12 +137,17 @@ export function SubmitCaseDialog({
         </ul>
         {items.length > LISTED_ITEMS && <p>and {items.length - LISTED_ITEMS} more</p>}
       </InlineMessage>}
-      {axisWarning && <InlineMessage tone="warning" title="Review unconfirmed clinical values">
-        <p>These values have not been explicitly confirmed. Continuing records acknowledgement of this warning; it keeps the clinical values and their defaulted status unchanged.</p>
-        <Checkbox id="submit-axis-warning" label="Submit with these unconfirmed values" checked={axisWarningAcknowledged} disabled={saving} onChange={event => setAxisWarningAcknowledged(event.target.checked)} />
-      </InlineMessage>}
+      <UnconfirmedValuesSection rows={unconfirmed} optionLabel={axisOptionLabel}
+        confirmUnavailableReason={confirmUnavailableReason} onConfirmValues={onConfirmValues}
+        onGoTo={onGoToRow} onEmpty={focusAfterRows} />
+      {showAcknowledgement && <div className="submit-ack">
+        <Checkbox id="submit-axis-warning" label={`Submit with ${n} unconfirmed values`}
+          hint="Acknowledging does not confirm the values; they stay marked as defaults."
+          checked={acknowledged} disabled={saving} onChange={event => setAcknowledged(event.target.checked)} />
+      </div>}
       <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
         <input
+          ref={textCheckedInput}
           type="checkbox"
           checked={textChecked}
           onChange={(e) => setTextChecked(e.target.checked)}
@@ -122,6 +155,9 @@ export function SubmitCaseDialog({
         <span>Entire text checked for further findings</span>
       </label>
       {blockedReason && <p id={reasonId} className="form-hint" data-submit-blocked-reason>{blockedReason}</p>}
+      <div className="visually-hidden" aria-live="polite" data-submit-status>
+        {submitStatus && <span>{submitStatus}</span>}
+      </div>
       <div className="visually-hidden" aria-live="assertive" data-submit-announcer>
         {announcement && <span key={announcement.count}>{announcement.text}</span>}
       </div>
