@@ -6781,6 +6781,8 @@ export interface components {
             annotate: boolean;
             /** Restored Revision */
             restored_revision?: number | null;
+            /** Decided */
+            decided?: boolean;
         };
         /** UndoView */
         UndoView: {

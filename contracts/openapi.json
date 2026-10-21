@@ -20330,6 +20330,10 @@
               }
             ],
             "title": "Restored Revision"
+          },
+          "decided": {
+            "type": "boolean",
+            "title": "Decided"
           }
         },
         "type": "object",

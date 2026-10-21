@@ -2,7 +2,7 @@
 
 ``work_plan_rows.decided`` is false only for rows the system wrote (no lead
 ``updated_by``) that are not in plan in a project importing with "Nothing
-planned" (spec VD3). Text changes after annotation record their resolutions
+planned" (spec VD3); source rows stay decided (they show "not planned"). Text changes after annotation record their resolutions
 and freeze drafts append-only; a round input comes from a submission or from
 such a draft snapshot.
 """
@@ -25,6 +25,12 @@ BACKFILL_DECIDED = f"""
 UPDATE {SCHEMA}.work_plan_rows SET decided = false
 WHERE review = false AND annotate = false AND updated_by IS NULL
   AND project_id IN (SELECT id FROM {SCHEMA}.projects WHERE import_plan = 'nothing')
+  AND NOT EXISTS (
+    SELECT 1 FROM {SCHEMA}.documents d
+    WHERE d.project_id = work_plan_rows.project_id
+      AND d.case_id = work_plan_rows.case_id
+      AND d.language = work_plan_rows.language
+      AND d.origin = 'native')
 """
 
 

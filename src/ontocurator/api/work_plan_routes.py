@@ -86,6 +86,8 @@ class UndoRowView(BaseModel):
     review: bool
     annotate: bool
     restored_revision: int | None = None
+    # False restores an undecided row (VD3) on Undo; absent means decided.
+    decided: bool = Field(default_factory=lambda: True)
 
 
 class UndoView(BaseModel):

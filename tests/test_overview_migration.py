@@ -65,6 +65,20 @@ def _seed(conn: Connection) -> None:
                 user=user,
                 key=key,
             )
+    # Project n: a system off/off source row (never undecided).
+    _exec(
+        conn,
+        f"INSERT INTO {S}.work_plan_rows (project_id, case_id, language,"
+        " review, annotate) SELECT id, 'c1', 'en', false, false"
+        f" FROM {S}.projects WHERE project_key = 'n'",
+    )
+    _exec(
+        conn,
+        f"INSERT INTO {S}.documents (project_id, document_id, language, text,"
+        " case_id, external_id, version, origin, text_sha256)"
+        f" SELECT id, 'n1', 'en', 'x', 'c1', 'c1', 1, 'native', 'h'"
+        f" FROM {S}.projects WHERE project_key = 'n'",
+    )
     # Project d: a source v1, its correction v2, an assignment, a submission
     # and a round on v1.
     for doc, version, derived in (("v1", 1, None), ("v2", 2, "v1")):
@@ -215,6 +229,7 @@ def test_decided_backfill(migrated) -> None:
         ("n", "de"): False,  # off, system row, "Nothing planned"
         ("n", "fr"): True,  # off, written by a lead
         ("n", "it"): True,  # on
+        ("n", "en"): True,  # source row
         ("d", "de"): True,  # default import plan
         ("d", "fr"): True,
         ("d", "it"): True,

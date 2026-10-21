@@ -358,6 +358,7 @@ def write_rows(
     *,
     actor_id: int | None,
     restored: Mapping[RowKey, int | None] = {},
+    decided: Mapping[RowKey, bool] = {},
 ) -> dict[str, int]:
     """Upsert flags; each touched case stores its current revision + 1 once.
 
@@ -369,6 +370,7 @@ def write_rows(
     by ``ensure_rows`` or the 0016 migration have NULL ``updated_by``).
     Every written row counts as decided (spec VD3), even with
     ``actor_id=None``: ``decided``, not ``updated_by``, is the source of truth.
+    Only an Undo passes ``decided`` to restore a row's earlier state exactly.
     """
     if not rows:
         return {}
@@ -382,7 +384,7 @@ def write_rows(
                 "annotate": flags.annotate,
                 "restored_revision": restored.get(key),
                 "updated_by": actor_id,
-                "decided": True,
+                "decided": decided.get(key, True),
             }
             for key, flags in rows.items()
             if (key in restored) is exact
@@ -401,7 +403,7 @@ def write_rows(
                 "review": excluded.review,
                 "annotate": excluded.annotate,
                 "updated_by": excluded.updated_by,
-                "decided": True,
+                "decided": excluded.decided,
                 "updated_at": func.now(),
                 "restored_revision": excluded.restored_revision
                 if exact
@@ -422,8 +424,9 @@ def ensure_rows(
 
     Inserted rows have NULL ``updated_by`` (system defaults, like the 0016
     migration rows); existing rows and revisions are left untouched. Under
-    "Nothing planned" a row the import leaves out of plan is undecided (spec
-    VD3); rows it puts in plan, and all rows under other plans, are decided.
+    "Nothing planned" a translation row the import leaves out of plan is
+    undecided (spec VD3); source rows (they show "not planned"), rows it puts
+    in plan, and all rows under other plans, are decided.
     """
     if not defaults:
         return 0
@@ -431,6 +434,7 @@ def ensure_rows(
         select(ProjectRow.import_plan).where(ProjectRow.id == project_id)
     ).scalar_one()
     nothing_planned = import_plan == "nothing"
+    sources = source_keys(conn, project_id, defaults) if nothing_planned else set()
     conn.execute(
         insert(WorkPlanRow)
         .values(
@@ -453,7 +457,10 @@ def ensure_rows(
                     "language": key.language,
                     "review": flags.review,
                     "annotate": flags.annotate,
-                    "decided": not nothing_planned or flags.review or flags.annotate,
+                    "decided": not nothing_planned
+                    or flags.review
+                    or flags.annotate
+                    or key in sources,
                 }
                 for key, flags in defaults.items()
             ]
@@ -470,16 +477,46 @@ def ensure_rows(
     return len(inserted)
 
 
-def decided_rows(conn: Connection, project_id: int) -> dict[RowKey, bool]:
-    """``decided`` of every stored row of the project."""
+def source_keys(
+    conn: Connection, project_id: int, keys: Iterable[RowKey]
+) -> set[RowKey]:
+    """The rows among ``keys`` that hold a source (native) text."""
+    keys = list(keys)
+    if not keys:
+        return set()
     rows = conn.execute(
-        select(
-            WorkPlanFlagsRow.case_id,
-            WorkPlanFlagsRow.language,
-            WorkPlanFlagsRow.decided,
-        ).where(WorkPlanFlagsRow.project_id == project_id)
+        select(DocumentRow.case_id, DocumentRow.language)
+        .where(
+            DocumentRow.project_id == project_id,
+            DocumentRow.origin == "native",
+            _in_keys(DocumentRow.case_id, DocumentRow.language, keys),
+        )
+        .distinct()
     )
-    return {_key(row): row.decided for row in rows}
+    return {_key(row) for row in rows}
+
+
+def decided_rows(
+    conn: Connection, project_id: int, case_ids: Iterable[str] | None = None
+) -> dict[RowKey, bool]:
+    """``decided`` of every stored row of the project (or of ``case_ids``)."""
+    query = select(
+        WorkPlanFlagsRow.case_id,
+        WorkPlanFlagsRow.language,
+        WorkPlanFlagsRow.decided,
+    ).where(WorkPlanFlagsRow.project_id == project_id)
+    if case_ids is not None:
+        query = query.where(WorkPlanFlagsRow.case_id.in_(list(case_ids)))
+    return {_key(row): row.decided for row in conn.execute(query)}
+
+
+def undecided(conn: Connection, project_id: int, keys: Iterable[RowKey]) -> set[RowKey]:
+    """The stored rows among ``keys`` whose ``decided`` is false (VD3)."""
+    keys = set(keys)
+    if not keys:
+        return set()
+    stored = decided_rows(conn, project_id, {key.case_id for key in keys})
+    return {key for key in keys if stored.get(key) is False}
 
 
 def open_tasks(

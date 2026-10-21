@@ -196,15 +196,27 @@ def _write(
     new: Mapping[RowKey, PlanFlags],
     *,
     restored: Mapping[RowKey, int | None],
+    decided: Mapping[RowKey, bool] = {},
 ) -> dict[str, int]:
     """Materialise the touched cases' effective rows, then write ``new``."""
+    _materialise(conn, pid, current, new)
+    return store.write_rows(
+        conn, pid, new, actor_id=actor.user_id, restored=restored, decided=decided
+    )
+
+
+def _materialise(
+    conn: Connection,
+    pid: int,
+    current: Mapping[RowKey, PlanFlags],
+    new: Mapping[RowKey, PlanFlags],
+) -> None:
     cases = {key.case_id for key in new}
     store.ensure_rows(
         conn,
         pid,
         {key: flags for key, flags in current.items() if key.case_id in cases},
     )
-    return store.write_rows(conn, pid, new, actor_id=actor.user_id, restored=restored)
 
 
 def enable_review_for_accepted(
@@ -505,16 +517,28 @@ class WorkPlanService:
         *,
         reason: str | None = None,
         restored: Mapping[RowKey, int | None] | None = None,
+        decided: Mapping[RowKey, bool] | None = None,
     ) -> dict[str, Any]:
-        """Acceptances, revocations, flags and audit of an evaluated plan."""
+        """Acceptances, revocations, flags and audit of an evaluated plan.
+
+        ``decided`` (Undo only) restores the rows' earlier undecided state.
+        """
         now = datetime.now(UTC)
         accepted = self._accept(conn, key, plan, reason, now)
         self._revoke(conn, plan.pid, result.withdrawn, now)
         previous = store.restored(conn, plan.pid)
         if restored is None:
             restored = {k: plan.revisions[k.case_id] + 1 for k in result.restored}
+        _materialise(conn, plan.pid, plan.current, plan.new)
+        was_undecided = store.undecided(conn, plan.pid, plan.new)
         revisions = _write(
-            conn, self.actor, plan.pid, plan.current, plan.new, restored=restored
+            conn,
+            self.actor,
+            plan.pid,
+            plan.current,
+            plan.new,
+            restored=restored,
+            decided=decided or {},
         )
         _audit_cases(
             conn,
@@ -535,6 +559,7 @@ class WorkPlanService:
                         **_ref(k),
                         **_flags(plan.current.get(k, OFF)),
                         "restored_revision": previous.get(k),
+                        "decided": k not in was_undecided,
                     }
                     for k in sorted(plan.new, key=_row_order)
                 ],
@@ -583,7 +608,11 @@ class WorkPlanService:
                 and _needs_acceptance(row, new)
                 else frozenset()
             )
-            if new == old and not accepting:
+            if (
+                new == old
+                and not accepting
+                and not store.undecided(conn, pid, [row_key])
+            ):
                 # Nothing to write: no revision bump, no audit, empty Undo.
                 return {
                     "case_id": case_id,
@@ -670,7 +699,14 @@ class WorkPlanService:
             for language, item in request.languages.items()
         }
         merged = merge(current, versions, cases, changes)
-        new = {k: f for k, f in merged.items() if f != current.get(k, OFF)}
+        # An undecided row the change reaches becomes decided (VD3), even when
+        # its flags stay as they are.
+        undecided = store.undecided(conn, pid, merged)
+        new = {
+            k: f
+            for k, f in merged.items()
+            if f != current.get(k, OFF) or k in undecided
+        }
         skipped = sorted((k for k in picked if k not in merged), key=_row_order)
         languages = (
             set(request.accept_external_review.languages)
@@ -864,6 +900,9 @@ class WorkPlanService:
                 plan,
                 result,
                 restored={k: r.restored_revision for k, r in rows.items()}
+                if request.undo
+                else None,
+                decided={k: r.decided for k, r in rows.items()}
                 if request.undo
                 else None,
             )

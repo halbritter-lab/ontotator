@@ -153,6 +153,7 @@ def test_bulk_preview_then_put_round_trip(case_env):
             "review": True,
             "annotate": True,
             "restored_revision": None,
+            "decided": True,
         }
     ]
     assert [w["assignment_id"] for w in result["withdrawn"]] == [
