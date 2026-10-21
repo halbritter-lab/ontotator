@@ -20,8 +20,11 @@ drift) and then only the tests affected by PATH, or without PATH by the files
 changed against REF (committed since the merge base, uncommitted, untracked).
 
 Backend: changed tests/test_*.py, tests named after a changed module
-(tests/test_<module>*.py) and tests importing a changed module or test helper.
-Python changes without such tests re-run the last failures (pytest --lf).
+(tests/test_<module>*.py; for <name>_routes.py also tests/test_<name>*.py),
+tests naming a changed migration's revision ("0019") and tests importing a
+changed module or test helper. Backend changes without such tests are listed;
+when no backend test runs at all the check fails: run
+'bash scripts/check.sh --only backend'.
 Frontend: vitest related for changed frontend/src and frontend/tests files.
 
 --base REF            base ref, default main (or CHECK_BASE)
@@ -77,7 +80,7 @@ fi
 
 backend_tests=()
 frontend_files=()
-backend_unmapped=0
+unmapped=()
 notes=()
 
 add_backend_test() {
@@ -104,15 +107,14 @@ for raw in "${paths[@]}"; do
     path="${path#./}"
     case "$path" in
         tests/conftest.py|tests/pg_harness.py)
-            backend_unmapped=1
-            notes+=("$path is shared test setup; run 'bash scripts/check.sh --only backend'.")
+            unmapped+=("$path (shared test setup)")
             ;;
         tests/*test_*.py)
             name="${path##*/}"
             if [[ "$name" == test_*.py ]]; then
                 add_backend_test "$path"
             else
-                backend_unmapped=1
+                unmapped+=("$path")
             fi
             ;;
         tests/*.py)
@@ -121,7 +123,7 @@ for raw in "${paths[@]}"; do
             mapfile -t found < <(tests_matching \
                 "^[[:space:]]*(from|import)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*\.)*${stem}([[:space:]]|\.|,|$)")
             add_backend_test "${found[@]}"
-            [ "${#found[@]}" -gt 0 ] || backend_unmapped=1
+            [ "${#found[@]}" -gt 0 ] || unmapped+=("$path")
             ;;
         src/ontocurator/*.py)
             module="${path#src/}"
@@ -134,12 +136,20 @@ for raw in "${paths[@]}"; do
                 tests_matching "(^|[^A-Za-z0-9_.])$(escape "$module")([^A-Za-z0-9_]|$)|^[[:space:]]*from[[:space:]]+$(escape "$parent")[[:space:]]+import[[:space:]].*\b${stem}\b"
                 compgen -G "tests/test_${stem}.py" || true
                 compgen -G "tests/test_${stem}_*.py" || true
+                # A route module is tested by its feature's API tests.
+                if [[ "$stem" == *_routes ]]; then
+                    compgen -G "tests/test_${stem%_routes}*.py" || true
+                fi
+                # A migration is named by its revision id ("0019").
+                if [[ "$path" == */migrations/versions/* && "$stem" =~ ^([0-9]{4})_ ]]; then
+                    tests_matching "[\"']${BASH_REMATCH[1]}[\"']"
+                fi
             )
             add_backend_test "${found[@]}"
-            [ "${#found[@]}" -gt 0 ] || backend_unmapped=1
+            [ "${#found[@]}" -gt 0 ] || unmapped+=("$path")
             ;;
         src/*|pyproject.toml|uv.lock|alembic.ini)
-            backend_unmapped=1
+            unmapped+=("$path")
             ;;
         frontend/src/*.ts|frontend/src/*.tsx|frontend/tests/*.ts|frontend/tests/*.tsx)
             if [ -f "$path" ]; then
@@ -153,8 +163,7 @@ for raw in "${paths[@]}"; do
 done
 
 needs_docker=0
-if { [ "${#backend_tests[@]}" -gt 0 ] || [ "$backend_unmapped" = 1 ]; } \
-    && [ -z "${ONTOCURATOR_TEST_PG_URL:-}" ]; then
+if [ "${#backend_tests[@]}" -gt 0 ] && [ -z "${ONTOCURATOR_TEST_PG_URL:-}" ]; then
     needs_docker=1
 fi
 if [ "$needs_docker" = 1 ]; then
@@ -181,8 +190,7 @@ step() {
     echo "==> ${name}"
     local status=0
     "$@" || status=$?
-    # pytest exit 5: --lf found no recorded failures to repeat.
-    if [ "$status" -eq 0 ] || { [ "$status" -eq 5 ] && [[ "$name" == *"last failures"* ]]; }; then
+    if [ "$status" -eq 0 ]; then
         summary+=("ok      $(printf '%4ds' $((SECONDS - started)))  ${name}")
     else
         summary+=("failed  $(printf '%4ds' $((SECONDS - started)))  ${name}")
@@ -215,9 +223,13 @@ if [ "${#backend_tests[@]}" -gt 0 ]; then
         step "backend affected tests (${#backend_tests[@]} files)" \
             uv run pytest -q "${backend_tests[@]}"
     fi
-elif [ "$backend_unmapped" = 1 ]; then
-    step "backend last failures (no mapped tests)" \
-        uv run pytest -q --lf --last-failed-no-failures none
+elif [ "${#unmapped[@]}" -gt 0 ]; then
+    print_summary
+    printf '  %s\n' "${unmapped[@]}" >&2
+    fail "no backend tests ran for the backend changes above; run 'bash scripts/check.sh --only backend'."
+fi
+if [ "${#unmapped[@]}" -gt 0 ]; then
+    notes+=("no tests mapped for: ${unmapped[*]}; run 'bash scripts/check.sh --only backend' to cover them.")
 fi
 
 if [ "${#notes[@]}" -gt 0 ]; then

@@ -38,6 +38,11 @@ def quick(tmp_path):
         "tests/test_other.py": "import ontocurator.storage\n",
         "tests/auth_harness.py": "",
         "tests/test_users.py": "from auth_harness import log_in\n",
+        "src/ontocurator/api/guideline_routes.py": "",
+        "tests/test_guidelines_api.py": "",
+        "tests/test_guideline_files.py": "",
+        "src/ontocurator/storage/migrations/versions/0042_things.py": "",
+        "tests/test_things_migration.py": 'REVISION = "0042"\n',
         "frontend/src/a.ts": "",
         "frontend/tests/a.test.ts": "",
     }
@@ -114,17 +119,55 @@ def test_changed_test_and_helper_select_their_tests_serially_for_one_file(quick)
     assert calls == [*STATIC, "uv run pytest -q tests/test_users.py"]
 
 
-def test_unmapped_python_change_repeats_last_failures(quick):
+def test_unmapped_python_change_fails_without_backend_tests(quick):
     result, calls = quick("src/ontocurator/orphan.py", CHECK_PYTEST_WORKERS="4")
-    assert result.returncode == 0, result.stderr
-    assert calls[-1] == "uv run pytest -q --lf --last-failed-no-failures none"
+    assert result.returncode != 0
+    assert "no backend tests ran" in result.stderr
+    assert "--only backend" in result.stderr
+    assert "src/ontocurator/orphan.py" in result.stderr
+    # Static checks still run; no pytest, so no Docker either.
+    assert calls == STATIC
 
 
 def test_shared_test_setup_points_to_the_backend_stage(quick):
     result, calls = quick("tests/conftest.py", ONTOCURATOR_TEST_PG_URL="test-only")
+    assert result.returncode != 0
+    assert "--only backend" in result.stderr
+    assert calls == STATIC
+
+
+def test_mapped_and_unmapped_changes_run_the_mapped_tests_with_a_note(quick):
+    result, calls = quick(
+        "src/ontocurator/orphan.py",
+        "tests/test_other.py",
+        ONTOCURATOR_TEST_PG_URL="test-only",
+    )
     assert result.returncode == 0, result.stderr
+    assert calls[-1] == "uv run pytest -q tests/test_other.py"
+    assert "src/ontocurator/orphan.py" in result.stdout
     assert "--only backend" in result.stdout
-    assert calls[-1] == "uv run pytest -q --lf --last-failed-no-failures none"
+
+
+def test_route_module_selects_tests_named_after_its_feature(quick):
+    result, calls = quick(
+        "src/ontocurator/api/guideline_routes.py", ONTOCURATOR_TEST_PG_URL="test-only"
+    )
+    assert result.returncode == 0, result.stderr
+    backend = calls[-1].split()
+    assert backend[:6] == ["uv", "run", "pytest", "-q", "-n", "2"]
+    assert sorted(backend[6:]) == [
+        "tests/test_guideline_files.py",
+        "tests/test_guidelines_api.py",
+    ]
+
+
+def test_migration_selects_tests_naming_its_revision(quick):
+    result, calls = quick(
+        "src/ontocurator/storage/migrations/versions/0042_things.py",
+        ONTOCURATOR_TEST_PG_URL="test-only",
+    )
+    assert result.returncode == 0, result.stderr
+    assert calls[-1] == "uv run pytest -q tests/test_things_migration.py"
 
 
 def test_docs_only_change_runs_static_checks_without_docker(quick):
