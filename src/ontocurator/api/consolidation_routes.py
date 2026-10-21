@@ -119,11 +119,14 @@ def _groups_service(request: Request) -> ConsolidationGroupService:
     repo = get_repo(request)
     ontology = get_ontology(request)
 
-    def valid_term(project_key: str, layer_id: str, term_id: str) -> bool:
+    def valid_term(project_key: str, layer_id: str, term_id: str) -> str | None:
+        """The canonical id (an alternative id resolves to its term)."""
         status = ontology.for_package_layer(repo, project_key, layer_id).validate_term(
             term_id
         )
-        return status.status not in {"obsolete", "unknown"}
+        if status.status in {"obsolete", "unknown"}:
+            return None
+        return status.term_id
 
     return ConsolidationGroupService(repo, valid_term)
 

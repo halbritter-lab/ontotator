@@ -443,37 +443,123 @@ def test_reopen_deletes_annotations_and_decisions(cons):
     ok(mutate(cons, "resolve", {"input_ids": ids, "action": "keep_both"}))
     draft = ok(mutate(cons, "reopen", {"input_ids": ids}))
     assert not decisions_on(draft, target_refs(cons, ids))
-    assert all(
-        not s.annotation.annotation_id.startswith("cons-") for s in draft.annotations
-    )
+    assert not {cons_id(cons, ids, 0), cons_id(cons, ids, 1)} & {
+        s.annotation.annotation_id for s in draft.annotations
+    }
     assert group(cons, "term_differs")["state"] == "open"
 
 
-def test_reopen_after_an_edit_in_the_editor(cons):
-    """Editing the consolidated annotation in the editor drops its decisions
-    (``_update_decision_replacements``); reopen still removes the edited
-    annotation."""
-    ids = inputs(group(cons, "partial"))
-    ok(mutate(cons, "resolve", {"input_ids": ids, "action": "keep"}))
-    cid = cons_id(cons, ids, 0)
-    workspace = view(cons)["workspace_id"]
-    edited = cons.adj.post(
+def edit_note(ns: Any, annotation_id: str, note: str) -> None:
+    """Change a note in the editor (``POST /workspaces/{id}/commands``)."""
+    workspace = view(ns)["workspace_id"]
+    edited = ns.adj.post(
         f"/api/v1/workspaces/{workspace}/commands",
         json={
-            "mutation_id": "edit",
-            "expected_revision": revision(cons),
+            "mutation_id": f"edit-{revision(ns)}",
+            "expected_revision": revision(ns),
             "payload": {
                 "command": "set_annotation_note",
-                "annotation_id": cid,
-                "note": "Edited in the editor",
+                "annotation_id": annotation_id,
+                "note": note,
             },
         },
     )
     assert edited.status_code == 200, edited.text
+
+
+def test_an_edit_in_the_editor_reads_edited(cons):
+    """The marked decisions follow the edited ``cons-…`` annotation
+    (``_update_decision_replacements``): the group stays resolved."""
+    ids = inputs(group(cons, "partial"))
+    ok(mutate(cons, "resolve", {"input_ids": ids, "action": "keep"}))
+    cid = cons_id(cons, ids, 0)
+    edit_note(cons, cid, "Edited in the editor")
+    after = group(cons, "partial")
+    assert (after["state"], after["edited"], after["annotation_ids"]) == (
+        "keep",
+        True,
+        [cid],
+    )
     draft = ok(mutate(cons, "reopen", {"input_ids": ids}))
     assert cid not in {s.annotation.annotation_id for s in draft.annotations}
+    assert not decisions_on(draft, target_refs(cons, ids))
     after = group(cons, "partial")
     assert (after["state"], after["annotation_ids"]) == ("open", [])
+
+
+def test_an_edited_choice_submits_without_reopening(cons):
+    from test_consolidation_submit_gating import submit_acknowledged
+
+    values = group(cons, "values_differ")
+    ids = inputs(values)
+    first = values["members"][0]
+    ok(
+        mutate(
+            cons,
+            "resolve",
+            {
+                "input_ids": ids,
+                "action": "choose",
+                "choice": {
+                    "term_id": first["term_id"],
+                    "span_from_input_id": first["input_id"],
+                    "axes": dict(first["axes"]),
+                },
+            },
+        )
+    )
+    edit_note(cons, cons_id(cons, ids, 0), "Edited in the editor")
+    assert (
+        group(cons, "values_differ")["state"],
+        group(cons, "values_differ")["edited"],
+    ) == (
+        "choose",
+        True,
+    )
+    for kind, action in (("term_differs", "keep_both"), ("partial", "leave_out")):
+        ok(
+            mutate(
+                cons,
+                "resolve",
+                {"input_ids": inputs(group(cons, kind)), "action": action},
+            )
+        )
+    response = submit_acknowledged(cons.adj, view(cons)["workspace_id"], revision(cons))
+    assert response.status_code == 200, response.text
+    notes = {
+        s["annotation"]["annotation_id"]: s["annotation"].get("note")
+        for s in response.json()["snapshots"]
+    }
+    assert notes[cons_id(cons, ids, 0)] == "Edited in the editor"
+
+
+def test_deleting_the_result_in_the_editor_reads_open(cons):
+    ids = inputs(group(cons, "partial"))
+    ok(mutate(cons, "resolve", {"input_ids": ids, "action": "keep"}))
+    workspace = view(cons)["workspace_id"]
+    deleted = cons.adj.post(
+        f"/api/v1/workspaces/{workspace}/commands",
+        json={
+            "mutation_id": "delete",
+            "expected_revision": revision(cons),
+            "payload": {
+                "command": "delete_draft_annotation",
+                "annotation_id": cons_id(cons, ids, 0),
+            },
+        },
+    )
+    assert deleted.status_code == 200, deleted.text
+    after = group(cons, "partial")
+    assert (after["state"], after["annotation_ids"]) == ("open", [])
+
+
+def test_editing_an_automatic_result_reads_edited(cons):
+    match = group(cons, "match")
+    [cid] = match["annotation_ids"]
+    assert cid == cons_id(cons, inputs(match), 0)
+    edit_note(cons, cid, "Checked the age")
+    after = group(cons, "match")
+    assert (after["state"], after["edited"]) == ("auto", True)
 
 
 def test_reopen_of_an_auto_group_reads_open(cons):
@@ -517,3 +603,57 @@ def test_unscoped_repository_sees_the_resolution(cons):
     assert cons_id(cons, ids, 0) in {
         s.annotation.annotation_id for s in draft.annotations
     }
+
+
+def resolve_all(ns: Any) -> None:
+    for kind, action in (
+        ("term_differs", "keep_both"),
+        ("values_differ", "leave_out"),
+        ("partial", "keep"),
+    ):
+        ok(
+            mutate(
+                ns, "resolve", {"input_ids": inputs(group(ns, kind)), "action": action}
+            )
+        )
+
+
+def test_group_commands_after_submit_are_refused(cons):
+    from test_consolidation_submit_gating import submit_acknowledged
+
+    resolve_all(cons)
+    workspace = view(cons)["workspace_id"]
+    submitted = submit_acknowledged(cons.adj, workspace, revision(cons))
+    assert submitted.status_code == 200, submitted.text
+    ids = inputs(group(cons, "partial"))
+    before = revision(cons)
+    for action, payload in (
+        ("resolve", {"input_ids": ids, "action": "leave_out"}),
+        ("annotate", {"input_ids": ids, "guidelines_unclear": True}),
+        ("reopen", {"input_ids": ids}),
+    ):
+        response = cons.adj.post(
+            f"/api/v1/workspaces/{workspace}/consolidation-groups/{action}",
+            json={
+                "mutation_id": f"late-{action}",
+                "expected_revision": before,
+                "payload": payload,
+            },
+        )
+        assert response.status_code == 409, response.text
+        # The submitted assignment refuses before the round's own check.
+        assert response.json()["code"] == "ASSIGNMENT_SUBMITTED"
+    assert revision(cons) == before
+
+
+def test_a_lead_who_is_not_the_assignee_is_refused(cons):
+    before = revision(cons)
+    response = mutate(
+        cons,
+        "resolve",
+        {"input_ids": inputs(group(cons, "partial")), "action": "keep"},
+        client=cons.env.lead,
+    )
+    assert response.status_code in {403, 404}, response.text
+    assert response.json()["code"] == "IDENTITY_MISMATCH"
+    assert revision(cons) == before

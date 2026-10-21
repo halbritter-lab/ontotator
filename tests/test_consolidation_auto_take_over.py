@@ -3,10 +3,10 @@ Backend > Automatic take-over", T9, U14).
 
 Creating a consolidation round (the start command and the old
 ``POST /assignments/{id}/rounds`` path) decides every ``match`` group in the
-consolidator's draft with the mark ``auto``: the earliest member is kept as
-is (``confirmed``, with its content hash), the others are rejected; one edit
-event. Seeding again changes nothing; a round without decisions (started
-before this change) reads every group ``open``.
+consolidator's draft like "Keep" with the mark ``auto``: one ``cons-…``
+annotation with merged provenance and a ``changed`` decision per member;
+one edit event. Seeding again changes nothing; a round without decisions
+(started before this change) reads every group ``open``.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from test_consolidation_resolve_api import (
     SECOND,
     access_of,
     build_round,
+    cons_id,
     group,
     inputs,
     revision,
@@ -68,31 +69,38 @@ def test_match_groups_are_kept_automatically(cons):
         "open",
         "open",
     ]
+    ids = inputs(match)
+    cid = cons_id(cons, ids, 0)
     draft = draft_of(cons)
-    refs = target_refs(cons, inputs(match))
+    refs = target_refs(cons, ids)
     decided = [
         d for d in draft.decisions if (d.target.annotation_id, d.target.version) in refs
     ]
     assert len(decided) == 2
+    assert {d.outcome for d in decided} == {"changed"}
+    assert {d.replacement.annotation_id for d in decided} == {cid}
     assert {d.consolidation.action for d in decided} == {"auto"}
     assert {d.reviewer_id for d in decided} == {cons.round.annotator_id}
-    kept = [d for d in decided if d.outcome == "confirmed"]
-    assert len(kept) == 1
-    assert [d.outcome for d in decided].count("rejected") == 1
+    # The same result as "Keep": the earliest member, merged provenance.
+    [kept] = draft.annotations
     inventory = {
         i["input_id"]: i
         for i in cons.env.app.state.repo.get_round_input_inventory(
             "proj", cons.round.round_id
         )
     }
-    keep = inventory[match["keep_input_id"]]["target_snapshot"]
-    assert kept[0].target.annotation_id == keep["annotation"]["annotation_id"]
-    from ontocurator.domain.serialization import decode_snapshot
-
-    assert kept[0].consolidation.content_sha256 == consolidated_content_sha256(
-        decode_snapshot(keep).annotation
-    )
-    assert match["annotation_ids"] == [keep["annotation"]["annotation_id"]]
+    keep = inventory[match["keep_input_id"]]["target_snapshot"]["annotation"]
+    assert kept.annotation.annotation_id == cid
+    assert kept.annotation.term_id == keep["term_id"]
+    assert kept.annotation.provenance.method == "merged"
+    assert kept.annotation.provenance.source_refs == [
+        f"round-input:{i}" for i in sorted(ids)
+    ]
+    assert kept.annotation.provenance.actor.actor_id == cons.round.annotator_id
+    assert {d.consolidation.content_sha256 for d in decided} == {
+        consolidated_content_sha256(kept.annotation)
+    }
+    assert match["annotation_ids"] == [cid]
     # Only the match group is decided; one edit event, revision 1.
     assert len(draft.decisions) == 2
     assert revision(cons) == 1

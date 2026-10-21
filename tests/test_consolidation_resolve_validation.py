@@ -160,3 +160,42 @@ def test_a_term_of_the_group_or_another_valid_term_is_accepted(cons):
         },
     )
     assert other.status_code == 200, other.text
+
+
+def test_another_term_is_stored_by_its_canonical_id(cons):
+    """An alternative id of another term ("Other term…") is stored as the
+    term's canonical id (``TermStatus.term_id``)."""
+    from ontocurator.application.consolidation_resolve import (
+        ConsolidationGroupService,
+    )
+    from ontocurator.domain.workspace import MutationEnvelope
+    from ontocurator.storage.repository import Repository
+
+    asked: list[tuple[str, str]] = []
+
+    def valid_term(project_key: str, layer_id: str, term_id: str) -> str | None:
+        asked.append((layer_id, term_id))
+        return SEIZURE if term_id == "HP:ALT" else None
+
+    values = group(cons, "values_differ")
+    draft = ConsolidationGroupService(Repository(cons.env.db), valid_term).resolve(
+        cons.round.workspace_key,
+        MutationEnvelope(
+            mutation_id="alt",
+            expected_revision=revision(cons),
+            payload={
+                "input_ids": inputs(values),
+                "action": "choose",
+                "choice": choice(values, term_id="HP:ALT"),
+            },
+        ),
+    )
+    assert asked == [(values["members"][0]["layer_id"], "HP:ALT")]
+    chosen = [
+        s.annotation
+        for s in draft.annotations
+        if s.annotation.annotation_id.startswith("cons-")
+        and s.annotation.provenance.source_refs
+        == sorted(f"round-input:{i}" for i in inputs(values))
+    ]
+    assert [a.term_id for a in chosen] == [SEIZURE]

@@ -17,6 +17,7 @@ from test_text_change_service import _carry, _submitted
 from test_work_rounds import create_consolidation_fixture
 from test_work_rounds import rounds as rounds
 
+from ontocurator.application.consolidation_resolve import ConsolidationGroupService
 from ontocurator.application.editing import EditingService
 from ontocurator.application.final_results import FinalResultService
 from ontocurator.application.reviews import ReviewService
@@ -34,10 +35,14 @@ from ontocurator.ontology.store import OntologyStore
 from ontocurator.storage.tables import ProjectOntologyRow
 
 
-@pytest.mark.parametrize("merged", [False, True])
-def test_final_export_freezes_human_sources_notes_and_unresolved_collision(
-    rounds, tmp_path, merged
+@pytest.mark.parametrize("mode", ["decided", "merged", "auto"])
+def test_final_export_freezes_human_sources_notes_and_colliding_ids(
+    rounds, tmp_path, mode
 ):
+    """``auto``: the matching inputs were kept automatically (a ``cons-…``
+    annotation with merged provenance, as "Keep"); ``decided`` and
+    ``merged`` reopen that group first and decide in the editor."""
+    merged = mode == "merged"
     repo, ontology, reviewer, work_round, sources, lead, actor = (
         create_consolidation_fixture(rounds)
     )
@@ -56,6 +61,16 @@ def test_final_export_freezes_human_sources_notes_and_unresolved_collision(
         )
     view = WorkspaceService(reviewer, ontology).open(work_round.workspace_key)
     draft = view.draft
+    inventory = repo.get_round_input_inventory("pkg-1", work_round.round_id)
+    if mode != "auto":
+        draft = ConsolidationGroupService(reviewer).reopen(
+            work_round.workspace_key,
+            MutationEnvelope(
+                mutation_id="reopen",
+                expected_revision=draft.revision,
+                payload={"input_ids": [item["input_id"] for item in inventory]},
+            ),
+        )
     if merged:
         draft = EditingService(reviewer, ontology).apply(
             work_round.workspace_key,
@@ -73,7 +88,6 @@ def test_final_export_freezes_human_sources_notes_and_unresolved_collision(
             ),
         )
         output = draft.annotations[0]
-        inventory = repo.get_round_input_inventory("pkg-1", work_round.round_id)
         draft = MergeRoundInputsService(reviewer).merge(
             work_round.workspace_key,
             MutationEnvelope(
@@ -89,7 +103,7 @@ def test_final_export_freezes_human_sources_notes_and_unresolved_collision(
                 },
             ),
         )
-    else:
+    elif mode == "decided":
         for index, target in enumerate(view.targets.targets):
             draft = ReviewService(reviewer).decide(
                 work_round.workspace_key,
@@ -170,7 +184,7 @@ def test_final_export_freezes_human_sources_notes_and_unresolved_collision(
     assert unit.annotation_set.set_kind == "stage_result"
     assert unit.annotation_set.stage == "consolidation"
     assert len({a.annotation_id for a in unit.annotation_set.annotations}) == (
-        1 if merged else 2
+        2 if mode == "decided" else 1
     )
     assert all(
         "Personal source" in a.provenance.notes for a in unit.annotation_set.annotations
@@ -180,6 +194,11 @@ def test_final_export_freezes_human_sources_notes_and_unresolved_collision(
         assert annotation.provenance.method == "merged"
         assert len(annotation.provenance.source_refs) == 2
         assert "Combined finding" in annotation.provenance.notes
+    elif mode == "auto":
+        [annotation] = unit.annotation_set.annotations
+        assert annotation.provenance.method == "merged"
+        assert len(annotation.provenance.source_refs) == 2
+        assert annotation.provenance.actor.actor_id == reviewer.access.pseudonym
     else:
         # Both kept: no unresolved collision reaches a consolidation's result.
         assert not any(a.review_resolution for a in unit.annotation_set.annotations)

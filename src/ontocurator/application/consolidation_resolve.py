@@ -19,15 +19,20 @@ event). ``input_ids`` must name exactly one group of the round
 * **Reopen** deletes the group's decisions and resulting annotations.
 * **Automatic take-over** (``take_over_matches``, called by
   ``WorkRoundService.create_in`` for consolidation rounds): every ``match``
-  group keeps its earliest member as is (``confirmed`` with its content
-  hash) and rejects the others, all marked ``auto`` by the consolidator; one
+  group gets the result of ``keep`` (the ``cons-…`` annotation with
+  ``merged`` provenance and ``changed`` decisions), marked ``auto``; one
   edit event. Groups already decided are skipped, so it is idempotent.
+
+An edit of a ``cons-…`` annotation in the editor keeps the marked decisions
+(``EditingService._update_decision_replacements``): the group stays
+resolved and reads *edited*. Deleting it there drops its decisions, so the
+group reads open again.
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
@@ -65,7 +70,12 @@ from ontocurator.domain.review import (
 )
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.storage.repository import DraftState, Repository, _key_str
-from ontocurator.storage.tables import DraftRow, ReviewDecisionRow
+from ontocurator.storage.tables import (
+    DraftAnnotationRow,
+    DraftEvidenceRow,
+    DraftRow,
+    ReviewDecisionRow,
+)
 from ontocurator.storage.workflow_tables import WorkRoundRow
 
 __all__ = [
@@ -181,7 +191,10 @@ class ReopenCommand(BaseModel):
 
 
 class TermValidator(Protocol):
-    def __call__(self, project_key: str, layer_id: str, term_id: str) -> bool: ...
+    """The canonical id of ``term_id`` in the layer, ``None`` when the
+    term is unknown or obsolete there (may load the ontology)."""
+
+    def __call__(self, project_key: str, layer_id: str, term_id: str) -> str | None: ...
 
 
 @dataclass(frozen=True)
@@ -313,6 +326,50 @@ def _add(draft: Draft, made: AnnotationSnapshot) -> None:
     ]
 
 
+def _add_result(
+    draft: Draft,
+    key: WorkspaceKey,
+    annotation_id: str,
+    base: RoundMember,
+    annotation: Annotation,
+    contributors: Mapping[str, AnnotationRef],
+    mark: ConsolidationMark,
+    document: Document,
+    profile: TaskProfile,
+    *,
+    note: str | None = None,
+) -> None:
+    """Add one consolidated annotation (``annotation`` as ``annotation_id``,
+    provenance ``merged`` from ``contributors`` by the consolidator, span and
+    evidence of ``base``) and a ``changed`` decision per contributing target,
+    marked with ``mark`` and the annotation's content hash. Resolve and the
+    automatic take-over share it, so their results look alike."""
+    consolidated = merged_annotation(
+        annotation.model_copy(update={"annotation_id": annotation_id}),
+        list(contributors),
+        actor=ActorRef(actor_id=key.annotator_id, kind="human"),
+    )
+    made = snapshot(consolidated, list(base.snapshot.evidence), document, profile)
+    _add(draft, made)
+    marked = mark.model_copy(
+        update={"content_sha256": consolidated_content_sha256(made.annotation)}
+    )
+    replacement = AnnotationRef(
+        annotation_id=made.annotation.annotation_id, version=made.version
+    )
+    for ref in contributors.values():
+        draft.decisions.append(
+            review_decision(
+                key,
+                ref,
+                outcome="changed",
+                replacement=replacement,
+                note=note,
+                mark=marked,
+            )
+        )
+
+
 def _resulting_hash(draft: Draft, decision: ReviewDecision, item: _Group) -> str | None:
     """The content hash of a decision's resulting annotation, if any."""
     if decision.replacement is not None:
@@ -365,11 +422,28 @@ class ConsolidationGroupService:
         assert isinstance(result, Draft)
         return result
 
+    def _other_term(self, key: WorkspaceKey, cmd: ResolveCommand) -> str | None:
+        """The canonical id of a chosen term outside the group's terms
+        ("Other term…"), checked before the draft lock is taken: the check
+        may load the ontology, and the group's members are frozen inputs."""
+        choice = cmd.choice
+        if choice is None or self.valid_term is None:
+            return None
+        with self.repo.db.transaction() as conn:
+            item = _find_group(conn, self.repo, key, cmd.input_ids)
+        base = item.members.get(choice.span_from_input_id)
+        if base is None or choice.term_id in item.group.terms:
+            return None
+        return self.valid_term(
+            key.project_key, base.snapshot.annotation.layer_id, choice.term_id
+        )
+
     def resolve(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
         cmd = ResolveCommand.model_validate(envelope.payload)
+        other_term = self._other_term(key, cmd)
 
         def apply(draft: Draft, item: _Group, document: Document) -> None:
-            plans = self._plans(key, cmd, item)
+            plans = self._plans(cmd, item, other_term)
             _clear_group(draft, item)
             note = _note(cmd.note)
             if cmd.action == "leave_out":
@@ -388,51 +462,32 @@ class ConsolidationGroupService:
                     )
                 _uncheck(draft, item)
                 return
-            actor = ActorRef(actor_id=key.annotator_id, kind="human")
             for n, (base, annotation, contributors) in enumerate(plans):
-                consolidated = merged_annotation(
-                    annotation.model_copy(
-                        update={
-                            "annotation_id": consolidated_annotation_id(
-                                item.round_id, item.input_ids, n
-                            )
-                        }
+                _add_result(
+                    draft,
+                    key,
+                    consolidated_annotation_id(item.round_id, item.input_ids, n),
+                    base,
+                    annotation,
+                    {iid: item.refs[iid] for iid in contributors},
+                    ConsolidationMark(
+                        action=cmd.action,
+                        guidelines_unclear=cmd.guidelines_unclear,
                     ),
-                    contributors,
-                    actor=actor,
+                    document,
+                    item.profile,
+                    note=note,
                 )
-                made = snapshot(
-                    consolidated, list(base.snapshot.evidence), document, item.profile
-                )
-                _add(draft, made)
-                mark = ConsolidationMark(
-                    action=cmd.action,
-                    guidelines_unclear=cmd.guidelines_unclear,
-                    content_sha256=consolidated_content_sha256(made.annotation),
-                )
-                replacement = AnnotationRef(
-                    annotation_id=made.annotation.annotation_id, version=made.version
-                )
-                for iid in contributors:
-                    draft.decisions.append(
-                        review_decision(
-                            key,
-                            item.refs[iid],
-                            outcome="changed",
-                            replacement=replacement,
-                            note=note,
-                            mark=mark,
-                        )
-                    )
             _uncheck(draft, item)
 
         return self._run(key, envelope, cmd.input_ids, apply)
 
     def _plans(
-        self, key: WorkspaceKey, cmd: ResolveCommand, item: _Group
+        self, cmd: ResolveCommand, item: _Group, other_term: str | None
     ) -> list[tuple[RoundMember, Annotation, list[str]]]:
         """Per consolidated annotation: the member giving span and evidence,
-        the annotation content and the contributing input ids."""
+        the annotation content and the contributing input ids. ``other_term``
+        is the canonical id of a chosen term outside the group's terms."""
         if (cmd.choice is not None) != (cmd.action == "choose"):
             raise _invalid("A choice goes with the action 'choose' only")
         group, members = item.group, item.members
@@ -465,10 +520,8 @@ class ConsolidationGroupService:
             raise _invalid("The note comes from a member of the group")
         base = members[choice.span_from_input_id]
         source = base.snapshot.annotation
-        if choice.term_id not in group.terms and not (
-            self.valid_term is not None
-            and self.valid_term(key.project_key, source.layer_id, choice.term_id)
-        ):
+        term_id = choice.term_id if choice.term_id in group.terms else other_term
+        if term_id is None:
             raise _invalid("The term is not valid in this layer")
         type_def = resolve_type(item.profile, source.layer_id, source.type_id)
         axes: dict[str, str | None] = {**source.axes_values, **choice.axes}
@@ -486,8 +539,7 @@ class ConsolidationGroupService:
             note = source.note
         try:
             chosen = Annotation.model_validate(
-                source.with_axes(axes).model_dump()
-                | {"term_id": choice.term_id, "note": note}
+                source.with_axes(axes).model_dump() | {"term_id": term_id, "note": note}
             )
         except (InvalidAnnotation, ValueError) as exc:
             raise _invalid(str(exc)) from exc
@@ -547,10 +599,15 @@ def take_over_matches(
     the mark ``auto`` (U14, T9); the number of groups decided.
 
     Runs on the caller's connection (the round and its inputs may be
-    uncommitted). The earliest member is kept as is (``confirmed``, with the
-    content hash of its target), the others are rejected; the reviewer is
-    the consolidator. One edit event and one revision for all groups; nothing
-    is written when no group needs it.
+    uncommitted). Each group gets the result of "Keep" (``_add_result``):
+    the annotation ``cons-…`` (``n`` = 0) from its earliest member with
+    ``merged`` provenance, and a ``changed`` decision per member, so an
+    automatic group exports like a resolved one and an edit in the editor
+    reads *edited*. The decisions' ``reviewer_id`` is the consolidator; the
+    edit event's user is the caller who starts the round (the lead in the
+    start command, the consolidator when they start it themselves), as for
+    every write of ``create_in``. One edit event and one revision for all
+    groups; nothing is written when no group needs it.
     """
     assert key.round_id is not None
     profile, defaults = project_profile(conn, pid)
@@ -558,6 +615,7 @@ def take_over_matches(
     draft = repo._open_draft(conn, key, None)
     decided = {(d.target.annotation_id, d.target.version) for d in draft.decisions}
     seeded: list[list[str]] = []
+    document: Document | None = None
     for group in round_groups(found):
         if group.kinds != frozenset({"match"}):
             continue
@@ -565,24 +623,22 @@ def take_over_matches(
         refs = {iid: member_ref(found.members[iid]) for iid in input_ids}
         if any((r.annotation_id, r.version) in decided for r in refs.values()):
             continue
-        keep = group.members[group.keep]
-        for iid, ref in refs.items():
-            kept = iid == keep
-            draft.decisions.append(
-                review_decision(
-                    key,
-                    ref,
-                    outcome="confirmed" if kept else "rejected",
-                    mark=ConsolidationMark(
-                        action="auto",
-                        content_sha256=consolidated_content_sha256(
-                            found.members[iid].snapshot.annotation
-                        )
-                        if kept
-                        else None,
-                    ),
-                )
-            )
+        if document is None:
+            # Joins the caller's transaction.
+            document = repo.get_document(key.project_key, key.document_id)
+            assert document is not None
+        keep = found.members[group.members[group.keep]]
+        _add_result(
+            draft,
+            key,
+            consolidated_annotation_id(key.round_id, input_ids, 0),
+            keep,
+            keep.snapshot.annotation,
+            refs,
+            ConsolidationMark(action="auto"),
+            document,
+            profile,
+        )
         seeded.append(sorted(input_ids))
     if not seeded:
         return 0
@@ -595,8 +651,12 @@ def take_over_matches(
         .where(DraftRow.id == row.id)
         .values(revision=before + 1, updated_at=now)
     )
-    conn.execute(delete(ReviewDecisionRow).where(ReviewDecisionRow.draft_id == row.id))
-    Repository._write_draft_content(conn, row.id, [], [], draft.decisions)
+    for table in (DraftAnnotationRow, DraftEvidenceRow, ReviewDecisionRow):
+        conn.execute(delete(table).where(table.draft_id == row.id))
+    Repository._insert_snapshots(conn, pid, draft.annotations, draft.evidence)
+    Repository._write_draft_content(
+        conn, row.id, draft.annotations, draft.evidence, draft.decisions
+    )
     Repository._log_edit(
         conn,
         pid,

@@ -324,6 +324,25 @@ def create_consolidation_fixture(rounds):
     )
 
 
+def reopen_automatic(repo, reviewer, result, revision):
+    """Reopen the group kept automatically at the start (the fixture's two
+    inputs match), so a test can decide in the editor alone."""
+    from ontocurator.application.consolidation_resolve import (
+        ConsolidationGroupService,
+    )
+    from ontocurator.domain.workspace import MutationEnvelope
+
+    inventory = repo.get_round_input_inventory("pkg-1", result.round_id)
+    return ConsolidationGroupService(reviewer).reopen(
+        result.workspace_key,
+        MutationEnvelope(
+            mutation_id="reopen-automatic",
+            expected_revision=revision,
+            payload={"input_ids": [i["input_id"] for i in inventory]},
+        ),
+    )
+
+
 def test_consolidation_frozen_collision_inputs_open_decide_submit_and_export(rounds):
     from ontocurator.application.reviews import ReviewService
     from ontocurator.application.submissions import SubmissionService
@@ -340,7 +359,7 @@ def test_consolidation_frozen_collision_inputs_open_decide_submit_and_export(rou
     assert {i["source_submission_id"] for i in inventory} == {
         s.submission_id for s in inputs
     }
-    draft = view.draft
+    draft = reopen_automatic(repo, reviewer, result, view.draft.revision)
     for index, target in enumerate(view.targets.targets):
         draft = ReviewService(reviewer).decide(
             result.workspace_key,
@@ -412,10 +431,11 @@ def test_deliberate_merge_binds_every_input_to_one_exact_output(rounds):
     repo, ontology, reviewer, result, _inputs, _lead, _actor = (
         create_consolidation_fixture(rounds)
     )
-    # The matching inputs were kept automatically (revision 1); the merge
-    # replaces those decisions.
+    # The matching inputs were kept automatically (revision 1); reopen them
+    # before merging in the editor.
     opened = WorkspaceService(reviewer, ontology).open(result.workspace_key).draft
     assert opened.revision == 1
+    opened = reopen_automatic(repo, reviewer, result, opened.revision)
     draft = EditingService(reviewer, ontology).apply(
         result.workspace_key,
         MutationEnvelope(

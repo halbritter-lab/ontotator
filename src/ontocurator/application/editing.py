@@ -14,6 +14,7 @@ from ontocurator.domain.annotations import (
     ActorKind,
     ActorRef,
     Annotation,
+    AnnotationRef,
     AnnotationSnapshot,
     Provenance,
     snapshot,
@@ -37,6 +38,7 @@ from ontocurator.domain.profiles import (
 )
 from ontocurator.domain.project_rules import ProjectRules, rule_violations
 from ontocurator.domain.reanchor_resolution import PendingReanchorRef
+from ontocurator.domain.review import ReviewDecision
 from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
@@ -1274,16 +1276,29 @@ class EditingService:
         annotation_id: str,
         new_snap: AnnotationSnapshot,
     ) -> None:
-        """Editing an approved replacement requires a fresh review decision."""
-        draft.decisions = [
-            dec
-            for dec in draft.decisions
-            if not (
+        """Editing an approved replacement requires a fresh review decision.
+
+        Except a consolidation's decisions (``ConsolidationMark``): they
+        follow the edited annotation, so the group stays resolved and reads
+        *edited* (its mark keeps the hash of the resolution)."""
+        kept: list[ReviewDecision] = []
+        for dec in draft.decisions:
+            if (
                 dec.replacement
                 and dec.replacement.annotation_id == annotation_id
                 and dec.replacement.version != new_snap.version
-            )
-        ]
+            ):
+                if dec.consolidation is None:
+                    continue
+                dec = dec.model_copy(
+                    update={
+                        "replacement": AnnotationRef(
+                            annotation_id=annotation_id, version=new_snap.version
+                        )
+                    }
+                )
+            kept.append(dec)
+        draft.decisions = kept
 
 
 EditorService = EditingService

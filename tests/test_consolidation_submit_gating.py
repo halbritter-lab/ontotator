@@ -130,8 +130,16 @@ def test_all_resolved_submits(cons):
     response = submit_acknowledged(cons.adj, workspace, revision(cons))
     assert response.status_code == 200, response.text
     submitted = response.json()
-    # match (kept as is) + two term annotations + the kept partial finding.
+    # The automatic match + two term annotations + the kept partial finding,
+    # all with the provenance of a consolidation (uniform export).
     assert len(submitted["snapshots"]) == 4
+    assert {
+        s["annotation"]["provenance"]["method"] for s in submitted["snapshots"]
+    } == {"merged"}
+    assert all(
+        s["annotation"]["annotation_id"].startswith("cons-")
+        for s in submitted["snapshots"]
+    )
     after = view(cons)
     assert after["read_only_reason"] == "submitted"
     assert [g["state"] for g in after["groups"]] == [
@@ -174,4 +182,37 @@ def test_ordinary_rounds_are_not_gated(cons):
     from ontocurator.api.routes import encode_workspace_id
 
     response = submit_acknowledged(anno, encode_workspace_id(created.workspace_key), 0)
+    assert response.status_code == 200, response.text
+
+
+def test_axis_warning_once_every_group_is_resolved(cons):
+    from test_consolidation_resolve_api import resolve_all
+
+    resolve_all(cons)
+    workspace = view(cons)["workspace_id"]
+    # Clear an axis of the kept partial finding in the editor: the result
+    # now has an axis nobody chose.
+    [kept] = group(cons, "partial")["annotation_ids"]
+    cleared = cons.adj.post(
+        f"/api/v1/workspaces/{workspace}/commands",
+        json={
+            "mutation_id": "clear-axis",
+            "expected_revision": revision(cons),
+            "payload": {
+                "command": "set_axes",
+                "annotation_id": kept,
+                "axes_values": {"temporality": None},
+            },
+        },
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert group(cons, "partial")["state"] == "keep"
+    expected = revision(cons)
+    warned = submit(cons.adj, workspace, expected)
+    assert warned.status_code == 422, warned.text
+    assert warned.json()["code"] == "AXIS_CONFIRMATION_WARNING"
+    acknowledgement = warned.json()["details"]["acknowledgement"]
+    response = submit(
+        cons.adj, workspace, expected, warning_acknowledgement=acknowledgement
+    )
     assert response.status_code == 200, response.text
