@@ -321,10 +321,12 @@ class DocumentRowView(_View):
     new: bool = False
     others_activity_at: datetime | None = None
     # Findings flagged "guidelines unclear" in the submitted consolidation of
-    # the row's current version, and the first flagged group (``?group=`` of
-    # the read-only consolidation view; X5).
+    # the row's current version (round ``flagged_round_id``; with several live
+    # chains the first chain's), and its first flagged group: the read-only
+    # consolidation view ``#/consolidations/{flagged_round_id}?group=`` (X5).
     flagged_unclear: int = 0
     flagged_group_id: str | None = None
+    flagged_round_id: str | None = None
 
 
 class DocumentGroupView(_View):

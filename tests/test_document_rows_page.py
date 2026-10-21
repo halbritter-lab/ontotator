@@ -330,6 +330,7 @@ ROW_KEYS = {
     "moved_work",
     "flagged_unclear",
     "flagged_group_id",
+    "flagged_round_id",
 }
 VERSION_KEYS = {
     "document_id",

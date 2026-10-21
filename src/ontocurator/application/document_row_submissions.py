@@ -173,14 +173,30 @@ def _stored_decisions(
     }
 
 
+@dataclass(frozen=True)
+class FlaggedConsolidation:
+    """A submitted consolidation whose stored decisions carry a "guidelines
+    unclear" mark (``load_consolidation_flags``)."""
+
+    round_id: str
+    submission_id: str
+
+
 def load_consolidation_flags(
     conn: Connection, pid: int
-) -> dict[str, ConsolidationSummary]:
-    """Flagged findings per document: of the latest submitted consolidation
-    round on each version (a version without flags is left out).
+) -> dict[str, FlaggedConsolidation]:
+    """Per document: its latest submitted consolidation round, if that
+    round's submission has a decision flagged "guidelines unclear".
 
-    The decisions are read without the snapshots; only rounds with a flagged
-    decision are grouped.
+    Cheap pre-check for the facet and the filter (one read of the stored
+    decisions JSON, no grouping); the exact counts are computed for the shown
+    rows only (``fill_consolidation_flags``). The pre-check and the exact count
+    differ only for a flagged decision of a group that is still open, which a
+    submitted consolidation does not normally have.
+
+    "Latest submitted" is by round creation: while a newer consolidation of
+    the same version is still open (editable), the flags of the older
+    submitted round are shown.
     """
     latest: dict[str, tuple[str, str]] = {}
     for row in conn.execute(
@@ -202,17 +218,51 @@ def load_consolidation_flags(
     if not latest:
         return {}
     decisions = _stored_decisions(conn, pid, (sid for _, sid in latest.values()))
-    flagged = {
-        sid: (rid, decisions[sid])
-        for rid, sid in latest.values()
+    return {
+        document_id: FlaggedConsolidation(round_id=rid, submission_id=sid)
+        for document_id, (rid, sid) in latest.items()
         if _flagged(decisions.get(sid))
     }
-    summaries = consolidation_summaries(conn, pid, flagged)
-    return {
-        document_id: summaries[sid]
-        for document_id, (_, sid) in latest.items()
-        if sid in summaries and summaries[sid].flagged_unclear
+
+
+def fill_consolidation_flags(
+    conn: Connection,
+    pid: int,
+    flagged: Mapping[str, FlaggedConsolidation],
+    page: Mapping[str, Any],
+) -> None:
+    """Exact ``flagged_unclear`` and ``flagged_group_id`` of the page's rows
+    that passed the pre-check (``flagged_round_id`` set). Runs after paging,
+    so only the shown rows are grouped; a row whose groups turn out not
+    flagged is cleared."""
+    rows = [
+        row
+        for group in page["groups"]
+        for row in group["rows"]
+        if row.get("flagged_round_id") is not None
+    ]
+    if not rows:
+        return
+    by_round = {item.round_id: item.submission_id for item in flagged.values()}
+    wanted = {
+        by_round[row["flagged_round_id"]]: row["flagged_round_id"]
+        for row in rows
+        if row["flagged_round_id"] in by_round
     }
+    decisions = _stored_decisions(conn, pid, wanted)
+    summaries = consolidation_summaries(
+        conn, pid, {sid: (rid, decisions.get(sid)) for sid, rid in wanted.items()}
+    )
+    for row in rows:
+        sid = by_round.get(row["flagged_round_id"])
+        summary = summaries.get(sid, _NO_MARKS) if sid is not None else _NO_MARKS
+        if summary.flagged_unclear:
+            row["flagged_unclear"] = summary.flagged_unclear
+            row["flagged_group_id"] = summary.flagged_group_id
+        else:
+            row["flagged_unclear"] = 0
+            row["flagged_group_id"] = None
+            row["flagged_round_id"] = None
 
 
 def _row_versions(

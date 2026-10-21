@@ -11203,6 +11203,17 @@
               }
             ],
             "title": "Flagged Group Id"
+          },
+          "flagged_round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flagged Round Id"
           }
         },
         "additionalProperties": false,
@@ -19265,13 +19276,15 @@
               "type": "string"
             },
             "type": "array",
+            "maxItems": 20,
             "minItems": 2,
             "title": "Source Submission Ids"
           },
           "reason": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 2000
               },
               {
                 "type": "null"

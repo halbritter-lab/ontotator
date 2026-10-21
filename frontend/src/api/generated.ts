@@ -3499,6 +3499,8 @@ export interface components {
             flagged_unclear: number;
             /** Flagged Group Id */
             flagged_group_id?: string | null;
+            /** Flagged Round Id */
+            flagged_round_id?: string | null;
         };
         /** DocumentRowsPage */
         DocumentRowsPage: {

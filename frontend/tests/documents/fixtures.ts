@@ -153,6 +153,7 @@ export function row(overrides: Partial<DocumentRowView> & Pick<DocumentRowView, 
     others_activity_at: null,
     flagged_unclear: 0,
     flagged_group_id: null,
+    flagged_round_id: null,
     ...overrides,
   };
 }

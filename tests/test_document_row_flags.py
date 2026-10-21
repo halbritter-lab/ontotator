@@ -104,6 +104,8 @@ def test_flagged_findings_group_id_facet_and_kept_automatically(cons):
     row = row_of(rows(env), "c1", "en")
     assert row["flagged_unclear"] == 2
     assert row["flagged_group_id"] == flagged_group(cons, 1)
+    # The round the group belongs to (``#/consolidations/{round_id}?group=``).
+    assert row["flagged_round_id"] == cons.round.round_id
     facets = rows(env)["bar"]["facets"]
     assert facets["flags"] == {"guidelines_unclear": 1}
     filtered = rows(env, [("flags", "guidelines_unclear")])
@@ -145,18 +147,70 @@ def test_three_automatic_groups_count_three(cons):
     listed = {item["submission_id"]: item for item in submissions(env)}
     assert listed[submission_id]["kept_automatically"] == 3
     row = row_of(rows(env), "c1", "en")
-    assert (row["flagged_unclear"], row["flagged_group_id"]) == (0, None)
+    assert (
+        row["flagged_unclear"],
+        row["flagged_group_id"],
+        row["flagged_round_id"],
+    ) == (0, None, None)
 
 
 def test_no_flags_before_and_without_marks(cons):
     env = cons.env
     row = row_of(rows(env), "c1", "en")
-    assert (row["flagged_unclear"], row["flagged_group_id"]) == (0, None)
+    assert (
+        row["flagged_unclear"],
+        row["flagged_group_id"],
+        row["flagged_round_id"],
+    ) == (0, None, None)
     assert rows(env)["bar"]["facets"]["flags"] == {}
     decide_and_submit(cons, [("confirmed", None)] * 3)
     row = row_of(rows(env), "c1", "en")
-    assert (row["flagged_unclear"], row["flagged_group_id"]) == (0, None)
+    assert (
+        row["flagged_unclear"],
+        row["flagged_group_id"],
+        row["flagged_round_id"],
+    ) == (0, None, None)
     facets = rows(env, [("flags", "guidelines_unclear")])["bar"]["facets"]
     assert facets["flags"] == {"guidelines_unclear": 0}
     assert rows(env, [("flags", "guidelines_unclear")])["groups"] == []
     assert all(item["kept_automatically"] == 0 for item in submissions(env))
+
+
+def test_exact_flags_only_for_shown_rows(cons, monkeypatch):
+    """Facet and filter use the cheap pre-check on the stored decisions; the
+    groups are built only for the rows shown after paging."""
+    import ontocurator.application.consolidation as consolidation
+
+    env = cons.env
+    decide_and_submit(
+        cons,
+        [
+            ("confirmed", ConsolidationMark(action="auto")),
+            ("confirmed", ConsolidationMark(action="choose", guidelines_unclear=True)),
+            ("confirmed", None),
+        ],
+    )
+    calls: list[str] = []
+    original = consolidation.round_members
+
+    def counted(conn, pid, round_id, *args, **kwargs):
+        calls.append(round_id)
+        return original(conn, pid, round_id, *args, **kwargs)
+
+    monkeypatch.setattr(consolidation, "round_members", counted)
+    # Page 2 of the one flagged row: counted in the facet, not shown.
+    hidden = rows(env, [("flags", "guidelines_unclear"), ("page", "2")])
+    assert hidden["groups"] == []
+    assert hidden["bar"]["facets"]["flags"] == {"guidelines_unclear": 1}
+    ids = env.lead.get(
+        f"{BASE}/document-rows/case-ids", params=[("flags", "guidelines_unclear")]
+    )
+    assert ids.status_code == 200, ids.text
+    assert ids.json()["case_ids"] == ["c1"]
+    assert calls == []
+    row = row_of(rows(env, [("flags", "guidelines_unclear")]), "c1", "en")
+    assert (row["flagged_unclear"], row["flagged_round_id"]) == (
+        1,
+        cons.round.round_id,
+    )
+    assert calls == [cons.round.round_id]

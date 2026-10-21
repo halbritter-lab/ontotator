@@ -478,7 +478,7 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
     )
     row_cells = ctx.cells[key]
     others_at = facts.others_activity.get(key)
-    flagged, flagged_group = _consolidation_flags(facts, live)
+    flagged_round = _consolidation_flags(facts, live)
     return {
         "case_id": case_id,
         "language": language,
@@ -566,28 +566,25 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
             and others_at > facts.baseline_at
         ),
         "others_activity_at": others_at,
-        "flagged_unclear": flagged,
-        "flagged_group_id": flagged_group,
+        # Pre-check only (facet, filter); exact after paging.
+        "flagged_unclear": 1 if flagged_round is not None else 0,
+        "flagged_group_id": None,
+        "flagged_round_id": flagged_round,
     }
 
 
-def _consolidation_flags(
-    facts: RowFacts, live: Sequence[rules.Chain]
-) -> tuple[int, str | None]:
-    """Flagged findings of the submitted consolidation of the row's current
-    version (the target of each live chain, as the final panel compares) and
-    the first flagged group (acceptance fixes X5)."""
-    count = 0
-    first: str | None = None
+def _consolidation_flags(facts: RowFacts, live: Sequence[rules.Chain]) -> str | None:
+    """The submitted consolidation round of the row's current version (the
+    target of each live chain, as the final panel compares; the first chain
+    with one) whose decisions pass the "guidelines unclear" pre-check
+    (acceptance fixes X5). The counts and the group of that one round are
+    filled for the shown rows after paging (``fill_consolidation_flags``)."""
     for chain in live:
         current = [v for v in chain.versions if not v.not_newer] or [chain.newest]
-        summary = facts.consolidation_flags.get(current[-1].document_id)
-        if summary is None:
-            continue
-        count += summary.flagged_unclear
-        if first is None:
-            first = summary.flagged_group_id
-    return count, first
+        flagged = facts.consolidation_flags.get(current[-1].document_id)
+        if flagged is not None:
+            return flagged.round_id
+    return None
 
 
 def _work_item(

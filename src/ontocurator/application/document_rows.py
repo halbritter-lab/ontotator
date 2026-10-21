@@ -22,8 +22,9 @@ from ontocurator.application.document_row_page import (
 )
 from ontocurator.application.document_row_reports import load_row_reports
 from ontocurator.application.document_row_submissions import (
-    ConsolidationSummary,
+    FlaggedConsolidation,
     build_submissions,
+    fill_consolidation_flags,
     lead_pseudonym_refs,
     load_consolidation_flags,
 )
@@ -296,9 +297,9 @@ class RowFacts:
     source_obligations: dict[str, tuple[SourceObligationFact, ...]] = field(
         default_factory=dict
     )
-    # document id -> flagged findings of its latest submitted consolidation
-    # (``load_consolidation_flags``; versions without flags left out).
-    consolidation_flags: dict[str, ConsolidationSummary] = field(default_factory=dict)
+    # document id -> its latest submitted consolidation if that one passes
+    # the "guidelines unclear" pre-check (``load_consolidation_flags``).
+    consolidation_flags: dict[str, FlaggedConsolidation] = field(default_factory=dict)
 
 
 def load_last_activity(
@@ -1044,6 +1045,7 @@ class DocumentRowsService:
             # Final label rule and "k of n match" for the shown rows only
             # (after paging).
             document_row_panel.fill_agreement(conn, pid, ctx, page)
+            fill_consolidation_flags(conn, pid, facts.consolidation_flags, page)
             return page
 
     def case_ids(self, key: str, query: RowQuery) -> dict[str, Any]:
