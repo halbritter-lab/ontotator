@@ -5,6 +5,7 @@ import { SubmissionHistory, type SubmissionHistoryProps } from '../src/variants/
 import { refKey } from '../src/variants/versionState';
 import { final, group, page, row, submission, submissions } from './documents/fixtures';
 import { historical } from './variantFixtures';
+import { guidelineListing, guidelineSummary } from './projectFixtures';
 
 const summary = { submission_id: 'immutable/submission', document_id: 'target', author_label: 'Reader A',
   created_at: '2026-10-18T12:00:00Z', mode: 'independent' as const, round_id: null, guideline_withdrawn: false };
@@ -24,6 +25,7 @@ beforeEach(() => {
   vi.spyOn(api, 'getSubmissionHistory').mockResolvedValue(detail);
   vi.spyOn(api, 'getRowSubmissions').mockResolvedValue(leadRows);
   vi.spyOn(api, 'listDocumentRows').mockResolvedValue(leadPage);
+  vi.spyOn(api, 'listGuidelines').mockResolvedValue(guidelineListing([guidelineSummary(3), guidelineSummary(2)]));
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -99,4 +101,26 @@ it('labels history entries with the text label', async () => {
   const table = await openHistory();
   expect(within(table).getByRole('cell', { name: 'case-0101 · de v1' })).toBeTruthy();
   expect(within(table).getByRole('cell', { name: 'case-0101 · de v2' })).toBeTruthy();
+});
+
+it('shows Guidelines v2 (current: v3)', async () => {
+  vi.mocked(api.getRowSubmissions).mockResolvedValue(submissions('case 1', 'de', { submissions: [
+    submission({ submission_id: 'sub-1', document_id: 'target', author_label: 'ann-0001', guideline_version: 2 }),
+  ] }));
+  render(<SubmissionHistory {...base} canManage />);
+  const table = await openHistory();
+  expect(api.listGuidelines).toHaveBeenCalledWith('pkg');
+  expect(await within(table).findByText('Guidelines v2 (current: v3)')).toBeTruthy();
+  cleanup();
+  vi.mocked(api.listSubmissionHistory).mockResolvedValue([{ ...summary, guideline_version: 3 }]);
+  render(<SubmissionHistory {...base} />);
+  expect(await within(await openHistory()).findByText('Guidelines v3')).toBeTruthy();
+});
+
+it('shows Guidelines: not recorded', async () => {
+  vi.mocked(api.listGuidelines).mockRejectedValue(new Error('Guidelines unavailable'));
+  render(<SubmissionHistory {...base} />);
+  const table = await openHistory();
+  expect(within(table).getAllByText('Guidelines: not recorded')).toHaveLength(2);
+  expect(screen.queryByText('Guidelines unavailable')).toBeNull();
 });

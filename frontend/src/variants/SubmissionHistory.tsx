@@ -18,7 +18,7 @@ export interface SubmissionHistoryProps {
   documents?: ProjectDocumentsQuery;
 }
 
-interface HistoryData { rows: RowSubmissionView[]; rounds: RowRoundView[]; final: FinalSelectionSummary | null; parallel: boolean }
+interface HistoryData { rows: RowSubmissionView[]; rounds: RowRoundView[]; final: FinalSelectionSummary | null; parallel: boolean; guidelineCurrent: number | null }
 
 /** Own submission from the per-document history (non-leads); the finding count comes from its detail. */
 function ownRow(row: SubmissionHistorySummary, version: number, findings: number): RowSubmissionView {
@@ -30,16 +30,21 @@ function ownRow(row: SubmissionHistorySummary, version: number, findings: number
   };
 }
 
+/** Version in force for the "(current: v3)" label; a failed read only drops the comparison. */
+const currentGuideline = (projectKey: string): Promise<number | null> =>
+  api.listGuidelines(projectKey).then(listing => listing.current?.version ?? null, () => null);
+
 async function loadLead(projectKey: string, caseId: string, language: string): Promise<HistoryData> {
-  const [data, page] = await Promise.all([api.getRowSubmissions(projectKey, caseId, language), api.listDocumentRows(projectKey, { case: caseId, language })]);
+  const [data, page, guidelineCurrent] = await Promise.all([api.getRowSubmissions(projectKey, caseId, language), api.listDocumentRows(projectKey, { case: caseId, language }), currentGuideline(projectKey)]);
   const row = page.groups.flatMap(group => group.rows).find(item => item.case_id === caseId && item.language === language);
-  return { rows: data.submissions, rounds: data.rounds, final: row?.final ?? null, parallel: row?.parallel_roots ?? false };
+  return { rows: data.submissions, rounds: data.rounds, final: row?.final ?? null, parallel: row?.parallel_roots ?? false, guidelineCurrent };
 }
 
 async function loadOwn(projectKey: string, documentId: string, version: number): Promise<HistoryData> {
+  const guidelineCurrent = currentGuideline(projectKey);
   const summaries = (await api.listSubmissionHistory(projectKey, documentId)).filter(row => row.document_id === documentId);
   const details = await Promise.all(summaries.map(row => api.getSubmissionHistory(projectKey, documentId, row.submission_id)));
-  return { rows: summaries.map((row, index) => ownRow(row, version, details[index].annotations.length)), rounds: [], final: null, parallel: false };
+  return { rows: summaries.map((row, index) => ownRow(row, version, details[index].annotations.length)), rounds: [], final: null, parallel: false, guidelineCurrent: await guidelineCurrent };
 }
 
 /**
@@ -76,7 +81,7 @@ export function SubmissionHistory({ projectKey, caseId, documentId, language, ve
       {current?.error ? <><ErrorNotice error={current.error} /><Button onClick={() => setRetry(value => value + 1)}>Retry submissions</Button></>
         : !current?.data ? <InlineMessage tone="info">Loading submissions...</InlineMessage>
         : <SubmissionsTable rows={current.data.rows} rounds={current.data.rounds} final={current.data.final} parallel={current.data.parallel}
-          showFinalColumn={canManage} language={language} caseId={caseId} viewRoute={viewRoute} label="Submission history"
+          showFinalColumn={canManage} language={language} caseId={caseId} viewRoute={viewRoute} label="Submission history" guidelineCurrent={current.data.guidelineCurrent}
           onNavigate={route => { close(); onNavigate(route); }} />}
     </Dialog>
   </>;

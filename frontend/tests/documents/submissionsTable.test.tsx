@@ -155,3 +155,28 @@ it("shows the author as display name and pseudonym for leads", () => {
   expect(screen.getByText("Round 3 · Ben Ito (ann-0006) · in progress, not submitted yet")).toBeTruthy();
   expect(first.querySelector("[hidden]")!.textContent).toContain("Ana Weber (ann-0004)");
 });
+
+it("shows Guidelines v2 (current: v3)", () => {
+  renderTable({ guidelineCurrent: 3, rows: [
+    submission({ submission_id: "a", document_id: "d1", guideline_version: 2 }),
+    submission({ submission_id: "b", document_id: "d1", guideline_version: 3, recorded_at: "2026-10-19T11:00:00Z" }),
+    submission({ submission_id: "c", document_id: "d1", guideline_version: 1, guideline_withdrawn: true, recorded_at: "2026-10-19T11:30:00Z" }),
+  ] });
+  expect(headers()).toEqual(["Final", "Round", "Kind", "By", "Submitted", "Findings"]);
+  const rows = bodyRows();
+  expect(within(rows[0]).getByText("Guidelines v2 (current: v3)")).toBeTruthy();
+  expect(within(rows[1]).getByText("Guidelines v3")).toBeTruthy();
+  expect(within(rows[2]).getByText("Guidelines v1 (withdrawn)")).toBeTruthy();
+  cleanup();
+  renderTable({ layout: "list", guidelineCurrent: 3, rows: [submission({ submission_id: "a", document_id: "d1", guideline_version: 2 })] });
+  expect(screen.getByText("Guidelines v2 (current: v3)")).toBeTruthy();
+});
+
+it("shows Guidelines: not recorded", () => {
+  renderTable({ rows: [submission({ submission_id: "a", document_id: "d1" })] });
+  expect(within(bodyRows()[0]).getByText("Guidelines: not recorded")).toBeTruthy();
+  cleanup();
+  // Without the current version (not loaded or not passed) the label names the stamp alone.
+  renderTable({ rows: [submission({ submission_id: "a", document_id: "d1", guideline_version: 2 })] });
+  expect(within(bodyRows()[0]).getByText("Guidelines v2")).toBeTruthy();
+});

@@ -5,6 +5,7 @@ import { routeHref, type Route } from "../app/router";
 import { kindLabels, personLabel, submissionLabel, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { plural } from "../app/labels";
+import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, DataTable, StatusBadge, type Column } from "../ui";
 import { isPlainClick } from "./RowCells";
 
@@ -51,6 +52,8 @@ export interface SubmissionsTableProps {
   layout?: "table" | "list";
   /** DOM id of the Final row's View link (stable focus target). */
   finalLinkId?: string;
+  /** Guideline version in force; with it older stamps read "Guidelines v2 (current: v3)". Null or absent: the stamp alone. */
+  guidelineCurrent?: number | null;
 }
 
 /** "Round n", "Initial submission" without a round, or the kind for rounds without an ordinal (consolidation). */
@@ -96,7 +99,7 @@ export function pendingRounds(rounds: readonly RowRoundView[]): RowRoundView[] {
  */
 export function SubmissionsTable({
   rows, rounds, final = null, parallel, showFinalColumn, language, caseId, actions, renderConfirm, viewRoute, onNavigate, label = "Submissions", now,
-  layout = "table", finalLinkId,
+  layout = "table", finalLinkId, guidelineCurrent = null,
 }: SubmissionsTableProps): JSX.Element {
   const id = useId();
   const [showAll, setShowAll] = useState(false);
@@ -129,6 +132,9 @@ export function SubmissionsTable({
     const version = submissionVersion(row.version, row.chain_name, parallel);
     return caseId == null ? version : `${textLabel({ case_id: caseId, language })} ${version}`;
   };
+  const guidelineLabel = (row: RowSubmissionView) => <span className="cell-secondary submission-guideline">
+    {submissionGuidelineLabel(row.guideline_version, row.guideline_withdrawn, guidelineCurrent)}
+  </span>;
   const roundCellContent = (row: RowSubmissionView) => viewLink(row, [roundName(row), ...roundSuffixes(row, rows)].join(" · "));
 
   const columns: Column<RowSubmissionView>[] = [
@@ -137,7 +143,7 @@ export function SubmissionsTable({
     { id: "kind", header: "Kind", cell: row => kindLabels[row.kind] },
     ...(showVersion ? [{ id: "version", header: "Version", cell: (row: RowSubmissionView) => versionCell(row) }] : []),
     { id: "by", header: "By", cell: row => personLabel(row.author_label, row.is_me, row.author) },
-    { id: "submitted", header: "Submitted", cell: row => <Time iso={row.recorded_at} now={now} seconds={needsSeconds(row)} /> },
+    { id: "submitted", header: "Submitted", cell: row => <><Time iso={row.recorded_at} now={now} seconds={needsSeconds(row)} />{guidelineLabel(row)}</> },
     { id: "findings", header: "Findings", align: "end", cell: row => row.finding_count },
     ...(actions ? [{ id: "actions", header: "Actions", cell: (row: RowSubmissionView) => <div className="submission-actions">{actions(row, { labelId: labelId(row), label: labelOf(row), isFinal: isFinal(row) })}</div> }] : []),
   ];
@@ -165,6 +171,7 @@ export function SubmissionsTable({
                 </div>
                 <div className="submissions-list-line">
                   <span className="submissions-list-findings">{plural(row.finding_count, "finding")}</span>
+                  {guidelineLabel(row)}
                   {actions && <div className="submission-actions">{actions(row, { labelId: labelId(row), label: labelOf(row), isFinal: isFinal(row) })}</div>}
                 </div>
                 {confirm != null && <div className="submissions-list-confirm">{confirm}</div>}

@@ -1,7 +1,8 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, notifySessionRestored, type ProjectSummary, type TaskSummary } from "../src/api/client";
 import { MyTasks } from "../src/tasks/MyTasks";
+import { guidelineListing, guidelineSummary, withdrawnGuideline } from "./projectFixtures";
 
 const project = (key: string, name: string, can_manage = false): ProjectSummary => ({
   project_key: key, name, description: null, roles: [], allowed_modes: [], document_count: 0, can_manage,
@@ -16,6 +17,9 @@ const deferred = <T,>() => {
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
+
+// No project has guidelines unless a test says so.
+beforeEach(() => { vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineListing([])); });
 
 describe("My tasks component", () => {
   beforeEach(() => { vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks); });
@@ -364,5 +368,40 @@ describe("My tasks filter and counts", () => {
     render(<MyTasks project="q" projects={[]} onNavigate={vi.fn()} />);
     await screen.findAllByTestId("task-row");
     expect(counts().getAttribute("aria-label")).toBe("Task counts in Project Q (q)");
+  });
+});
+
+describe("My tasks guideline links", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("links Project guidelines v3 once per project with a version in force", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([...tasks, task(5, "open", "r", "Project R")]);
+    vi.mocked(api.listGuidelines).mockImplementation(async key => key === "p" ? guidelineListing([guidelineSummary(3), guidelineSummary(2)])
+      : key === "q" ? guidelineListing([guidelineSummary(1)]) : guidelineListing([withdrawnGuideline(2), guidelineSummary(1)]));
+    const onNavigate = vi.fn();
+    const { rerender } = render(<MyTasks projects={[]} onNavigate={onNavigate} />);
+    await screen.findAllByTestId("task-row");
+    const links = await screen.findAllByRole("link", { name: /^Project guidelines/ });
+    // Ordered as the project filter options; R has no version in force (its current one is withdrawn).
+    expect(links.map(link => link.textContent)).toEqual(["Project guidelines v3 · Project P", "Project guidelines v1 · Project Q"]);
+    expect(links.map(link => link.getAttribute("href"))).toEqual(["#/projects/p/guidelines", "#/projects/q/guidelines"]);
+    expect(vi.mocked(api.listGuidelines).mock.calls.map(([key]) => key).sort()).toEqual(["p", "q", "r"]);
+    fireEvent.click(links[0]);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectGuidelines", key: "p" });
+
+    rerender(<MyTasks project="p" projects={[]} onNavigate={onNavigate} />);
+    const filtered = await screen.findAllByRole("link", { name: /^Project guidelines/ });
+    expect(filtered.map(link => link.textContent)).toEqual(["Project guidelines v3"]);
+    expect(api.listGuidelines).toHaveBeenCalledTimes(3);
+  });
+
+  it("shows no guideline link when the request fails or no project has guidelines", async () => {
+    vi.spyOn(api, "listMyTasks").mockResolvedValue(tasks);
+    vi.mocked(api.listGuidelines).mockImplementation(async key => { if (key === "p") throw new Error("Network down"); return guidelineListing([]); });
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    await screen.findAllByTestId("task-row");
+    await waitFor(() => expect(api.listGuidelines).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("link", { name: /^Project guidelines/ })).toBeNull();
+    expect(screen.queryByText("Network down")).toBeNull();
   });
 });
