@@ -143,8 +143,18 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   const assignment = workspace.assignment;
   // An active consolidation round opens the consolidation view (acceptance fixes WP-E); "Edit in editor…" adds view=editor.
   if (roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor") {
-    return <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId}
-      onNavigate={onNavigate} workspaceView={workspace.read_only ? null : workspace.view} />;
+    // The task's guidelines and "Report problem" stay at hand: the consolidator decides guideline questions.
+    return <TaskGuidelines assignment={assignment} readOnly={workspace.read_only || assignment.held}>{guidelines => <>
+      {guidelines.notice}
+      <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId}
+        onNavigate={onNavigate} workspaceView={workspace.read_only ? null : workspace.view}
+        headerActions={<>{guidelines.button}
+          {/* Group commands save at once: nothing to save before a report. */}
+          <TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => undefined} onRefresh={value => {
+            setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
+          }} /></>} />
+      {guidelines.drawer}
+    </>}</TaskGuidelines>;
   }
   const openRound = async (roundId: string) => {
     if (routeLeaveRef.current && !await routeLeaveRef.current()) return;
@@ -172,7 +182,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         <TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
           setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
         }} /></>}
-      roundInputs={roundInputs} roundKind={roundInfo?.kind} roundBadge={roundBadge} roundTitle={roundTitle}
+      roundInputs={roundInputs} roundKind={roundInfo?.kind} roundActive={roundInfo?.active} roundBadge={roundBadge} roundTitle={roundTitle}
       roundOrdinal={roundInfo?.round_ordinal} documentVersion={roundInfo?.document_version}
       held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef} guidelineNotice={guidelines.notice}
       versionContext={{ username: user.username, assignmentId, onNavigate, canBrowseVersions: versionAccess.allowed }}

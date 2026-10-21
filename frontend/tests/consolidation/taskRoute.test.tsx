@@ -16,13 +16,20 @@ describe("task route view", () => {
     expect(parseRoute("#/tasks/42")).toEqual({ name: "task", assignmentId: 42 });
     expect(parseRoute("#/tasks/42?view=other")).toEqual({ name: "task", assignmentId: 42 });
   });
+
+  it("round-trips the documents query of a consolidation route", () => {
+    const route = { name: "projectConsolidation" as const, key: "p", roundId: "r-9", group: "g-1", documents: { panel: "case-1:de", stage: "final" } };
+    expect(parseRoute(routeHref(route))).toEqual(route);
+    expect(parseRoute("#/projects/p/consolidations/r-9")).toEqual({ name: "projectConsolidation", key: "p", roundId: "r-9" });
+  });
 });
 
 const round: WorkRoundView = { round_id: "round-c", project_key: "pkg", assignment_id: 1, document_id: "doc", annotator_id: "alice", kind: "consolidation",
   mode: "review", state: "editable", workflow_revision: 3, input_manifest_sha256: "manifest", input_submission_ids: ["s1", "s2"], active: true, submission_count: 0, input_count: 2 };
 
-function mockTask() {
+function mockTask(assignment: Record<string, unknown> = {}) {
   const opened = assigned(workspaceFixture());
+  Object.assign(opened.assignment, assignment);
   opened.view.key = { ...opened.view.key, round_id: "round-c" };
   vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(opened.assignment);
   vi.spyOn(api, "openAssignment").mockResolvedValue(opened);
@@ -45,6 +52,14 @@ describe("TaskEditor switch", () => {
     render(<TaskEditor assignmentId={1} user={user} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
     expect(await screen.findByRole("heading", { name: "Consolidate case-107 · de v2" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit in editor…" })).toBeTruthy();
+  });
+
+  it("offers the guidelines and Report problem in the consolidation view", async () => {
+    mockTask({ guideline: { version: 2 } });
+    render(<TaskEditor assignmentId={1} user={user} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
+    await screen.findByRole("heading", { name: "Consolidate case-107 · de v2" });
+    expect(screen.getByRole("button", { name: /^Guidelines v2/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Report problem/ })).toBeTruthy();
   });
 
   it("opens the editor with view=editor", async () => {

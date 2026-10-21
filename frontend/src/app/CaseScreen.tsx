@@ -183,6 +183,8 @@ export interface CaseScreenProps {
   saveBeforeReportRef?: React.MutableRefObject<(() => Promise<void>) | null>;
   roundInputs?: readonly import("../api/client").RoundInputView[];
   roundKind?: import("../api/client").WorkRoundView["kind"];
+  /** Whether the task's round is still active; an inactive consolidation round offers no "Back to consolidation". */
+  roundActive?: boolean;
   /** Toolbar badge of a carry-forward round, e.g. "Round 3 · continued from Round 2". */
   roundBadge?: string;
   /** Full round identity, shown as the badge's title. */
@@ -207,7 +209,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onSubmitted,
   annotatorName,
   leaveGuardRef,
-  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, guidelineNotice, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundBadge, roundTitle, documentVersion, roundOrdinal,
+  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, guidelineNotice, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundActive = true, roundBadge, roundTitle, documentVersion, roundOrdinal,
 }) => {
   const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, versionContext?.canBrowseVersions, workspaceId, view.key]);
   const [acceptedSubmission, setAcceptedSubmission] = useState<{ identity: string; value: Submission } | null>(null);
@@ -526,7 +528,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, [consolidationRoundId]);
   const entryAuthorOf = (annotationId: string): string | undefined =>
     entryAuthors && entryAuthors.roundId === consolidationRoundId ? entryAuthors.labels.get(annotationId) : undefined;
-  const consolidationAssignmentId = roundKind === "consolidation" ? assignmentNavigation?.current.assignment_id ?? versionContext?.assignmentId : undefined;
+  // Only an active round opens the consolidation view; otherwise the task route opens this editor again.
+  const consolidationAssignmentId = roundKind === "consolidation" && roundActive ? assignmentNavigation?.current.assignment_id ?? versionContext?.assignmentId : undefined;
 
   // Review mode targets
   const reviewTargets: TargetProposal[] = useMemo(() => {

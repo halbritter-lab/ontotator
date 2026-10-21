@@ -113,3 +113,10 @@ it("reads no consolidation and shows no link outside a consolidation round", () 
   expect(load).not.toHaveBeenCalled();
   expect(screen.queryByRole("link", { name: "Back to consolidation" })).toBeNull();
 });
+
+it("shows no Back to consolidation once the round is no longer active", async () => {
+  vi.spyOn(api, "getConsolidation").mockResolvedValue(consolidation);
+  render(<CaseScreen view={consolidationView()} workspaceId="ws-c" onClose={vi.fn()} roundKind="consolidation" roundActive={false}
+    versionContext={{ canBrowseVersions: false, username: "lead", assignmentId: 42, onNavigate: vi.fn() }} />);
+  expect(screen.queryByRole("link", { name: "Back to consolidation" })).toBeNull();
+});
