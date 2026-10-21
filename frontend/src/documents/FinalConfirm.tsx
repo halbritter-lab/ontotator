@@ -1,10 +1,8 @@
-import { forwardRef, useId, useState } from "react";
 import { ApiError, type DecisionBarView, type DocumentRowView, type FinalSelectionSummary, type RowSubmissionView, type RowSubmissions } from "../api/client";
 import type { components } from "../api/generated";
-import { Checkbox, InlineConfirm, type InlineConfirmOutcome } from "../ui";
 import { decisionCategoryLabels, workText } from "./labels";
 import { finalLabel, rowKeyOf } from "./RowCells";
-import { causeLines, OWN_RESULT_REASON, waitingLines } from "./SelectionNotice";
+import { causeLines, waitingLines } from "./SelectionNotice";
 import { rowSubmissionLabel } from "./SubmissionsTable";
 
 export type FinalConfirmKind = "use" | "replace" | "keep";
@@ -151,73 +149,3 @@ export function failureOf(error: unknown): FinalConfirmFailure {
   }
   return { kind: "error" };
 }
-
-export const CHECK_REQUIRED = "Check the box to confirm you reviewed these changes.";
-
-export interface FinalConfirmProps {
-  request: FinalConfirmRequest;
-  busy: boolean;
-  failure: FinalConfirmFailure | null;
-  onConfirm: () => void;
-  onCancel: () => void;
-  /** Conflict: reload the row and close. */
-  onReview: () => void;
-}
-
-/** The inline Use / Replace / Keep confirmation of the Documents page; the ref is its container (focus checks). */
-export const FinalConfirm = forwardRef<HTMLDivElement, FinalConfirmProps>(function FinalConfirm({ request, busy, failure, onConfirm, onCancel, onReview }, ref) {
-  const id = useId();
-  const [checked, setChecked] = useState(false);
-  const [needsCheck, setNeedsCheck] = useState(false);
-  const keep = request.kind === "keep";
-  const hintId = `${id}-check-required`;
-
-  const target = `${request.caseId} · ${request.language}`;
-  const title = request.kind === "use" ? "Use as final result" : request.kind === "replace" ? "Replace final result" : "Keep final result";
-  const confirmLabel = request.kind === "use" ? "Use as final" : request.kind === "replace" ? "Replace" : "Keep as final";
-  const lead = request.kind === "use"
-    ? `Use ${request.label} as the final result for ${target}?`
-    : request.kind === "replace"
-      ? `Replace ${request.oldLabel} with ${request.label}? The previous choice stays in the history.`
-      : `Keep ${request.label} as the final result for ${target}?`;
-  const notes = keep ? [] : [
-    request.stillOpen ? `Still open: ${request.stillOpen}.` : null,
-    request.roundNote ? `This result belongs to ${request.roundNote === "abandoned" ? "an abandoned" : "a superseded"} round; you will be asked to confirm it again after choosing.` : null,
-    request.own ? "This is your own result." : null,
-  ].filter((note): note is string => note !== null);
-
-  const message = <>
-    <p>{lead}</p>
-    {notes.map(note => <p key={note}>{note}</p>)}
-    {keep && request.causeLines.length > 0 && <ul className="selection-notice-lines">
-      {request.causeLines.map(line => <li key={line.text}>{line.text}{line.hint && <span className="selection-notice-hint">{line.hint}</span>}</li>)}
-    </ul>}
-  </>;
-
-  const outcome: InlineConfirmOutcome | null = failure === null ? null
-    : failure.kind === "conflict" ? { kind: "conflict", changedBy: failure.changedBy, changedAt: failure.changedAt, onReview }
-      : failure.kind === "error" ? { kind: "error", onRetry: onConfirm }
-        : { kind: "session" };
-
-  return <div ref={ref} className="final-confirm">
-    <InlineConfirm
-      title={title}
-      message={message}
-      confirmLabel={confirmLabel}
-      busy={busy}
-      outcome={outcome}
-      conflictMessage={failure?.kind === "conflict" && failure.ownResult ? `${OWN_RESULT_REASON} Nothing was saved.` : undefined}
-      onCancel={onCancel}
-      // The primary stays focusable but reads as unavailable until the box is checked.
-      confirmUnavailable={keep && !checked ? { reasonId: needsCheck ? hintId : undefined } : null}
-      onConfirmUnavailable={() => setNeedsCheck(true)}
-      onConfirm={onConfirm}
-    >
-      {keep && <>
-        <Checkbox id={`${id}-reviewed`} label="I reviewed these changes and keep this exact result" checked={checked}
-          onChange={event => { setChecked(event.target.checked); if (event.target.checked) setNeedsCheck(false); }} />
-        {needsCheck && !checked && <p id={hintId} className="inline-confirm-notice" role="alert">{CHECK_REQUIRED}</p>}
-      </>}
-    </InlineConfirm>
-  </div>;
-});

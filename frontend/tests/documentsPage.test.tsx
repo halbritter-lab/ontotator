@@ -7,12 +7,14 @@ import { DocumentsPage, type DocumentsPageProps } from "../src/admin/DocumentsPa
 import type { ProjectDocumentsQuery, Route } from "../src/app/router";
 import { documentsRowId } from "../src/documents/RowCells";
 import { recordDecision } from "../src/documents/visitState";
+import { FINAL_SELECTION_CHANGED } from "../src/variants/finalSelectionState";
 import { useRegisteredShortcuts } from "../src/ui/shortcuts";
-import { final, group, item, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
+import { final, finalPanel, group, item, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
 import { ana, cell, scenario7a, stagedRow, tom } from "./documents/tableFixtures";
+import { acceptPanel } from "./documents/panelFixtures";
 import { reviewRecord } from "./translationFixtures";
 
-const { expandedProps, choiceProps, assignProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[], choiceProps: [] as Record<string, unknown>[], assignProps: [] as unknown[] }));
+const { expandedProps, assignProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[], assignProps: [] as unknown[] }));
 // The assign dialog has its own tests; here only its wiring (props in, onAssigned / onClose out) matters.
 vi.mock("../src/admin/AssignWorkDialog", () => ({
   AssignWorkDialog: (props: AssignWorkDialogProps) => { assignProps.push(props); return <div role="dialog" aria-label="Assign stub" />; },
@@ -28,7 +30,6 @@ vi.mock("../src/documents/ExpandedRow", async importOriginal => {
   return {
     ...actual,
     ExpandedRow: (props: Parameters<typeof actual.ExpandedRow>[0]) => { expandedProps.push(props as unknown as Record<string, unknown>); return actual.ExpandedRow(props); },
-    FinalChoice: (props: Parameters<typeof actual.FinalChoice>[0]) => { choiceProps.push(props as unknown as Record<string, unknown>); return actual.FinalChoice(props); },
   };
 });
 
@@ -81,7 +82,8 @@ const chooseFinalStep = () => stepOf("choose_final", { detail: { kind: "annotati
 
 beforeEach(() => {
   expandedProps.length = 0;
-  choiceProps.length = 0;
+  vi.spyOn(api, "finalPanel").mockImplementation(async () => finalPanel());
+  vi.spyOn(api, "listGuidelines").mockResolvedValue({ current: null, latest_version: null, versions: [], my_latest_seen: null });
   vi.spyOn(api, "listDocumentRows").mockResolvedValue(page([]));
   vi.spyOn(api, "getRowSubmissions").mockImplementation(async (_key, caseId, language) => submissions(caseId, language));
   vi.spyOn(api, "getProjectSettings").mockResolvedValue({ languages: ["en", "de"] } as never);
@@ -654,16 +656,16 @@ it("keeps the page busy with focus on the paging link while the next page loads,
   expect(screen.getByRole("link", { name: "Previous" }).getAttribute("aria-disabled")).toBeNull();
 });
 
-it("renders the final choice of a card as a list under the card, not the table", async () => {
+it("opens the final-result panel from a card as the side dialog", async () => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
   const s1 = scenarioS1();
   const en = { ...s1.group.rows.find(entry => entry.language === "en")!, next_step: chooseFinalStep(), steps: [chooseFinalStep()] };
   mockRows(page([{ ...s1.group, rows: [en] }]), s1.submissions);
-  renderPage();
+  renderStateful({});
   fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
-  expect(await screen.findByRole("list", { name: "Submissions, case-0042 · en" })).toBeTruthy();
-  expect(screen.queryByRole("table")).toBeNull();
-  expect(choiceProps.at(-1)?.layout).toBe("list");
+  const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+  expect(panel.classList.contains("ui-dialog--side")).toBe(true);
+  expect(screen.queryByRole("list", { name: "Submissions, case-0042 · en" })).toBeNull();
 });
 
 it("expands and focuses a deep-linked row that no longer needs a decision", async () => {
@@ -738,17 +740,6 @@ it("expands a row with replace navigation", async () => {
   const { onNavigate } = renderPage({ query: { language: "en" } });
   fireEvent.click(await screen.findByRole("button", { name: "Show history, case-0042 · en" }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en", open: ["case-0042:en"] }, { replace: true });
-});
-
-it("passes the current project rule, not the final's snapshot, to the final choice", async () => {
-  const s5 = scenarioS5();
-  const en = { ...s5.group.rows[0], next_step: chooseFinalStep(), steps: [chooseFinalStep()] };
-  mockRows(page([{ ...s5.group, rows: [en] }], { adjudicator_not_annotator: true }), s5.submissions);
-  renderPage();
-  fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0377 · en" }));
-  await screen.findByRole("region", { name: "Final result · case-0377 · en" });
-  expect(s5.group.rows[0].final?.adjudicator_not_annotator).toBeNull();
-  expect(choiceProps.at(-1)?.adjudicatorNotAnnotator).toBe(true);
 });
 
 it("passes the case's plan revision, the row assign dialog, the plan chips and the lead to the expanded row", async () => {
@@ -850,17 +841,15 @@ describe("Resolved and Changed badges", () => {
     const de = { ...s0.group.rows[1], next_step: stepOf("confirm_final"), steps: [stepOf("confirm_final")] };
     serve(page([group("synthetic-accepted", [de])]));
     vi.mocked(api.getRowSubmissions).mockImplementation(async (_key, caseId, language) => structuredClone(s0.submissions[rowKey(caseId, language)] ?? submissions(caseId, language)));
-    const { onNavigate } = renderPage({ query: { decision: "confirm-final", open: [rowKey("synthetic-accepted", "de")] } });
+    // The panel is open on the row (route parameter `panel`).
+    const { onNavigate } = renderPage({ query: { decision: "confirm-final", open: [rowKey("synthetic-accepted", "de")], panel: "synthetic-accepted:de" } });
     await waitFor(() => expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] }));
-    // Review changes… opens Keep in the final choice under the row (no longer inside the expansion).
-    fireEvent.click(await screen.findByRole("button", { name: "Review changes…, synthetic-accepted · de" }));
-    const confirm = await screen.findByRole("group", { name: "Keep final result" });
-    expect(confirm.closest("[aria-label^='History']")).toBeNull();
-    fireEvent.click(within(confirm).getByRole("checkbox", { name: "I reviewed these changes and keep this exact result" }));
-    serve(page([group("synthetic-accepted", [{ ...de, issues: [], categories: [], final: { ...de.final!, revision: 2 }, matches_decision: false, retained: true }])]));
-    fireEvent.click(within(confirm).getByRole("button", { name: "Keep as final" }));
+    const panel = await screen.findByRole("dialog", { name: "Final result · synthetic-accepted · de" });
+    serve(page([group("synthetic-accepted", [{ ...de, issues: [], categories: [], final: { ...de.final!, revision: 2 }, matches_decision: false, retained: true, next_step: null, steps: [] }])]));
+    fireEvent.click(await within(panel).findByRole("button", { name: "Keep final on v1" }));
+    expect(await within(panel).findByText("No more final results to decide.")).toBeTruthy();
     await waitFor(() => expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("false"));
-    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", decision: "confirm-final" }, { replace: true });
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", decision: "confirm-final", panel: "synthetic-accepted:de" }, { replace: true });
     expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] });
     // The badge is on the collapsed row itself, next to its row header.
     expect(within(rowHeader("synthetic-accepted · de")).getByText("Resolved")).toBeTruthy();
@@ -941,45 +930,65 @@ describe("row actions", () => {
   });
   const oneSubmission = (caseId = "case-0042", language = "en") => submissions(caseId, language, { submissions: [submission({ submission_id: `sub-${caseId}`, document_id: `${caseId}-${language}`, author_label: "ann-0001" })] });
 
-  it("Choose final… opens the final choice under the row with Use as final for one eligible submission", async () => {
+  it("Accept result… opens the side panel (route parameter panel) and Close returns focus to the row action", async () => {
     mockRows(page([group("case-0042", [chooseFinal()])]), { [rowKey("case-0042", "en")]: oneSubmission() });
+    vi.mocked(api.finalPanel).mockResolvedValue(acceptPanel("case-0042", "en"));
     const { onNavigate } = renderStateful({});
-    fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
-    const confirm = await screen.findByRole("group", { name: "Use as final result" });
-    const choice = screen.getByRole("region", { name: "Final result · case-0042 · en" });
-    expect(choice.contains(confirm)).toBe(true);
+    const action = await screen.findByRole("button", { name: "Compare results…, case-0042 · en" });
+    action.focus();
+    fireEvent.click(action);
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", panel: "case-0042:en" }, { replace: true });
+    const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    expect(await within(panel).findByText("Accept Ana Weber’s annotation as final?")).toBeTruthy();
+    // The heading has focus; the page behind is inert.
+    expect(document.activeElement).toBe(within(panel).getByRole("heading", { level: 2 }));
+    expect(screen.getByRole("heading", { level: 1, name: "Documents" }).closest("[inert]")).not.toBeNull();
     // The expansion stays closed: the decision is not in the expansion (V1).
-    expect(onNavigate).not.toHaveBeenCalledWith(expect.objectContaining({ open: ["case-0042:en"] }), expect.anything());
     expect(screen.getByRole("button", { name: "Show history, case-0042 · en" }).getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
-    expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action");
-    fireEvent.click(within(choice).getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("region", { name: "Final result · case-0042 · en" })).toBeNull();
+    fireEvent.click(within(panel).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Final result · case-0042 · en" })).toBeNull());
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p" }, { replace: true });
     await waitFor(() => expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action"));
   });
 
-  it("Choose final… focuses Submissions when several submissions are eligible", async () => {
-    const two = submissions("case-0042", "en", { submissions: [
-      submission({ submission_id: "a", document_id: "case-0042-en" }), submission({ submission_id: "b", document_id: "case-0042-en", author_label: "ann-0002" }),
-    ] });
-    mockRows(page([group("case-0042", [chooseFinal()])]), { [rowKey("case-0042", "en")]: two });
-    renderStateful({});
-    fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
-    await waitFor(() => expect(document.activeElement?.textContent).toBe("Submissions (2)"));
-    expect(screen.queryByRole("group", { name: "Use as final result" })).toBeNull();
+  it("panel route parameter reopens the panel and editor links return to it", async () => {
+    mockRows(page([group("case-0042", [chooseFinal()])]));
+    vi.mocked(api.finalPanel).mockResolvedValue(acceptPanel("case-0042", "en"));
+    const { onNavigate } = renderPage({ query: { segment: "decision", panel: "case-0042:en" } });
+    const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    expect(api.finalPanel).toHaveBeenCalledWith("p", "case-0042", "en");
+    fireEvent.click(await within(panel).findByRole("link", { name: "Open in editor" }));
+    expect(onNavigate).toHaveBeenLastCalledWith(expect.objectContaining({ name: "projectCase", caseId: "case-0042", documents: { segment: "decision", panel: "case-0042:en" } }));
   });
 
-  it("Review changes… expands the row and opens Keep", async () => {
-    const s0 = scenarioS0();
-    const de = { ...s0.group.rows[1], next_step: stepOf("confirm_final"), steps: [stepOf("confirm_final")] };
-    mockRows(page([group("synthetic-accepted", [s0.group.rows[0], de])]), s0.submissions);
+  it("Escape returns focus to the row action, or the row header when the row left", async () => {
+    const first = chooseFinal();
+    mockRows(page([group("case-0042", [first])]));
+    vi.mocked(api.finalPanel).mockResolvedValue(acceptPanel("case-0042", "en"));
+    vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1", revision: 1 });
     renderStateful({});
-    fireEvent.click(await screen.findByRole("button", { name: "Review changes…, synthetic-accepted · de" }));
-    const keep = await screen.findByRole("group", { name: "Keep final result" });
-    expect(within(keep).getByRole("checkbox", { name: "I reviewed these changes and keep this exact result" })).toBeTruthy();
+    const action = await screen.findByRole("button", { name: "Compare results…, case-0042 · en" });
+    action.focus();
+    fireEvent.click(action);
+    await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(action));
+
+    // After the decision the row has no action any more: focus goes to its row header.
+    fireEvent.click(action);
+    const again = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], categories: [],
+      final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1" }) };
+    mockRows(page([group("case-0042", [done])]));
+    fireEvent.click(await within(again).findByRole("button", { name: "Accept as final" }));
+    expect(await within(again).findByText("No more final results to decide.")).toBeTruthy();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement?.id).toBe(documentsRowId("case-0042", "en", "header")));
   });
 
-  it("Review changes… opens Keep for a PLAN_RESTORED row", async () => {
+  it("Review changes… opens the panel with Keep final on v1 for every cause shown", async () => {
     const s0 = scenarioS0();
     vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "synthetic-accepted", language: "de", document_id: "synthetic-accepted-de", submission_id: "sub-s0-r1", revision: 2 });
     const restored = item({ code: "PLAN_RESTORED", cause_id: "PLAN_RESTORED:synthetic-accepted:de:3", category: "confirm-final" });
@@ -987,12 +996,11 @@ describe("row actions", () => {
     mockRows(page([group("synthetic-accepted", [s0.group.rows[0], de])]), s0.submissions);
     renderStateful({});
     fireEvent.click(await screen.findByRole("button", { name: "Review changes…, synthetic-accepted · de" }));
-    const keep = await screen.findByRole("group", { name: "Keep final result" });
-    expect(within(keep).getByText("This language version returned to the plan. Confirm its earlier final result.")).toBeTruthy();
-    fireEvent.click(within(keep).getByRole("checkbox", { name: "I reviewed these changes and keep this exact result" }));
-    fireEvent.click(within(keep).getByRole("button", { name: "Keep as final" }));
+    const panel = await screen.findByRole("dialog", { name: "Final result · synthetic-accepted · de" });
+    expect(await within(panel).findByText("This language version returned to the plan. Confirm its earlier final result.")).toBeTruthy();
+    fireEvent.click(within(panel).getByRole("button", { name: "Keep final on v1" }));
     await waitFor(() => expect(api.selectFinalResult).toHaveBeenCalledWith("p", expect.objectContaining({
-      acknowledged_cause_ids: ["PLAN_RESTORED:synthetic-accepted:de:3"],
+      document_id: "synthetic-accepted-de", submission_id: "sub-s0-r1", acknowledged_cause_ids: ["PLAN_RESTORED:synthetic-accepted:de:3"],
     })));
   });
 
@@ -1023,26 +1031,45 @@ describe("row actions", () => {
     expect(screen.queryByRole("group", { name: "Resolve rejected translation, case-1 · de" })).toBeNull();
   });
 
-  it("after success the row updates in place and announces Next: case · language under a segment filter", async () => {
+  it("after a decision the panel moves to the next final decision and the row updates in place", async () => {
     const first = chooseFinal();
     const second = chooseFinal("case-0099", "de");
-    const rowSubmissions = { [rowKey("case-0042", "en")]: oneSubmission(), [rowKey("case-0099", "de")]: oneSubmission("case-0099", "de") };
-    mockRows(page([group("case-0042", [first]), group("case-0099", [second])]), rowSubmissions);
-    vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "sub-case-0042", revision: 1 });
-    renderStateful({ segment: "decision" });
+    mockRows(page([group("case-0042", [first]), group("case-0099", [second])]));
+    vi.mocked(api.finalPanel).mockImplementation(async (_key, caseId, language) => acceptPanel(caseId, language));
+    vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1", revision: 1 });
+    const changed = vi.fn();
+    window.addEventListener(FINAL_SELECTION_CHANGED, changed);
+    const { onNavigate } = renderStateful({ segment: "decision" });
     fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
-    const confirm = await screen.findByRole("group", { name: "Use as final result" });
+    const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
     const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], matches_decision: false, retained: true, categories: [],
-      final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "sub-case-0042" }) };
-    mockRows(page([group("case-0042", [done]), group("case-0099", [second])]), rowSubmissions);
-    fireEvent.click(within(confirm).getByRole("button", { name: "Use as final" }));
-    await waitFor(() => expect(live().textContent).toContain("Next: case-0099 · de."));
-    expect(screen.getByRole("link", { name: "Next: case-0099 · de" })).toBeTruthy();
-    // "Next: case-0099 · de" opens that row and focuses its row header name.
-    fireEvent.click(screen.getByRole("link", { name: "Next: case-0099 · de" }));
-    await waitFor(() => expect(document.activeElement?.id).toBe(documentsRowId("case-0099", "de", "header")));
+      final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1" }) };
+    mockRows(page([group("case-0042", [done]), group("case-0099", [second])]));
+    fireEvent.click(await within(panel).findByRole("button", { name: "Accept as final" }));
+    expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-0042-en", submission_id: "case-0042-s1", expected_revision: 0, acknowledged_cause_ids: [] });
+    await waitFor(() => expect(within(panel).getByRole("heading", { level: 2 }).textContent).toBe("Final result · case-0099 · de"));
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "decision", panel: "case-0099:de" }, { replace: true });
+    expect(within(panel).getByText("Final result saved for case-0042 · en.")).toBeTruthy();
+    await waitFor(() => expect(panel.querySelector("p[role='status']")!.textContent).toBe("Final result saved. Next: case-0099 · de."));
+    expect(changed).toHaveBeenCalled();
+    window.removeEventListener(FINAL_SELECTION_CHANGED, changed);
     // Updated in place: the row stays (retained) without the action.
     await waitFor(() => expect(within(screen.getByRole("button", { name: "Show history, case-0042 · en" }).closest("tr")!).queryByRole("button", { name: /Compare results…/ })).toBeNull());
+  });
+
+  it("Next decision closes the panel and runs that row's action without the panel in its links", async () => {
+    const first = chooseFinal();
+    const report = planRow("case-0390", "de", stepOf("decide_report", { report_id: "report-0390" }));
+    mockRows(page([group("case-0042", [first]), group("case-0390", [report])]));
+    vi.mocked(api.finalPanel).mockResolvedValue(acceptPanel("case-0042", "en"));
+    vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1", revision: 1 });
+    const { onNavigate } = renderStateful({ segment: "decision" });
+    fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
+    const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    mockRows(page([group("case-0042", [{ ...first, next_step: stepOf("done"), steps: [stepOf("done")], categories: [] }]), group("case-0390", [report])]));
+    fireEvent.click(await within(panel).findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await within(panel).findByRole("button", { name: "Next decision: case-0390 · de (problem report)" }));
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectProblemReport", key: "p", reportId: "report-0390", section: "decide", documents: { segment: "decision" } }, undefined);
   });
 });
 

@@ -1,15 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { api, type DocumentRowView, type RowSubmissions } from "../../src/api/client";
-import { guidelineListing, guidelineSummary } from "../projectFixtures";
+import type { DocumentRowView, RowSubmissions } from "../../src/api/client";
 import type { ProjectDocumentsQuery } from "../../src/app/router";
 import { formatTime } from "../../src/app/submissionLabels";
-import { ExpandedRow, FinalChoice, type ExpandedRowProps, type FinalChoiceProps } from "../../src/documents/ExpandedRow";
+import { ExpandedRow, type ExpandedRowProps } from "../../src/documents/ExpandedRow";
 import { TextVersions, type TextVersionsTools } from "../../src/documents/TextVersions";
 import type { RowSubmissionsState } from "../../src/documents/useRowSubmissions";
-import { refKey } from "../../src/variants/versionState";
 import {
-  final, item, notInPlanRow, planRow, recordedVersion, round, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, stepOf, submission, submissions, translationReview, version, work, type DocumentsScenario,
+  final, item, notInPlanRow, planRow, recordedVersion, round, row, rowKey, scenarioS4, stepOf, submission, submissions, version, work, type DocumentsScenario,
 } from "./fixtures";
 
 afterEach(cleanup);
@@ -25,13 +23,6 @@ function state(data: RowSubmissions | null, overrides: Partial<RowSubmissionsSta
 function renderRow(target: DocumentRowView, data: RowSubmissions | null, props: Partial<ExpandedRowProps> = {}) {
   const onNavigate = vi.fn();
   const utils = render(<ExpandedRow row={target} projectKey="p" query={query} submissions={state(data)} onNavigate={onNavigate} now={now} {...props} />);
-  return { ...utils, onNavigate };
-}
-
-/** The interim final-result choice under the row (Choose final…, Review changes…; O6 replaces it). */
-function renderChoice(target: DocumentRowView, data: RowSubmissions | null, props: Partial<FinalChoiceProps> = {}) {
-  const onNavigate = vi.fn();
-  const utils = render(<FinalChoice row={target} projectKey="p" query={query} submissions={state(data)} onNavigate={onNavigate} now={now} onSelectFinal={vi.fn()} onClose={vi.fn()} {...props} />);
   return { ...utils, onNavigate };
 }
 
@@ -64,7 +55,6 @@ const chainData = (overrides: Partial<RowSubmissions> = {}) => submissions("c", 
   ...overrides,
 });
 
-const noticeLines = (container: HTMLElement) => [...container.querySelectorAll(".selection-notice-lines > li")].map(line => line.textContent);
 // ---- Slim expansion (documents overview, O4c) ----
 
 const ana = { pseudonym: "ann-0003", display_name: "Ana Weber", is_me: false };
@@ -196,222 +186,6 @@ it("keeps problem reports listed for rows not in plan", () => {
   const reports = screen.getByText("Problem reports (1)").closest("details")!;
   expect(within(reports).getByRole("listitem").textContent).toContain("Wrong text · ann-0004");
   expect(within(reports).getByRole("link", { name: "Open report" })).toBeTruthy();
-});
-
-// ---- Interim final-result choice under the row (moved out of the expansion; O6 replaces it) ----
-
-it("is a region 'Final result · case · language' with Submissions (n) and Close", () => {
-  const { target, data } = scenarioRow(scenarioS1(), "en");
-  const onClose = vi.fn();
-  renderChoice(target, data, { onClose });
-  const region = screen.getByRole("region", { name: "Final result · case-0042 · en" });
-  expect(within(region).getByRole("heading", { name: "Submissions (2)" }).getAttribute("tabindex")).toBe("-1");
-  fireEvent.click(within(region).getByRole("button", { name: "Close" }));
-  expect(onClose).toHaveBeenCalled();
-});
-
-it("renders exactly the three lines of the S0 example", () => {
-  const { target, data } = scenarioRow(scenarioS0(), "de");
-  const onKeep = vi.fn();
-  const { container } = renderChoice(target, data, { onKeep });
-  expect(screen.queryByRole("heading", { name: "Issues" })).toBeNull();
-  const notice = container.querySelector(".selection-notice")!;
-  expect(noticeLines(container)).toEqual([
-    "v2 (Ready for review) corrects the text of the final result.",
-    "Waiting: Round 3 (ann-0004) is in progress. You can choose again once it is submitted.",
-  ]);
-  const keep = within(notice as HTMLElement).getByRole("button", { name: "Keep final result…" });
-  expect(within(notice as HTMLElement).getAllByRole("button")).toHaveLength(1);
-  fireEvent.click(keep);
-  expect(onKeep).toHaveBeenCalledWith({ causeIds: ["SELECTED_TEXT_CORRECTED:synthetic-accepted-de:synthetic-accepted-de-v2"], triggerId: keep.id });
-});
-
-it("words every acknowledgeable cause as in the spec", () => {
-  const target = chainRow({
-    issues: [
-      item({ code: "SELECTED_ROUND_ABANDONED", cause_id: "SELECTED_ROUND_ABANDONED:r1", category: "confirm-final" }),
-      item({ code: "SELECTED_ROUND_SUPERSEDED", cause_id: "SELECTED_ROUND_SUPERSEDED:r1", category: "confirm-final" }),
-      item({ code: "SELECTED_RESULT_REVISED", cause_id: "SELECTED_RESULT_REVISED:s1b", category: "confirm-final" }),
-      item({ code: "SELECTED_NEWER_RESULT", cause_id: "SELECTED_NEWER_RESULT:s2", category: "confirm-final", document_id: "c-de" }),
-      item({ code: "SELECTED_TEXT_CORRECTED", cause_id: "SELECTED_TEXT_CORRECTED:c-de:c-de-v2:accepted", category: "confirm-final", document_id: "c-de-v2", version: 2 }),
-    ],
-  });
-  const onKeep = vi.fn();
-  const { container } = renderChoice(target, chainData(), { onKeep });
-  expect(noticeLines(container)).toEqual([
-    "Round 1 (ann-0004) is abandoned.",
-    "Round 1 (ann-0004) has been superseded by Round 2.",
-    `Round 1 (ann-0004) has a newer submission (${time("2026-10-18T11:00:00Z")}).`,
-    `Round 2 · ann-0004 · v1 was submitted after the final result was chosen (${time("2026-10-18T10:05:00Z")}).`,
-    "v2 (Accepted) corrects the text of the final result.Keep v1, or choose a result on v2 once one exists (assign work in Text versions).",
-  ]);
-  fireEvent.click(screen.getByRole("button", { name: "Keep final result…" }));
-  expect(onKeep.mock.calls[0][0].causeIds).toHaveLength(5);
-});
-
-it("adds non-actionable and waiting lines without a Keep action", () => {
-  const v1 = version({ document_id: "c-de", chain_name: "DeepL", origin: "machine_translation", translation_status: "accepted", is_newest_in_chain: false });
-  const v2 = version({ document_id: "c-de-v2", chain_id: "c-de", chain_name: "DeepL", version: 2, origin: "correction", derived_from: "c-de", translation_status: "reviewed", latest_review_decision: "query", is_newest_in_chain: false });
-  const v3 = version({ document_id: "c-de-v3", chain_id: "c-de", chain_name: "DeepL", version: 3, origin: "correction", derived_from: "c-de-v2", translation_status: "ready_for_review" });
-  const target = chainRow({ versions: [v1, v2, v3] });
-  const data = chainData({ open_translation_reviews: [translationReview({ assignment_id: 9, document_id: "c-de-v3", version: 3, reviewer_label: "ann-0009" })] });
-  const { container } = renderChoice(target, data, { onKeep: vi.fn() });
-  expect(noticeLines(container)).toEqual([
-    "v2 was queried in review. No action needed.",
-    "Waiting: translation review of v3 by ann-0009 is open. You can choose again once it is submitted.",
-  ]);
-  expect(screen.queryByRole("button", { name: "Keep final result…" })).toBeNull();
-});
-
-it("renders the S3 waiting line for the open translation review", () => {
-  const { target, data } = scenarioRow(scenarioS3(), "de");
-  const { container } = renderChoice(target, data, { onKeep: vi.fn() });
-  expect(noticeLines(container)).toContain("Waiting: translation review of v3 by rev-0007 is open. You can choose again once it is submitted.");
-});
-
-it("offers Use as final without a final result and Compare… with a preselected second submission", () => {
-  const target = chainRow({ final: null });
-  const onSelectFinal = vi.fn();
-  const data = chainData({ submissions: chainData().submissions.slice(0, 2) });
-  const { onNavigate } = renderChoice(target, data, { onSelectFinal });
-  const use = screen.getAllByRole("button", { name: "Use as final…" });
-  expect(use).toHaveLength(2);
-  expect(document.getElementById(use[0].getAttribute("aria-describedby")!)!.textContent).toMatch(/^Annotation · Round 1 · ann-0004 · de v1 · /);
-  fireEvent.click(use[0]);
-  expect(onSelectFinal).toHaveBeenCalledWith({ kind: "use", submission: data.submissions[0], triggerId: use[0].id });
-  fireEvent.click(screen.getAllByRole("button", { name: "Compare…" })[0]);
-  const chooser = screen.getByLabelText("Compare with") as HTMLSelectElement;
-  expect(chooser.value).toBe("s1b");
-  fireEvent.click(screen.getByRole("link", { name: "Open comparison" }));
-  expect(onNavigate).toHaveBeenCalledWith({
-    name: "projectCase", key: "p", caseId: "c", variant: "c-de",
-    annotations: refKey({ kind: "submission", id: "s1" }), compare: refKey({ kind: "submission", id: "s1b" }), documents: query,
-  });
-});
-
-it("offers Replace and Compare on non-final rows and nothing on the final row", () => {
-  const target = chainRow();
-  const base = chainData();
-  const data = { ...base, submissions: [...base.submissions, submission({ submission_id: "s3", document_id: "c-de-v2", version: 2, author_label: "ann-0005", recorded_at: "2026-10-18T13:00:00Z" })] };
-  const onSelectFinal = vi.fn();
-  const { onNavigate } = renderChoice(target, data, { onSelectFinal });
-  const rows = screen.getAllByRole("row").slice(1);
-  expect(within(rows[0]).queryByRole("button")).toBeNull();
-  expect(within(rows[0]).queryByRole("link", { name: "Compare" })).toBeNull();
-  expect(within(rows[1]).getByRole("button", { name: "Replace…" })).toBeTruthy();
-  fireEvent.click(within(rows[1]).getByRole("link", { name: "Compare" }));
-  expect(onNavigate).toHaveBeenCalledWith({
-    name: "projectCase", key: "p", caseId: "c", variant: "c-de",
-    annotations: refKey({ kind: "submission", id: "s1" }), compare: refKey({ kind: "submission", id: "s1b" }), documents: query,
-  });
-  expect(within(rows[3]).getByText("Different text versions; open each with View.")).toBeTruthy();
-  fireEvent.click(within(rows[3]).getByRole("button", { name: "Replace…" }));
-  expect(onSelectFinal).toHaveBeenCalledWith(expect.objectContaining({ kind: "replace", submission: data.submissions[3] }));
-});
-
-it("links View to the case viewer with a submission ref and the Documents query", () => {
-  const { target, data } = scenarioRow(scenarioS1(), "en");
-  const { onNavigate } = renderChoice(target, data);
-  fireEvent.click(screen.getByRole("link", { name: /^View Annotation · Initial submission · ann-0002 · en v1/ }));
-  expect(onNavigate).toHaveBeenCalledWith({ name: "projectCase", key: "p", caseId: "case-0042", variant: "case-0042-en", annotations: refKey({ kind: "submission", id: "sub-0042-b" }), documents: query });
-});
-
-it("keeps actions unavailable while submissions load and offers Retry after an error", () => {
-  const { target, data } = scenarioRow(scenarioS1(), "en");
-  const onSelectFinal = vi.fn();
-  render(<FinalChoice onClose={vi.fn()} row={{ ...target, final: null }} projectKey="p" query={{}} submissions={state(data, { loading: true })} onNavigate={vi.fn()} onSelectFinal={onSelectFinal} />);
-  expect(screen.getByText("Loading submissions…")).toBeTruthy();
-  const use = screen.getAllByRole("button", { name: "Use as final…" })[0];
-  expect(use.getAttribute("aria-disabled")).toBe("true");
-  fireEvent.click(use);
-  expect(onSelectFinal).not.toHaveBeenCalled();
-  cleanup();
-  const retry = vi.fn();
-  render(<FinalChoice onClose={vi.fn()} row={target} projectKey="p" query={{}} submissions={state(null, { error: new Error("boom"), retry })} onNavigate={vi.fn()} />);
-  expect(screen.getByText(/Could not load submissions/)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-  expect(retry).toHaveBeenCalled();
-});
-
-it("blocks the lead's own result when the project keeps adjudication separate", () => {
-  const target = chainRow({ final: null });
-  const data = chainData({ submissions: [submission({ submission_id: "mine", document_id: "c-de", author_label: "lead-0002", is_me: true })] });
-  const onSelectFinal = vi.fn();
-  const onAnnounce = vi.fn();
-  renderChoice(target, data, { onSelectFinal, onAnnounce, adjudicatorNotAnnotator: true });
-  const use = screen.getByRole("button", { name: "Use as final…" });
-  expect(use.getAttribute("aria-disabled")).toBe("true");
-  const reasonId = use.getAttribute("aria-describedby")!.split(" ")[1];
-  expect(document.getElementById(reasonId)!.textContent).toBe("This project keeps adjudication separate from annotation. Another lead must choose this result.");
-  fireEvent.click(use);
-  expect(onSelectFinal).not.toHaveBeenCalled();
-  expect(onAnnounce).toHaveBeenCalledWith("This project keeps adjudication separate from annotation. Another lead must choose this result.");
-});
-
-it("renders confirmations below their submission and the Keep confirmation below the notice", () => {
-  const { target, data } = scenarioRow(scenarioS0(), "de");
-  const { container } = renderChoice(target, data, { onKeep: vi.fn(), keepConfirm: <p>Keep confirm</p>, renderConfirm: entry => entry.submission_id === "sub-s0-review" ? <p>Replace confirm</p> : null });
-  expect(screen.getByText("Keep confirm").parentElement).toBe(container.querySelector(".selection-notice"));
-  expect(screen.getByText("Replace confirm").closest("tr")!.className).toBe("data-table-expanded");
-});
-it("names the Submissions heading without a count until the submissions are loaded", () => {
-  const { target } = scenarioRow(scenarioS1(), "en");
-  render(<FinalChoice onClose={vi.fn()} row={target} projectKey="p" query={query} submissions={state(null, { loading: true })} onNavigate={vi.fn()} now={now} />);
-  expect(screen.getByRole("heading", { level: 3, name: "Submissions" })).toBeTruthy();
-  expect(screen.queryByRole("heading", { name: /^Submissions \(/ })).toBeNull();
-});
-
-it("renders Submissions as two-line list items with the confirmation below its item in the list layout", () => {
-  const { target, data } = scenarioRow(scenarioS1(), "en");
-  const chosen = data.submissions[1];
-  renderChoice(target, data, { layout: "list", renderConfirm: entry => (entry.submission_id === chosen.submission_id ? <p>Confirm here</p> : null) });
-  expect(screen.queryByRole("table")).toBeNull();
-  const list = screen.getByRole("list", { name: `Submissions, ${target.case_id} · en` });
-  const items = within(list).getAllByRole("listitem");
-  expect(items).toHaveLength(data.submissions.length);
-  expect(items[0].classList.contains("final-row")).toBe(true);
-  expect(within(items[0]).getByText("Final")).toBeTruthy();
-  expect(items[0].querySelector("a")!.id).toBe("documents-row-case-0042-en-final-view");
-  const lines = items[1].querySelectorAll(".submissions-list-line");
-  expect(lines).toHaveLength(2);
-  expect(within(lines[0] as HTMLElement).getByRole("link", { name: /^View / })).toBeTruthy();
-  expect(lines[1].textContent).toContain(`${chosen.finding_count} finding`);
-  expect(within(lines[1] as HTMLElement).getByRole("button", { name: "Replace…" })).toBeTruthy();
-  expect(items[1].querySelector(".submissions-list-confirm")!.textContent).toBe("Confirm here");
-  expect(items[0].querySelector(".submissions-list-confirm")).toBeNull();
-});
-
-it("shows Submissions only when there is one or a final", () => {
-  const target = planRow("case-0101", "de", stepOf("assign_translation_review"));
-  renderChoice(target, submissions("case-0101", "de"));
-  expect(screen.queryByRole("heading", { name: /^Submissions/ })).toBeNull();
-  expect(screen.queryByRole("table")).toBeNull();
-  expect(screen.queryByText("No submissions yet.")).toBeNull();
-  cleanup();
-
-  // While loading without a final result nothing but a status is shown.
-  render(<FinalChoice onClose={vi.fn()} row={target} projectKey="p" query={query} submissions={state(null, { loading: true })} onNavigate={vi.fn()} now={now} />);
-  expect(screen.queryByRole("heading", { name: /^Submissions/ })).toBeNull();
-  expect(screen.getByText("Loading submissions…")).toBeTruthy();
-  cleanup();
-
-  const withFinal = { ...target, final: final({ case_id: "case-0101", language: "de", document_id: "case-0101-de", submission_id: "s1" }) };
-  renderChoice(withFinal, submissions("case-0101", "de"));
-  expect(screen.getByRole("heading", { name: "Submissions (0)" })).toBeTruthy();
-  cleanup();
-
-  const { target: s1, data } = scenarioRow(scenarioS1(), "en");
-  renderChoice({ ...s1, final: null }, data);
-  expect(screen.getByRole("heading", { name: "Submissions (2)" })).toBeTruthy();
-});
-it("shows Guidelines v2 (current: v3) in the submissions table", async () => {
-  const listing = vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineListing([guidelineSummary(3), guidelineSummary(2)]));
-  try {
-    const target = row({ case_id: "g", language: "de" });
-    renderChoice(target, submissions("g", "de", { submissions: [submission({ submission_id: "s-g", document_id: "g-de", guideline_version: 2 })] }));
-    expect(await screen.findByText("Guidelines v2 (current: v3)")).toBeTruthy();
-    expect(listing).toHaveBeenCalledWith("p");
-  } finally { listing.mockRestore(); }
 });
 
 // ---- Text versions ----

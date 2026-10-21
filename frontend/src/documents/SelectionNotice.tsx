@@ -1,12 +1,9 @@
-import { useId, type ReactNode } from "react";
 import type { DocumentRowView, RowItemView, RowRoundView, RowSubmissions } from "../api/client";
 import { formatTime, personLabel, roundCell } from "../app/submissionLabels";
-import { Time } from "../app/Time";
-import { Button } from "../ui";
 import { statusBadgeText, versionName } from "./labels";
 import { pendingRounds, roundName, submissionVersion } from "./SubmissionsTable";
 
-/** Causes the lead acknowledges with "Keep final result…". */
+/** Causes the lead acknowledges with "Keep final on v1" (final-result panel). */
 export const ACKNOWLEDGEABLE_CODES: ReadonlySet<string> = new Set([
   "SELECTED_ROUND_ABANDONED",
   "SELECTED_ROUND_SUPERSEDED",
@@ -27,7 +24,8 @@ export function acknowledgeableItems(row: DocumentRowView): RowItemView[] {
   return [...row.issues, ...row.notes].filter(item => ACKNOWLEDGEABLE_CODES.has(item.code));
 }
 
-interface NoticeLine { key: string; content: ReactNode; hint?: string }
+/** A non-actionable line of the cause list (a correction that was rejected or queried). */
+export interface NoticeLine { key: string; text: string }
 
 /** A cause line part: plain text or a timestamp shown as a local time label. */
 export type CauseSegment = string | { time: string };
@@ -122,7 +120,7 @@ export function causeLines(row: DocumentRowView, data: RowSubmissions | null, no
 }
 
 /** Corrections of the final result's chain whose latest review rejected or queried them. */
-function notAcceptedLines(row: DocumentRowView): NoticeLine[] {
+export function notAcceptedLines(row: DocumentRowView): NoticeLine[] {
   if (!row.final) return [];
   const finalChain = row.versions.find(version => version.document_id === row.final?.document_id)?.chain_id;
   return row.versions
@@ -130,7 +128,7 @@ function notAcceptedLines(row: DocumentRowView): NoticeLine[] {
       && NOT_ACCEPTED_DECISIONS[version.latest_review_decision ?? ""] !== undefined)
     .map(version => ({
       key: `not-accepted:${version.document_id}`,
-      content: `${versionName(version.version, version.chain_name, row.parallel_roots)} was ${NOT_ACCEPTED_DECISIONS[version.latest_review_decision ?? ""]} in review. No action needed.`,
+      text: `${versionName(version.version, version.chain_name, row.parallel_roots)} was ${NOT_ACCEPTED_DECISIONS[version.latest_review_decision ?? ""]} in review. No action needed.`,
     }));
 }
 
@@ -143,67 +141,4 @@ export function waitingLines(row: DocumentRowView, data: RowSubmissions | null):
   const reviews = data.open_translation_reviews.map(review =>
     `Waiting: translation review of ${submissionVersion(review.version, review.chain_name, row.parallel_roots)} by ${personLabel(review.reviewer_label, review.is_me, review.reviewer)} is open. You can choose again once it is submitted.`);
   return [...rounds, ...reviews];
-}
-
-export interface KeepRequest {
-  /** Every acknowledgeable cause id shown at open; never a subset. */
-  causeIds: string[];
-  triggerId: string;
-}
-
-export interface SelectionNoticeProps {
-  row: DocumentRowView;
-  data: RowSubmissions | null;
-  /** Current project rule (`page.adjudicator_not_annotator`), never the final's snapshot. */
-  adjudicatorNotAnnotator?: boolean;
-  /** Opens the Keep confirmation; without it no Keep action is offered. */
-  onKeep?: (request: KeepRequest) => void;
-  /** Keep confirmation, rendered directly below the notice. */
-  keepConfirm?: ReactNode;
-  /** True while submissions load or another confirmation is busy: the Keep trigger is `aria-disabled`. */
-  unavailable?: boolean;
-  onAnnounce?: (message: string) => void;
-  now?: Date;
-}
-
-/**
- * Selection notice above the Submissions table: acknowledgeable causes, non-actionable
- * correction lines, waiting lines and "Keep final result…". Renders nothing without lines.
- */
-export function SelectionNotice({ row, data, adjudicatorNotAnnotator = false, onKeep, keepConfirm, unavailable = false, onAnnounce, now }: SelectionNoticeProps): JSX.Element | null {
-  const id = useId();
-  const causes = acknowledgeableItems(row);
-  const lines = causeLines(row, data, now);
-  const other = notAcceptedLines(row);
-  const waiting = row.final ? waitingLines(row, data) : [];
-  if (!lines.length && !other.length && !waiting.length && !keepConfirm) return null;
-  const ownBlocked = adjudicatorNotAnnotator && !!row.final?.is_mine;
-  const triggerId = `${id}-keep`;
-  const reasonId = `${id}-keep-reason`;
-  const keepAvailable = causes.length > 0 && !!onKeep && !!row.final;
-  return <div className="selection-notice">
-    <ul className="selection-notice-lines">
-      {lines.map(line => <li key={line.causeId}>
-        {line.segments.map((part, index) => (typeof part === "string" ? part : <Time key={index} iso={part.time} now={now} />))}
-        {line.hint && <span className="selection-notice-hint">{line.hint}</span>}
-      </li>)}
-      {other.map(line => <li key={line.key}>{line.content}</li>)}
-      {waiting.map(line => <li key={line} className="selection-notice-waiting">{line}</li>)}
-    </ul>
-    {keepAvailable && <div className="selection-notice-actions">
-      <Button
-        id={triggerId}
-        size="sm"
-        aria-disabled={ownBlocked || unavailable ? true : undefined}
-        aria-describedby={ownBlocked ? reasonId : undefined}
-        onClick={() => {
-          if (ownBlocked) { onAnnounce?.(OWN_RESULT_REASON); return; }
-          if (unavailable) return;
-          onKeep?.({ causeIds: causes.map(item => item.cause_id), triggerId });
-        }}
-      >Keep final result…</Button>
-      {ownBlocked && <p id={reasonId} className="action-reason">{OWN_RESULT_REASON}</p>}
-    </div>}
-    {keepConfirm}
-  </div>;
 }
