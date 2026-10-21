@@ -19,7 +19,11 @@ from sqlalchemy import func, select
 from sqlalchemy.engine import Connection
 
 from ontocurator.domain.submission_labels import round_ordinals
-from ontocurator.domain.work_rounds import RoundInputView, WorkRoundView
+from ontocurator.domain.work_rounds import (
+    CARRY_ROUND_KINDS,
+    RoundInputView,
+    WorkRoundView,
+)
 from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import SubmissionRow
 from ontocurator.storage.workflow_tables import (
@@ -149,7 +153,7 @@ def enrich_rounds(
         sources = {
             v.input_submission_ids[0]
             for v in views
-            if v.kind == "carry_forward" and v.input_submission_ids
+            if v.kind in CARRY_ROUND_KINDS and v.input_submission_ids
         }
         latest = {v.latest_submission_id for v in views if v.latest_submission_id}
         owners, source_ordinals, recorded = _source_facts(
@@ -191,7 +195,7 @@ def enrich_rounds(
                 else inputs.get(view.round_id, 0)
             ),
         }
-        if view.kind == "carry_forward" and view.input_submission_ids:
+        if view.kind in CARRY_ROUND_KINDS and view.input_submission_ids:
             sid = view.input_submission_ids[0]
             owner = owners.get(sid)
             source_row = recorded.get(sid)

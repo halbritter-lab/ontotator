@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
@@ -31,13 +33,25 @@ from ontocurator.domain.reanchor import (
     text_map,
 )
 from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
+from ontocurator.domain.scopes import TaskScope, build_scope
 from ontocurator.domain.serialization import encode_snapshot
-from ontocurator.domain.work_rounds import RoundKind, WorkRoundView
+from ontocurator.domain.work_rounds import (
+    CARRY_ROUND_KINDS,
+    DraftSnapshotPayload,
+    RoundKind,
+    WorkRoundView,
+)
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.storage.database import Database
+from ontocurator.storage.overview_tables import DraftSnapshotRow
 from ontocurator.storage.repository import Repository, _key_str, _lock_id
-from ontocurator.storage.tables import AssignmentRow, ProjectRow, UserRow
+from ontocurator.storage.tables import (
+    AssignmentRow,
+    DocumentRow,
+    ProjectRow,
+    SubmissionRow,
+    UserRow,
+)
 from ontocurator.storage.workflow_tables import (
     RoundInputRow,
     RoundWorkspaceBindingRow,
@@ -49,17 +63,22 @@ from ontocurator.storage.workflow_tables import (
 
 def _input_payload(
     iid: str,
-    sid: str,
+    sid: str | None,
     original: AnnotationSnapshot,
     target: AnnotationSnapshot | None,
     mapped: Carried | NeedsReview,
+    *,
+    did: int | None = None,
 ) -> dict[str, Any]:
     """The stored payload of one frozen round input.
 
     ``review_reason`` names why a carried finding could not be re-anchored; it
-    is stored for new rounds only (older payloads have no such key).
+    is stored for new rounds only (older payloads have no such key). An input
+    of a frozen draft (``did``, kind ``text_change``) has no source submission
+    and stores ``source_draft_snapshot_id``; submission inputs keep their
+    payload shape (``RoundInputView`` forbids unknown keys).
     """
-    return {
+    payload: dict[str, Any] = {
         "input_id": iid,
         "source_submission_id": sid,
         "source_ref": {
@@ -75,6 +94,70 @@ def _input_payload(
             else None
         ),
     }
+    if did is not None:
+        payload["source_draft_snapshot_id"] = did
+    return payload
+
+
+# Round kinds only the text-change operations create (``TextChangeService``).
+TEXT_CHANGE_ROUND_KINDS = frozenset({"text_change", "handover"})
+
+
+@dataclass(frozen=True)
+class RoundSource:
+    """One round source: a submission, or a frozen draft (kind ``text_change``)."""
+
+    snapshots: list[AnnotationSnapshot]
+    # Document version of a frozen draft's text; None for a submission.
+    version: int | None
+    origin_key: WorkspaceKey
+    scope: TaskScope | None
+    source_submission_id: str | None
+    source_draft_snapshot_id: int | None
+
+
+def require_independent(
+    conn: Connection,
+    pid: int,
+    *,
+    case_id: str,
+    language: str,
+    user_id: int,
+    pseudonym: str,
+    excluding: int | None,
+) -> None:
+    """A handover owner has no own annotation on any version of the row (I3).
+
+    Refused (``HANDOVER_NOT_INDEPENDENT``) when the person holds a non-revoked
+    annotate assignment (other than ``excluding``) or an annotation submission
+    on any version of ``(case_id, language)``; also with "Annotations per
+    text = 1" (spec open question 2).
+    """
+    row_documents = select(DocumentRow.document_id).where(
+        DocumentRow.project_id == pid,
+        DocumentRow.case_id == case_id,
+        DocumentRow.language == language,
+    )
+    assigned = select(AssignmentRow.id).where(
+        AssignmentRow.project_id == pid,
+        AssignmentRow.user_id == user_id,
+        AssignmentRow.task == "annotate",
+        AssignmentRow.revoked_at.is_(None),
+        AssignmentRow.document_id.in_(row_documents),
+    )
+    if excluding is not None:
+        assigned = assigned.where(AssignmentRow.id != excluding)
+    submitted = select(SubmissionRow.submission_id).where(
+        SubmissionRow.project_id == pid,
+        SubmissionRow.annotator_id == pseudonym,
+        SubmissionRow.mode.in_(["independent", "assisted"]),
+        SubmissionRow.document_id.in_(row_documents),
+    )
+    if (
+        conn.execute(assigned.limit(1)).first() is not None
+        or conn.execute(submitted.limit(1)).first() is not None
+    ):
+        raise DomainError("HANDOVER_NOT_INDEPENDENT")
 
 
 class WorkRoundService:
@@ -258,88 +341,216 @@ class WorkRoundService:
                 if receipt["request_hash"] != request_hash:
                     raise DomainError("WORKFLOW_REQUEST_CONFLICT")
                 return WorkRoundView.model_validate(receipt["response"])
-            if assignment["workflow_revision"] != expected_workflow_revision:
-                raise DomainError("WORKFLOW_REVISION_CONFLICT")
-            if assignment["task"] not in MODE_FOR_TASK:
-                raise DomainError(
-                    "ROUND_KIND_INVALID", "This endpoint handles annotation rounds"
-                )
+            if kind in TEXT_CHANGE_ROUND_KINDS:
+                # Only the text-change operations create these rounds; they
+                # record the lead's decision with the round (TextChangeService).
+                raise DomainError("ROUND_KIND_INVALID")
             owner = conn.execute(
                 select(UserRow.pseudonym).where(UserRow.id == assignment["user_id"])
             ).scalar_one()
-            mode = MODE_FOR_TASK[assignment["task"]]
-            prior_id = assignment["active_round_id"]
-            if kind == "consolidation" and (
-                (
-                    prior_id
-                    and self.repo.get_work_round(project, prior_id).state == "editable"
+            result = self.create_in(
+                conn,
+                project=project,
+                pid=pid,
+                actor=actor,
+                assignment=assignment,
+                kind=kind,
+                sources=sources,
+                draft_sources=[],
+                reason=reason,
+                expected_workflow_revision=expected_workflow_revision,
+                lead=lead,
+                owner=owner,
+            )
+            now = datetime.now(UTC)
+            conn.execute(
+                insert(WorkflowCommandReceiptRow).values(
+                    project_id=pid,
+                    actor_key=actor_key,
+                    request_id=request_id,
+                    request_hash=request_hash,
+                    response=result.model_dump(mode="json"),
+                    created_at=now,
                 )
-                or (
-                    not prior_id and assignment["status"] in {"in_progress", "reopened"}
-                )
-            ):
-                raise DomainError(
-                    "ROUND_ACTIVE", "Finish or explicitly restart existing work first"
-                )
-            from ontocurator.application.workflow_guards import require_task_writable
+            )
+            record_audit(
+                conn,
+                actor,
+                "round.create",
+                target_type="work_round",
+                target_id=result.round_id,
+                project_id=pid,
+                details={
+                    "kind": kind,
+                    "assignment_id": assignment_id,
+                    "sources": sources,
+                    "reason": reason,
+                },
+                at=now,
+            )
+            return result
 
-            require_task_writable(conn, assignment_id)
-            if kind == "clean_restart" and not lead:
-                raise AccessDenied("RESTART_AGREEMENT_REQUIRED")
-            if kind == "ordinary" and (
+    def _round_source(
+        self, conn: Connection, project: str, pid: int, source: str | int
+    ) -> RoundSource:
+        """One round source: a submission ID or a ``draft_snapshots`` ID."""
+        if isinstance(source, str):
+            submission = self.repo.get_submission(source, project)
+            if submission is None:
+                raise DomainError("SUBMISSION_NOT_FOUND")
+            return RoundSource(
+                snapshots=list(submission.snapshots),
+                version=None,
+                origin_key=submission.origin_key,
+                scope=submission.scope,
+                source_submission_id=source,
+                source_draft_snapshot_id=None,
+            )
+        stored = conn.execute(
+            select(DraftSnapshotRow.payload).where(
+                DraftSnapshotRow.project_id == pid, DraftSnapshotRow.id == source
+            )
+        ).scalar_one_or_none()
+        if stored is None:
+            raise DomainError("ROUND_INPUT_INVALID", "Unknown draft snapshot")
+        payload = DraftSnapshotPayload.model_validate(stored)
+        return RoundSource(
+            snapshots=payload.snapshots,
+            version=payload.document_version,
+            origin_key=payload.origin_key,
+            scope=payload.scope,
+            source_submission_id=None,
+            source_draft_snapshot_id=source,
+        )
+
+    def create_in(
+        self,
+        conn: Connection,
+        *,
+        project: str,
+        pid: int,
+        actor: Actor,
+        assignment: Mapping[Any, Any],
+        kind: RoundKind,
+        sources: list[str],
+        draft_sources: list[int],
+        reason: str | None,
+        expected_workflow_revision: int,
+        lead: bool,
+        owner: str,
+    ) -> WorkRoundView:
+        """Create the round on the caller's transaction (exclusive project lock).
+
+        Writes neither a command receipt nor an audit event: ``create`` and
+        the text-change operations record their own. ``owner`` is the
+        assignee's pseudonym; ``lead`` whether the actor manages assignments.
+        ``draft_sources`` are ``draft_snapshots`` IDs (kind ``text_change``).
+        """
+        assignment_id = int(assignment["id"])
+        if assignment["workflow_revision"] != expected_workflow_revision:
+            raise DomainError("WORKFLOW_REVISION_CONFLICT")
+        if assignment["task"] not in MODE_FOR_TASK:
+            raise DomainError(
+                "ROUND_KIND_INVALID", "This endpoint handles annotation rounds"
+            )
+        mode = MODE_FOR_TASK[assignment["task"]]
+        prior_id = assignment["active_round_id"]
+        if kind == "consolidation" and (
+            (
                 prior_id
-                or assignment["last_submission_id"]
-                or assignment["status"] != "open"
-            ):
-                raise DomainError("ROUND_ALREADY_EXISTS")
-            if kind == "clean_restart" and (not prior_id or not (reason or "").strip()):
-                raise DomainError("ROUND_REASON_REQUIRED")
-            if kind == "consolidation" and (
-                not lead or mode != "review" or len(sources) < 2
+                and self.repo.get_work_round(project, prior_id).state == "editable"
+            )
+            or (not prior_id and assignment["status"] in {"in_progress", "reopened"})
+        ):
+            raise DomainError(
+                "ROUND_ACTIVE", "Finish or explicitly restart existing work first"
+            )
+        from ontocurator.application.workflow_guards import require_task_writable
+
+        require_task_writable(conn, assignment_id)
+        if kind == "clean_restart" and not lead:
+            raise AccessDenied("RESTART_AGREEMENT_REQUIRED")
+        if kind == "ordinary" and (
+            prior_id
+            or assignment["last_submission_id"]
+            or assignment["status"] != "open"
+        ):
+            raise DomainError("ROUND_ALREADY_EXISTS")
+        if kind == "clean_restart" and (not prior_id or not (reason or "").strip()):
+            raise DomainError("ROUND_REASON_REQUIRED")
+        if kind == "consolidation" and (
+            not lead or mode != "review" or len(sources) < 2
+        ):
+            raise DomainError(
+                "ROUND_INPUT_INVALID",
+                "Consolidation needs a reviewer and at least two selected submissions",
+            )
+        if kind == "carry_forward" and (mode != "independent" or len(sources) != 1):
+            raise DomainError(
+                "ROUND_INPUT_INVALID", "Carry-forward needs one own submission"
+            )
+        if kind == "text_change" and (
+            not lead or mode != "independent" or sources or len(draft_sources) != 1
+        ):
+            raise DomainError(
+                "ROUND_INPUT_INVALID", "A text change carries one frozen draft"
+            )
+        if kind == "handover" and (
+            not lead or mode != "independent" or len(sources) != 1
+        ):
+            raise DomainError(
+                "ROUND_INPUT_INVALID", "A handover is a lead's carry of one submission"
+            )
+        if kind in {"ordinary", "clean_restart"} and sources:
+            raise DomainError("ROUND_INPUT_INVALID")
+        if kind != "text_change" and draft_sources:
+            raise DomainError("ROUND_INPUT_INVALID")
+        require_annotation_gate(conn, pid, assignment["document_id"])
+        profile = self.repo.get_task_profile(project)
+        separate_contributors = conn.execute(
+            select(ProjectRow.adjudicator_not_annotator).where(ProjectRow.id == pid)
+        ).scalar_one()
+        scope = build_scope(profile, mode)
+        document = self.repo.get_document(project, assignment["document_id"])
+        assert document is not None
+        variants = {v.document_id: v for v in self.repo.list_variants(project)}
+        if kind == "handover":
+            row_variant = variants[document.document_id]
+            require_independent(
+                conn,
+                pid,
+                case_id=row_variant.case_id,
+                language=row_variant.language,
+                user_id=int(assignment["user_id"]),
+                pseudonym=owner,
+                excluding=assignment_id,
+            )
+        rid = f"round-{uuid4().hex}"
+        inputs: list[dict[str, Any]] = []
+        items: list[str | int] = [*sources, *draft_sources]
+        for item in items:
+            source = self._round_source(conn, project, pid, item)
+            sid = source.source_submission_id
+            did = source.source_draft_snapshot_id
+            if (
+                kind == "consolidation"
+                and separate_contributors
+                and source.origin_key.annotator_id == owner
             ):
                 raise DomainError(
                     "ROUND_INPUT_INVALID",
-                    "Consolidation needs a reviewer and at least two selected submissions",
+                    "The reviewer contributed a selected input",
                 )
-            if kind == "carry_forward" and (mode != "independent" or len(sources) != 1):
+            if (
+                source.scope is not None
+                and source.scope.scope_id
+                != build_scope(profile, source.origin_key.mode).scope_id
+            ):
                 raise DomainError(
-                    "ROUND_INPUT_INVALID", "Carry-forward needs one own submission"
+                    "ROUND_INPUT_INVALID",
+                    "The source profile differs from this round",
                 )
-            if kind in {"ordinary", "clean_restart"} and sources:
-                raise DomainError("ROUND_INPUT_INVALID")
-            require_annotation_gate(conn, pid, assignment["document_id"])
-            profile = self.repo.get_task_profile(project)
-            separate_contributors = conn.execute(
-                select(ProjectRow.adjudicator_not_annotator).where(ProjectRow.id == pid)
-            ).scalar_one()
-            scope = build_scope(profile, mode)
-            document = self.repo.get_document(project, assignment["document_id"])
-            assert document is not None
-            variants = {v.document_id: v for v in self.repo.list_variants(project)}
-            rid = f"round-{uuid4().hex}"
-            inputs: list[dict[str, Any]] = []
-            for sid in sources:
-                source = self.repo.get_submission(sid, project)
-                if source is None:
-                    raise DomainError("SUBMISSION_NOT_FOUND")
-                if (
-                    kind == "consolidation"
-                    and separate_contributors
-                    and source.origin_key.annotator_id == owner
-                ):
-                    raise DomainError(
-                        "ROUND_INPUT_INVALID",
-                        "The reviewer contributed a selected input",
-                    )
-                if (
-                    source.scope is not None
-                    and source.scope.scope_id
-                    != build_scope(profile, source.origin_key.mode).scope_id
-                ):
-                    raise DomainError(
-                        "ROUND_INPUT_INVALID",
-                        "The source profile differs from this round",
-                    )
+            if sid is not None:
                 bound = self.repo.get_round_for_submission(project, sid)
                 if bound is None:
                     authoritative = conn.execute(
@@ -361,247 +572,228 @@ class WorkRoundService:
                     or bound.latest_submission_id != sid
                 ):
                     raise DomainError("ROUND_INPUT_STALE")
-                if kind == "carry_forward":
-                    if (
-                        source.origin_key.annotator_id != owner
-                        or source.origin_key.mode != "independent"
-                    ):
-                        raise DomainError(
-                            "ROUND_INPUT_INVALID",
-                            "Carry-forward is private to its author",
-                        )
-                    current = variants[document.document_id]
-                    seen = set()
-                    while current.document_id != source.origin_key.document_id:
-                        if (
-                            current.document_id in seen
-                            or current.origin != "correction"
-                            or current.derived_from not in variants
-                        ):
-                            raise DomainError(
-                                "ROUND_INPUT_INVALID",
-                                "Source must be an exact correction ancestor",
-                            )
-                        seen.add(current.document_id)
-                        previous = variants[current.derived_from]
-                        if (
-                            previous.case_id,
-                            previous.external_id,
-                            previous.language,
-                            previous.version + 1,
-                        ) != (
-                            current.case_id,
-                            current.external_id,
-                            current.language,
-                            current.version,
-                        ):
-                            raise DomainError("ROUND_INPUT_INVALID")
-                        current = previous
-                elif source.origin_key.document_id != document.document_id or any(
-                    s.text_sha256 != document.text_sha256 for s in source.snapshots
+            if kind in CARRY_ROUND_KINDS:
+                own = source.origin_key.annotator_id == owner
+                if source.origin_key.mode != "independent" or (
+                    own if kind == "handover" else not own
                 ):
                     raise DomainError(
                         "ROUND_INPUT_INVALID",
-                        "Consolidation inputs require the exact target text",
+                        "A handover carries the annotation of another author"
+                        if kind == "handover"
+                        else "Carry-forward is private to its author",
                     )
-                old_document = self.repo.get_document(
-                    project, source.origin_key.document_id
-                )
-                assert old_document is not None
-                # One map per source text, not per snapshot: this runs under the
-                # exclusive project lock.
-                mapping = text_map(old_document.text, document.text)
-                for original in source.snapshots:
-                    if original.annotation.layer_id not in scope.editable_layer_ids:
+                current = variants[document.document_id]
+                seen = set()
+                while current.document_id != source.origin_key.document_id:
+                    if (
+                        current.document_id in seen
+                        or current.origin != "correction"
+                        or current.derived_from not in variants
+                    ):
                         raise DomainError(
                             "ROUND_INPUT_INVALID",
-                            "A source layer is outside the current scope",
+                            "Source must be an exact correction ancestor",
                         )
-                    iid = canonical_hash(
-                        {
-                            "round": rid,
-                            "submission": sid,
-                            "ref": original.version,
-                            "id": original.annotation.annotation_id,
-                        }
+                    seen.add(current.document_id)
+                    previous = variants[current.derived_from]
+                    if (
+                        previous.case_id,
+                        previous.external_id,
+                        previous.language,
+                        previous.version + 1,
+                    ) != (
+                        current.case_id,
+                        current.external_id,
+                        current.language,
+                        current.version,
+                    ):
+                        raise DomainError("ROUND_INPUT_INVALID")
+                    current = previous
+            elif source.origin_key.document_id != document.document_id or any(
+                s.text_sha256 != document.text_sha256 for s in source.snapshots
+            ):
+                raise DomainError(
+                    "ROUND_INPUT_INVALID",
+                    "Consolidation inputs require the exact target text",
+                )
+            old_document = self.repo.get_document(
+                project, source.origin_key.document_id
+            )
+            assert old_document is not None
+            # One map per source text, not per snapshot: this runs under the
+            # exclusive project lock.
+            mapping = text_map(old_document.text, document.text)
+            for original in source.snapshots:
+                if original.annotation.layer_id not in scope.editable_layer_ids:
+                    raise DomainError(
+                        "ROUND_INPUT_INVALID",
+                        "A source layer is outside the current scope",
                     )
-                    mapped = reanchor_annotation(
-                        original,
-                        original.evidence,
-                        old_document.text,
-                        document.text,
-                        mapping,
-                    )
-                    target = None
-                    if isinstance(mapped, Carried):
-                        evidence = [
-                            EvidenceSnapshot.create(
-                                EvidenceMention(
-                                    evidence_id=f"input-{iid}-e{index}",
-                                    segments=[
-                                        Segment(start=s.start, end=s.end)
-                                        for s in ev.segments
-                                    ],
-                                    cue_segments=[
-                                        Segment(start=s.start, end=s.end)
-                                        for s in ev.cue_segments
-                                    ],
-                                ),
-                                document,
-                            )
-                            for index, ev in enumerate(mapped.evidence)
-                        ]
-                        annotation = original.annotation.model_copy(
-                            deep=True,
-                            update={
-                                "annotation_id": f"input-{iid}",
-                                "document_id": document.document_id,
-                                "evidence_refs": [
-                                    EvidenceRef(
-                                        evidence_id=e.mention.evidence_id,
-                                        version=e.version,
-                                    )
-                                    for e in evidence
+                iid = canonical_hash(
+                    {
+                        "round": rid,
+                        "submission": sid,
+                        "ref": original.version,
+                        "id": original.annotation.annotation_id,
+                    }
+                    if sid is not None
+                    else {
+                        "round": rid,
+                        "draft_snapshot": did,
+                        "ref": original.version,
+                        "id": original.annotation.annotation_id,
+                    }
+                )
+                mapped = reanchor_annotation(
+                    original,
+                    original.evidence,
+                    old_document.text,
+                    document.text,
+                    mapping,
+                )
+                target = None
+                if isinstance(mapped, Carried):
+                    evidence = [
+                        EvidenceSnapshot.create(
+                            EvidenceMention(
+                                evidence_id=f"input-{iid}-e{index}",
+                                segments=[
+                                    Segment(start=s.start, end=s.end)
+                                    for s in ev.segments
                                 ],
-                                "provenance": original.annotation.provenance.model_copy(
-                                    update={"source_refs": [f"round-input:{iid}"]}
-                                ),
-                            },
+                                cue_segments=[
+                                    Segment(start=s.start, end=s.end)
+                                    for s in ev.cue_segments
+                                ],
+                            ),
+                            document,
                         )
-                        target = snapshot(annotation, evidence, document, profile)
-                    inputs.append(_input_payload(iid, sid, original, target, mapped))
+                        for index, ev in enumerate(mapped.evidence)
+                    ]
+                    annotation = original.annotation.model_copy(
+                        deep=True,
+                        update={
+                            "annotation_id": f"input-{iid}",
+                            "document_id": document.document_id,
+                            "evidence_refs": [
+                                EvidenceRef(
+                                    evidence_id=e.mention.evidence_id,
+                                    version=e.version,
+                                )
+                                for e in evidence
+                            ],
+                            "provenance": original.annotation.provenance.model_copy(
+                                update={"source_refs": [f"round-input:{iid}"]}
+                            ),
+                        },
+                    )
+                    target = snapshot(annotation, evidence, document, profile)
+                inputs.append(
+                    _input_payload(iid, sid, original, target, mapped, did=did)
+                )
+        targets = ReviewTargetSet.create(
+            [
+                AnnotationRef(
+                    annotation_id=i["target_snapshot"]["annotation"]["annotation_id"],
+                    version=i["target_snapshot"]["version"],
+                )
+                for i in inputs
+                if i["target_snapshot"] is not None
+            ]
+            if mode == "review"
+            else []
+        )
+        if mode == "review" and not sources and kind == "ordinary":
             targets = ReviewTargetSet.create(
                 [
                     AnnotationRef(
-                        annotation_id=i["target_snapshot"]["annotation"][
-                            "annotation_id"
-                        ],
-                        version=i["target_snapshot"]["version"],
+                        annotation_id=s.annotation.annotation_id, version=s.version
                     )
-                    for i in inputs
-                    if i["target_snapshot"] is not None
+                    for s in self.repo.list_annotations_for_document(
+                        project, document.document_id
+                    )
+                    if s.annotation.layer_id in scope.editable_layer_ids
                 ]
-                if mode == "review"
-                else []
             )
-            if mode == "review" and not sources and kind == "ordinary":
-                targets = ReviewTargetSet.create(
-                    [
-                        AnnotationRef(
-                            annotation_id=s.annotation.annotation_id, version=s.version
-                        )
-                        for s in self.repo.list_annotations_for_document(
-                            project, document.document_id
-                        )
-                        if s.annotation.layer_id in scope.editable_layer_ids
-                    ]
-                )
-            key = WorkspaceKey(
-                format_version="ontocurator-workspace-key/v3",
+        key = WorkspaceKey(
+            format_version="ontocurator-workspace-key/v3",
+            round_id=rid,
+            project_key=project,
+            document_id=document.document_id,
+            annotator_id=owner,
+            mode=mode,
+            scope_id=scope.scope_id,
+            target_set_id=targets.target_set_id if mode == "review" else "targets-0",
+        )
+        manifest_content: dict[str, Any] = {
+            "submission_ids": sources,
+            "inputs": inputs,
+            "targets": targets.model_dump(),
+        }
+        if draft_sources:
+            manifest_content["draft_snapshot_ids"] = draft_sources
+        manifest = canonical_hash(manifest_content)
+        now = datetime.now(UTC)
+        conn.execute(
+            insert(WorkRoundRow).values(
                 round_id=rid,
-                project_key=project,
+                project_id=pid,
+                assignment_id=assignment_id,
                 document_id=document.document_id,
                 annotator_id=owner,
+                kind=kind,
                 mode=mode,
-                scope_id=scope.scope_id,
-                target_set_id=targets.target_set_id
-                if mode == "review"
-                else "targets-0",
+                predecessor_round_id=prior_id,
+                input_manifest_sha256=manifest,
+                input_submission_ids=sources,
+                workspace_key=key.model_dump(mode="json"),
+                created_by=actor.user_id,
+                created_at=now,
             )
-            manifest = canonical_hash(
-                {
-                    "submission_ids": sources,
-                    "inputs": inputs,
-                    "targets": targets.model_dump(),
-                }
+        )
+        conn.execute(
+            insert(WorkRoundStateRow).values(round_id=rid, state="editable", revision=1)
+        )
+        conn.execute(
+            insert(RoundWorkspaceBindingRow).values(
+                project_id=pid, workspace_key=_key_str(key), round_id=rid
             )
-            now = datetime.now(UTC)
+        )
+        for position, payload in enumerate(inputs):
             conn.execute(
-                insert(WorkRoundRow).values(
+                insert(RoundInputRow).values(
+                    input_id=payload["input_id"],
+                    project_id=pid,
                     round_id=rid,
-                    project_id=pid,
-                    assignment_id=assignment_id,
-                    document_id=document.document_id,
-                    annotator_id=owner,
-                    kind=kind,
-                    mode=mode,
-                    predecessor_round_id=prior_id,
-                    input_manifest_sha256=manifest,
-                    input_submission_ids=sources,
-                    workspace_key=key.model_dump(mode="json"),
-                    created_by=actor.user_id,
-                    created_at=now,
+                    source_submission_id=payload["source_submission_id"],
+                    source_draft_snapshot_id=payload.get("source_draft_snapshot_id"),
+                    position=position,
+                    payload=payload,
                 )
             )
+        if prior_id:
             conn.execute(
-                insert(WorkRoundStateRow).values(
-                    round_id=rid, state="editable", revision=1
-                )
-            )
-            conn.execute(
-                insert(RoundWorkspaceBindingRow).values(
-                    project_id=pid, workspace_key=_key_str(key), round_id=rid
-                )
-            )
-            for position, item in enumerate(inputs):
-                conn.execute(
-                    insert(RoundInputRow).values(
-                        input_id=item["input_id"],
-                        project_id=pid,
-                        round_id=rid,
-                        source_submission_id=item["source_submission_id"],
-                        position=position,
-                        payload=item,
-                    )
-                )
-            if prior_id:
-                conn.execute(
-                    update(WorkRoundStateRow)
-                    .where(WorkRoundStateRow.round_id == prior_id)
-                    .values(
-                        state="abandoned" if kind == "clean_restart" else "superseded",
-                        revision=WorkRoundStateRow.revision + 1,
-                    )
-                )
-            conn.execute(
-                update(AssignmentRow)
-                .where(AssignmentRow.id == assignment_id)
+                update(WorkRoundStateRow)
+                .where(WorkRoundStateRow.round_id == prior_id)
                 .values(
-                    active_round_id=rid,
-                    workflow_revision=expected_workflow_revision + 1,
-                    status="open",
-                    last_submission_id=None,
-                    updated_at=now,
+                    state="abandoned" if kind == "clean_restart" else "superseded",
+                    revision=WorkRoundStateRow.revision + 1,
                 )
             )
-            self.repo._create_draft(conn, pid, key, _key_str(key), targets)
-            result = self.repo.get_work_round(project, rid)
-            conn.execute(
-                insert(WorkflowCommandReceiptRow).values(
-                    project_id=pid,
-                    actor_key=actor_key,
-                    request_id=request_id,
-                    request_hash=request_hash,
-                    response=result.model_dump(mode="json"),
-                    created_at=now,
-                )
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == assignment_id)
+            .values(
+                active_round_id=rid,
+                workflow_revision=expected_workflow_revision + 1,
+                status="open",
+                last_submission_id=None,
+                updated_at=now,
             )
-            record_audit(
-                conn,
-                actor,
-                "round.create",
-                target_type="work_round",
-                target_id=rid,
-                project_id=pid,
-                details={
-                    "kind": kind,
-                    "assignment_id": assignment_id,
-                    "sources": sources,
-                    "reason": reason,
-                },
-                at=now,
-            )
-            return result
+        )
+        self.repo._create_draft(conn, pid, key, _key_str(key), targets)
+        return self.repo.get_work_round(project, rid)
 
 
 def validate_round_input_resolutions(repo: Repository, draft: Any) -> None:
@@ -673,7 +865,7 @@ class RoundInputResolutionService:
         if (
             key.round_id is None
             or self.repo.get_work_round(key.project_key, key.round_id).kind
-            != "carry_forward"
+            not in CARRY_ROUND_KINDS
         ):
             raise DomainError("ROUND_KIND_INVALID")
         return {

@@ -16,6 +16,7 @@ from ontocurator.domain.profiles import TaskProfile, resolve_type
 from ontocurator.domain.project_rules import rule_violations
 from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.scopes import TaskScope, build_scope
+from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS
 from ontocurator.domain.workspace import (
     Draft,
     MutationEnvelope,
@@ -424,7 +425,7 @@ class SubmissionService:
             if key.round_id is not None
             else None
         )
-        if round_view is not None and round_view.kind == "carry_forward":
+        if round_view is not None and round_view.kind in CARRY_ROUND_KINDS:
             from ontocurator.application.work_rounds import (
                 validate_round_input_resolutions,
             )

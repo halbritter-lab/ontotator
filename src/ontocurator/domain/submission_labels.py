@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Literal
 
+from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS
+
 SubmissionKind = Literal["consolidation", "carry_forward", "annotation", "review"]
 
 
@@ -38,6 +40,6 @@ def round_ordinals(rounds: Iterable[tuple[str, str | None]]) -> dict[str, int]:
 def submission_kind(round_kind: str | None, mode: str | None) -> SubmissionKind:
     if round_kind == "consolidation":
         return "consolidation"
-    if round_kind == "carry_forward":
+    if round_kind in CARRY_ROUND_KINDS:
         return "carry_forward"
     return "review" if mode == "review" else "annotation"

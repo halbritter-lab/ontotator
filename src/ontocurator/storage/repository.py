@@ -47,6 +47,7 @@ from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.work_rounds import (
+    CARRY_ROUND_KINDS,
     WorkRoundView,
     archive_round,
     archived_inputs,
@@ -359,7 +360,9 @@ class Repository:
         if round_view.workspace_key != key:
             raise DomainError("ROUND_KEY_MISMATCH")
         inputs = self.get_round_input_inventory(key.project_key, key.round_id)
-        if round_view.input_submission_ids:
+        # A text-change round has no source submission: its inputs come from a
+        # frozen draft, so the carry kind decides, not the submission list.
+        if round_view.input_submission_ids or round_view.kind in CARRY_ROUND_KINDS:
             return [
                 decode_snapshot(item["target_snapshot"])
                 for item in inputs
@@ -2871,7 +2874,7 @@ class Repository:
                 # An ordinary independent attempt never sees proposal seeds.
                 if (
                     self.get_work_round(key.project_key, key.round_id).kind
-                    != "carry_forward"
+                    not in CARRY_ROUND_KINDS
                 ):
                     seeds = []
                 evidence = [ev for annotation in seeds for ev in annotation.evidence]

@@ -10,7 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ontocurator.domain.annotations import AnnotationRef, AnnotationSnapshot
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
-from ontocurator.domain.serialization import decode_snapshot
+from ontocurator.domain.scopes import TaskScope
+from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.variants import (
     VariantInfo,
     is_translation_chain,
@@ -18,7 +19,22 @@ from ontocurator.domain.variants import (
 )
 from ontocurator.domain.workspace import WorkspaceKey, WorkspaceMode
 
-RoundKind = Literal["ordinary", "carry_forward", "clean_restart", "consolidation"]
+RoundKind = Literal[
+    "ordinary",
+    "carry_forward",
+    "clean_restart",
+    "consolidation",
+    "text_change",
+    "handover",
+]
+# Rounds whose inputs are carried findings of earlier work, each needing a
+# resolution before submit: the author's own carry-forward, a lead's move of a
+# draft to a corrected text (``text_change``) and a lead's handover of another
+# author's submission (``handover``). Their submissions keep the kind
+# ``carry_forward`` (``submission_labels.submission_kind``).
+CARRY_ROUND_KINDS: frozenset[str] = frozenset(
+    {"carry_forward", "text_change", "handover"}
+)
 RoundState = Literal["editable", "submitted", "superseded", "abandoned"]
 
 
@@ -59,6 +75,50 @@ class RoundInputView(BaseModel):
                 if isinstance(value.get(field), dict):
                     value[field] = decode_snapshot(value[field])
         return value
+
+
+class DraftSnapshotPayload(BaseModel):
+    """The frozen draft of an assignment moved to a corrected text.
+
+    Stored in ``draft_snapshots.payload``; the snapshots keep their wire
+    encoding (``encode_snapshot``) so the stored JSON is version-aware.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    format_version: Literal["ontocurator-draft-snapshot/v1"] = (
+        "ontocurator-draft-snapshot/v1"
+    )
+    # The old assignment's workspace key (document_id = the old version).
+    origin_key: WorkspaceKey
+    # ``build_scope(profile, origin_key.mode)`` at snapshot time.
+    scope: TaskScope
+    # Version number and text hash of ``origin_key.document_id``.
+    document_version: int
+    text_sha256: str
+    snapshots: list[AnnotationSnapshot]
+
+    @model_validator(mode="before")
+    @classmethod
+    def decode(cls, value: Any) -> Any:
+        if isinstance(value, dict) and isinstance(value.get("snapshots"), list):
+            value = dict(value)
+            value["snapshots"] = [
+                decode_snapshot(item) if isinstance(item, dict) else item
+                for item in value["snapshots"]
+            ]
+        return value
+
+    def stored(self) -> dict[str, Any]:
+        """The JSON payload of the ``draft_snapshots`` row."""
+        return {
+            "format_version": self.format_version,
+            "origin_key": self.origin_key.model_dump(mode="json"),
+            "scope": self.scope.model_dump(mode="json"),
+            "document_version": self.document_version,
+            "text_sha256": self.text_sha256,
+            "snapshots": [encode_snapshot(item) for item in self.snapshots],
+        }
 
 
 # Archived rounds (package ``workflow_history``) keep the inputs in the shape
