@@ -1960,7 +1960,9 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 /* Values block (editor axes spec Part 1): one row per axis, the axis name in a 96 px column and the
    values as one connected segmented control. The fit rule (editor/valuesLayout.ts) writes
    data-values-layout: row (default), stacked (label above the control) or boxes (one box per axis).
-   Values and labels are never truncated; segments have no transitions. */
+   Values and labels are never truncated; segments have no transitions.
+   Keep in sync: LABEL_COLUMN_PX (96) and COLUMN_GAP_PX (8) in editor/valuesLayout.ts mirror the
+   label column and column gap below. */
 .values-section .axis-field {
   display: grid;
   grid-template-columns: calc(2 * var(--space-7)) minmax(0, 1fr);
@@ -2136,6 +2138,12 @@ details.case-version-controls > .btn { vertical-align: bottom; }
     forced-color-adjust: none;
     background: Canvas;
     color: CanvasText;
+  }
+  /* Hover keeps the system background; the outline alone marks it (the rule above would otherwise win). */
+  .values-section .axis-option:not(:has(input:disabled)):not(:has(input:checked)):hover {
+    background: Canvas;
+    outline: 1px solid CanvasText;
+    outline-offset: -3px;
   }
   .values-section .axis-option:has(input:disabled):not(:has(input:checked)) {
     color: GrayText;

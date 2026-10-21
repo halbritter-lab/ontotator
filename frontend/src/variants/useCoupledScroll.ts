@@ -22,21 +22,23 @@ export interface AlignRequest {
   targets: readonly string[];
   /** Pixels between the top of the anchor pane and its paragraph start; negative means above the visible area. */
   anchorOffset: number;
-  /** Used when anchorOffset < 0 (spec 2.4: `space-3` = 12 px). */
+  /** Used when the anchor paragraph starts above or below the visible area (spec 2.4: `space-3` = 12 px). */
   topInset: number;
 }
 export interface AlignResult {
   pairs: ReadonlyArray<{ paneId: string; paragraph: number }>;
   estimate: boolean;
 }
-export interface CoupledScrollState { leaderId: string | null; pairs: ReadonlyArray<{ paneId: string; paragraph: number }> }
-const empty: CoupledScrollState = { leaderId: null, pairs: [] };
+/** What produced the current pairs: binding, a leader's scroll, a marker/starts refresh or align(). */
+export type PairsOrigin = 'bind' | 'scroll' | 'refresh' | 'align';
+export interface CoupledScrollState { leaderId: string | null; pairs: ReadonlyArray<{ paneId: string; paragraph: number }>; origin: PairsOrigin | null }
+const empty: CoupledScrollState = { leaderId: null, pairs: [], origin: null };
 const navigationKeys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar']);
 
 type BoundPane = CoupledScrollPane & { element: HTMLElement };
 type Row = { index: number; top: number; marker?: HTMLElement };
 type Geometry = { rows: Row[]; end: number; count: number };
-type FrozenGeometry = { paneId: string; rows: { index: number; top: number }[]; scrollHeight: number; count: number };
+type FrozenGeometry = { paneId: string; element: HTMLElement; rows: { index: number; top: number }[]; scrollHeight: number; count: number };
 
 /** Same index mapping as coupling: linear when counts differ, 0 when either side has ≤ 1 paragraph. */
 export function mapParagraph(index: number, fromCount: number, toCount: number): number {
@@ -93,17 +95,18 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
   const captureFrozen = useCallback(() => {
     const { panes: current, frozenPaneId: frozenId } = latest.current;
     const pane = frozenId === undefined ? undefined : current.find(row => row.id === frozenId);
-    if (!pane?.element) { frozenGeometry.current = null; return; }
+    // A detached element (a surface just replaced, e.g. the change view) has no layout: never capture it.
+    if (!pane?.element || !pane.element.isConnected) { frozenGeometry.current = null; return; }
     const count = startsOf(pane).length;
     frozenGeometry.current = {
-      paneId: pane.id, count, scrollHeight: pane.element.scrollHeight,
+      paneId: pane.id, element: pane.element, count, scrollHeight: pane.element.scrollHeight,
       rows: readMarkers(pane.element, count).map(({ index, top }) => ({ index, top })),
     };
   }, []);
-  /** While a pane is frozen, its geometry is the one captured at the last revision; markers stay live. */
-  const geometryOf = useCallback((pane: BoundPane, decorateInto?: Set<HTMLElement>): Geometry => {
+  /** While a pane is frozen, its geometry is the one captured at the last revision for its current element; markers stay live. */
+  const geometryOf = useCallback((pane: BoundPane, decorateInto?: Set<HTMLElement>, live = false): Geometry => {
     const frozen = frozenGeometry.current;
-    if (frozen && frozen.paneId === pane.id && latest.current.frozenPaneId === pane.id) {
+    if (!live && frozen && frozen.paneId === pane.id && frozen.element === pane.element && latest.current.frozenPaneId === pane.id) {
       const live = new Map<number, HTMLElement>();
       for (const marker of markerElements(pane.element)) {
         const index = markerIndex(marker, frozen.count);
@@ -130,7 +133,7 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
       const marks = decorated.current;
       if (frozenPaneId !== undefined) captureFrozen();
       participants.forEach(pane => readMarkers(pane.element, startsOf(pane).length, marks));
-      const sync = (source: BoundPane, move = true) => {
+      const sync = (source: BoundPane, move: boolean, origin: PairsOrigin) => {
         const sourceGeometry = geometryOf(source, marks);
         const geometry = sourceGeometry.rows;
         const current = geometry.filter(row => row.top <= source.element.scrollTop).at(-1) ?? geometry[0];
@@ -158,7 +161,7 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
             programmatic.current.set(pane.element, pane.element.scrollTop);
           }
         }
-        setState(previous => previous.leaderId === leaderId && previous.pairs.length === pairs.length && pairs.every((pair,i) => pair.paneId === previous.pairs[i].paneId && pair.paragraph === previous.pairs[i].paragraph) ? previous : { leaderId, pairs });
+        setState(previous => previous.leaderId === leaderId && previous.origin === origin && previous.pairs.length === pairs.length && pairs.every((pair,i) => pair.paneId === previous.pairs[i].paneId && pair.paragraph === previous.pairs[i].paragraph) ? previous : { leaderId, pairs, origin });
       };
       const removals: (() => void)[] = [];
       participants.forEach(pane => {
@@ -173,7 +176,7 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
           // A follower scrolled by hand moves only itself while a fixed leader is set.
           if (fixedLeader !== undefined && pane.id !== fixedLeader) return;
           if (leaderId === null) leaderId = pane.id;
-          if (leaderId === pane.id) sync(pane);
+          if (leaderId === pane.id) sync(pane, true, 'scroll');
         };
         for (const type of ['wheel','touchstart','pointerdown']) {
           pane.element.addEventListener(type,input,{passive:true}); removals.push(()=>pane.element.removeEventListener(type,input));
@@ -182,7 +185,7 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
         removals.push(()=>{ pane.element.removeEventListener('keydown',key); pane.element.removeEventListener('scroll',scroll); });
       });
       /** Re-reads markers and lazy starts and refreshes pairs; never writes scrollTop. */
-      const refreshMarkers = () => {
+      const refreshMarkers = (origin: PairsOrigin = 'refresh') => {
         // Vendor annotation redraws replace marker nodes without replacing the
         // scrollport. Observe child lists only: our attribute writes cannot loop.
         const valid = new Set<HTMLElement>();
@@ -199,7 +202,7 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
         }
         participants.forEach(pane => readMarkers(pane.element, startsOf(pane).length, marks));
         const source = participants.find(pane => pane.id === leaderId) ?? participants[0];
-        if (source) sync(source, false);
+        if (source) sync(source, false, origin);
       };
       const frozenElement = frozenPaneId === undefined ? undefined : participants.find(pane => pane.id === frozenPaneId)?.element;
       const observer = new MutationObserver(records => {
@@ -209,8 +212,20 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
       });
       participants.forEach(pane => observer.observe(pane.element, { childList: true, subtree: true }));
       removals.push(() => observer.disconnect());
-      refreshMarkers();
-      refresh.current = refreshMarkers;
+      // A width change rewraps the frozen pane: re-capture its geometry (never writes scrollTop).
+      if (frozenElement && typeof ResizeObserver !== 'undefined') {
+        let width = frozenElement.clientWidth;
+        const resize = new ResizeObserver(() => {
+          if (frozenElement.clientWidth === width) return;
+          width = frozenElement.clientWidth;
+          captureFrozen();
+          refreshMarkers();
+        });
+        resize.observe(frozenElement);
+        removals.push(() => resize.disconnect());
+      }
+      refreshMarkers('bind');
+      refresh.current = () => refreshMarkers();
       detach = () => {
         removals.forEach(remove=>remove());
         marks.forEach(marker=>{ delete marker.dataset.paragraphNumber; delete marker.dataset.coupledActive; });
@@ -225,10 +240,14 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
   },[panes,enabled,available,fixedLeader,frozenPaneId]);
 
   // A revision re-captures the frozen geometry and refreshes numbers, highlight and pairs without rebinding.
+  // Binding (also on a frozenPaneId change) captures by itself, so only a changed revision acts here.
+  const seenRevision = useRef(startsRevision);
   useEffect(() => {
+    if (seenRevision.current === startsRevision) return;
+    seenRevision.current = startsRevision;
     captureFrozen();
     refresh.current?.();
-  }, [startsRevision, frozenPaneId]);
+  }, [startsRevision]);
 
   useEffect(() => () => {
     decorated.current.forEach(marker => { delete marker.dataset.paragraphNumber; delete marker.dataset.coupledActive; });
@@ -241,7 +260,8 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
     const anchor = bound(request.anchor.paneId);
     if (!anchor) return { pairs: [], estimate: false };
     const marks = decorated.current;
-    const anchorGeometry = geometryOf(anchor);
+    // Live geometry: the caller commits pending starts first, and a frozen capture may be stale or of a replaced element.
+    const anchorGeometry = geometryOf(anchor, undefined, true);
     const pairs: { paneId: string; paragraph: number }[] = [];
     const mark = (pane: BoundPane, row: Row | undefined, paragraph: number) => {
       clearActive(pane.element);
@@ -255,17 +275,19 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
     for (const id of request.targets) {
       const pane = bound(id);
       if (!pane || pane === anchor) continue;
-      const geometry = geometryOf(pane);
+      const geometry = geometryOf(pane, undefined, true);
       if (geometry.count !== anchorGeometry.count) estimate = true;
       const mapped = mapParagraph(request.anchor.paragraph, anchorGeometry.count, geometry.count);
       const partner = geometry.rows.find(row => row.index === mapped);
       if (!mark(pane, partner, mapped) || !partner) continue;
-      const target = partner.top - (request.anchorOffset >= 0 ? request.anchorOffset : request.topInset);
+      // Spec 2.4 names only "above the view"; an anchor below the view is treated the same (spec gap), so the target is visible.
+      const inView = request.anchorOffset >= 0 && request.anchorOffset <= anchor.element.clientHeight;
+      const target = partner.top - (inView ? request.anchorOffset : request.topInset);
       if (!Number.isFinite(target)) continue;
       pane.element.scrollTop = Math.max(0, Math.min(Math.max(0, pane.element.scrollHeight - pane.element.clientHeight), target));
       programmatic.current.set(pane.element, pane.element.scrollTop);
     }
-    setState(previous => ({ leaderId: previous.leaderId, pairs }));
+    setState(previous => ({ leaderId: previous.leaderId, pairs, origin: 'align' }));
     return { pairs, estimate };
   }, [geometryOf]);
 

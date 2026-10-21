@@ -173,12 +173,16 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const pairing = useCoupledScroll(panes, { enabled: couplingRequested, minWidth: 700, startsRevision,
     fixedLeader: editing ? "target" : undefined, frozenPaneId: editing ? "target" : undefined });
   const coupled = couplingRequested && pairing.available;
-  /** The pair line follows only once scrolling rests, so it does not chatter (spec 2.7). */
+  /** The pair line follows only once scrolling rests, so it does not chatter; never on a recompute or align (spec 2.7). */
   const [restingPairs, setRestingPairs] = useState(pairing.pairs);
+  const restTimer = useRef<number | undefined>(undefined);
   useEffect(() => {
-    const timer = window.setTimeout(() => setRestingPairs(pairing.pairs), 150);
-    return () => window.clearTimeout(timer);
-  }, [pairing.pairs]);
+    if (pairing.origin === "refresh" || pairing.origin === "align") return;
+    const pairs = pairing.pairs;
+    window.clearTimeout(restTimer.current);
+    restTimer.current = window.setTimeout(() => setRestingPairs(pairs), 150);
+  }, [pairing.pairs, pairing.origin]);
+  useEffect(() => () => window.clearTimeout(restTimer.current), []);
   /** "Show matching paragraph" (spec 2.4): the anchor sources and the one polite status of its result. */
   const paneElements = useRef<Record<string, HTMLElement | null>>({});
   paneElements.current = { source: sourceElement, target: targetElement, comparison: comparison ? comparisonElement : null };
@@ -186,6 +190,18 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const matchButton = useRef<HTMLButtonElement | null>(null), caretFocus = useRef(false);
   const pendingMatch = useRef<{ paneId: string; paragraph: number } | null>(null);
   const [matchStatus, setMatchStatus] = useState("");
+  /** A repeated identical result is cleared first and set again on the next frame, so it is announced again. */
+  const matchStatusText = useRef(""), matchStatusFrame = useRef<number | undefined>(undefined);
+  const announceMatch = (next: string) => {
+    if (matchStatusFrame.current !== undefined) window.cancelAnimationFrame(matchStatusFrame.current);
+    matchStatusFrame.current = undefined;
+    const repeated = next === matchStatusText.current;
+    matchStatusText.current = next;
+    if (!repeated) { setMatchStatus(next); return; }
+    setMatchStatus("");
+    matchStatusFrame.current = window.requestAnimationFrame(() => { matchStatusFrame.current = undefined; setMatchStatus(next); });
+  };
+  useEffect(() => () => { if (matchStatusFrame.current !== undefined) window.cancelAnimationFrame(matchStatusFrame.current); }, []);
   useEffect(() => {
     const removals: (() => void)[] = [];
     const listen = (element: EventTarget, type: string, listener: (event: Event) => void) => {
@@ -219,7 +235,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     // Below 700 px the texts stack: the target scrolled internally is also brought into view; focus and caret stay.
     if (!pairing.available && targets[0]) elements[targets[0]]?.scrollIntoView?.({ block: "nearest" });
     const shown = result.pairs.filter(pair => pair.paneId !== anchor.paneId);
-    if (shown.length) setMatchStatus(matchingParagraphStatus(anchor, shown, result.estimate));
+    if (shown.length) announceMatch(matchingParagraphStatus(anchor, shown, result.estimate));
   };
   const showMatching = () => {
     const elements = paneElements.current, active = document.activeElement;
@@ -442,10 +458,10 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     };
     const observer = new ResizeObserver(measure);
     observer.observe(root);
-    root.querySelectorAll(".translation-review > .notice, .translation-review-bar, .translation-checks, .translation-pinned-bar, .translation-column-head, .translation-column-note")
+    root.querySelectorAll(".translation-review > .notice, .translation-review-bar, .translation-checks, .translation-pinned-bar, .translation-column-head, .translation-column-note, .translation-column-hint")
       .forEach(element => observer.observe(element));
     return () => observer.disconnect();
-  }, [wide, readOnly, showChanges, comparisonId]);
+  }, [wide, readOnly, showChanges, comparisonId, coupled]);
   const closeDetails = (event: KeyboardEvent<HTMLDetailsElement>) => {
     if (event.key !== "Escape" || !event.currentTarget.open) return;
     event.preventDefault(); event.stopPropagation();
@@ -532,17 +548,9 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
               <h2 id="review-translation-label" className="translation-column-title">Translation ({targetLanguage})</h2>
               <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
               {pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
-              <Button ref={matchButton} variant="quiet" size="sm" title={showMatchingTitle} onMouseDown={event => event.preventDefault()} onClick={showMatching}>
+              <Button ref={matchButton} variant="quiet" size="sm" title={showMatchingTitle} aria-keyshortcuts="Alt+M" onMouseDown={event => event.preventDefault()} onClick={showMatching}>
                 {showMatchingLabel}<span aria-hidden="true"> <Kbd>Alt M</Kbd></span></Button>
               <span role="status" className="review-sr-only">{matchStatus}</span>
-              {coupled && <p className="translation-column-hint">
-                <span>{couplingNote}</span>
-                {editing && <span>{couplingEditingNote}</span>}
-                <span role="status" aria-label="Paragraph pairing">{restingPairs.map(pair => `${paneNames[pair.paneId]} paragraph ${pair.paragraph + 1}`).join(" ↔ ")}</span>
-                {sourceStarts.length !== targetStarts.length && <span>{paragraphCountsDiffer(sourceStarts.length, targetStarts.length)}</span>}
-                {comparison && comparisonStarts.length !== targetStarts.length && <span>{comparisonCountsDiffer(targetStarts.length, comparisonStarts.length)}</span>}
-                <span aria-live="polite">{targetStarts.length !== loadedCount && paragraphCountChanged(loadedCount, targetStarts.length)}</span>
-              </p>}
             </div>
             {showChanges
               ? <DiffView ref={setTargetElement} before={workspace.text} after={text} lang={targetLanguage} />
@@ -564,6 +572,15 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
             </div>
             <TextView key={comparisonId} ref={setComparisonElement} text={comparison.text} label="Comparison" lang={comparison.variant.language} />
           </div>}
+          {/* One line below the panes spanning the text columns, so the notes never push one pane below the others. */}
+          {coupled && <p className="translation-column-hint">
+            <span>{couplingNote}</span>
+            {editing && <span>{couplingEditingNote}</span>}
+            <span role="status" aria-label="Paragraph pairing">{restingPairs.map(pair => `${paneNames[pair.paneId]} paragraph ${pair.paragraph + 1}`).join(" ↔ ")}</span>
+            {sourceStarts.length !== targetStarts.length && <span>{paragraphCountsDiffer(sourceStarts.length, targetStarts.length)}</span>}
+            {comparison && comparisonStarts.length !== targetStarts.length && <span>{comparisonCountsDiffer(targetStarts.length, comparisonStarts.length)}</span>}
+            <span aria-live="polite">{targetStarts.length !== loadedCount && paragraphCountChanged(loadedCount, targetStarts.length)}</span>
+          </p>}
         </div>
       </div>
       <aside className="translation-decision density-compact" aria-labelledby="translation-decision-heading">

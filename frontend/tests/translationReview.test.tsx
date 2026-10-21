@@ -9,22 +9,22 @@ import { decisionConsequences, decisionLabels, decisionOutcomes, issueMessages }
 import { ShortcutHelpHost, openShortcutHelp } from "../src/ui/ShortcutHelp";
 import type { ReviewDecisionCode } from "../src/translation/reviewRules";
 
-import type { AlignRequest, CoupledScrollOptions, CoupledScrollPane } from "../src/variants/useCoupledScroll";
+import type { AlignRequest, CoupledScrollOptions, CoupledScrollPane, PairsOrigin } from "../src/variants/useCoupledScroll";
 
 type Pairs = ReadonlyArray<{ paneId: string; paragraph: number }>;
 /** The real hook, wrapped to record the screen's options and, where a test sets them, to report given pairs. */
-const hook = vi.hoisted(() => ({ calls: [] as { panes: readonly CoupledScrollPane[]; options: CoupledScrollOptions }[], pairs: null as Pairs | null, aligns: [] as AlignRequest[] }));
+const hook = vi.hoisted(() => ({ calls: [] as { panes: readonly CoupledScrollPane[]; options: CoupledScrollOptions }[], pairs: null as Pairs | null, origin: "scroll" as PairsOrigin, aligns: [] as AlignRequest[] }));
 vi.mock("../src/variants/useCoupledScroll", async importOriginal => {
   const actual = await importOriginal<typeof import("../src/variants/useCoupledScroll")>();
   return { ...actual, useCoupledScroll: (panes: readonly CoupledScrollPane[], options: CoupledScrollOptions) => {
     hook.calls.push({ panes, options });
     const result = actual.useCoupledScroll(panes, options);
     const align = (request: AlignRequest) => { hook.aligns.push(request); return result.align(request); };
-    return { ...result, align, ...(hook.pairs ? { pairs: hook.pairs } : {}) };
+    return { ...result, align, ...(hook.pairs ? { pairs: hook.pairs, origin: hook.origin } : {}) };
   } };
 });
 
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); hook.calls.length = 0; hook.pairs = null; hook.aligns.length = 0; });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); hook.calls.length = 0; hook.pairs = null; hook.origin = "scroll"; hook.aligns.length = 0; });
 function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }, reportActions?: JSX.Element) {
   vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
@@ -440,6 +440,35 @@ it("updates the pair line only after scrolling rests for 150 ms", async () => {
   await clock(50);
   expect(line()).toBe("Source paragraph 2 ↔ Translation paragraph 2");
 });
+it("keeps the pair line on a recompute or align and updates it only after a scroll", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  vi.useFakeTimers();
+  fireEvent.click(coupleBox()!);
+  const line = () => screen.getByRole("status", { name: "Paragraph pairing" }).textContent;
+  hook.pairs = [{ paneId: "source", paragraph: 0 }, { paneId: "target", paragraph: 0 }];
+  typeTranslation("Changed");
+  await clock(150);
+  expect(line()).toBe("Source paragraph 1 ↔ Translation paragraph 1");
+  for (const origin of ["refresh", "align"] as const) {
+    hook.origin = origin; hook.pairs = [{ paneId: "source", paragraph: 1 }, { paneId: "target", paragraph: 1 }];
+    typeTranslation(`Changed by ${origin}`);
+    await clock(300);
+    expect(line()).toBe("Source paragraph 1 ↔ Translation paragraph 1");
+  }
+  hook.origin = "scroll"; hook.pairs = [{ paneId: "source", paragraph: 1 }, { paneId: "target", paragraph: 1 }];
+  typeTranslation("Scrolled");
+  await clock(150);
+  expect(line()).toBe("Source paragraph 2 ↔ Translation paragraph 2");
+});
+it("puts the coupling notes in one line spanning the text columns, outside every column head", async () => {
+  setup(); await screen.findByRole("textbox", { name: "Translation (de)" });
+  fireEvent.click(coupleBox()!);
+  const hint = screen.getByText(COUPLING_NOTE).closest<HTMLElement>(".translation-column-hint")!;
+  expect(hint.parentElement!.classList.contains("translation-columns")).toBe(true);
+  expect(hint.closest(".translation-column-head")).toBeNull();
+  expect(screen.getByRole("status", { name: "Paragraph pairing" }).closest(".translation-column-hint")).toBe(hint);
+  expect(screen.getByText(EDITING_NOTE).closest(".translation-column-hint")).toBe(hint);
+});
 const FIVE = "One 😀\n\nTwo\n\nThree\n\nFour\n\nFive";
 const comparisonRow = (text = FIVE) => ({ variant: { ...reviewWorkspace().variant, document_id: "comparison-1", external_id: "First MT" }, text });
 const matchingWorkspace = (changes: Parameters<typeof reviewWorkspace>[0] = {}) => reviewWorkspace({ text: FIVE, draft: { text: FIVE, form: {}, revision: 6 },
@@ -463,6 +492,7 @@ it("Show matching paragraph sits after Show changes and Couple scrolling with Kb
   expect(button.querySelector("kbd")?.closest("[aria-hidden='true']")).not.toBeNull();
   expect(button.title).toBe("Scroll the other text to the paragraph paired with the one at your cursor or the one you clicked.");
   expect(button.getAttribute("aria-disabled")).toBeNull();
+  expect(button.getAttribute("aria-keyshortcuts")).toBe("Alt+M");
 });
 it("anchor 1: from the textarea uses the caret paragraph with fresh starts", async () => {
   setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" });
@@ -531,6 +561,21 @@ it("announces the result in the polite status", async () => {
   caretIn(edited.indexOf("Four") + 1);
   fireEvent.click(matchingButton());
   expect(status.textContent).toBe("Source paragraph 3 is shown next to translation paragraph 4. Paragraph counts differ, so this is an estimate.");
+});
+it("announces a repeated identical result again: cleared, then set on the next frame", async () => {
+  setup(matchingWorkspace()); await screen.findByRole("textbox", { name: "Translation (de)" });
+  const frames: FrameRequestCallback[] = [];
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { frames.push(callback); return frames.length; });
+  caretIn(FIVE.indexOf("Four") + 1);
+  altM();
+  const text = "Source paragraph 4 is shown next to translation paragraph 4.";
+  const status = screen.getByText(text);
+  expect(frames).toHaveLength(0);
+  altM();
+  expect(status.textContent).toBe("");
+  expect(frames).toHaveLength(1);
+  act(() => frames[0](0));
+  expect(status.textContent).toBe(text);
 });
 it("Alt+M works from the textarea, also via event.code, and types nothing", async () => {
   setup(matchingWorkspace()); await screen.findByRole("textbox", { name: "Translation (de)" });

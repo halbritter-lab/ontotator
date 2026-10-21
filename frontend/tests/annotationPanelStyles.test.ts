@@ -32,3 +32,14 @@ it("has one Values rule set without pills or transitions", () => {
   expect(block).toContain("CanvasText");
   expect(block).not.toMatch(/line-clamp|text-overflow:\s*ellipsis/);
 });
+
+it("keeps the system background on a hovered segment in forced colours", () => {
+  const editor = readFileSync(new URL("../src/styles/screens/editor.css", import.meta.url), "utf8");
+  const hover = ".values-section .axis-option:not(:has(input:disabled)):not(:has(input:checked)):hover";
+  const forced = editor.slice(editor.indexOf("@media (forced-colors: active)", editor.indexOf("/* Values block")));
+  const rule = forced.slice(forced.indexOf(hover));
+  expect(forced.indexOf(hover)).toBeGreaterThan(0);
+  expect(rule.slice(0, rule.indexOf("}"))).toContain("background: Canvas;");
+  // The forced-colours rule comes after the regular hover rule, so it wins at equal specificity.
+  expect(editor.lastIndexOf(hover)).toBeGreaterThan(editor.indexOf(hover));
+});

@@ -127,13 +127,15 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   const savedAxes: AxesValues = annotation?.annotation.axes_values ?? (annotation?.annotation as any)?.axes?.values ?? {};
   const axes = useCoalescedAxisChange(savedAxes, values => onUpdateAxes(values));
   const axesFlush = axes.flush;
-  // Fit rule (spec 1.4): re-measured when the axes or an unavailable stored value change.
+  // Fit rule (spec 1.4): re-measured when the axes, an unavailable stored value or the selection change.
   const valuesSection = useRef<HTMLElement>(null);
   const unavailableKey = (axesConfig ?? []).map(axis => {
     const value = axes.values[axis.id];
     return typeof value === "string" && value !== "" && !axis.options.includes(value) ? value : "";
   }).join("|");
-  const valuesLayout = useValuesLayout(valuesSection, [axesConfig, unavailableKey]);
+  // The selected segment is bold and so wider: a selection change is re-measured too (hysteresis prevents flicker).
+  const selectedKey = (axesConfig ?? []).map(axis => String(axes.values[axis.id] ?? "")).join("|");
+  const valuesLayout = useValuesLayout(valuesSection, [axesConfig, unavailableKey, selectedKey]);
   useEffect(() => {
     if (!axesFlushRef) return;
     axesFlushRef.current = axesFlush;

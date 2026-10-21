@@ -323,6 +323,26 @@ describe("Values block layout", () => {
     expect(screen.getByRole("radio", { name: "Present · default" })).toBeDefined();
   });
 
+  it("re-measures when the selection changes, so a value that turns bold is measured bold", () => {
+    const config = [{ id: "assertion", label: "Assertion", options: ["present", "absent"], allow_empty: false }];
+    // A checked segment is bold and wider: present 60 px, absent 80 px; unchecked 50 px.
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (!this.matches(".axis-option > span:not(.visually-hidden)")) return 0;
+        const checked = this.parentElement!.querySelector<HTMLInputElement>("input")!.checked;
+        return !checked ? 50 : this.textContent === "Absent" ? 80 : 60;
+      },
+    });
+    // Present selected: 60 + 50 + 3 = 113 px fits the row cell (217 − 96 − 8).
+    geometry.section = 217;
+    const { container } = render(<AnnotationPanel {...props({ axesConfig: config }, [])} />);
+    expect(layoutOf(container)).toBe("row");
+    // Absent selected: 50 + 80 + 3 = 133 px no longer fits the row cell, without any resize.
+    fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
+    expect(layoutOf(container)).toBe("stacked");
+  });
+
   it("does not switch while the section has no width", () => {
     geometry.section = 0;
     const { container } = render(<AnnotationPanel {...props()} />);

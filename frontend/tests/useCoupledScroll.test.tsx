@@ -14,6 +14,8 @@ function pane(id: string, offsets: number[], height = 2000): CoupledScrollPane {
     marker.getBoundingClientRect = () => ({ top: 100 + offset - element.scrollTop } as DOMRect);
     element.append(marker);
   });
+  // Attached like a real scrollport: a frozen pane is captured only while it is connected.
+  document.body.append(element);
   return { id, element, starts: offsets };
 }
 function scroll(p: CoupledScrollPane, offset: number) { act(() => { p.element!.scrollTop = offset; fireEvent.scroll(p.element!); }); }
@@ -21,7 +23,7 @@ beforeEach(() => {
   width = 1280;
   vi.stubGlobal('matchMedia', (query: string) => ({ get matches() { return width >= Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? NaN); }, addEventListener: (_: string, cb: () => void) => changes.add(cb), removeEventListener: (_: string, cb: () => void) => changes.delete(cb) }));
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); changes.clear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); changes.clear(); document.body.replaceChildren(); });
 it('keeps panes independent when the environment cannot detect viewport support', () => {
   vi.stubGlobal('matchMedia', undefined);
   const source = pane('source', [0, 200]), target = pane('target', [0, 400]);
@@ -301,4 +303,73 @@ it('ComparePane defaults are unchanged', () => {
   expect(result.current.available).toBe(true);
   scroll(a, 100); expect(b.element!.scrollTop).toBe(200); expect(result.current.leaderId).toBe('a');
   fireEvent.wheel(b.element!); scroll(b, 400); expect(a.element!.scrollTop).toBe(200); expect(result.current.leaderId).toBe('b');
+});
+
+function stubResizeObserver() {
+  const observers: { callback: ResizeObserverCallback; elements: Element[] }[] = [];
+  vi.stubGlobal('ResizeObserver', class {
+    entry: { callback: ResizeObserverCallback; elements: Element[] };
+    constructor(callback: ResizeObserverCallback) { this.entry = { callback, elements: [] }; observers.push(this.entry); }
+    observe(element: Element) { this.entry.elements.push(element); }
+    unobserve() {}
+    disconnect() { this.entry.elements = []; }
+  });
+  return (element: Element) => act(() => observers.filter(o => o.elements.includes(element)).forEach(o => o.callback([], {} as ResizeObserver)));
+}
+
+it('a width change of the frozen pane re-captures its geometry without writing scrollTop', () => {
+  const fire = stubResizeObserver();
+  const source = pane('source', [0, 200, 400]), target = pane('target', [0, 400, 800]); const panes = [source, target];
+  let width = 600;
+  Object.defineProperty(target.element!, 'clientWidth', { configurable: true, get: () => width });
+  renderHook(() => useCoupledScroll(panes, { enabled: true, fixedLeader: 'target', frozenPaneId: 'target', startsRevision: 0 }));
+  const sourceWrites = trackWrites(source), targetWrites = trackWrites(target);
+  // A narrower pane rewraps the text: the paragraphs start lower.
+  moveMarker(target, 1, 600); moveMarker(target, 2, 1000);
+  fire(target.element!);
+  expect(sourceWrites).not.toHaveBeenCalled();
+  width = 500; fire(target.element!);
+  expect(sourceWrites).not.toHaveBeenCalled(); expect(targetWrites).not.toHaveBeenCalled();
+  scroll(target, 600);
+  expect(source.element!.scrollTop).toBe(200);
+});
+
+it('never captures a detached frozen element, and align reads live geometry', () => {
+  const source = pane('source', [0, 200, 400, 600]);
+  // The replaced surface (old change view) is detached: its markers report no layout.
+  const old = pane('target', [0, 0, 0, 0], 0); old.element!.remove();
+  const fresh = pane('target', [0, 400, 800, 1200]);
+  const { result, rerender } = renderHook(({ target }) => useCoupledScroll(useMemo(() => [source, target], [target]), { enabled: false, frozenPaneId: 'target', startsRevision: 0 }), { initialProps: { target: old } });
+  rerender({ target: fresh });
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 2 }, targets: ['target'], anchorOffset: 0, topInset: 12 }); });
+  expect(fresh.element!.scrollTop).toBe(800);
+  // Markers moved after the last capture (typing before the recompute): align still uses the live position.
+  moveMarker(fresh, 3, 1300);
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 3 }, targets: ['target'], anchorOffset: 0, topInset: 12 }); });
+  expect(fresh.element!.scrollTop).toBe(1300);
+});
+
+it('align uses topInset when the anchor paragraph starts below the visible area (spec gap)', () => {
+  const source = pane('source', [0, 200, 400, 600]), target = pane('target', [0, 400, 800, 1200]); const panes = [source, target];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: false }));
+  // The anchor pane is 100 px high; an offset of 150 px lies below its view.
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 2 }, targets: ['target'], anchorOffset: 150, topInset: 12 }); });
+  expect(target.element!.scrollTop).toBe(788);
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 1 }, targets: ['target'], anchorOffset: 100, topInset: 12 }); });
+  expect(target.element!.scrollTop).toBe(300);
+});
+
+it('reports the origin of the pairs: bind, scroll, refresh and align', () => {
+  const source = pane('source', [0, 200, 400]), target = pane('target', [0, 400, 800]);
+  let targetStarts: readonly number[] = [0, 400];
+  const panes = [source, { ...target, starts: () => targetStarts }];
+  const { result, rerender } = renderHook(({ revision }) => useCoupledScroll(panes, { enabled: true, startsRevision: revision }), { initialProps: { revision: 0 } });
+  expect(result.current.origin).toBe('bind');
+  scroll(source, 250); expect(result.current.origin).toBe('scroll');
+  targetStarts = [0, 400, 800]; rerender({ revision: 1 });
+  expect(result.current.origin).toBe('refresh');
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 2 }, targets: ['target'], anchorOffset: 0, topInset: 12 }); });
+  expect(result.current.origin).toBe('align');
+  // A scroll that yields the same pairs as the refresh still reports a scroll.
+  scroll(source, 260); expect(result.current.origin).toBe('scroll');
 });

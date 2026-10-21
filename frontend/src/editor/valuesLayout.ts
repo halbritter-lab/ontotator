@@ -5,7 +5,10 @@ export type ValuesLayout = "row" | "stacked" | "boxes";
 /** Return to a better layout only when the free space exceeds the required width by this much (spec 1.4). */
 export const VALUES_HYSTERESIS_PX = 8;
 
-/** Label column (`calc(2 * var(--space-7))`) plus the column gap (`var(--space-2)`) of layout B. */
+/**
+ * Label column (`calc(2 * var(--space-7))`) plus the column gap (`var(--space-2)`) of layout B.
+ * Keep in sync with `.values-section .axis-field` in styles/screens/editor.css (grid-template-columns, column-gap).
+ */
 const LABEL_COLUMN_PX = 96;
 const COLUMN_GAP_PX = 8;
 

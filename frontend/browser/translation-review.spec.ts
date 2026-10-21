@@ -470,6 +470,11 @@ for (const [w, h] of [[1440, 900], [800, 900]] as const) test(`coupling while ed
   expect(await caretState(page)).toEqual(afterTyping);
   await expect(page.getByText('Your edits changed the number of paragraphs (14 → 15). Pairing after that point may be off.', { exact: true })).toBeVisible();
   await expect(page.getByText('Paragraphs differ (source 14, translation 15); the other text may show a neighbouring paragraph.', { exact: true })).toBeVisible();
+  // With every note shown, the notes sit below the panes: the translation pane starts level with the source pane.
+  {
+    const sourceTop = (await source.boundingBox())!.y, editorTop = (await editor.boundingBox())!.y;
+    expect(Math.abs(editorTop - sourceTop)).toBeLessThanOrEqual(50);
+  }
   await expect(target(page)).toBeFocused();
   // A real wheel on the translation moves the source; the source follows the paired paragraph.
   const sourceBefore = await source.evaluate(el => el.scrollTop);
@@ -561,6 +566,6 @@ test('axe has no violations in the column head with coupling on', async ({ page 
   await expect(page.getByText(couplingEditingNote, { exact: true })).toBeVisible();
   await placeCaret(page, 'Absatz 3.', 5); await page.keyboard.press('Alt+KeyM');
   await expect(matchStatus(page)).not.toHaveText('');
-  const results = await new AxeBuilder({ page }).include('.translation-column-head').analyze();
+  const results = await new AxeBuilder({ page }).include('.translation-column-head').include('.translation-column-hint').analyze();
   expect(results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(' ')}: ${n.failureSummary ?? ''}`))).toEqual([]);
 });
