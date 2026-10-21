@@ -171,6 +171,41 @@ test("V, arrows, Tab and D keep their flow", async ({ page }) => {
   await expect(section(page).locator('[data-axis-field="assertion"] input[type="radio"]:checked')).toHaveValue("absent");
 });
 
+test("clicking the default confirms only that axis", async ({ page }) => {
+  await openWithFinding(page, "VALUES_STANDARD");
+  const confirm = page.locator("[data-confirm-defaults]");
+  await expect(confirm).toHaveText(/^Confirm defaults \(3\)/);
+  const assertion = section(page).locator('[data-axis-field="assertion"]');
+  const confirmed = commandResponse(page, "set_axes");
+  await assertion.locator(".axis-option.is-default").click();
+  expect((await confirmed).ok()).toBeTruthy();
+  await expect(assertion.locator(".axis-default-tag")).toHaveCount(0);
+  await expect(section(page).locator(".axis-default-tag")).toHaveCount(2);
+  await expect(confirm).toHaveText(/^Confirm defaults \(2\)/);
+  await expect(assertion.locator('input[type="radio"]:checked')).toHaveValue("present");
+});
+
+test("Space on the checked default confirms only that axis", async ({ page }) => {
+  await openWithFinding(page, "VALUES_STANDARD");
+  const confirm = page.locator("[data-confirm-defaults]");
+  await expect(confirm).toBeFocused();
+  const experiencer = section(page).locator('[data-axis-field="experiencer"]');
+  const checked = experiencer.locator('input[type="radio"]:checked');
+  // Confirm defaults precedes the rows: Tab reaches Assertion, then Experiencer.
+  await page.keyboard.press("Tab");
+  await expect(section(page).locator('[data-axis-field="assertion"] input[type="radio"]:checked')).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(checked).toBeFocused();
+  await expect(checked).toHaveValue("patient");
+  const confirmed = commandResponse(page, "set_axes");
+  await page.keyboard.press("Space");
+  expect((await confirmed).ok()).toBeTruthy();
+  await expect(experiencer.locator(".axis-default-tag")).toHaveCount(0);
+  await expect(section(page).locator(".axis-default-tag")).toHaveCount(2);
+  await expect(confirm).toHaveText(/^Confirm defaults \(2\)/);
+  await expect(checked).toBeFocused();
+});
+
 test("focus ring is fully visible on the first, middle and last segment", async ({ page }) => {
   await openWithFinding(page, "VALUES_STANDARD");
   await page.keyboard.press("v");

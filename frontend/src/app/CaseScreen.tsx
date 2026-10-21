@@ -2448,7 +2448,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, [selectedAnnotationId]);
 
   /** "Confirm defaults (n)": one set_axes with the shown values; then back to the text after the mark. */
-  const handleConfirmDefaults = async (axisIds: string[], values?: AxesValues) => {
+  const handleConfirmDefaults = async (axisIds: string[], values?: AxesValues, options?: { moveFocus?: boolean }) => {
     if (readOnlyRef.current || !selectedAnnotation) return;
     const snapshot = selectedAnnotation, annotationId = snapshot.annotation.annotation_id;
     const current: AxesValues = values ?? snapshot.annotation.axes_values ?? {};
@@ -2463,6 +2463,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
     const axisLabel = (id: string) => currentAxesConfig.find(axis => axis.id === id)?.label ?? id;
     announceCarried(`Confirmed: ${ids.map(id => `${axisLabel(id)} ${axisOptionLabel(current[id])}`).join(", ")}.`);
+    // A click on the highlighted default confirms in place (D5): focus stays on that value.
+    if (options?.moveFocus === false) return;
     // Move focus only while the same finding is selected and the user has not gone elsewhere meanwhile.
     const active = document.activeElement as HTMLElement | null;
     const focusUntouched = !active || active === document.body || active.hasAttribute("data-confirm-defaults")
@@ -3202,7 +3204,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onUpdateAxes={(axesValues) => handleUpdateAxes(axesValues, undefined, selectedAnnotationId)
                 .catch(error => { reportError(error); throw error; })}
               axesFlushRef={pendingAxesFlush}
-              onConfirmDefaults={(axisIds, values) => { void handleConfirmDefaults(axisIds, values); }}
+              onConfirmDefaults={(axisIds, values, options) => { void handleConfirmDefaults(axisIds, values, options); }}
               valuesError={valuesError && valuesError.annotationId === selectedAnnotationId ? valuesError.message : null}
               searchRequest={changeTermRequest}
               onAttachMention={(segments) =>

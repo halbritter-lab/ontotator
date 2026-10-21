@@ -57,8 +57,8 @@ export interface AnnotationPanelProps {
   onUpdateAxes: (axes: Partial<Axes>) => void | Promise<unknown>;
   /** Receives the flush of a coalesced axis change still waiting, so leaving can queue it first. */
   axesFlushRef?: React.MutableRefObject<(() => void) | null>;
-  /** "Confirm defaults (n)": the defaulted axes to confirm and the values shown (one set_axes). */
-  onConfirmDefaults?: (axisIds: string[], values?: AxesValues) => void;
+  /** "Confirm defaults (n)": the defaulted axes to confirm and the values shown (one set_axes); `moveFocus: false` keeps focus. */
+  onConfirmDefaults?: (axisIds: string[], values?: AxesValues, options?: { moveFocus?: boolean }) => void;
   /** Error of the last confirmation, shown inside the Values section. */
   valuesError?: string | null;
   /** Each increment opens "Change term" and focuses the term search. */
@@ -124,6 +124,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   const valuesHeadingId = useId();
   // Radio changes by arrow keys are coalesced (one save after a pause); a click saves at once.
   const arrowChange = useRef(false);
+  const spaceConfirmedAt = useRef(0);
   const savedAxes: AxesValues = annotation?.annotation.axes_values ?? (annotation?.annotation as any)?.axes?.values ?? {};
   const axes = useCoalescedAxisChange(savedAxes, values => onUpdateAxes(values));
   const axesFlush = axes.flush;
@@ -178,6 +179,24 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
     const ids = confirmableDefaults.map(axis => axis.id);
     axes.flush();
     onConfirmDefaults(ids, { ...axes.values });
+  };
+  /** A click (or Space) on the highlighted default confirms that axis only (D5). */
+  const confirmAxis = (axisId: string) => {
+    if (readOnly || !onConfirmDefaults) return;
+    axes.flush();
+    onConfirmDefaults([axisId], { ...axes.values }, { moveFocus: false });
+  };
+  // Chromium fires no click for Space on a checked radio, so Space confirms on keydown; a click a
+  // browser still synthesises for that key press (detail 0) is then ignored.
+  const confirmDefaultKey = (event: React.KeyboardEvent<HTMLInputElement>, axisId: string) => {
+    if (event.key !== " ") return;
+    event.preventDefault();
+    spaceConfirmedAt.current = Date.now();
+    confirmAxis(axisId);
+  };
+  const confirmDefaultClick = (event: React.MouseEvent<HTMLInputElement>, axisId: string) => {
+    if (event.detail === 0 && Date.now() - spaceConfirmedAt.current < 1000) return;
+    confirmAxis(axisId);
   };
 
   const evidenceRefs = ann.evidence_refs ?? [];
@@ -278,7 +297,15 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           data-values-layout={valuesLayout}
           aria-labelledby={valuesHeadingId} aria-keyshortcuts={readOnly ? undefined : "v"}
           onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) axes.flush(); }}>
-          <h3 id={valuesHeadingId}>Values{!readOnly && <span aria-hidden="true"> <Kbd>V</Kbd></span>}</h3>
+          <div className="values-heading-row">
+            <h3 id={valuesHeadingId}>Values{!readOnly && <span aria-hidden="true"> <Kbd>V</Kbd></span>}</h3>
+            {!readOnly && onConfirmDefaults && confirmableDefaults.length > 0 && (
+              <Button type="button" variant="primary" size="sm" className="values-confirm" data-confirm-defaults
+                aria-keyshortcuts="d" onClick={confirmDefaults}>
+                Confirm defaults ({confirmableDefaults.length})<span aria-hidden="true"> <Kbd>D</Kbd></span>
+              </Button>
+            )}
+          </div>
           {axesConfig.map((axis) => {
             const val = axesValues[axis.id] ?? "";
             const isRequired = !axis.allow_empty;
@@ -306,14 +333,19 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                   <div className="axis-options">
                     {options.map((option) => {
                       const isDefault = unconfirmed && val === option.value;
+                      const confirmsDefault = isDefault && !readOnly && !!onConfirmDefaults;
                       return (
                         <label key={option.value} className={`axis-option${isDefault ? " is-default" : ""}`}
                           onPointerDown={() => { arrowChange.current = false; }}>
                           <input type="radio" name={`axis-${ann.annotation_id}-${axis.id}`}
                             value={option.value} checked={val === option.value}
                             disabled={readOnly || (unavailable && option.value === val)}
-                            onKeyDown={event => { if (event.key.startsWith("Arrow")) arrowChange.current = true; }}
-                            onChange={() => updateAxis(option.value)} />
+                            onKeyDown={event => {
+                              if (event.key.startsWith("Arrow")) arrowChange.current = true;
+                              else if (confirmsDefault) confirmDefaultKey(event, axis.id);
+                            }}
+                            onChange={() => updateAxis(option.value)}
+                            onClick={confirmsDefault ? event => confirmDefaultClick(event, axis.id) : undefined} />
                           <span>{option.label}</span>{isDefault && <span className="visually-hidden"> · default</span>}
                         </label>
                       );
@@ -331,14 +363,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               </fieldset>
             );
           })}
-          {!readOnly && onConfirmDefaults && confirmableDefaults.length > 0 && (
-            <Button type="button" variant="primary" size="sm" className="values-confirm" data-confirm-defaults
-              aria-keyshortcuts="d" onClick={confirmDefaults}>
-              Confirm defaults ({confirmableDefaults.length})<span aria-hidden="true"> <Kbd>D</Kbd></span>
-            </Button>
-          )}
           {confirmableDefaults.length > 0 && (!readOnly && onConfirmDefaults
-            ? <p className="form-hint">Highlighted values are defaults. Press <Kbd>D</Kbd> to confirm them, or choose another value.</p>
+            ? <p className="form-hint">Highlighted values are defaults. Click a highlighted value or “Confirm defaults” to confirm, or choose another value.</p>
             : <p className="form-hint">Highlighted values are defaults that were not confirmed.</p>)}
           {valuesError && <InlineMessage tone="error">{valuesError}</InlineMessage>}
         </section>

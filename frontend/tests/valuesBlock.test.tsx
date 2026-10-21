@@ -88,16 +88,68 @@ describe("Values block", () => {
     expect(container.querySelectorAll(".axis-default-tag")).toHaveLength(2);
   });
 
-  it("shows the editable hint with Kbd D", () => {
+  it("hint names the click", () => {
     const { container } = render(<AnnotationPanel {...props({ onConfirmDefaults: vi.fn() })} />);
     const section = container.querySelector<HTMLElement>("[data-values-section]")!;
     const hint = section.querySelector<HTMLElement>(".form-hint")!;
-    expect(hint.textContent).toBe("Highlighted values are defaults. Press D to confirm them, or choose another value.");
-    expect(hint.querySelector("kbd")!.textContent).toBe("D");
+    expect(hint.textContent).toBe("Highlighted values are defaults. Click a highlighted value or “Confirm defaults” to confirm, or choose another value.");
+    expect(hint.querySelector("kbd")).toBeNull();
     expect(screen.queryByText(/Defaults are not confirmed/)).toBeNull();
-    // "Confirm defaults (n)" stays above the hint.
+  });
+
+  it("Confirm defaults sits on the Values heading row before the first axis", () => {
+    const { container } = render(<AnnotationPanel {...props({ onConfirmDefaults: vi.fn() })} />);
     const button = screen.getByRole("button", { name: "Confirm defaults (3)" });
-    expect(button.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const heading = screen.getByRole("heading", { name: "Values" });
+    expect(button.parentElement!.classList.contains("values-heading-row")).toBe(true);
+    expect(heading.parentElement).toBe(button.parentElement);
+    const firstFieldset = container.querySelector("[data-values-section] fieldset")!;
+    expect(button.compareDocumentPosition(firstFieldset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("click on the checked default confirms that axis", () => {
+    const onConfirmDefaults = vi.fn(), onUpdateAxes = vi.fn();
+    render(<AnnotationPanel {...props({ onConfirmDefaults, onUpdateAxes })} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Present · default" }));
+    expect(onConfirmDefaults).toHaveBeenCalledTimes(1);
+    expect(onConfirmDefaults).toHaveBeenCalledWith(["assertion"],
+      { assertion: "present", experiencer: "patient", temporality: "current" }, { moveFocus: false });
+    expect(onUpdateAxes).not.toHaveBeenCalled();
+  });
+
+  it("Space on the checked default confirms that axis once", () => {
+    const onConfirmDefaults = vi.fn();
+    render(<AnnotationPanel {...props({ onConfirmDefaults })} />);
+    const patient = screen.getByRole("radio", { name: "Patient · default" });
+    fireEvent.keyDown(patient, { key: " " });
+    // A click the browser synthesises for the same key press does not confirm twice.
+    fireEvent.click(patient, { detail: 0 });
+    expect(onConfirmDefaults).toHaveBeenCalledTimes(1);
+    expect(onConfirmDefaults).toHaveBeenCalledWith(["experiencer"],
+      { assertion: "present", experiencer: "patient", temporality: "current" }, { moveFocus: false });
+  });
+
+  it("click on a checked non-default value does nothing", () => {
+    const onConfirmDefaults = vi.fn(), onUpdateAxes = vi.fn();
+    render(<AnnotationPanel {...props({ onConfirmDefaults, onUpdateAxes }, ["assertion", "experiencer"])} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Current" }));
+    expect(onConfirmDefaults).not.toHaveBeenCalled();
+    expect(onUpdateAxes).not.toHaveBeenCalled();
+  });
+
+  it("no click handler when read-only or the default is unavailable", () => {
+    const onConfirmDefaults = vi.fn();
+    const { unmount } = render(<AnnotationPanel {...props({ onConfirmDefaults, readOnly: true })} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Present · default" }));
+    expect(onConfirmDefaults).not.toHaveBeenCalled();
+    unmount();
+    // A defaulted value that is no longer among the options is not a confirmable default.
+    const config = axesConfig.map(axis => axis.id === "temporality" ? { ...axis, options: ["historical", "future"] } : axis);
+    const { container } = render(<AnnotationPanel {...props({ onConfirmDefaults, axesConfig: config }, ["temporality"])} />);
+    const radio = within(container.querySelector<HTMLElement>('[data-axis-field="temporality"]')!)
+      .getByRole("radio", { name: "current (current unavailable value)" });
+    fireEvent.click(radio);
+    expect(onConfirmDefaults).not.toHaveBeenCalled();
   });
 
   it("shows the read-only hint without a key or button", () => {

@@ -1283,6 +1283,24 @@ describe("CaseScreen integration", () => {
         expect(document.querySelector("[data-carried-announcer]")?.textContent ?? "").not.toContain("Confirmed:");
       });
 
+      it("clicking the highlighted default sends one set_axes for that axis and keeps focus", async () => {
+        const view = twoFindings();
+        view.draft.annotations![0].annotation.axes_defaulted = ["assertion", "experiencer"];
+        const apply = loopServer(view);
+        render(<CaseScreen view={view} workspaceId="ws-click-default" onClose={vi.fn()} />);
+        selectFinding("finding-a");
+        const present = screen.getByRole("radio", { name: "Present · default" });
+        present.focus();
+        fireEvent.click(present);
+        await waitFor(() => expect(setAxesCalls(apply)).toHaveLength(1));
+        expect((setAxesCalls(apply)[0][1] as any).payload).toEqual(expect.objectContaining({
+          command: "set_axes", annotation_id: "finding-a", axes_values: allDefaults, chosen_axis_ids: ["assertion"] }));
+        await waitFor(() => expect(announcer()).toBe("Confirmed: Vorhandensein (Assertion) Present."));
+        expect(document.activeElement).toBe(present);
+        await waitFor(() => expect(screen.getByRole("button", { name: "Confirm defaults (1)" })).toBeDefined());
+        expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Present" }));
+      });
+
       it("queues a pending arrow change before the logout guard looks at the queue", async () => {
         const view = twoFindings();
         let release!: () => void;
