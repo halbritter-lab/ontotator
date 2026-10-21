@@ -800,11 +800,14 @@ class TextChangeService:
         *,
         resolution: Literal["finish_then_carry", "withdrawn"],
         target_document_id: str,
+        expected_workflow_revision: int,
     ) -> None:
         """Record "Let X finish on v1" or withdraw (revoke, draft kept).
 
         Repeating the same decision is a no-op; another decision for an
-        assignment already decided is refused (``already_resolved``).
+        assignment already decided is refused (``already_resolved``). A
+        decision on a changed assignment (``expected_workflow_revision``) is
+        refused with ``WORKFLOW_REVISION_CONFLICT``.
         """
         with self.db.transaction() as conn:
             key = AssignmentService._locate(conn, assignment_id)
@@ -824,6 +827,8 @@ class TextChangeService:
                     return
                 raise _not_applicable("already_resolved")
             old = AssignmentService._locked(conn, assignment_id)
+            if old["workflow_revision"] != expected_workflow_revision:
+                raise DomainError("WORKFLOW_REVISION_CONFLICT")
             self._require_open_annotation(old)
             require_task_writable(conn, assignment_id)
             source, target = self._check_target(

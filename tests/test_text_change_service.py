@@ -190,7 +190,9 @@ def _carry(env: Env, submission_id: str, **overrides: Any) -> Any:
     return env.service().carry(access, actor, env.key, submission_id, **arguments)
 
 
-def _resolve(env: Env, assignment_id: int, resolution: str) -> None:
+def _resolve(
+    env: Env, assignment_id: int, resolution: str, revision: int | None = None
+) -> None:
     access, actor = env.lead()
     env.service().resolve(
         access,
@@ -198,6 +200,9 @@ def _resolve(env: Env, assignment_id: int, resolution: str) -> None:
         assignment_id,
         resolution=resolution,
         target_document_id=env.docs[-1],
+        expected_workflow_revision=_revision(env, assignment_id)
+        if revision is None
+        else revision,
     )
 
 
@@ -608,6 +613,16 @@ def test_resolution_withdrawn_revokes_and_keeps_draft(env):
     # Repeating the same decision changes nothing.
     _resolve(env, work["assignment_id"], "withdrawn")
     assert _counts(env) == after
+
+
+def test_resolution_refuses_a_stale_revision(env):
+    work = _started(env)
+    stale = _revision(env, work["assignment_id"]) - 1
+    with pytest.raises(DomainError) as refused:
+        _resolve(env, work["assignment_id"], "withdrawn", stale)
+    assert refused.value.code == "WORKFLOW_REVISION_CONFLICT"
+    assert _assignment(env, work["assignment_id"]).revoked_at is None
+    assert _resolutions(env) == []
 
 
 def test_resolution_finish_then_carry_records_only(env):

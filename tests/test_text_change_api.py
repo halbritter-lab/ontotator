@@ -98,7 +98,11 @@ def test_routes_are_lead_only(client):
     assert _move(client, env, work["assignment_id"]).status_code == 403
     resolution = client.post(
         f"/api/v1/assignments/{work['assignment_id']}/text-change-resolution",
-        json={"resolution": "withdrawn", "target_document_id": env.docs[1]},
+        json={
+            "resolution": "withdrawn",
+            "target_document_id": env.docs[1],
+            "expected_workflow_revision": 1,
+        },
     )
     assert resolution.status_code == 403
     assert _carry(client, env, done["submission_id"]).status_code == 403

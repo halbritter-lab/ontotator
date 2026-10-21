@@ -788,6 +788,7 @@ describe("text changes (V5)", () => {
       work: [work({ assignment_id: 41, document_id: "case-201-de-v1", person: tom, status: "in_progress" }), work({ assignment_id: 42, document_id: "case-201-de-v1", person: ana, status: "in_progress" })] });
     mockRows(page([group("case-201", [de])]));
     const resolve = vi.spyOn(api, "resolveTextChange").mockResolvedValue({} as AssignmentView);
+    vi.spyOn(api, "listAssignments").mockResolvedValue([{ id: 42, workflow_revision: 3 } as AssignmentView]);
     renderStateful({});
     fireEvent.click(await screen.findByRole("button", { name: "+1 more action, case-201 · de" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Handle text change… · Ana Weber" }));
@@ -795,7 +796,7 @@ describe("text changes (V5)", () => {
     expect(within(dialog).getByText("Ana Weber has an open annotation on v1. The text is now v2.")).toBeDefined();
     fireEvent.click(within(dialog).getByRole("radio", { name: "Withdraw" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
-    await waitFor(() => expect(resolve).toHaveBeenCalledWith(42, { resolution: "withdrawn", target_document_id: "case-201-de-v2" }));
+    await waitFor(() => expect(resolve).toHaveBeenCalledWith(42, { resolution: "withdrawn", target_document_id: "case-201-de-v2", expected_workflow_revision: 3 }));
     expect((await screen.findAllByText("Ana Weber’s task is withdrawn. v2 needs a new annotation.")).length).toBeGreaterThan(0);
     expect(screen.queryByRole("dialog", { name: "Handle text change · case-201 · de" })).toBeNull();
   });

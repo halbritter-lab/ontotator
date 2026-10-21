@@ -6542,6 +6542,8 @@ export interface components {
             resolution: "finish_then_carry" | "withdrawn";
             /** Target Document Id */
             target_document_id: string;
+            /** Expected Workflow Revision */
+            expected_workflow_revision: number;
         };
         /** TextWindowView */
         TextWindowView: {

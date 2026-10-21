@@ -68,13 +68,14 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
     if (writing.current || assignmentId === null) return;
     writing.current = true; setBusy(true); setFailure(null);
     try {
+      const current = (await api.listAssignments(projectKey, { document_id: item?.document_id })).find(entry => entry.id === assignmentId);
+      if (!current) throw new ApiError(409, RELOADED_MESSAGE, "TEXT_CHANGE_CHANGED");
+      const expected_workflow_revision = current.workflow_revision;
       if (choice === "move") {
-        const current = (await api.listAssignments(projectKey, { document_id: item?.document_id })).find(entry => entry.id === assignmentId);
-        if (!current) throw new ApiError(409, RELOADED_MESSAGE, "TEXT_CHANGE_CHANGED");
-        await api.moveToVersion(assignmentId, { target_document_id: targetId, expected_workflow_revision: current.workflow_revision, request_id: crypto.randomUUID() });
+        await api.moveToVersion(assignmentId, { target_document_id: targetId, expected_workflow_revision, request_id: crypto.randomUUID() });
         if (alive.current) props.onDone(movedMessage(person, to));
       } else {
-        await api.resolveTextChange(assignmentId, { resolution: choice === "finish" ? "finish_then_carry" : "withdrawn", target_document_id: targetId });
+        await api.resolveTextChange(assignmentId, { resolution: choice === "finish" ? "finish_then_carry" : "withdrawn", target_document_id: targetId, expected_workflow_revision });
         if (alive.current) props.onDone(choice === "finish" ? finishingMessage(person, from, to) : withdrawnMessage(person, to));
       }
     } catch (error: unknown) {

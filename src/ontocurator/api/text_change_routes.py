@@ -56,6 +56,7 @@ class TextChangeResolutionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     resolution: Literal["finish_then_carry", "withdrawn"]
     target_document_id: str = Field(min_length=1)
+    expected_workflow_revision: int
 
 
 class CarryRequest(BaseModel):

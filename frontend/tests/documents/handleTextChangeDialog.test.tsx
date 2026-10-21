@@ -54,14 +54,14 @@ describe("HandleTextChangeDialog", () => {
     props = setup();
     fireEvent.click(screen.getByRole("radio", { name: "Let Tom Reis finish on v1" }));
     fireEvent.click(apply());
-    await waitFor(() => expect(resolve).toHaveBeenCalledWith(41, { resolution: "finish_then_carry", target_document_id: V2 }));
+    await waitFor(() => expect(resolve).toHaveBeenCalledWith(41, { resolution: "finish_then_carry", target_document_id: V2, expected_workflow_revision: 7 }));
     expect(props.onDone).toHaveBeenCalledWith("Tom Reis finishes on v1. The result is carried to v2 when they submit.");
     cleanup();
 
     props = setup();
     fireEvent.click(screen.getByRole("radio", { name: "Withdraw" }));
     fireEvent.click(apply());
-    await waitFor(() => expect(resolve).toHaveBeenCalledWith(41, { resolution: "withdrawn", target_document_id: V2 }));
+    await waitFor(() => expect(resolve).toHaveBeenCalledWith(41, { resolution: "withdrawn", target_document_id: V2, expected_workflow_revision: 7 }));
     expect(props.onDone).toHaveBeenCalledWith("Tom Reis’s task is withdrawn. v2 needs a new annotation.");
   });
 
