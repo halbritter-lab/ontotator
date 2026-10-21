@@ -55,16 +55,18 @@ it("sends actual override tuples while preserving the legacy omitted body and tr
 
 it("shows the server-owned override label and sends controlled filters without remounting the ID input", async () => {
   const navigate = vi.fn();
-  const view = render(<DocumentsPage projectKey="p" canManage query={{ origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
-  expect(await screen.findByText(/Accepted without review/)).toBeTruthy();
+  const view = render(<DocumentsPage projectKey="p" canManage query={{ ...openTarget, origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
+  await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });
+  // The expanded row's Text versions labels the server-owned flag, not the descriptive status reason.
+  expect((await within(screen.getByRole("table", { name: "Documents" })).findAllByText(/Accepted without review/)).length).toBeGreaterThan(0);
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { origin: "machine_translation", translation_status: "accepted" });
-  const prefix = screen.getByLabelText("Case ID"); prefix.focus();
+  const prefix = screen.getByLabelText("Case ID or text"); prefix.focus();
   fireEvent.change(prefix, { target: { value: "abc" } });
   fireEvent.keyDown(prefix, { key: "Enter" });
   expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({ origin: "machine_translation", translation_status: "accepted", q: "abc" }));
-  view.rerender(<DocumentsPage projectKey="p" canManage query={{ q: "abc", origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
+  view.rerender(<DocumentsPage projectKey="p" canManage query={{ ...openTarget, q: "abc", origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
   await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });
-  expect(screen.getByLabelText("Case ID")).toBe(prefix);
+  expect(screen.getByLabelText("Case ID or text")).toBe(prefix);
   expect(document.activeElement).toBe(prefix);
   expect(api.getProjectSettings).toHaveBeenCalledTimes(1);
   expect(api.listCases).toHaveBeenCalledTimes(1);
