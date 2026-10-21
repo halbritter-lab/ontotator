@@ -152,7 +152,7 @@ Targets: from the translation, the source and the comparison (if shown); from th
 
 Effect, once:
 
-- Each target pane scrolls instantly (no smooth scrolling) so that its paired paragraph starts at the same vertical offset inside its pane as the anchor paragraph inside the anchor pane, clamped to the scroll range; if the anchor paragraph starts above the visible area, the target paragraph is placed at the top with `space-3` offset.
+- Each target pane scrolls instantly (no smooth scrolling) so that its paired paragraph starts at the same vertical offset inside its pane as the anchor paragraph inside the anchor pane, clamped to the scroll range; if the anchor paragraph starts above the visible area (a long paragraph), the line in view is matched instead of the paragraph tops (final review 2026-10-21): the caret line (rule 1; its share of the paragraph in code points, up to the next paragraph start), else the line at the `space-3` inset, is placed at the same height in the target at the same share of the paired paragraph. Limitation: the share is by characters and paragraph height, not by sentence, so a translation that is much longer or shorter in one part of the paragraph lands only approximately.
 - The written positions are registered as programmatic, so they never make the target a leader and never feed back.
 - The paired paragraph numbers get `data-coupled-active`; the polite status reads the result (copy 2.6).
 - Focus, caret and selection stay where they were. Moving the translation pane from a source anchor is allowed because the reviewer asked for it; the caret does not move.
@@ -160,7 +160,7 @@ Effect, once:
 
 Controls:
 
-- Button "Show matching paragraph" (`Button variant="quiet" size="sm"`, `Kbd` "Alt M") in the translation column head next to "Show changes" and "Couple scrolling"; one instance per screen.
+- Button "Show matching paragraph" (`Button size="sm"`, secondary, so it reads as a button (final review 2026-10-21), `Kbd` "Alt M") in the translation column head next to "Show changes" and "Couple scrolling"; one instance per screen.
 - Shortcut `Alt+M`, scope screen, group "Translation review", `allowInInputs: true` (it must work from the textarea), not while a dialog is open. `matches()` (`ui/shortcuts.ts:112-124`) compares `event.key`; on macOS Option+M yields "µ", so Alt bindings with a single letter fall back to `event.code === "KeyM"`. `preventDefault` so no character is typed. Listed in `?` help: "Alt + M: Show the paragraph paired with the one at your cursor".
 
 ### 2.5 Width rule

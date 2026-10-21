@@ -63,7 +63,10 @@
 .translation-columns--comparison { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .translation-column { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .translation-column-head { margin-bottom: var(--space-2); }
-.translation-texts .translation-column-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--space-3); min-height: 28px; }
+/* Every head: the title on the first line (level across the columns), the column's controls on a second line. */
+.translation-texts .translation-column-head { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-1); min-height: 28px; }
+.translation-texts .translation-column-head .translation-column-title { min-height: 28px; display: flex; align-items: center; }
+.translation-texts .translation-column-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
 .translation-texts .translation-column-head .form-group { margin: 0; }
 .translation-texts .translation-column-head .form-checkbox-row { min-height: 28px; font-size: var(--size-md); line-height: var(--leading-md); }
 .translation-texts .translation-column-head .form-group:has(.form-select) { display: flex; align-items: center; gap: var(--space-2); }

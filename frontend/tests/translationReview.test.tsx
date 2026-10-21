@@ -499,12 +499,24 @@ it("Show matching paragraph sits after Show changes and Couple scrolling with Kb
   expect(button.closest(".translation-column-head")).toBe(showChanges.closest(".translation-column-head"));
   expect(showChanges.compareDocumentPosition(coupleBox()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(coupleBox()!.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(button.className).toContain("btn-quiet"); expect(button.className).toContain("btn-sm");
+  // Visibly a button (bordered secondary), not a text link.
+  expect(button.className).toContain("btn-secondary"); expect(button.className).toContain("btn-sm");
   expect(button.querySelector("kbd")?.textContent).toBe("Alt M");
   expect(button.querySelector("kbd")?.closest("[aria-hidden='true']")).not.toBeNull();
   expect(button.title).toBe("Scroll the other text to the paragraph paired with the one at your cursor or the one you clicked.");
   expect(button.getAttribute("aria-disabled")).toBeNull();
   expect(button.getAttribute("aria-keyshortcuts")).toBe("Alt+M");
+});
+it("the three column heads put the titles on one first line and the comparison picker is labelled without a second visible label", async () => {
+  setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" });
+  const heads = [...document.querySelectorAll<HTMLElement>(".translation-column-head")];
+  expect(heads).toHaveLength(3);
+  for (const head of heads) expect(head.firstElementChild!.classList.contains("translation-column-title")).toBe(true);
+  const select = screen.getByRole("combobox", { name: "Comparison translation" });
+  expect(heads[2].querySelector("label")).toBeNull();
+  expect(select.closest(".translation-column-head")).toBe(heads[2]);
+  expect(heads[1].querySelector(".translation-column-controls")).not.toBeNull();
+  expect(heads[2].querySelector(".translation-column-controls")).not.toBeNull();
 });
 it("anchor 1: from the textarea uses the caret paragraph with fresh starts", async () => {
   setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" });

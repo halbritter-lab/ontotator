@@ -24,6 +24,11 @@ export interface AlignRequest {
   anchorOffset: number;
   /** Used when the anchor paragraph starts above or below the visible area (spec 2.4: `space-3` = 12 px). */
   topInset: number;
+  /**
+   * Share (0 to 1) of the anchor paragraph before the caret line. Used only when the paragraph starts above
+   * the view (a long paragraph): that line is matched to the same share of each partner paragraph.
+   */
+  anchorFraction?: number;
 }
 export interface AlignResult {
   pairs: ReadonlyArray<{ paneId: string; paragraph: number }>;
@@ -270,7 +275,23 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
       pairs.push({ paneId: pane.id, paragraph });
       return true;
     };
-    mark(anchor, anchorGeometry.rows.find(row => row.index === request.anchor.paragraph), request.anchor.paragraph);
+    const anchorRow = anchorGeometry.rows.find(row => row.index === request.anchor.paragraph);
+    mark(anchor, anchorRow, request.anchor.paragraph);
+    // A long paragraph whose top is above the view: match the line in view (the caret line, else the line at
+    // the top inset) to the same share of the partner paragraph, instead of the paragraph tops.
+    const heightOf = (geometry: Geometry, row: Row) => (geometry.rows.find(next => next.index > row.index)?.top ?? geometry.end) - row.top;
+    let inside: { fraction: number; offset: number } | null = null;
+    if (anchorRow && request.anchorOffset < 0) {
+      const height = heightOf(anchorGeometry, anchorRow), scrollTop = anchor.element.scrollTop;
+      if (height > 0) {
+        const clamp = (value: number) => Math.min(1, Math.max(0, value));
+        const caret = request.anchorFraction === undefined ? null : clamp(request.anchorFraction);
+        const caretOffset = caret === null ? null : anchorRow.top + caret * height - scrollTop;
+        inside = caret !== null && caretOffset !== null && caretOffset >= 0 && caretOffset <= anchor.element.clientHeight
+          ? { fraction: caret, offset: caretOffset }
+          : { fraction: clamp((scrollTop + request.topInset - anchorRow.top) / height), offset: request.topInset };
+      }
+    }
     let estimate = false;
     for (const id of request.targets) {
       const pane = bound(id);
@@ -282,7 +303,9 @@ export function useCoupledScroll(panes: readonly CoupledScrollPane[], options: C
       if (!mark(pane, partner, mapped) || !partner) continue;
       // Spec 2.4 names only "above the view"; an anchor below the view is treated the same (spec gap), so the target is visible.
       const inView = request.anchorOffset >= 0 && request.anchorOffset <= anchor.element.clientHeight;
-      const target = partner.top - (inView ? request.anchorOffset : request.topInset);
+      const target = inside
+        ? partner.top + inside.fraction * heightOf(geometry, partner) - inside.offset
+        : partner.top - (inView ? request.anchorOffset : request.topInset);
       if (!Number.isFinite(target)) continue;
       pane.element.scrollTop = Math.max(0, Math.min(Math.max(0, pane.element.scrollHeight - pane.element.clientHeight), target));
       programmatic.current.set(pane.element, pane.element.scrollTop);
