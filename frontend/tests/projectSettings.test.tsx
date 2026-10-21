@@ -5,7 +5,7 @@ import { api, ApiError } from "../src/api/client";
 import { ProjectNewPage } from "../src/admin/ProjectNewPage";
 import { ProjectSettingsPage, type ProjectSettingsPageProps } from "../src/admin/ProjectSettingsPage";
 import type { RouteLeaveGuard, SettingsSection } from "../src/app/router";
-import { currentUser, deferred, ontologies, profile, settings } from "./projectFixtures";
+import { currentUser, deferred, guidelineListing, guidelineSummary, ontologies, profile, settings } from "./projectFixtures";
 
 beforeEach(() => {
   vi.spyOn(api, "listTemplates").mockResolvedValue([{ id: "template", label: "Template", required_ontology_ids: ["HP"] }]);
@@ -16,6 +16,7 @@ beforeEach(() => {
   vi.spyOn(api, "updatePins").mockResolvedValue(settings);
   vi.spyOn(api, "updateProjectProfile").mockResolvedValue(settings);
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
+  vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineListing([guidelineSummary(1)]));
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -93,6 +94,16 @@ describe("settings section addresses", () => {
     expect(screen.getByRole("form", { name: "General" })).toBeDefined();
     expect(screen.queryByRole("form", { name: "Rules" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Guidelines" })).toBeNull();
+  });
+
+  it("section Guidelines renders GuidelinesSection", async () => {
+    render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} section="guideline" />);
+    const section = await screen.findByRole("region", { name: "Guidelines" });
+    expect(within(section).getByRole("heading", { level: 2, name: "Guidelines" })).toBeDefined();
+    expect(await within(section).findByText(/^v1 · guide-v1\.md/)).toBeDefined();
+    expect(within(section).getByLabelText("Guideline file (.md or .txt, up to 256 KB)")).toBeDefined();
+    expect(api.listGuidelines).toHaveBeenCalledWith(settings.project_key);
+    expect(within(section).getAllByRole("heading", { level: 2, name: "Guidelines" })).toHaveLength(1);
   });
 
   it("shows the section of its address", async () => {

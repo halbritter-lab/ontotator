@@ -3,6 +3,7 @@ import { api, type CurrentUser, type OntologyInfo, type ProjectSettings } from "
 import { routeHref, SETTINGS_SECTIONS, type Route, type RouteLeaveGuard, type SettingsSection } from "../app/router";
 import { Button, Checkbox, Dialog, InlineMessage, Select, Textarea, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { GuidelinesSection } from "./GuidelinesSection";
 import { HiddenAxisValuesField } from "./HiddenAxisValuesField";
 import { LanguagesField } from "./LanguagesField";
 import { MembersSection } from "./MembersSection";
@@ -183,7 +184,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
         <Button type="submit" loading={busy === "General"}>Save general</Button>
       </fieldset>{feedback("General")}
     </form>; break;
-    case "guideline": content = <section ref={bindSection} tabIndex={-1} aria-label="Guidelines"><h2>Guidelines</h2></section>; break;
+    case "guideline": content = <section ref={bindSection} tabIndex={-1} aria-label="Guidelines"><GuidelinesSection projectKey={projectKey} /></section>; break;
     case "rules": content = <form ref={bindSection} tabIndex={-1} aria-label="Rules" onSubmit={event => submit(event, "Rules")}>
       <fieldset disabled={busy !== null}><legend>Rules</legend>
         <div className="settings-section-actions" role="group" aria-label="Rules save state">
