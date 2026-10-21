@@ -1359,6 +1359,9 @@ if __name__ == "__main__":
         from browser_review_flow_scenarios import register_review_flow_scenario_route
 
         register_review_flow_scenario_route(app)
+        from browser_overview_scenarios import register_overview_scenario_route
+
+        register_overview_scenario_route(app)
         from browser_guideline_scenarios import register_guideline_scenario_route
 
         register_guideline_scenario_route(app)
