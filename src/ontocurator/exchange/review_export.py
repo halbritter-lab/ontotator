@@ -12,13 +12,18 @@ from typing import Any
 import ontospan
 from sqlalchemy import func, select
 
-from ontocurator.application.translation_reviews import TranslationReviewRecord
+from ontocurator.application.translation_reviews import (
+    TranslationReviewRecord,
+    with_guideline_withdrawn,
+)
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.policy import Action
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.guidelines import guideline_ref
 from ontocurator.domain.variants import VariantInfo, resolve_translation_lineage
 from ontocurator.jobs.queue import Job, JobContext
+from ontocurator.storage.guidelines import guideline_facts
 from ontocurator.storage.repository import Repository, _lock_id
 from ontocurator.storage.tables import JobRow, ProjectRow, TranslationReviewRow
 
@@ -57,8 +62,14 @@ def serialize_review_export(
     project_id: int,
     records: Sequence[TranslationReviewRecord],
     variants: Mapping[str, VariantInfo],
+    guideline_hashes: Mapping[int, str] | None = None,
 ) -> bytes:
     """Serialize historical records; no current user/profile/status substitution.
+
+    ``guideline_hashes`` maps each guideline version of the project to its
+    sha256; a row carries the reference of its recorded version, never the
+    guideline text (G20). ``guideline_withdrawn`` is taken from the record as
+    the caller computed it at export time.
 
     reviewed_variant.translation projects the translation ancestor's run context,
     while every other reviewed identity/hash remains that of the reviewed text.
@@ -116,6 +127,12 @@ def serialize_review_export(
             raise _invalid()
         if record.created_at.utcoffset() is None:
             raise _invalid()
+        reference = None
+        if record.guideline_version is not None:
+            sha = (guideline_hashes or {}).get(record.guideline_version)
+            if sha is None:
+                raise _invalid()
+            reference = guideline_ref(project, record.guideline_version, _hash(sha))
         row = dict(
             format="ontocurator-translation-review/v1",
             review_id=record.id,
@@ -154,6 +171,10 @@ def serialize_review_export(
             reviewed_at=record.created_at.astimezone(UTC).strftime(
                 "%Y-%m-%dT%H:%M:%SZ"
             ),
+            # Additive fields; the format stays v1 (G26).
+            guideline_version=record.guideline_version,
+            guideline_ref=reference,
+            guideline_withdrawn=record.guideline_withdrawn,
         )
         lines.append(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
     return "".join(lines).encode("utf-8")
@@ -205,15 +226,22 @@ def translation_review_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             )
         require_project_management(conn, actor, key, pid, Action.EXPORT_ALL_WORK)
         variants = {v.document_id: v for v in Repository(db)._variants(key)}
-        records = [
-            TranslationReviewRecord.model_validate(r)
-            for r in conn.execute(
-                select(TranslationReviewRow)
-                .where(TranslationReviewRow.project_id == pid)
-                .order_by(TranslationReviewRow.id)
-            ).mappings()
-        ]
-        data = serialize_review_export(key, pid, records, variants)
+        records = with_guideline_withdrawn(
+            conn,
+            pid,
+            [
+                TranslationReviewRecord.model_validate(r)
+                for r in conn.execute(
+                    select(TranslationReviewRow)
+                    .where(TranslationReviewRow.project_id == pid)
+                    .order_by(TranslationReviewRow.id)
+                ).mappings()
+            ],
+        )
+        hashes = {
+            version: fact.sha256 for version, fact in guideline_facts(conn, pid).items()
+        }
+        data = serialize_review_export(key, pid, records, variants, hashes)
         sha = store_file(db, data)
         result = {"sha256": sha, "reviews": len(records)}
         record_audit(

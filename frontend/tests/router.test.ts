@@ -203,3 +203,17 @@ describe("settings section addresses", () => {
     for (const section of SETTINGS_SECTIONS) expect(parseRoute(routeHref({ name: "projectSettings", key: "a", section }))).toMatchObject({ key: "a" });
   });
 });
+
+describe("project guidelines addresses", () => {
+  it("parses and builds #/projects/{key}/guidelines and /guidelines/v{n}", () => {
+    expect(parseRoute("#/projects/study%2Fa/guidelines")).toEqual({ name: "projectGuidelines", key: "study/a" });
+    expect(parseRoute("#/projects/a/guidelines/v3")).toEqual({ name: "projectGuidelines", key: "a", version: 3 });
+    expect(routeHref({ name: "projectGuidelines", key: "study/a" })).toBe("#/projects/study%2Fa/guidelines");
+    expect(routeHref({ name: "projectGuidelines", key: "a", version: 12 })).toBe("#/projects/a/guidelines/v12");
+  });
+
+  it.each(["#/projects/a/guidelines/v0", "#/projects/a/guidelines/vx", "#/projects/a/guidelines/v01", "#/projects/a/guidelines/3",
+    "#/projects/a/guidelines/v", "#/projects/a/guidelines/v1.5", "#/projects/a/guidelines/v9007199254740992", "#/projects/a/guidelines/"])("v0 and non-numeric versions are notFound %j", (hash) => {
+    expect(parseRoute(hash)).toEqual({ name: "notFound", hash });
+  });
+});

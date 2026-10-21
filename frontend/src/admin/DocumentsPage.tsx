@@ -21,6 +21,7 @@ import {
 import { formatDateTime, labelFor, plural } from "../app/labels";
 import { routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
+import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, Checkbox, Dialog, EmptyState, InlineMessage, Select, StatusBadge, TextInput, Toast, Toolbar, useMediaQuery, useToast, type GroupSelection, type GroupSelectMode } from "../ui";
 import { DecisionBar } from "../documents/DecisionBar";
 import { DocumentCards } from "../documents/DocumentCards";
@@ -1059,6 +1060,7 @@ function ReviewHistory({ projectKey, documentId, onClose }: { projectKey: string
     {records?.length === 0 && <p>No one has reviewed this translation yet.</p>}
     {records && <ol className="review-history">{records.map(record => <li key={record.id}>
       <p><strong>{labelFor(decisionLabels, record.decision)}</strong> by {record.reviewer_pseudonym} · <time dateTime={record.created_at}>{formatDateTime(record.created_at)}</time></p>
+      <p className="cell-secondary review-guideline">{submissionGuidelineLabel(record.guideline_version, record.guideline_withdrawn, null)}</p>
       <p className="cell-secondary">{[record.reviewer_qualification, record.reviewer_languages.length ? `reads ${record.reviewer_languages.join(", ")}` : ""].filter(Boolean).join(" · ")}</p>
       <p>{record.status_before === record.status_after ? `Translation status stayed ${labelFor(translationStatusLabels, record.status_after)}.` : `Translation status changed from ${labelFor(translationStatusLabels, record.status_before)} to ${labelFor(translationStatusLabels, record.status_after)}.`}</p>
       <p>{record.clinical_change ? "Clinical change" : "No clinical change"}{record.categories.length ? `: ${record.categories.map(category => labelFor(categoryLabels, category)).join(", ")}` : ""}</p>

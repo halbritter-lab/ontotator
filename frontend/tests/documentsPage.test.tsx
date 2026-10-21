@@ -10,6 +10,7 @@ import { stageBlockHeadingId } from "../src/documents/StageBlocks";
 import { recordDecision } from "../src/documents/visitState";
 import { useRegisteredShortcuts } from "../src/ui/shortcuts";
 import { final, group, item, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
+import { reviewRecord } from "./translationFixtures";
 
 const { expandedProps, assignProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[], assignProps: [] as unknown[] }));
 // The assign dialog has its own tests; here only its wiring (props in, onAssigned / onClose out) matters.
@@ -594,6 +595,20 @@ it("opens the translation review history of a version from Text versions", async
   expect(api.listTranslationReviews).toHaveBeenCalledWith("p", "case-0211-de");
   const dialog = await screen.findByRole("dialog", { name: "Translation reviews: case-0211-de" });
   expect(await within(dialog).findByText("No one has reviewed this translation yet.")).toBeTruthy();
+});
+
+it("labels each translation review with its guideline version", async () => {
+  const s3 = scenarioS3();
+  mockRows(s3.page, s3.submissions);
+  vi.spyOn(api, "listTranslationReviews").mockResolvedValue([
+    reviewRecord({ id: 2, guideline_version: 2, guideline_withdrawn: true }),
+    reviewRecord({ id: 1, guideline_version: null }),
+  ]);
+  renderPage({ query: { open: [rowKey("case-0211", "de")] } });
+  fireEvent.click(await screen.findByRole("button", { name: "Translation reviews for v1" }));
+  const dialog = await screen.findByRole("dialog", { name: "Translation reviews: case-0211-de" });
+  await within(dialog).findAllByRole("listitem");
+  expect([...dialog.querySelectorAll(".review-guideline")].map(line => line.textContent)).toEqual(["Guidelines v2 (withdrawn)", "Guidelines: not recorded"]);
 });
 
 it("renders cards on narrow viewports", async () => {

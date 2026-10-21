@@ -25,7 +25,7 @@ vi.mock("../src/variants/useCoupledScroll", async importOriginal => {
 });
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); hook.calls.length = 0; hook.pairs = null; hook.origin = "scroll"; hook.aligns.length = 0; });
-function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }, reportActions?: JSX.Element) {
+function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }, reportActions?: JSX.Element, guidelineNotice?: JSX.Element) {
   vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
   const width = () => viewport?.width ?? 1440;
@@ -41,7 +41,7 @@ function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width
   const routeLeaveRef: { current: RouteLeaveGuard | null } = { current: null };
   const leaveGuardRef: { current: ((proceed: () => void) => void) | null } = { current: null };
   const navigate = vi.fn();
-  const element = <TranslationReviewScreen assignmentId={17} username="alice" onNavigate={navigate} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} reportActions={reportActions} />;
+  const element = <TranslationReviewScreen assignmentId={17} username="alice" onNavigate={navigate} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef} reportActions={reportActions} guidelineNotice={guidelineNotice} />;
   const rendered = render(strict ? <StrictMode>{element}</StrictMode> : element);
   return { ...rendered, open, save, submit, routeLeaveRef, leaveGuardRef, navigate };
 }
@@ -109,6 +109,18 @@ it("autosaves exact raw data once in StrictMode and submits with the actual conf
   expect(submit).toHaveBeenCalledWith(17, 41);
   expect(screen.getByText("Review submitted")).toBeDefined();
   expect(screen.getByText("A corrected version v7 was created.")).toBeDefined();
+});
+it("hides the guidelines notice once the review is submitted here and lists the guideline stamp", async () => {
+  const { submit } = setup(undefined, false, undefined, undefined, <p>Guidelines updated to v2</p>);
+  submit.mockResolvedValue(reviewRecord({ guideline_version: 2 }));
+  await edited(); await clock();
+  expect(screen.getByText("Guidelines updated to v2")).toBeDefined();
+  await confirmSubmit();
+  expect(screen.getByText("Review submitted")).toBeDefined();
+  expect(screen.queryByText("Guidelines updated to v2")).toBeNull();
+  const summary = screen.getByRole("region", { name: "Submitted review" });
+  const row = within(summary).getByText("Guidelines", { selector: "dt" }).parentElement!;
+  expect(row.querySelector("dd")?.textContent).toBe("v2");
 });
 it.each<ReviewDecisionCode>(["accepted_unchanged", "accepted_corrected", "query", "rejected"])("submits a deliberately selected %s through the real form and saver", async decision => {
   const { save, submit } = setup();

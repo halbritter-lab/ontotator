@@ -80,6 +80,7 @@ NOT_FOUND_CODES = frozenset(
         "REPORT_NOT_FOUND",
         "ANNOTATION_NOT_FOUND",
         "EVIDENCE_NOT_FOUND",
+        "GUIDELINE_NOT_FOUND",
     }
 )
 
@@ -430,6 +431,10 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "VARIANT_ALREADY_DISCARDED": 409,
                     "ASSIGNMENT_BATCH_REFUSED": 409,
                     "ASSIGNMENT_BATCH_STALE": 409,
+                    "GUIDELINE_TOO_LARGE": 413,
+                    "GUIDELINE_UNCHANGED": 409,
+                    "GUIDELINE_VERSION_CONFLICT": 409,
+                    "GUIDELINE_ALREADY_WITHDRAWN": 409,
                 }.get(exc.code, 422)
             ),
             content={"code": exc.code, "details": exc.details or str(exc)},
@@ -470,6 +475,9 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
 
     app.include_router(work_plan_router)
     app.include_router(translation_workflow_router)
+    from ontocurator.api.guideline_routes import router as guideline_router
+
+    app.include_router(guideline_router)
     app.include_router(project_router)
     app.include_router(job_router)
     app.include_router(upload_router)

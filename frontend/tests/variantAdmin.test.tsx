@@ -167,7 +167,7 @@ it("shows ordered readonly reviewer snapshots, rationale and created variant", a
     reviewer_pseudonym: "Original pseudonym", reviewer_qualification: "Original qualification", reviewer_languages: ["en", "de"],
     decision: "accepted_corrected", clinical_change: true, categories: ["value"], rationale: "Original rationale",
     machine_text_sha256: "a".repeat(64), proposed_text: "Immutable proposed text", proposed_text_sha256: "b".repeat(64),
-    status_before: "ready_for_review", status_after: "reviewed", created_variant_id: "actual-created-variant", review_policy: "review/v1", created_at: "2026-10-16T00:00:00Z",
+    status_before: "ready_for_review", status_after: "reviewed", created_variant_id: "actual-created-variant", review_policy: "review/v1", created_at: "2026-10-16T00:00:00Z", guideline_withdrawn: false,
   }]);
   render(<DocumentsPage projectKey="p" canManage query={openTarget} onNavigate={vi.fn()} />);
   fireEvent.click(await screen.findByRole("button", { name: "Translation reviews for v1" }));

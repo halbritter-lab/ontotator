@@ -66,7 +66,6 @@ from tests.layered_fixtures import HP_DIGEST, make_layered_package  # noqa: E402
 from tests.t1_fixtures import (  # noqa: E402
     bundle,
     create_project,
-    run_import,
     unit,
 )
 from tests.work_plan_support import plan_all  # noqa: E402
@@ -517,6 +516,36 @@ def run_fixture_import(
                 },
             )
         sleep(0.05)
+
+
+def register_t1_import_route(
+    app: FastAPI, grant_project_roles: Callable[[int, str, str], None]
+) -> None:
+    """Register ``/__test_import__``: a T1 bundle into ``t1-browser``."""
+
+    @app.post("/__test_import__")
+    def test_import(username: str = Query(...)) -> dict[str, object]:
+        """Import a T1 bundle into ``t1-browser``; the user joins it.
+
+        The import runs on the server's own job worker (``run_fixture_import``);
+        claiming it inline would race that worker for the queued job.
+        """
+        if app.state.repo.manifest_hash(T1_PROJECT) is None:
+            create_project(app.state.repo.db, T1_PROJECT)
+        with tempfile.TemporaryDirectory() as folder:
+            job = run_fixture_import(
+                app,
+                bundle(Path(folder) / "t1.zip", [unit("t1-case")], "browser-t1"),
+                T1_PROJECT,
+            )
+        user = app.state.accounts.get_by_username(username)
+        grant_project_roles(user.id, user.username, T1_PROJECT)
+        from auth_harness import provision_assignments
+
+        provision_assignments(app, user.username, T1_PROJECT, ROLES)
+        return dict(job.result or {})
+
+    app.router.routes.insert(0, app.router.routes.pop())
 
 
 def register_variant_scenario_route(app: FastAPI) -> None:
@@ -1330,6 +1359,10 @@ if __name__ == "__main__":
         from browser_review_flow_scenarios import register_review_flow_scenario_route
 
         register_review_flow_scenario_route(app)
+        from browser_guideline_scenarios import register_guideline_scenario_route
+
+        register_guideline_scenario_route(app)
+
         from browser_values_scenarios import register_values_scenario_route
 
         register_values_scenario_route(app)
@@ -1357,27 +1390,6 @@ if __name__ == "__main__":
 
         app.router.routes.insert(0, app.router.routes.pop())
 
-        @app.post("/__test_import__")
-        def test_import(username: str = Query(...)) -> dict[str, object]:
-            """Import a T1 bundle into ``t1-browser`` inline; the user joins it."""
-            db = app.state.repo.db
-            if app.state.repo.manifest_hash(T1_PROJECT) is None:
-                create_project(db, T1_PROJECT)
-            with tempfile.TemporaryDirectory() as folder:
-                job = run_import(
-                    db,
-                    bundle(Path(folder) / "t1.zip", [unit("t1-case")], "browser-t1"),
-                    T1_PROJECT,
-                )
-            if job.status != "succeeded":
-                raise HTTPException(500, job.error)
-            user = app.state.accounts.get_by_username(username)
-            grant_all(user.id, user.username, T1_PROJECT)
-            from auth_harness import provision_assignments
-
-            provision_assignments(app, user.username, T1_PROJECT, ROLES)
-            return dict(job.result or {})
-
-        app.router.routes.insert(0, app.router.routes.pop())
+        register_t1_import_route(app, grant_all)
 
         uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")

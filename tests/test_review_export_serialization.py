@@ -124,6 +124,9 @@ def test_exact_jsonl_contract_and_recorded_snapshot():
         "status_after",
         "review_policy",
         "reviewed_at",
+        "guideline_version",
+        "guideline_ref",
+        "guideline_withdrawn",
     ]
     assert row["reviewed_variant"] == dict(
         document_id="DE 1/7",

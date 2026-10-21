@@ -206,14 +206,15 @@ test('ordinary lead downloads real review JSONL bytes and a later current-role r
     const stream = await download.createReadStream(); expect(stream).not.toBeNull(); const chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
     const bytes = Buffer.concat(chunks); expect(sha(bytes)).toBe(job.result?.sha256); expect(bytes.toString('utf8').endsWith('\n')).toBe(true);
     const rows = bytes.toString('utf8').trimEnd().split('\n').map(line => JSON.parse(line) as { [key: string]: unknown }); expect(rows).toHaveLength(1);
-    expect(Object.keys(rows[0]).sort()).toEqual(['format', 'review_id', 'project', 'case_id', 'reviewed_variant', 'source_variant', 'reviewer', 'decision', 'clinical_change', 'categories', 'rationale', 'machine_text_sha256', 'proposed_text', 'proposed_text_sha256', 'created_variant', 'status_before', 'status_after', 'review_policy', 'reviewed_at'].sort());
+    expect(Object.keys(rows[0]).sort()).toEqual(['format', 'review_id', 'project', 'case_id', 'reviewed_variant', 'source_variant', 'reviewer', 'decision', 'clinical_change', 'categories', 'rationale', 'machine_text_sha256', 'proposed_text', 'proposed_text_sha256', 'created_variant', 'status_before', 'status_after', 'review_policy', 'reviewed_at', 'guideline_version', 'guideline_ref', 'guideline_withdrawn'].sort());
     expect(rows[0]).toEqual({ format: 'ontocurator-translation-review/v1', review_id: record.id, project: s.project, case_id: s.case_id,
       reviewed_variant: { document_id: s.external_id, language: 'de', version: reviewed.version, origin: reviewed.origin, text_sha256: reviewed.text_sha256, translation: reviewed.translation },
       source_variant: { document_id: source.external_id, language: 'en', version: source.version, text_sha256: source.text_sha256 },
       reviewer: { pseudonym: record.reviewer_pseudonym, qualification: record.reviewer_qualification, languages: record.reviewer_languages },
       decision: record.decision, clinical_change: record.clinical_change, categories: record.categories, rationale: record.rationale,
       machine_text_sha256: record.machine_text_sha256, proposed_text: record.proposed_text, proposed_text_sha256: record.proposed_text_sha256,
-      created_variant: null, status_before: record.status_before, status_after: record.status_after, review_policy: record.review_policy, reviewed_at: new Date(record.created_at).toISOString().replace(/\.\d{3}Z$/, 'Z') });
+      created_variant: null, status_before: record.status_before, status_after: record.status_after, review_policy: record.review_policy, reviewed_at: new Date(record.created_at).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      guideline_version: null, guideline_ref: null, guideline_withdrawn: false });
     const direct = await authenticatedRequest(page, `/api/v1/jobs/${jobId}/download`); expect(direct.ok()).toBeTruthy(); expect(direct.headers()['content-type']).toBe('application/x-ndjson'); expect(await direct.body()).toEqual(bytes);
     expect((await authenticatedRequest(other.page, `/api/v1/jobs/${jobId}/download`)).status()).toBe(403);
     expect((await authenticatedRequest(other.page, documentPath(s, s.documents.target, 'translation-reviews'))).status()).toBe(404);

@@ -18,6 +18,7 @@ import { DocumentsPage } from "./admin/DocumentsPage";
 import { ProgressPage } from "./admin/ProgressPage";
 import { ExportPage } from "./admin/ExportPage";
 import { ProblemReportDetail } from './tasks/ProblemReportDetail';
+import { GuidelinesPage } from "./guidelines/GuidelinesPage";
 import { Button, EmptyState, InlineMessage } from "./ui";
 
 export interface AppProps { user?: CurrentUser | null; onLogout?: () => void }
@@ -235,6 +236,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "projectCase": content = <CaseViewer projectKey={route.key} caseId={route.caseId} variant={route.variant} annotations={route.annotations} compare={route.compare} documents={route.documents} username={user.username} onNavigate={go} />; break;
     case "projectProgress": content = <ProgressPage projectKey={route.key} onNavigate={go} />; break;
     case "projectExport": content = <ExportPage projectKey={route.key} currentUser={user} />; break;
+    case "projectGuidelines": content = <GuidelinesPage projectKey={route.key} version={route.version}
+      canManage={!!projects.find(project => project.project_key === route.key)?.can_manage} onNavigate={go} />; break;
     case 'projectProblemReport': {
       const canManage = !!projects.find(project => project.project_key === route.key)?.can_manage;
       content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>

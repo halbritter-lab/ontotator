@@ -15,8 +15,8 @@ from ontocurator.storage.schema import alembic_config, upgrade
 from ontocurator.storage.tables import APP_ROLE
 
 # Renumbering (plan Global rule 12) only touches these two constants.
-REVISION = "0018"
-PREVIOUS = "0017"
+REVISION = "0019"
+PREVIOUS = "0018"
 S = "ontocurator"
 
 

@@ -39,6 +39,8 @@ export const taskText = (task: Pick<TaskSummary, "case_id" | "external_id" | "do
 export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.Element {
   const [state, setState] = useState<TaskState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
+  // Bumped by every successful task load, so the guideline links are re-read with the tasks.
+  const [loads, setLoads] = useState(0);
   useEffect(() => {
     let active = true;
     let generation = 0;
@@ -47,7 +49,7 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
       setState({ kind: "loading" });
       try {
         const tasks = await api.listMyTasks();
-        if (active && request === generation) setState({ kind: "ready", tasks });
+        if (active && request === generation) { setState({ kind: "ready", tasks }); setLoads(value => value + 1); }
       } catch (error: unknown) {
         if (active && request === generation) setState({ kind: "error", error });
       }
@@ -62,6 +64,24 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
       stopRestored();
     };
   }, [retry]);
+
+  // One quiet "Project guidelines v3" link per listed project with a version in force (spec: My tasks).
+  const taskProjects = state.kind === "ready" ? [...new Set(state.tasks.map(task => task.project_key))].sort() : [];
+  const projectIdentity = JSON.stringify(taskProjects);
+  const [guidelines, setGuidelines] = useState<{ identity: string; versions: ReadonlyMap<string, number> } | null>(null);
+  useEffect(() => {
+    const keys = JSON.parse(projectIdentity) as string[];
+    if (keys.length === 0) return;
+    let active = true;
+    // A failed read only hides that project's link; the task list stays usable.
+    void Promise.all(keys.map(key => api.listGuidelines(key).then(listing => listing.current?.version ?? null, () => null))).then(versions => {
+      if (!active) return;
+      const inForce = new Map<string, number>();
+      keys.forEach((key, index) => { const version = versions[index]; if (version !== null) inForce.set(key, version); });
+      setGuidelines({ identity: projectIdentity, versions: inForce });
+    });
+    return () => { active = false; };
+  }, [projectIdentity, loads]);
 
   const tasks = state.kind === "ready" ? state.tasks : [];
   const filtered = project === undefined ? tasks : tasks.filter(task => task.project_key === project);
@@ -78,6 +98,17 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
   const count = (predicate: (task: TaskSummary) => boolean) => filtered.filter(predicate).length;
   const countsLabel = project === undefined ? "Task counts" : `Task counts in ${options.get(project) ?? project}`;
   const managed = projects.filter(item => item.can_manage && (project === undefined || item.project_key === project));
+  const guidelineVersions = guidelines?.identity === projectIdentity ? guidelines.versions : new Map<string, number>();
+  const listedProjects = new Set(filtered.map(task => task.project_key));
+  const guidelineLinks = [...options.keys()].filter(key => listedProjects.has(key) && guidelineVersions.has(key));
+  const guidelineLink = (key: string) => {
+    const route: Route = { name: "projectGuidelines", key };
+    const name = tasks.find(task => task.project_key === key)?.project_name ?? key;
+    return <a href={routeHref(route)} onClick={event => {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault(); onNavigate(route);
+    }}>{`Project guidelines v${guidelineVersions.get(key)}${guidelineLinks.length > 1 ? ` · ${name}` : ""}`}</a>;
+  };
   const columns: Column<TaskSummary>[] = [
     { id: "text", header: "Text", cell: task => taskText(task) },
     { id: "project", header: "Project", cell: task => projectLabel(task.project_name, task.project_key) },
@@ -122,6 +153,9 @@ export function MyTasks({ project, projects, onNavigate }: MyTasksProps): JSX.El
         <li>In progress: {count(task => task.status === "in_progress")}</li>
         <li>Submitted: {count(task => task.status === "submitted")}</li>
         <li>of which paused: {count(task => task.held)}</li>
+      </ul>}
+      {guidelineLinks.length > 0 && <ul className="task-counts" aria-label="Project guidelines">
+        {guidelineLinks.map(key => <li key={key}>{guidelineLink(key)}</li>)}
       </ul>}
       {filtered.length === 0 ? empty : <DataTable label="My tasks" className="data-table--pin-end" rows={filtered} columns={columns} rowKey={task => String(task.assignment_id)} rowProps={task => ({ "data-testid": "task-row", "aria-label": `${projectLabel(task.project_name, task.project_key)}: ${taskText(task)}${failedChecks(task) > 0 ? `, ${failedChecksTitle(failedChecks(task))}` : ""}` })} />}
     </>}

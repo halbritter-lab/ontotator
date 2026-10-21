@@ -38,6 +38,7 @@ from ontocurator.domain.axis_visibility import editor_profile, legacy_axes_confi
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import Document, EvidenceSnapshot
 from ontocurator.domain.errors import DomainError, InvalidPackage, RevisionConflict
+from ontocurator.domain.guidelines import guideline_ref
 from ontocurator.domain.profiles import OntologyDefinition, TaskProfile, profile_hash
 from ontocurator.domain.project_rules import ProjectRules
 from ontocurator.domain.reanchor_resolution import PendingReanchorRef, ReanchorItem
@@ -75,6 +76,7 @@ from ontocurator.packages.models import (
     is_tree_walk,
 )
 from ontocurator.storage.database import Database, advisory_lock_id
+from ontocurator.storage.guidelines import current_guideline_version, guideline_facts
 from ontocurator.storage.tables import (
     AnnotationSnapshotRow,
     DocumentRow,
@@ -323,7 +325,10 @@ class ProjectExport:
     submissions: list[Submission]
     proposals: dict[tuple[str, str], AnnotationSnapshot]
     contributors: list[tuple[str, str, str | None]]
-    guideline_ref: str | None = None
+    # By submission_id, only for stamped submissions (G20): the reference and
+    # the version number of the guideline each result was made under.
+    guideline_refs: dict[str, str] = field(default_factory=dict)
+    guideline_versions: dict[str, int] = field(default_factory=dict)
     proposal_notes: dict[tuple[str, str], list[str]] = field(default_factory=dict)
 
 
@@ -1450,12 +1455,9 @@ class Repository:
         )
         with context as conn:
             project = conn.execute(
-                select(
-                    ProjectRow.id,
-                    ProjectRow.task_profile,
-                    ProjectRow.guideline_url,
-                    ProjectRow.guideline_version,
-                ).where(ProjectRow.project_key == project_key)
+                select(ProjectRow.id, ProjectRow.task_profile).where(
+                    ProjectRow.project_key == project_key
+                )
             ).one_or_none()
             if project is None:
                 raise DomainError(
@@ -1489,6 +1491,7 @@ class Repository:
                 SubmissionRow.mode,
                 SubmissionRow.recorded_at,
                 SubmissionRow.payload,
+                SubmissionRow.guideline_version,
             ).where(SubmissionRow.project_id == project.id)
             if submission_ids is not None:
                 submission_query = submission_query.where(
@@ -1526,11 +1529,19 @@ class Repository:
                 )
             ]
             pins = self._pins(conn, project.id)
+            facts = (
+                guideline_facts(conn, project.id)
+                if any(row.guideline_version is not None for row in submission_rows)
+                else {}
+            )
         groups: dict[tuple[str, str, str], list[Submission]] = {}
         recorded: dict[str, datetime] = {}
+        stamps: dict[str, int] = {}
         for row in submission_rows:
             submission = Submission.model_validate(row.payload)
             recorded[submission.submission_id] = row.recorded_at
+            if row.guideline_version is not None:
+                stamps[submission.submission_id] = row.guideline_version
             groups.setdefault((row.document_id, row.annotator_id, row.mode), []).append(
                 submission
             )
@@ -1569,6 +1580,12 @@ class Repository:
                         proposals[(alias.annotation.annotation_id, alias.version)] = (
                             alias
                         )
+        # A withdrawn version keeps its reference (G20): hash and kind stay.
+        versions = {
+            s.submission_id: stamps[s.submission_id]
+            for s in submissions
+            if s.submission_id in stamps
+        }
         return ProjectExport(
             profile=TaskProfile.model_validate(project.task_profile),
             pins=pins,
@@ -1577,9 +1594,11 @@ class Repository:
             proposals=proposals,
             proposal_notes=proposal_notes,
             contributors=contributors,
-            guideline_ref=f"{project.guideline_url}@{project.guideline_version}"
-            if project.guideline_url and project.guideline_version
-            else None,
+            guideline_refs={
+                sid: guideline_ref(project_key, version, facts[version].sha256)
+                for sid, version in versions.items()
+            },
+            guideline_versions=versions,
         )
 
     def edit_log(self, project_key: str) -> list[dict[str, Any]]:
@@ -2182,6 +2201,7 @@ class Repository:
         local_key: str,
         imported: bool,
         last_edit_event_id: int | None = None,
+        guideline_version: int | None = None,
     ) -> None:
         origin = submission.origin_key
         statement = pg_insert(SubmissionRow).values(
@@ -2196,6 +2216,7 @@ class Repository:
             payload=_submission_payload(submission),
             created_at=submission.created_at,
             last_edit_event_id=last_edit_event_id,
+            guideline_version=guideline_version,
         )
         # Imported submissions may already be known; a local one must be new.
         conn.execute(statement.on_conflict_do_nothing() if imported else statement)
@@ -3150,6 +3171,8 @@ class Repository:
                     local_key=key_string,
                     imported=False,
                     last_edit_event_id=event_id,
+                    # The version in force when this submit commits (G15).
+                    guideline_version=current_guideline_version(conn, project_id),
                 )
                 response = _submission_payload(result)
             else:

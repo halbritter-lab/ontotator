@@ -1075,6 +1075,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/guidelines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Guidelines */
+        get: operations["list_guidelines_api_v1_projects__key__guidelines_get"];
+        put?: never;
+        /** Publish Guideline */
+        post: operations["publish_guideline_api_v1_projects__key__guidelines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/guidelines/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Guideline */
+        get: operations["get_guideline_api_v1_projects__key__guidelines__version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/guidelines/{version}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw Guideline */
+        post: operations["withdraw_guideline_api_v1_projects__key__guidelines__version__withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/guidelines/{version}/reads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Guideline Read */
+        post: operations["record_guideline_read_api_v1_projects__key__guidelines__version__reads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/progress": {
         parameters: {
             query?: never;
@@ -2151,6 +2220,24 @@ export interface components {
              */
             lead_correction: boolean;
         };
+        /**
+         * AssignmentGuidelineView
+         * @description The guideline version in force in the task's project.
+         */
+        AssignmentGuidelineView: {
+            /** Version */
+            version: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "markdown" | "text";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** AssignmentOpenRequest */
         AssignmentOpenRequest: {
             /** Review Round Target Set Id */
@@ -2260,6 +2347,8 @@ export interface components {
              * @default false
              */
             lead_correction: boolean;
+            guideline?: components["schemas"]["AssignmentGuidelineView"] | null;
+            guideline_notice?: components["schemas"]["GuidelineNoticeView"] | null;
         };
         /**
          * AxisDefinition
@@ -2439,6 +2528,21 @@ export interface components {
             "files[]": string[];
             /** Language */
             language?: string | null;
+        };
+        /** Body_publish_guideline_api_v1_projects__key__guidelines_post */
+        Body_publish_guideline_api_v1_projects__key__guidelines_post: {
+            /** File */
+            file: string;
+            /**
+             * Change Note
+             * @default
+             */
+            change_note: string;
+            /**
+             * Expected Latest Version
+             * @default
+             */
+            expected_latest_version: string;
         };
         /** Body_upload_ontologies_api_v1_admin_ontologies__post */
         Body_upload_ontologies_api_v1_admin_ontologies__post: {
@@ -3318,6 +3422,149 @@ export interface components {
             reason: string;
             /** Destination */
             destination: string;
+        };
+        /** GuidelineDocument */
+        GuidelineDocument: {
+            /** Version */
+            version: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "markdown" | "text";
+            /** Filename */
+            filename: string | null;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Sha256 */
+            sha256: string;
+            /** Change Note */
+            change_note: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            created_by: components["schemas"]["PersonRefView"];
+            withdrawn?: components["schemas"]["GuidelineWithdrawalView"] | null;
+            reach?: components["schemas"]["GuidelineReachView"] | null;
+            /** Not Seen */
+            not_seen?: components["schemas"]["GuidelineNotSeenView"][] | null;
+            /** Body */
+            body: string | null;
+        };
+        /** GuidelineListing */
+        GuidelineListing: {
+            current: components["schemas"]["GuidelineSummary"] | null;
+            /** Latest Version */
+            latest_version: number | null;
+            /** Versions */
+            versions: components["schemas"]["GuidelineSummary"][];
+            /** My Latest Seen */
+            my_latest_seen: number | null;
+        };
+        /** GuidelineNotSeenView */
+        GuidelineNotSeenView: {
+            person: components["schemas"]["PersonRefView"];
+            /** Notified */
+            notified: boolean;
+        };
+        /** GuidelineNoticeChangeView */
+        GuidelineNoticeChangeView: {
+            /** Version */
+            version: number;
+            /** Change Note */
+            change_note: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Withdrawn */
+            withdrawn: boolean;
+        };
+        /**
+         * GuidelineNoticeView
+         * @description Versions newer than the owner last saw, newest first (at most five).
+         */
+        GuidelineNoticeView: {
+            /** From Version */
+            from_version: number | null;
+            /** To Version */
+            to_version: number;
+            /** Changes */
+            changes: components["schemas"]["GuidelineNoticeChangeView"][];
+            /** More */
+            more: number;
+        };
+        /**
+         * GuidelineReachView
+         * @description Task members (annotator or adjudicator role) notified of / opening a version.
+         */
+        GuidelineReachView: {
+            /** Notified */
+            notified: number;
+            /** Opened */
+            opened: number;
+            /** Members */
+            members: number;
+        };
+        /** GuidelineReadRequest */
+        GuidelineReadRequest: {
+            /**
+             * Event
+             * @enum {string}
+             */
+            event: "notified" | "opened";
+        };
+        /**
+         * GuidelineSummary
+         * @description One version; ``reach`` and ``not_seen`` only for leads and admins.
+         */
+        GuidelineSummary: {
+            /** Version */
+            version: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "markdown" | "text";
+            /** Filename */
+            filename: string | null;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Sha256 */
+            sha256: string;
+            /** Change Note */
+            change_note: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            created_by: components["schemas"]["PersonRefView"];
+            withdrawn?: components["schemas"]["GuidelineWithdrawalView"] | null;
+            reach?: components["schemas"]["GuidelineReachView"] | null;
+            /** Not Seen */
+            not_seen?: components["schemas"]["GuidelineNotSeenView"][] | null;
+        };
+        /** GuidelineWithdrawRequest */
+        GuidelineWithdrawRequest: {
+            /** Reason */
+            reason?: string | null;
+            /** Expected Latest Version */
+            expected_latest_version: number;
+        };
+        /** GuidelineWithdrawalView */
+        GuidelineWithdrawalView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            by: components["schemas"]["PersonRefView"];
+            /** Reason */
+            reason: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -4572,10 +4819,6 @@ export interface components {
             description?: string | null;
             /** Languages */
             languages?: string[];
-            /** Guideline Url */
-            guideline_url?: string | null;
-            /** Guideline Version */
-            guideline_version?: string | null;
             /**
              * Allow Spanless Findings
              * @default true
@@ -4661,10 +4904,6 @@ export interface components {
             description?: string | null;
             /** Languages */
             languages?: string[];
-            /** Guideline Url */
-            guideline_url?: string | null;
-            /** Guideline Version */
-            guideline_version?: string | null;
             /**
              * Allow Spanless Findings
              * @default true
@@ -5301,6 +5540,13 @@ export interface components {
             /** Finding Count */
             finding_count: number;
             author?: components["schemas"]["PersonRefView"] | null;
+            /** Guideline Version */
+            guideline_version?: number | null;
+            /**
+             * Guideline Withdrawn
+             * @default false
+             */
+            guideline_withdrawn: boolean;
         };
         /** RowSubmissions */
         RowSubmissions: {
@@ -5775,6 +6021,13 @@ export interface components {
             mode: string;
             /** Round Id */
             round_id?: string | null;
+            /** Guideline Version */
+            guideline_version?: number | null;
+            /**
+             * Guideline Withdrawn
+             * @default false
+             */
+            guideline_withdrawn: boolean;
         };
         /** SubmitRequest */
         SubmitRequest: {
@@ -6008,6 +6261,13 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Guideline Version */
+            guideline_version?: number | null;
+            /**
+             * Guideline Withdrawn
+             * @default false
+             */
+            guideline_withdrawn: boolean;
         };
         /** TranslationRunView */
         TranslationRunView: {
@@ -8858,6 +9118,181 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TranslationReviewRecord"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_guidelines_api_v1_projects__key__guidelines_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuidelineListing"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_guideline_api_v1_projects__key__guidelines_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_publish_guideline_api_v1_projects__key__guidelines_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuidelineSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_guideline_api_v1_projects__key__guidelines__version__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuidelineDocument"];
+                };
+            };
+            /** @description The cached version is still valid. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_guideline_api_v1_projects__key__guidelines__version__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuidelineWithdrawRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuidelineSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_guideline_read_api_v1_projects__key__guidelines__version__reads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuidelineReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

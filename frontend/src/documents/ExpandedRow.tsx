@@ -1,5 +1,5 @@
-import { Fragment, useId, useRef, useState, type ReactNode } from "react";
-import type { DocumentRowView, RowItemView, RowSubmissionView, RowSubmissions, SubmissionHistorySummary } from "../api/client";
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { api, type DocumentRowView, type RowItemView, type RowSubmissionView, type RowSubmissions, type SubmissionHistorySummary } from "../api/client";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { personLabel } from "../app/submissionLabels";
 import { Time } from "../app/Time";
@@ -85,7 +85,7 @@ function excerpt(text: string): string {
 }
 
 function toHistorySummary(row: RowSubmissionView): SubmissionHistorySummary {
-  return { submission_id: row.submission_id, document_id: row.document_id, author_label: row.author_label, created_at: row.recorded_at, mode: row.mode, round_id: row.round_id };
+  return { submission_id: row.submission_id, document_id: row.document_id, author_label: row.author_label, created_at: row.recorded_at, mode: row.mode, round_id: row.round_id, guideline_version: row.guideline_version ?? null, guideline_withdrawn: row.guideline_withdrawn };
 }
 
 /** Expanded content of one Documents row: stage blocks, Issues, Submissions (n) and More. */
@@ -98,6 +98,13 @@ export function ExpandedRow({
   const textVersionsRef = useRef<HTMLDetailsElement>(null);
   const [textVersionsOpen, setTextVersionsOpen] = useState(false);
   const [compareFor, setCompareFor] = useState<string | null>(null);
+  // Version in force, once per mount, for "Guidelines v2 (current: v3)"; a failed read only drops the comparison.
+  const [guidelineCurrent, setGuidelineCurrent] = useState<number | null>(null);
+  useEffect(() => {
+    let active = true;
+    void api.listGuidelines(projectKey).then(listing => listing.current?.version ?? null, () => null).then(version => { if (active) setGuidelineCurrent(version); });
+    return () => { active = false; };
+  }, [projectKey]);
   const [compareWith, setCompareWith] = useState("");
   const headingId = submissionsHeadingId(row.case_id, row.language);
   const data: RowSubmissions | null = submissions.data;
@@ -253,7 +260,7 @@ export function ExpandedRow({
               unavailable={unavailable} onAnnounce={onAnnounce} now={now} />
             <SubmissionsTable rows={rows} rounds={data.rounds} final={final} parallel={row.parallel_roots} showFinalColumn language={row.language}
               actions={actions} renderConfirm={renderConfirm} onNavigate={onNavigate} now={now} layout={layout}
-              finalLinkId={documentsRowId(row.case_id, row.language, "final-view")}
+              finalLinkId={documentsRowId(row.case_id, row.language, "final-view")} guidelineCurrent={guidelineCurrent}
               label={`Submissions, ${row.case_id} · ${row.language}`}
               viewRoute={submission => caseRoute(submission.document_id, submissionRef(submission.submission_id))} />
           </>}

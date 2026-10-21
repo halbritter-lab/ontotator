@@ -316,7 +316,7 @@ def serialize_t1_content(
                 else f"{project}:{key.annotator_id}:{key.mode}:{submission.submission_id}"
             ),
             source_text_sha256=stored.source_text_sha256,
-            guideline_ref=content.guideline_ref,
+            guideline_ref=content.guideline_refs.get(submission.submission_id),
             variant=stored.variant,
             source_variant_hashes=source_variant_hashes,
             single_native_case=stored.variant is None

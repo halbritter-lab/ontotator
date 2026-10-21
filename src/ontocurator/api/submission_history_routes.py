@@ -22,6 +22,7 @@ from ontocurator.domain.reanchor_resolution import (
 from ontocurator.domain.review import ReviewDecision
 from ontocurator.domain.work_rounds import RoundInputView
 from ontocurator.domain.workspace import RoundInputResolution, Submission
+from ontocurator.storage.guidelines import guideline_facts
 from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import SubmissionRow
 from ontocurator.storage.workflow_tables import RoundSubmissionBindingRow
@@ -40,6 +41,8 @@ class SubmissionHistorySummary(BaseModel):
     created_at: datetime
     mode: str
     round_id: str | None = None
+    guideline_version: int | None = None
+    guideline_withdrawn: bool = False
 
 
 class SubmissionHistoryDetail(BaseModel):
@@ -114,6 +117,11 @@ def _history(
                 )
             )
         }
+        facts = (
+            guideline_facts(conn, pid)
+            if any(row["guideline_version"] is not None for row in rows)
+            else {}
+        )
         summaries = [
             SubmissionHistorySummary(
                 submission_id=row["submission_id"],
@@ -123,6 +131,9 @@ def _history(
                 mode=row["mode"],
                 round_id=bindings.get(row["submission_id"])
                 or row["payload"].get("origin_key", {}).get("round_id"),
+                guideline_version=row["guideline_version"],
+                guideline_withdrawn=row["guideline_version"] is not None
+                and facts[row["guideline_version"]].withdrawn,
             )
             for row in rows
         ]

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { DocumentRowView, RowSubmissions } from "../../src/api/client";
+import { api, type DocumentRowView, type RowSubmissions } from "../../src/api/client";
+import { guidelineListing, guidelineSummary } from "../projectFixtures";
 import type { ProjectDocumentsQuery } from "../../src/app/router";
 import { formatTime } from "../../src/app/submissionLabels";
 import { ExpandedRow, type ExpandedRowProps } from "../../src/documents/ExpandedRow";
@@ -459,4 +460,14 @@ it("keeps open problem reports listed under More for rows not in plan", () => {
   const reports = screen.getByText("Problem reports (1)").closest("details")!;
   expect(within(reports).getByRole("listitem").textContent).toContain("Wrong text · ann-0004");
   expect(within(reports).getByRole("link", { name: "Open report" })).toBeTruthy();
+});
+
+it("shows Guidelines v2 (current: v3) in the submissions table", async () => {
+  const listing = vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineListing([guidelineSummary(3), guidelineSummary(2)]));
+  try {
+    const target = row({ case_id: "g", language: "de" });
+    renderRow(target, submissions("g", "de", { submissions: [submission({ submission_id: "s-g", document_id: "g-de", guideline_version: 2 })] }));
+    expect(await screen.findByText("Guidelines v2 (current: v3)")).toBeTruthy();
+    expect(listing).toHaveBeenCalledWith("p");
+  } finally { listing.mockRestore(); }
 });

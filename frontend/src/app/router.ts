@@ -84,6 +84,8 @@ export type Route =
   | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string; compare?: string; documents?: ProjectDocumentsQuery }
   | { name: "projectProgress"; key: string }
   | { name: "projectExport"; key: string }
+  /** Read-only guidelines page; without `version` the version in force. */
+  | { name: "projectGuidelines"; key: string; version?: number }
   | { name: "projectProblemReport"; key: string; reportId: string; action?: "resume"; section?: "decide"; documents?: ProjectDocumentsQuery }
   | { name: "notFound"; hash: string };
 
@@ -140,6 +142,13 @@ export function parseRoute(hash: string): Route {
       if (settings[2] === undefined) return { name: "projectSettings", key };
       return isSettingsSection(settings[2]) ? { name: "projectSettings", key, section: settings[2] } : notFound;
     }
+    const guidelines = /^#\/projects\/([^/]+)\/guidelines(?:\/v([1-9]\d*))?$/.exec(path);
+    if (guidelines) {
+      const key = decodeURIComponent(guidelines[1]);
+      if (guidelines[2] === undefined) return { name: "projectGuidelines", key };
+      const version = Number(guidelines[2]);
+      return Number.isSafeInteger(version) ? { name: "projectGuidelines", key, version } : notFound;
+    }
     const project = /^#\/projects\/([^/]+)\/(documents|progress|export)$/.exec(path);
     if (!project) return notFound;
     const key = decodeURIComponent(project[1]);
@@ -185,6 +194,7 @@ export function routeHref(route: Route): string {
     ])}`;
     case "projectProgress": return `#/projects/${encodeURIComponent(route.key)}/progress`;
     case "projectExport": return `#/projects/${encodeURIComponent(route.key)}/export`;
+    case "projectGuidelines": return `#/projects/${encodeURIComponent(route.key)}/guidelines${route.version === undefined ? "" : `/v${route.version}`}`;
     case "projectProblemReport": return `#/projects/${encodeURIComponent(route.key)}/problem-reports/${encodeURIComponent(route.reportId)}${querySuffix([
       ["action", route.action], ["section", route.section], ...documentsEntries(route.documents, "documents_"),
     ])}`;

@@ -72,15 +72,18 @@ def test_a_lead_edits_settings_but_not_another_project(app):
     create_project(app, admin, "other")
     lead = logged_in(app, "lead", projects={"phenotypes": ["lead"]})
     changed = lead.patch(
-        "/api/v1/projects/phenotypes/settings",
-        json={
-            "name": "Updated",
-            "guideline_url": "https://example.org/g",
-            "guideline_version": "v2",
-        },
+        "/api/v1/projects/phenotypes/settings", json={"name": "Updated"}
     )
     assert changed.status_code == 200, changed.text
     assert changed.json()["name"] == "Updated"
+    # The URL/version fields are gone; versioned guidelines replace them.
+    assert (
+        lead.patch(
+            "/api/v1/projects/phenotypes/settings",
+            json={"guideline_url": "https://example.org/g"},
+        ).status_code
+        == 422
+    )
     assert (
         lead.patch("/api/v1/projects/other/settings", json={"name": "No"}).status_code
         == 404
@@ -204,34 +207,6 @@ def test_pins_lock_after_the_first_submission(tmp_path):
         service.update_pins(OPERATOR, "proj", {})
     with pytest.raises(DomainError, match="PROJECT_IN_USE"):
         service.update_profile(OPERATOR, "proj", service.settings("proj").profile)
-
-
-def test_the_export_carries_the_guideline_reference(tmp_path):
-    from pg_harness import database_for
-    from t1_fixtures import OPERATOR, bundle, run_import, unit
-    from t1_fixtures import create_project as seed
-    from test_t1_export import _read, _run, _submit
-
-    from ontocurator.ontology.registry import OntologyRegistry
-    from ontocurator.ontology.store import OntologyStore
-    from ontocurator.projects.service import ProjectService, ProjectSettingsChange
-
-    db = database_for(tmp_path / "project.db", data_dir=tmp_path)
-    seed(db)
-    assert (
-        run_import(db, bundle(tmp_path / "in.zip", [unit("EN100017")])).status
-        == "succeeded"
-    )
-    ProjectService(db, OntologyStore(db, OntologyRegistry(), tmp_path)).update_settings(
-        OPERATOR,
-        "proj",
-        ProjectSettingsChange(
-            guideline_url="https://example.org/g", guideline_version="v2"
-        ),
-    )
-    _submit(db, "alice", "independent", [], submission_id="s1")
-    _, units = _read(db, _run(db, "t1_export"))
-    assert units[0].annotation_set.guideline_ref == "https://example.org/g@v2"
 
 
 def test_a_prepared_edit_cannot_commit_after_profile_change(tmp_path, monkeypatch):

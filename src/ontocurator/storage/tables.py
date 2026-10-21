@@ -20,6 +20,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Identity,
     Index,
+    Integer,
     MetaData,
     Text,
     UniqueConstraint,
@@ -58,6 +59,8 @@ APPEND_ONLY_TABLES = (
     "discarded_variants",
     "text_change_resolutions",
     "draft_snapshots",
+    "guideline_versions",
+    "guideline_withdrawals",
 )
 
 NAMING_CONVENTION = {
@@ -102,8 +105,6 @@ class ProjectRow(Base):
     task_profile: Mapped[dict[str, Any]]
     task_profile_sha256: Mapped[str]
     languages: Mapped[list[Any]] = mapped_column(server_default=text("'[]'::jsonb"))
-    guideline_url: Mapped[str | None]
-    guideline_version: Mapped[str | None]
     allow_spanless_findings: Mapped[bool] = mapped_column(
         Boolean, server_default=text("true")
     )
@@ -400,6 +401,13 @@ class SubmissionRow(Base):
     __table_args__ = (
         Index("ix_submissions_project_local_key", "project_id", "local_key"),
         Index("ix_submissions_project_document", "project_id", "document_id"),
+        ForeignKeyConstraint(
+            ["project_id", "guideline_version"],
+            [
+                f"{SCHEMA}.guideline_versions.project_id",
+                f"{SCHEMA}.guideline_versions.version",
+            ],
+        ),
     )
 
     project_id: Mapped[int] = mapped_column(
@@ -419,6 +427,8 @@ class SubmissionRow(Base):
     last_edit_event_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey(f"{SCHEMA}.edit_events.id")
     )
+    # The guideline version in force at submit; NULL when none was (G19).
+    guideline_version: Mapped[int | None] = mapped_column(Integer)
 
 
 class SearchEventRow(Base):
@@ -844,6 +854,13 @@ class TranslationReviewRow(Base):
             "document_id",
             "id",
         ),
+        ForeignKeyConstraint(
+            ["project_id", "guideline_version"],
+            [
+                f"{SCHEMA}.guideline_versions.project_id",
+                f"{SCHEMA}.guideline_versions.version",
+            ],
+        ),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
@@ -865,6 +882,8 @@ class TranslationReviewRow(Base):
     created_variant_id: Mapped[str | None]
     review_policy: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # The guideline version in force at submit; NULL when none was (G19).
+    guideline_version: Mapped[int | None] = mapped_column(Integer)
 
 
 class TranslationReviewDraftRow(Base):
@@ -914,6 +933,7 @@ class UploadRow(Base):
 # Register workflow mappings after the shared Base and historical tables exist.
 # Register split final-result metadata with the shared schema.
 from ontocurator.storage import final_tables as _final_tables  # noqa: E402,F401
+from ontocurator.storage import guideline_tables as _guideline_tables  # noqa: E402,F401
 from ontocurator.storage import overview_tables as _overview_tables  # noqa: E402,F401
 from ontocurator.storage import plan_tables as _plan_tables  # noqa: E402,F401
 from ontocurator.storage import workflow_tables as _workflow_tables  # noqa: E402, F401

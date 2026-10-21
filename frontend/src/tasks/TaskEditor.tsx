@@ -10,6 +10,7 @@ import { useVersionAccess } from "../variants/useVersionAccess";
 import { TranslationReviewScreen } from "../translation/TranslationReviewScreen";
 import { WorkRoundsDialog } from "./WorkRoundsDialog";
 import { TaskProblemActions } from "./TaskProblemActions";
+import { TaskGuidelines } from "./TaskGuidelines";
 import { roundBadge as roundBadgeOf, roundIdentity } from "../editor/rounds/roundLabels";
 
 interface TaskEditorProps {
@@ -37,10 +38,19 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
   if (state.error) return <section>{state.error instanceof ApiError && state.error.code === "ASSIGNMENT_NOT_FOUND"
     ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={state.error} />}
     <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate({ name: "tasks" })}>Back to my tasks</Button></section>;
-  if (state.assignment?.task === "translation_review") return <TranslationReviewScreen key={identity} assignmentId={props.assignmentId} username={props.user.username}
-    held={state.assignment.held} holdReason={state.assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
-    reportActions={<TaskProblemActions assignment={state.assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={assignment => setState({ identity, assignment })} />}
-    onNavigate={props.onNavigate} routeLeaveRef={props.routeLeaveRef} leaveGuardRef={props.leaveGuardRef} />;
+  if (state.assignment?.task === "translation_review") {
+    const assignment = state.assignment;
+    // Lead correction shows no problem reporter, whose focus reload otherwise refreshes the task metadata.
+    return <TaskGuidelines assignment={assignment} readOnly={assignment.status === "submitted" || assignment.held}
+      onRefresh={assignment.lead_correction ? value => setState({ identity, assignment: value }) : undefined}>{guidelines => <>
+      <TranslationReviewScreen key={identity} assignmentId={props.assignmentId} username={props.user.username}
+        held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
+        guidelineActions={guidelines.button} guidelineNotice={guidelines.notice}
+        reportActions={<TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => setState({ identity, assignment: value })} />}
+        onNavigate={props.onNavigate} routeLeaveRef={props.routeLeaveRef} leaveGuardRef={props.leaveGuardRef} />
+      {guidelines.drawer}
+    </>}</TaskGuidelines>;
+  }
   return <AnnotationTaskEditor key={identity} {...props} />;
 }
 
@@ -142,7 +152,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   // Toolbar identity (spec section 7): short badge, full identity line as its title.
   const roundBadge = roundBadgeOf(roundInfo);
   const roundTitle = roundInfo ? roundIdentity(roundInfo) : undefined;
-  return <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
+  return <TaskGuidelines assignment={assignment} readOnly={workspace.read_only || assignment.held}>{guidelines => <>{submittedElsewhere && <InlineMessage tone="info">Another session submitted this task. Your editor has been reloaded read-only.</InlineMessage>}
     {!!taskError && <><ErrorNotice error={taskError} /><Button onClick={() => { void loadTasks(); }}>Retry task list</Button></>}
     <CaseErrorBoundary key={`${workspace.workspace_id}:${revision}`} onBackToDashboard={back} backLabel="Back to my tasks" onReload={() => { void load(); }}>
     <CaseScreen view={workspace.view} workspaceId={workspace.workspace_id} annotatorName={user.display_name}
@@ -150,12 +160,13 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
         // Save pending edits first: the dialog tells an untouched round from one with saved work.
         void (saveBeforeReportRef.current?.() ?? Promise.resolve()).catch(() => undefined).then(() => { if (active.current) setRoundDialogOpen(true); });
       }}>Work rounds</Button>
+        {guidelines.button}
         <TaskProblemActions assignment={assignment} onSaveBeforeReport={async () => { await saveBeforeReportRef.current?.(); }} onRefresh={value => {
           setWorkspace(current => current ? { ...current, assignment: value } : current); void loadTasks();
         }} /></>}
       roundInputs={roundInputs} roundKind={roundInfo?.kind} roundBadge={roundBadge} roundTitle={roundTitle}
       roundOrdinal={roundInfo?.round_ordinal} documentVersion={roundInfo?.document_version}
-      held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef}
+      held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef} guidelineNotice={guidelines.notice}
       versionContext={{ username: user.username, assignmentId, onNavigate, canBrowseVersions: versionAccess.allowed }}
       readOnly={workspace.read_only} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef}
       assignmentNavigation={{ tasks, current, onNavigate: id => onNavigate({ name: "task", assignmentId: id }) }}
@@ -173,5 +184,6 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       selectedWorkRound.current = created.round_id; setRoundDialogOpen(false);
       await load(undefined, created.round_id);
     }} />}
-  </>;
+  {guidelines.drawer}
+  </>}</TaskGuidelines>;
 }

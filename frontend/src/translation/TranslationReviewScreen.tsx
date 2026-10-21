@@ -23,6 +23,10 @@ export interface TranslationReviewScreenProps {
   routeLeaveRef: MutableRefObject<RouteLeaveGuard | null>;
   leaveGuardRef: MutableRefObject<((proceed: () => void) => void) | null>;
   reportActions?: ReactNode;
+  /** The guidelines toolbar button; shown in every mode, also where `reportActions` is hidden (lead correction). */
+  guidelineActions?: ReactNode;
+  /** The guidelines update notice, shown above the review bar. */
+  guidelineNotice?: ReactNode;
   held?: boolean;
   holdReason?: string | null;
   saveBeforeReportRef?: MutableRefObject<(() => Promise<void>) | null>;
@@ -512,6 +516,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
 
   return <section className="translation-review" aria-label="Translation review" ref={screenRoot}>
     {held && <InlineMessage tone="warning">Task paused: {props.holdReason ?? workspace.assignment.hold_reason ?? "A project problem needs attention."} Your local translation and review input are kept.</InlineMessage>}
+    {/* Gone once the review is submitted here: the notice belongs to editable tasks. */}
+    {!readOnly && props.guidelineNotice}
     <Button className="translation-skip" onClick={focusDecision}>Skip to decision</Button>
     <div className="translation-review-bar density-compact">
       <h1>{workspace.variant.external_id}</h1>
@@ -529,6 +535,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
         </details>
       </div>
       <div className="translation-review-tools">
+        {props.guidelineActions}
         {!leadCorrection && props.reportActions}
         <span role="status" className="translation-save-status"><StatusBadge tone={statusTone}>{status}</StatusBadge></span>
         <Button variant="quiet" size="sm" icon={<IconRetry />} onClick={() => { void reload(); }}

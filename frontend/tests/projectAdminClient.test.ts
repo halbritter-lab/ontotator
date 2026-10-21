@@ -10,7 +10,7 @@ it("uses exact project endpoints, changed-only PATCH, structural PUTs, encoded k
   await client.listTemplates();
   await client.createProject({ key: "p", name: "Project", template: "template", pins: [] });
   await client.getProjectSettings("p/key");
-  await client.updateProjectSettings("p/key", { guideline_url: null, guideline_version: null });
+  await client.updateProjectSettings("p/key", { name: "Research" });
   await client.updatePins("p/key", []);
   await client.updateProjectProfile("p/key", profile);
   await client.listMembers("p/key");
@@ -21,7 +21,7 @@ it("uses exact project endpoints, changed-only PATCH, structural PUTs, encoded k
     ["/api/v1/projects/p%2Fkey/pins", "PUT"], ["/api/v1/projects/p%2Fkey/profile", "PUT"],
     ["/api/v1/projects/p%2Fkey/members", "GET"], ["/api/v1/projects/p%2Fkey/members/alice.name", "PUT"],
   ]);
-  expect(JSON.parse(fetch.mock.calls[3][1].body)).toEqual({ guideline_url: null, guideline_version: null });
+  expect(JSON.parse(fetch.mock.calls[3][1].body)).toEqual({ name: "Research" });
   expect(JSON.parse(fetch.mock.calls[7][1].body)).toEqual({ roles: [], revoke_assignments: true });
   expect(fetch.mock.calls.every(([, init]) => init.credentials === "same-origin")).toBe(true);
   for (const [, init] of fetch.mock.calls) expect(new Headers(init.headers).get("X-CSRF-Token")).toBe(init.method === "GET" ? null : "token");

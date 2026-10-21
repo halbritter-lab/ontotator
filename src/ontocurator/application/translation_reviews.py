@@ -36,6 +36,7 @@ from ontocurator.domain.variants import (
 )
 from ontocurator.jobs.queue import JobQueue
 from ontocurator.storage.database import Database
+from ontocurator.storage.guidelines import current_guideline_version, guideline_facts
 from ontocurator.storage.repository import Repository, _lock_id
 from ontocurator.storage.tables import (
     AssignmentRow,
@@ -69,6 +70,27 @@ class TranslationReviewRecord(BaseModel):
     created_variant_id: str | None
     review_policy: str
     created_at: datetime
+    # The guideline version in force at submit (G15); NULL when none was.
+    guideline_version: int | None = None
+    guideline_withdrawn: bool = False
+
+
+def with_guideline_withdrawn(
+    conn: Connection, project_id: int, records: list[TranslationReviewRecord]
+) -> list[TranslationReviewRecord]:
+    """``records`` with ``guideline_withdrawn`` set from the stamped versions."""
+    if not any(r.guideline_version is not None for r in records):
+        return records
+    facts = guideline_facts(conn, project_id)
+    # The stamp has a foreign key to its version, so every stamp has a fact.
+    return [
+        r
+        if r.guideline_version is None
+        else r.model_copy(
+            update={"guideline_withdrawn": facts[r.guideline_version].withdrawn}
+        )
+        for r in records
+    ]
 
 
 def failed_translation_checks(
@@ -268,10 +290,16 @@ class TranslationReviewService:
         )
         if not can(fresh, Action.VIEW_ALL_DOCUMENTS, key):
             query = query.where(TranslationReviewRow.reviewer_user_id == fresh.user_id)
-        records = [
-            TranslationReviewRecord.model_validate(r)
-            for r in conn.execute(query.order_by(TranslationReviewRow.id)).mappings()
-        ]
+        records = with_guideline_withdrawn(
+            conn,
+            project_id,
+            [
+                TranslationReviewRecord.model_validate(r)
+                for r in conn.execute(
+                    query.order_by(TranslationReviewRow.id)
+                ).mappings()
+            ],
+        )
         if any(r.machine_text_sha256 != baseline_hash for r in records):
             raise DomainError("VARIANT_SOURCE_UNKNOWN", "Review baseline hash mismatch")
         return records
@@ -306,6 +334,7 @@ class TranslationReviewService:
                     or submitted.machine_text_sha256 != variant.text_sha256
                 ):
                     raise DomainError("ASSIGNMENT_NOT_FOUND")
+                (submitted,) = with_guideline_withdrawn(conn, pid, [submitted])
                 row = conn.execute(
                     select(TranslationReviewDraftRow.revision).where(
                         TranslationReviewDraftRow.assignment_id == assignment.id
@@ -480,6 +509,7 @@ class TranslationReviewService:
                 created_variant_id=child.document_id if child else None,
                 review_policy=REVIEW_POLICY,
                 created_at=now,
+                guideline_version=current_guideline_version(conn, pid),
             )
             record_id = conn.execute(
                 insert(TranslationReviewRow)
