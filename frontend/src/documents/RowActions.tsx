@@ -35,15 +35,45 @@ export function PlanPopover({ row, groupRevision, saves, variant = "secondary", 
   const button = useRef<HTMLButtonElement>(null);
   const name = rowName(row);
   const popoverId = documentsRowId(row.case_id, row.language, "plan");
+  // Undecided: the two-option controls; once decided (here or by a reload) the chips. The swap keeps focus in the popover.
+  const choices = isUndecided(row) && !saves.decidedLocally(row);
+  const shownChoices = useRef(choices);
+  useEffect(() => {
+    if (shownChoices.current === choices) return;
+    shownChoices.current = choices;
+    const active = document.activeElement;
+    if (open && (!active || active === document.body)) document.getElementById(popoverId)?.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [choices, open, popoverId]);
   return <>
     <Button ref={button} id={documentsRowId(row.case_id, row.language, "action")} size="sm" variant={variant}
       className={["documents-action", block && "documents-action--block"].filter(Boolean).join(" ")}
       aria-label={`Plan…, ${name}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? popoverId : undefined}
       onClick={() => setOpen(!open)}>Plan…</Button>
     <Popover open={open} anchorRef={button} label={`Plan, ${name}`} width={280} onClose={() => setOpen(false)}>
-      <div id={popoverId}><PlanChips row={row} groupRevision={groupRevision} saves={saves} /></div>
+      <div id={popoverId}>{choices
+        ? <PlanChoices row={row} groupRevision={groupRevision} saves={saves} />
+        : <PlanChips row={row} groupRevision={groupRevision} saves={saves} />}</div>
     </Popover>
   </>;
+}
+
+/**
+ * The plan of an undecided row as two-option controls ("Annotate" / "Don't annotate", and Review for
+ * translations): neither option is pressed until the lead decides, so "not decided" never looks like "off".
+ */
+export function PlanChoices({ row, groupRevision, saves }: { row: DocumentRowView; groupRevision: number; saves: PlanSaves }): JSX.Element {
+  const name = rowName(row);
+  const reviewApplicable = row.plan_row?.review_applicable ?? !row.is_source;
+  const choice = (flag: "review" | "annotate", on: string, off: string) => <div key={flag} role="group" aria-label={`${on}, ${name}`} className="documents-plan-choice">
+    {[[true, on], [false, off]].map(([value, label]) => <Button key={String(value)} size="sm" variant="secondary"
+      aria-pressed={false} aria-disabled={saves.isBusy(row, flag) || undefined}
+      onClick={() => { if (!saves.isBusy(row, flag)) saves.set(row, flag, value as boolean, groupRevision); }}>{label as string}</Button>)}
+    <span className="cell-secondary">Not decided yet</span>
+  </div>;
+  return <div className="documents-plan-choices" data-plan-row={`${row.case_id}:${row.language}`}>
+    {reviewApplicable && choice("review", "Review", "Don't review")}
+    {choice("annotate", "Annotate", "Don't annotate")}
+  </div>;
 }
 
 export interface RowActionCellProps {

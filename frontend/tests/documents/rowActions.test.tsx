@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, type DocumentRowView, type NextStepView, type PlanRowResult } from "../../src/api/client";
 import { usePlanSaves } from "../../src/documents/PlanChips";
@@ -23,7 +23,7 @@ const undecided = (language = "de") => notInPlanRow("case-101", language, {
   plan_row: { review: false, annotate: false, review_applicable: true, discarded: false, decided: false },
 });
 
-beforeEach(() => { onAction.mockReset(); vi.spyOn(api, "patchWorkPlan"); });
+beforeEach(() => { onAction.mockReset(); vi.spyOn(api, "patchWorkPlan"); vi.spyOn(api, "setWorkPlanRows"); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it("one button for the first lead-owned step and a +n menu for the others", () => {
@@ -82,7 +82,12 @@ it("plan popover saves on chip click with Undo toast", async () => {
   fireEvent.click(button);
   expect(button.getAttribute("aria-expanded")).toBe("true");
   const popover = screen.getByRole("dialog", { name: "Plan, case-101 · de" });
-  const review = within(popover).getByRole("button", { name: "Review, case-101 · de" });
+  // Undecided: each flag is a pair of options, neither pressed.
+  const reviewGroup = within(popover).getByRole("group", { name: "Review, case-101 · de" });
+  const review = within(reviewGroup).getByRole("button", { name: "Review" });
+  expect(within(reviewGroup).getByRole("button", { name: "Don't review" }).getAttribute("aria-pressed")).toBe("false");
+  expect(review.getAttribute("aria-pressed")).toBe("false");
+  expect(within(reviewGroup).getByText("Not decided yet")).toBeTruthy();
   expect(document.activeElement).toBe(review);
   fireEvent.click(review);
   expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-101", "de", { review: true, expected_revision: 3, confirm: false });
@@ -116,7 +121,7 @@ it("plan popover stays open when a save moves the row into the plan; closing foc
   expect(button.getAttribute("aria-controls")).toBe("documents-row-case-101-de-plan");
   expect(document.getElementById("documents-row-case-101-de-plan")).not.toBeNull();
   expect(popover.contains(document.getElementById("documents-row-case-101-de-plan"))).toBe(true);
-  fireEvent.click(within(popover).getByRole("button", { name: "Review, case-101 · de" }));
+  fireEvent.click(within(within(popover).getByRole("group", { name: "Review, case-101 · de" })).getByRole("button", { name: "Review" }));
   expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
   // The reload: the row is in the plan now, its first lead step is no longer "Plan…".
   rerender(<Harness row={stagedRow("case-101", "de", { steps: [stepOf("assign_translation_review")] })} />);
@@ -145,4 +150,20 @@ it("lists lead actions that are no step after the other steps, and alone as an A
     extraActions={[{ id: "change-final", label: "Change final…", onSelect: changeFinal }]} />);
   const actions = screen.getByRole("button", { name: "Actions, case-110 · de" });
   expect(actions.textContent).toBe("Actions");
+});
+
+it("Don't annotate on an undecided row records the decision without turning anything on", async () => {
+  vi.mocked(api.setWorkPlanRows).mockResolvedValue({ changed_rows: 1, revisions: { "case-101": 4 }, withdrawn: [],
+    undo: { rows: [{ case_id: "case-101", language: "de", review: false, annotate: false, restored_revision: null }], revisions: { "case-101": 4 } } });
+  render(<Harness row={undecided()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Plan…, case-101 · de" }));
+  const annotate = screen.getByRole("group", { name: "Annotate, case-101 · de" });
+  fireEvent.click(within(annotate).getByRole("button", { name: "Don't annotate" }));
+  await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledWith("p", {
+    rows: [{ case_id: "case-101", language: "de", review: false, annotate: false }], expected_revisions: { "case-101": 3 }, undo: false, confirm: false,
+  }));
+  expect(api.patchWorkPlan).not.toHaveBeenCalled();
+  expect(await screen.findByText("de of case-101: Annotate off")).toBeTruthy();
+  // Decided now: the popover shows the row's chips.
+  expect(screen.getByRole("button", { name: "Annotate, case-101 · de" }).getAttribute("aria-pressed")).toBe("false");
 });

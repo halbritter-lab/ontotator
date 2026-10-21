@@ -119,3 +119,6 @@
 .documents-review-reason { display: grid; gap: var(--space-1); margin-top: var(--space-1); }
 .documents-review-reason p { margin: 0; }
 .documents-review-reason blockquote { margin: 0; padding-inline-start: var(--space-3); border-inline-start: 3px solid var(--border-strong); }
+/* Plan… of an undecided row: two options per flag, neither pressed until the lead decides. */
+.documents-plan-choices { display: grid; gap: var(--space-2); }
+.documents-plan-choice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
