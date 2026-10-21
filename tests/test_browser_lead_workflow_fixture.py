@@ -260,16 +260,16 @@ def test_rejected_translation_for_lead_builds(client):
         assert not [w for w in row["work"] if w["status"] != "submitted"]
     assert de[cases["to_assign"]]["next_step"]["code"] == "assign_translation_review"
     # The fixture imports with "Nothing planned": the three en source rows
-    # stay unplanned, so they are undecided and count as decisions too (V10);
-    # the two resolve steps stay.
+    # stay unplanned but are never undecided ("not planned"); only the two
+    # resolve steps need a decision (V10).
     undecided = {
         key
         for key, row in rows.items()
         if row["next_step"] and row["next_step"]["code"] == "decide_plan"
     }
-    assert undecided == {(case, "en") for case in cases.values()}
-    assert bar["not_decided"] == len(undecided) == 3
-    assert bar["needs_decision"] - bar["not_decided"] == 2
+    assert undecided == set()
+    assert bar["not_decided"] == 0
+    assert bar["needs_decision"] == 2
     # The lead reviews de (FD6: languages and a qualification at start).
     app: Any = client.app
     accounts = app.state.accounts

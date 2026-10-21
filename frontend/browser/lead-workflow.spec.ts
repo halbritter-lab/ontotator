@@ -137,14 +137,16 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
   expect(clicks.total).toBe(1);
   // Not counted: the upload dialog stays open with the import result and is closed here.
   await finishImport(page, upload, 200);
-  // "Nothing planned": every text is undecided (VD3): a normal row with "? not decided" and "Plan…", counted as a decision (V10).
+  // "Nothing planned": every translation is undecided (VD3): a normal row with "? not decided" and "Plan…", counted as a
+  // decision (V10). The en sources are never undecided: "— not planned", no decision.
   await expect(documentsTab(page, "All", 200)).toBeVisible();
-  await expect(documentsTab(page, "Needs your decision", 200)).toBeVisible();
+  await expect(documentsTab(page, "Needs your decision", 150)).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Select all 50 filtered cases", exact: true })).toBeVisible();
-  for (const language of ["en", "de", "es", "fr"]) {
+  for (const language of ["de", "es", "fr"]) {
     await expect(rowCell(row(page, "case-0101", language), "annotation"), language).toHaveText(/not decided/);
     await expect(rowAction(page, "Plan…", "case-0101", language)).toBeVisible();
   }
+  await expect(rowCell(row(page, "case-0101", "en"), "annotation")).toHaveText(/not planned/);
 
   // 2. Plan the 20 de cases from pasted IDs: Select by case IDs…, Select 20, Plan…, Review, Annotate, Save (6 + paste; total 7).
   await selectByIds(page, clicks, de);
