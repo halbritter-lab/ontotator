@@ -1,0 +1,110 @@
+/* Submit dialog: "Unconfirmed values" section (annotator acceptance spec F2). Tokens only. */
+
+.unconfirmed-values {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--notice-warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--notice-warning-fill);
+  color: var(--notice-warning-text);
+}
+
+.unconfirmed-values__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.unconfirmed-values__header h3 {
+  margin: 0;
+  font-size: var(--size-md);
+}
+
+.unconfirmed-values__intro,
+.unconfirmed-values__note {
+  margin: 0;
+  font-size: var(--size-sm);
+}
+
+.unconfirmed-values__note {
+  font-weight: var(--weight-strong);
+}
+
+.unconfirmed-values__list {
+  max-height: 50dvh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.unconfirmed-values__row {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.unconfirmed-values__row:last-child {
+  border-bottom: 0;
+}
+
+.unconfirmed-values__quote {
+  font-family: var(--font-serif);
+  font-size: var(--size-sm);
+  color: var(--text-muted);
+}
+
+.unconfirmed-values__values {
+  font-size: var(--size-sm);
+  font-weight: var(--weight-strong);
+}
+
+.unconfirmed-values__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.unconfirmed-values__busy,
+.unconfirmed-values__reason {
+  font-size: var(--size-sm);
+  color: var(--text-muted);
+}
+
+.unconfirmed-values__error {
+  font-size: var(--size-sm);
+  color: var(--danger);
+}
+
+.unconfirmed-values__done {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--notice-success-border);
+  border-radius: var(--radius-sm);
+  background: var(--success-light);
+  color: var(--notice-success-text);
+  font-weight: var(--weight-strong);
+}
+
+.submit-ack {
+  margin: 0 0 var(--space-2);
+}
+
+@media (forced-colors: active) {
+  .unconfirmed-values,
+  .unconfirmed-values__list,
+  .unconfirmed-values__row,
+  .unconfirmed-values__done {
+    border-color: CanvasText;
+  }
+}

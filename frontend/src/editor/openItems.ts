@@ -90,10 +90,22 @@ export function summaryLine(items: readonly OpenItem[]): string {
   return KIND_ORDER.filter(kind => countOf(items, kind) > 0).map(kind => PHRASES[kind](countOf(items, kind))).join(", ");
 }
 
-/** Why "Submit case" is unavailable because of open items: the first blocking kind's sentence. */
-export function submitBlockedReason(items: readonly OpenItem[]): string | null {
+/** Kinds the Submit dialog shows in its own "Unconfirmed values" section, not in the generic list. */
+export const DIALOG_HIDDEN_KINDS: readonly OpenItemKind[] = ["defaulted", "unconfirmed-values"];
+
+/** The open items the Submit dialog lists; the toolbar's "Next open item" keeps every kind. */
+export function dialogItems(items: readonly OpenItem[]): OpenItem[] {
+  return items.filter(item => !DIALOG_HIDDEN_KINDS.includes(item.kind));
+}
+
+/**
+ * Why "Submit case" is unavailable because of open items: the first blocking kind's sentence, then
+ * `blockingValues` unconfirmed values when the project requires chosen axes.
+ */
+export function submitBlockedReason(items: readonly OpenItem[], blockingValues = 0): string | null {
   const kind = KIND_ORDER.find(value => items.some(item => item.kind === value && item.blocking));
-  return kind ? BLOCKED[kind]?.(countOf(items, kind)) ?? null : null;
+  const reason = kind ? BLOCKED[kind]?.(countOf(items, kind)) ?? null : null;
+  return reason ?? (blockingValues > 0 ? `Confirm or choose ${blockingValues} values before submitting.` : null);
 }
 
 /**
