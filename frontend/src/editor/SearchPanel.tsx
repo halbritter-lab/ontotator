@@ -29,8 +29,9 @@ export interface SearchPanelProps {
   autoFocus?: boolean;
   /** Esc in the field. */
   onEscape?: () => void;
-  /** Help line under the empty field; default "Name or code, for example HP:0001250". */
-  emptyHint?: string;
+  /** Language hint ("Names are searched in English…"): replaces the empty-field help line, stays under
+   * the field while a query is shown and starts the no-hits message. */
+  languageHint?: string;
 }
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -49,7 +50,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   initialQuery,
   autoFocus = false,
   onEscape,
-  emptyHint,
+  languageHint,
 }) => {
   const languageControl = languages && languages.options.length > 0 ? languages : undefined;
   // Sent with every request when translations are loaded; English is implied.
@@ -159,6 +160,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const resultsCurrent = hasQuery && state.query === queryInput && !state.isLoading && !debouncing && !state.error;
   const candidates = resultsCurrent ? state.candidates : [];
   const expanded = candidates.length > 0;
+  const noHits = resultsCurrent && candidates.length === 0;
 
   // The active hit resets to the first usable one whenever a new result list arrives.
   const [active, setActive] = useState<{ list: SearchCandidate[]; index: number } | null>(null);
@@ -266,12 +268,13 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           {languageControl && <SearchLanguageButton control={languageControl} />}
         </div>
         <div id={hintId} className="search-hint">
+          {hasQuery && languageHint && !noHits && <span className="search-hint-language">{languageHint}</span>}
           {!hasQuery ? (
-            emptyHint ?? DEFAULT_EMPTY_HINT
+            languageHint ?? DEFAULT_EMPTY_HINT
           ) : searching ? (
             <span role="status">Searching…</span>
-          ) : failed ? null : resultsCurrent && candidates.length === 0 ? (
-            `No terms match “${queryInput.trim()}”. Change the words, try a code (HP:0001250) or switch search languages.`
+          ) : failed ? null : noHits ? (
+            `${languageHint ? `${languageHint} ` : ""}No terms match “${queryInput.trim()}”. Change the words, try a code (HP:0001250) or switch search languages.`
           ) : expanded ? (
             canAssign ? (
               <>

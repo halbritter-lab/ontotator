@@ -25,11 +25,12 @@ export function prefillQuery(text: string, segments: readonly { start: number; e
 
 const baseLanguage = (code: string): string => code.split(/[-_]/)[0].toLowerCase();
 
-/** English documents always; others only when the document language (base subtag) is an active search language. */
-export function canPrefill(documentLanguage: string, activeLanguages: readonly string[] | undefined): boolean {
+/** The marked text is always prefilled; for a document language that is not searched (English is),
+ * the hint that explains English-only names, else null. */
+export function prefillHint(documentLanguage: string, activeLanguages: readonly string[] | undefined): string | null {
   const language = baseLanguage(documentLanguage);
-  if (language === "en") return true;
-  return (activeLanguages ?? []).some((code) => baseLanguage(code) === language);
+  if (language === "en") return null;
+  return (activeLanguages ?? []).some((code) => baseLanguage(code) === language) ? null : NO_PREFILL_HINT;
 }
 
 /** Spec B.6 match line; null for label matches or when the match equals the label. */

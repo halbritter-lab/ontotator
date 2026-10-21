@@ -878,19 +878,24 @@ describe("CaseScreen integration", () => {
       })));
     });
 
-    it("does not prefill a German document without German search names and says why", () => {
+    it("prefills a German document without German search names and says names are searched in English", async () => {
       const search = vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
       const view = structuredClone(sampleView); view.document.language = "de";
       const rendered = render(<CaseScreen view={view} workspaceId="ws-de" onClose={vi.fn()} />);
       markThe(rendered.container);
       const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
       expect(document.activeElement).toBe(input);
-      expect(input.value).toBe("");
+      expect(input.value).toBe("The");
+      expect(input.selectionStart).toBe(0);
+      expect(input.selectionEnd).toBe(3);
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ query: "The" }));
       expect(screen.getByText("Names are searched in English. Type an English name or a code.")).toBeDefined();
-      expect(search).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.getAllByRole("option").length).toBeGreaterThan(0));
+      expect(screen.getByText("Names are searched in English. Type an English name or a code.")).toBeDefined();
     });
 
-    it("prefills a German document once its search languages arrive after the text was marked", async () => {
+    it("prefills a German document at once and searches German too once its search languages arrive", async () => {
       let resolveOntologies!: (value: any) => void;
       let resolvePreferences!: (value: any) => void;
       vi.spyOn(api, "listPackageOntologies").mockReturnValue(new Promise(resolve => { resolveOntologies = resolve; }) as any);
@@ -900,19 +905,20 @@ describe("CaseScreen integration", () => {
       const rendered = render(<CaseScreen view={view} workspaceId="ws-de-late" onClose={vi.fn()} />);
       markThe(rendered.container);
       const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
-      expect(input.value).toBe("");
-      expect(search).not.toHaveBeenCalled();
+      expect(input.value).toBe("The");
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ query: "The" }));
+      expect(screen.getByText("Names are searched in English. Type an English name or a code.")).toBeDefined();
       await act(async () => {
         resolveOntologies([{ ontology_id: "hp", release: "2024-06-25", sha256: "TEST-HP-SHA", term_count: 11,
           translations: [{ language: "de", filenames: ["hp-de.babelon.tsv"], term_count: 4 }] }]);
         resolvePreferences({ last_annotator_id: "user-test", mode_by_package: {}, search_languages_by_annotator: { "user-test": ["de"] } });
       });
-      await waitFor(() => expect(input.value).toBe("The"));
+      // The German names arrive: the same query is asked again with German.
+      await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+      expect(input.value).toBe("The");
       expect(document.activeElement).toBe(input);
-      expect(input.selectionStart).toBe(0);
-      expect(input.selectionEnd).toBe(3);
-      expect(search).toHaveBeenCalledTimes(1);
-      expect(search.mock.calls[0][0]).toEqual(expect.objectContaining({ query: "The", languages: ["de"] }));
+      expect(search.mock.calls[1][0]).toEqual(expect.objectContaining({ query: "The", languages: ["de"] }));
       expect(screen.queryByText("Names are searched in English. Type an English name or a code.")).toBeNull();
     });
 

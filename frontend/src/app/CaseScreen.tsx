@@ -84,7 +84,7 @@ import {
 } from "../editor/ReviewActions";
 import { useSearchLanguages } from "../editor/searchLanguages";
 import { SearchPanel } from "../editor/SearchPanel";
-import { canPrefill, NO_PREFILL_HINT, prefillQuery } from "../editor/termSearch";
+import { prefillHint, prefillQuery } from "../editor/termSearch";
 import { focusTextAt } from "../editor/textFocus";
 import { useMediaQuery } from "../ui/useMediaQuery";
 import { SearchManager } from "../editor/searchState";
@@ -1539,11 +1539,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       },
     };
     if (pending.isSpanless) return base;
-    const prefill = canPrefill(view.document.language, searchLanguagesFor(pending.layerId)?.active);
+    // Always prefilled; a language that is not searched keeps the English-only hint under the field.
     return {
       ...base,
-      initialQuery: prefill ? prefillQuery(view.document.text, pending.segments) : undefined,
-      emptyHint: prefill ? undefined : NO_PREFILL_HINT,
+      initialQuery: prefillQuery(view.document.text, pending.segments),
+      languageHint: prefillHint(view.document.language, searchLanguagesFor(pending.layerId)?.active) ?? undefined,
     };
   };
 

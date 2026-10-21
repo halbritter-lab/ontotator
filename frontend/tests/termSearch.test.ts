@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { canPrefill, firstUsableIndex, matchLine, prefillQuery } from "../src/editor/termSearch";
+import { firstUsableIndex, matchLine, NO_PREFILL_HINT, prefillHint, prefillQuery } from "../src/editor/termSearch";
 
 describe("prefillQuery", () => {
   it("joins segments with a space and collapses whitespace", () => {
@@ -17,13 +17,17 @@ describe("prefillQuery", () => {
     expect(prefillQuery("😀 seizure", [{ start: 2, end: 9 }])).toBe("seizure");
   });
 });
-describe("canPrefill", () => {
-  it("prefills English and active search languages only", () => {
-    expect(canPrefill("en", undefined)).toBe(true);
-    expect(canPrefill("en-GB", [])).toBe(true);
-    expect(canPrefill("de", ["de"])).toBe(true);
-    expect(canPrefill("de", undefined)).toBe(false);
-    expect(canPrefill("fr", ["de"])).toBe(false);
+describe("prefillHint", () => {
+  it("says nothing for English and for active search languages", () => {
+    expect(prefillHint("en", undefined)).toBeNull();
+    expect(prefillHint("en-GB", [])).toBeNull();
+    expect(prefillHint("de", ["de"])).toBeNull();
+    expect(prefillHint("de-AT", ["de"])).toBeNull();
+  });
+  it("explains English-only search for languages that are not searched", () => {
+    expect(NO_PREFILL_HINT).toBe("Names are searched in English. Type an English name or a code.");
+    expect(prefillHint("de", undefined)).toBe(NO_PREFILL_HINT);
+    expect(prefillHint("fr", ["de"])).toBe(NO_PREFILL_HINT);
   });
 });
 describe("matchLine (spec B.6)", () => {

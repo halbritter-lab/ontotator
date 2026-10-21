@@ -1073,6 +1073,11 @@
   color: var(--text-muted);
 }
 
+/* The English-only hint stays on its own line above the search status. */
+.search-hint-language {
+  display: block;
+}
+
 .search-panel .notice {
   margin-bottom: var(--space-2);
 }

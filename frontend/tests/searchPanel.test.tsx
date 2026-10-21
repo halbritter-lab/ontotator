@@ -252,9 +252,31 @@ describe("SearchPanel", () => {
     renderPanel(vi.fn().mockResolvedValue(threeHits));
     expect(screen.getByText("Name or code, for example HP:0001250")).toBeDefined();
     cleanup();
-    renderPanel(vi.fn().mockResolvedValue(threeHits), { emptyHint: "Type an English name." });
+    renderPanel(vi.fn().mockResolvedValue(threeHits), { languageHint: "Type an English name." });
     expect(screen.getByText("Type an English name.")).toBeDefined();
     expect(screen.queryByText("Name or code, for example HP:0001250")).toBeNull();
+  });
+
+  it("keeps the language hint under a prefilled field and starts the no-hits message with it", async () => {
+    const hint = "Names are searched in English. Type an English name or a code.";
+    const searchOntology = vi.fn()
+      .mockResolvedValueOnce(threeHits)
+      .mockResolvedValueOnce({ search_id: "s-2", candidates: [] });
+    const input = renderPanel(searchOntology, { initialQuery: "Krampfanfall", autoFocus: true, languageHint: hint });
+    expect(searchOntology).toHaveBeenCalledTimes(1);
+    expect(searchOntology.mock.calls[0][0].query).toBe("Krampfanfall");
+    expect(input.value).toBe("Krampfanfall");
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe("Krampfanfall".length);
+    await waitFor(() => expect(options()).toHaveLength(3));
+    const hintLine = () => document.querySelector(".search-hint")!.textContent!;
+    expect(hintLine()).toBe(`${hint}2 terms · ↓↑ choose · Enter add · Esc cancel`);
+    expect(screen.getByText(hint)).toBeDefined();
+    fireEvent.change(input, { target: { value: "Fieberkrampf" } });
+    await waitFor(() => expect(hintLine()).toBe(
+      `${hint} No terms match “Fieberkrampf”. Change the words, try a code (HP:0001250) or switch search languages.`));
+    expect(hintLine().startsWith("Names are searched in English.")).toBe(true);
   });
 
   it("clear_search_is_named_and_clears_the_query", async () => {
