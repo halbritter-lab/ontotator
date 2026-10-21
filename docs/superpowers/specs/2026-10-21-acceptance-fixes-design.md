@@ -117,7 +117,7 @@ A group resolves when every row has a choice (X6).
 
 ### Frontend
 
-- **Route** `#/consolidation/{round_id}` with optional `group`; opened from the task list (as today's consolidation editor) and, read-only, from the row panel ("Open consolidation", flag links).
+- **Route** `#/projects/{key}/consolidations/{round_id}` with optional `group`; opened from the task list (as today's consolidation editor) and, read-only, from the row panel ("Open consolidation", flag links).
 - **Header:** "Consolidate case-107 · de v2 · Luc Martin, Tom Reis · 4 open" and Submit.
 - **Layout (U13):** ≥ 1100 px text left, groups right; 700–1099 px text on top ("Hide text"), groups below with the selected group in view; below 700 px groups only, each with a text snippet of its passage.
 - **Text:** read-only; one underline lane per person in fixed order (lane 1 closest to the text), same stroke, distinct offset; with more than 4 people lane 4 combines the rest ("+n"). Legend names every lane. Kept findings (automatic or decided) get a neutral background and keep their lanes. The selected group is framed and scrolled into view only when off-screen, instantly under reduced motion (X18).
