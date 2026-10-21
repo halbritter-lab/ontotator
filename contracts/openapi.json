@@ -3944,6 +3944,67 @@
         }
       }
     },
+    "/api/v1/projects/{key}/document-rows/{case_id}/{language}/final-panel": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Row Final Panel",
+        "description": "Final-result panel of one row: submissions, agreement, label rule,\ncauses and changed passages (leads only, nothing stored).",
+        "operationId": "row_final_panel_api_v1_projects__key__document_rows__case_id___language__final_panel_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "language",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalPanelView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/documents/visit": {
       "post": {
         "tags": [
@@ -7096,6 +7157,35 @@
           "task"
         ],
         "title": "AffectedTask"
+      },
+      "AgreementView": {
+        "properties": {
+          "compared_version": {
+            "type": "integer",
+            "title": "Compared Version"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "matching": {
+            "type": "integer",
+            "title": "Matching"
+          },
+          "context_differences": {
+            "type": "integer",
+            "title": "Context Differences"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "compared_version",
+          "total",
+          "matching",
+          "context_differences"
+        ],
+        "title": "AgreementView"
       },
       "Annotation": {
         "properties": {
@@ -11238,6 +11328,236 @@
           "language"
         ],
         "title": "FinalOmission"
+      },
+      "FinalPanelSubmissionView": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "chain_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Name"
+          },
+          "author_label": {
+            "type": "string",
+            "title": "Author Label"
+          },
+          "is_me": {
+            "type": "boolean",
+            "title": "Is Me"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recorded At"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "consolidation",
+              "carry_forward",
+              "annotation",
+              "review"
+            ],
+            "title": "Kind"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          },
+          "round_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round State"
+          },
+          "is_latest_in_round": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Latest In Round"
+          },
+          "finding_count": {
+            "type": "integer",
+            "title": "Finding Count"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "guideline_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guideline Version"
+          },
+          "guideline_withdrawn": {
+            "type": "boolean",
+            "title": "Guideline Withdrawn",
+            "default": false
+          },
+          "eligible": {
+            "type": "boolean",
+            "title": "Eligible",
+            "default": true
+          },
+          "only_here": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Only Here"
+          },
+          "comparable": {
+            "type": "boolean",
+            "title": "Comparable",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "submission_id",
+          "document_id",
+          "version",
+          "chain_name",
+          "author_label",
+          "is_me",
+          "recorded_at",
+          "mode",
+          "kind",
+          "round_id",
+          "round_ordinal",
+          "round_state",
+          "is_latest_in_round",
+          "finding_count"
+        ],
+        "title": "FinalPanelSubmissionView"
+      },
+      "FinalPanelView": {
+        "properties": {
+          "submissions": {
+            "items": {
+              "$ref": "#/components/schemas/FinalPanelSubmissionView"
+            },
+            "type": "array",
+            "title": "Submissions"
+          },
+          "agreement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgreementView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label_rule": {
+            "type": "string",
+            "enum": [
+              "accept",
+              "compare"
+            ],
+            "title": "Label Rule",
+            "default": "compare"
+          },
+          "accept_submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accept Submission Id"
+          },
+          "causes": {
+            "items": {
+              "$ref": "#/components/schemas/RowItemView"
+            },
+            "type": "array",
+            "title": "Causes"
+          },
+          "changed_passages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed Passages"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FinalPanelView"
       },
       "FinalPreflight": {
         "properties": {

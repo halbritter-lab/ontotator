@@ -43,6 +43,10 @@ export type RowSubmissions = components["schemas"]["RowSubmissions"];
 export type RowSubmissionView = components["schemas"]["RowSubmissionView"];
 export type RowRoundView = components["schemas"]["RowRoundView"];
 export type OpenTranslationReviewView = components["schemas"]["OpenTranslationReviewView"];
+// Final-result panel of one Documents row (documents overview V6, V9, VD16)
+export type FinalPanelView = components["schemas"]["FinalPanelView"];
+export type FinalPanelSubmissionView = components["schemas"]["FinalPanelSubmissionView"];
+export type AgreementView = components["schemas"]["AgreementView"];
 // Next step per Documents row (lead workflow L1)
 export type NextStepView = components["schemas"]["NextStepView"];
 export type StepOwnerView = components["schemas"]["StepOwnerView"];
@@ -420,6 +424,11 @@ export class ApiClient {
 
   async getRowSubmissions(key: string, caseId: string, language: string): Promise<RowSubmissions> {
     return this.request<RowSubmissions>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/${encodeURIComponent(caseId)}/${encodeURIComponent(language)}/submissions`, { method: "GET" });
+  }
+
+  /** Final-result panel of one row: submissions, agreement, label rule, causes (leads only). */
+  async finalPanel(key: string, caseId: string, language: string): Promise<FinalPanelView> {
+    return this.request<FinalPanelView>(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/${encodeURIComponent(caseId)}/${encodeURIComponent(language)}/final-panel`, { method: "GET" });
   }
 
 

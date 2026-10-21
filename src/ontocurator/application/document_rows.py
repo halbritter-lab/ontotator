@@ -14,7 +14,7 @@ from typing import Any, Literal
 from sqlalchemy import Connection, and_, exists, func, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB
 
-from ontocurator.application import documents_visits
+from ontocurator.application import document_row_panel, documents_visits
 from ontocurator.application.document_row_page import (
     build_page,
     case_ids,
@@ -1002,7 +1002,10 @@ class DocumentRowsService:
         with self.db.transaction() as conn:
             pid = authorize_final_results(conn, self.actor, key, exclusive=False)
             facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
-            return build_page(facts, query)
+            page = build_page(facts, query)
+            # Final "k of n match" for the shown rows only (after paging).
+            document_row_panel.fill_agreement(conn, self.repo, pid, facts, page)
+            return page
 
     def case_ids(self, key: str, query: RowQuery) -> dict[str, Any]:
         """Case IDs matching ``query`` in list order (header checkbox)."""
@@ -1040,4 +1043,13 @@ class DocumentRowsService:
             pid = authorize_final_results(conn, self.actor, key, exclusive=False)
             return build_submissions(
                 conn, key, pid, case_id, language, self.access.user_id
+            )
+
+    def final_panel(self, key: str, case_id: str, language: str) -> dict[str, Any]:
+        """Final-result panel of one row (lead only, shared project lock)."""
+        with self.db.transaction() as conn:
+            pid = authorize_final_results(conn, self.actor, key, exclusive=False)
+            facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
+            return document_row_panel.final_panel(
+                conn, self.repo, facts, key, case_id, language
             )

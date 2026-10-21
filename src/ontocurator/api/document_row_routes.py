@@ -450,6 +450,33 @@ class RowSubmissions(_View):
     open_translation_reviews: list[OpenTranslationReviewView]
 
 
+class FinalPanelSubmissionView(RowSubmissionView):
+    # The lead may use it as final (false: own result under the
+    # adjudicator rule, OWN_RESULT_NOT_SELECTABLE).
+    eligible: bool = True
+    # Findings found in no other compared submission; None when not compared.
+    only_here: int | None = None
+    # Eligible on the compared version (spec VD16).
+    comparable: bool = False
+
+
+class AgreementView(_View):
+    compared_version: int
+    total: int
+    matching: int
+    context_differences: int
+
+
+class FinalPanelView(_View):
+    submissions: list[FinalPanelSubmissionView] = Field(default_factory=list)
+    agreement: AgreementView | None = None
+    label_rule: Literal["accept", "compare"] = "compare"
+    accept_submission_id: str | None = None
+    causes: list[RowItemView] = Field(default_factory=list)
+    # Findings of a final on old text in changed passages of the newer text.
+    changed_passages: int | None = None
+
+
 def _service(request: Request, principal: Any) -> DocumentRowsService:
     return DocumentRowsService(
         request.app.state.repo.db,
@@ -565,6 +592,18 @@ def row_submissions(
 ) -> dict[str, Any]:
     """All submissions, rounds and open translation reviews of one row."""
     return _service(request, principal).submissions(key, case_id, language)
+
+
+@router.get(
+    "/document-rows/{case_id:path}/{language}/final-panel",
+    response_model=FinalPanelView,
+)
+def row_final_panel(
+    key: str, case_id: str, language: str, principal: PrincipalDep, request: Request
+) -> dict[str, Any]:
+    """Final-result panel of one row: submissions, agreement, label rule,
+    causes and changed passages (leads only, nothing stored)."""
+    return _service(request, principal).final_panel(key, case_id, language)
 
 
 @router.post("/documents/visit", response_model=DocumentsVisitView)

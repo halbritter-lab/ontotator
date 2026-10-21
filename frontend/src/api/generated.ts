@@ -953,6 +953,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/document-rows/{case_id}/{language}/final-panel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Row Final Panel
+         * @description Final-result panel of one row: submissions, agreement, label rule,
+         *     causes and changed passages (leads only, nothing stored).
+         */
+        get: operations["row_final_panel_api_v1_projects__key__document_rows__case_id___language__final_panel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/documents/visit": {
         parameters: {
             query?: never;
@@ -2100,6 +2121,17 @@ export interface components {
              * @enum {string}
              */
             task: "annotate" | "review" | "translation_review";
+        };
+        /** AgreementView */
+        AgreementView: {
+            /** Compared Version */
+            compared_version: number;
+            /** Total */
+            total: number;
+            /** Matching */
+            matching: number;
+            /** Context Differences */
+            context_differences: number;
         };
         /**
          * Annotation
@@ -3502,6 +3534,81 @@ export interface components {
             case_id: string;
             /** Language */
             language: string;
+        };
+        /** FinalPanelSubmissionView */
+        FinalPanelSubmissionView: {
+            /** Submission Id */
+            submission_id: string;
+            /** Document Id */
+            document_id: string;
+            /** Version */
+            version: number;
+            /** Chain Name */
+            chain_name: string | null;
+            /** Author Label */
+            author_label: string;
+            /** Is Me */
+            is_me: boolean;
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "consolidation" | "carry_forward" | "annotation" | "review";
+            /** Round Id */
+            round_id: string | null;
+            /** Round Ordinal */
+            round_ordinal: number | null;
+            /** Round State */
+            round_state: string | null;
+            /** Is Latest In Round */
+            is_latest_in_round: boolean | null;
+            /** Finding Count */
+            finding_count: number;
+            author?: components["schemas"]["PersonRefView"] | null;
+            /** Guideline Version */
+            guideline_version?: number | null;
+            /**
+             * Guideline Withdrawn
+             * @default false
+             */
+            guideline_withdrawn: boolean;
+            /**
+             * Eligible
+             * @default true
+             */
+            eligible: boolean;
+            /** Only Here */
+            only_here?: number | null;
+            /**
+             * Comparable
+             * @default false
+             */
+            comparable: boolean;
+        };
+        /** FinalPanelView */
+        FinalPanelView: {
+            /** Submissions */
+            submissions?: components["schemas"]["FinalPanelSubmissionView"][];
+            agreement?: components["schemas"]["AgreementView"] | null;
+            /**
+             * Label Rule
+             * @default compare
+             * @enum {string}
+             */
+            label_rule: "accept" | "compare";
+            /** Accept Submission Id */
+            accept_submission_id?: string | null;
+            /** Causes */
+            causes?: components["schemas"]["RowItemView"][];
+            /** Changed Passages */
+            changed_passages?: number | null;
         };
         /** FinalPreflight */
         FinalPreflight: {
@@ -9128,6 +9235,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RowSubmissions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    row_final_panel_api_v1_projects__key__document_rows__case_id___language__final_panel_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                case_id: string;
+                language: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinalPanelView"];
                 };
             };
             /** @description Validation Error */

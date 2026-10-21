@@ -7,11 +7,14 @@
  * change existing ones.
  */
 import type {
+  AgreementView,
   DecisionBarView,
   DocumentGroupView,
   DocumentRowView,
   DocumentRowsPage,
   DocumentVersionView,
+  FinalPanelSubmissionView,
+  FinalPanelView,
   FinalSelectionSummary,
   NextStepView,
   OpenTranslationReviewView,
@@ -233,6 +236,19 @@ export function translationReview(overrides: Partial<OpenTranslationReviewView> 
 
 export function submissions(caseId: string, language: string, overrides: Partial<RowSubmissions> = {}): RowSubmissions {
   return { case_id: caseId, language, adjudicator_not_annotator: false, submissions: [], rounds: [], open_translation_reviews: [], ...overrides };
+}
+
+/** A final-panel submission (eligible and compared unless overridden). */
+export function panelSubmission(overrides: Partial<FinalPanelSubmissionView> & Pick<FinalPanelSubmissionView, "submission_id" | "document_id">): FinalPanelSubmissionView {
+  return { ...submission(overrides), eligible: true, only_here: null, comparable: true, ...overrides };
+}
+
+export function agreement(overrides: Partial<AgreementView> = {}): AgreementView {
+  return { compared_version: 1, total: 0, matching: 0, context_differences: 0, ...overrides };
+}
+
+export function finalPanel(overrides: Partial<FinalPanelView> = {}): FinalPanelView {
+  return { submissions: [], agreement: null, label_rule: "compare", accept_submission_id: null, causes: [], changed_passages: null, ...overrides };
 }
 
 function scenario(group: DocumentGroupView, rows: Record<string, RowSubmissions>): DocumentsScenario {
