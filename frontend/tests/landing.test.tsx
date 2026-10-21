@@ -7,7 +7,8 @@ import { testUser } from "./session";
 
 // The Documents page has its own tests; here only the destination matters.
 vi.mock("../src/admin/DocumentsPage", () => ({
-  DocumentsPage: ({ projectKey }: { projectKey: string }) => <h1>Documents of {projectKey}</h1>,
+  DocumentsPage: ({ projectKey, query }: { projectKey: string; query: { segment?: string } }) =>
+    <h1>Documents of {projectKey}{query.segment ? ` (${query.segment})` : ""}</h1>,
 }));
 
 const project = (key: string, roles: ProjectSummary["roles"]): ProjectSummary => ({
@@ -24,6 +25,7 @@ beforeEach(() => {
   window.localStorage.clear();
   window.history.replaceState(null, "", "#/");
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
+  vi.spyOn(api, "documentsSummary").mockResolvedValue({ needs_decision: 0 });
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); window.history.replaceState(null, "", "#/"); });
 
@@ -39,6 +41,33 @@ describe("landing (D7)", () => {
     expect(screen.queryByRole("heading", { name: "My tasks" })).toBeNull();
   });
 
+  it("lands on Needs your decision when the count is > 0", async () => {
+    window.localStorage.setItem("ontocurator.lastProject.v1:lead", "p2");
+    vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 3 });
+    vi.spyOn(api, "listProjects").mockResolvedValue([project("p1", ["lead"]), project("p2", ["lead"])]);
+    const before = window.history.length;
+    render(<App user={lead} />);
+    expect(await screen.findByRole("heading", { name: "Documents of p2 (decision)" })).toBeDefined();
+    expect(window.location.hash).toBe("#/projects/p2/documents?segment=decision");
+    expect(window.history.length).toBe(before);
+    expect(api.documentsSummary).toHaveBeenCalledWith("p2");
+  });
+
+  it("lands on All otherwise", async () => {
+    vi.spyOn(api, "listProjects").mockResolvedValue([project("p1", ["lead"])]);
+    render(<App user={lead} />);
+    expect(await screen.findByRole("heading", { name: "Documents of p1" })).toBeDefined();
+    expect(window.location.hash).toBe("#/projects/p1/documents");
+    expect(api.documentsSummary).toHaveBeenCalledWith("p1");
+    // A failed summary also lands on All.
+    cleanup();
+    window.history.replaceState(null, "", "#/");
+    vi.mocked(api.documentsSummary).mockRejectedValue(new Error("offline"));
+    render(<App user={lead} />);
+    expect(await screen.findByRole("heading", { name: "Documents of p1" })).toBeDefined();
+    expect(window.location.hash).toBe("#/projects/p1/documents");
+  });
+
   it("skips a remembered project the user no longer leads", async () => {
     window.localStorage.setItem("ontocurator.lastProject.v1:lead", "p2");
     vi.spyOn(api, "listProjects").mockResolvedValue([project("p1", ["lead"]), project("p2", ["annotator"])]);
@@ -52,7 +81,7 @@ describe("landing (D7)", () => {
     render(<App user={lead} />);
     expect(await screen.findByRole("heading", { name: "Documents of b" })).toBeDefined();
     // The landing project is remembered like any other opened project.
-    expect(window.localStorage.getItem("ontocurator.lastProject.v1:lead")).toBe("b");
+    await waitFor(() => expect(window.localStorage.getItem("ontocurator.lastProject.v1:lead")).toBe("b"));
   });
 
   it("keeps users who lead nothing on My tasks", async () => {

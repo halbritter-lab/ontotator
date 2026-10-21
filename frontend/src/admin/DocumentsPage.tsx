@@ -38,6 +38,7 @@ import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
 import { MAX_SELECTION_CASES as MAX_SELECTION, textKeyOf, useTextSelection } from "../documents/useTextSelection";
 import { useDocumentRows } from "../documents/useDocumentRows";
+import { notifyDocumentsChanged } from "../documents/documentsEvents";
 import { useRowSubmissions } from "../documents/useRowSubmissions";
 import { clearVisits, recordDecision, rememberShown, retainedKeys, rowBadges, type RowBadge } from "../documents/visitState";
 import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
@@ -160,6 +161,13 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // `useDocumentRows` is typed with one value per filter; the client sends lists as repeated parameters.
   const rows = useDocumentRows(projectKey, (retain.length ? { ...request, retain: [...retain] } : request) as DocumentRowsQuery);
   const page: DocumentRowsPage | null = rows.page;
+  // Visit baseline for NEW (VD6): once per mount (the component is keyed by project and user), not on refetch, tab or filter change.
+  const visited = useRef(false);
+  useEffect(() => {
+    if (visited.current) return;
+    visited.current = true;
+    void api.recordDocumentsVisit(projectKey).catch(() => { /* NEW then compares against the previous baseline. */ });
+  }, [projectKey]);
 
   // Live region: a repeated message is cleared first and set again on the next tick so it is re-announced.
   const [announcement, setAnnouncement] = useState("");
@@ -329,7 +337,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const pageRows = useMemo(() => page?.groups.flatMap(group => group.rows) ?? [], [page]);
   const groupOf = (caseId: string) => page?.groups.find(group => group.case_id === caseId);
 
-  const refreshAll = () => { rows.reload(); setRevision(value => value + 1); };
+  const latestReload = useRef(rows.reload);
+  latestReload.current = rows.reload;
+  const refreshAll = () => { rows.reload(); setRevision(value => value + 1); notifyDocumentsChanged(); };
+  /** Refetch after an own action; the navigation counter reloads too ("documents-changed"). */
+  const reloadAfterAction = () => { latestReload.current(); notifyDocumentsChanged(); };
   // Assign dialog: one row (task preselected) or the selected cases (selection bar).
   const [assignDialog, setAssignDialog] = useState<AssignWorkDialogProps | null>(null);
   /** Assign dialog for one row; `options.newReviewOfAccepted` marks a new review of an accepted translation (D25). */
@@ -393,9 +405,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   // Plan chips: one shared queue and toast; a save refetches the rows (the next step updates in place).
   const { toast, show: showToast, dismiss: dismissToast } = useToast();
-  const latestReload = useRef(rows.reload);
-  latestReload.current = rows.reload;
-  const planSaves = usePlanSaves({ projectKey, onAnnounce: announce, onChanged: () => latestReload.current(), showToast });
+  const planSaves = usePlanSaves({ projectKey, onAnnounce: announce, onChanged: () => reloadAfterAction(), showToast });
   // A finished import closes the upload dialog: the imported cases arrive in the reloaded rows with their plan.
   const importDone = (message: string) => { setUploadOpen(false); showToast({ message }); announce(message); refreshAll(); };
   // Each new rows page: drop local chip flags the server has caught up with; restore focus after a save.
@@ -582,7 +592,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const finalPanel = panelKey ? <FinalPanel projectKey={projectKey} rowKey={panelKey} page={page} query={viewQuery} refreshFailed={rows.error != null}
     username={currentUser?.username ?? ""}
     onClose={() => closeFinalPanel()}
-    onDecided={key => { notifyFinalSelectionChanged(projectKey); recordDecision(projectKey, key); rows.reload(); }}
+    onDecided={key => { notifyFinalSelectionChanged(projectKey); recordDecision(projectKey, key); reloadAfterAction(); }}
     onAdvance={key => openFinalPanel(key)}
     onReload={() => rows.reload()}
     onNavigate={route => onNavigate(route)}
@@ -627,10 +637,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         onDone={(message, saved) => {
           planSaves.noteRevision(saved.caseId, saved.revision);
           announce(message);
-          rows.reload();
+          reloadAfterAction();
           closePanel(key);
         }}
-        onChanged={(caseId, revision) => { planSaves.noteRevision(caseId, revision); rows.reload(); }}
+        onChanged={(caseId, revision) => { planSaves.noteRevision(caseId, revision); reloadAfterAction(); }}
         onAnnounce={announce}
         onCancel={() => closePanel(key)} />
     </div>;
@@ -683,7 +693,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     }
     // Sticky above the table; below 700 px after the cards, so it can stick to the bottom of the viewport.
     const selectionBar = <SelectionBar projectKey={projectKey} keys={selection.keys} filters={filters} refresh={page} narrow={narrow} limitNote={limitNote}
-      onClear={clearSelection} onAssign={openAssignCases} showToast={showToast} onAnnounce={announce} onChanged={() => latestReload.current()}
+      onClear={clearSelection} onAssign={openAssignCases} showToast={showToast} onAnnounce={announce} onChanged={() => reloadAfterAction()}
       onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }} />;
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>

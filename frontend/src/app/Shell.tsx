@@ -4,6 +4,7 @@ import { roleLabels } from "./labels";
 import { AppShell, type Crumb } from "../ui/AppShell";
 import { routeHref, type Route } from "./router";
 import { ProjectPicker } from "./ProjectPicker";
+import { useDocumentsSummary } from "../documents/useDocumentsSummary";
 
 export interface ShellProps {
   user: CurrentUser;
@@ -16,14 +17,14 @@ export interface ShellProps {
   taskProject?: string;
 }
 
-function NavigationLink({ destination, current, onNavigate, children }: {
-  destination: Route; current: Route; onNavigate: ShellProps["onNavigate"]; children: ReactNode;
+function NavigationLink({ destination, current, onNavigate, label, children }: {
+  destination: Route; current: Route; onNavigate: ShellProps["onNavigate"]; label?: string; children: ReactNode;
 }): JSX.Element {
   const active = current.name === destination.name && (
     !("key" in destination) || ("key" in current && current.key === destination.key)
   );
   const inTasks = destination.name === "tasks" && current.name === "task";
-  return <a href={routeHref(destination)} className="shell-nav-link"
+  return <a href={routeHref(destination)} className="shell-nav-link" aria-label={label}
     aria-current={active ? "page" : inTasks ? "location" : undefined}
     onClick={(event) => {
       if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
@@ -74,11 +75,17 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
   const currentKey = explicitKey ?? (choice?.username === user.username ? choice.key : undefined);
   const current = projects.find(project => project.project_key === currentKey);
   const openTasks = useOpenTaskCount(user.username);
+  // "Documents (n)": rows needing the lead's decision (V3); the summary is lead only.
+  const needsDecision = useDocumentsSummary(current?.project_key, !!current?.can_manage && current.roles.includes("lead"));
   const selector = projects.length > 0 && <ProjectPicker projects={projects} current={current} route={route}
     onNavigate={onNavigate} onChoose={key => setChoice({ username: user.username, key })} />;
-  const link = (destination: Route, label: string) => <li key={destination.name}>
-    <NavigationLink destination={destination} current={route} onNavigate={onNavigate}>{label}</NavigationLink>
+  const link = (destination: Route, text: string, label?: string) => <li key={destination.name}>
+    <NavigationLink destination={destination} current={route} onNavigate={onNavigate} label={label}>{text}</NavigationLink>
   </li>;
+  // With n > 0 the link opens Needs your decision (VD7); otherwise plain Documents (All).
+  const documentsLink = (key: string) => needsDecision
+    ? link({ name: "projectDocuments", key, segment: "decision" }, `Documents (${needsDecision})`, `Documents, ${needsDecision} need your decision`)
+    : link({ name: "projectDocuments", key }, "Documents");
   const nav = <>
     <ul className="shell-nav-list">
       {link({ name: "tasks" }, openTasks === null ? "My tasks" : `My tasks (${openTasks})`)}
@@ -95,7 +102,7 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
     {current?.can_manage && <section className="shell-nav-group" aria-label="Current project sections">
         <h2>{current.name}</h2>
         <ul className="shell-nav-list">
-          {link({ name: "projectDocuments", key: current.project_key }, "Documents")}
+          {documentsLink(current.project_key)}
           {link({ name: "projectProgress", key: current.project_key }, "Progress")}
           {link({ name: "projectSettings", key: current.project_key }, "Settings")}
           {link({ name: "projectExport", key: current.project_key }, "Export")}

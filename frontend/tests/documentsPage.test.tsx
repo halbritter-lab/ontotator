@@ -8,6 +8,7 @@ import type { ProjectDocumentsQuery, Route } from "../src/app/router";
 import { documentsRowId } from "../src/documents/RowCells";
 import { recordDecision } from "../src/documents/visitState";
 import { FINAL_SELECTION_CHANGED } from "../src/variants/finalSelectionState";
+import { DOCUMENTS_CHANGED } from "../src/documents/documentsEvents";
 import { useRegisteredShortcuts } from "../src/ui/shortcuts";
 import { final, finalPanel, group, item, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
 import { ana, cell, scenario7a, stagedRow, tom } from "./documents/tableFixtures";
@@ -93,6 +94,7 @@ beforeEach(() => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listUploads").mockResolvedValue([]);
   vi.spyOn(api, "selectionSummary").mockResolvedValue({ cases: 0, steps: [], skipped: {}, common: null, not_shown: 0 });
+  vi.spyOn(api, "recordDocumentsVisit").mockResolvedValue({ baseline_at: "2026-10-21T08:00:00Z" });
   assignProps.length = 0;
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); });
@@ -1290,5 +1292,43 @@ describe("Resolve renders inline under the row (Change 13, F1, F5)", () => {
     await waitFor(() => expect(document.activeElement).toBe(resolveHeading()));
     fireEvent.click(within(resolveBox()!).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(document.activeElement).toBe(actionButton()));
+  });
+});
+
+describe("visit baseline and navigation counter (VD6, V3)", () => {
+  it("records the visit once on mount, not on tab or filter change", async () => {
+    mockRows(scenarioS1().page);
+    renderStateful({});
+    await loaded();
+    expect(api.recordDocumentsVisit).toHaveBeenCalledOnce();
+    expect(api.recordDocumentsVisit).toHaveBeenCalledWith("p");
+    fireEvent.click(screen.getByRole("tab", { name: /^To assign/ }));
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { segment: "assign" }));
+    fireEvent.change(searchField(), { target: { value: "case" } });
+    fireEvent.keyDown(searchField(), { key: "Enter" });
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { segment: "assign", q: "case" }));
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    await loaded();
+    expect(api.recordDocumentsVisit).toHaveBeenCalledOnce();
+  });
+
+  it("fires documents-changed after an own action", async () => {
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ languages: ["en"], annotate_accepted_translations_only: false } as never);
+    mockRows(scenarioS1().page);
+    const changed = vi.fn();
+    window.addEventListener(DOCUMENTS_CHANGED, changed);
+    try {
+      renderPage();
+      await loaded();
+      // Loading and refetching alone fire nothing.
+      act(() => { window.dispatchEvent(new Event("focus")); });
+      await loaded();
+      expect(changed).not.toHaveBeenCalled();
+      const upload = screen.getByRole("button", { name: "Upload texts…" });
+      await waitFor(() => expect(upload.getAttribute("aria-disabled")).toBeNull());
+      fireEvent.click(upload);
+      fireEvent.click(await screen.findByRole("button", { name: "Finish import stub" }));
+      await waitFor(() => expect(changed).toHaveBeenCalledOnce());
+    } finally { window.removeEventListener(DOCUMENTS_CHANGED, changed); }
   });
 });

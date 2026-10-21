@@ -57,6 +57,8 @@ it("passes the actual session user to Export and keeps authorized downloads bina
   sessionStorage.setItem(storageKey(user.username, "other-project"), "91");
   sessionStorage.setItem(storageKey(user.username), "11");
   vi.spyOn(api, "getJob").mockImplementation(async id => job(id));
+  // The navigation counter has its own endpoint; the fetch stub below serves only the download.
+  vi.spyOn(api, "documentsSummary").mockResolvedValue({ needs_decision: 0 });
   const save = vi.spyOn(downloads, "saveDownload").mockImplementation(() => {});
   const blob = new Blob([new Uint8Array([0, 255, 7])], { type: "application/zip" });
   const json = vi.fn();

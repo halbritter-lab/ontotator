@@ -47,6 +47,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   // Landing (D7): only the first view of plain `#/` after login redirects a lead;
   // a later visit to My tasks stays there.
   const [landing, setLanding] = useState(() => route.name === "tasks" && route.project === undefined);
+  // The landing redirect waits for the Documents summary; My tasks keeps its loading line meanwhile.
+  const [landingSummary, setLandingSummary] = useState(false);
   const [taskProject, setTaskProject] = useState<{ identity: string; key: string } | null>(null);
   const taskIdentity = route.name === 'task' ? JSON.stringify([baseUser?.username, route.assignmentId]) : '';
   // The breadcrumb names the open task; until its summary arrives it reads "Task" (never the bare number).
@@ -170,7 +172,17 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     if (!projectsReady || !baseUser) return;
     setLanding(false);
     const key = landingProject(baseUser.username, projects);
-    if (key !== undefined) void requestRef.current({ name: "projectDocuments", key }, undefined, { replace: true });
+    if (key === undefined) return;
+    // Needs your decision when the counter is > 0 (VD7), otherwise All; a failed summary lands on All.
+    // The redirect is dropped if the user navigated while the summary loaded.
+    const from = acceptedHash.current;
+    setLandingSummary(true);
+    const land = (segment?: "decision") => {
+      if (acceptedHash.current !== from) { setLandingSummary(false); return; }
+      void Promise.resolve(requestRef.current({ name: "projectDocuments", key, ...(segment ? { segment } : {}) }, undefined, { replace: true }))
+        .finally(() => setLandingSummary(false));
+    };
+    api.documentsSummary(key).then(summary => land(summary.needs_decision > 0 ? "decision" : undefined), () => land());
   }, [landing, route, projectError, projectsReady, baseUser, projects]);
   const rememberedKey = baseUser && route.name !== "notFound" && "key" in route ? route.key : undefined;
   useEffect(() => {
@@ -214,7 +226,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   };
   let content: JSX.Element;
   switch (route.name) {
-    case "tasks": content = landing ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
+    case "tasks": content = landing || landingSummary ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
       : <MyTasks project={route.project} projects={projects} onNavigate={go} />; break;
     case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId])} assignmentId={route.assignmentId}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef}

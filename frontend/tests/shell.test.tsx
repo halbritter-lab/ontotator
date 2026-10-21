@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { Shell, type ShellProps } from "../src/app/Shell";
 import { NotFound } from "../src/app/NotFound";
 import { routeHref } from "../src/app/router";
+import { notifyDocumentsChanged } from "../src/documents/documentsEvents";
+import { DOCUMENTS_SUMMARY_REFRESH_MS } from "../src/documents/useDocumentsSummary";
 
 const user: CurrentUser = { username: "alex", display_name: "Alex", pseudonym: "a1", is_system_admin: false, csrf_token: "test" };
 const project = (key: string, canManage: boolean): ProjectSummary => ({
@@ -24,6 +26,8 @@ beforeEach(() => {
   window.history.replaceState(null, "", "#/tasks/42");
   // The task count stays unknown unless a test answers it.
   vi.spyOn(api, "listMyTasks").mockReturnValue(new Promise(() => {}));
+  // Likewise the Documents counter.
+  vi.spyOn(api, "documentsSummary").mockReturnValue(new Promise(() => {}));
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, "", "/"); });
 
@@ -210,6 +214,63 @@ describe("shell identity and task count", () => {
     expect(identity.querySelector(".cell-secondary")?.textContent).toBe("System administrator");
     rerender(<Shell {...props({ projects: [] })} />);
     expect(identity.querySelector(".cell-secondary")).toBeNull();
+  });
+});
+
+describe("Documents counter (V3, VD7)", () => {
+  const led = () => props({ projects: [project("led", true)], route: { name: "projectProgress", key: "led" } });
+
+  it("shows Documents (3) for leads with accessible name Documents, 3 need your decision", async () => {
+    vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 3 });
+    render(<Shell {...led()} />);
+    const link = await screen.findByRole("link", { name: "Documents, 3 need your decision" });
+    expect(link.textContent).toBe("Documents (3)");
+    expect(api.documentsSummary).toHaveBeenCalledWith("led");
+  });
+
+  it("links segment=decision when n > 0, plain Documents otherwise", async () => {
+    vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 2 });
+    const state = led();
+    render(<Shell {...state} />);
+    const link = await screen.findByRole("link", { name: "Documents, 2 need your decision" });
+    expect(link.getAttribute("href")).toBe(routeHref({ name: "projectDocuments", key: "led", segment: "decision" }));
+    fireEvent.click(link);
+    expect(state.onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "led", segment: "decision" });
+    vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 0 });
+    act(() => { notifyDocumentsChanged(); });
+    const plain = await screen.findByRole("link", { name: "Documents" });
+    expect(plain).toBe(link);
+    expect(plain.textContent).toBe("Documents");
+    expect(plain.getAttribute("href")).toBe("#/projects/led/documents");
+  });
+
+  it("reloads on focus, every 60 s and on documents-changed", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 1 });
+      render(<Shell {...led()} />);
+      await screen.findByRole("link", { name: "Documents, 1 need your decision" });
+      vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 4 });
+      act(() => { window.dispatchEvent(new Event("focus")); });
+      await screen.findByRole("link", { name: "Documents, 4 need your decision" });
+      vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 5 });
+      await act(async () => { vi.advanceTimersByTime(DOCUMENTS_SUMMARY_REFRESH_MS); });
+      await screen.findByRole("link", { name: "Documents, 5 need your decision" });
+      vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 6 });
+      act(() => { notifyDocumentsChanged(); });
+      await screen.findByRole("link", { name: "Documents, 6 need your decision" });
+      expect(api.documentsSummary).toHaveBeenCalledTimes(4);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("non-leads see no count", async () => {
+    vi.mocked(api.documentsSummary).mockResolvedValue({ needs_decision: 3 });
+    // A system administrator manages the project without leading it: the summary is lead only.
+    const admin = { ...project("managed", true), roles: [] as ProjectSummary["roles"] };
+    render(<Shell {...props({ user: { ...user, is_system_admin: true }, projects: [admin], route: { name: "projectProgress", key: "managed" } })} />);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByRole("link", { name: "Documents" }).textContent).toBe("Documents");
+    expect(api.documentsSummary).not.toHaveBeenCalled();
   });
 });
 
