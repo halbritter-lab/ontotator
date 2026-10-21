@@ -63,7 +63,7 @@ const consolidation: ConsolidationView = {
     edited: false, note: null, guidelines_unclear: false, annotation_ids: [],
     members: [member("in-1", "ann-0004", "a-luc", "HP:0001252"), member("in-2", "ann-0007", "a-tom", "HP:0001250")],
   }],
-  workflow_revision: 5, draft_revision: 3,
+  added: [], added_by: null, workflow_revision: 5, draft_revision: 3,
 } as ConsolidationView;
 
 const renderEditor = (roundKind: "consolidation" | "ordinary" = "consolidation") => render(

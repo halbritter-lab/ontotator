@@ -707,3 +707,60 @@ def test_clearing_a_decision_of_a_resolved_group_reopens_it(cons):
         s.annotation.annotation_id for s in draft.annotations
     }
     assert group(cons, "term_differs")["state"] == "open"
+
+
+def add_finding(ns: Any, term: str, words: str) -> str:
+    """Add a finding nobody marked (the view's "Add finding",
+    ``POST /workspaces/{id}/commands``); returns its annotation id."""
+    workspace = view(ns)["workspace_id"]
+    annotation_id = f"ann-added-{revision(ns)}"
+    span = span_of(ns.env, doc("c1", "en"), words)
+    created = ns.adj.post(
+        f"/api/v1/workspaces/{workspace}/commands",
+        json={
+            "mutation_id": f"add-{revision(ns)}",
+            "expected_revision": revision(ns),
+            "payload": {
+                "command": "create_annotation",
+                "annotation_id": annotation_id,
+                "evidence_id": f"ev-added-{revision(ns)}",
+                "term_id": term,
+                "layer_id": "hpo",
+                "type_id": "phenotype",
+                "segments": [dict(zip(("start", "end"), span, strict=True))],
+                "axes_values": {},
+                "chosen_axis_ids": [],
+            },
+        },
+    )
+    assert created.status_code == 200, created.text
+    return annotation_id
+
+
+def test_added_findings_are_listed_for_the_assignee_and_the_lead(cons):
+    """Findings the consolidator added outside every group are in ``added``
+    (live and after submission), with the consolidator as ``added_by``; the
+    groups' ``cons-…`` results and kept targets are not."""
+    assert view(cons)["added"] == []
+    added_id = add_finding(cons, OTHER_TERM, "Seit 2")
+    resolve_all(cons)
+    adj = cons.env.app.state.accounts.get_by_username("adj").pseudonym
+    live = view(cons)
+    assert [a["annotation_id"] for a in live["added"]] == [added_id]
+    item = live["added"][0]
+    assert item["person_id"] == adj
+    assert item["term_id"] == OTHER_TERM
+    assert item["term_label"] and item["term_label"] != OTHER_TERM
+    assert item["spans"] == [list(span_of(cons.env, doc("c1", "en"), "Seit 2"))]
+    assert live["added_by"] == f"Ada Judicator ({adj})"
+
+    from test_consolidation_submit_gating import submit_acknowledged
+
+    submitted = submit_acknowledged(cons.adj, live["workspace_id"], revision(cons))
+    assert submitted.status_code == 200, submitted.text
+    read = cons.env.lead.get(f"/api/v1/rounds/{cons.round.round_id}/consolidation")
+    assert read.status_code == 200, read.text
+    body = read.json()
+    assert body["read_only"] is True
+    assert [a["annotation_id"] for a in body["added"]] == [added_id]
+    assert body["added_by"] == f"Ada Judicator ({adj})"

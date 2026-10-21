@@ -62,7 +62,7 @@ export function exampleGroups(): ConsolidationGroupView[] {
 export function exampleView(extra: Partial<ConsolidationView> = {}): ConsolidationView {
   return {
     round_id: "round-c", workspace_id: "ws-c", read_only: false, read_only_reason: null, case_id: "case-107", language: "de",
-    document_version: 2, document_id: "doc-1", text: TEXT, people: [LUC, TOM], groups: exampleGroups(),
+    document_version: 2, document_id: "doc-1", text: TEXT, people: [LUC, TOM], groups: exampleGroups(), added: [], added_by: null,
     workflow_revision: 5, draft_revision: 3, ...extra,
   };
 }

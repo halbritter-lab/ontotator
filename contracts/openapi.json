@@ -9891,6 +9891,25 @@
             "type": "array",
             "title": "Groups"
           },
+          "added": {
+            "items": {
+              "$ref": "#/components/schemas/ConsolidationMemberView"
+            },
+            "type": "array",
+            "title": "Added",
+            "default": []
+          },
+          "added_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added By"
+          },
           "workflow_revision": {
             "type": "integer",
             "title": "Workflow Revision"

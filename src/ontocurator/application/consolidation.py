@@ -325,6 +325,12 @@ class ConsolidationReader:
                 )
             ).one()
             people = _people(conn, access, order, found.authors)
+            added = _added(members, content, defaults)
+            added_by = (
+                _people(conn, access, ["self"], {"self": item.annotator_id})[0]["label"]
+                if added
+                else None
+            )
         return {
             "round_id": item.round_id,
             "workspace_id": None,  # filled by the route for the editable assignee
@@ -340,9 +346,60 @@ class ConsolidationReader:
                 _group_view(group, members, content)
                 for group in _groups(order, members)
             ],
+            "added": added,
+            "added_by": added_by,
             "workflow_revision": item.workflow_revision,
             "draft_revision": 0 if submitted else content.revision,
         }
+
+
+def _added(
+    members: Mapping[str, RoundMember], content: _Content, defaults: AxisDefaults
+) -> list[dict[str, Any]]:
+    """Findings the consolidator added outside every group ("Add finding"):
+    the draft's or submission's annotations that are neither a group's
+    ``cons-…`` result, a member target nor a decision's replacement.
+
+    Each is shaped like a group member; ``input_id`` holds the annotation id
+    and ``person_id`` the annotation's author (the consolidator)."""
+    targets = {m.snapshot.annotation.annotation_id for m in members.values()}
+    replacements = {
+        d.replacement.annotation_id
+        for d in content.decisions
+        if d.replacement is not None
+    }
+    added: list[dict[str, Any]] = []
+    for snapshot in content.annotations:
+        annotation = snapshot.annotation
+        if (
+            annotation.annotation_id.startswith("cons-")
+            or annotation.annotation_id in targets
+            or annotation.annotation_id in replacements
+        ):
+            continue
+        found = finding_of(
+            snapshot,
+            key=annotation.annotation_id,
+            order=len(added),
+            defaults=defaults,
+        )
+        added.append(
+            {
+                "input_id": annotation.annotation_id,
+                "person_id": annotation.provenance.actor.actor_id,
+                "annotation_id": annotation.annotation_id,
+                "term_id": annotation.term_id,
+                "term_label": annotation.term_id,
+                "layer_id": annotation.layer_id,
+                "type_id": annotation.type_id,
+                "axes": dict(found.axes),
+                "spans": [list(span) for span in found.spans],
+                "cues": [list(span) for span in found.cues],
+                "note": annotation.note or None,
+            }
+        )
+    added.sort(key=lambda item: (item["spans"][:1], item["annotation_id"]))
+    return added
 
 
 def _people(

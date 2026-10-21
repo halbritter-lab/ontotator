@@ -3145,6 +3145,13 @@ export interface components {
             people: components["schemas"]["ConsolidationPersonView"][];
             /** Groups */
             groups: components["schemas"]["ConsolidationGroupView"][];
+            /**
+             * Added
+             * @default []
+             */
+            added: components["schemas"]["ConsolidationMemberView"][];
+            /** Added By */
+            added_by?: string | null;
             /** Workflow Revision */
             workflow_revision: number;
             /**

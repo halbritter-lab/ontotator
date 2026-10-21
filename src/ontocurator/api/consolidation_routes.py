@@ -80,6 +80,13 @@ class ConsolidationView(_View):
     text: str = ""
     people: list[ConsolidationPersonView]
     groups: list[ConsolidationGroupView]
+    # Findings the consolidator added outside every group ("Add finding"),
+    # shaped like members: ``input_id`` is the annotation id, ``person_id``
+    # the consolidator.
+    added: list[ConsolidationMemberView] = []
+    # The consolidator's label ("Ada Judicator (ann-0007)") when ``added`` is
+    # not empty.
+    added_by: str | None = None
     workflow_revision: int
     # The live draft's revision, the ``expected_revision`` of the next group
     # command; 0 in read-only mode.
@@ -103,15 +110,15 @@ def read_consolidation(
         data["workspace_id"] = encode_workspace_id(item.workspace_key)
     ontology = get_ontology(request)
     labels: dict[tuple[str, str], str] = {}
-    for group in data["groups"]:
-        for member in group["members"]:
-            term = (member["layer_id"], member["term_id"])
-            if term not in labels:
-                status = ontology.for_package_layer(
-                    repo, item.project_key, term[0]
-                ).validate_term(term[1])
-                labels[term] = status.label or term[1]
-            member["term_label"] = labels[term]
+    members = [m for group in data["groups"] for m in group["members"]]
+    for member in [*members, *data["added"]]:
+        term = (member["layer_id"], member["term_id"])
+        if term not in labels:
+            status = ontology.for_package_layer(
+                repo, item.project_key, term[0]
+            ).validate_term(term[1])
+            labels[term] = status.label or term[1]
+        member["term_label"] = labels[term]
     return ConsolidationView.model_validate(data)
 
 
