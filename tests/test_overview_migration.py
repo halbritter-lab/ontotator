@@ -341,6 +341,25 @@ def test_downgrade_refuses_with_draft_inputs(migrated) -> None:
         assert _one(conn, f"SELECT version_num FROM {S}.alembic_version") == REVISION
 
 
+@pytest.mark.parametrize("kind", ["text_change", "handover"])
+def test_downgrade_refuses_with_text_change_rounds(migrated, kind) -> None:
+    engine = migrated[1]
+    with engine.begin() as conn:
+        _exec(
+            conn,
+            f"INSERT INTO {S}.work_rounds (round_id, project_id, assignment_id,"
+            " document_id, annotator_id, kind, input_manifest_sha256,"
+            " input_submission_ids, created_at)"
+            f" SELECT 'r2', a.project_id, a.id, 'v1', 'ann-0001', :kind, 'h',"
+            f" '[]', now() FROM {S}.assignments a",
+            kind=kind,
+        )
+    with pytest.raises(RuntimeError, match="text-change"):
+        _downgrade(engine)
+    with engine.connect() as conn:
+        assert _one(conn, f"SELECT version_num FROM {S}.alembic_version") == REVISION
+
+
 def test_downgrade_reverses_without_them(migrated) -> None:
     engine = migrated[1]
     with engine.begin() as conn:

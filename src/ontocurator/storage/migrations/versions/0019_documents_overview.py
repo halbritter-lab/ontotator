@@ -198,6 +198,17 @@ def downgrade() -> None:
             "Cannot downgrade: round inputs come from draft snapshots;"
             " their source would be lost"
         )
+    rounds = op.get_bind().execute(
+        sa.text(
+            f"SELECT EXISTS (SELECT 1 FROM {SCHEMA}.work_rounds"
+            " WHERE kind IN ('text_change', 'handover'))"
+        )
+    )
+    if rounds.scalar_one():
+        raise RuntimeError(
+            "Cannot downgrade: text-change or handover rounds exist;"
+            " the previous revision does not know them"
+        )
     # No round input uses a snapshot, so dropping the text_change_resolutions
     # and draft_snapshots rows below is intended (nothing depends on them).
     op.drop_constraint(
