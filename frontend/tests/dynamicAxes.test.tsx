@@ -91,12 +91,12 @@ describe("Dynamic Axes and Non-HPO UI", () => {
     expect(screen.getByText(/Schweregrad/)).toBeDefined();
     expect(screen.getByText(/\(required\)/)).toBeDefined();
 
-    // Small axes expose all choices directly.
-    expect((screen.getByRole("radio", { name: "severe" }) as HTMLInputElement).checked).toBe(true);
+    // Small axes expose all choices directly; profile identifiers read as words.
+    expect((screen.getByRole("radio", { name: "Severe" }) as HTMLInputElement).checked).toBe(true);
 
     expect((screen.getByRole("radio", { name: /Not specified|Nicht angegeben/i }) as HTMLInputElement).checked).toBe(true);
 
-    fireEvent.click(screen.getByRole("radio", { name: "high" }));
+    fireEvent.click(screen.getByRole("radio", { name: "High" }));
     expect(onUpdateAxes).toHaveBeenCalledWith({
       severity: "severe",
       confidence: "high",
