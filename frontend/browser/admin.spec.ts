@@ -114,6 +114,9 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
 
 async function selectProject(page: Page, key: string) {
   // D7: a lead of one project already lands on its Documents (with or without the decision tab, VD7).
+  // The landing redirect waits for the Documents summary ("Loading your projects…" meanwhile); a
+  // redirect landing after the picker opened would close it under the click.
+  await expect(page.getByText("Loading your projects…", { exact: true })).toHaveCount(0);
   if (new RegExp(`#/projects/${key}/documents(\\?|$)`).test(page.url())) return;
   await page.locator(".shell-project-trigger").click();
   await page.locator(`#shell-project-panel a[href="#/projects/${encodeURIComponent(key)}/documents"]`).click();
@@ -210,13 +213,15 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await selectText(page, 0, 9);
   await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
-  for (const [axis, value] of [["Assertion", "Present"], ["Experiencer", "Patient"], ["Temporality", "Current"]]) {
-    const choice = page.getByRole("group", { name: new RegExp(`^${axis}`) }).getByRole("radio", { name: value, exact: true });
-    // Controlled axes reflect the asynchronous server response, as in design.spec.ts.
-    await choice.click();
-    await expect(choice).toBeChecked();
-    await expect(page.locator(".status-badge")).toHaveClass(/status-saved/);
-  }
+  // A new project presets the clinical creation defaults (U5): the finding starts with them unconfirmed.
+  const axes = [["Assertion", "Present"], ["Experiencer", "Patient"], ["Temporality", "Current"]] as const;
+  const axisRadio = (axis: string, name: string) =>
+    page.getByRole("group", { name: new RegExp(`^${axis}`) }).getByRole("radio", { name, exact: true });
+  for (const [axis, value] of axes) await expect(axisRadio(axis, `${value} · default`)).toBeChecked();
+  await page.getByRole("button", { name: /^Confirm defaults \(3\)/ }).click();
+  // Controlled axes reflect the asynchronous server response, as in design.spec.ts.
+  for (const [axis, value] of axes) await expect(axisRadio(axis, value)).toBeChecked();
+  await expect(page.locator(".status-badge")).toHaveClass(/status-saved/);
   await submitCase(page);
 }
 
