@@ -96,11 +96,13 @@ The publish form gets an action bar above the preview: file + note inputs, then 
 | `match`                 | kept automatically; reopened: Keep / Leave out / Edit values… / Other term… (U14)         |
 | `values_differ`         | per axis: one person's value ("absent · Tom Reis")                                        |
 | `span_differs`          | one person's span                                                                         |
-| `notes_differ`          | one person's note, both, or none                                                          |
+| `notes_differ`          | one person's note, or none (always offered); not both, see below                          |
 | `term_differs`          | one term (with that term's rows), keep both, or "Other term…" (search, same layer + type) |
 | `partial` (+ any above) | "Keep Luc Martin's finding" (optionally "Edit values…") or "Leave out", plus the rows     |
 
 A group resolves when every row has a choice (X6).
+
+**Notes, deviation (final review 2026-10-21):** the note row offers each person's note and always "No note". "Both notes" is not offered: the resolve command takes one person's note (`note_from_input_id`); joining notes needs backend support and is deferred.
 
 ### Backend
 
