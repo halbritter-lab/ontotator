@@ -9,7 +9,9 @@ Nothing is deleted: old assignments are revoked, drafts and submissions stay.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import logging
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -31,6 +33,7 @@ from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.auth.authority import lock_user_authority
 from ontocurator.authz.policy import Access, Action, can
 from ontocurator.authz.visibility import current_access
+from ontocurator.domain import document_rows as rules
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import AccessDenied, DomainError
@@ -67,6 +70,11 @@ from ontocurator.storage.workflow_tables import (
     RoundInputRow,
     WorkflowCommandReceiptRow,
 )
+
+logger = logging.getLogger(__name__)
+
+# The actor of the automatic carry after "Let X finish on v1" (V8).
+SYSTEM_ACTOR = Actor(user_id=None, label="system:text_change")
 
 # Unplaced findings whose marked text the correction changed (preview).
 _CHANGED_REASONS = frozenset({"changed_segment", "changed_cue"})
@@ -186,18 +194,8 @@ class TextChangeService:
                 ``NOT_IN_WORK_PLAN`` (discarded version or Annotate off).
         """
         variants = {v.document_id: v for v in self.repo.list_variants(project)}
-        source = variants.get(from_id)
-        if source is None:
-            raise DomainError("DOCUMENT_NOT_FOUND")
-        chains = _chains(conn, pid, [source.case_id]).get(
-            RowKey(source.case_id, source.language), []
-        )
-        chain = next(
-            (c for c in chains if any(v.document_id == from_id for v in c.versions)),
-            None,
-        )
-        if chain is None:
-            raise DomainError("DOCUMENT_NOT_FOUND")
+        chain = self._chain(conn, pid, variants, from_id)
+        source = variants[from_id]
         target_id = _row_target(chain).document_id
         if from_id == target_id:
             raise _not_applicable("already_on_target")
@@ -224,6 +222,32 @@ class TextChangeService:
                 raise _not_applicable("target_not_annotatable") from None
             raise
         return source, target
+
+    @staticmethod
+    def _chain(
+        conn: Connection, pid: int, variants: Mapping[str, VariantInfo], from_id: str
+    ) -> rules.Chain:
+        """The version chain of ``from_id`` in its row."""
+        source = variants.get(from_id)
+        if source is None:
+            raise DomainError("DOCUMENT_NOT_FOUND")
+        chains = _chains(conn, pid, [source.case_id]).get(
+            RowKey(source.case_id, source.language), []
+        )
+        chain = next(
+            (c for c in chains if any(v.document_id == from_id for v in c.versions)),
+            None,
+        )
+        if chain is None:
+            raise DomainError("DOCUMENT_NOT_FOUND")
+        return chain
+
+    def current_target(
+        self, conn: Connection, project: str, pid: int, from_id: str
+    ) -> str:
+        """The document ID of the newest counted version of ``from_id``'s root."""
+        variants = {v.document_id: v for v in self.repo.list_variants(project)}
+        return str(_row_target(self._chain(conn, pid, variants, from_id)).document_id)
 
     @staticmethod
     def _require_open_annotation(assignment: Mapping[Any, Any]) -> None:
@@ -1067,3 +1091,143 @@ class TextChangeService:
             round=round_view,
             carried_findings=carried,
         )
+
+
+@contextmanager
+def _isolated(conn: Connection, db: Database) -> Iterator[None]:
+    """A SAVEPOINT whose failure leaves the surrounding transaction usable.
+
+    A failure inside a joined ``Database.transaction()`` scope marks the
+    ambient transaction rollback-only; once the savepoint has undone that
+    scope's writes, the mark is taken back.
+    """
+    ambient = db._current.get()
+    before = None if ambient is None else ambient.failure
+    try:
+        with conn.begin_nested():
+            yield
+    except BaseException:
+        if ambient is not None:
+            ambient.failure = before
+        raise
+
+
+def auto_carry_on_submit(
+    conn: Connection,
+    repo: Repository,
+    *,
+    project_id: int,
+    project_key: str,
+    assignment_id: int,
+    submission: Submission,
+) -> None:
+    """Carry a submission on an old version for its author (V8).
+
+    Runs inside the submit transaction, which holds the exclusive project
+    lock. When the lead let the author finish on the old version
+    (``finish_then_carry``), the author gets a ``carry_forward`` round on the
+    root's newest version. Anything that prevents it (no resolution any more,
+    target not annotatable, author no longer a member, own work on the
+    target, any error) leaves the submission alone: the savepoint is rolled
+    back, the reason logged, and rule 3b ("Carry to v2…") applies.
+    """
+    try:
+        with _isolated(conn, repo.db):
+            _auto_carry(
+                conn,
+                repo,
+                pid=project_id,
+                key=project_key,
+                assignment_id=assignment_id,
+                submission=submission,
+            )
+    except DomainError as error:
+        logger.warning(
+            "No automatic carry for assignment %s after a text change: %s",
+            assignment_id,
+            error.code,
+        )
+    except Exception:
+        logger.exception(
+            "Automatic carry for assignment %s after a text change failed",
+            assignment_id,
+        )
+
+
+def _auto_carry(
+    conn: Connection,
+    repo: Repository,
+    *,
+    pid: int,
+    key: str,
+    assignment_id: int,
+    submission: Submission,
+) -> None:
+    # Re-read under the lock: only a decision that still stands is carried.
+    decided_by = conn.execute(
+        select(TextChangeResolutionRow.decided_by).where(
+            TextChangeResolutionRow.project_id == pid,
+            TextChangeResolutionRow.assignment_id == assignment_id,
+            TextChangeResolutionRow.resolution == "finish_then_carry",
+        )
+    ).one_or_none()
+    if decided_by is None:
+        return
+    if submission.origin_key.mode != "independent":
+        raise _not_applicable("not_annotation")
+    service = TextChangeService(repo.db, repo)
+    from_id = submission.origin_key.document_id
+    # The newest version now, also when the text changed again since.
+    target_id = service.current_target(conn, key, pid, from_id)
+    source, target = service._check_target(conn, key, pid, from_id, target_id)
+    project_row = (
+        conn.execute(select(ProjectRow).where(ProjectRow.id == pid)).mappings().one()
+    )
+    user_id = conn.execute(
+        select(AssignmentRow.user_id).where(AssignmentRow.id == assignment_id)
+    ).scalar_one()
+    # Still a member who may annotate (raises otherwise).
+    AssignmentService._require_target(conn, project_row, user_id, "annotate")
+    now = datetime.now(UTC)
+    result = service._carry_round(
+        conn,
+        key,
+        project_row,
+        SYSTEM_ACTOR,
+        submission.submission_id,
+        submission.origin_key.annotator_id,
+        target,
+        mode="author",
+        username=None,
+        locked_user_id=user_id,
+        # The author works on this row's language already (as a move).
+        confirm_language=True,
+        now=now,
+    )
+    assert result.round is not None
+    TextChangeService._record(
+        conn,
+        pid,
+        source,
+        target,
+        "carried",
+        SYSTEM_ACTOR,
+        now,
+        submission_id=submission.submission_id,
+        round_id=result.round.round_id,
+    )
+    record_audit(
+        conn,
+        SYSTEM_ACTOR,
+        "text_change.auto_carry",
+        target_type="submission",
+        target_id=submission.submission_id,
+        project_id=pid,
+        details={
+            "from_assignment_id": assignment_id,
+            "submission_id": submission.submission_id,
+            "round_id": result.round.round_id,
+            "finish_then_carry_decided_by": decided_by[0],
+        },
+        at=now,
+    )

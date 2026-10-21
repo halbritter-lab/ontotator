@@ -156,6 +156,49 @@ def _assignment(row: RowMapping) -> Assignment:
     return Assignment(**row)
 
 
+ReviewReason = Literal["source_changed"]
+
+
+def enable_source_change_review(
+    conn: Connection, actor: Actor, project_id: int, project_key: str, document_id: str
+) -> bool:
+    """VD14: a translation review of a version whose source text changed.
+
+    Allowed only while the version has an unresolved
+    ``SOURCE_UPDATE_UNREVIEWED`` obligation (only the newest translation
+    version has one); then the review may bypass
+    ``translation_already_accepted`` (returns True) and Review is turned on
+    for the row (D26 pattern: audited, no confirmation). The caller holds the
+    project lock.
+
+    Raises:
+        DomainError: ``SOURCE_REVIEW_NOT_NEEDED`` without such an obligation.
+    """
+    from ontocurator.application.work_plans import turn_review_on
+    from ontocurator.domain.work_plans import RowKey
+    from ontocurator.domain.work_rounds import derive_source_obligations
+    from ontocurator.storage.workflow_tables import ReviewObligationResolutionRow
+
+    variants = load_variants(conn, project_id)
+    variant = variants.get(document_id)
+    if variant is None:
+        raise DomainError("DOCUMENT_NOT_FOUND")
+    resolved = set(
+        conn.execute(
+            select(ReviewObligationResolutionRow.cause_id).where(
+                ReviewObligationResolutionRow.project_id == project_id
+            )
+        ).scalars()
+    )
+    if not any(
+        cause.document_id == document_id
+        for cause in derive_source_obligations(project_key, variants.values(), resolved)
+    ):
+        raise DomainError("SOURCE_REVIEW_NOT_NEEDED")
+    turn_review_on(conn, actor, project_id, RowKey(variant.case_id, variant.language))
+    return True
+
+
 class AssignmentService:
     def __init__(
         self, db: Database, *, now: Callable[[], datetime] = lambda: datetime.now(UTC)
@@ -428,15 +471,24 @@ class AssignmentService:
         *,
         confirm_language: bool = False,
         review_accepted_translation: bool = False,
+        review_reason: ReviewReason | None = None,
     ) -> Assignment:
         """``review_accepted_translation`` (D25): a new translation review of a
         newest version with a lead or override acceptance; turns Review on for
-        its row in the same transaction."""
+        its row in the same transaction. ``review_reason="source_changed"``
+        (VD14): a review of a translation whose source text changed, see
+        ``enable_source_change_review``."""
         with self.db.transaction() as conn:
             target = self._target(conn, username)
             project = self._prepare(conn, actor, key, target)
             allow = False
-            if review_accepted_translation and task == "translation_review":
+            if review_reason == "source_changed":
+                if task != "translation_review":
+                    raise DomainError("SOURCE_REVIEW_NOT_NEEDED")
+                allow = enable_source_change_review(
+                    conn, actor, project["id"], key, document_id
+                )
+            elif review_accepted_translation and task == "translation_review":
                 from ontocurator.application.work_plans import (
                     enable_review_for_accepted,
                 )

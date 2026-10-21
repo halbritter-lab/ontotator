@@ -23,7 +23,11 @@ from ontocurator.application import document_row_page as page
 from ontocurator.application.document_rows import RowFacts, RowQuery, load_facts
 from ontocurator.application.people import person_refs
 from ontocurator.assignments.eligibility import load_variants, required_languages
-from ontocurator.assignments.service import Assignment, AssignmentService
+from ontocurator.assignments.service import (
+    Assignment,
+    AssignmentService,
+    enable_source_change_review,
+)
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import TASK_ROLES, Access, Action, Role, Task
@@ -78,6 +82,8 @@ class BatchSpec:
     usernames: tuple[str, ...] = ()
     sort: str = "case"
     review_accepted_translation: bool = False
+    # VD14: translation reviews of versions whose source text changed.
+    review_reason: Literal["source_changed"] | None = None
     # Row-level selection (VD21): only these texts; replaces ``case_ids``.
     # Texts of another language than ``language`` are not targeted.
     rows: tuple[RowKey, ...] = ()
@@ -103,6 +109,8 @@ class _Target:
     remaining: int
     holders: frozenset[str]  # usernames holding the task on this version
     accepted_review: bool  # D25: Review is turned on at commit
+    # VD14: a source-change review; the obligation is rechecked at commit.
+    source_review: bool = False
     usernames: list[str] = field(default_factory=list)
 
 
@@ -199,7 +207,12 @@ class _Rows:
         ]
 
     def _target(
-        self, version: rules.Version, task: Task, *, accepted_review: bool = False
+        self,
+        version: rules.Version,
+        task: Task,
+        *,
+        accepted_review: bool = False,
+        source_review: bool = False,
     ) -> _Target:
         work = self._work(version.document_id, task)
         if task == "annotate":
@@ -217,10 +230,17 @@ class _Rows:
             remaining=max(remaining, 0),
             holders=frozenset(self.username_of.get(i.user_id, "") for i in work),
             accepted_review=accepted_review,
+            source_review=source_review,
         )
 
     def match(
-        self, case_id: str, language: str, task: Task, *, accepted_review: bool
+        self,
+        case_id: str,
+        language: str,
+        task: Task,
+        *,
+        accepted_review: bool,
+        source_review: bool = False,
     ) -> _Match:
         key = (case_id, language)
         row = self.rows.get(key)
@@ -251,7 +271,19 @@ class _Rows:
                 if accepted_review and row["in_plan"]
                 else []
             )
-            if not review and not external:
+            # VD14: versions with an unresolved source-change obligation
+            # (only a newest translation version has one).
+            changed = (
+                [
+                    self._target(v, task, source_review=True)
+                    for v in newest
+                    if v.document_id in self.facts.source_obligations
+                    and all(t.document_id != v.document_id for t in external)
+                ]
+                if source_review and (review or row["in_plan"])
+                else []
+            )
+            if not review and not external and not changed:
                 # In the plan (Annotate on), e.g. package-accepted: its step
                 # is not a translation review.
                 reason: SkipReason = "step_differs" if row["in_plan"] else "not_in_plan"
@@ -264,6 +296,8 @@ class _Rows:
                     or v.translation_status in REVIEWER_NEEDED_STATUSES
                 ]
             candidates += external
+            known = {t.document_id for t in candidates}
+            candidates += [t for t in changed if t.document_id not in known]
         else:
             if not annotate:
                 return _Match((), "not_in_plan", holders)
@@ -493,6 +527,8 @@ class BatchAssignmentService:
                 task,
                 accepted_review=spec.review_accepted_translation
                 and task == "translation_review",
+                source_review=spec.review_reason == "source_changed"
+                and task == "translation_review",
             )
             holders[case_id] = match.holders
             if match.reason is not None:
@@ -712,6 +748,14 @@ class BatchAssignmentService:
 
                                 allow = enable_review_for_accepted(
                                     conn, self.actor, project["id"], target.document_id
+                                )
+                            if target.source_review:
+                                allow = enable_source_change_review(
+                                    conn,
+                                    self.actor,
+                                    project["id"],
+                                    key,
+                                    target.document_id,
                                 )
                             created.append(
                                 service._assign_locked(

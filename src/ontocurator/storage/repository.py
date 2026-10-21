@@ -204,6 +204,14 @@ def _workspace_aliases(key: WorkspaceKey) -> tuple[str, ...]:
 _lock_id = advisory_lock_id
 
 
+def _lock_project(conn: Connection, project_key: str, *, exclusive: bool) -> None:
+    """The project's transaction lock, shared or exclusive."""
+    lock = (
+        func.pg_advisory_xact_lock if exclusive else func.pg_advisory_xact_lock_shared
+    )
+    conn.execute(select(lock(_lock_id("project", project_key))))
+
+
 # Search event IDs are global, but the primary key is per project. Writers that
 # check an ID and then insert it hold this lock until they commit: local saves
 # shared (they bring fresh IDs, so they need not wait for each other), imports
@@ -2665,8 +2673,15 @@ class Repository:
                 )
             )
 
-    def _before_workspace_locks(self, conn: Connection, key: WorkspaceKey) -> None:
-        """Keep a contextual principal stable before any draft/assignment lock."""
+    def _before_workspace_locks(
+        self, conn: Connection, key: WorkspaceKey, *, exclusive: bool = False
+    ) -> None:
+        """Keep a contextual principal stable before any draft/assignment lock.
+
+        ``exclusive`` takes the project lock exclusively: a shared lock is
+        never upgraded later in the same transaction (two shared holders
+        waiting for the same upgrade would deadlock).
+        """
         principal = current_principal.get()
         if principal is not None:
             from ontocurator.auth.authority import lock_user_authority
@@ -2678,13 +2693,7 @@ class Repository:
                     )
                 )
             )
-            conn.execute(
-                select(
-                    func.pg_advisory_xact_lock_shared(
-                        _lock_id("project", key.project_key)
-                    )
-                )
-            )
+            _lock_project(conn, key.project_key, exclusive=exclusive)
             lock_user_authority(conn, principal.user_id)
 
     def _before_open_draft(self, conn: Connection, key: WorkspaceKey) -> None:
@@ -3024,6 +3033,8 @@ class Repository:
         operation: Callable[[Draft], Draft | Submission],
         *,
         before_operation: Callable[[Connection], None] | None = None,
+        exclusive_project: bool = False,
+        after_submit: Callable[[Connection, Submission], None] | None = None,
     ) -> Draft | Submission:
         """Run ``operation`` on the draft at the expected revision, exactly once.
 
@@ -3034,20 +3045,21 @@ class Repository:
         Every committed command is logged in ``edit_events`` in the same
         transaction (D6), with the user and session of the running request
         (none outside a request). A replay logs nothing.
+
+        ``exclusive_project`` takes the project lock exclusively from the
+        first acquisition on (a submit that creates work, V8);
+        ``after_submit`` runs in the transaction once a submission is stored
+        and its round and assignment are advanced, before the receipt.
         """
         key_string = _key_str(key)
         request_hash = canonical_hash(envelope.model_dump())
         with self.db.transaction() as conn:
-            self._before_workspace_locks(conn, key)
+            self._before_workspace_locks(conn, key, exclusive=exclusive_project)
             # Shared across independent drafts, exclusive against structural
-            # changes/imports. Always acquire before the per-draft lock.
-            conn.execute(
-                select(
-                    func.pg_advisory_xact_lock_shared(
-                        _lock_id("project", key.project_key)
-                    )
-                )
-            )
+            # changes/imports. Always acquire before the per-draft lock. With
+            # ``exclusive_project`` an exclusive lock: once held, this one
+            # adds nothing.
+            _lock_project(conn, key.project_key, exclusive=exclusive_project)
             project_id = self._require_project(conn, key.project_key)
             self._lock_draft(conn, key)
             receipt = conn.execute(
@@ -3179,6 +3191,11 @@ class Repository:
                 raise ValueError(f"Unsupported operation return type: {type(result)}")
             self._advance_round(conn, key, result)
             self._after_new_mutation(conn, key, result, now)
+            if after_submit is not None and isinstance(result, Submission):
+                # After the guideline stamp, the round and the assignment
+                # status: the hook carries the submission as its round's
+                # result (V8).
+                after_submit(conn, result)
             conn.execute(
                 insert(MutationReceiptRow).values(
                     project_id=project_id,

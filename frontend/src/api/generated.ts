@@ -2219,6 +2219,8 @@ export interface components {
             context?: components["schemas"]["DistributionContextView"] | null;
             /** Review Accepted Translation */
             review_accepted_translation?: boolean | null;
+            /** Review Reason */
+            review_reason?: "source_changed" | null;
         };
         /** AssignResponse */
         AssignResponse: {
@@ -2510,6 +2512,8 @@ export interface components {
              * @default false
              */
             review_accepted_translation: boolean;
+            /** Review Reason */
+            review_reason?: "source_changed" | null;
             /** Expected Preview Digest */
             expected_preview_digest: string;
             /**
@@ -2550,6 +2554,8 @@ export interface components {
              * @default false
              */
             review_accepted_translation: boolean;
+            /** Review Reason */
+            review_reason?: "source_changed" | null;
         };
         /** BatchAssignResult */
         BatchAssignResult: {

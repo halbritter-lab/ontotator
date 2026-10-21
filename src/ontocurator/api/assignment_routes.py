@@ -203,6 +203,9 @@ class AssignRequest(BaseModel):
     # D25: a new review of a translation the lead or an import override accepted.
     # None (omitted) means False; None keeps the generated client field optional.
     review_accepted_translation: bool | None = None
+    # VD14: a review of a translation whose source text changed; refused
+    # (``SOURCE_REVIEW_NOT_NEEDED``) without an unresolved obligation.
+    review_reason: Literal["source_changed"] | None = None
 
 
 class RefusedAssignment(AssignmentRowRequest):
@@ -394,6 +397,7 @@ def assign(
                     body.task,
                     confirm_language=body.confirm_language,
                     review_accepted_translation=bool(body.review_accepted_translation),
+                    review_reason=body.review_reason,
                 )
             )
         except DomainError as exc:

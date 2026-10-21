@@ -204,17 +204,21 @@ class ScopedRepository(Repository):
             raise DomainError("ASSIGNMENT_SUBMITTED")
         return assignment
 
-    def _before_workspace_locks(self, conn: Connection, key: WorkspaceKey) -> None:
+    def _before_workspace_locks(
+        self, conn: Connection, key: WorkspaceKey, *, exclusive: bool = False
+    ) -> None:
         conn.execute(
             select(
                 func.pg_advisory_xact_lock_shared(_lock_id("members", key.project_key))
             )
         )
-        conn.execute(
-            select(
-                func.pg_advisory_xact_lock_shared(_lock_id("project", key.project_key))
-            )
+        # Exclusive for a submit that creates work (V8); never upgraded later.
+        project_lock = (
+            func.pg_advisory_xact_lock
+            if exclusive
+            else func.pg_advisory_xact_lock_shared
         )
+        conn.execute(select(project_lock(_lock_id("project", key.project_key))))
         lock_user_authority(conn, self.access.user_id)
         # Revocation uses project EXCLUSIVE, so this assignment stays valid
         # through commit without a global command mutex.
@@ -751,11 +755,18 @@ class ScopedRepository(Repository):
         operation: Callable[[Draft], Draft | Submission],
         *,
         before_operation: Callable[[Connection], None] | None = None,
+        exclusive_project: bool = False,
+        after_submit: Callable[[Connection, Submission], None] | None = None,
     ) -> Draft | Submission:
         self._document(key.project_key, key.document_id)
         self._visible(key.project_key)
         return super().run_mutation(
-            key, envelope, operation, before_operation=before_operation
+            key,
+            envelope,
+            operation,
+            before_operation=before_operation,
+            exclusive_project=exclusive_project,
+            after_submit=after_submit,
         )
 
     def get_document_status(

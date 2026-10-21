@@ -7379,6 +7379,18 @@
               }
             ],
             "title": "Review Accepted Translation"
+          },
+          "review_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "source_changed"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Reason"
           }
         },
         "additionalProperties": false,
@@ -8091,6 +8103,18 @@
             "title": "Review Accepted Translation",
             "default": false
           },
+          "review_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "source_changed"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Reason"
+          },
           "expected_preview_digest": {
             "type": "string",
             "title": "Expected Preview Digest"
@@ -8175,6 +8199,18 @@
             "type": "boolean",
             "title": "Review Accepted Translation",
             "default": false
+          },
+          "review_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "source_changed"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Reason"
           }
         },
         "additionalProperties": false,

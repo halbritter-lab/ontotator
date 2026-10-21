@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import Connection, select
 
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import validate_axes
@@ -208,12 +209,73 @@ class SubmissionService:
         def operation(draft: Draft) -> Submission:
             return self._create_submission(draft, cmd, key)
 
-        result = self.repo.run_mutation(key, envelope, operation)
+        finishing = self._finish_then_carry(key)
+        if finishing is None:
+            result = self.repo.run_mutation(key, envelope, operation)
+        else:
+            # V8: the lead let this person finish on an old version; the
+            # submit carries the result to the newest one. Creating work
+            # needs the exclusive project lock from the start.
+            project_id, assignment_id = finishing
+            from ontocurator.application.text_changes import auto_carry_on_submit
+
+            # Unscoped: the carry reads the new version and creates work the
+            # submitter's own view does not cover yet.
+            plain = Repository(self.repo.db)
+
+            def after_submit(conn: Connection, submission: Submission) -> None:
+                auto_carry_on_submit(
+                    conn,
+                    plain,
+                    project_id=project_id,
+                    project_key=key.project_key,
+                    assignment_id=assignment_id,
+                    submission=submission,
+                )
+
+            result = self.repo.run_mutation(
+                key,
+                envelope,
+                operation,
+                exclusive_project=True,
+                after_submit=after_submit,
+            )
         if not isinstance(result, Submission):
             raise ValueError(
                 f"Expected Submission from run_mutation, got {type(result)}"
             )
         return result
+
+    def _finish_then_carry(self, key: WorkspaceKey) -> tuple[int, int] | None:
+        """``(project_id, assignment_id)`` when the lead let this annotation
+        finish on an old version (a ``finish_then_carry`` resolution), else
+        None. One read before the submit transaction; the hook re-reads it
+        under the lock."""
+        if key.mode != "independent":
+            return None
+        from ontocurator.storage.overview_tables import TextChangeResolutionRow
+        from ontocurator.storage.tables import AssignmentRow, ProjectRow, UserRow
+
+        with self.repo.db.transaction() as conn:
+            found = conn.execute(
+                select(AssignmentRow.project_id, AssignmentRow.id)
+                .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
+                .join(UserRow, UserRow.id == AssignmentRow.user_id)
+                .join(
+                    TextChangeResolutionRow,
+                    (TextChangeResolutionRow.project_id == AssignmentRow.project_id)
+                    & (TextChangeResolutionRow.assignment_id == AssignmentRow.id),
+                )
+                .where(
+                    ProjectRow.project_key == key.project_key,
+                    AssignmentRow.document_id == key.document_id,
+                    AssignmentRow.task == "annotate",
+                    AssignmentRow.revoked_at.is_(None),
+                    UserRow.pseudonym == key.annotator_id,
+                    TextChangeResolutionRow.resolution == "finish_then_carry",
+                )
+            ).one_or_none()
+        return None if found is None else (int(found[0]), int(found[1]))
 
     def read(self, key: WorkspaceKey, submission_id: str) -> Submission:
         """Read a historical submission scoped to its local workspace."""

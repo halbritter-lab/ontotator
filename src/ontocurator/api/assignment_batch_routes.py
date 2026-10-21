@@ -103,6 +103,8 @@ class BatchAssignRequest(BaseModel):
     usernames: list[str] = Field(default_factory=list, max_length=50)
     # D25: translation review of an externally accepted version.
     review_accepted_translation: bool = False
+    # VD14: translation reviews of versions whose source text changed.
+    review_reason: Literal["source_changed"] | None = None
 
     @model_validator(mode="after")
     def _valid(self) -> Self:
@@ -120,6 +122,7 @@ class BatchAssignRequest(BaseModel):
             usernames=tuple(self.usernames),
             sort=self.sort,
             review_accepted_translation=self.review_accepted_translation,
+            review_reason=self.review_reason,
             rows=tuple(RowKey(row.case_id, row.language) for row in self.rows),
         )
 
