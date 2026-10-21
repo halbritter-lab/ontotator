@@ -347,6 +347,79 @@ test("/ and Esc", async ({ page }) => {
   await expect(termHeading(page)).toContainText("Seizure");
 });
 
+test("Esc from the text discards the marked text", async ({ page }) => {
+  const s = await startLoop(page);
+  await openLoop(page, s, "loop-en");
+  const [, end] = await markAndWaitForHits(page, s, "loop-en", "seizure");
+  await textPane(page).focus();
+  await page.keyboard.press("Escape");
+  await expect(newFinding(page)).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Marked text", exact: true })).toHaveCount(0);
+  await expect(announcer(page)).toHaveText("Marked text discarded.");
+  await expect.poll(() => focusIsTextPane(page)).toBe(true);
+  expect(await caretOffset(page)).toBe(end);
+  await expect(textPane(page).locator(".resize-handle")).toHaveCount(0);
+});
+
+test("Shift+Tab from the search field reaches the inspector Discard", async ({ page }) => {
+  const s = await startLoop(page);
+  await openLoop(page, s, "loop-en");
+  await markAndWaitForHits(page, s, "loop-en", "seizure");
+  const discard = newFinding(page).getByRole("button", { name: "Discard", exact: true });
+  await expect(discard).toBeVisible();
+  // Count the focusable elements between the heading's Discard and the search field: Shift+Tab walks them back.
+  const between = await page.evaluate(() => {
+    const focusable = Array.from(document.querySelectorAll<HTMLElement>("a[href], button, input, select, textarea, [tabindex]"))
+      .filter(element => element.tabIndex >= 0 && !(element as HTMLButtonElement).disabled && element.getClientRects().length > 0);
+    const region = document.querySelector('section[aria-label="New finding"]')!;
+    const from = focusable.findIndex(element => region.contains(element) && element.textContent?.startsWith("Discard"));
+    const to = focusable.indexOf(document.querySelector<HTMLElement>("#search-input")!);
+    return to - from;
+  });
+  expect(between).toBeGreaterThan(0);
+  const order: string[] = [];
+  for (let step = 0; step < between; step += 1) {
+    await page.keyboard.press("Shift+Tab");
+    order.push(await page.evaluate(() => {
+      const element = document.activeElement as HTMLElement;
+      return `${element.tagName.toLowerCase()}:${element.getAttribute("aria-label") ?? element.textContent?.trim().slice(0, 30) ?? ""}`;
+    }));
+  }
+  await expect(discard, `Shift+Tab order: ${order.join(" | ")}`).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(newFinding(page)).toHaveCount(0);
+  await expect(announcer(page)).toHaveText("Marked text discarded.");
+});
+
+test("the Marked text bar never moves the text", async ({ page }) => {
+  const s = await startLoop(page);
+  await openLoop(page, s, "loop-en");
+  const [start, end] = offsetsOf(s, "loop-en", "seizure");
+  const before = await textGeometry(page, 0, 3);
+  await markAndWaitForHits(page, s, "loop-en", "seizure");
+  const bar = page.getByRole("group", { name: "Marked text", exact: true });
+  await expect(bar).toBeVisible();
+  await expect(bar).toContainText("Drag the edges to adjust");
+  expect(await textGeometry(page, 0, 3)).toEqual(before);
+  // The bar sits under (or, near the pane bottom, above) the mark and never covers it.
+  const mark = await textGeometry(page, start, end);
+  const box = (await bar.boundingBox())!;
+  const markLine = await textPane(page).evaluate((container, offsets) => {
+    const run = Array.from(container.querySelectorAll<HTMLElement>(".run[data-mentions]"))
+      .find(element => Number(element.dataset.start) <= offsets.start && offsets.start < Number(element.dataset.start) + (element.textContent?.length ?? 0))!;
+    const rect = run.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom };
+  }, { start, end });
+  expect(box.y >= markLine.bottom - 1 || box.y + box.height <= markLine.top + 1, "bar overlaps the mark").toBe(true);
+  expect(mark.viewport.y).toBeGreaterThan(0);
+  mkdirSync(resolve(test.info().config.rootDir, "../../build/annotator-ui/evidence"), { recursive: true });
+  await page.screenshot({ path: resolve(test.info().config.rootDir, "../../build/annotator-ui/evidence/pending-mark-bar.png") });
+  await bar.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(bar).toHaveCount(0);
+  await expect(newFinding(page)).toHaveCount(0);
+  expect(await textGeometry(page, 0, 3)).toEqual(before);
+});
+
 test("keys never fire in text fields", async ({ page }) => {
   const s = await startLoop(page);
   await openLoop(page, s, "loop-en");

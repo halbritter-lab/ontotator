@@ -208,7 +208,8 @@ async function nativeAcrossExpiry(page:Page,s:Scenario,button:Locator,method:'po
   await expect(page.getByRole('region',{name:'New finding',exact:true}).getByRole('heading',{name:'New finding',exact:true})).toBeVisible();
   // Completion may prepare ordinary pending UI, but saving still needs a term.
   expect(writes).toEqual([]);
-  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  // A marked span is discarded (the inspector at wide widths, the New finding bar at narrow ones).
+  await page.locator('.inspector-pane, .pending-bar').getByRole('button',{name:'Discard',exact:true}).click();
 }
 
 for(const width of [1280,1024,600])test(`real pending contexts preserve producer data, owned scroll and transient native selection at ${width}`,async({page})=>{

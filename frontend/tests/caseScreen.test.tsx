@@ -1038,6 +1038,183 @@ describe("CaseScreen integration", () => {
       focus.mockRestore();
     });
 
+    describe("pending mark (F1)", () => {
+      const handlesOf = (container: HTMLElement) => Array.from(container.querySelectorAll<HTMLElement>(".resize-handle"));
+      const endHandle = () => screen.getByRole("separator", { name: "End of marked text" });
+      const status = (container: HTMLElement) => container.querySelector("[data-carried-announcer]")!.textContent;
+      const arrow = (key: "ArrowLeft" | "ArrowRight") => fireEvent.keyDown(document.activeElement!, { key });
+
+      it("the pending mark is resizable", () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = withEditableFinding(structuredClone(sampleView));
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-f1-handles" onClose={vi.fn()} />);
+        markThe(rendered.container);
+        const handles = handlesOf(rendered.container);
+        expect(handles.map(h => h.getAttribute("aria-label"))).toEqual(["Start of marked text", "End of marked text"]);
+        expect(screen.getByRole("separator", { name: "Start of marked text" }).dataset.offset).toBe("0");
+        expect(endHandle().dataset.offset).toBe("3");
+      });
+
+      it("moving a pending edge updates the mark locally without a mutation", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const mutate = vi.spyOn(api, "applyCommand");
+        const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-move" onClose={vi.fn()} />);
+        markThe(rendered.container);
+        endHandle().focus();
+        arrow("ArrowRight");
+        // Reported after the vendor's keyboard pause.
+        await waitFor(() => expect(rendered.container.querySelector(".pending-quote")!.textContent).toBe("“The p”"));
+        expect(status(rendered.container)).toBe("Marked text: “The p”");
+        expect(screen.getByRole("region", { name: "New finding" })).toBeDefined();
+        expect(mutate).not.toHaveBeenCalled();
+      });
+
+      it("the search follows the adjusted span until typed", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-prefill" onClose={vi.fn()} />);
+        markThe(rendered.container);
+        const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+        endHandle().focus();
+        arrow("ArrowRight");
+        await waitFor(() => expect(input.value).toBe("The p"));
+        fireEvent.change(input, { target: { value: "tone" } });
+        endHandle().focus();
+        arrow("ArrowRight");
+        await waitFor(() => expect(rendered.container.querySelector(".pending-quote")!.textContent).toBe("“The pa”"));
+        expect(input.value).toBe("tone");
+      });
+
+      it("choosing a term during a keyboard pause saves the adjusted segments", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const view = structuredClone(sampleView);
+        const mutate = vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 1 });
+        const rendered = render(<CaseScreen view={view} workspaceId="ws-f1-flush" onClose={vi.fn()} />);
+        markThe(rendered.container);
+        const hypotonia = await candidateCard("Hypotonia");
+        endHandle().focus();
+        arrow("ArrowRight");
+        fireEvent.click(hypotonia);
+        await waitFor(() => expect(mutate).toHaveBeenCalledWith("ws-f1-flush", expect.objectContaining({
+          payload: expect.objectContaining({ command: "create_annotation", term_id: "HP:0001252", segments: [{ start: 0, end: 5 }] }),
+        })));
+        expect(mutate).toHaveBeenCalledTimes(1);
+      });
+
+      it("Esc in the text pane discards the marked text", () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-esc-text" onClose={vi.fn()} />);
+        const text = markThe(rendered.container);
+        text.focus();
+        fireEvent.keyDown(text, { key: "Escape" });
+        expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
+        expect(status(rendered.container)).toBe("Marked text discarded.");
+        expect(document.activeElement).toBe(text);
+        const selection = window.getSelection()!;
+        const range = document.createRange(); range.setStart(text, 0); range.setEnd(selection.anchorNode!, selection.anchorOffset);
+        expect(range.toString()).toBe("The");
+        expect(handlesOf(rendered.container)).toEqual([]);
+      });
+
+      it("Esc on an inspector button discards", () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-esc-button" onClose={vi.fn()} />);
+        markThe(rendered.container);
+        const region = screen.getByRole("region", { name: "New finding" });
+        const button = within(region).getByRole("button", { name: "Discard" });
+        button.focus();
+        fireEvent.keyDown(button, { key: "Escape" });
+        expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
+      });
+
+      it("Esc inside a dialog or drawer does not discard", async () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-esc-dialog" onClose={vi.fn()} />);
+        const text = markThe(rendered.container);
+        text.focus();
+        fireEvent.keyDown(text, { key: "?" });
+        const help = await screen.findByRole("dialog");
+        fireEvent.keyDown(within(help).getAllByRole("button")[0], { key: "Escape" });
+        expect(screen.getByRole("region", { name: "New finding" })).toBeDefined();
+        // A drawer inside the screen owns its Escape too.
+        const drawer = document.createElement("aside");
+        drawer.className = "ui-drawer";
+        const inside = document.createElement("button");
+        drawer.append(inside);
+        rendered.container.querySelector(".inspector-pane")!.append(drawer);
+        fireEvent.keyDown(inside, { key: "Escape" });
+        expect(screen.getByRole("region", { name: "New finding" })).toBeDefined();
+        drawer.remove();
+      });
+
+      it("the inspector heading row has Discard and the adjust hint; no bottom Cancel for a marked span", () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-inspector" onClose={vi.fn()} />);
+        markThe(rendered.container);
+        const region = screen.getByRole("region", { name: "New finding" });
+        const row = region.querySelector(".term-heading-row")!;
+        expect(within(row as HTMLElement).getByRole("heading", { name: "New finding" })).toBeDefined();
+        const discard = within(row as HTMLElement).getByRole("button", { name: "Discard" });
+        expect(discard.getAttribute("aria-keyshortcuts")).toBe("Escape");
+        expect(discard.querySelector("[aria-hidden='true'] kbd")!.textContent).toBe("Esc");
+        expect(within(region).getByText("Adjust the marked text with its edge handles, or mark new text to replace it.")).toBeDefined();
+        expect(within(region).queryByRole("button", { name: "Cancel" })).toBeNull();
+        fireEvent.click(discard);
+        expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
+        expect(status(rendered.container)).toBe("Marked text discarded.");
+      });
+
+      it("spanless findings keep Cancel and get no handles", () => {
+        const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-spanless" onClose={vi.fn()} />);
+        fireEvent.click(screen.getByRole("button", { name: "Add finding without a text span" }));
+        const region = screen.getByRole("region", { name: "New finding" });
+        expect(within(region).getByRole("button", { name: "Cancel" })).toBeDefined();
+        expect(within(region).queryByRole("button", { name: "Discard" })).toBeNull();
+        expect(within(region).queryByText("Adjust the marked text with its edge handles, or mark new text to replace it.")).toBeNull();
+        expect(handlesOf(rendered.container)).toEqual([]);
+        expect(screen.queryByRole("group", { name: "Marked text" })).toBeNull();
+      });
+
+      it("at 700 px the New finding bar offers Discard", () => {
+        const original = window.matchMedia;
+        window.matchMedia = ((query: string) => ({
+          matches: query === "(max-width: 700px)", media: query, onchange: null,
+          addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+        })) as unknown as typeof window.matchMedia;
+        try {
+          vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+          const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-narrow" onClose={vi.fn()} />);
+          const text = markThe(rendered.container);
+          const bar = rendered.container.querySelector<HTMLElement>(".pending-bar")!;
+          expect(within(bar).queryByRole("button", { name: "Cancel" })).toBeNull();
+          expect(screen.queryByRole("group", { name: "Marked text" })).toBeNull();
+          fireEvent.click(within(bar).getByRole("button", { name: "Discard" }));
+          expect(rendered.container.querySelector(".pending-bar")).toBeNull();
+          expect(status(rendered.container)).toBe("Marked text discarded.");
+          expect(document.activeElement).toBe(text);
+        } finally { window.matchMedia = original; }
+      });
+
+      it("above 700 px the Marked text bar is shown and Discard discards", () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-bar" onClose={vi.fn()} />);
+        markThe(rendered.container);
+        expect(rendered.container.querySelector(".pending-bar")).toBeNull();
+        const bar = screen.getByRole("group", { name: "Marked text" });
+        expect(bar.textContent).toContain("Drag the edges to adjust");
+        fireEvent.click(within(bar).getByRole("button", { name: "Discard" }));
+        expect(screen.queryByRole("group", { name: "Marked text" })).toBeNull();
+        expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
+      });
+
+      it("? help lists Esc as Discard the marked text / clear selection / cancel adding a mention or segment", async () => {
+        render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-help" onClose={vi.fn()} />);
+        fireEvent.keyDown(window, { key: "?" });
+        const help = await screen.findByRole("dialog");
+        expect(within(help).getByText("Discard the marked text / clear selection / cancel adding a mention or segment")).toBeDefined();
+        expect(within(help).getByText("Move the focused mention edge (Tab to an edge handle of the selected annotation or the marked text)")).toBeDefined();
+      });
+    });
+
     describe("values loop", () => {
       const allDefaults = { assertion: "present", experiencer: "patient", temporality: "current" };
       const loopView = (defaults: Record<string, string> = allDefaults, requiredAssertion = false) => {
@@ -1262,7 +1439,7 @@ describe("CaseScreen integration", () => {
           expect(layout().classList.contains("mobile-pane-text")).toBe(true);
           const bar = rendered.container.querySelector<HTMLElement>(".pending-bar")!;
           expect(bar.textContent).toContain("New finding “The” · Choose term");
-          expect(within(bar).getByRole("button", { name: "Cancel" })).toBeDefined();
+          expect(within(bar).getByRole("button", { name: "Discard" })).toBeDefined();
           expect(document.activeElement).not.toBe(screen.getByRole("combobox", { name: "Search term" }));
           fireEvent.click(within(bar).getByRole("button", { name: "Choose term" }));
           expect(layout().classList.contains("mobile-pane-details")).toBe(true);

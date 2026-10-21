@@ -471,7 +471,7 @@ test.describe("ontology tree", () => {
     expectSameBox(await box(page.locator(".inspector-pane")), column);
     expectSameBox(await box(page.locator(".center-pane")), text);
     // Given up, the tree is back where it was, on the same walk.
-    await page.locator(".inspector-pane").getByRole("button", { name: "Cancel" }).click();
+    await page.locator(".inspector-pane").getByRole("button", { name: "Discard", exact: true }).click();
     await expect(panel).toBeVisible();
     expectSameBox(await box(host), tree);
     expectSameBox(await box(page.locator(".inspector-pane")), inspector);
@@ -762,7 +762,7 @@ test.describe("ontology tree", () => {
       await expect(page.locator(".tree-host")).toBeHidden();
       expectSameBox(await box(page.locator(".inspector-pane")), inspectorBefore);
       expectSameBox(await box(page.locator(".center-pane")), textBefore);
-      await page.locator(".inspector-pane").getByRole("button", { name: "Cancel" }).click();
+      await page.locator(".inspector-pane").getByRole("button", { name: "Discard", exact: true }).click();
       await expect(panel).toBeVisible();
       expectSameBox(await box(page.locator(".tree-host")), tree);
 

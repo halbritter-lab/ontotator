@@ -71,7 +71,7 @@ test.describe("Evidence Spans Proof & Verification", () => {
     await selectText(page, 0, 9);
     await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 0");
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
-    await page.getByRole("button", { name: /Cancel|Abbrechen/i, exact: true }).click();
+    await page.locator(".inspector-pane").getByRole("button", { name: "Discard", exact: true }).click();
     await expect(page.locator(".text-container .run--marked")).toHaveCount(0);
     await selectText(page, 0, 9);
     await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");

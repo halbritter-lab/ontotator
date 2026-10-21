@@ -90,6 +90,8 @@ import { useMediaQuery } from "../ui/useMediaQuery";
 import { SearchManager } from "../editor/searchState";
 import { TermName } from "../editor/TermName";
 import { TextPane } from "../editor/TextPane";
+import { PendingMarkBar } from "../editor/PendingMarkBar";
+import { Kbd } from "../ui/Kbd";
 import { TreeBrowser } from "../editor/TreeBrowser";
 import { useTermLabels } from "../editor/useTermLabels";
 import { type MentionDisplay, type SelectionPayload } from "../spans/adapter";
@@ -197,6 +199,8 @@ export interface CaseScreenProps {
 }
 
 const NO_ROUND_INPUTS: readonly import("../api/client").RoundInputView[] = [];
+/** Names of the pending mark's edge handles (spec F1). */
+const PENDING_HANDLE_LABELS = { start: "Start of marked text", end: "End of marked text" };
 /** Round kinds whose inputs are carried findings to check (a text change and a lead's handover included). */
 const isCarryKind = (kind: CaseScreenProps["roundKind"]): boolean => kind === "carry_forward" || kind === "text_change" || kind === "handover";
 
@@ -255,6 +259,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     carriedInput?: import("../api/client").RoundInputView;
     selectedTerm?: { termId: string; searchId?: string };
   } | null>(null);
+  // Segments of the pending mark moved by its handles, readable before the state update lands.
+  const pendingSegments = useRef<{ evidenceId: string; segments: SelectionPayload["segments"] } | null>(null);
+  // Reports a keyboard move of a handle that still waits for its pause (set by TextPane).
+  const flushTextResize = useRef<(() => void) | null>(null);
   const [activeReanchor, setActiveReanchor] = useState<ReanchorItem | null>(null);
   // "Mark in text" waits for a text selection for this carried input.
   const [activeCarried, setActiveCarried] = useState<import("../api/client").RoundInputView | null>(null);
@@ -1549,9 +1557,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const base = {
       autoFocus: !panesLayout && !reasonFirst,
       onEscape: () => {
-        const end = pending.segments.reduce((max, segment) => Math.max(max, segment.end), 0);
+        if (!pending.isSpanless) { discardPending(); return; }
         cancelPending();
-        setTextFocusRequest({ offset: pending.isSpanless ? null : end });
+        setTextFocusRequest({ offset: null });
       },
     };
     if (pending.isSpanless) return base;
@@ -1564,15 +1572,29 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   const cancelPending = () => {
+    pendingSegments.current = null;
     const item=activeReanchor ?? pendingAnnotation?.reanchorItem;
     setPendingAnnotation(null); setActiveReanchor(null); setActiveCarried(null); searchManager.clear();
     if(item) [...(sidebarScrollRef.current?.querySelectorAll<HTMLElement>('[data-reanchor-item]') ?? [])]
       .find(row=>row.dataset.reanchorItem===reanchorKey(item))?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
   };
 
+  // Discards a newly marked span (Esc, "Discard"): focus goes back to the text at its end.
+  const discardPending = () => {
+    const adjusted = pendingSegments.current;
+    const segments = adjusted && adjusted.evidenceId === pendingAnnotation?.evidenceId
+      ? adjusted.segments : pendingAnnotation?.segments ?? [];
+    const end = segments.reduce((max, segment) => Math.max(max, segment.end), 0);
+    cancelPending();
+    setTextFocusRequest({ offset: end });
+    announceCarried("Marked text discarded.");
+  };
+
   const createPendingAnnotation = async (termId: string, searchId?: string, termText?: string) => {
     if (readOnlyRef.current) return;
     if (!pendingAnnotation || creatingPending.current) return;
+    // A handle moved by keyboard reports after a pause: take that move along.
+    flushTextResize.current?.();
     if (pendingAnnotation.isSpanless && spanlessNotesRequired && !spanlessReason.trim()) {
       setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId, searchId } });
       setSpanlessReasonError(true);
@@ -1581,7 +1603,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
     creatingPending.current = true;
     setActionError(null);
-    const pending = pendingAnnotation;
+    const adjusted = pendingSegments.current;
+    const pending = adjusted && adjusted.evidenceId === pendingAnnotation.evidenceId
+      ? { ...pendingAnnotation, segments: adjusted.segments } : pendingAnnotation;
     try {
       const type = view.layers?.find(l => l.layer_id === pending.layerId)?.annotation_types.find(t => t.type_id === pending.typeId);
       if (!pending.reanchorItem || !latestDraft.current.annotations?.some(snapshot=>snapshot.annotation.annotation_id===pending.annotationId)) await enqueueMutation({
@@ -1609,6 +1633,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         setFocusRequest({ key: `annotation:${pending.annotationId}`, find: carriedPrimary });
       }
       setPendingAnnotation(null);
+      pendingSegments.current = null;
       setSpanlessReason(""); setSpanlessReasonError(false);
       setSelectedTargetId(null);
       setSelectedSourceId(null);
@@ -1815,6 +1840,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // A mention edge was dragged (or moved by keyboard) in the text.
   const handleResizeMention = async (evidenceId: string, segments: Array<{ start: number; end: number }>) => {
     if (readOnlyRef.current) return;
+    // The pending mark changes only locally: nothing is saved before a term is chosen.
+    if (pendingIsMarkedSpan && pendingAnnotation?.evidenceId === evidenceId) {
+      pendingSegments.current = { evidenceId, segments };
+      setPendingAnnotation(current => current?.evidenceId === evidenceId ? { ...current, segments } : current);
+      announceCarried(`Marked text: “${quoteSegments(view.document.text, segments, 40)}”`);
+      return;
+    }
     // A keyboard resize is reported after a pause, so the selection may have moved on:
     // save to the annotation the mention belongs to, preferring the selected one.
     const owners = (latestDraft.current.annotations ?? [])
@@ -2082,10 +2114,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const editableLayerIds = view.scope?.editable_layer_ids ?? (view.layers ? view.layers.map(l => l.layer_id) : []);
   // Only the selected curated annotation's mentions can be resized, and not while
   // another text interaction (attaching a mention, choosing a term) is in progress.
-  const resizableEvidenceIds = !readOnly && selectedAnnotation && !isAttachingMention && !pendingAnnotation
-    && editableLayerIds.includes(selectedAnnotation.annotation.layer_id)
-    ? (selectedAnnotation.annotation.evidence_refs ?? []).map((r) => r.evidence_id)
-    : [];
+  // A newly marked span (not re-anchor, not carried) can be adjusted before a term is chosen.
+  const pendingEvidenceId = pendingIsMarkedSpan ? pendingAnnotation?.evidenceId : undefined;
+  const resizableEvidenceIds = readOnly || isAttachingMention ? []
+    : pendingEvidenceId ? [pendingEvidenceId]
+      : selectedAnnotation && !pendingAnnotation && editableLayerIds.includes(selectedAnnotation.annotation.layer_id)
+        ? (selectedAnnotation.annotation.evidence_refs ?? []).map((r) => r.evidence_id)
+        : [];
+  const resizableLabels = pendingEvidenceId ? { [pendingEvidenceId]: PENDING_HANDLE_LABELS } : undefined;
 
   // One line above the text, only while a marking mode waits for text (spec C.6).
   const intentTerm = selectedAnnotation
@@ -2590,12 +2626,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (!document || !onNavigateCase || queueState === "saving") return false;
     navigateTo(document.document_id);
   }, { ...shortcutOptions, group: "Navigation", description: "Previous / next case" });
-  useShortcut("Escape", () => {
+  useShortcut("Escape", (event) => {
+    if (pendingIsMarkedSpan && !readOnly) {
+      // A drawer or dialog owns its Escape (same rule as TextPane's attach mode).
+      if (event.target instanceof Element && event.target.closest(".ui-drawer, [role='dialog']")) return false;
+      discardPending();
+      return;
+    }
     if (isAttachingMention) { setIsAttachingMention(false); return; }
     if (selectionIntent === "extend_mention" && !readOnly) { setSelectionIntent("new_mention"); return; }
     if (!selectedAnnotationId && !selectedTargetId && !selectedSourceId && !selectedInputId) return false;
     handleDeselectAll();
-  }, { ...shortcutOptions, allowRepeat: true, group: "General", description: "Clear selection / cancel adding a mention or segment" });
+  }, { ...shortcutOptions, allowRepeat: true, group: "General", description: "Discard the marked text / clear selection / cancel adding a mention or segment" });
   useShortcut(["j", "k"], (event) => {
     const current = reviewTargets.findIndex((target) => refKey(target) === selectedTargetId);
     const index = event.key.toLowerCase() === "j"
@@ -2672,7 +2714,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     button.click();
   }, { ...shortcutOptions, enabled: ownFindingActive && (selectedAnnotation?.annotation.axes_defaulted?.length ?? 0) > 0,
     group: "Finding", description: "Confirm all default values" });
-  useShortcutHint(["←", "→", "Ctrl + ← / →"], "Move the focused mention edge (Tab to an edge handle of the selected annotation)");
+  useShortcutHint(["←", "→", "Ctrl + ← / →"], "Move the focused mention edge (Tab to an edge handle of the selected annotation or the marked text)");
 
   const textMentions: MentionDisplay[] = useMemo(() => [
     ...mentionsDisplay,
@@ -3095,19 +3137,21 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           onChangeIntent={intent => { if (!readOnlyRef.current) setSelectionIntent(intent); }}
           readOnly={readOnly}
           resizableEvidenceIds={resizableEvidenceIds}
+          resizableLabels={resizableLabels}
+          flushResizeRef={flushTextResize}
           onResizeMention={(evidenceId, segments) => { void handleResizeMention(evidenceId, segments); }}
           resyncToken={textResyncToken}
           scrollRequest={textScrollRequest}
         />
+        {!panesLayout && pendingIsMarkedSpan && !readOnly && pendingAnnotation?.evidenceId && (
+          <PendingMarkBar textElement={leftTextElement} evidenceId={pendingAnnotation.evidenceId}
+            segmentsKey={JSON.stringify(pendingAnnotation.segments)} onDiscard={discardPending} />
+        )}
         {panesLayout && pendingIsMarkedSpan && !readOnly && mobilePane === "text" && (
           <div className="pending-bar" role="group" aria-label="New finding">
             <span className="pending-bar__text">New finding “{quoteSegments(view.document.text, pendingAnnotation!.segments, 40)}” · </span>
             <Button type="button" variant="primary" size="sm" onClick={chooseTerm}>Choose term</Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => {
-              const end = pendingAnnotation!.segments.reduce((max, segment) => Math.max(max, segment.end), 0);
-              cancelPending();
-              setTextFocusRequest({ offset: end });
-            }}>Cancel</Button>
+            <Button type="button" variant="secondary" size="sm" onClick={discardPending}>Discard</Button>
           </div>
         )}
 
@@ -3141,13 +3185,21 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           ) : pendingAnnotation ? (
             <section className="detail-pane" aria-label="New finding">
               <div className="detail-section">
-                <h2>
-                  {pendingAnnotation.carriedInput ? "Re-create carried finding" : pendingAnnotation.reanchorItem ? "Re-create finding on corrected text" : pendingAnnotation.isSpanless
-                    ? "New finding without a text span"
-                    : "New finding"}
-                </h2>
+                <div className="term-heading-row">
+                  <h2>
+                    {pendingAnnotation.carriedInput ? "Re-create carried finding" : pendingAnnotation.reanchorItem ? "Re-create finding on corrected text" : pendingAnnotation.isSpanless
+                      ? "New finding without a text span"
+                      : "New finding"}
+                  </h2>
+                  {pendingIsMarkedSpan && <Button type="button" variant="quiet" size="sm" aria-keyshortcuts="Escape" onClick={discardPending}>
+                    Discard<span aria-hidden="true"> <Kbd>Esc</Kbd></span>
+                  </Button>}
+                </div>
                 {pendingIsMarkedSpan
-                  ? <p className="pending-quote">“{quoteSegments(view.document.text, pendingAnnotation.segments)}”</p>
+                  ? <>
+                    <p className="pending-quote">“{quoteSegments(view.document.text, pendingAnnotation.segments)}”</p>
+                    <p className="form-hint">Adjust the marked text with its edge handles, or mark new text to replace it.</p>
+                  </>
                   : <p>
                     {pendingAnnotation.carriedInput ? "Save this finding with the original term and values. Then check it and mark it as checked." : pendingAnnotation.reanchorItem ? "Save this finding, check its evidence and values, then complete the text-change review." : "Select a term from the ontology for the new finding."}
                   </p>}
@@ -3180,7 +3232,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId } });
                     else void createPendingAnnotation(candidate.term_id, searchId, candidate.label ?? undefined);
                   }} />}
-                <Button type="button" variant="secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</Button>
+                {!pendingIsMarkedSpan && <Button type="button" variant="secondary" disabled={queueState === "saving"} onClick={cancelPending}>Cancel</Button>}
               </div>
             </section>
           ) : selectedInputState ? (() => {
