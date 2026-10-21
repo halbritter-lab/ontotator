@@ -109,6 +109,8 @@ export type Route =
   | { name: "adminUsers" }
   | { name: "adminOntologies" }
   | { name: "projectNew" }
+  /** Every project of the user (F8); the landing when no last-used project is accessible. */
+  | { name: "projects" }
   | { name: "projectSettings"; key: string; section?: SettingsSection }
   | ({ name: "projectDocuments"; key: string } & ProjectDocumentsQuery)
   | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string; compare?: string; documents?: ProjectDocumentsQuery }
@@ -143,6 +145,7 @@ export function parseRoute(hash: string): Route {
       case "#/me": return { name: "me" };
       case "#/admin/users": return { name: "adminUsers" };
       case "#/admin/ontologies": return { name: "adminOntologies" };
+      case "#/projects": return { name: "projects" };
       case "#/projects/new": return { name: "projectNew" };
     }
     const task = /^#\/tasks\/([1-9]\d*)$/.exec(path);
@@ -226,6 +229,7 @@ export function routeHref(route: Route): string {
     case "adminUsers": return "#/admin/users";
     case "adminOntologies": return "#/admin/ontologies";
     case "projectNew": return "#/projects/new";
+    case "projects": return "#/projects";
     case "projectSettings": return `#/projects/${encodeURIComponent(route.key)}/settings${route.section && route.section !== "general" ? `/${route.section}` : ""}`;
     case "projectDocuments":
       return `#/projects/${encodeURIComponent(route.key)}/documents${querySuffix(documentsEntries(route))}`;

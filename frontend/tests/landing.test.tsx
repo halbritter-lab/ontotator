@@ -106,7 +106,7 @@ describe("landing (D7)", () => {
     await screen.findByRole("heading", { name: "Documents of p1" });
     screen.getByRole("link", { name: /^My tasks/ }).click();
     expect(await screen.findByRole("heading", { name: "My tasks" })).toBeDefined();
-    expect(window.location.hash).toBe("#/");
+    expect(window.location.hash).toBe("#/?status=all");
   });
 
   it("does not redirect deep links or a filtered My tasks", async () => {
@@ -125,7 +125,6 @@ describe("landing (D7)", () => {
     render(<App user={lead} />);
     expect(await screen.findByRole("heading", { name: "My tasks" })).toBeDefined();
     await waitFor(() => expect(api.listProjects).toHaveBeenCalled());
-    expect(api.documentsSummary).not.toHaveBeenCalled();
     expect(window.location.hash).toBe("#/?status=all");
     expect(screen.queryByRole("heading", { name: "Documents of p1" })).toBeNull();
   });

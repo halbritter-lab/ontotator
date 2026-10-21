@@ -29,7 +29,7 @@ beforeEach(() => {
   // Likewise the Documents counter.
   vi.spyOn(api, "documentsSummary").mockReturnValue(new Promise(() => {}));
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, "", "/"); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); window.localStorage.clear(); window.history.replaceState(null, "", "/"); });
 
 describe("role-based shell", () => {
   it("keeps reading navigation in a keyboard-accessible disclosure without a permanent sidebar", async () => {
@@ -55,7 +55,7 @@ describe("role-based shell", () => {
   it("shows an annotator only My tasks and Profile, using the real AppShell once", () => {
     render(<Shell {...props({ projects: [project("assigned", false)] })} />);
     const nav = screen.getByRole("navigation", { name: "Sections" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["My tasks", "Profile"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["My tasks", "Projects", "Profile"]);
     expect(within(nav).queryByRole("navigation")).toBeNull();
     expect(screen.getAllByRole("banner")).toHaveLength(1);
     expect(screen.getAllByRole("main")).toHaveLength(1);
@@ -77,8 +77,8 @@ describe("role-based shell", () => {
     render(<Shell {...state} />);
     expect(screen.getAllByRole("link", { name: "Documents" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Documents" }).getAttribute("href")).toBe("#/projects/first/documents");
-    fireEvent.click(screen.getByRole("button", { name: /^Current project: / }));
-    const panel = document.querySelector<HTMLElement>("#shell-project-panel")!;
+    fireEvent.click(screen.getByRole("button", { name: "Project: Research, switch project" }));
+    const panel = screen.getByRole("dialog", { name: "Switch project" });
     const target = routeHref({ name: "projectDocuments", key: "second / α" });
     // Every fixture project is named "Research", so the link is found by its destination, not its name.
     const link = within(panel).getAllByRole("link").find(item => item.getAttribute("href") === target);
@@ -162,6 +162,56 @@ describe("role-based shell", () => {
     expect(screen.getByRole("link", { name: "Profile" }).hasAttribute("aria-current")).toBe(false);
   });
 
+  it("puts the project switcher first in the nav and no project control in the header", () => {
+    render(<Shell {...props({ projects: [project("first", true)], route: { name: "projectDocuments", key: "first" } })} />);
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    const switcher = within(nav).getByRole("button", { name: "Project: Research, switch project" });
+    expect(nav.firstElementChild).toBe(switcher);
+    expect(within(screen.getByRole("banner")).queryByRole("button", { name: /project/i })).toBeNull();
+    expect(document.querySelector(".shell-actions .project-switcher")).toBeNull();
+  });
+
+  it("links My tasks to the All tab and marks it current on every tasks route", () => {
+    const state = props({ projects: [project("first", false)] });
+    const { rerender } = render(<Shell {...state} />);
+    const myTasks = screen.getByRole("link", { name: "My tasks" });
+    expect(myTasks.getAttribute("href")).toBe("#/?status=all");
+    fireEvent.click(myTasks);
+    expect(state.onNavigate).toHaveBeenCalledWith({ name: "tasks", status: "all" });
+    for (const route of [{ name: "tasks" }, { name: "tasks", status: "submitted" }, { name: "tasks", project: "first", status: "todo" }] as const) {
+      rerender(<Shell {...state} route={route} />);
+      expect(screen.getByRole("link", { name: "My tasks" }).getAttribute("aria-current")).toBe("page");
+    }
+  });
+
+  it("shows Projects after My tasks only with at least one project", () => {
+    const state = props({ projects: [project("first", false)], route: { name: "projects" } });
+    const { rerender } = render(<Shell {...state} />);
+    const links = within(screen.getByRole("navigation", { name: "Sections" })).getAllByRole("link").map(link => link.textContent);
+    expect(links.indexOf("Projects")).toBe(links.indexOf("My tasks") + 1);
+    const projectsLink = screen.getByRole("link", { name: "Projects" });
+    expect(projectsLink.getAttribute("href")).toBe("#/projects");
+    expect(projectsLink.getAttribute("aria-current")).toBe("page");
+    rerender(<Shell {...state} projects={[]} />);
+    expect(screen.queryByRole("link", { name: "Projects" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /switch project|Choose project/ })).toBeNull();
+  });
+
+  it("names the remembered project without a project in the route", () => {
+    window.localStorage.setItem("ontocurator.lastProject.v1:alex", "second");
+    render(<Shell {...props({ projects: [project("first", true), { ...project("second", true), name: "Second" }], route: { name: "projects" } })} />);
+    expect(screen.getByRole("button", { name: "Project: Second, switch project" })).toBeDefined();
+    expect(screen.getByRole("region", { name: "Current project sections" })).toBeDefined();
+  });
+
+  it("puts the switcher first inside Sections in the reading shell", async () => {
+    render(<Shell {...props({ projects: [project("first", true)], route: { name: "task", assignmentId: 42 }, taskProject: "first" })} />);
+    await userEvent.setup().click(screen.getByText("Sections"));
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    expect(nav.closest("details")).not.toBeNull();
+    expect(nav.firstElementChild).toBe(within(nav).getByRole("button", { name: "Project: Research, switch project" }));
+  });
+
   it.each(["click", "keyboard"])("focuses main via skip-link %s without leaving the editor hash", async (activation) => {
     window.history.replaceState(null, "", "#/tasks/17");
     const onNavigate = vi.fn();
@@ -185,7 +235,7 @@ describe("shell identity and task count", () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([task(1, "open"), task(2, "in_progress"), task(3, "reopened"), task(4, "submitted")]);
     render(<Shell {...props()} />);
     const link = await screen.findByRole("link", { name: "My tasks (3)" });
-    expect(link.getAttribute("href")).toBe("#/");
+    expect(link.getAttribute("href")).toBe("#/?status=all");
     expect(api.listMyTasks).toHaveBeenCalledTimes(1);
     vi.mocked(api.listMyTasks).mockResolvedValue([task(1, "submitted")]);
     act(() => { window.dispatchEvent(new Event("focus")); });

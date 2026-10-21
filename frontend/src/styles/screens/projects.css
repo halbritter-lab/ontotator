@@ -1,0 +1,33 @@
+/* Projects page (F8). Wide: a DataTable. Narrow (below 700 px): every row becomes a card, cells stacked with the column name as a muted label. */
+.projects-page .form-group { margin-bottom: var(--space-4); }
+.projects-page__name { font-weight: var(--weight-strong); overflow-wrap: anywhere; }
+.projects-page__current { display: inline-flex; align-items: center; gap: var(--space-1); margin-inline-start: var(--space-2); color: var(--accent); font-size: var(--size-sm); font-weight: var(--weight-strong); }
+.projects-page__actions { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); }
+.projects-table tr.projects-table__row--current > :first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+@media (max-width: 699px) {
+  .projects-page .data-table-scroll { overflow-x: visible; }
+  .projects-table,
+  .projects-table tbody,
+  .projects-table tr,
+  .projects-table th,
+  .projects-table td { display: block; width: auto; }
+  .projects-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .projects-table tbody { display: grid; gap: var(--space-3); }
+  .projects-table tbody tr { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); min-width: 0; }
+  .projects-table tbody tr.projects-table__row--current { border-left: 3px solid var(--accent); padding-left: calc(var(--space-3) - 2px); }
+  .projects-table tr.projects-table__row--current > :first-child { box-shadow: none; }
+  .projects-table tbody :is(th, td) { padding: 0; border: 0; text-align: start; min-width: 0; overflow-wrap: anywhere; }
+  /* Column names as muted labels; the table header carries them for assistive technology. */
+  .projects-table tbody td:nth-child(2)::before { content: "Your roles" / ""; }
+  .projects-table tbody td:nth-child(3)::before { content: "Needs your decision" / ""; }
+  .projects-table tbody td:nth-child(4)::before { content: "Your open tasks" / ""; }
+  .projects-table tbody td:is(:nth-child(2), :nth-child(3), :nth-child(4))::before { display: block; color: var(--text-muted); font-size: var(--size-sm); }
+  .projects-table tbody td:last-child { padding-top: var(--space-1); }
+  .projects-table tbody td:last-child .btn { min-height: 32px; }
+}
+
+@media (forced-colors: active) {
+  .projects-table tr.projects-table__row--current > :first-child { box-shadow: none; border-left: 3px solid CanvasText; }
+  .projects-table tbody tr { border-color: CanvasText; }
+}

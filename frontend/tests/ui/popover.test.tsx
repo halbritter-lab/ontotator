@@ -7,14 +7,14 @@ import { useShortcut } from "../../src/ui/shortcuts";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function Example({ onEscapeShortcut = () => undefined }: { onEscapeShortcut?: () => void }) {
+function Example({ onEscapeShortcut = () => undefined, closeOnTabOut }: { onEscapeShortcut?: () => void; closeOnTabOut?: boolean }) {
   const anchor = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   useShortcut("Escape", () => { onEscapeShortcut(); });
   return <>
     <button ref={anchor} aria-expanded={open} aria-controls="filter-popover" onClick={() => setOpen((value) => !value)}>Filter</button>
     <button>Outside</button>
-    <Popover open={open} anchorRef={anchor} label="Filter" onClose={() => setOpen(false)} footer={<button>Clear all</button>}>
+    <Popover open={open} anchorRef={anchor} label="Filter" onClose={() => setOpen(false)} footer={<button>Clear all</button>} closeOnTabOut={closeOnTabOut}>
       <div id="filter-popover">
         <fieldset><legend>Language</legend>
           <label><input type="checkbox" /> de, 8 texts</label>
@@ -89,4 +89,28 @@ it("sheet below 700 px", async () => {
   await user.keyboard("{Escape}");
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(document.activeElement).toBe(screen.getByRole("button", { name: "Filter" }));
+});
+
+it.each([
+  { shift: false, from: "Clear all" },
+  { shift: true, from: "de" },
+])("closeOnTabOut closes on Tab out at either end without preventing the default (%j)", async ({ shift, from }) => {
+  const user = userEvent.setup();
+  render(<Example closeOnTabOut />);
+  await user.click(screen.getByRole("button", { name: "Filter" }));
+  const start = from === "de" ? screen.getAllByRole("checkbox")[0] : screen.getByRole("button", { name: "Clear all" });
+  start.focus();
+  const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey: shift, bubbles: true, cancelable: true });
+  act(() => { start.dispatchEvent(event); });
+  expect(event.defaultPrevented).toBe(false);
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("closeOnTabOut keeps Tab inside the popover between its controls", async () => {
+  const user = userEvent.setup();
+  render(<Example closeOnTabOut />);
+  await user.click(screen.getByRole("button", { name: "Filter" }));
+  await user.tab();
+  expect(document.activeElement).toBe(screen.getAllByRole("checkbox")[1]);
+  expect(screen.getByRole("dialog", { name: "Filter" })).not.toBeNull();
 });

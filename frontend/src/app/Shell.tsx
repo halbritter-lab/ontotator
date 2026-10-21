@@ -3,7 +3,8 @@ import { api, onSessionRestored, type CurrentUser, type ProjectSummary } from ".
 import { roleLabels } from "./labels";
 import { AppShell, type Crumb } from "../ui/AppShell";
 import { routeHref, type Route } from "./router";
-import { ProjectPicker } from "./ProjectPicker";
+import { ProjectSwitcher } from "./ProjectPicker";
+import { rememberedProject } from "./lastProject";
 import { useDocumentsSummary } from "../documents/useDocumentsSummary";
 
 export interface ShellProps {
@@ -72,12 +73,15 @@ function useOpenTaskCount(username: string): number | null {
 export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children, taskProject }: ShellProps): JSX.Element {
   const [choice, setChoice] = useState<{ username: string; key: string } | null>(null);
   const explicitKey = 'key' in route ? route.key : route.name === 'tasks' ? route.project : route.name === 'task' ? taskProject : undefined;
-  const currentKey = explicitKey ?? (choice?.username === user.username ? choice.key : undefined);
+  // Without a project in the route: the switcher's last choice, else the remembered (last-used) project.
+  const remembered = rememberedProject(user.username);
+  const currentKey = explicitKey ?? (choice?.username === user.username ? choice.key : undefined)
+    ?? (remembered !== null && projects.some(project => project.project_key === remembered) ? remembered : undefined);
   const current = projects.find(project => project.project_key === currentKey);
   const openTasks = useOpenTaskCount(user.username);
   // "Documents (n)": rows needing the lead's decision (V3); the summary is lead only.
   const needsDecision = useDocumentsSummary(current?.project_key, !!current?.can_manage && current.roles.includes("lead"));
-  const selector = projects.length > 0 && <ProjectPicker projects={projects} current={current} route={route}
+  const switcher = projects.length > 0 && <ProjectSwitcher projects={projects} current={current} route={route}
     onNavigate={onNavigate} onChoose={key => setChoice({ username: user.username, key })} />;
   const link = (destination: Route, text: string, label?: string) => <li key={destination.name}>
     <NavigationLink destination={destination} current={route} onNavigate={onNavigate} label={label}>{text}</NavigationLink>
@@ -87,8 +91,11 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
     ? link({ name: "projectDocuments", key, segment: "decision" }, `Documents (${needsDecision})`, `Documents, ${needsDecision} need your decision`)
     : link({ name: "projectDocuments", key }, "Documents");
   const nav = <>
+    {switcher}
     <ul className="shell-nav-list">
-      {link({ name: "tasks" }, openTasks === null ? "My tasks" : `My tasks (${openTasks})`)}
+      {/* "All" explicitly, so a reload of My tasks never triggers the last-used landing. */}
+      {link({ name: "tasks", status: "all" }, openTasks === null ? "My tasks" : `My tasks (${openTasks})`)}
+      {projects.length > 0 && link({ name: "projects" }, "Projects")}
       {link({ name: "me" }, "Profile")}
     </ul>
     {user.is_system_admin && <section className="shell-nav-group" aria-label="Administration">
@@ -109,6 +116,6 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
         </ul>
       </section>}
   </>;
-  return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav} actions={selector} role={shellRole(user, projects, current)}
+  return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav} role={shellRole(user, projects, current)}
     density={(route.name === "task" || route.name === "projectCase") ? "reading" : "compact"}>{children}</AppShell>;
 }

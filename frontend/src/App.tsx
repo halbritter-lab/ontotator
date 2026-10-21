@@ -17,6 +17,7 @@ import { ProjectSettingsPage } from "./admin/ProjectSettingsPage";
 import { DocumentsPage } from "./admin/DocumentsPage";
 import { ProgressPage } from "./admin/ProgressPage";
 import { ExportPage } from "./admin/ExportPage";
+import { ProjectsPage } from "./app/ProjectsPage";
 import { ProblemReportDetail } from './tasks/ProblemReportDetail';
 import { GuidelinesPage } from "./guidelines/GuidelinesPage";
 import { ConsolidationScreen } from "./consolidation/ConsolidationScreen";
@@ -233,6 +234,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId, route.view ?? null])} assignmentId={route.assignmentId} view={route.view}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef}
       onProjectContext={key => setTaskProject({ identity: taskIdentity, key })} />; break;
+    case "projects": content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
+      : <ProjectsPage projects={projects} currentKey={landingProject(user.username, projects)} onNavigate={go} />; break;
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
     case "adminOntologies": content = <OntologiesPage onNavigate={go} />; break;
     case "projectNew": content = <ProjectNewPage onNavigate={next => { setRetry(value => value + 1); go(next); }} />; break;

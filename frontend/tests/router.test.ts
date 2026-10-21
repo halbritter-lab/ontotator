@@ -23,6 +23,7 @@ describe("hash route parsing and links", () => {
     { name: "adminUsers" },
     { name: "adminOntologies" },
     { name: "projectNew" },
+    { name: "projects" },
     { name: "projectSettings", key: "study-a" },
     { name: "projectDocuments", key: "study-a" },
     { name: "projectProgress", key: "study-a" },
@@ -46,6 +47,12 @@ describe("hash route parsing and links", () => {
     expect(routeHref({ name: "tasks", status: "all" })).toBe("#/?status=all");
     expect(parseRoute("#/?status=bogus")).toEqual({ name: "tasks" });
     expect(parseRoute("#/?project=p1&status=bogus")).toEqual({ name: "tasks", project: "p1" });
+  });
+
+  it("reads and writes the Projects page (F8)", () => {
+    expect(parseRoute("#/projects")).toEqual({ name: "projects" });
+    expect(routeHref({ name: "projects" })).toBe("#/projects");
+    expect(parseRoute("#/projects/new")).toEqual({ name: "projectNew" });
   });
 
   it.each(["", "#/"])("opens My tasks for the root hash %j", (hash) => {
@@ -90,7 +97,7 @@ describe("hash route parsing and links", () => {
     expect(parseRoute("#/projects/a/documents?q=first&q=second&extra=x")).toEqual({ name: "projectDocuments", key: "a", q: "first" });
   });
 
-  it.each(["#main", "#/unknown", "#/tasks", "#/tasks/1/extra", "#/me/", "#/projects", "#/projects/a", "#/projects//settings", "#/projects/a/b/settings", "#/projects/a/unknown", "/me"])("returns NotFound for unknown hash %j", (hash) => {
+  it.each(["#main", "#/unknown", "#/tasks", "#/tasks/1/extra", "#/me/", "#/projects/", "#/projects/a", "#/projects//settings", "#/projects/a/b/settings", "#/projects/a/unknown", "/me"])("returns NotFound for unknown hash %j", (hash) => {
     expect(parseRoute(hash)).toEqual({ name: "notFound", hash });
   });
 

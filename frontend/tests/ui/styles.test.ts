@@ -17,9 +17,17 @@ it("forced_colors_focus_overrides_the_class_level_focus_selectors", () => {
   const rule = [...block.matchAll(/([^{}]+)\{([^}]*)\}/g)].find(match => match[1].includes(".btn:focus-visible"));
   expect(rule?.[2]).toMatch(/outline: 2px solid Highlight/);
   for (const selector of [".btn:focus-visible", ".form-control:focus-visible", ".form-select:focus-visible", ".shell-nav-link:focus-visible",
-    ".shell-reading-navigation > summary:focus-visible", ".document-tree summary:focus-visible", ".shell-project-link:focus-visible"]) {
+    ".shell-reading-navigation > summary:focus-visible", ".document-tree summary:focus-visible", ".project-switcher:focus-visible", ".project-switcher-all:focus-visible"]) {
     expect(rule?.[1]).toContain(selector);
   }
+});
+
+it("declares_project_switcher_rules_with_forced_colours", () => {
+  expect(css).not.toContain(".shell-project-");
+  const block = css.slice(css.indexOf("@media (forced-colors: active)"));
+  expect(css).toMatch(/\.project-switcher \{[^}]*border: 1px solid var\(--border-strong\)/);
+  expect(block).toMatch(/\.project-switcher \{ border-color: CanvasText; \}/);
+  expect(block).toMatch(/\.project-switcher-option\[aria-selected="true"\] \{[^}]*background: Highlight/);
 });
 
 it("disables_disclosure_motion_under_reduced_motion", () => {

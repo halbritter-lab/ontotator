@@ -12,6 +12,8 @@ export interface PopoverProps {
   width?: number;
   children: ReactNode;
   footer?: ReactNode;
+  /** Tab past the last focusable (or Shift+Tab before the first) closes the popover and lets focus move on; default cycles inside. */
+  closeOnTabOut?: boolean;
 }
 
 const FOCUSABLE = 'a[href],button,input:not([type="hidden"]),select,textarea,[tabindex]';
@@ -24,9 +26,10 @@ function focusables(element: HTMLElement): HTMLElement[] {
 /**
  * Anchored, non-modal `role="dialog"` below its button. Focus moves to the first control inside; Tab cycles inside;
  * Escape closes and returns focus to the anchor; a pointer down outside closes without moving focus.
+ * With `closeOnTabOut`, Tab out at either end closes it and focus moves on as usual.
  * Below 700 px it is a full-height sheet: a modal `Dialog` with class `ui-popover-sheet`.
  */
-export function Popover({ open, anchorRef, label, onClose, width = 360, children, footer }: PopoverProps): JSX.Element | null {
+export function Popover({ open, anchorRef, label, onClose, width = 360, children, footer, closeOnTabOut = false }: PopoverProps): JSX.Element | null {
   const narrow = useMediaQuery("(max-width: 699px)");
   const panel = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
@@ -77,6 +80,9 @@ export function Popover({ open, anchorRef, label, onClose, width = 360, children
     if (event.key !== "Tab") return;
     const elements = focusables(event.currentTarget);
     const first = elements[0]; const last = elements.at(-1);
+    const leavesStart = event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget);
+    const leavesEnd = !event.shiftKey && document.activeElement === last;
+    if (closeOnTabOut && (leavesStart || leavesEnd || !first)) { onClose(); return; }
     if (!first) { event.preventDefault(); return; }
     if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last!.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
