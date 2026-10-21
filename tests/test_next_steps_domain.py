@@ -416,3 +416,33 @@ def test_needs_attention_never_appears_for_valid_facts():
         assert all(step.code != "needs_attention" for step in steps), f
         checked += 1
     assert checked > 10_000
+
+
+def test_undecided_row_gets_decide_plan_only():
+    translation = derive_steps(facts(decided=False))
+    assert [(s.code, s.kind, s.stage, s.action, s.badges) for s in translation] == [
+        ("decide_plan", "decision", "translation_review", "plan", ("your_decision",))
+    ]
+    [source] = derive_steps(facts(decided=False, is_source=True))
+    assert (source.code, source.stage) == ("decide_plan", "annotation")
+    # Precedes every other rule: facts that would match rules 1-3 change nothing.
+    busy = facts(
+        decided=False,
+        open_report_id="r1",
+        orphan_pause_assignment_id=4,
+        has_final=True,
+        unacknowledged_final_cause=True,
+    )
+    assert [s.code for s in derive_steps(busy)] == ["decide_plan"]
+    # An in-plan row is decided by definition: the flag is ignored there.
+    assert "decide_plan" not in codes(annotate=True, decided=False, is_source=True)
+
+
+def test_decided_not_in_plan_row_has_no_step():
+    assert derive_steps(facts(decided=True)) == []
+    assert derive_steps(facts()) == []  # decided defaults to True
+
+
+def test_decide_plan_segment_is_decision():
+    [step] = derive_steps(facts(decided=False))
+    assert segment_of(step) == "decision"

@@ -3,7 +3,9 @@
 Rules 1-11 (with 4a) are checked in precedence order; ``derive_steps``
 returns every matching rule, the first is the row's next step. "In plan"
 (Review or Annotate on) is its own fact: a row in the plan always has at
-least one step, a row outside it has none. Should no rule match an in-plan
+least one step, a row outside it has none, except an undecided row (plan
+written by the system under "Nothing planned", documents overview VD3),
+whose only step is ``decide_plan`` (V10). Should no rule match an in-plan
 row (an application invariant broke), the row gets the logged safety
 fallback "needs_attention" instead of an error.
 """
@@ -17,6 +19,7 @@ from typing import Literal
 __all__ = [
     "NOT_ACCEPTED_DECISIONS",
     "REVIEWER_NEEDED_STATUSES",
+    "OldItem",
     "RowAction",
     "Segment",
     "Stage",
@@ -31,6 +34,7 @@ __all__ = [
 ]
 
 StepCode = Literal[
+    "decide_plan",
     "decide_report",
     "resume_task",
     "confirm_final",
@@ -52,6 +56,7 @@ StepKind = Literal["decision", "assign", "in_progress", "done"]
 Stage = Literal["translation_review", "annotation", "final", "done"]
 Segment = Literal["decision", "assign", "progress"]
 RowAction = Literal[
+    "plan",
     "decide_report",
     "resume_task",
     "review_changes",
@@ -81,6 +86,16 @@ _SEGMENTS: dict[StepKind, Segment | None] = {
 
 
 @dataclass(frozen=True)
+class OldItem:
+    """Annotation work on an older text version (documents overview V5)."""
+
+    user_id: int
+    from_version: int
+    assignment_id: int | None = None
+    submission_id: str | None = None
+
+
+@dataclass(frozen=True)
 class StepFacts:
     review: bool
     annotate: bool
@@ -105,6 +120,8 @@ class StepFacts:
     missing_final: bool
     has_final: bool
     check_failed: bool  # a newest version is automatic_check_failed
+    # False: plan row system-written under "Nothing planned" (VD3).
+    decided: bool = True
 
 
 @dataclass(frozen=True)
@@ -170,7 +187,10 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
     ``row`` (the row key) only names the row in the fallback's log line.
     """
     if not in_plan(facts):
-        return []
+        if facts.decided:
+            return []
+        stage: Stage = "annotation" if facts.is_source else "translation_review"
+        return [_decision("decide_plan", stage, "plan")]
     translation = not facts.is_source
     accepted = _accepted(facts)
     open_review = facts.open_translation_reviews > 0
@@ -301,6 +321,6 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
 
 
 def segment_of(step: Step) -> Segment | None:
-    """Bar segment: decision (rules 1-5, 4a, fallback), assign (6, 8),
-    progress (7, 9, 10)."""
+    """Bar segment: decision (decide_plan, rules 1-5, 4a, fallback), assign
+    (6, 8), progress (7, 9, 10)."""
     return _SEGMENTS[step.kind]
