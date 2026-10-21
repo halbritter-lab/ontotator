@@ -200,6 +200,19 @@ describe("cards", () => {
     expect(document.activeElement).toBe(stageButton);
   });
 
+  it("the Final line shows 1 flagged, part of the stage button's description (X5)", () => {
+    const flagged = stagedRow("case-120", "de", { stages: { final: cell("none", "none") }, overrides: { flagged_unclear: 1 } });
+    renderCards(page([group("case-120", [flagged])]));
+    const card = cardOf("case-120 · de");
+    expect(within(card).getByText("· 1 flagged")).toBeTruthy();
+    const button = within(card).getByRole("button", { name: /^Final:/ });
+    const described = (button.getAttribute("aria-describedby") ?? "").split(" ").map(id => document.getElementById(id)?.textContent).join(" ");
+    expect(described).toContain("1 flagged");
+    cleanup();
+    renderCards(page([group("case-120", [{ ...flagged, flagged_unclear: 0 }])]));
+    expect(within(cardOf("case-120 · de")).queryByText(/flagged/)).toBeNull();
+  });
+
   it("stage lines stay plain text without the row panel", () => {
     renderCards(page([case106()]), { onOpenPanel: undefined });
     expect(within(cardOf("case-106 · de")).queryByRole("button", { name: /Show history/ })).toBeNull();

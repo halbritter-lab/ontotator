@@ -82,6 +82,10 @@ function StageLine({ row, stage, title, sourceLanguage, projectKey, onOpenPanel,
   const cell = row.stages?.[stage];
   const text = cell ? stageText(stage, cell, row, { sourceLanguage }) : { symbol: "", word: "—", detail: "" };
   const tone = cell?.tone ?? "none";
+  // X5: the Final line's "1 flagged" (findings flagged "guidelines unclear" in the submitted consolidation), as in the table.
+  const flagged = stage === "final" ? row.flagged_unclear ?? 0 : 0;
+  const flagId = useId();
+  const describedBy = [text.detail && detailId, flagged > 0 && flagId].filter(Boolean).join(" ");
   const status = <span className="stage-cell-status">{text.symbol && <><span className="stage-cell-symbol" aria-hidden="true">{text.symbol}</span>{" "}</>}{text.word}</span>;
   const openDetails = () => {
     setOpen(false);
@@ -92,10 +96,11 @@ function StageLine({ row, stage, title, sourceLanguage, projectKey, onOpenPanel,
       <span className="document-card-stage-label">{`${title}:`}</span>{" "}
       {cell && onOpenPanel
         ? <button ref={anchor} type="button" className="document-card-stage-button" aria-label={`${title}: ${text.word}. Show history, ${rowName(row)}`}
-          aria-describedby={text.detail ? detailId : undefined} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? contentId : undefined}
+          aria-describedby={describedBy || undefined} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? contentId : undefined}
           onClick={() => setOpen(value => !value)}>{status}</button>
         : status}
       {text.detail ? <span id={detailId} className="document-card-stage-detail">{` · ${text.detail}`}</span> : null}
+      {flagged > 0 ? <span id={flagId} className="document-card-stage-detail documents-stage-flagged">{` · ${flagged} flagged`}</span> : null}
     </p>
     {/* After the line: the popover is a `div` (a sheet `Dialog` below 700 px), never inside the `p`. */}
     {open && <StagePopover row={row} stage={stage} projectKey={projectKey} anchorRef={anchor} contentId={contentId} me={me}
