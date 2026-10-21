@@ -310,10 +310,10 @@ test("German text prefills with German names; French text explains the missing l
   const [start, end] = offsetsOf(s, "loop-fr", "crise");
   await selectText(page, start, end);
   await expect(search(page)).toBeFocused();
-  await expect(search(page)).toHaveValue("");
-  await expect(newFinding(page).locator(".search-hint")).toHaveText("Names are searched in English. Type an English name or a code.");
-  await expect(hits(page)).toHaveCount(0);
-  await evidence(page, "6-french-no-prefill");
+  // U6: always prefilled; the hint says French is not searched.
+  await expect(search(page)).toHaveValue("crise");
+  await expect(newFinding(page).locator(".search-hint")).toContainText("Names are searched in English. Type an English name or a code.");
+  await evidence(page, "6-french-prefill-hint");
 });
 
 test("/ and Esc", async ({ page }) => {
