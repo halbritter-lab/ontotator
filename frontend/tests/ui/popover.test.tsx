@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { Popover } from "../../src/ui/Popover";
 import { useShortcut } from "../../src/ui/shortcuts";
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 function Example({ onEscapeShortcut = () => undefined, closeOnTabOut }: { onEscapeShortcut?: () => void; closeOnTabOut?: boolean }) {
   const anchor = useRef<HTMLButtonElement>(null);
@@ -113,4 +113,75 @@ it("closeOnTabOut keeps Tab inside the popover between its controls", async () =
   await user.tab();
   expect(document.activeElement).toBe(screen.getAllByRole("checkbox")[1]);
   expect(screen.getByRole("dialog", { name: "Filter" })).not.toBeNull();
+});
+
+function mockPanelHeight(initial: number) {
+  let height = initial;
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+    return this.classList.contains("ui-popover") ? height : 0;
+  });
+  return (next: number) => { height = next; };
+}
+const anchorAt = (anchor: HTMLElement, top: number) => {
+  anchor.getBoundingClientRect = () => ({ top, bottom: top + 32, left: 40, right: 120, width: 80, height: 32, x: 40, y: top, toJSON: () => ({}) });
+};
+
+it("flips above an anchor near the bottom and caps its height to the room there", async () => {
+  vi.stubGlobal("innerHeight", 768);
+  mockPanelHeight(400);
+  const user = userEvent.setup();
+  render(<Example />);
+  const anchor = screen.getByRole("button", { name: "Filter" });
+  anchorAt(anchor, 700);
+  await user.click(anchor);
+  const dialog = screen.getByRole("dialog", { name: "Filter" });
+  // Room above: 700 - 4 - 8 = 688; below: 768 - 732 - 4 - 8 = 24; the stylesheet's 70vh stays the overall cap.
+  expect(dialog.style.top).toBe(`${700 - 4 - 400}px`);
+  expect(dialog.style.maxHeight).toBe(`${Math.floor(768 * 0.7)}px`);
+});
+
+it("never grows past the free space on the chosen side", async () => {
+  vi.stubGlobal("innerHeight", 768);
+  mockPanelHeight(900);
+  const user = userEvent.setup();
+  render(<Example />);
+  const anchor = screen.getByRole("button", { name: "Filter" });
+  anchorAt(anchor, 700);
+  await user.click(anchor);
+  const dialog = screen.getByRole("dialog", { name: "Filter" });
+  const maxHeight = parseFloat(dialog.style.maxHeight);
+  expect(maxHeight).toBeLessThanOrEqual(700 - 4 - 8);
+  // Its bottom edge stays clear of the anchor.
+  expect(parseFloat(dialog.style.top) + maxHeight).toBe(700 - 4);
+});
+
+it("stays below with a capped height when there is more room below", async () => {
+  vi.stubGlobal("innerHeight", 768);
+  mockPanelHeight(900);
+  const user = userEvent.setup();
+  render(<Example />);
+  const anchor = screen.getByRole("button", { name: "Filter" });
+  anchorAt(anchor, 100);
+  await user.click(anchor);
+  const dialog = screen.getByRole("dialog", { name: "Filter" });
+  expect(dialog.style.top).toBe("136px");
+  expect(dialog.style.maxHeight).toBe(`${Math.floor(768 * 0.7)}px`);
+});
+
+it("re-places when its content grows after opening", async () => {
+  vi.stubGlobal("innerHeight", 768);
+  const setHeight = mockPanelHeight(20);
+  const callbacks: Array<() => void> = [];
+  vi.stubGlobal("ResizeObserver", class { constructor(callback: () => void) { callbacks.push(callback); } observe() {} disconnect() {} });
+  const user = userEvent.setup();
+  render(<Example />);
+  const anchor = screen.getByRole("button", { name: "Filter" });
+  anchorAt(anchor, 600);
+  await user.click(anchor);
+  const dialog = screen.getByRole("dialog", { name: "Filter" });
+  expect(dialog.style.top).toBe("636px");
+  setHeight(400);
+  expect(callbacks.length).toBeGreaterThan(0);
+  act(() => { for (const callback of callbacks) callback(); });
+  expect(dialog.style.top).toBe(`${600 - 4 - 400}px`);
 });
