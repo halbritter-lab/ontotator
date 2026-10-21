@@ -99,3 +99,9 @@ export const IconDocument = (p: IconProps) => (
     <path d="M4 1.75h5.5L12.5 4.75v9.5H4zM9.5 1.75v3h3M6 8h4.5M6 10.5h4.5" />
   </Icon>
 );
+
+export const IconBook = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 4.25C6.75 3.25 4.75 2.75 2 2.75v9.5c2.75 0 4.75.5 6 1.5 1.25-1 3.25-1.5 6-1.5v-9.5c-2.75 0-4.75.5-6 1.5zM8 4.25v9.5" />
+  </Icon>
+);

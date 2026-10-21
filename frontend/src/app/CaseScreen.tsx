@@ -177,6 +177,8 @@ export interface CaseScreenProps {
   annotatorName?: string;
   leaveGuardRef?: React.MutableRefObject<((proceed: () => void) => void) | null>;
   taskActions?: React.ReactNode;
+  /** The guidelines update notice (tasks/TaskGuidelines), shown below the toolbar. */
+  guidelineNotice?: React.ReactNode;
   held?: boolean;
   holdReason?: string | null;
   saveBeforeReportRef?: React.MutableRefObject<(() => Promise<void>) | null>;
@@ -204,7 +206,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   onSubmitted,
   annotatorName,
   leaveGuardRef,
-  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundBadge, roundTitle, documentVersion, roundOrdinal,
+  readOnly: serverReadOnly = false, routeLeaveRef, assignmentNavigation, onReadonlyRequired, versionContext, taskActions, guidelineNotice, held = false, holdReason, saveBeforeReportRef, roundInputs = NO_ROUND_INPUTS, roundKind, roundBadge, roundTitle, documentVersion, roundOrdinal,
 }) => {
   const versionIdentity = JSON.stringify([versionContext?.username, versionContext?.assignmentId, versionContext?.canBrowseVersions, workspaceId, view.key]);
   const [acceptedSubmission, setAcceptedSubmission] = useState<{ identity: string; value: Submission } | null>(null);
@@ -2702,6 +2704,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <Button disabled={versionBusy} onClick={() => { void chooseAnnotationVersion("draft"); }}>Back to my draft</Button>
       </InlineMessage>}
       {serverReadOnly && <InlineMessage tone="info">Submitted. The project lead can reopen it for changes.</InlineMessage>}
+      {guidelineNotice}
       {queueState === "conflict" && (
         <InlineMessage tone="error" aria-label="Revision conflict">
           <span>

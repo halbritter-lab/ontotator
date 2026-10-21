@@ -3,11 +3,14 @@ import { api, type AssignmentView, type ProblemReportView } from "../api/client"
 
 const newestFirst = (a: ProblemReportView, b: ProblemReportView): number => Date.parse(b.created_at ?? "") - Date.parse(a.created_at ?? "");
 
-/** The fields the reporter dialog and the editor read; any difference means the editor's task is stale. */
+/** The fields the reporter dialog, the editor and the guidelines entry read; any difference means the editor's task is stale. */
 function assignmentChanged(current: AssignmentView, fresh: AssignmentView): boolean {
   return current.workflow_revision !== fresh.workflow_revision || current.held !== fresh.held
     || (current.hold_reason ?? null) !== (fresh.hold_reason ?? null) || current.status !== fresh.status
-    || JSON.stringify(current.active_holds ?? []) !== JSON.stringify(fresh.active_holds ?? []);
+    || JSON.stringify(current.active_holds ?? []) !== JSON.stringify(fresh.active_holds ?? [])
+    // The guidelines button and the update notice read these.
+    || JSON.stringify(current.guideline ?? null) !== JSON.stringify(fresh.guideline ?? null)
+    || JSON.stringify(current.guideline_notice ?? null) !== JSON.stringify(fresh.guideline_notice ?? null);
 }
 
 export interface TaskReports {
