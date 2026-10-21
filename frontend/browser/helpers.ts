@@ -92,20 +92,12 @@ export async function submitCase(page: Page) {
   await expect(dialog).toBeVisible();
   const submit = dialog.getByRole("button", { name: /^Submit case$/ });
   await expect(submit).toBeDisabled();
+  // Unconfirmed values (defaults or empty) are acknowledged in one tick; the dialog resends once.
+  const acknowledgement = dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values$/ });
+  if (await acknowledgement.isVisible()) await acknowledgement.check();
   await dialog.getByLabel(/Entire text checked for further findings/i).check();
   await submit.click();
-  const completed = page.getByRole("dialog", { name: "Case submitted" });
-  const acknowledgement = dialog.getByRole("checkbox", { name: "Submit with these unconfirmed values" });
-  await expect(acknowledgement.or(completed)).toBeVisible();
-  if (await acknowledgement.isVisible()) {
-    await expect(dialog).toContainText("keeps the clinical values and their defaulted status unchanged");
-    const continueSubmit = dialog.getByRole("button", { name: "Continue and submit", exact: true });
-    await expect(continueSubmit).toBeDisabled();
-    await acknowledgement.check();
-    await expect(continueSubmit).toBeEnabled();
-    await continueSubmit.click();
-  }
-  await expect(completed).toContainText(/Case successfully submitted/i);
+  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Case successfully submitted/i);
 }
 
 /** Select document text by UTF-16 offsets and fire the mouseup the editor listens to. */
