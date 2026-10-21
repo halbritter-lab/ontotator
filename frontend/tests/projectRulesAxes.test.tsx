@@ -22,7 +22,7 @@ describe("project rule axis controls", () => {
   it("offers an explicit same-value confirmation for a retained default", () => {
     const onConfirmDefaults = vi.fn();
     render(<AnnotationPanel {...props("present")} onConfirmDefaults={onConfirmDefaults} />);
-    expect(screen.getByText(/Highlighted values are defaults. Press/)).toBeDefined();
+    expect(screen.getByText(/Highlighted values are defaults. Click a highlighted value/)).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Confirm defaults (1)" }));
     expect(onConfirmDefaults).toHaveBeenCalledWith(["presence"], { presence: "present" });
   });
