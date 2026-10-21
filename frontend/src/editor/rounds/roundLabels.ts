@@ -6,7 +6,7 @@ import { formatTime, type FormatTimeOptions } from "../../app/submissionLabels";
 
 export interface RoundFacts {
   round_id: string;
-  kind: "ordinary" | "carry_forward" | "clean_restart" | "consolidation";
+  kind: "ordinary" | "carry_forward" | "clean_restart" | "consolidation" | "text_change" | "handover";
   state: "editable" | "submitted" | "superseded" | "abandoned";
   round_ordinal?: number | null;
   predecessor_round_id?: string | null;
@@ -42,6 +42,12 @@ export function roundIdentity(round: RoundFacts, options: FormatTimeOptions = {}
       const time = round.source_submission_recorded_at ? ` (${formatTime(round.source_submission_recorded_at, options)})` : "";
       return withVersion(`continued from ${source}${time}`);
     }
+    // A lead moved the draft to the corrected text (spec V5).
+    case "text_change":
+      return withVersion("carried after text change");
+    // A lead handed another annotator's submission over (VD13).
+    case "handover":
+      return withVersion("handed over from another annotator");
     default:
       return withVersion("started empty");
   }
@@ -109,6 +115,8 @@ export function roundStartingPoint(round: Pick<RoundFacts, "kind" | "source_roun
     case "carry_forward": return round.source_round_ordinal ? `from Round ${round.source_round_ordinal} submission` : "from an earlier submission";
     case "clean_restart": return "restarted empty";
     case "consolidation": return `consolidation of ${plural(round.input_submission_ids?.length ?? 0, "submission", "submissions")}`;
+    case "text_change": return "carried after text change";
+    case "handover": return "handed over";
     default: return "started empty";
   }
 }

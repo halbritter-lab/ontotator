@@ -42,6 +42,8 @@ PATHS = (
     "exchange",
     "ontology/store.py",
     "application/submissions.py",
+    "application/text_changes.py",
+    "api/text_change_routes.py",
     "application/translation_reviews.py",
     "application/workspaces.py",
     "domain/errors.py",

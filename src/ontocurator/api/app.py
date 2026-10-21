@@ -405,6 +405,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "ROUND_ACTIVE": 409,
                     "ROUND_ALREADY_EXISTS": 409,
                     "TASK_HELD": 409,
+                    "TEXT_CHANGE_CHANGED": 409,
                     "VARIANT_REVIEW_STALE": 409,
                     "TRANSLATION_NOT_ACCEPTED": 409,
                     "LEAD_CORRECTION_NOT_AVAILABLE": 409,
@@ -452,6 +453,9 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     from ontocurator.api.work_round_routes import router as work_round_router
 
     app.include_router(work_round_router)
+    from ontocurator.api.text_change_routes import router as text_change_router
+
+    app.include_router(text_change_router)
     from ontocurator.api.assignment_submission_routes import (
         router as assignment_submission_router,
     )

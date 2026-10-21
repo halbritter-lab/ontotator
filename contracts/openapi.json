@@ -1076,6 +1076,223 @@
         }
       }
     },
+    "/api/v1/projects/{key}/text-changes/preview": {
+      "post": {
+        "tags": [
+          "text-changes"
+        ],
+        "summary": "Preview Text Change",
+        "operationId": "preview_text_change_api_v1_projects__key__text_changes_preview_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TextChangePreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextChangePreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assignments/{assignment_id}/move-to-version": {
+      "post": {
+        "tags": [
+          "text-changes"
+        ],
+        "summary": "Move To Version",
+        "operationId": "move_to_version_api_v1_assignments__assignment_id__move_to_version_post",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveToVersionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveToVersionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assignments/{assignment_id}/text-change-resolution": {
+      "post": {
+        "tags": [
+          "text-changes"
+        ],
+        "summary": "Resolve Text Change",
+        "operationId": "resolve_text_change_api_v1_assignments__assignment_id__text_change_resolution_post",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TextChangeResolutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/submissions/{submission_id}/carry": {
+      "post": {
+        "tags": [
+          "text-changes"
+        ],
+        "summary": "Carry Submission",
+        "operationId": "carry_submission_api_v1_projects__key__submissions__submission_id__carry_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assignments/{assignment_id}/submissions": {
       "get": {
         "tags": [
@@ -8546,6 +8763,129 @@
         ],
         "title": "BulkTargetView"
       },
+      "CarryPerson": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "author": {
+            "type": "boolean",
+            "title": "Author"
+          },
+          "has_work": {
+            "type": "boolean",
+            "title": "Has Work"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "display_name",
+          "author",
+          "has_work"
+        ],
+        "title": "CarryPerson",
+        "description": "A member who may annotate the target; ``has_work`` mutes them (VD13)."
+      },
+      "CarryRequest": {
+        "properties": {
+          "target_document_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Target Document Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "author",
+              "other",
+              "dismiss"
+            ],
+            "title": "Mode"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "confirm_language": {
+            "type": "boolean",
+            "title": "Confirm Language",
+            "default": false
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target_document_id",
+          "mode",
+          "request_id"
+        ],
+        "title": "CarryRequest"
+      },
+      "CarryResponse": {
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "carried",
+              "handed_over",
+              "dismissed"
+            ],
+            "title": "Resolution"
+          },
+          "assignment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssignmentView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "round": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkRoundView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "carried_findings": {
+            "type": "integer",
+            "title": "Carried Findings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "resolution",
+          "assignment",
+          "round",
+          "carried_findings"
+        ],
+        "title": "CarryResponse"
+      },
       "CaseDetail": {
         "properties": {
           "case_id": {
@@ -12438,6 +12778,58 @@
           "off"
         ],
         "title": "MixedCountView"
+      },
+      "MoveToVersionRequest": {
+        "properties": {
+          "target_document_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Target Document Id"
+          },
+          "expected_workflow_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Workflow Revision"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target_document_id",
+          "expected_workflow_revision",
+          "request_id"
+        ],
+        "title": "MoveToVersionRequest"
+      },
+      "MoveToVersionResponse": {
+        "properties": {
+          "assignment": {
+            "$ref": "#/components/schemas/AssignmentView"
+          },
+          "round": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkRoundView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "assignment",
+          "round"
+        ],
+        "title": "MoveToVersionResponse",
+        "description": "The new assignment on the target; ``round`` is None when the moved\nassignment had not started (nothing to carry)."
       },
       "MultilingualSearchPreferences": {
         "properties": {
@@ -18779,6 +19171,115 @@
           "term_id"
         ],
         "title": "TermLookup"
+      },
+      "TextChangePreview": {
+        "properties": {
+          "from_version": {
+            "type": "integer",
+            "title": "From Version"
+          },
+          "to_version": {
+            "type": "integer",
+            "title": "To Version"
+          },
+          "findings": {
+            "type": "integer",
+            "title": "Findings"
+          },
+          "placed": {
+            "type": "integer",
+            "title": "Placed"
+          },
+          "unplaced": {
+            "type": "integer",
+            "title": "Unplaced"
+          },
+          "in_changed_passages": {
+            "type": "integer",
+            "title": "In Changed Passages"
+          },
+          "persons": {
+            "items": {
+              "$ref": "#/components/schemas/CarryPerson"
+            },
+            "type": "array",
+            "title": "Persons"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "from_version",
+          "to_version",
+          "findings",
+          "placed",
+          "unplaced",
+          "in_changed_passages",
+          "persons"
+        ],
+        "title": "TextChangePreview"
+      },
+      "TextChangePreviewRequest": {
+        "properties": {
+          "assignment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Id"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          },
+          "target_document_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Target Document Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "target_document_id"
+        ],
+        "title": "TextChangePreviewRequest",
+        "description": "Exactly one of ``assignment_id`` (open work) or ``submission_id``."
+      },
+      "TextChangeResolutionRequest": {
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "finish_then_carry",
+              "withdrawn"
+            ],
+            "title": "Resolution"
+          },
+          "target_document_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Target Document Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "resolution",
+          "target_document_id"
+        ],
+        "title": "TextChangeResolutionRequest"
       },
       "TextWindowView": {
         "properties": {

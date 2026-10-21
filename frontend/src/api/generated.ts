@@ -344,6 +344,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/text-changes/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Text Change */
+        post: operations["preview_text_change_api_v1_projects__key__text_changes_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assignments/{assignment_id}/move-to-version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move To Version */
+        post: operations["move_to_version_api_v1_assignments__assignment_id__move_to_version_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assignments/{assignment_id}/text-change-resolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Text Change */
+        post: operations["resolve_text_change_api_v1_assignments__assignment_id__text_change_resolution_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/submissions/{submission_id}/carry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Carry Submission */
+        post: operations["carry_submission_api_v1_projects__key__submissions__submission_id__carry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{assignment_id}/submissions": {
         parameters: {
             query?: never;
@@ -2675,6 +2743,51 @@ export interface components {
              */
             mode: "checkbox" | "choose_in_versions";
         };
+        /**
+         * CarryPerson
+         * @description A member who may annotate the target; ``has_work`` mutes them (VD13).
+         */
+        CarryPerson: {
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Author */
+            author: boolean;
+            /** Has Work */
+            has_work: boolean;
+        };
+        /** CarryRequest */
+        CarryRequest: {
+            /** Target Document Id */
+            target_document_id: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "author" | "other" | "dismiss";
+            /** Username */
+            username?: string | null;
+            /**
+             * Confirm Language
+             * @default false
+             */
+            confirm_language: boolean;
+            /** Request Id */
+            request_id: string;
+        };
+        /** CarryResponse */
+        CarryResponse: {
+            /**
+             * Resolution
+             * @enum {string}
+             */
+            resolution: "carried" | "handed_over" | "dismissed";
+            assignment: components["schemas"]["AssignmentView"] | null;
+            round: components["schemas"]["WorkRoundView"] | null;
+            /** Carried Findings */
+            carried_findings: number;
+        };
         /** CaseDetail */
         CaseDetail: {
             /** Case Id */
@@ -3970,6 +4083,24 @@ export interface components {
             on: number;
             /** Off */
             off: number;
+        };
+        /** MoveToVersionRequest */
+        MoveToVersionRequest: {
+            /** Target Document Id */
+            target_document_id: string;
+            /** Expected Workflow Revision */
+            expected_workflow_revision: number;
+            /** Request Id */
+            request_id: string;
+        };
+        /**
+         * MoveToVersionResponse
+         * @description The new assignment on the target; ``round`` is None when the moved
+         *     assignment had not started (nothing to carry).
+         */
+        MoveToVersionResponse: {
+            assignment: components["schemas"]["AssignmentView"];
+            round: components["schemas"]["WorkRoundView"] | null;
         };
         /**
          * MultilingualSearchPreferences
@@ -6256,6 +6387,45 @@ export interface components {
             /** Term Id */
             term_id: string;
         };
+        /** TextChangePreview */
+        TextChangePreview: {
+            /** From Version */
+            from_version: number;
+            /** To Version */
+            to_version: number;
+            /** Findings */
+            findings: number;
+            /** Placed */
+            placed: number;
+            /** Unplaced */
+            unplaced: number;
+            /** In Changed Passages */
+            in_changed_passages: number;
+            /** Persons */
+            persons: components["schemas"]["CarryPerson"][];
+        };
+        /**
+         * TextChangePreviewRequest
+         * @description Exactly one of ``assignment_id`` (open work) or ``submission_id``.
+         */
+        TextChangePreviewRequest: {
+            /** Assignment Id */
+            assignment_id?: number | null;
+            /** Submission Id */
+            submission_id?: string | null;
+            /** Target Document Id */
+            target_document_id: string;
+        };
+        /** TextChangeResolutionRequest */
+        TextChangeResolutionRequest: {
+            /**
+             * Resolution
+             * @enum {string}
+             */
+            resolution: "finish_then_carry" | "withdrawn";
+            /** Target Document Id */
+            target_document_id: string;
+        };
         /** TextWindowView */
         TextWindowView: {
             /** Start */
@@ -7701,6 +7871,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_text_change_api_v1_projects__key__text_changes_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TextChangePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TextChangePreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_to_version_api_v1_assignments__assignment_id__move_to_version_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveToVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveToVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_text_change_api_v1_assignments__assignment_id__text_change_resolution_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TextChangeResolutionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    carry_submission_api_v1_projects__key__submissions__submission_id__carry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CarryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarryResponse"];
                 };
             };
             /** @description Validation Error */

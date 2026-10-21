@@ -222,6 +222,14 @@ export type AssignResponse = components["schemas"]["AssignResponse"];
 export type ProposalRequest = components["schemas"]["ProposalRequest"];
 export type ProposalResponse = components["schemas"]["ProposalResponse"];
 export type ReassignRequest = components["schemas"]["ReassignRequest"];
+export type TextChangePreviewRequest = components["schemas"]["TextChangePreviewRequest"];
+export type TextChangePreview = components["schemas"]["TextChangePreview"];
+export type CarryPerson = components["schemas"]["CarryPerson"];
+export type MoveToVersionRequest = components["schemas"]["MoveToVersionRequest"];
+export type MoveToVersionResponse = components["schemas"]["MoveToVersionResponse"];
+export type TextChangeResolutionRequest = components["schemas"]["TextChangeResolutionRequest"];
+export type CarryRequest = components["schemas"]["CarryRequest"];
+export type CarryResponse = components["schemas"]["CarryResponse"];
 export type TermLookup = { layer_id: string; term_id: string };
 export type TermLabel = TermLookup & { label: string | null };
 
@@ -362,6 +370,14 @@ export class ApiClient {
   async reassign(id: number, body: ReassignRequest): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reassign`, { method: "POST", body: JSON.stringify(body) }); }
   async reopenAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }); }
   async revokeAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/revoke`, { method: "POST", body: JSON.stringify({ reason }) }); }
+  /** Counts of a move or carry to the row's newest version, without writing (lead only). */
+  async previewTextChange(key: string, body: TextChangePreviewRequest): Promise<TextChangePreview> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/text-changes/preview`, { method: "POST", body: JSON.stringify(body) }); }
+  /** "Move to v2": freeze the draft, continue on the target, revoke the old assignment (lead only). */
+  async moveToVersion(id: number, body: MoveToVersionRequest): Promise<MoveToVersionResponse> { return this.request(`/api/v1/assignments/${id}/move-to-version`, { method: "POST", body: JSON.stringify(body) }); }
+  /** "Let X finish on v1" or "Withdraw" for open work on an old version (lead only). */
+  async resolveTextChange(id: number, body: TextChangeResolutionRequest): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/text-change-resolution`, { method: "POST", body: JSON.stringify(body) }); }
+  /** "Carry to v2…": the author, someone else (handover) or dismiss (lead only). */
+  async carrySubmission(key: string, submissionId: string, body: CarryRequest): Promise<CarryResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/submissions/${encodeURIComponent(submissionId)}/carry`, { method: "POST", body: JSON.stringify(body) }); }
 
   async listTemplates(): Promise<TemplateInfo[]> { return this.request("/api/v1/projects/templates", { method: "GET" }); }
   async createProject(body: CreateProjectRequest): Promise<ProjectSettings> { return this.request("/api/v1/projects/", { method: "POST", body: JSON.stringify(body) }); }
