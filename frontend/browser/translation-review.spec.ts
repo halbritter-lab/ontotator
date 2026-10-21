@@ -339,7 +339,8 @@ for (const actor of ['reviewer', 'other'] as const) test(`expired review session
     expect(savedResponse.request().postDataJSON()).toEqual({ expected_revision: before.draft.revision, text, form: { decision: 'accepted_corrected', clinical_change: false } });
     await saved(page, s.assignment_id!, text, 'accepted_corrected');
   } else {
-    await expect(page).toHaveURL(/#\/$/); await expect(page.getByRole('heading', { name: 'My tasks', exact: true })).toBeVisible();
+    // Another user starts afresh at "#/"; without a last-used project the landing opens Projects (F8).
+    await expect(page).toHaveURL(/#\/projects$/); await expect(page.getByRole('heading', { name: 'Projects', exact: true, level: 1 })).toBeVisible();
     await expect(target(page)).toHaveCount(0); await expect(page.locator('[data-session-owner]')).toHaveCount(0);
     const denied = await authenticatedRequest(page, `/api/v1/translation-reviews/${s.assignment_id}`); expect(denied.status()).toBe(404);
   }

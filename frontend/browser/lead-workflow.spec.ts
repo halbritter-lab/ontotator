@@ -12,7 +12,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   caseBox, decisionBlock, detailsButton, documentsReady, documentsTab, openFilters, openRowPanel, rowAction, rowCell, rowPanel, textRow, textVersionItems,
 } from "./documentsHelpers";
-import { authenticatedRequest, TASKS_HOME, TEST_PASSWORD } from "./helpers";
+import { authenticatedRequest, openTasksHome, TEST_PASSWORD } from "./helpers";
 import { leadScenario, pasteCaseIds, type LeadPerson, type LeadScenario } from "./leadWorkflowHelpers";
 
 test.setTimeout(240_000);
@@ -50,7 +50,8 @@ const person = (s: LeadScenario, name: LeadPerson) => `${s.display_names[name]} 
  * the landing (F8) opens that project.
  */
 async function login(page: Page, s: LeadScenario, name: LeadPerson, remember?: string) {
-  await page.goto(remember === undefined ? TASKS_HOME : "/");
+  if (remember === undefined) await openTasksHome(page);
+  else await page.goto("/");
   if (remember !== undefined) await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontocurator.lastProject.v1:${s.users[name]}`, remember]);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username", { exact: true }).fill(s.users[name]);

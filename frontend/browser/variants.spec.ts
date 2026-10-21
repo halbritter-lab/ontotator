@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { authenticatedRequest, loginExisting, openCase, selectText, submitCase } from './helpers';
+import { authenticatedRequest, loginExisting, openCase, selectText, submitCase, TASKS_HOME } from './helpers';
 
 test.setTimeout(90_000);
 
@@ -241,7 +241,8 @@ test('dirty failed-save snapshot cancellation preserves focus and real native Ba
   await loginExisting(page, s.users.alice);
   await ownSubmission(page, s.assignments.alice);
   await reopen(browser, s, s.assignments.alice);
-  await page.goto('/');
+  // A fresh load of My tasks ("All"); a bare "/" would land on the last-used project (F8).
+  await page.goto(TASKS_HOME); await page.reload();
   await openCase(page, { documentId: s.documents.target });
   const taskUrl = page.url();
   await openVersions(page);

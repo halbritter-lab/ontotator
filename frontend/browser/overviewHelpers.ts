@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { TASKS_HOME, TEST_PASSWORD } from "./helpers";
+import { openTasksHome, TEST_PASSWORD } from "./helpers";
 
 /** Scenarios of ``POST /__test_overview__`` (tests/browser_overview_scenarios.py). */
 export type OverviewScenarioName =
@@ -95,7 +95,7 @@ export async function overviewAct(page: Page, body: OverviewActBody): Promise<Ov
  * display name, so ``loginExisting`` does not apply).
  */
 export async function loginOverviewUser(page: Page, scenario: Pick<OverviewScenario, "users" | "display_names">, name: OverviewPerson): Promise<void> {
-  await page.goto(TASKS_HOME);
+  await openTasksHome(page);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username", { exact: true }).fill(scenario.users[name]);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);

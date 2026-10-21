@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 import { documentsTab, rowAction } from "./documentsHelpers";
-import { selectText, submitCase, TASKS_HOME, TEST_PASSWORD } from "./helpers";
+import { openTasksHome, selectText, submitCase, TASKS_HOME, TEST_PASSWORD } from "./helpers";
 
 interface Actor { username: string; code: string }
 interface ProjectSetup { key: string; lead: Actor; annotator: Actor }
 
 async function redeemCode(page: Page, actor: Actor) {
-  await page.goto(TASKS_HOME);
+  await openTasksHome(page);
   await page.getByRole("button", { name: "I have a setup or reset code" }).click();
   const form = page.getByRole("form", { name: "Set your password" });
   await form.getByLabel("Username", { exact: true }).fill(actor.username);
@@ -28,7 +28,7 @@ async function logout(page: Page) {
 }
 
 async function loginExisting(page: Page, actor: Actor) {
-  await page.goto(TASKS_HOME);
+  await openTasksHome(page);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username", { exact: true }).fill(actor.username);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
