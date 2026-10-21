@@ -36,7 +36,7 @@ export function UnconfirmedValuesSection({
   const confirmButtons = useRef(new Map<string, HTMLButtonElement>());
   const confirmAllButton = useRef<HTMLButtonElement>(null);
   /** The row whose confirm moves the focus once it has left the list. */
-  const focusAfter = useRef<{ id: string; index: number } | null>(null);
+  const focusAfter = useRef<{ id: string; index: number; term: string } | null>(null);
   const refocusAfterAll = useRef(false);
 
   const announce = (text: string) => setStatus(previous => ({ text, count: (previous?.count ?? 0) + 1 }));
@@ -44,9 +44,13 @@ export function UnconfirmedValuesSection({
 
   useLayoutEffect(() => {
     const pending = focusAfter.current;
-    if (pending && !rows.some(row => row.annotationId === pending.id)) {
+    // Done when the row has left the list or stays only with values to choose (a mixed row): its
+    // "Confirm" button is gone either way, so the focus moves on.
+    const still = pending ? rows.find(row => row.annotationId === pending.id) : undefined;
+    if (pending && (!still || !isConfirmable(still))) {
       focusAfter.current = null;
-      const next = rows.slice(pending.index).find(isConfirmable)
+      if (rows.length > 0) announce(`Confirmed ${pending.term}. ${rows.length} left.`);
+      const next = rows.slice(pending.index).find(row => isConfirmable(row) && row.annotationId !== pending.id)
         ?? rows.slice(0, pending.index).reverse().find(isConfirmable);
       const button = next ? confirmButtons.current.get(next.annotationId) : undefined;
       if (button) button.focus();
@@ -60,18 +64,15 @@ export function UnconfirmedValuesSection({
 
   const confirmOne = async (row: UnconfirmedRow) => {
     if (unavailable || running || busy.has(row.annotationId)) return;
-    focusAfter.current = { id: row.annotationId, index: latestRows.current.findIndex(item => item.annotationId === row.annotationId) };
+    const pending = { id: row.annotationId, index: latestRows.current.findIndex(item => item.annotationId === row.annotationId), term: row.term };
+    focusAfter.current = pending;
     setBusy(previous => new Set(previous).add(row.annotationId));
     setFailed(previous => { const next = new Set(previous); next.delete(row.annotationId); return next; });
     const ok = await onConfirmValues(row).catch(() => false);
     setBusy(previous => { const next = new Set(previous); next.delete(row.annotationId); return next; });
-    if (!ok) {
-      if (focusAfter.current?.id === row.annotationId) focusAfter.current = null;
-      setFailed(previous => new Set(previous).add(row.annotationId));
-      return;
-    }
-    const left = latestRows.current.filter(item => item.annotationId !== row.annotationId).length;
-    if (left > 0) announce(`Confirmed ${row.term}. ${left} left.`);
+    if (ok) return; // the focus effect moves on and announces once the rows show the update
+    if (focusAfter.current === pending) focusAfter.current = null;
+    setFailed(previous => new Set(previous).add(row.annotationId));
   };
 
   const confirmAll = async () => {
@@ -92,7 +93,7 @@ export function UnconfirmedValuesSection({
     refocusAfterAll.current = true;
     setRunning(false);
     const needValue = latestRows.current.filter(row => !isConfirmable(row)).length;
-    announce(`Confirmed ${done} findings.${needValue ? ` ${needValue} need a value.` : ""}`);
+    announce(`Confirmed ${plural(done, "finding", "findings")}.${needValue ? ` ${needValue} need a value.` : ""}`);
   };
 
   const live = (

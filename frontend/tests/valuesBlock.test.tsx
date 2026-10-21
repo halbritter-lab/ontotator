@@ -129,6 +129,26 @@ describe("Values block", () => {
       { assertion: "present", experiencer: "patient", temporality: "current" }, { moveFocus: false });
   });
 
+  it("a held Space or a double click sends one confirm until it has settled", async () => {
+    let settle!: () => void;
+    const onConfirmDefaults = vi.fn(() => new Promise<void>(resolve => { settle = resolve; }));
+    render(<AnnotationPanel {...props({ onConfirmDefaults })} />);
+    const patient = screen.getByRole("radio", { name: "Patient · default" });
+    fireEvent.keyDown(patient, { key: " " });
+    fireEvent.keyDown(patient, { key: " ", repeat: true });
+    fireEvent.keyDown(patient, { key: " ", repeat: true });
+    expect(onConfirmDefaults).toHaveBeenCalledTimes(1);
+    const present = screen.getByRole("radio", { name: "Present · default" });
+    fireEvent.click(present, { detail: 1 });
+    fireEvent.click(present, { detail: 2 });
+    expect(onConfirmDefaults).toHaveBeenCalledTimes(2);
+    expect(onConfirmDefaults).toHaveBeenLastCalledWith(["assertion"], expect.anything(), { moveFocus: false });
+    // Once the confirm has settled (e.g. it failed), a new click may try again.
+    await act(async () => { settle(); });
+    fireEvent.click(present, { detail: 1 });
+    expect(onConfirmDefaults).toHaveBeenCalledTimes(3);
+  });
+
   it("click on a checked non-default value does nothing", () => {
     const onConfirmDefaults = vi.fn(), onUpdateAxes = vi.fn();
     render(<AnnotationPanel {...props({ onConfirmDefaults, onUpdateAxes }, ["assertion", "experiencer"])} />);

@@ -330,7 +330,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   /** The (finding, axis) pairs listed when "Submit with {n} unconfirmed values" was ticked. */
   const [ackSeen, setAckSeen] = useState<ReadonlySet<string> | null>(null);
   /** Polite status of the submit dialog, e.g. after the server listed other values. */
-  const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+  const [submitStatus, setSubmitStatusState] = useState<{ text: string; count: number } | null>(null);
+  /** A new `count` per announcement, so the same text after a resend is read again. */
+  const setSubmitStatus = (text: string | null) =>
+    setSubmitStatusState(previous => text === null ? null : { text, count: (previous?.count ?? 0) + 1 });
   const submittingWorkspace = useRef(false);
   // A warning's acknowledgement is bound to the draft revision; the ticked checkbox stays while the
   // list only shrinks (new pairs untick it, see the effect on `pairsKey`).
@@ -2181,7 +2184,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     try {
       return await handleUpdateAxes({ ...snapshot.annotation.axes_values }, row.confirmableAxisIds, row.annotationId);
     } catch (error) {
-      reportError(error);
+      if (!(error instanceof DiscardedChangesError)) reportError(error);
       return false;
     }
   };
@@ -3292,7 +3295,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               onUpdateAxes={(axesValues) => handleUpdateAxes(axesValues, undefined, selectedAnnotationId)
                 .catch(error => { reportError(error); throw error; })}
               axesFlushRef={pendingAxesFlush}
-              onConfirmDefaults={(axisIds, values, options) => { void handleConfirmDefaults(axisIds, values, options); }}
+              onConfirmDefaults={(axisIds, values, options) => handleConfirmDefaults(axisIds, values, options)}
               valuesError={valuesError && valuesError.annotationId === selectedAnnotationId ? valuesError.message : null}
               searchRequest={changeTermRequest}
               onAttachMention={(segments) =>

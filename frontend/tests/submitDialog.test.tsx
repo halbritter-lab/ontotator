@@ -289,6 +289,33 @@ describe("Unconfirmed values section", () => {
     expect(section()).toBeNull();
   });
 
+  it("moves the focus on when a confirmed row stays with an empty value only", async () => {
+    let resolve!: (ok: boolean) => void;
+    const onConfirmValues = vi.fn(() => new Promise<boolean>(r => { resolve = r; }));
+    const rows = rowsOf([
+      snap("h", { assertion: "present", experiencer: null }, ["assertion"]),
+      snap("s", defaults, ["assertion", "experiencer"]),
+    ]);
+    const { rerender } = render(<SubmitCaseDialog {...dialogProps({ onConfirmValues, unconfirmed: rows })} />);
+    const confirmH = screen.getByRole("button", { name: "Confirm values of Hypotonia" });
+    confirmH.focus();
+    fireEvent.click(confirmH);
+    await act(async () => { resolve(true); });
+    const after = rowsOf([snap("h", { assertion: "present", experiencer: null }, []), snap("s", defaults, ["assertion", "experiencer"])]);
+    expect(after[0].confirmableAxisIds).toEqual([]);
+    rerender(<SubmitCaseDialog {...dialogProps({ onConfirmValues, unconfirmed: after })} />);
+    expect(screen.queryByRole("button", { name: "Confirm values of Hypotonia" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Confirm values of Seizure" }));
+    expect(status()).toBe("Confirmed Hypotonia. 2 left.");
+
+    // The mixed row is the only one left: the focus goes to the text check, not to body.
+    fireEvent.click(screen.getByRole("button", { name: "Confirm values of Seizure" }));
+    await act(async () => { resolve(true); });
+    rerender(<SubmitCaseDialog {...dialogProps({ onConfirmValues, unconfirmed: after.slice(0, 1) })} />);
+    expect(document.activeElement).toBe(screen.getByRole("checkbox", { name: "Entire text checked for further findings" }));
+    expect(status()).toBe("Confirmed Seizure. 1 left.");
+  });
+
   it("focuses Submit case after the last row when the text check is ticked", async () => {
     const rows = threeRows().slice(0, 1);
     const { rerender } = render(<SubmitCaseDialog {...dialogProps({ unconfirmed: rows, textChecked: true })} />);
@@ -307,14 +334,14 @@ describe("Unconfirmed values section", () => {
     const row = screen.getByRole("button", { name: "Retry confirming values of Seizure" }).closest("li")!;
     expect(within(row).getByText("Could not confirm. Try again.")).toBeDefined();
     expect(within(row).getByRole("button", { name: /Retry/ }).textContent).toBe("Retry");
-    expect(status()).toBe("Confirmed 1 findings.");
+    expect(status()).toBe("Confirmed 1 finding.");
   });
 
   it("Confirm all names the rows that still need a value and is hidden without confirmable rows", async () => {
     const mixed = rowsOf([snap("h", defaults, ["assertion"]), snap("e", { assertion: null, experiencer: "patient" }, [])]);
     const { unmount } = render(<SubmitCaseDialog {...dialogProps({ unconfirmed: mixed })} />);
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Confirm all (1)" })); });
-    expect(status()).toBe("Confirmed 1 findings. 1 need a value.");
+    expect(status()).toBe("Confirmed 1 finding. 1 need a value.");
     unmount();
     render(<SubmitCaseDialog {...dialogProps({ unconfirmed: mixed.slice(1) })} />);
     expect(screen.queryByRole("button", { name: /Confirm all/ })).toBeNull();
@@ -376,11 +403,17 @@ describe("Unconfirmed values section", () => {
   });
 
   it("always labels the primary button Submit case and reads the submit status politely", () => {
-    render(<SubmitCaseDialog {...dialogProps({ submitStatus: "The unconfirmed values changed. Check the list again." })} />);
+    const text = "The unconfirmed values changed. Check the list again.";
+    const { rerender } = render(<SubmitCaseDialog {...dialogProps({ submitStatus: { text, count: 1 } })} />);
     expect(submitButton()).toBeDefined();
     expect(screen.queryByRole("button", { name: "Continue and submit" })).toBeNull();
     const region = document.querySelector<HTMLElement>("[data-submit-status]")!;
     expect(region.getAttribute("aria-live")).toBe("polite");
-    expect(region.textContent).toBe("The unconfirmed values changed. Check the list again.");
+    expect(region.textContent).toBe(text);
+    // The same text a second time (a warning after the resend) is a new node, so it is read again.
+    const first = region.firstElementChild;
+    rerender(<SubmitCaseDialog {...dialogProps({ submitStatus: { text, count: 2 } })} />);
+    expect(region.textContent).toBe(text);
+    expect(region.firstElementChild).not.toBe(first);
   });
 });

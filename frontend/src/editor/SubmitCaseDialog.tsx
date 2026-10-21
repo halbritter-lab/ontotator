@@ -36,8 +36,9 @@ export interface SubmitCaseDialogProps {
   onConfirmValues: (row: UnconfirmedRow) => Promise<boolean>;
   acknowledged: boolean;
   setAcknowledged: (checked: boolean) => void;
-  /** Polite status from the submit flow, e.g. "The unconfirmed values changed. Check the list again." */
-  submitStatus: string | null;
+  /** Polite status from the submit flow, e.g. "The unconfirmed values changed. Check the list again.";
+   *  `count` changes on every announcement so a repeated text is read again. */
+  submitStatus: { text: string; count: number } | null;
   textChecked: boolean;
   saving: boolean;
   readOnly: boolean;
@@ -156,7 +157,7 @@ export function SubmitCaseDialog({
       </label>
       {blockedReason && <p id={reasonId} className="form-hint" data-submit-blocked-reason>{blockedReason}</p>}
       <div className="visually-hidden" aria-live="polite" data-submit-status>
-        {submitStatus && <span>{submitStatus}</span>}
+        {submitStatus && <span key={submitStatus.count}>{submitStatus.text}</span>}
       </div>
       <div className="visually-hidden" aria-live="assertive" data-submit-announcer>
         {announcement && <span key={announcement.count}>{announcement.text}</span>}

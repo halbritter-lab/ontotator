@@ -58,7 +58,7 @@ export interface AnnotationPanelProps {
   /** Receives the flush of a coalesced axis change still waiting, so leaving can queue it first. */
   axesFlushRef?: React.MutableRefObject<(() => void) | null>;
   /** "Confirm defaults (n)": the defaulted axes to confirm and the values shown (one set_axes); `moveFocus: false` keeps focus. */
-  onConfirmDefaults?: (axisIds: string[], values?: AxesValues, options?: { moveFocus?: boolean }) => void;
+  onConfirmDefaults?: (axisIds: string[], values?: AxesValues, options?: { moveFocus?: boolean }) => void | Promise<void>;
   /** Error of the last confirmation, shown inside the Values section. */
   valuesError?: string | null;
   /** Each increment opens "Change term" and focuses the term search. */
@@ -125,6 +125,10 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   // Radio changes by arrow keys are coalesced (one save after a pause); a click saves at once.
   const arrowChange = useRef(false);
   const spaceConfirmedAt = useRef(0);
+  /** "{annotation}:{axis}" of a default confirm still on its way: a repeat sends no second set_axes. */
+  const confirmingAxes = useRef(new Set<string>());
+  const defaultedKey = `${annotation?.annotation.annotation_id ?? ""}|${(annotation?.annotation.axes_defaulted ?? []).join(",")}`;
+  useEffect(() => { confirmingAxes.current.clear(); }, [defaultedKey]);
   const savedAxes: AxesValues = annotation?.annotation.axes_values ?? (annotation?.annotation as any)?.axes?.values ?? {};
   const axes = useCoalescedAxisChange(savedAxes, values => onUpdateAxes(values));
   const axesFlush = axes.flush;
@@ -183,8 +187,13 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   /** A click (or Space) on the highlighted default confirms that axis only (D5). */
   const confirmAxis = (axisId: string) => {
     if (readOnly || !onConfirmDefaults) return;
+    const key = `${ann.annotation_id}:${axisId}`;
+    if (confirmingAxes.current.has(key)) return;
+    confirmingAxes.current.add(key);
     axes.flush();
-    onConfirmDefaults([axisId], { ...axes.values }, { moveFocus: false });
+    void Promise.resolve(onConfirmDefaults([axisId], { ...axes.values }, { moveFocus: false }))
+      .catch(() => undefined)
+      .finally(() => { confirmingAxes.current.delete(key); });
   };
   // Chromium fires no click for Space on a checked radio, so Space confirms on keydown; a click a
   // browser still synthesises for that key press (detail 0) is then ignored.
@@ -192,6 +201,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
     if (event.key !== " ") return;
     event.preventDefault();
     spaceConfirmedAt.current = Date.now();
+    if (event.repeat) return; // a held Space confirms once
     confirmAxis(axisId);
   };
   const confirmDefaultClick = (event: React.MouseEvent<HTMLInputElement>, axisId: string) => {
