@@ -1,7 +1,7 @@
 import { StrictMode, createRef, useRef } from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { isTypingTarget, matches, useRegisteredShortcuts, useShortcut, useShortcutHint, type ShortcutOptions } from "../../src/ui/shortcuts";
+import { isTextEntryTarget, isTypingTarget, matches, useRegisteredShortcuts, useShortcut, useShortcutHint, type ShortcutOptions } from "../../src/ui/shortcuts";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -289,4 +289,16 @@ it("does not treat checkboxes and radios as typing targets", () => {
   box.focus();
   expect(press("z", { ctrlKey: true }, box).defaultPrevented).toBe(true);
   expect(handler).toHaveBeenCalledTimes(1);
+});
+
+it("isTextEntryTarget: text fields and contenteditable, not selects or non-text inputs", () => {
+  const input = (type: string) => Object.assign(document.createElement("input"), { type });
+  const editable = document.createElement("div");
+  editable.setAttribute("contenteditable", "true");
+  for (const target of [input("text"), input("search"), document.createElement("textarea"), editable]) expect(isTextEntryTarget(target)).toBe(true);
+  for (const target of [document.createElement("select"), input("range"), input("color"), input("checkbox"), document.createElement("button"), null]) {
+    expect(isTextEntryTarget(target)).toBe(false);
+  }
+  // A select still counts as typing for letter shortcuts (type-ahead).
+  expect(isTypingTarget(document.createElement("select"))).toBe(true);
 });

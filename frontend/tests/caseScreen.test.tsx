@@ -1126,6 +1126,25 @@ describe("CaseScreen integration", () => {
         expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
       });
 
+      it("Esc on a select in the inspector discards; a text field keeps its Escape", () => {
+        vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
+        const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-esc-select" onClose={vi.fn()} />);
+        markThe(rendered.container);
+        const inspector = rendered.container.querySelector(".inspector-pane")!;
+        const field = document.createElement("input");
+        field.type = "text";
+        const select = document.createElement("select");
+        select.append(new Option("en"), new Option("de"));
+        inspector.append(field, select);
+        field.focus();
+        fireEvent.keyDown(field, { key: "Escape" });
+        expect(screen.getByRole("region", { name: "New finding" })).toBeDefined();
+        select.focus();
+        fireEvent.keyDown(select, { key: "Escape" });
+        expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
+        field.remove(); select.remove();
+      });
+
       it("Esc inside a dialog or drawer does not discard", async () => {
         vi.spyOn(api, "searchOntology").mockResolvedValue(hits as any);
         const rendered = render(<CaseScreen view={structuredClone(sampleView)} workspaceId="ws-f1-esc-dialog" onClose={vi.fn()} />);

@@ -102,7 +102,7 @@ import { Dialog } from "../ui/Dialog";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { IconButton } from "../ui/IconButton";
 import { openShortcutHelp, ShortcutHelpHost } from "../ui/ShortcutHelp";
-import { useShortcut, useShortcutHint } from "../ui/shortcuts";
+import { isTextEntryTarget, isTypingTarget, useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { CaseNavigation } from "./CaseNavigation";
 import { adjacentCase, orderTasks } from "./caseOrder";
 import type { RouteLeaveGuard } from "./router";
@@ -2627,17 +2627,21 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     navigateTo(document.document_id);
   }, { ...shortcutOptions, group: "Navigation", description: "Previous / next case" });
   useShortcut("Escape", (event) => {
+    // Registered with allowInInputs so a select or other non-text control can discard (spec F1.5);
+    // text fields keep their Escape, and only the pending discard runs from a non-text control.
+    if (isTextEntryTarget(event.target)) return false;
     if (pendingIsMarkedSpan && !readOnly) {
       // A drawer or dialog owns its Escape (same rule as TextPane's attach mode).
       if (event.target instanceof Element && event.target.closest(".ui-drawer, [role='dialog']")) return false;
       discardPending();
       return;
     }
+    if (isTypingTarget(event.target)) return false;
     if (isAttachingMention) { setIsAttachingMention(false); return; }
     if (selectionIntent === "extend_mention" && !readOnly) { setSelectionIntent("new_mention"); return; }
     if (!selectedAnnotationId && !selectedTargetId && !selectedSourceId && !selectedInputId) return false;
     handleDeselectAll();
-  }, { ...shortcutOptions, allowRepeat: true, group: "General", description: "Discard the marked text / clear selection / cancel adding a mention or segment" });
+  }, { ...shortcutOptions, allowRepeat: true, allowInInputs: true, group: "General", description: "Discard the marked text / clear selection / cancel adding a mention or segment" });
   useShortcut(["j", "k"], (event) => {
     const current = reviewTargets.findIndex((target) => refKey(target) === selectedTargetId);
     const index = event.key.toLowerCase() === "j"

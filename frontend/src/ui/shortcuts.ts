@@ -138,3 +138,17 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   const editable = el.getAttribute?.("contenteditable");
   return editable !== null && editable !== undefined && editable !== "false";
 }
+
+const NON_TEXT_INPUTS = ["button", "color", "file", "image", "range", "reset", "submit"];
+
+/**
+ * Typing targets whose own Escape handling matters (text fields, contenteditable). A `select` or a non-text input
+ * still counts as typing for letter shortcuts (type-ahead), but has no use for Escape.
+ */
+export function isTextEntryTarget(target: EventTarget | null): boolean {
+  if (!isTypingTarget(target)) return false;
+  const el = target as HTMLElement;
+  const tag = el.tagName?.toLowerCase();
+  if (tag === "select") return false;
+  return !(tag === "input" && NON_TEXT_INPUTS.includes((el as HTMLInputElement).type?.toLowerCase()));
+}
