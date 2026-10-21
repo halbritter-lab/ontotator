@@ -84,8 +84,8 @@ export interface RowActionCellProps {
   /** Full-width button (narrow cards). */
   block?: boolean;
   /**
-   * Lead actions that are no step ("Change final…", "Request translation correction…"): listed in
-   * the "+n" menu after the other steps; alone they form an "Actions" menu.
+   * Lead actions that are no step ("Change final…", "Request translation correction…"): listed in the
+   * "+n" menu after the other steps of a row that has a step (the expansion offers them too).
    */
   extraActions?: readonly MenuItem[];
 }
@@ -124,11 +124,8 @@ export function RowActionCell({ row, onAction, plan, block = false, extraActions
     return <span className={className}>{popover(active ? "secondary" : "quiet")}{menuOf(rest)}</span>;
   }
   if (!active) return plan ? <span className={className}>{popover("quiet")}</span> : null;
-  if (!first) {
-    return extraActions.length ? <span className={className}>
-      <MenuButton key="more" label={`Actions, ${name}`} buttonLabel="Actions" items={[...extraActions]} />
-    </span> : null;
-  }
+  // In-plan rows without a lead step show nothing; their other actions are in the expansion.
+  if (!first) return null;
   const firstLabel = rowActionLabel(first, row);
   return <span className={className}>
     {first.action === "plan" && plan

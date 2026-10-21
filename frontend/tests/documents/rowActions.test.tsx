@@ -136,7 +136,7 @@ it("plan popover stays open when a save moves the row into the plan; closing foc
   expect(document.activeElement?.textContent).toBe("Assign review…");
 });
 
-it("lists lead actions that are no step after the other steps, and alone as an Actions menu", () => {
+it("lists lead actions that are no step after the other steps; without a step the cell stays empty", () => {
   const changeFinal = vi.fn();
   const steps: NextStepView[] = [stepOf("decide_report"), stepOf("assign_annotation")];
   const target = stagedRow("case-109", "de", { steps });
@@ -148,8 +148,7 @@ it("lists lead actions that are no step after the other steps, and alone as an A
   view.unmount();
   render(<RowActionCell row={stagedRow("case-110", "de", { steps: [] })} onAction={onAction}
     extraActions={[{ id: "change-final", label: "Change final…", onSelect: changeFinal }]} />);
-  const actions = screen.getByRole("button", { name: "Actions, case-110 · de" });
-  expect(actions.textContent).toBe("Actions");
+  expect(screen.queryByRole("button")).toBeNull();
 });
 
 it("Don't annotate on an undecided row records the decision without turning anything on", async () => {

@@ -633,7 +633,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         textVersionTools={textVersionTools} me={currentUser?.pseudonym ?? null}
         plan={<PlanChips row={row} groupRevision={groupOf(row.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} />}
         planRevision={planSaves.revisionOf(row.case_id, groupOf(row.case_id)?.plan_revision ?? 1)} onAssign={onAssign}
-        revealTextVersions={revealFor === key} onTextVersionsRevealed={() => setRevealFor(null)} headingLevel={narrow ? 5 : 3} />
+        revealTextVersions={revealFor === key} onTextVersionsRevealed={() => setRevealFor(null)} headingLevel={narrow ? 5 : 3}
+        extraActions={rowExtras(row)} />
     </>;
   };
 
@@ -789,6 +790,7 @@ interface ExpandedRowLoaderProps {
   planRevision?: ExpandedRowProps["planRevision"];
   onAssign?: ExpandedRowProps["onAssign"];
   headingLevel?: ExpandedRowProps["headingLevel"];
+  extraActions?: ExpandedRowProps["extraActions"];
   revealTextVersions: boolean;
   onTextVersionsRevealed: () => void;
 }

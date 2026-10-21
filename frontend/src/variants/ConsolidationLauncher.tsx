@@ -93,7 +93,7 @@ function ConsolidationContent({ projectKey, documentId, language, username, rows
     {current && !created && <>
       <fieldset disabled={busy}><legend>Submissions to merge</legend>{eligibleRows.map(row => <Checkbox key={row.submission_id}
         id={`${fieldId}-${encodeURIComponent(row.submission_id)}`} label={row.label ?? `${row.author_label} · ${formatDateTime(row.created_at)}`}
-        checked={selected.has(row.submission_id)} onChange={event => setSelected(previous => {
+        data-submission-id={row.submission_id} checked={selected.has(row.submission_id)} onChange={event => setSelected(previous => {
           const next = new Set(previous); if (event.target.checked) next.add(row.submission_id); else next.delete(row.submission_id); return next;
         })} />)}</fieldset>
       <Select id={`${fieldId}-reviewer`} label="Consolidation reviewer" value={member ? reviewer : ''} disabled={busy}

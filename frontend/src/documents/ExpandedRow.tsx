@@ -38,6 +38,8 @@ export interface ExpandedRowProps {
   planRevision?: number;
   /** Assign dialog for this row ("Assign annotation review…", D25 "Assign a new review…"). */
   onAssign?: (row: DocumentRowView, task: AssignTaskKind, options?: { newReviewOfAccepted?: boolean }) => void;
+  /** Lead actions that are no step ("Change final…", "Request translation correction…"), as quiet links. */
+  extraActions?: readonly { id: string; label: string; onSelect: () => void }[];
   /** The row's Review / Annotate chips (`PlanChips`) for the "Plan" line (VD2 (2)). */
   plan?: ReactNode;
   /** Pseudonym of the signed-in lead ("Final: chosen by you"). */
@@ -64,7 +66,7 @@ function useLink(onNavigate: (route: Route) => void) {
  */
 export function ExpandedRow({
   row, projectKey, query, submissions, onNavigate, id, textVersionTools, planRevision, onAssign, plan, me, revealTextVersions = false, onTextVersionsRevealed, now,
-  headingLevel = 3,
+  headingLevel = 3, extraActions = [],
 }: ExpandedRowProps): JSX.Element {
   const Heading = `h${headingLevel}` as "h3";
   const SubHeading = `h${headingLevel + 1}` as "h4";
@@ -126,7 +128,8 @@ export function ExpandedRow({
         <summary>Text versions ({row.versions.length})</summary>
         <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} now={now} />
       </details>
-      {(reviewable || newReview) && <div className="expanded-row-links">
+      {(reviewable || newReview || extraActions.length > 0) && <div className="expanded-row-links">
+        {extraActions.map(action => <Button key={action.id} size="sm" variant="quiet" onClick={action.onSelect}>{action.label}</Button>)}
         {reviewable && <Button size="sm" variant="quiet" onClick={() => onAssign(row, "review")}>Assign annotation review…</Button>}
         {newReview && <Button size="sm" variant="quiet" onClick={() => onAssign(row, "translation_review", { newReviewOfAccepted: true })}>Assign a new review…</Button>}
       </div>}
@@ -137,8 +140,7 @@ export function ExpandedRow({
             : consolidationDocuments.map(documentId => <div key={documentId} className="expanded-row-consolidation">
               {consolidationDocuments.length > 1 && <SubHeading>{nameOf(documentId)}</SubHeading>}
               <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={textVersionTools?.username ?? ""}
-                rows={consolidationInputs(rows.filter(item => item.document_id === documentId), now)}
-                defaultSelected={rows.filter(item => item.document_id === documentId && item.is_latest_in_round !== false).map(item => item.submission_id)} />
+                rows={consolidationInputs(rows.filter(item => item.document_id === documentId), now)} />
             </div>)}
       </details>
       {problemReports.length > 0 && <details className="expanded-row-more">

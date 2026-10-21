@@ -1030,7 +1030,7 @@ describe("row actions", () => {
     await waitFor(() => expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action"));
   });
 
-  it("Change final… in a decided row's Actions menu opens the panel on the compare content", async () => {
+  it("Change final… in a decided row's expansion opens the panel on the compare content", async () => {
     const decided = row({ case_id: "case-0050", language: "de", final: final({ case_id: "case-0050", language: "de", document_id: "case-0050-de", submission_id: "s-ana", revision: 3 }) });
     mockRows(page([group("case-0050", [decided])]));
     vi.mocked(api.finalPanel).mockResolvedValue(finalPanel({ submissions: [
@@ -1038,9 +1038,11 @@ describe("row actions", () => {
       panelSubmission({ submission_id: "s-tom", document_id: "case-0050-de", author: tom, author_label: "ann-0004" }),
     ] }));
     const select = vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0050", language: "de", document_id: "case-0050-de", submission_id: "s-tom", revision: 4 });
-    renderStateful({});
-    fireEvent.click(await screen.findByRole("button", { name: "Actions, case-0050 · de" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Change final…" }));
+    renderStateful({ open: ["case-0050:de"] });
+    const history = await screen.findByRole("region", { name: "History, case-0050 · de" });
+    // A row without a lead step keeps its Action cell empty (the expansion offers the action).
+    expect(screen.queryByRole("button", { name: /more action/ })).toBeNull();
+    fireEvent.click(within(history).getByRole("button", { name: "Change final…" }));
     const panel = await screen.findByRole("dialog", { name: "Final result · case-0050 · de" });
     const table = await within(panel).findByRole("table", { name: "Submissions, case-0050 · de" });
     const tomRow = within(table).getAllByRole("row").find(entry => entry.textContent?.includes("Tom Reis"))!;

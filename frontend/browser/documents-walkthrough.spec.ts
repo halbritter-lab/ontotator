@@ -194,9 +194,11 @@ test("step 6: the lead requests a correction, Ana corrects → v2", async () => 
   await expectEdge(page, de(), true);
   await expect(rowCell(de(), "action").getByRole("button").first()).toHaveAccessibleName(`Handle text change…, ${CASE} · de`);
   const more = moreActions(page, CASE, "de");
-  await expect(more).toHaveAccessibleName(`+1 more action, ${CASE} · de`);
+  // Carry to v2… and the correction request of the accepted v2 (a lead action that is no step).
+  await expect(more).toHaveAccessibleName(`+2 more actions, ${CASE} · de`);
   await more.click();
   await expect(page.getByRole("menuitem", { name: "Carry to v2…", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Request translation correction…", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(documentsTab(page, "Needs your decision", 1)).toBeVisible();
   await expect(await expectCounterEqualsTab(page)).toBe(1);
@@ -295,11 +297,12 @@ test("step 10: Compare results… → agreement 5 of 7 → Consolidate… → An
   await expect(launcher).toBeVisible();
   const reviewer = launcher.getByLabel("Consolidation reviewer", { exact: true });
   await expect(reviewer).toBeVisible({ timeout: 30_000 });
-  const boxes = launcher.getByRole("checkbox", { name: /^Include submission / });
+  // The compared submissions on the current text, preselected and named "{person} · Round 1 · {time}" (no codes).
+  const boxes = launcher.getByRole("checkbox");
   await expect(boxes).toHaveCount(2);
   for (const box of await boxes.all()) {
-    if (!(await box.isChecked())) await clicks.count(box);
     await expect(box).toBeChecked();
+    await expect(box).toHaveAccessibleName(/^\S.* · Round 1 · /);
   }
   await expect(reviewer.locator("option", { hasText: ANA })).toHaveCount(1);
   if (!(await reviewer.inputValue()) || !(await reviewer.locator("option:checked").textContent())?.includes(ANA)) await chooseOption(reviewer, ANA);

@@ -407,8 +407,9 @@ function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[];
   const documentId = compared && documents.includes(compared) ? compared : documents[0];
   if (!documentId) return null;
   const rows = consolidationInputs((data.panel.submissions ?? []).filter(item => item.document_id === documentId), now);
-  // Preselected: the listed (latest per round) submissions on that text, the ones the panel compares.
-  const preselected = listed.filter(item => item.document_id === documentId).map(item => item.submission_id);
+  // Preselected: the submissions the panel compares on that text (latest of a live round), never a superseded input.
+  const preselected = listed.filter(item => item.document_id === documentId && item.comparable
+    && item.round_state !== "abandoned" && item.round_state !== "superseded").map(item => item.submission_id);
   return <div className="final-panel-consolidate">
     {!open && <p>
       <Button size="sm" variant="quiet" onClick={() => setOpen(true)}>Consolidate…</Button>
