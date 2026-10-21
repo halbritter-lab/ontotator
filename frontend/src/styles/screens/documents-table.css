@@ -7,9 +7,10 @@
 .documents-tabs-meta a { display: inline-block; min-height: 24px; white-space: nowrap; }
 @media (max-width: 699px) {
   .documents-tabs { flex-wrap: nowrap; flex-direction: column; align-items: stretch; }
-  /* One scrolling row; the fading right edge shows that more tabs follow (the end padding lets the last one clear it). */
+  /* One scrolling row; the fading right edge shows that more tabs follow (the end padding lets the last one clear it).
+     The mask uses only alpha, so "black" here is opacity, not a colour. */
   .documents-tabs .ui-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-inline-end: var(--space-6);
-    mask-image: linear-gradient(to right, #000 calc(100% - var(--space-6)), transparent); }
+    mask-image: linear-gradient(to right, black calc(100% - var(--space-6)), transparent); }
   .documents-tabs .ui-tab { flex: none; white-space: nowrap; }
   .documents-tabs-meta { margin-left: 0; }
 }
