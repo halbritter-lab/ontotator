@@ -1300,6 +1300,9 @@ if __name__ == "__main__":
         from browser_review_flow_scenarios import register_review_flow_scenario_route
 
         register_review_flow_scenario_route(app)
+        from browser_guideline_scenarios import register_guideline_scenario_route
+
+        register_guideline_scenario_route(app)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:
