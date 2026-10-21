@@ -1,17 +1,18 @@
 import type { ProjectSummary } from "../api/client";
 
 /**
- * Landing (spec D7): a lead opens Documents of the last project they opened.
- * The key is per user so a shared browser never mixes two people's projects.
+ * Last-used landing (spec F8, D4): after login every user returns to the project they used last
+ * (Documents for leads, My tasks filtered to it for everyone else); without one, or when it is no
+ * longer accessible, the Projects page. "Used" means a project route (`key`), My tasks with
+ * `?project=` or an opened task of that project. The key is per user so a shared browser never
+ * mixes two people's projects.
  */
 export const LAST_PROJECT_PREFIX = "ontocurator.lastProject.v1:";
-
-const leads = (project: ProjectSummary): boolean => project.roles.includes("lead");
 
 export function rememberProject(username: string, key: string): void {
   try {
     window.localStorage.setItem(`${LAST_PROJECT_PREFIX}${username}`, key);
-  } catch { /* Storage may be unavailable; landing then falls back to the first led project. */ }
+  } catch { /* Storage may be unavailable; the landing then shows the Projects page. */ }
 }
 
 export function rememberedProject(username: string): string | null {
@@ -22,9 +23,8 @@ export function rememberedProject(username: string): string | null {
   }
 }
 
-/** The remembered project if the user still leads it, else the first led project; undefined for users who lead nothing. */
+/** The remembered project while it is still in `projects` (any role), else undefined. */
 export function landingProject(username: string, projects: readonly ProjectSummary[]): string | undefined {
-  const led = projects.filter(leads);
   const remembered = rememberedProject(username);
-  return (led.find(project => project.project_key === remembered) ?? led[0])?.project_key;
+  return projects.find(project => project.project_key === remembered)?.project_key;
 }

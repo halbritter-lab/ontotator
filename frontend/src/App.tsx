@@ -18,6 +18,7 @@ import { DocumentsPage } from "./admin/DocumentsPage";
 import { ProgressPage } from "./admin/ProgressPage";
 import { ExportPage } from "./admin/ExportPage";
 import { ProjectsPage } from "./app/ProjectsPage";
+import { projectDestination } from "./app/ProjectPicker";
 import { ProblemReportDetail } from './tasks/ProblemReportDetail';
 import { GuidelinesPage } from "./guidelines/GuidelinesPage";
 import { ConsolidationScreen } from "./consolidation/ConsolidationScreen";
@@ -173,8 +174,16 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     if (route.name !== "tasks" || route.project !== undefined || route.status !== undefined || projectError) { setLanding(false); return; }
     if (!projectsReady || !baseUser) return;
     setLanding(false);
+    // Last-used project (D4): Documents for leads, My tasks filtered to it for others; else the Projects page.
     const key = landingProject(baseUser.username, projects);
-    if (key === undefined) return;
+    const project = projects.find(item => item.project_key === key);
+    // My tasks keeps its loading line until the redirect is accepted, so it never flashes.
+    const redirect = (next: Route) => {
+      setLandingSummary(true);
+      void Promise.resolve(requestRef.current(next, undefined, { replace: true })).finally(() => setLandingSummary(false));
+    };
+    if (key === undefined || !project) { redirect({ name: "projects" }); return; }
+    if (!(project.can_manage && project.roles.includes("lead"))) { redirect(projectDestination(project)); return; }
     // Needs your decision when the counter is > 0 (VD7), otherwise All; a failed summary lands on All.
     // The redirect is dropped if the user navigated while the summary loaded.
     const from = acceptedHash.current;
@@ -186,7 +195,12 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     };
     api.documentsSummary(key).then(summary => land(summary.needs_decision > 0 ? "decision" : undefined), () => land());
   }, [landing, route, projectError, projectsReady, baseUser, projects]);
-  const rememberedKey = baseUser && route.name !== "notFound" && "key" in route ? route.key : undefined;
+  // Last-used project: project routes, My tasks with ?project= and an opened task's project.
+  const rememberedKey = !baseUser || route.name === "notFound" ? undefined
+    : "key" in route ? route.key
+    : route.name === "tasks" && route.project ? route.project
+    : route.name === "task" && taskProject?.identity === taskIdentity ? taskProject.key
+    : undefined;
   useEffect(() => {
     if (baseUser && rememberedKey !== undefined) rememberProject(baseUser.username, rememberedKey);
   }, [baseUser?.username, rememberedKey]);
