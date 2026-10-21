@@ -516,7 +516,7 @@ test("forced colours keep the active hit and the dashed default border", async (
   const defaults = page.locator(".values-section .axis-option.is-default");
   await expect.poll(() => defaultedAxes(page)).toEqual(["assertion", "experiencer", "temporality"]);
   await expect(defaults).toHaveCount(2);
-  for (const style of await defaults.evaluateAll(elements => elements.map(element => getComputedStyle(element).borderTopStyle))) {
+  for (const style of await defaults.evaluateAll(elements => elements.map(element => getComputedStyle(element).outlineStyle))) {
     expect(style).toBe("dashed");
   }
   await expect(defaults.first()).toContainText("· default");

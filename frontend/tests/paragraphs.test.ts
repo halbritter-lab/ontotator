@@ -32,6 +32,11 @@ describe("paragraphStarts", () => {
     expect(paragraphStarts(text)).toEqual(expected);
   });
 
+  it("switches from line mode to paragraph mode when the first blank line is typed", () => {
+    expect(paragraphStarts("a\nb\nc")).toEqual([0, 2, 4]);
+    expect(paragraphStarts("a\n\nb\nc")).toEqual([0, 3]);
+  });
+
   it("does not trim indentation or normalize the original text", () => {
     const text = "😀\r\n\n  next";
     const starts = paragraphStarts(text);

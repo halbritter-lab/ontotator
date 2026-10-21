@@ -1957,13 +1957,21 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   .case-workspace > .app-layout { flex: 1; min-height: 0; }
 }
 
-/* Values block (spec B.2): one row per axis, the axis name in a 96 px column, compact segmented options. */
+/* Values block (editor axes spec Part 1): one row per axis, the axis name in a 96 px column and the
+   values as one connected segmented control. The fit rule (editor/valuesLayout.ts) writes
+   data-values-layout: row (default), stacked (label above the control) or boxes (one box per axis).
+   Values and labels are never truncated; segments have no transitions.
+   Keep in sync: LABEL_COLUMN_PX (96) and COLUMN_GAP_PX (8) in editor/valuesLayout.ts mirror the
+   label column and column gap below. */
 .values-section .axis-field {
   display: grid;
   grid-template-columns: calc(2 * var(--space-7)) minmax(0, 1fr);
   align-items: center;
   column-gap: var(--space-2);
-  margin: 0 0 var(--space-1);
+  min-width: 0;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  border: 0;
 }
 .values-section .axis-legend {
   /* A floated legend takes part in the grid like any other child. */
@@ -1972,25 +1980,98 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   font-size: var(--size-sm);
   font-weight: 500;
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 .values-section .axis-required {
   color: var(--text-muted);
   font-weight: 400;
 }
-.values-section .axis-option {
-  min-height: var(--space-5);
-  min-width: var(--space-5);
-  border-style: solid;
-}
-/* An unconfirmed default: dashed border plus the word "default" (never colour alone). */
-.values-section .axis-option.is-default {
-  border-style: dashed;
-}
+/* Unconfirmed default: second line of the label cell (the segment keeps " · default" for screen readers). */
 .values-section .axis-default-tag {
-  color: var(--text-muted);
-  font-weight: 400;
+  display: block;
+  font-size: var(--size-xs);
+  color: var(--warning);
+  font-weight: var(--weight-strong);
 }
+.values-section .axis-default-suffix {
+  color: var(--warning);
+  font-weight: var(--weight-strong);
+}
+.values-section .axis-options {
+  display: flex;
+  flex-wrap: nowrap;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.values-section .axis-option {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--surface-raised);
+  cursor: pointer;
+  user-select: none;
+}
+.values-section .axis-option + .axis-option {
+  border-left: 1px solid var(--border-strong);
+}
+.values-section .axis-option:first-child {
+  border-top-left-radius: calc(var(--radius-sm) - 1px);
+  border-bottom-left-radius: calc(var(--radius-sm) - 1px);
+}
+.values-section .axis-option:last-child {
+  border-top-right-radius: calc(var(--radius-sm) - 1px);
+  border-bottom-right-radius: calc(var(--radius-sm) - 1px);
+}
+/* The native radio stays focusable and operable; the segment is its label. It covers the
+   segment invisibly, so a pointer on the segment lands on the radio itself. */
+.values-section .axis-option input[type="radio"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.values-section .axis-option:not(:has(input:disabled)):not(:has(input:checked)):hover {
+  background: var(--surface-sunken);
+}
+.values-section .axis-option:has(input:checked) {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: var(--weight-strong);
+}
+/* An unconfirmed default: warning colours, bold text, a dashed inner outline and the "Default" tag. */
+.values-section .axis-option.is-default:has(input:checked):not(:has(input:focus-visible)) {
+  background: var(--warning-light);
+  color: var(--warning);
+  font-weight: var(--weight-strong);
+  outline: 1px dashed var(--warning);
+  outline-offset: -3px;
+}
+.values-section .axis-option:has(input:disabled):not(:has(input:checked)) {
+  color: var(--text-muted);
+  cursor: default;
+}
+.values-section .axis-option:has(input:disabled) {
+  cursor: default;
+}
+.values-section .axis-option.is-default:has(input:checked:focus-visible) {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+/* The group has no overflow clipping, so the raised focused segment shows its whole ring. */
 .values-section .axis-option:has(input:focus-visible) {
+  z-index: 1;
   outline: var(--focus-width) solid var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
@@ -2003,14 +2084,93 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 .values-section .form-hint {
   margin: var(--space-1) 0 0;
 }
+
+/* Stacked: the label moves above the control; still segmented. */
+.values-section[data-values-layout="stacked"] .axis-field {
+  grid-template-columns: minmax(0, 1fr);
+}
+.values-section[data-values-layout="stacked"] .axis-legend {
+  margin-bottom: var(--space-1);
+}
+
+/* Boxes (fallback A): one tinted box per axis, legend on top, the values as separate wrapping chips. */
+.values-section[data-values-layout="boxes"] .axis-field {
+  display: block;
+  padding: var(--space-2);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.values-section[data-values-layout="boxes"] .axis-field:has(.axis-default-suffix) {
+  border: 1px dashed var(--warning);
+}
+.values-section[data-values-layout="boxes"] .axis-legend {
+  width: 100%;
+  margin-bottom: var(--space-1);
+}
+.values-section[data-values-layout="boxes"] .axis-default-tag {
+  display: none;
+}
+.values-section[data-values-layout="boxes"] .axis-options {
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  border: 0;
+  border-radius: 0;
+}
+.values-section[data-values-layout="boxes"] .axis-option,
+.values-section[data-values-layout="boxes"] .axis-option + .axis-option {
+  flex: 0 1 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+.values-section[data-values-layout="boxes"] .axis-field > :not(legend) {
+  clear: both;
+}
+
 @media (forced-colors: active) {
-  .values-section .axis-option {
-    border: 1px solid CanvasText;
+  .values-section .axis-options,
+  .values-section .axis-option + .axis-option,
+  .values-section[data-values-layout="boxes"] .axis-option,
+  .values-section[data-values-layout="boxes"] .axis-option + .axis-option {
+    border-color: CanvasText;
   }
-  .values-section .axis-option.is-default {
-    border-style: dashed;
+  .values-section .axis-option {
+    forced-color-adjust: none;
+    background: Canvas;
+    color: CanvasText;
+  }
+  /* Hover keeps the system background; the outline alone marks it (the rule above would otherwise win). */
+  .values-section .axis-option:not(:has(input:disabled)):not(:has(input:checked)):hover {
+    background: Canvas;
+    outline: 1px solid CanvasText;
+    outline-offset: -3px;
+  }
+  .values-section .axis-option:has(input:disabled):not(:has(input:checked)) {
+    color: GrayText;
+  }
+  .values-section .axis-option:has(input:checked) {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .values-section .axis-option.is-default:has(input:checked):not(:has(input:focus-visible)),
+  .values-section .axis-option.is-default:has(input:checked:focus-visible) {
+    background: Highlight;
+    color: HighlightText;
+  }
+  .values-section .axis-option.is-default:has(input:checked):not(:has(input:focus-visible)) {
+    outline: 1px dashed CanvasText;
+  }
+  .values-section .axis-option:has(input:focus-visible) {
+    outline-color: Highlight;
+  }
+  .values-section[data-values-layout="boxes"] .axis-field {
+    border-color: CanvasText;
+  }
+  .values-section[data-values-layout="boxes"] .axis-field:has(.axis-default-suffix) {
+    border: 1px dashed CanvasText;
   }
 }
+/* End of Values block */
 
 /* <=700 px: a new mark keeps the text pane; this bar leads to the term search (spec B.5). */
 .pending-bar {

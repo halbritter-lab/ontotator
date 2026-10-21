@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnnotationPanel, type AnnotationPanelProps } from "../src/editor/AnnotationPanel";
 import { SearchManager } from "../src/editor/searchState";
 
@@ -53,8 +53,19 @@ describe("Values block", () => {
     expect(field.queryByText("unknown")).toBeNull();
   });
 
-  it("marks unconfirmed defaults with a dashed option and the word default", () => {
+  it("renders each axis as one segmented group with the label cell first", () => {
     const { container } = render(<AnnotationPanel {...props({}, ["assertion", "experiencer"])} />);
+    const field = container.querySelector<HTMLElement>('[data-axis-field="temporality"]')!;
+    expect(field.firstElementChild!.tagName).toBe("LEGEND");
+    const group = field.querySelector<HTMLElement>(".axis-options")!;
+    const segments = Array.from(group.children);
+    expect(segments).toHaveLength(4);
+    for (const segment of segments) {
+      expect(segment.tagName).toBe("LABEL");
+      expect(segment.classList.contains("axis-option")).toBe(true);
+      expect(segment.querySelector('input[type="radio"]')).not.toBeNull();
+    }
+    expect(within(field).getAllByRole("radio").map(radio => (radio as HTMLInputElement).value)).toEqual(["", "current", "historical", "future"]);
     const present = screen.getByRole("radio", { name: "Present · default" }) as HTMLInputElement;
     expect(present.checked).toBe(true);
     expect(present.closest(".axis-option")!.classList.contains("is-default")).toBe(true);
@@ -62,8 +73,83 @@ describe("Values block", () => {
     const current = screen.getByRole("radio", { name: "Current" }) as HTMLInputElement;
     expect(current.checked).toBe(true);
     expect(current.closest(".axis-option")!.classList.contains("is-default")).toBe(false);
-    expect(within(container.querySelector<HTMLElement>("[data-values-section]")!)
-      .getAllByText("Defaults are not confirmed until you confirm them or choose another value.")).toHaveLength(1);
+  });
+
+  it("shows the Default tag in the label cell and keeps ' · default' in the radio's accessible name", () => {
+    const { container } = render(<AnnotationPanel {...props({}, ["assertion", "experiencer"])} />);
+    expect(screen.getByRole("radio", { name: "Present · default" })).toBeDefined();
+    const assertion = container.querySelector<HTMLElement>('[data-axis-field="assertion"]')!;
+    expect(assertion.querySelector(".axis-legend .axis-default-tag")!.textContent).toBe("Default");
+    const segment = assertion.querySelector<HTMLElement>(".axis-option.is-default")!;
+    const hidden = segment.querySelector(".visually-hidden")!;
+    expect(hidden.textContent).toBe(" · default");
+    expect(Array.from(segment.querySelectorAll("span:not(.visually-hidden)")).map(span => span.textContent)).toEqual(["Present"]);
+    expect(container.querySelector('[data-axis-field="temporality"] .axis-default-tag')).toBeNull();
+    expect(container.querySelectorAll(".axis-default-tag")).toHaveLength(2);
+  });
+
+  it("shows the editable hint with Kbd D", () => {
+    const { container } = render(<AnnotationPanel {...props({ onConfirmDefaults: vi.fn() })} />);
+    const section = container.querySelector<HTMLElement>("[data-values-section]")!;
+    const hint = section.querySelector<HTMLElement>(".form-hint")!;
+    expect(hint.textContent).toBe("Highlighted values are defaults. Press D to confirm them, or choose another value.");
+    expect(hint.querySelector("kbd")!.textContent).toBe("D");
+    expect(screen.queryByText(/Defaults are not confirmed/)).toBeNull();
+    // "Confirm defaults (n)" stays above the hint.
+    const button = screen.getByRole("button", { name: "Confirm defaults (3)" });
+    expect(button.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows the read-only hint without a key or button", () => {
+    const { container } = render(<AnnotationPanel {...props({ readOnly: true, onConfirmDefaults: vi.fn() })} />);
+    const hint = container.querySelector<HTMLElement>("[data-values-section] .form-hint")!;
+    expect(hint.textContent).toBe("Highlighted values are defaults that were not confirmed.");
+    expect(hint.querySelector("kbd")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Confirm defaults/ })).toBeNull();
+    expect(container.querySelectorAll(".axis-default-tag")).toHaveLength(3);
+  });
+
+  it("keeps an unavailable stored value as the last disabled chosen segment", () => {
+    const base = props({}, []);
+    base.annotation!.annotation.axes_values = { assertion: "unknown", experiencer: "patient", temporality: "current" };
+    const { container } = render(<AnnotationPanel {...base} />);
+    const group = container.querySelector<HTMLElement>('[data-axis-field="assertion"] .axis-options')!;
+    const last = group.lastElementChild as HTMLElement;
+    expect(group.children).toHaveLength(4);
+    expect(last.textContent).toBe("unknown (current unavailable value)");
+    const radio = within(last).getByRole("radio") as HTMLInputElement;
+    expect(radio.checked).toBe(true);
+    expect(radio.disabled).toBe(true);
+  });
+
+  it("renders a one-option axis as a one-segment radio group", () => {
+    const config = [{ id: "assertion", label: "Assertion", options: ["present"], allow_empty: false }];
+    const { container } = render(<AnnotationPanel {...props({ axesConfig: config }, [])} />);
+    const field = screen.getByRole("group", { name: /Assertion/ });
+    expect(field.querySelectorAll(".axis-options > .axis-option")).toHaveLength(1);
+    expect((within(field).getByRole("radio", { name: "Present" }) as HTMLInputElement).checked).toBe(true);
+    expect(container.querySelector("select")).toBeNull();
+  });
+
+  it("keeps the Select with ' · default' for more than four options and shows the Default tag", () => {
+    const config = axesConfig.map(axis => axis.id === "experiencer"
+      ? { ...axis, options: ["patient", "family_member", "other", "unknown"] } : axis);
+    const { container } = render(<AnnotationPanel {...props({ axesConfig: config }, ["experiencer"])} />);
+    const field = container.querySelector<HTMLElement>('[data-axis-field="experiencer"]')!;
+    expect(field.querySelector(".axis-options")).toBeNull();
+    expect(within(field).getByRole("option", { name: "Patient · default" })).toBeDefined();
+    expect(field.querySelector(".axis-legend .axis-default-tag")!.textContent).toBe("Default");
+  });
+
+  it("a required axis without a value shows no chosen segment and no Default tag", () => {
+    const base = props({}, ["assertion"]);
+    base.annotation!.annotation.axes_values = { assertion: null, experiencer: "patient", temporality: "current" };
+    const { container } = render(<AnnotationPanel {...base} />);
+    const field = container.querySelector<HTMLElement>('[data-axis-field="assertion"]')!;
+    expect(within(field).getAllByRole("radio").some(radio => (radio as HTMLInputElement).checked)).toBe(false);
+    expect(field.querySelector("legend")!.textContent).toContain("(required)");
+    expect(field.querySelector(".axis-default-tag")).toBeNull();
+    expect(field.textContent).not.toContain(" · default");
   });
 
   it("Confirm defaults (n) calls onConfirmDefaults with every defaulted axis that has an available value", () => {
@@ -141,9 +227,125 @@ describe("Values block", () => {
   it("hides Confirm defaults when nothing is defaulted or read-only", () => {
     const { unmount } = render(<AnnotationPanel {...props({ onConfirmDefaults: vi.fn() }, [])} />);
     expect(screen.queryByRole("button", { name: /Confirm defaults/ })).toBeNull();
-    expect(screen.queryByText(/Defaults are not confirmed/)).toBeNull();
+    expect(screen.queryByText(/Highlighted values are defaults/)).toBeNull();
     unmount();
     render(<AnnotationPanel {...props({ onConfirmDefaults: vi.fn(), readOnly: true })} />);
     expect(screen.queryByRole("button", { name: /Confirm defaults/ })).toBeNull();
+  });
+});
+
+describe("Values block layout", () => {
+  const geometry = { section: 600, label: 40, span: 40, padding: 0 };
+  const observers: ResizeObserverCallback[] = [];
+  const getComputedStyleOriginal = window.getComputedStyle;
+
+  beforeEach(() => {
+    Object.assign(geometry, { section: 600, label: 40, span: 40, padding: 0 });
+    observers.length = 0;
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) { observers.push(callback); }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get(this: HTMLElement) { return this.matches("[data-values-section]") ? geometry.section : 0; },
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.matches(".axis-option")) return geometry.label;
+        if (this.matches(".axis-option > span:not(.visually-hidden)")) return geometry.span;
+        return 0;
+      },
+    });
+    vi.spyOn(window, "getComputedStyle").mockImplementation((element: Element, pseudo?: string | null) => {
+      const style = getComputedStyleOriginal(element, pseudo);
+      if (element.matches(".axis-option")) {
+        style.paddingLeft = `${geometry.padding}px`;
+        style.paddingRight = `${geometry.padding}px`;
+      }
+      return style;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    delete (HTMLElement.prototype as any).clientWidth;
+    delete (HTMLElement.prototype as any).scrollWidth;
+  });
+
+  const resize = (section: number) => {
+    geometry.section = section;
+    act(() => { for (const callback of observers) callback([], {} as ResizeObserver); });
+  };
+  const layoutOf = (container: HTMLElement) => container.querySelector("[data-values-section]")!.getAttribute("data-values-layout");
+
+  it("writes data-values-layout on the section and keeps selection and focus when it changes", () => {
+    const { container } = render(<AnnotationPanel {...props({}, ["assertion", "experiencer"])} />);
+    expect(layoutOf(container)).toBe("row");
+    const present = screen.getByRole("radio", { name: "Present · default" }) as HTMLInputElement;
+    present.focus();
+    // Widest control: four segments of 40 px plus 5 px outline and separators = 165 px.
+    resize(260);
+    expect(layoutOf(container)).toBe("stacked");
+    resize(100);
+    expect(layoutOf(container)).toBe("boxes");
+    expect((screen.getByRole("radio", { name: "Present · default" }) as HTMLInputElement).checked).toBe(true);
+    expect(document.activeElement).toBe(present);
+    expect((screen.getByRole("radio", { name: "Current" }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("measures the inner span plus padding, not the stretched segment", () => {
+    const config = [{ id: "assertion", label: "Assertion", options: ["present"], allow_empty: false }];
+    Object.assign(geometry, { label: 200, span: 60, padding: 8 });
+    // Required: 60 + 8 + 8 + 2 = 78 px. Row cell = section − 96 − 8.
+    geometry.section = 182;
+    const { container } = render(<AnnotationPanel {...props({ axesConfig: config }, [])} />);
+    expect(layoutOf(container)).toBe("row");
+    resize(181);
+    expect(layoutOf(container)).toBe("stacked");
+    resize(190);
+    expect(layoutOf(container)).toBe("row");
+  });
+
+  it("in boxes the legend shows ' · default, not confirmed' and hides the Default tag", () => {
+    const { container } = render(<AnnotationPanel {...props({}, ["assertion", "experiencer"])} />);
+    expect(container.querySelector(".axis-default-suffix")).toBeNull();
+    resize(100);
+    expect(layoutOf(container)).toBe("boxes");
+    const assertion = container.querySelector<HTMLElement>('[data-axis-field="assertion"] .axis-legend')!;
+    expect(assertion.querySelector(".axis-default-suffix")!.textContent).toBe(" · default, not confirmed");
+    expect(container.querySelector('[data-axis-field="temporality"] .axis-default-suffix')).toBeNull();
+    expect(container.querySelector(".axis-default-tag")).toBeNull();
+    expect(screen.getByRole("radio", { name: "Present · default" })).toBeDefined();
+  });
+
+  it("re-measures when the selection changes, so a value that turns bold is measured bold", () => {
+    const config = [{ id: "assertion", label: "Assertion", options: ["present", "absent"], allow_empty: false }];
+    // A checked segment is bold and wider: present 60 px, absent 80 px; unchecked 50 px.
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (!this.matches(".axis-option > span:not(.visually-hidden)")) return 0;
+        const checked = this.parentElement!.querySelector<HTMLInputElement>("input")!.checked;
+        return !checked ? 50 : this.textContent === "Absent" ? 80 : 60;
+      },
+    });
+    // Present selected: 60 + 50 + 3 = 113 px fits the row cell (217 − 96 − 8).
+    geometry.section = 217;
+    const { container } = render(<AnnotationPanel {...props({ axesConfig: config }, [])} />);
+    expect(layoutOf(container)).toBe("row");
+    // Absent selected: 50 + 80 + 3 = 133 px no longer fits the row cell, without any resize.
+    fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
+    expect(layoutOf(container)).toBe("stacked");
+  });
+
+  it("does not switch while the section has no width", () => {
+    geometry.section = 0;
+    const { container } = render(<AnnotationPanel {...props()} />);
+    expect(layoutOf(container)).toBe("row");
   });
 });

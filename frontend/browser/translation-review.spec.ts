@@ -1,3 +1,6 @@
+import { mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
 import { authenticatedRequest, loginExisting, TEST_PASSWORD } from './helpers';
@@ -89,6 +92,35 @@ async function alignAt(surface: Locator, index: number) {
 async function markerDistance(surface: Locator, index: number) {
   return await surface.evaluate((el, index) => Math.abs(el.querySelector(`[data-paragraph="${index}"]`)!.getBoundingClientRect().top - el.getBoundingClientRect().top - el.clientTop), index);
 }
+/** Signed offset of a paragraph start inside its pane's scrollport (negative: above the visible area). */
+async function markerOffset(surface: Locator, index: number) {
+  return await surface.evaluate((el, index) => el.querySelector(`[data-paragraph="${index}"]`)!.getBoundingClientRect().top - el.getBoundingClientRect().top - el.clientTop, index);
+}
+/** "Show matching paragraph" places the target paragraph at the anchor's offset, or at the 12 px inset when the anchor starts above the view. */
+async function matchedWithin(anchor: Locator, follower: Locator, index: number) {
+  const offset = await markerOffset(anchor, index);
+  return Math.abs(await markerOffset(follower, index) - (offset >= 0 ? offset : 12));
+}
+/** Focuses the translation without scrolling and puts the caret at a UTF-16 index found from a needle. */
+async function placeCaret(page: Page, needle: string, delta = 0) {
+  return await target(page).evaluate((el, [needle, delta]) => {
+    const input = el as HTMLTextAreaElement, index = input.value.indexOf(needle as string) + (delta as number);
+    input.focus({ preventScroll: true }); input.setSelectionRange(index, index); return index;
+  }, [needle, delta] as const);
+}
+const caretState = (page: Page) => target(page).evaluate(el => {
+  const input = el as HTMLTextAreaElement;
+  return { selection: [input.selectionStart, input.selectionEnd], scrollTop: input.closest<HTMLElement>('.translation-editor')!.scrollTop };
+});
+const evidenceDir = () => resolve(test.info().config.rootDir, '../../build/editor-axes-scroll/evidence');
+async function evidence(page: Page, name: string) {
+  mkdirSync(evidenceDir(), { recursive: true });
+  await page.screenshot({ path: resolve(evidenceDir(), `${name}.png`), fullPage: false });
+}
+const couplingNote = 'Paragraphs are paired by position, not by meaning. Merged or split paragraphs shift the pairing.';
+const couplingEditingNote = 'While you edit, only the other texts follow your translation.';
+const matchStatus = (page: Page) => review(page).locator('.translation-column-head span.review-sr-only[role="status"]');
+const matchButton = (page: Page) => page.getByRole('button', { name: 'Show matching paragraph', exact: true });
 
 test('lead assigns the exact pending translation; ordinary reviewer corrects, submits, reloads readonly and lead reopens immutable history', async ({ page, browser }) => {
   const s = await scenario(page);
@@ -259,7 +291,7 @@ test('live qualification refusal retains inputs and the guarded profile link flu
     expected_revision: current.draft.revision, text: current.draft.text, form: current.draft.form,
   }); expect(changed.ok()).toBeTruthy();
   const localOnly = `${latest}\nKeep conflicted input.`; await target(page).fill(localOnly);
-  await expect(review(page).getByRole('status')).toHaveText('Conflict: reload');
+  await expect(review(page).locator('.translation-save-status')).toHaveText('Conflict: reload');
   await section(page, 'My tasks');
   const leave = page.getByRole('dialog', { name: 'Changes not saved', exact: true });
   await leave.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -333,13 +365,15 @@ for (const width of [1280, 1024, 600]) test(`review source, the one editable tra
     const mirror = el.querySelector('.translation-editor-mirror')!, input = el.querySelector('textarea')!;
     return Math.abs(mirror.getBoundingClientRect().height - input.getBoundingClientRect().height) <= 1 && input.scrollHeight <= input.clientHeight + 1;
   })).toBe(true);
-  // Coupling is offered only where it works: not beside the editable translation.
-  await expect(page.getByRole('checkbox', {name:'Couple scrolling',exact:true})).toHaveCount(0);
+  // Coupling is offered wherever the texts sit side by side, also beside the editable translation; it starts off.
+  const couple = page.getByRole('checkbox', { name: 'Couple scrolling', exact: true });
+  if (width >= 700) { await expect(couple).toBeVisible(); await expect(couple).not.toBeChecked(); }
+  else await expect(couple).toHaveCount(0);
   if (width >= 1100) {
     const initial = await editor.evaluate(el=>el.scrollTop); await alignAt(source,2); expect(await editor.evaluate(el=>el.scrollTop)).toBe(initial);
     await showChanges.check(); await expect(diff).toHaveText(s.texts.target);
     await page.getByRole('checkbox', {name:'Couple scrolling',exact:true}).check();
-    await expect(page.getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toBeVisible();
+    await expect(page.getByText(couplingNote,{exact:true})).toBeVisible();
     await alignAt(source, 3); await alignAt(source, 2); await expect.poll(() => markerDistance(diff, 2)).toBeLessThanOrEqual(20);
     await alignAt(diff, 8); await expect.poll(() => markerDistance(comparison, 9)).toBeLessThanOrEqual(20);
   } else {
@@ -378,12 +412,13 @@ test('three reading panes preserve positional progress and reject delayed feedba
   const s=await response.json() as Scenario; await openReview(page,s); await page.evaluate(()=>document.fonts.ready);
   const box=page.getByRole('checkbox',{name:'Couple scrolling',exact:true}),show=page.getByRole('checkbox',{name:'Show changes',exact:true});
   const source=page.getByRole('region',{name:'Source (en)',exact:true}),diff=page.getByRole('region',{name:'Text changes',exact:true}),comparison=page.getByRole('region',{name:'Comparison',exact:true});
-  await expect(box).toHaveCount(0);
+  // Offered beside the editable translation, off by default.
+  await expect(box).not.toBeChecked();
   await target(page).evaluate(el=>{(el as HTMLTextAreaElement).setSelectionRange(8,15);});
   await source.dispatchEvent('wheel'); await alignAt(source,1);
   expect(await target(page).evaluate(el=>[(el as HTMLTextAreaElement).selectionStart,(el as HTMLTextAreaElement).selectionEnd])).toEqual([8,15]);
   await show.check(); await box.check();
-  await expect(page.getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toBeVisible();
+  await expect(page.getByText(couplingNote,{exact:true})).toBeVisible();
   for(const leader of [source,diff,comparison]) {
     for(const fraction of [0.25,0.5,0.75]) {
       await leader.dispatchEvent('wheel');
@@ -397,15 +432,140 @@ test('three reading panes preserve positional progress and reject delayed feedba
       await expect(page.getByLabel('Paragraph pairing')).toHaveText('Source paragraph 2 ↔ Translation paragraph 2 ↔ Comparison paragraph 2');
     }
   }
+  // Texts side by side down to 700 px keep coupling; below, the texts stack and it is hidden, the request kept.
   await page.setViewportSize({width:1024,height:900});
+  await expect(box).toBeChecked(); await expect(page.getByRole('status',{name:'Paragraph pairing'})).toBeVisible();
+  await page.setViewportSize({width:600,height:900});
   await expect(box).toHaveCount(0);
   await expect(page.getByRole('status',{name:'Paragraph pairing'})).toHaveCount(0);
-  await expect(page.getByText('Paragraphs are paired by position, not by meaning',{exact:true})).toHaveCount(0);
-  await page.screenshot({path:test.info().outputPath('coupling-unavailable-1024.png')});
+  await expect(page.getByText(couplingNote,{exact:true})).toHaveCount(0);
+  await page.screenshot({path:test.info().outputPath('coupling-unavailable-600.png')});
   await page.setViewportSize({width:1280,height:900});
   await expect(box).toBeEnabled(); await expect(box).toBeChecked();
   await expect(page.getByRole('status',{name:'Paragraph pairing'})).toBeVisible();
-  await show.uncheck(); await expect(box).toHaveCount(0);
+  // The request survives Show changes and edits; the editing note appears only beside the editable translation.
+  await show.uncheck(); await expect(box).toBeChecked(); await expect(page.getByText(couplingEditingNote,{exact:true})).toBeVisible();
   await target(page).fill(s.texts.target+' Native correction.'); await expect(target(page)).toHaveValue(s.texts.target+' Native correction.');
-  await show.check(); await expect(box).not.toBeChecked();
+  await expect(box).toBeChecked();
+  await show.check(); await expect(box).toBeChecked(); await expect(page.getByText(couplingEditingNote,{exact:true})).toHaveCount(0);
+});
+
+for (const [w, h] of [[1440, 900], [800, 900]] as const) test(`coupling while editing at ${w}px`, async ({ page }) => {
+  await page.setViewportSize({ width: w, height: h }); const s = await scenario(page, 'target'); await openReview(page, s);
+  await page.evaluate(() => document.fonts.ready);
+  const source = page.getByRole('region', { name: 'Source (en)', exact: true }), editor = page.locator('.translation-editor');
+  const box = page.getByRole('checkbox', { name: 'Couple scrolling', exact: true });
+  await expect(box).not.toBeChecked(); await box.check();
+  await expect(page.getByText(couplingNote, { exact: true })).toBeVisible();
+  await expect(page.getByText(couplingEditingNote, { exact: true })).toBeVisible();
+  // Type a word and a new paragraph at the end of paragraph 3.
+  await alignAt(editor, 2);
+  const caret = await placeCaret(page, '\n\nAbsatz 4.');
+  const typed = ' Ergänzung\n\nNeuer Satz.';
+  await page.keyboard.type(typed);
+  const afterTyping = await caretState(page);
+  expect(afterTyping.selection).toEqual([caret + typed.length, caret + typed.length]);
+  // The recompute (300 ms after the last edit) changes neither the caret nor the translation's scroll position.
+  await page.waitForTimeout(400);
+  expect(await caretState(page)).toEqual(afterTyping);
+  await expect(page.getByText('Your edits changed the number of paragraphs (14 → 15). Pairing after that point may be off.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Paragraphs differ (source 14, translation 15); the other text may show a neighbouring paragraph.', { exact: true })).toBeVisible();
+  // With every note shown, the notes sit below the panes: the translation pane starts level with the source pane.
+  {
+    const sourceTop = (await source.boundingBox())!.y, editorTop = (await editor.boundingBox())!.y;
+    expect(Math.abs(editorTop - sourceTop)).toBeLessThanOrEqual(50);
+  }
+  await expect(target(page)).toBeFocused();
+  // A real wheel on the translation moves the source; the source follows the paired paragraph.
+  const sourceBefore = await source.evaluate(el => el.scrollTop);
+  const editorBox = (await editor.boundingBox())!;
+  await page.mouse.move(editorBox.x + editorBox.width / 2, editorBox.y + editorBox.height / 2); await page.mouse.wheel(0, 400);
+  await expect.poll(() => source.evaluate(el => el.scrollTop)).not.toBe(sourceBefore);
+  await alignAt(editor, 1); await expect.poll(() => markerDistance(source, 1)).toBeLessThanOrEqual(20);
+  // A wheel on the source moves only the source.
+  const fixed = await caretState(page), sourceTop = await source.evaluate(el => el.scrollTop);
+  const sourceBox = (await source.boundingBox())!;
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2); await page.mouse.wheel(0, 500);
+  await expect.poll(() => source.evaluate(el => el.scrollTop)).not.toBe(sourceTop);
+  await page.waitForTimeout(250);
+  expect(await caretState(page)).toEqual(fixed);
+  // Deleting one blank line merges two paragraphs; the count notes follow the recompute.
+  await alignAt(editor, 8); await placeCaret(page, '\n\nAbsatz 9.', 2); await page.keyboard.press('Backspace');
+  await expect(page.getByText(/^Your edits changed the number of paragraphs/)).toHaveCount(0);
+  await alignAt(editor, 9); await placeCaret(page, '\n\nAbsatz 11.', 2); await page.keyboard.press('Backspace');
+  await expect(page.getByText('Your edits changed the number of paragraphs (14 → 13). Pairing after that point may be off.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Paragraphs differ (source 14, translation 13); the other text may show a neighbouring paragraph.', { exact: true })).toBeVisible();
+  await expect(box).toBeChecked();
+  await evidence(page, `20-coupled-editing-${w}`);
+});
+
+test('Show matching paragraph from the caret and from a source click', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 }); const s = await scenario(page, 'target'); await openReview(page, s);
+  await page.evaluate(() => document.fonts.ready);
+  const source = page.getByRole('region', { name: 'Source (en)', exact: true }), editor = page.locator('.translation-editor');
+  const comparison = page.getByRole('region', { name: 'Comparison', exact: true });
+  await expect(matchButton(page)).toHaveCount(1);
+  await expect(matchButton(page)).toHaveAttribute('title', 'Scroll the other text to the paragraph paired with the one at your cursor or the one you clicked.');
+  // From the caret in paragraph 6, with the paragraph a little below the translation's top.
+  await alignAt(editor, 5); await editor.evaluate(el => { el.scrollTop -= 100; });
+  const caret = await placeCaret(page, 'Absatz 6.', 20);
+  await matchButton(page).click();
+  await expect(target(page)).toBeFocused();
+  await expect.poll(() => matchedWithin(editor, source, 5)).toBeLessThanOrEqual(4);
+  await expect.poll(() => matchedWithin(editor, comparison, 5)).toBeLessThanOrEqual(4);
+  await expect(matchStatus(page)).toHaveText('Source paragraph 6 and comparison paragraph 6 are shown next to translation paragraph 6.');
+  expect((await caretState(page)).selection).toEqual([caret, caret]);
+  // From a click into source paragraph 9.
+  await alignAt(source, 8); await source.evaluate(el => { el.scrollTop -= 80; });
+  const y = await source.evaluate(el => el.querySelector('[data-paragraph="8"]')!.getBoundingClientRect().top + 20);
+  const sourceBox = (await source.boundingBox())!;
+  await page.mouse.click(sourceBox.x + 120, y);
+  await matchButton(page).click();
+  await expect.poll(() => matchedWithin(source, editor, 8)).toBeLessThanOrEqual(4);
+  await expect.poll(() => matchedWithin(source, comparison, 8)).toBeLessThanOrEqual(4);
+  await expect(matchStatus(page)).toHaveText('Translation paragraph 9 and comparison paragraph 9 are shown next to source paragraph 9.');
+  expect((await caretState(page)).selection).toEqual([caret, caret]);
+  // Alt+M from the textarea does the same and types no character.
+  const value = await target(page).inputValue();
+  await alignAt(editor, 10); await editor.evaluate(el => { el.scrollTop -= 60; });
+  const altCaret = await placeCaret(page, 'Absatz 11.', 10);
+  await page.keyboard.press('Alt+KeyM');
+  await expect.poll(() => matchedWithin(editor, source, 10)).toBeLessThanOrEqual(4);
+  await expect(matchStatus(page)).toHaveText('Source paragraph 11 and comparison paragraph 11 are shown next to translation paragraph 11.');
+  await expect(target(page)).toHaveValue(value); await expect(target(page)).toBeFocused();
+  expect((await caretState(page)).selection).toEqual([altCaret, altCaret]);
+});
+
+test('390x844: checkbox hidden, action works', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 }); const s = await scenario(page, 'target'); await openReview(page, s);
+  await page.evaluate(() => document.fonts.ready);
+  const source = page.getByRole('region', { name: 'Source (en)', exact: true });
+  await expect(page.getByRole('checkbox', { name: 'Couple scrolling', exact: true })).toHaveCount(0);
+  await expect(matchButton(page)).toHaveCount(1);
+  const value = await target(page).inputValue();
+  // The caret's paragraph is in view inside the stacked translation pane.
+  const editor = page.locator('.translation-editor');
+  await editor.scrollIntoViewIfNeeded(); await alignAt(editor, 7); await editor.evaluate(el => { el.scrollTop -= 40; });
+  const caret = await placeCaret(page, 'Absatz 8.', 10);
+  await page.keyboard.press('Alt+KeyM');
+  await expect(matchStatus(page)).toHaveText('Source paragraph 8 and comparison paragraph 8 are shown next to translation paragraph 8.');
+  // Paragraph markers are empty spans, so "in view" is checked on the marker position: inside the source pane and the window.
+  await expect(source).toBeInViewport();
+  await expect.poll(() => source.evaluate(el => {
+    const top = el.querySelector('[data-paragraph="7"]')!.getBoundingClientRect().top, pane = el.getBoundingClientRect();
+    return top >= Math.max(0, pane.top) && top < Math.min(window.innerHeight, pane.bottom);
+  })).toBe(true);
+  await expect(target(page)).toHaveValue(value); await expect(target(page)).toBeFocused();
+  expect((await caretState(page)).selection).toEqual([caret, caret]);
+  await evidence(page, '21-narrow-action');
+});
+
+test('axe has no violations in the column head with coupling on', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 }); const s = await scenario(page, 'target'); await openReview(page, s);
+  await page.getByRole('checkbox', { name: 'Couple scrolling', exact: true }).check();
+  await expect(page.getByText(couplingEditingNote, { exact: true })).toBeVisible();
+  await placeCaret(page, 'Absatz 3.', 5); await page.keyboard.press('Alt+KeyM');
+  await expect(matchStatus(page)).not.toHaveText('');
+  const results = await new AxeBuilder({ page }).include('.translation-column-head').include('.translation-column-hint').analyze();
+  expect(results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(' ')}: ${n.failureSummary ?? ''}`))).toEqual([]);
 });

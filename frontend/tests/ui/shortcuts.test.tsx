@@ -40,6 +40,18 @@ it("letters_are_case_insensitive_and_shift_is_ignored_for_characters", () => {
   expect(matches("?", new KeyboardEvent("keydown", { key: "/", shiftKey: true }))).toBe(false);
 });
 
+it("alt_letter_bindings_fall_back_to_event_code", () => {
+  // macOS Option+M yields "µ"; the physical key code still names the letter.
+  expect(matches("Alt+M", new KeyboardEvent("keydown", { altKey: true, key: "µ", code: "KeyM" }))).toBe(true);
+  expect(matches("Alt+M", new KeyboardEvent("keydown", { altKey: true, key: "µ", code: "KeyN" }))).toBe(false);
+  expect(matches("Alt+M", new KeyboardEvent("keydown", { altKey: true, key: "m", code: "KeyM" }))).toBe(true);
+  expect(matches("Alt+M", new KeyboardEvent("keydown", { key: "µ", code: "KeyM" }))).toBe(false);
+  // Plain letter bindings never use the code: another layout's letter on that key is a different key.
+  expect(matches("m", new KeyboardEvent("keydown", { key: "µ", code: "KeyM" }))).toBe(false);
+  expect(matches("m", new KeyboardEvent("keydown", { key: ",", code: "KeyM" }))).toBe(false);
+  expect(matches("Ctrl+m", new KeyboardEvent("keydown", { key: "µ", code: "KeyM", ctrlKey: true }))).toBe(false);
+});
+
 it("named_control_keys_require_exact_shift_and_key_names", () => {
   expect(matches("Escape", new KeyboardEvent("keydown", { key: "Escape" }))).toBe(true);
   expect(matches("Escape", new KeyboardEvent("keydown", { key: "Escape", shiftKey: true }))).toBe(false);

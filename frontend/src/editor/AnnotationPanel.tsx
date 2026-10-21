@@ -17,6 +17,7 @@ import { axisOptionLabel } from "./axisLabels";
 import { InlineMessage } from "../ui/InlineMessage";
 import { Kbd } from "../ui/Kbd";
 import { useCoalescedAxisChange } from "./useCoalescedAxisChange";
+import { useValuesLayout } from "./valuesLayout";
 
 export type AxesValues = Record<string, string | null>;
 export type Axes = AxesValues;
@@ -126,6 +127,15 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   const savedAxes: AxesValues = annotation?.annotation.axes_values ?? (annotation?.annotation as any)?.axes?.values ?? {};
   const axes = useCoalescedAxisChange(savedAxes, values => onUpdateAxes(values));
   const axesFlush = axes.flush;
+  // Fit rule (spec 1.4): re-measured when the axes, an unavailable stored value or the selection change.
+  const valuesSection = useRef<HTMLElement>(null);
+  const unavailableKey = (axesConfig ?? []).map(axis => {
+    const value = axes.values[axis.id];
+    return typeof value === "string" && value !== "" && !axis.options.includes(value) ? value : "";
+  }).join("|");
+  // The selected segment is bold and so wider: a selection change is re-measured too (hysteresis prevents flicker).
+  const selectedKey = (axesConfig ?? []).map(axis => String(axes.values[axis.id] ?? "")).join("|");
+  const valuesLayout = useValuesLayout(valuesSection, [axesConfig, unavailableKey, selectedKey]);
   useEffect(() => {
     if (!axesFlushRef) return;
     axesFlushRef.current = axesFlush;
@@ -264,7 +274,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
 
       {/* 2. Values (hidden if the type has no axes) */}
       {axesConfig && axesConfig.length > 0 && (
-        <section className="detail-section values-section" data-values-section data-testid="axes-section" tabIndex={-1}
+        <section ref={valuesSection} className="detail-section values-section" data-values-section data-testid="axes-section" tabIndex={-1}
+          data-values-layout={valuesLayout}
           aria-labelledby={valuesHeadingId} aria-keyshortcuts={readOnly ? undefined : "v"}
           onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) axes.flush(); }}>
           <h3 id={valuesHeadingId}>Values{!readOnly && <span aria-hidden="true"> <Kbd>V</Kbd></span>}</h3>
@@ -289,6 +300,9 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               <fieldset key={axis.id} className="axis-field" data-axis-field={axis.id}>
                 <legend className="axis-legend">
                   {axis.label}{isRequired && <span className="axis-required"> (required)</span>}
+                  {unconfirmed && (valuesLayout === "boxes"
+                    ? <span className="axis-default-suffix"> · default, not confirmed</span>
+                    : <>{" "}<span className="axis-default-tag">Default</span></>)}
                 </legend>
                 {options.length <= 4 ? (
                   <div className="axis-options">
@@ -302,7 +316,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                             disabled={readOnly || (unavailable && option.value === val)}
                             onKeyDown={event => { if (event.key.startsWith("Arrow")) arrowChange.current = true; }}
                             onChange={() => updateAxis(option.value)} />
-                          <span>{option.label}</span>{isDefault && <span className="axis-default-tag"> · default</span>}
+                          <span>{option.label}</span>{isDefault && <span className="visually-hidden"> · default</span>}
                         </label>
                       );
                     })}
@@ -325,9 +339,9 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               Confirm defaults ({confirmableDefaults.length})<span aria-hidden="true"> <Kbd>D</Kbd></span>
             </Button>
           )}
-          {confirmableDefaults.length > 0 && (
-            <p className="form-hint">Defaults are not confirmed until you confirm them or choose another value.</p>
-          )}
+          {confirmableDefaults.length > 0 && (!readOnly && onConfirmDefaults
+            ? <p className="form-hint">Highlighted values are defaults. Press <Kbd>D</Kbd> to confirm them, or choose another value.</p>
+            : <p className="form-hint">Highlighted values are defaults that were not confirmed.</p>)}
           {valuesError && <InlineMessage tone="error">{valuesError}</InlineMessage>}
         </section>
       )}

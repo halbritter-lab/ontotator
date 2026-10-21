@@ -119,7 +119,11 @@ export function matches(binding: string, event: KeyboardEvent): boolean {
   }
   if (event.altKey !== modifiers.has("Alt") || event.ctrlKey !== modifiers.has("Ctrl") ||
       event.metaKey !== modifiers.has("Meta")) return false;
-  if ([...key].length === 1) return key.toLowerCase() === event.key.toLowerCase();
+  if ([...key].length === 1) {
+    if (key.toLowerCase() === event.key.toLowerCase()) return true;
+    // macOS Option+letter types another character (Option+M gives "µ"); Alt letter bindings use the physical key.
+    return modifiers.has("Alt") && /^[a-z]$/i.test(key) && event.code === `Key${key.toUpperCase()}`;
+  }
   return key === event.key && event.shiftKey === modifiers.has("Shift");
 }
 

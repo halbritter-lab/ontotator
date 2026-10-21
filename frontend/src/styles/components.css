@@ -66,54 +66,6 @@
   color: var(--text);
 }
 
-.axis-field {
-  border: 0;
-  padding: 0;
-  min-width: 0;
-}
-
-.axis-options {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.axis-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: 9999px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text);
-  background: var(--surface-raised);
-  transition: all 0.15s ease;
-  user-select: none;
-}
-
-.axis-option input[type="radio"] {
-  width: 13px;
-  height: 13px;
-  margin: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-.axis-option:hover {
-  border-color: var(--accent);
-  background: var(--surface);
-}
-
-.axis-option:has(input:checked) {
-  border-color: var(--accent);
-  background: var(--accent-light);
-  color: var(--accent);
-  font-weight: 600;
-}
-
 .form-control,
 .form-select {
   width: 100%;
@@ -424,24 +376,6 @@ textarea.form-control {
 .form-select:focus {
   border-color: var(--focus-ring);
   box-shadow: 0 0 0 1px var(--focus-ring);
-}
-
-.axis-option {
-  font-size: var(--size-sm);
-  border-color: var(--border);
-  background: transparent;
-  border-radius: var(--radius-sm);
-}
-
-.axis-option:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-sunken);
-}
-
-.axis-option:has(input:checked) {
-  border-color: var(--accent);
-  background: var(--accent-light);
-  color: var(--accent);
 }
 
 .modal-overlay {

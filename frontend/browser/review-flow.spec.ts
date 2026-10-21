@@ -131,7 +131,8 @@ test("1440×900: both texts show at least 15 lines and the rail shows four decis
   await expect(crumb).toHaveText("failed-translation · Translation review (de)");
   await expect(crumb).toHaveAttribute("title", `Assignment ${s.assignments["failed-translation"]}`);
   await expect(page.getByRole("link", { name: "Back to my tasks", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("checkbox", { name: "Couple scrolling", exact: true })).toHaveCount(0);
+  // Coupling is offered beside the editable translation too, unchecked by default.
+  await expect(page.getByRole("checkbox", { name: "Couple scrolling", exact: true })).not.toBeChecked();
   await expect(page.getByText("Coupled scrolling is available in read-only views.")).toHaveCount(0);
   // The rail's Submit is unavailable with its reason next to it; activating it moves focus to the reason.
   await expect(submitButton(page)).toHaveAttribute("aria-disabled", "true");

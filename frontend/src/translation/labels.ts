@@ -197,3 +197,30 @@ export function formatReviewDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : dateTime.format(date);
 }
+
+/** Coupled scrolling notes (editor-axes-and-coupled-scroll spec 2.6). */
+export const couplingNote = "Paragraphs are paired by position, not by meaning. Merged or split paragraphs shift the pairing.";
+export const couplingEditingNote = "While you edit, only the other texts follow your translation.";
+export function paragraphCountsDiffer(source: number, translation: number): string {
+  return `Paragraphs differ (source ${source}, translation ${translation}); the other text may show a neighbouring paragraph.`;
+}
+export function comparisonCountsDiffer(translation: number, comparison: number): string {
+  return `Paragraphs differ (translation ${translation}, comparison ${comparison}); the other text may show a neighbouring paragraph.`;
+}
+export function paragraphCountChanged(before: number, after: number): string {
+  return `Your edits changed the number of paragraphs (${before} → ${after}). Pairing after that point may be off.`;
+}
+export const showMatchingLabel = "Show matching paragraph";
+export const showMatchingTitle = "Scroll the other text to the paragraph paired with the one at your cursor or the one you clicked.";
+export const showMatchingShortcut = "Show the paragraph paired with the one at your cursor";
+const paneWords: Record<string, string> = { source: "source", target: "translation", comparison: "comparison" };
+/**
+ * Result of "Show matching paragraph" for the polite status (spec 2.6), e.g. "Source paragraph 4 is shown next to
+ * translation paragraph 4."; several shown panes are joined with "and". Paragraph numbers are zero-based here.
+ */
+export function matchingParagraphStatus(anchor: { paneId: string; paragraph: number }, shown: ReadonlyArray<{ paneId: string; paragraph: number }>, estimate: boolean): string {
+  const phrase = ({ paneId, paragraph }: { paneId: string; paragraph: number }) => `${paneWords[paneId] ?? paneId} paragraph ${paragraph + 1}`;
+  const list = shown.map(phrase).join(" and ");
+  const sentence = `${list.charAt(0).toUpperCase()}${list.slice(1)} ${shown.length > 1 ? "are" : "is"} shown next to ${phrase(anchor)}.`;
+  return estimate ? `${sentence} Paragraph counts differ, so this is an estimate.` : sentence;
+}
