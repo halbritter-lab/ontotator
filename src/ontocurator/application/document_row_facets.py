@@ -19,6 +19,7 @@ FacetGroup = Literal[
     "origin",
     "plan",
     "waiting_on",
+    "flags",
 ]
 FACET_GROUPS: tuple[FacetGroup, ...] = (
     "language",
@@ -28,7 +29,11 @@ FACET_GROUPS: tuple[FacetGroup, ...] = (
     "origin",
     "plan",
     "waiting_on",
+    "flags",
 )
+# Facet "Flagged: guidelines unclear" (acceptance fixes X5): rows whose
+# submitted consolidation of the current version has a flagged finding.
+FlagFilter = Literal["guidelines_unclear"]
 Key = TypeVar("Key")
 
 
@@ -59,6 +64,8 @@ def facet_values(
         return (row["language"],)
     if group in _STAGE_GROUPS:
         return (row["stages"][_STAGE_GROUPS[group]]["state"],)
+    if group == "flags":
+        return ("guidelines_unclear",) if row.get("flagged_unclear") else ()
     source = {"origin": origins, "plan": plan, "waiting_on": waiting_on}[group]
     return tuple(dict.fromkeys(source()))
 

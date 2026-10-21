@@ -27,6 +27,7 @@ GROUPS = (
     "origin",
     "plan",
     "waiting_on",
+    "flags",
 )
 
 

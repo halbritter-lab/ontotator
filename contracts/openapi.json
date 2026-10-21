@@ -1119,6 +1119,59 @@
         }
       }
     },
+    "/api/v1/projects/{key}/consolidations": {
+      "post": {
+        "tags": [
+          "work-rounds"
+        ],
+        "summary": "Start Consolidation",
+        "description": "Assign the consolidator and start the consolidation round in one\ntransaction (leads only). Choosing yourself gives you the Adjudicator\nrole; your session stays valid.",
+        "operationId": "start_consolidation_api_v1_projects__key__consolidations_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartConsolidationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartConsolidationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/text-changes/preview": {
       "post": {
         "tags": [
@@ -3365,6 +3418,26 @@
               "title": "Waiting On"
             },
             "description": "\"me\" or a pseudonym"
+          },
+          {
+            "name": "flags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "const": "guidelines_unclear",
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Flags"
+            }
           }
         ],
         "responses": {
@@ -3900,6 +3973,26 @@
               "title": "Waiting On"
             },
             "description": "\"me\" or a pseudonym"
+          },
+          {
+            "name": "flags",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "const": "guidelines_unclear",
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Flags"
+            }
           }
         ],
         "responses": {
@@ -11094,6 +11187,22 @@
               }
             ],
             "title": "Others Activity At"
+          },
+          "flagged_unclear": {
+            "type": "integer",
+            "title": "Flagged Unclear",
+            "default": 0
+          },
+          "flagged_group_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flagged Group Id"
           }
         },
         "additionalProperties": false,
@@ -11857,6 +11966,10 @@
             "type": "boolean",
             "title": "Guideline Withdrawn",
             "default": false
+          },
+          "kept_automatically": {
+            "type": "integer",
+            "title": "Kept Automatically"
           },
           "eligible": {
             "type": "boolean",
@@ -18217,6 +18330,10 @@
             "type": "boolean",
             "title": "Guideline Withdrawn",
             "default": false
+          },
+          "kept_automatically": {
+            "type": "integer",
+            "title": "Kept Automatically"
           }
         },
         "additionalProperties": false,
@@ -19130,6 +19247,90 @@
           "detail"
         ],
         "title": "StageCellView"
+      },
+      "StartConsolidationRequest": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Document Id"
+          },
+          "reviewer": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Reviewer"
+          },
+          "source_submission_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 2,
+            "title": "Source Submission Ids"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "confirm_language": {
+            "type": "boolean",
+            "title": "Confirm Language",
+            "default": false
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "expected_workflow_revision": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Workflow Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "reviewer",
+          "source_submission_ids",
+          "request_id"
+        ],
+        "title": "StartConsolidationRequest",
+        "description": "Body of the start command (``ConsolidationStartService.start``)."
+      },
+      "StartConsolidationResponse": {
+        "properties": {
+          "round": {
+            "$ref": "#/components/schemas/WorkRoundView"
+          },
+          "role_granted": {
+            "type": "boolean",
+            "title": "Role Granted"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "round",
+          "role_granted"
+        ],
+        "title": "StartConsolidationResponse"
       },
       "StatusOverride": {
         "properties": {

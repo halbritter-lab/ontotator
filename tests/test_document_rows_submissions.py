@@ -91,6 +91,8 @@ def test_submissions_cover_all_versions_with_kinds_ordinals_and_counts(rounds):
     assert all(s["round_ordinal"] == 1 for s in subs if s["kind"] == "annotation")
     assert [s["recorded_at"] for s in subs] == sorted(s["recorded_at"] for s in subs)
     assert all(isinstance(s["finding_count"], int) for s in subs)
+    # Decided in the editor without the consolidation view: nothing automatic.
+    assert all(s["kept_automatically"] == 0 for s in subs)
     assert {s["finding_count"] for s in subs if s["kind"] == "annotation"} == {1}
     assert all(s["is_latest_in_round"] is None for s in subs)
     assert all(s["chain_name"] is None for s in subs)

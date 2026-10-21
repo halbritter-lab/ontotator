@@ -365,6 +365,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/consolidations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Consolidation
+         * @description Assign the consolidator and start the consolidation round in one
+         *     transaction (leads only). Choosing yourself gives you the Adjudicator
+         *     role; your session stays valid.
+         */
+        post: operations["start_consolidation_api_v1_projects__key__consolidations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/text-changes/preview": {
         parameters: {
             query?: never;
@@ -3470,6 +3492,13 @@ export interface components {
             new: boolean;
             /** Others Activity At */
             others_activity_at?: string | null;
+            /**
+             * Flagged Unclear
+             * @default 0
+             */
+            flagged_unclear: number;
+            /** Flagged Group Id */
+            flagged_group_id?: string | null;
         };
         /** DocumentRowsPage */
         DocumentRowsPage: {
@@ -3735,6 +3764,8 @@ export interface components {
              * @default false
              */
             guideline_withdrawn: boolean;
+            /** Kept Automatically */
+            kept_automatically?: number;
             /**
              * Eligible
              * @default true
@@ -6030,6 +6061,8 @@ export interface components {
              * @default false
              */
             guideline_withdrawn: boolean;
+            /** Kept Automatically */
+            kept_automatically?: number;
         };
         /** RowSubmissions */
         RowSubmissions: {
@@ -6353,6 +6386,35 @@ export interface components {
              */
             tone: "none" | "undecided" | "waiting" | "todo" | "running" | "decision" | "rejected" | "done";
             detail: components["schemas"]["StageCellDetailView"];
+        };
+        /**
+         * StartConsolidationRequest
+         * @description Body of the start command (``ConsolidationStartService.start``).
+         */
+        StartConsolidationRequest: {
+            /** Document Id */
+            document_id: string;
+            /** Reviewer */
+            reviewer: string;
+            /** Source Submission Ids */
+            source_submission_ids: string[];
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Confirm Language
+             * @default false
+             */
+            confirm_language: boolean;
+            /** Request Id */
+            request_id: string;
+            /** Expected Workflow Revision */
+            expected_workflow_revision?: number | null;
+        };
+        /** StartConsolidationResponse */
+        StartConsolidationResponse: {
+            round: components["schemas"]["WorkRoundView"];
+            /** Role Granted */
+            role_granted: boolean;
         };
         /** StatusOverride */
         StatusOverride: {
@@ -8200,6 +8262,41 @@ export interface operations {
             };
         };
     };
+    start_consolidation_api_v1_projects__key__consolidations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartConsolidationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartConsolidationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     preview_text_change_api_v1_projects__key__text_changes_preview_post: {
         parameters: {
             query?: never;
@@ -9331,6 +9428,7 @@ export interface operations {
                 final_state?: ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final")[] | null;
                 /** @description "me" or a pseudonym */
                 waiting_on?: string[] | null;
+                flags?: "guidelines_unclear"[] | null;
             };
             header?: never;
             path: {
@@ -9387,6 +9485,7 @@ export interface operations {
                 final_state?: ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final")[] | null;
                 /** @description "me" or a pseudonym */
                 waiting_on?: string[] | null;
+                flags?: "guidelines_unclear"[] | null;
             };
             header?: never;
             path: {

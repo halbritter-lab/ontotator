@@ -478,6 +478,7 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
     )
     row_cells = ctx.cells[key]
     others_at = facts.others_activity.get(key)
+    flagged, flagged_group = _consolidation_flags(facts, live)
     return {
         "case_id": case_id,
         "language": language,
@@ -565,7 +566,28 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
             and others_at > facts.baseline_at
         ),
         "others_activity_at": others_at,
+        "flagged_unclear": flagged,
+        "flagged_group_id": flagged_group,
     }
+
+
+def _consolidation_flags(
+    facts: RowFacts, live: Sequence[rules.Chain]
+) -> tuple[int, str | None]:
+    """Flagged findings of the submitted consolidation of the row's current
+    version (the target of each live chain, as the final panel compares) and
+    the first flagged group (acceptance fixes X5)."""
+    count = 0
+    first: str | None = None
+    for chain in live:
+        current = [v for v in chain.versions if not v.not_newer] or [chain.newest]
+        summary = facts.consolidation_flags.get(current[-1].document_id)
+        if summary is None:
+            continue
+        count += summary.flagged_unclear
+        if first is None:
+            first = summary.flagged_group_id
+    return count, first
 
 
 def _work_item(
@@ -1160,6 +1182,8 @@ def _row_level_matches(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -
         selected = getattr(query, f"{name}_state")
         if selected and row["stages"][name]["state"] not in selected:
             return False
+    if query.flags and not row["flagged_unclear"]:
+        return False
     if query.waiting_on:
         viewer = ctx.facts.viewer_pseudonym
         wanted = {viewer if item == "me" else item for item in query.waiting_on}

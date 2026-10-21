@@ -22,8 +22,10 @@ from ontocurator.application.document_row_page import (
 )
 from ontocurator.application.document_row_reports import load_row_reports
 from ontocurator.application.document_row_submissions import (
+    ConsolidationSummary,
     build_submissions,
     lead_pseudonym_refs,
+    load_consolidation_flags,
 )
 from ontocurator.application.final_causes import (
     authorize_final_results,
@@ -93,6 +95,7 @@ REPEATABLE = (
     "annotation_state",
     "final_state",
     "waiting_on",
+    "flags",
 )
 
 
@@ -142,6 +145,9 @@ class RowQuery:
     annotation_state: tuple[str, ...] = ()
     final_state: tuple[str, ...] = ()
     waiting_on: tuple[str, ...] = ()
+    # Acceptance fixes X5: "guidelines_unclear" = a flagged finding in the
+    # submitted consolidation of the row's current version.
+    flags: tuple[str, ...] = ()
     sort: Sort = "case"
     # "{case_id}:{language}" keys kept visible this visit (Task 5.9). A key
     # splits at the last ":" (case ids may contain ":"; language codes do not).
@@ -290,6 +296,9 @@ class RowFacts:
     source_obligations: dict[str, tuple[SourceObligationFact, ...]] = field(
         default_factory=dict
     )
+    # document id -> flagged findings of its latest submitted consolidation
+    # (``load_consolidation_flags``; versions without flags left out).
+    consolidation_flags: dict[str, ConsolidationSummary] = field(default_factory=dict)
 
 
 def load_last_activity(
@@ -1018,6 +1027,7 @@ def load_facts(
         resolutions=_resolutions(conn, pid),
         last_submissions=_last_submissions(conn, pid),
         source_obligations=_source_obligations(causes),
+        consolidation_flags={} if lean else load_consolidation_flags(conn, pid),
     )
 
 

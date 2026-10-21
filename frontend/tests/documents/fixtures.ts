@@ -151,6 +151,8 @@ export function row(overrides: Partial<DocumentRowView> & Pick<DocumentRowView, 
     version_marker: null,
     new: false,
     others_activity_at: null,
+    flagged_unclear: 0,
+    flagged_group_id: null,
     ...overrides,
   };
 }
@@ -210,6 +212,7 @@ export function submission(overrides: Partial<RowSubmissionView> & Pick<RowSubmi
     finding_count: 3,
     guideline_version: null,
     guideline_withdrawn: false,
+    kept_automatically: 0,
     ...overrides,
   };
 }

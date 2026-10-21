@@ -13,6 +13,7 @@ from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.person_views import PersonRefView
 from ontocurator.api.routes import get_access
 from ontocurator.api.work_plan_routes import PlanFlagsView
+from ontocurator.application.document_row_facets import FlagFilter
 from ontocurator.application.document_rows import (
     MAX_RETAIN,
     DocumentRowsService,
@@ -319,6 +320,11 @@ class DocumentRowView(_View):
     # since the start of the viewer's previous Documents visit.
     new: bool = False
     others_activity_at: datetime | None = None
+    # Findings flagged "guidelines unclear" in the submitted consolidation of
+    # the row's current version, and the first flagged group (``?group=`` of
+    # the read-only consolidation view; X5).
+    flagged_unclear: int = 0
+    flagged_group_id: str | None = None
 
 
 class DocumentGroupView(_View):
@@ -414,6 +420,10 @@ class RowSubmissionView(_View):
     author: PersonRefView | None = None
     guideline_version: int | None = None
     guideline_withdrawn: bool = False
+    # Consolidation submissions: findings kept automatically (all matched, U14).
+    # A factory default keeps it optional in the generated types: the
+    # submission history builds own rows without it.
+    kept_automatically: int = Field(default_factory=int)
 
 
 class RowRoundView(_View):
@@ -532,11 +542,12 @@ def _filters(
     waiting_on: Annotated[
         list[str] | None, Query(description='"me" or a pseudonym')
     ] = None,
+    flags: Annotated[list[FlagFilter] | None, Query()] = None,
 ) -> dict[str, Any]:
     """Filters shared by the rows page and the filtered case IDs.
 
-    ``language``, ``origin``, ``step``, ``stage``, ``plan``, the stage states
-    and ``waiting_on`` repeat: OR within one, AND across.
+    ``language``, ``origin``, ``step``, ``stage``, ``plan``, the stage states,
+    ``waiting_on`` and ``flags`` repeat: OR within one, AND across.
     """
     if decision is not None and final is not None:
         raise _exclusive("final", "decision")
@@ -562,6 +573,7 @@ def _filters(
         "annotation_state": tuple(annotation_state or ()),
         "final_state": tuple(final_state or ()),
         "waiting_on": tuple(waiting_on or ()),
+        "flags": tuple(flags or ()),
     }
 
 

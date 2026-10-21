@@ -159,6 +159,8 @@ export type AffectedTask = components["schemas"]["AffectedTask"];
 export type PauseCandidate = components["schemas"]["PauseCandidate"];
 export type ActiveHoldView = components["schemas"]["ActiveHoldView"];
 export type CreateRoundRequest = components["schemas"]["CreateRoundRequest"];
+export type StartConsolidationRequest = components["schemas"]["StartConsolidationRequest"];
+export type StartConsolidationResponse = components["schemas"]["StartConsolidationResponse"];
 export type MutationEnvelope = components["schemas"]["MutationEnvelope"];
 export type Draft = components["schemas"]["Draft"];
 export type Submission = components["schemas"]["Submission"];
@@ -895,6 +897,11 @@ export class ApiClient {
 
   async listRoundInputs(roundId: string): Promise<RoundInputView[]> {
     return this.request(`/api/v1/rounds/${encodeURIComponent(roundId)}/inputs`, { method: "GET" });
+  }
+
+  /** Assign the consolidator and start the consolidation round in one step (lead only); choosing yourself grants the Adjudicator role. */
+  async startConsolidation(key: string, body: StartConsolidationRequest): Promise<StartConsolidationResponse> {
+    return this.request(`/api/v1/projects/${encodeURIComponent(key)}/consolidations`, { method: "POST", body: JSON.stringify(body) });
   }
 
   async getConsolidation(roundId: string): Promise<ConsolidationView> {

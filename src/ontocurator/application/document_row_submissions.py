@@ -2,10 +2,17 @@
 
 Runs its own reads on the caller's connection; the caller (``DocumentRowsService``)
 has authorized the lead and holds the shared project lock.
+
+Also the consolidation facts of the lead's row reads (acceptance fixes spec
+"WP-B > After consolidation", "Flags", X4, X5): findings kept automatically
+and findings flagged "guidelines unclear" of a submitted consolidation. Both
+count findings, i.e. consolidation groups (``consolidation_groups``): each
+member of a group carries its own decision with the group's mark.
 """
 
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import Connection, and_, func, select
@@ -51,6 +58,160 @@ def lead_pseudonym_refs(
             pseudonym, {"pseudonym": pseudonym, "display_name": None, "is_me": False}
         )
         for pseudonym in wanted
+    }
+
+
+@dataclass(frozen=True)
+class ConsolidationSummary:
+    """Findings of a submitted consolidation by their consolidation mark."""
+
+    kept_automatically: int = 0  # groups in state "auto"
+    flagged_unclear: int = 0  # groups flagged "guidelines unclear"
+    # The first flagged group in reading order (``consolidation_group_id``).
+    flagged_group_id: str | None = None
+
+
+_NO_MARKS = ConsolidationSummary()
+
+
+def _marked(raw: Any) -> bool:
+    """Whether stored decisions carry a consolidation mark (cheap pre-check)."""
+    return isinstance(raw, list) and any(
+        isinstance(item, dict) and isinstance(item.get("consolidation"), dict)
+        for item in raw
+    )
+
+
+def _flagged(raw: Any) -> bool:
+    return isinstance(raw, list) and any(
+        isinstance(item, dict)
+        and isinstance(item.get("consolidation"), dict)
+        and item["consolidation"].get("guidelines_unclear") is True
+        for item in raw
+    )
+
+
+def consolidation_summaries(
+    conn: Connection, pid: int, submissions: Mapping[str, tuple[str, Any]]
+) -> dict[str, ConsolidationSummary]:
+    """Summary per consolidation submission (``submissions``: submission id
+    -> (round id, stored decisions JSON)). A submission without marks, or
+    whose decisions do not decode, has the empty summary.
+
+    A group counts by its state (``consolidation._state``, the rule of the
+    consolidation view): "auto" counts as kept automatically; a decided group
+    with ``guidelines_unclear`` counts as flagged.
+    """
+    # Imported here: ``consolidation`` imports ``document_row_panel``, which
+    # imports this module.
+    from ontocurator.application.consolidation import (
+        _Content,
+        _state,
+        consolidation_group_id,
+        round_members,
+    )
+    from ontocurator.application.document_row_panel import project_profile
+    from ontocurator.domain.agreement import Finding, groups
+    from ontocurator.domain.review import ReviewDecision
+
+    result = dict.fromkeys(submissions, _NO_MARKS)
+    marked = {
+        sid: (rid, raw) for sid, (rid, raw) in submissions.items() if _marked(raw)
+    }
+    if not marked:
+        return result
+    profile, defaults = project_profile(conn, pid)
+    for submission_id, (round_id, raw) in marked.items():
+        try:
+            decisions = [ReviewDecision.model_validate(item) for item in raw]
+        except ValueError:
+            continue
+        content = _Content(annotations=(), decisions=decisions)
+        found = round_members(conn, pid, round_id, profile, defaults)
+        findings: dict[str, list[Finding]] = {sid: [] for sid in found.order}
+        for member in found.members.values():
+            findings[member.submission_id].append(member.finding)
+        kept = flagged = 0
+        first: str | None = None
+        for group in groups(findings, found.order):
+            inputs = list(group.members.values())
+            targets = {
+                (
+                    found.members[iid].snapshot.annotation.annotation_id,
+                    found.members[iid].snapshot.version,
+                ): found.members[iid].snapshot.annotation
+                for iid in inputs
+            }
+            state = _state(targets, content)
+            if state["state"] == "auto":
+                kept += 1
+            if state["state"] != "open" and state["guidelines_unclear"]:
+                flagged += 1
+                if first is None:
+                    first = consolidation_group_id(inputs)
+        result[submission_id] = ConsolidationSummary(
+            kept_automatically=kept, flagged_unclear=flagged, flagged_group_id=first
+        )
+    return result
+
+
+def _stored_decisions(
+    conn: Connection, pid: int, submission_ids: Iterable[str]
+) -> dict[str, Any]:
+    """The stored decisions JSON per submission (without the snapshots)."""
+    return {
+        row.submission_id: row.decisions
+        for row in conn.execute(
+            select(
+                SubmissionRow.submission_id,
+                SubmissionRow.payload["decisions"].label("decisions"),
+            ).where(
+                SubmissionRow.project_id == pid,
+                SubmissionRow.submission_id.in_(sorted(set(submission_ids))),
+            )
+        )
+    }
+
+
+def load_consolidation_flags(
+    conn: Connection, pid: int
+) -> dict[str, ConsolidationSummary]:
+    """Flagged findings per document: of the latest submitted consolidation
+    round on each version (a version without flags is left out).
+
+    The decisions are read without the snapshots; only rounds with a flagged
+    decision are grouped.
+    """
+    latest: dict[str, tuple[str, str]] = {}
+    for row in conn.execute(
+        select(
+            WorkRoundRow.round_id,
+            WorkRoundRow.document_id,
+            WorkRoundStateRow.latest_submission_id,
+        )
+        .join(WorkRoundStateRow, WorkRoundStateRow.round_id == WorkRoundRow.round_id)
+        .where(
+            WorkRoundRow.project_id == pid,
+            WorkRoundRow.kind == "consolidation",
+            WorkRoundStateRow.state == "submitted",
+            WorkRoundStateRow.latest_submission_id.is_not(None),
+        )
+        .order_by(WorkRoundRow.created_at, WorkRoundRow.round_id)
+    ):
+        latest[row.document_id] = (row.round_id, row.latest_submission_id)
+    if not latest:
+        return {}
+    decisions = _stored_decisions(conn, pid, (sid for _, sid in latest.values()))
+    flagged = {
+        sid: (rid, decisions[sid])
+        for rid, sid in latest.values()
+        if _flagged(decisions.get(sid))
+    }
+    summaries = consolidation_summaries(conn, pid, flagged)
+    return {
+        document_id: summaries[sid]
+        for document_id, (_, sid) in latest.items()
+        if sid in summaries and summaries[sid].flagged_unclear
     }
 
 
@@ -194,6 +355,22 @@ def _open_translation_reviews(
     )
 
 
+def _kept_automatically(
+    conn: Connection, pid: int, rounds: Mapping[str, str]
+) -> dict[str, int]:
+    """Findings kept automatically per consolidation submission (``rounds``:
+    submission id -> its live consolidation round)."""
+    if not rounds:
+        return {}
+    decisions = _stored_decisions(conn, pid, rounds)
+    summaries = consolidation_summaries(
+        conn,
+        pid,
+        {sid: (rid, decisions.get(sid)) for sid, rid in rounds.items()},
+    )
+    return {sid: item.kept_automatically for sid, item in summaries.items()}
+
+
 def build_submissions(
     conn: Connection,
     key: str,
@@ -223,6 +400,7 @@ def build_submissions(
     ).scalar_one()
 
     live = _live_rounds(conn, pid, documents)
+    live_ids = {row.round_id for row in live}
     archived = _archived_rounds(
         conn, pid, set(documents), {row.round_id for row in live}
     )
@@ -272,6 +450,17 @@ def build_submissions(
         if any(row.guideline_version is not None for row in rows)
         else {}
     )
+    kept = _kept_automatically(
+        conn,
+        pid,
+        {
+            row.submission_id: owned
+            for row in rows
+            if (owned := owner[row.submission_id]) is not None
+            and owned in live_ids
+            and round_facts[owned][0] == "consolidation"
+        },
+    )
     submissions = []
     for row in rows:
         owned = owner[row.submission_id]
@@ -300,6 +489,7 @@ def build_submissions(
                 "guideline_version": row.guideline_version,
                 "guideline_withdrawn": row.guideline_version is not None
                 and facts[row.guideline_version].withdrawn,
+                "kept_automatically": kept.get(row.submission_id, 0),
             }
         )
 

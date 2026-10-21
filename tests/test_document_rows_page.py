@@ -328,6 +328,8 @@ ROW_KEYS = {
     "new",
     "others_activity_at",
     "moved_work",
+    "flagged_unclear",
+    "flagged_group_id",
 }
 VERSION_KEYS = {
     "document_id",
