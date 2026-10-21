@@ -158,6 +158,42 @@ class Database:
             with conn.begin(), self._ambient(conn, snapshot=True):
                 yield conn
 
+    @contextmanager
+    def savepoint(self, conn: Connection) -> Iterator[None]:
+        """A SAVEPOINT whose failure leaves the surrounding transaction usable.
+
+        A failure inside a joined ``transaction()`` scope marks the ambient
+        transaction rollback-only. Within this block the savepoint undoes that
+        scope's writes, so the mark is taken back:
+
+        - an exception rolls the savepoint back, restores the mark and is
+          re-raised;
+        - a normal exit after a joined scope failed (its exception was caught
+          inside the block) also rolls the savepoint back, restores the mark
+          and raises ``RuntimeError`` chained to that failure;
+        - otherwise the savepoint is released.
+        """
+        ambient = self._current.get()
+        before = None if ambient is None else ambient.failure
+        nested = conn.begin_nested()
+        try:
+            yield
+        except BaseException:
+            if nested.is_active:
+                nested.rollback()
+            if ambient is not None:
+                ambient.failure = before
+            raise
+        if ambient is not None and ambient.failure is not before:
+            failure = ambient.failure
+            if nested.is_active:
+                nested.rollback()
+            ambient.failure = before
+            raise RuntimeError("A joined scope inside the savepoint failed") from (
+                failure
+            )
+        nested.commit()
+
     @staticmethod
     @contextmanager
     def _joined(current: _Ambient) -> Iterator[None]:

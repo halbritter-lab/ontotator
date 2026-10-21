@@ -171,12 +171,18 @@ def enable_source_change_review(
     for the row (D26 pattern: audited, no confirmation). The caller holds the
     project lock.
 
+    The row must be in the plan (Review or Annotate on), the precondition
+    the batch applies too (``assignments.batch``): a review of a row the lead
+    took out of the plan does not turn Review back on.
+
     Raises:
-        DomainError: ``SOURCE_REVIEW_NOT_NEEDED`` without such an obligation.
+        DomainError: ``SOURCE_REVIEW_NOT_NEEDED`` without such an obligation
+            or for a row not in the plan (``{"reason": "not_in_plan"}``).
     """
     from ontocurator.application.work_plans import turn_review_on
-    from ontocurator.domain.work_plans import RowKey
+    from ontocurator.domain.work_plans import OFF, RowKey
     from ontocurator.domain.work_rounds import derive_source_obligations
+    from ontocurator.storage import work_plan_store
     from ontocurator.storage.workflow_tables import ReviewObligationResolutionRow
 
     variants = load_variants(conn, project_id)
@@ -195,7 +201,13 @@ def enable_source_change_review(
         for cause in derive_source_obligations(project_key, variants.values(), resolved)
     ):
         raise DomainError("SOURCE_REVIEW_NOT_NEEDED")
-    turn_review_on(conn, actor, project_id, RowKey(variant.case_id, variant.language))
+    row = RowKey(variant.case_id, variant.language)
+    flags = work_plan_store.effective_plan(conn, project_id, [row.case_id]).get(
+        row, OFF
+    )
+    if not (flags.review or flags.annotate):
+        raise DomainError("SOURCE_REVIEW_NOT_NEEDED", {"reason": "not_in_plan"})
+    turn_review_on(conn, actor, project_id, row)
     return True
 
 
@@ -483,6 +495,7 @@ class AssignmentService:
             project = self._prepare(conn, actor, key, target)
             allow = False
             if review_reason == "source_changed":
+                # The API refuses another task at request validation.
                 if task != "translation_review":
                     raise DomainError("SOURCE_REVIEW_NOT_NEEDED")
                 allow = enable_source_change_review(

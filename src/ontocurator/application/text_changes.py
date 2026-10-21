@@ -10,8 +10,7 @@ Nothing is deleted: old assignments are revoked, drafts and submissions stay.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -1093,25 +1092,6 @@ class TextChangeService:
         )
 
 
-@contextmanager
-def _isolated(conn: Connection, db: Database) -> Iterator[None]:
-    """A SAVEPOINT whose failure leaves the surrounding transaction usable.
-
-    A failure inside a joined ``Database.transaction()`` scope marks the
-    ambient transaction rollback-only; once the savepoint has undone that
-    scope's writes, the mark is taken back.
-    """
-    ambient = db._current.get()
-    before = None if ambient is None else ambient.failure
-    try:
-        with conn.begin_nested():
-            yield
-    except BaseException:
-        if ambient is not None:
-            ambient.failure = before
-        raise
-
-
 def auto_carry_on_submit(
     conn: Connection,
     repo: Repository,
@@ -1132,7 +1112,7 @@ def auto_carry_on_submit(
     back, the reason logged, and rule 3b ("Carry to v2…") applies.
     """
     try:
-        with _isolated(conn, repo.db):
+        with repo.db.savepoint(conn):
             _auto_carry(
                 conn,
                 repo,
@@ -1183,9 +1163,18 @@ def _auto_carry(
     project_row = (
         conn.execute(select(ProjectRow).where(ProjectRow.id == pid)).mappings().one()
     )
-    user_id = conn.execute(
-        select(AssignmentRow.user_id).where(AssignmentRow.id == assignment_id)
-    ).scalar_one()
+    source_row = conn.execute(
+        select(AssignmentRow.user_id, AssignmentRow.revoked_at, UserRow.pseudonym)
+        .join(UserRow, UserRow.id == AssignmentRow.user_id)
+        .where(AssignmentRow.id == assignment_id)
+    ).one()
+    # Only the author's own, still standing assignment carries their work.
+    if (
+        source_row.revoked_at is not None
+        or source_row.pseudonym != submission.origin_key.annotator_id
+    ):
+        raise _not_applicable("not_annotation")
+    user_id = source_row.user_id
     # Still a member who may annotate (raises otherwise).
     AssignmentService._require_target(conn, project_row, user_id, "annotate")
     now = datetime.now(UTC)

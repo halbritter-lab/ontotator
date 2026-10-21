@@ -181,6 +181,12 @@ def test_assign_review_with_source_changed_bypasses_already_accepted(client, app
     )
     assert response.status_code == 200, response.text
     assert len(response.json()["created"]) == 1
+    # The reason belongs to a translation review only: refused as a request.
+    response = client.post(
+        f"/api/v1/projects/{other.key}/assignments",
+        json=body | {"task": "annotate", "review_reason": "source_changed"},
+    )
+    assert response.status_code == 422, response.text
 
 
 def test_batch_assign_review_with_source_changed(app):
@@ -205,6 +211,29 @@ def test_refused_without_obligation(app):
     preview = service.preview(scenario.key, spec)
     assert preview["targets"] == []
     assert [s["reason"] for s in preview["skipped"]] == ["step_differs"]
+
+
+def test_refused_for_a_row_not_in_the_plan(app):
+    # Single and batch share the precondition: Review or Annotate on.
+    scenario = _project(app, "source-review-out")
+    with scenario.db.transaction() as conn:
+        store.write_rows(
+            conn,
+            _pid(scenario),
+            {RowKey(CASE, "de"): PlanFlags(False, False)},
+            actor_id=None,
+        )
+    with pytest.raises(DomainError) as refused:
+        _assign(scenario, review_reason="source_changed")
+    assert refused.value.code == "SOURCE_REVIEW_NOT_NEEDED"
+    assert refused.value.details == {"reason": "not_in_plan"}
+    service, spec = _batch(scenario, "source_changed")
+    preview = service.preview(scenario.key, spec)
+    assert preview["targets"] == []
+    assert [s["reason"] for s in preview["skipped"]] == ["not_in_plan"]
+    with scenario.db.transaction() as conn:
+        flags = store.effective_plan(conn, _pid(scenario), [CASE])
+    assert flags[RowKey(CASE, "de")] == PlanFlags(False, False)
 
 
 def test_turns_review_on_with_audit(app):

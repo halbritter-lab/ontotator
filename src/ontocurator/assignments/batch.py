@@ -283,6 +283,10 @@ class _Rows:
                 if source_review and (review or row["in_plan"])
                 else []
             )
+            # A source-change review of a version without an unresolved
+            # obligation is skipped as ``step_differs`` here, while the
+            # single assignment refuses it (``SOURCE_REVIEW_NOT_NEEDED``);
+            # a skip reason of its own would change the API contract.
             if not review and not external and not changed:
                 # In the plan (Annotate on), e.g. package-accepted: its step
                 # is not a translation review.

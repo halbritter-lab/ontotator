@@ -2,10 +2,10 @@
 
 from dataclasses import asdict
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from sqlalchemy import select
 
 from ontocurator.api.identity import PrincipalDep
@@ -206,6 +206,12 @@ class AssignRequest(BaseModel):
     # VD14: a review of a translation whose source text changed; refused
     # (``SOURCE_REVIEW_NOT_NEEDED``) without an unresolved obligation.
     review_reason: Literal["source_changed"] | None = None
+
+    @model_validator(mode="after")
+    def _source_review_is_a_translation_review(self) -> Self:
+        if self.review_reason is not None and self.task != "translation_review":
+            raise ValueError("review_reason applies only to translation_review")
+        return self
 
 
 class RefusedAssignment(AssignmentRowRequest):

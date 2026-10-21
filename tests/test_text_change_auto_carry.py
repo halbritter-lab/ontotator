@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -33,7 +34,7 @@ from browser_documents_scenarios import (
 from browser_server import ONTOLOGY, TEST_PASSWORD
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
-from sqlalchemy import delete, func, insert, update
+from sqlalchemy import delete, func, insert, text, update
 from sqlalchemy import select as sa_select
 from sqlalchemy.exc import IntegrityError
 from test_text_change_service import (
@@ -323,10 +324,39 @@ def _staged_failure(monkeypatch: pytest.MonkeyPatch, failure: str) -> list[str]:
 
     calls: list[str] = []
 
+    if failure == "joined_caught":
+        # A joined scope fails, the hook catches it and returns normally
+        # after a write: the savepoint must still undo it and take back the
+        # rollback-only mark of the submit transaction.
+        def caught(conn: Any, repo: Any, **kwargs: Any) -> None:
+            calls.append(failure)
+            text_changes.record_audit(
+                conn,
+                text_changes.SYSTEM_ACTOR,
+                "text_change.auto_carry",
+                target_type="submission",
+                target_id=kwargs["submission"].submission_id,
+                project_id=kwargs["pid"],
+                details={},
+            )
+            try:
+                with repo.db.transaction():
+                    raise DomainError("ASSIGNMENT_EXISTS")
+            except DomainError:
+                pass
+
+        monkeypatch.setattr(text_changes, "_auto_carry", caught)
+        return calls
+
     def broken(self: Any, conn: Any, *args: Any, **kwargs: Any) -> Any:
         calls.append(failure)
         if failure == "domain":
             raise DomainError("ASSIGNMENT_EXISTS")
+        if failure == "joined":
+            # A failure leaving a joined scope marks the submit transaction
+            # rollback-only; the savepoint takes the mark back.
+            with self.db.transaction():
+                raise DomainError("ASSIGNMENT_EXISTS")
         # A failing SQL statement: the finish_then_carry row is unique per
         # assignment, so a second one violates the constraint.
         row = conn.execute(
@@ -351,7 +381,7 @@ def _staged_failure(monkeypatch: pytest.MonkeyPatch, failure: str) -> list[str]:
     return calls
 
 
-@pytest.mark.parametrize("failure", ["domain", "integrity"])
+@pytest.mark.parametrize("failure", ["domain", "integrity", "joined", "joined_caught"])
 def test_submission_never_fails_because_of_the_hook(
     client, env, monkeypatch, caplog, failure
 ):
@@ -368,6 +398,10 @@ def test_submission_never_fails_because_of_the_hook(
     if failure == "integrity":
         assert logged.exc_info is not None
         assert isinstance(logged.exc_info[1], IntegrityError)
+    elif failure == "joined_caught":
+        assert logged.exc_info is not None
+        assert isinstance(logged.exc_info[1], RuntimeError)
+        assert isinstance(logged.exc_info[1].__cause__, DomainError)
     else:
         assert "ASSIGNMENT_EXISTS" in logged.getMessage()
     monkeypatch.undo()
@@ -431,18 +465,65 @@ def test_submit_takes_exclusive_lock_only_with_finish_then_carry(client, app, en
     _assert_carried(env, outcome["submission_id"], env.docs[1])
 
 
+def _waiting_advisory_locks(env: Env) -> int:
+    with env.db.engine.connect() as conn:
+        return int(
+            conn.execute(
+                text(
+                    "SELECT count(*) FROM pg_locks "
+                    "WHERE locktype = 'advisory' AND NOT granted"
+                )
+            ).scalar_one()
+        )
+
+
+def _until_waiting(env: Env, count: int) -> None:
+    deadline = time.monotonic() + 30
+    while _waiting_advisory_locks(env) < count:
+        assert time.monotonic() < deadline, "the submits never blocked"
+        time.sleep(0.05)
+
+
 def test_hook_does_not_deadlock_with_concurrent_submit(client, app, env):
     plain = _started(env, "ana")
     flagged = _finishing(env)
-    runs = [
-        _submit_in_thread(app, env, "tom", flagged),
-        _submit_in_thread(app, env, "ana", plain),
-    ]
+    # Both submits overlap: each waits on the held lock before either runs.
+    holder = _shared_holder(env)
+    try:
+        runs = [_submit_in_thread(app, env, "tom", flagged)]
+        _until_waiting(env, 1)
+        # Queued behind Tom's exclusive request.
+        runs.append(_submit_in_thread(app, env, "ana", plain))
+        _until_waiting(env, 2)
+    finally:
+        _release(env, holder)
     for thread, outcome in runs:
         thread.join(60)
         assert not thread.is_alive() and "error" not in outcome, outcome
     _assert_carried(env, runs[0][1]["submission_id"], env.docs[1])
     assert _submitted(env, runs[1][1]["submission_id"])
+
+
+def test_resolution_after_the_unlocked_check_still_carries(client, env, monkeypatch):
+    # The lead lets Tom finish between the unlocked pre-check and the lock:
+    # the re-read under the shared lock starts the submit over exclusively.
+    from ontocurator.application.submissions import SubmissionService
+
+    work = _finishing(env)
+    original = SubmissionService._finish_then_carry
+    reads: list[bool] = []
+
+    def late(self: Any, key: Any, conn: Any = None) -> Any:
+        reads.append(conn is not None)
+        if reads == [False]:
+            return None  # the decision is not there yet
+        return original(self, key, conn)
+
+    monkeypatch.setattr(SubmissionService, "_finish_then_carry", late)
+    submission_id = _submit(client, env, "tom", work)
+    monkeypatch.undo()
+    assert reads[:2] == [False, True]
+    _assert_carried(env, submission_id, env.docs[1])
 
 
 def test_auto_carry_actor(client, env):

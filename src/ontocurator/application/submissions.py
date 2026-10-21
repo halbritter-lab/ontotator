@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from typing import Any
@@ -27,6 +29,10 @@ from ontocurator.domain.workspace import (
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
 from ontocurator.storage.repository import Repository
+
+
+class _NeedsExclusive(Exception):
+    """A finish-then-carry decision appeared after the unlocked pre-check."""
 
 
 class AxisWarningAcknowledgement(BaseModel):
@@ -210,54 +216,85 @@ class SubmissionService:
             return self._create_submission(draft, cmd, key)
 
         finishing = self._finish_then_carry(key)
-        if finishing is None:
+        if finishing is None and not self.repo.db.in_transaction():
+            # The read above ran before any lock: a lead may have let this
+            # person finish on the old version since. Re-read it under the
+            # shared lock and, if it is there now, start over with the
+            # exclusive one (the rolled back attempt wrote nothing).
+            def recheck(conn: Connection) -> None:
+                if self._finish_then_carry(key, conn) is not None:
+                    raise _NeedsExclusive
+
+            try:
+                result = self.repo.run_mutation(
+                    key, envelope, operation, before_operation=recheck
+                )
+            except _NeedsExclusive:
+                finishing = self._finish_then_carry(key)
+                if finishing is None:
+                    result = self.repo.run_mutation(key, envelope, operation)
+                else:
+                    result = self._submit_and_carry(key, envelope, operation, finishing)
+        elif finishing is None:
+            # Inside a caller's transaction a retry could not start over.
             result = self.repo.run_mutation(key, envelope, operation)
         else:
-            # V8: the lead let this person finish on an old version; the
-            # submit carries the result to the newest one. Creating work
-            # needs the exclusive project lock from the start.
-            project_id, assignment_id = finishing
-            from ontocurator.application.text_changes import auto_carry_on_submit
-
-            # Unscoped: the carry reads the new version and creates work the
-            # submitter's own view does not cover yet.
-            plain = Repository(self.repo.db)
-
-            def after_submit(conn: Connection, submission: Submission) -> None:
-                auto_carry_on_submit(
-                    conn,
-                    plain,
-                    project_id=project_id,
-                    project_key=key.project_key,
-                    assignment_id=assignment_id,
-                    submission=submission,
-                )
-
-            result = self.repo.run_mutation(
-                key,
-                envelope,
-                operation,
-                exclusive_project=True,
-                after_submit=after_submit,
-            )
+            result = self._submit_and_carry(key, envelope, operation, finishing)
         if not isinstance(result, Submission):
             raise ValueError(
                 f"Expected Submission from run_mutation, got {type(result)}"
             )
         return result
 
-    def _finish_then_carry(self, key: WorkspaceKey) -> tuple[int, int] | None:
+    def _submit_and_carry(
+        self,
+        key: WorkspaceKey,
+        envelope: MutationEnvelope,
+        operation: Callable[[Draft], Submission],
+        finishing: tuple[int, int],
+    ) -> Draft | Submission:
+        # V8: the lead let this person finish on an old version; the
+        # submit carries the result to the newest one. Creating work
+        # needs the exclusive project lock from the start.
+        project_id, assignment_id = finishing
+        from ontocurator.application.text_changes import auto_carry_on_submit
+
+        # Unscoped: the carry reads the new version and creates work the
+        # submitter's own view does not cover yet.
+        plain = Repository(self.repo.db)
+
+        def after_submit(conn: Connection, submission: Submission) -> None:
+            auto_carry_on_submit(
+                conn,
+                plain,
+                project_id=project_id,
+                project_key=key.project_key,
+                assignment_id=assignment_id,
+                submission=submission,
+            )
+
+        return self.repo.run_mutation(
+            key,
+            envelope,
+            operation,
+            exclusive_project=True,
+            after_submit=after_submit,
+        )
+
+    def _finish_then_carry(
+        self, key: WorkspaceKey, conn: Connection | None = None
+    ) -> tuple[int, int] | None:
         """``(project_id, assignment_id)`` when the lead let this annotation
         finish on an old version (a ``finish_then_carry`` resolution), else
         None. One read before the submit transaction; the hook re-reads it
-        under the lock."""
+        under the lock. With ``conn``, read in that transaction."""
         if key.mode != "independent":
             return None
         from ontocurator.storage.overview_tables import TextChangeResolutionRow
         from ontocurator.storage.tables import AssignmentRow, ProjectRow, UserRow
 
-        with self.repo.db.transaction() as conn:
-            found = conn.execute(
+        with self.repo.db.transaction() if conn is None else nullcontext(conn) as c:
+            found = c.execute(
                 select(AssignmentRow.project_id, AssignmentRow.id)
                 .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
                 .join(UserRow, UserRow.id == AssignmentRow.user_id)
