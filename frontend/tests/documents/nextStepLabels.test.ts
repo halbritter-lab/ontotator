@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { NextStepView } from "../../src/api/client";
 import { actionLabel, BADGE_LABELS, leadSteps, rowActionLabel, secondaryLine, stepLabel, STEP_FILTER_GROUPS, STEP_LABELS } from "../../src/documents/nextStepLabels";
-import { final, row, stageCell, stages, step, stepOf } from "./fixtures";
+import { final, row, stageCell, stages, step, stepOf, version, work } from "./fixtures";
 
 describe("next step labels", () => {
   it("labels every step code", () => {
@@ -76,6 +76,22 @@ describe("next step labels", () => {
     expect(rowActionLabel(choose, one)).toBe("Accept result…");
     expect(rowActionLabel(choose, two)).toBe("Compare results…");
     expect(rowActionLabel(stepOf("assign_annotation"), one)).toBe("Assign annotation…");
+  });
+
+  it("names the text-change actions by target version and person when one row has several (VD18)", () => {
+    const versions = [version({ document_id: "d1", version: 1, is_newest_in_chain: false }), version({ document_id: "d3", version: 3 })];
+    const tom = { pseudonym: "ann-0004", display_name: "Tom Reis", is_me: false };
+    const luc = { pseudonym: "ann-0005", display_name: "Luc Martin", is_me: false };
+    const handleTom = stepOf("handle_text_change", { assignment_id: 1, document_id: "d3" });
+    const handleLuc = stepOf("handle_text_change", { assignment_id: 2, document_id: "d3" });
+    const carry = stepOf("carry_text_change", { assignment_id: 3, submission_id: "s", document_id: "d3" });
+    const one = row({ case_id: "c", language: "de", versions, steps: [handleTom, carry],
+      work: [work({ assignment_id: 1, document_id: "d1", person: tom }), work({ assignment_id: 3, document_id: "d1", status: "submitted", person: luc })] });
+    expect(rowActionLabel(handleTom, one)).toBe("Handle text change…");
+    expect(rowActionLabel(carry, one)).toBe("Carry to v3…");
+    const several = { ...one, steps: [handleTom, handleLuc], work: [...one.work, work({ assignment_id: 2, document_id: "d1", person: luc })] };
+    expect(rowActionLabel(handleTom, several)).toBe("Handle text change… · Tom Reis");
+    expect(rowActionLabel(handleLuc, several)).toBe("Handle text change… · Luc Martin");
   });
 
   it("lists the lead-owned steps with an action in server order", () => {

@@ -28,6 +28,8 @@ import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
 import { ExpandedRow, type ExpandedRowProps } from "../documents/ExpandedRow";
 import { FinalPanel, type PanelSection } from "../documents/FinalPanel";
+import { HandleTextChangeDialog } from "../documents/HandleTextChangeDialog";
+import { CarryDialog, carrySourceOfFinal, carrySourceOfStep, type CarrySource } from "../documents/CarryDialog";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
 import { useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { ResolveTranslation } from "../documents/ResolveTranslation";
@@ -345,9 +347,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // Assign dialog: one row (task preselected) or the selected cases (selection bar).
   const [assignDialog, setAssignDialog] = useState<AssignWorkDialogProps | null>(null);
   /** Assign dialog for one row; `options.newReviewOfAccepted` marks a new review of an accepted translation (D25). */
-  const onAssign = (row: DocumentRowView, task: AssignTask, options?: { newReviewOfAccepted?: boolean }) => {
+  const onAssign = (row: DocumentRowView, task: AssignTask, options?: { newReviewOfAccepted?: boolean; reviewReason?: "source_changed" }) => {
     setAssignDialog({
-      mode: "row", projectKey, row, task, newReviewOfAccepted: options?.newReviewOfAccepted,
+      mode: "row", projectKey, row, task, newReviewOfAccepted: options?.newReviewOfAccepted, reviewReason: options?.reviewReason,
       onClose: () => setAssignDialog(null),
       onAssigned: message => { setAssignDialog(null); showToast({ message }); announce(message); refreshAll(); },
     });
@@ -526,13 +528,28 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const openPanel = (row: DocumentRowView, mode: RowPanel["mode"]) => {
     setRowPanel({ rowKey: rowKeyOf(row), mode });
   };
-  /** Row whose expansion opens Text versions (interim target of the text-change actions until O7). */
+  /** Row whose expansion opens Text versions (the panel's Text versions link). */
   const [revealFor, setRevealFor] = useState<string | null>(null);
   // Links away from the page never carry the open panel (a row action from the panel closes it first).
   const { panel: _panel, ...linkQuery } = viewQuery;
   const reportRoute = (reportId: string, extra: { section?: "decide"; action?: "resume" }): Route => ({
     name: "projectProblemReport", key: projectKey, reportId, ...extra, ...(Object.keys(linkQuery).length ? { documents: linkQuery } : {}),
   });
+  // Text-change dialogs; they read the current row, so a reload after a conflict shows the new state.
+  const [textChange, setTextChange] = useState<{ kind: "handle"; rowKey: string; step: NextStepView } | { kind: "carry"; rowKey: string; source: CarrySource } | null>(null);
+  const textChangeRow = textChange ? pageRows.find(entry => rowKeyOf(entry) === textChange.rowKey) ?? null : null;
+  const textChangeDone = (message: string) => { setTextChange(null); showToast({ message }); announce(message); reloadAfterAction(); };
+  const textChangeDialog = !textChange || !textChangeRow ? null : textChange.kind === "handle" ? (() => {
+    const step = (textChangeRow.steps ?? []).find(entry => entry.action === "handle_text_change" && entry.assignment_id === textChange.step.assignment_id) ?? textChange.step;
+    // The paused task's report: the step's, the row's pause cause or a report on that assignment.
+    const reportId = pausedReportId(textChangeRow, step)
+      ?? [...textChangeRow.issues, ...textChangeRow.notes].find(item => item.assignment_id === step.assignment_id && item.report_id)?.report_id ?? null;
+    return <HandleTextChangeDialog projectKey={projectKey} row={textChangeRow} step={step}
+      onClose={() => setTextChange(null)} onDone={textChangeDone} onReload={() => rows.reload()}
+      onDecideReport={reportId ? () => { setTextChange(null); onNavigate(reportRoute(reportId, { section: "decide" })); } : undefined} />;
+  })() : <CarryDialog projectKey={projectKey} row={textChangeRow} source={textChange.source}
+    onClose={() => setTextChange(null)} onDone={textChangeDone} onReload={() => rows.reload()}
+    onFromScratch={() => { const row = textChangeRow; setTextChange(null); reloadAfterAction(); onAssign(row, "annotate"); }} />;
   const onAction = (row: DocumentRowView, step: NextStepView) => {
     const key = rowKeyOf(row);
     switch (step.action) {
@@ -543,13 +560,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         setRowPanel(null);
         openFinalPanel(key);
         return;
-      // Interim (O7 replaces it with its dialogs): the expansion opens Text versions, where the work is reassigned.
-      case "handle_text_change":
-      case "carry_text_change":
-      case "assign_source_review":
-        setRevealFor(key);
-        expandRow(key);
-        return;
+      // Text changes (V5): one dialog per old-version item; the "+n" menu lists one entry per person.
+      case "handle_text_change": setTextChange({ kind: "handle", rowKey: key, step }); return;
+      case "carry_text_change": setTextChange({ kind: "carry", rowKey: key, source: carrySourceOfStep(row, step) }); return;
+      case "assign_source_review": void onAssign(row, "translation_review", { reviewReason: "source_changed" }); return;
       case "decide_report":
         if (step.report_id) onNavigate(reportRoute(step.report_id, { section: "decide" })); else expandRow(key);
         return;
@@ -599,7 +613,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     onRowAction={(row, step) => { closeFinalPanel(); onAction(row, step); }}
     onAssign={row => { closeFinalPanel(); onAssign(row, "review"); }}
     // Interim (O7 replaces it with the carry dialog): the expansion opens Text versions.
-    onCarry={row => panelSection(row, "versions")}
+    onCarry={(row, target) => {
+      const source = carrySourceOfFinal(row, target);
+      closeFinalPanel();
+      if (source) setTextChange({ kind: "carry", rowKey: rowKeyOf(row), source });
+    }}
     onSection={panelSection}
     onConsolidationStarted={row => {
       closeFinalPanel();
@@ -747,6 +765,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     </Dialog>
     {reviewDocument !== null && <ReviewHistory key={reviewDocument} projectKey={projectKey} documentId={reviewDocument} onClose={() => setReviewDocument(null)} />}
     {assignDialog && <AssignWorkDialog {...assignDialog} />}
+    {textChangeDialog}
     {finalPanel}
     {idsDialogOpen && <SelectByIdsDialog projectKey={projectKey} current={selection.cases} onClose={() => setIdsDialogOpen(false)} onSelect={selectByIds} />}
   </section>;

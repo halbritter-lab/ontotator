@@ -771,15 +771,58 @@ it("reloads the submissions of open rows when the rows refresh", async () => {
   expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
 });
 
-it("Handle text change… opens the expansion's Text versions (interim until the text-change dialogs)", async () => {
-  const de = planRow("case-201", "de", stepOf("handle_text_change", { stage: "annotation" }));
-  mockRows(page([group("case-201", [de])]));
-  renderStateful({});
-  fireEvent.click(await screen.findByRole("button", { name: "Handle text change…, case-201 · de" }));
-  const region = await screen.findByRole("region", { name: "History, case-201 · de" });
-  const summary = within(region).getByText("Text versions (1)", { selector: "summary" });
-  expect((summary.closest("details") as HTMLDetailsElement).open).toBe(true);
-  await waitFor(() => expect(document.activeElement).toBe(summary));
+describe("text changes (V5)", () => {
+  const tcVersions = (caseId: string) => [
+    version({ document_id: `${caseId}-de-v1`, external_id: `${caseId}-de`, chain_id: "de", version: 1, is_newest_in_chain: false }),
+    version({ document_id: `${caseId}-de-v2`, external_id: `${caseId}-de`, chain_id: "de", version: 2, origin: "correction" }),
+  ];
+  beforeEach(() => {
+    vi.spyOn(api, "previewTextChange").mockResolvedValue({ from_version: 1, to_version: 2, findings: 3, placed: 3, unplaced: 0, in_changed_passages: 0,
+      persons: [{ username: "ana", display_name: "Ana Weber", author: true, has_work: true }] });
+  });
+
+  it("Handle text change… opens one dialog per person from the +n menu and toasts the result", async () => {
+    const handleTom = stepOf("handle_text_change", { stage: "annotation", assignment_id: 41, document_id: "case-201-de-v2" });
+    const handleAna = stepOf("handle_text_change", { stage: "annotation", assignment_id: 42, document_id: "case-201-de-v2" });
+    const de = planRow("case-201", "de", handleTom, { versions: tcVersions("case-201"), steps: [handleTom, handleAna],
+      work: [work({ assignment_id: 41, document_id: "case-201-de-v1", person: tom, status: "in_progress" }), work({ assignment_id: 42, document_id: "case-201-de-v1", person: ana, status: "in_progress" })] });
+    mockRows(page([group("case-201", [de])]));
+    const resolve = vi.spyOn(api, "resolveTextChange").mockResolvedValue({} as AssignmentView);
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "+1 more action, case-201 · de" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Handle text change… · Ana Weber" }));
+    const dialog = await screen.findByRole("dialog", { name: "Handle text change · case-201 · de" });
+    expect(within(dialog).getByText("Ana Weber has an open annotation on v1. The text is now v2.")).toBeDefined();
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Withdraw" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(resolve).toHaveBeenCalledWith(42, { resolution: "withdrawn", target_document_id: "case-201-de-v2" }));
+    expect((await screen.findAllByText("Ana Weber’s task is withdrawn. v2 needs a new annotation.")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("dialog", { name: "Handle text change · case-201 · de" })).toBeNull();
+  });
+
+  it("Carry to v2… opens the carry dialog; Annotate v2 from scratch opens the assign dialog", async () => {
+    const carry = stepOf("carry_text_change", { stage: "annotation", assignment_id: 51, submission_id: "sub-1", document_id: "case-202-de-v2" });
+    const de = planRow("case-202", "de", carry, { versions: tcVersions("case-202"),
+      work: [work({ assignment_id: 51, document_id: "case-202-de-v1", person: ana, status: "submitted", round_ordinal: 1 })] });
+    mockRows(page([group("case-202", [de])]));
+    const carrySpy = vi.spyOn(api, "carrySubmission").mockResolvedValue({ resolution: "dismissed", assignment: null, round: null, carried_findings: 0 });
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Carry to v2…, case-202 · de" }));
+    const dialog = await screen.findByRole("dialog", { name: "Carry to v2 · case-202 · de" });
+    expect(await within(dialog).findByText("Ana Weber submitted on v1 (Round 1 · 3 findings).")).toBeDefined();
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Annotate v2 from scratch" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign" }));
+    await waitFor(() => expect(carrySpy).toHaveBeenCalledWith("p", "sub-1", expect.objectContaining({ mode: "dismiss", target_document_id: "case-202-de-v2" })));
+    await waitFor(() => expect(lastAssign()).toMatchObject({ mode: "row", task: "annotate" }));
+  });
+
+  it("Assign review… for a changed source opens the assign dialog with review_reason source_changed", async () => {
+    const de = planRow("case-203", "de", stepOf("review_source_change", { stage: "translation_review" }));
+    mockRows(page([group("case-203", [de])]));
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Assign review…, case-203 · de" }));
+    await waitFor(() => expect(lastAssign()).toMatchObject({ mode: "row", task: "translation_review", reviewReason: "source_changed" }));
+  });
 });
 
 it("opens the translation review history of a version from Text versions", async () => {

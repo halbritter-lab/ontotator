@@ -142,10 +142,18 @@ export function secondaryLine(step: NextStepView, row: DocumentRowView): string 
 }
 
 /** The action name of a step on its row: "Choose final" reads "Accept result…" with one submission, else "Compare results…" (V6, VD16). */
-export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "stages">): string {
+export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "stages"> & Partial<Pick<DocumentRowView, "versions" | "work" | "steps" | "next_step">>): string {
   if (step.action === "choose_final") {
     const final = row.stages?.final;
     return final?.state === "choose" && final.detail.submitted === 1 ? "Accept result…" : "Compare results…";
+  }
+  if (step.action === "handle_text_change" || step.action === "carry_text_change") {
+    const target = row.versions?.find(version => version.document_id === step.document_id);
+    const base = step.action === "carry_text_change" && target ? `Carry to v${target.version}…` : actionLabel(step.action);
+    // Several old-version items on one row: one entry per person, in the server's order (spec V5).
+    const same = row.steps || row.next_step ? leadSteps({ steps: row.steps, next_step: row.next_step ?? null }).filter(other => other.action === step.action) : [];
+    const item = row.work?.find(entry => entry.assignment_id === step.assignment_id);
+    return same.length > 1 && item ? `${base} · ${item.person?.display_name?.trim() || item.person?.pseudonym || item.author_label}` : base;
   }
   return step.action ? actionLabel(step.action) : "";
 }
