@@ -66,6 +66,108 @@
         ],
         "createdAt": "2026-10-21T15:30:25.616Z",
         "reason": "assistant decided: rules moved verbatim from documents-expanded.css on main (selection-notice, final-panel-text-change); row-panel-banner reuses that established notice style"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/148565-1792589249/content/wpa-expansion-v2.html"
+        ],
+        "createdAt": "2026-10-21T13:31:55.211Z",
+        "reason": "assistant decided: throwaway brainstorming wireframe, not product UI"
+      },
+      {
+        "rule": "border-accent-on-rounded",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/148565-1792589249/content/wpe-consolidation-v2.html"
+        ],
+        "createdAt": "2026-10-21T13:40:24.999Z",
+        "reason": "assistant decided: throwaway brainstorming wireframe, not product UI"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/148565-1792589249/content/wpe-consolidation-v2.html"
+        ],
+        "createdAt": "2026-10-21T13:40:25.285Z",
+        "reason": "assistant decided: throwaway brainstorming wireframe, not product UI"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "consolas",
+        "createdAt": "2026-10-21T16:33:42.869Z",
+        "reason": "Consolas is part of --font-mono in frontend/src/styles/tokens.css:59; mockups reuse the token stack"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "sfmono-regular",
+        "createdAt": "2026-10-21T16:35:50.370Z",
+        "reason": "DESIGN.md:191 documents --font-mono as ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/161693-1792600358/content/a-pending-selection.html"
+        ],
+        "createdAt": "2026-10-21T16:39:08.340Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/161693-1792600358/content/b-values-confirm.html"
+        ],
+        "createdAt": "2026-10-21T16:39:08.636Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/161693-1792600358/content/c-submit-unconfirmed.html"
+        ],
+        "createdAt": "2026-10-21T16:39:08.988Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/161693-1792600358/content/d-term-search.html"
+        ],
+        "createdAt": "2026-10-21T16:39:09.351Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/161693-1792600358/content/e-my-tasks.html"
+        ],
+        "createdAt": "2026-10-21T16:39:09.698Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/161693-1792600358/content/f-project-switcher.html"
+        ],
+        "createdAt": "2026-10-21T16:39:10.051Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/161693-1792600358/content/index.html"
+        ],
+        "createdAt": "2026-10-21T16:39:10.450Z",
+        "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
       }
     ]
   }
