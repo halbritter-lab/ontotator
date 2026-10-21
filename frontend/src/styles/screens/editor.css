@@ -1993,10 +1993,6 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   color: var(--warning);
   font-weight: var(--weight-strong);
 }
-.values-section .axis-default-suffix {
-  color: var(--warning);
-  font-weight: var(--weight-strong);
-}
 .values-section .axis-options {
   display: flex;
   flex-wrap: nowrap;
@@ -2093,7 +2089,8 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   margin-bottom: var(--space-1);
 }
 
-/* Boxes (fallback A): one tinted box per axis, legend on top, the values as separate wrapping chips. */
+/* Boxes (fallback A): one tinted box per axis, legend on top, the values as separate wrapping chips.
+   An unconfirmed default keeps the same "Default" tag as the other layouts and dashes the box border. */
 .values-section[data-values-layout="boxes"] .axis-field {
   display: block;
   padding: var(--space-2);
@@ -2101,15 +2098,12 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.values-section[data-values-layout="boxes"] .axis-field:has(.axis-default-suffix) {
+.values-section[data-values-layout="boxes"] .axis-field:has(.axis-default-tag) {
   border: 1px dashed var(--warning);
 }
 .values-section[data-values-layout="boxes"] .axis-legend {
   width: 100%;
   margin-bottom: var(--space-1);
-}
-.values-section[data-values-layout="boxes"] .axis-default-tag {
-  display: none;
 }
 .values-section[data-values-layout="boxes"] .axis-options {
   flex-wrap: wrap;
@@ -2166,7 +2160,7 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   .values-section[data-values-layout="boxes"] .axis-field {
     border-color: CanvasText;
   }
-  .values-section[data-values-layout="boxes"] .axis-field:has(.axis-default-suffix) {
+  .values-section[data-values-layout="boxes"] .axis-field:has(.axis-default-tag) {
     border: 1px dashed CanvasText;
   }
 }

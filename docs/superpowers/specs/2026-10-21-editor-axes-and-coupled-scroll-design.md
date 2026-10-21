@@ -70,7 +70,7 @@ Measurement: a hidden measuring copy is not needed; each control is laid out wit
 
 Values are never abbreviated or truncated in any layout; clinical values are read in full.
 
-**Layout A (boxes):** each `fieldset` is a box: `surface-sunken` fill, 1 px `border`, `radius`, padding `var(--space-2)`, gap `var(--space-2)` between boxes. Legend on top (`size-sm`, weight 500); options as separate wrapping chips (`flex-wrap: wrap`, gap `var(--space-1)`, `radius-sm`, today's chip look). An axis whose value is an unconfirmed default: box border 1 px dashed `warning`, legend suffix " · default, not confirmed" in `warning`; the chosen chip keeps the `warning-light` fill and `warning` text of 1.2. Hint and button as in 1.3.
+**Layout A (boxes):** each `fieldset` is a box: `surface-sunken` fill, 1 px `border`, `radius`, padding `var(--space-2)`, gap `var(--space-2)` between boxes. Legend on top (`size-sm`, weight 500); options as separate wrapping chips (`flex-wrap: wrap`, gap `var(--space-1)`, `radius-sm`, today's chip look). An axis whose value is an unconfirmed default: box border 1 px dashed `warning`, the same "Default" tag under the legend as in B (final review 2026-10-21: one marking in every layout; it replaced the earlier legend suffix " · default, not confirmed"); the chosen chip keeps the `warning-light` fill and `warning` text of 1.2. Hint and button as in 1.3.
 
 ### 1.5 Keyboard and accessibility
 

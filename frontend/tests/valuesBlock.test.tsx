@@ -311,15 +311,15 @@ describe("Values block layout", () => {
     expect(layoutOf(container)).toBe("row");
   });
 
-  it("in boxes the legend shows ' · default, not confirmed' and hides the Default tag", () => {
+  it("in boxes the legend shows the same Default tag as the other layouts", () => {
     const { container } = render(<AnnotationPanel {...props({}, ["assertion", "experiencer"])} />);
-    expect(container.querySelector(".axis-default-suffix")).toBeNull();
     resize(100);
     expect(layoutOf(container)).toBe("boxes");
     const assertion = container.querySelector<HTMLElement>('[data-axis-field="assertion"] .axis-legend')!;
-    expect(assertion.querySelector(".axis-default-suffix")!.textContent).toBe(" · default, not confirmed");
-    expect(container.querySelector('[data-axis-field="temporality"] .axis-default-suffix')).toBeNull();
-    expect(container.querySelector(".axis-default-tag")).toBeNull();
+    expect(assertion.querySelector(".axis-default-tag")!.textContent).toBe("Default");
+    expect(container.querySelector('[data-axis-field="temporality"] .axis-default-tag')).toBeNull();
+    expect(container.querySelectorAll(".axis-default-tag")).toHaveLength(2);
+    expect(container.querySelector(".axis-default-suffix")).toBeNull();
     expect(screen.getByRole("radio", { name: "Present · default" })).toBeDefined();
   });
 

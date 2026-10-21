@@ -300,9 +300,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               <fieldset key={axis.id} className="axis-field" data-axis-field={axis.id}>
                 <legend className="axis-legend">
                   {axis.label}{isRequired && <span className="axis-required"> (required)</span>}
-                  {unconfirmed && (valuesLayout === "boxes"
-                    ? <span className="axis-default-suffix"> · default, not confirmed</span>
-                    : <>{" "}<span className="axis-default-tag">Default</span></>)}
+                  {unconfirmed && <>{" "}<span className="axis-default-tag">Default</span></>}
                 </legend>
                 {options.length <= 4 ? (
                   <div className="axis-options">

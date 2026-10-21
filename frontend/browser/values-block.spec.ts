@@ -119,15 +119,17 @@ test("long option values fall back to boxes and are never truncated", async ({ p
   await openWithFinding(page, "VALUES_LONG");
   await expect(section(page)).toHaveAttribute("data-values-layout", "boxes");
   const certainty = section(page).locator('[data-axis-field="certainty"]');
-  for (const value of ["confirmed_by_genetic_testing", "clinically_suspected_only", "excluded_after_workup"]) {
-    const option = certainty.locator(".axis-option").filter({ hasText: value });
+  // Profile option identifiers are shown as words, never as raw values.
+  for (const label of ["Confirmed by genetic testing", "Clinically suspected only", "Excluded after workup"]) {
+    const option = certainty.locator(".axis-option").filter({ hasText: label });
     await expect(option).toBeVisible();
-    await expect(option.locator("span").first()).toHaveText(value);
+    await expect(option.locator("span").first()).toHaveText(label);
   }
+  await expect(certainty).not.toContainText("_");
   await expectNoSegmentOverflow(page);
-  // The default is named in the legend; the separate tag is not shown in boxes.
-  await expect(certainty.locator("legend")).toContainText(" · default, not confirmed");
-  await expect(section(page).locator(".axis-default-tag")).toHaveCount(0);
+  // The default is marked with the same "Default" tag as in the other layouts.
+  await expect(certainty.locator("legend .axis-default-tag")).toHaveText("Default");
+  await expect(section(page).locator(".axis-default-suffix")).toHaveCount(0);
   const clipped = await section(page).evaluate(element => Array.from(element.querySelectorAll<HTMLElement>("*"))
     .filter(node => {
       const style = getComputedStyle(node);

@@ -38,7 +38,7 @@ it("keeps an invalid-mention warning before the text without polluting its codep
     mentions={[{ evidence_id: "invalid", segments: [{ start: 0, end: 99 }] }]} />);
   const warning = mounted.getByRole("alert");
   const scrollport = mounted.container.querySelector<HTMLDivElement>(".text-container")!;
-  expect(warning.textContent).toContain("1 mention(s) have offsets outside this text");
+  expect(warning.textContent).toContain("1 mention has offsets outside this text");
   expect(warning.compareDocumentPosition(scrollport) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   expect(scrollport.contains(warning)).toBe(false);
   expect(Array.from(scrollport.textContent ?? "")).toEqual(Array.from(text));
