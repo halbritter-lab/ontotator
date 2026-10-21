@@ -1168,3 +1168,21 @@ def test_final_choose_counts_consolidation_submissions() -> None:
     assert c.annotation.detail.submitted == 2
     # Without ``final_submissions`` the Final cell counts ``submissions``.
     assert cells(facts(**base)).final.detail.submitted == 2
+
+
+def test_open_old_work_while_the_correction_awaits_review_is_running() -> None:
+    # v1 work stays visible while v2 waits for its review (rule on).
+    cell = cells(
+        facts(
+            translation_statuses=("ready_for_review",),
+            open_annotations=1,
+            annotation_assignments=1,
+            old_open=(OldItem(TOM, 1, assignment_id=7),),
+            annotators_open=(TOM,),
+            correction_waiting=True,
+            newest_version=2,
+        )
+    ).annotation
+    assert (cell.state, cell.tone) == ("in_progress", "running")
+    assert cell.detail.note == "text_change_waiting"
+    assert cell.detail.people == (TOM,)

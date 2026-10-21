@@ -404,6 +404,17 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             return _cell("blocked", "waiting", note="translation_queried")
         if "translation_not_accepted" in codes:
             return _cell("blocked", "waiting", note="translation_not_accepted")
+        if facts.correction_waiting and (
+            facts.annotators_open or step.old_open or step.finishing
+        ):
+            # Work on the older version keeps running meanwhile.
+            return _cell(
+                "in_progress",
+                "running",
+                people=facts.annotators_open
+                or _people((*step.old_open, *step.finishing)),
+                **waiting_note,
+            )
         return _cell("after_review", "waiting", **waiting_note)
     newest = facts.newest_version
     if not facts.correction_waiting:
