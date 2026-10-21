@@ -253,6 +253,16 @@ def test_author_holding_the_target_gets_no_carry_step(env):
     assert all(s["submission_id"] != work["submission_id"] for s in row["steps"])
 
 
+def test_person_holding_the_target_gets_no_move_step(env):
+    # A move to a version the person already works on fails ASSIGNMENT_EXISTS,
+    # so their open v1 work is no 3a item.
+    work = _started(env)
+    assign(env.scenario, env.docs[1], "tom", "annotate")
+    row = _row(env)
+    assert "handle_text_change" not in _codes(row)
+    assert all(s["assignment_id"] != work["assignment_id"] for s in row["steps"])
+
+
 def test_dismissal_settles_only_its_own_target(app):
     env = _env(app, [TEXT_DE, CORRECTED_DE, THIRD_DE])
     work = _submitted(env)

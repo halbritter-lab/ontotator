@@ -736,7 +736,8 @@ def _old_work(
 
     ``annotations`` are the row's non-revoked annotate assignments on live
     versions. A held old task is decided through its report first (I5): it
-    is no 3a item but still waits, so it counts for rule 8.
+    is no 3a item but still waits, so it counts for rule 8. Old open work of a
+    person who already holds the target is no 3a item either.
     """
     version_of = {v.document_id: v for chain in live for v in chain.versions}
     old_open: list[steps_rules.OldItem] = []
@@ -761,7 +762,9 @@ def _old_work(
                 item.user_id, old.version, assignment_id=item.assignment_id
             )
             if _open(item):
-                if item.held:
+                if item.held or item.user_id in holders:
+                    # A holder of the target cannot move there (the move
+                    # would fail ASSIGNMENT_EXISTS): no 3a item.
                     pass
                 elif ctx.resolution_of.get(item.assignment_id) == "finish_then_carry":
                     finishing.append(entry)
