@@ -3016,7 +3016,7 @@ export interface components {
             /** Plan */
             plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan" | "not_decided")[];
             /** Step */
-            step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[];
+            step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[];
             /** Stage */
             stage?: ("translation_review" | "annotation" | "final" | "done")[];
             /** Translation Status */
@@ -3056,7 +3056,7 @@ export interface components {
             /** Segment */
             segment?: ("decision" | "assign" | "progress" | "done") | null;
             /** Step */
-            step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
+            step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
             /** Stage */
             stage?: ("translation_review" | "annotation" | "final" | "done") | ("translation_review" | "annotation" | "final" | "done")[] | null;
             /** Owner */
@@ -3121,6 +3121,8 @@ export interface components {
             parallel_roots: boolean;
             /** Work */
             work: components["schemas"]["WorkItemView"][];
+            /** Moved Work */
+            moved_work?: components["schemas"]["WorkItemView"][];
             final: components["schemas"]["FinalSelectionSummary"] | null;
             /** Issues */
             issues: components["schemas"]["RowItemView"][];
@@ -4007,7 +4009,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention";
+            code: "decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention";
             /**
              * Kind
              * @enum {string}
@@ -4019,9 +4021,9 @@ export interface components {
              */
             stage: "translation_review" | "annotation" | "final" | "done";
             /** Action */
-            action?: ("plan" | "decide_report" | "resume_task" | "review_changes" | "resolve" | "accept_or_review" | "choose_final" | "assign_translation_review" | "assign_annotation") | null;
+            action?: ("plan" | "decide_report" | "resume_task" | "review_changes" | "handle_text_change" | "carry_text_change" | "resolve" | "accept_or_review" | "choose_final" | "assign_translation_review" | "assign_source_review" | "assign_annotation") | null;
             /** Badges */
-            badges?: ("your_decision" | "check_failed" | "paused")[];
+            badges?: ("your_decision" | "check_failed" | "paused" | "source_changed")[];
             /** Assigned */
             assigned?: number | null;
             /** Target */
@@ -4032,6 +4034,8 @@ export interface components {
             report_id?: string | null;
             /** Assignment Id */
             assignment_id?: number | null;
+            /** Submission Id */
+            submission_id?: string | null;
             /** Document Id */
             document_id?: string | null;
         };
@@ -6834,6 +6838,8 @@ export interface components {
              * @default false
              */
             lead_correction: boolean;
+            /** Moved To Version */
+            moved_to_version?: number | null;
         };
         /** WorkRoundView */
         WorkRoundView: {
@@ -8686,7 +8692,7 @@ export interface operations {
                 final?: ("missing" | "none" | "any") | null;
                 case?: string | null;
                 segment?: ("decision" | "assign" | "progress" | "done") | null;
-                step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
+                step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
                 stage?: ("translation_review" | "annotation" | "final" | "done")[] | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;
@@ -8742,7 +8748,7 @@ export interface operations {
                 final?: ("missing" | "none" | "any") | null;
                 case?: string | null;
                 segment?: ("decision" | "assign" | "progress" | "done") | null;
-                step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
+                step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
                 stage?: ("translation_review" | "annotation" | "final" | "done")[] | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;

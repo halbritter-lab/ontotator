@@ -156,12 +156,12 @@ class StageFacts:
     paused_by: int | None = None  # reporter of the open report
     paused_excerpt: str | None = None  # ≤ 60 characters
     paused_task: Literal["annotate", "translation_review"] | None = None
-    old_open: tuple[OldItem, ...] = ()  # rule 3a items (O2a fills)
-    old_submitted: tuple[OldItem, ...] = ()  # rule 3b items (O2a fills)
-    finishing: tuple[OldItem, ...] = ()  # finish_then_carry items (O2a fills)
-    source_changed_from: int | None = (
-        None  # source version of an unreviewed source change (O2a fills)
-    )
+    # Old-version work items (rules 3a, 3b, finishing) are ``step.old_open``,
+    # ``step.old_submitted`` and ``step.finishing``: one source for the steps
+    # and the cells.
+    # Source version of an unreviewed source change (rule 6a, Final
+    # "may be outdated").
+    source_changed_from: int | None = None
     correction_waiting: bool = False  # correction ready_for_review, rule on (edge case)
     final_causes: tuple[str, ...] = ()  # unacknowledged cause codes
     final_kind: Literal["round", "consolidation"] | None = None
@@ -230,11 +230,14 @@ STEP_CELL: Mapping[StepCode, CellName | None] = {
     "decide_report": "annotation",
     "resume_task": "annotation",
     "confirm_final": "final",
+    "handle_text_change": "annotation",
+    "carry_text_change": "annotation",
     "resolve_rejected": "review",
     "resolve_queried": "review",
     "translation_not_accepted": "review",
     "choose_final": "final",
     "assign_translation_review": "review",
+    "review_source_change": "review",
     "translation_review_in_progress": "review",
     "assign_annotation": "annotation",
     "annotation_in_progress": "annotation",
@@ -403,20 +406,20 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
         return _cell("after_review", "waiting", **waiting_note)
     newest = facts.newest_version
     if not facts.correction_waiting:
-        if facts.old_open:
+        if step.old_open:
             return _cell(
                 "old_text_open",
                 "decision",
-                people=_people(facts.old_open),
-                from_version=facts.old_open[0].from_version,
+                people=_people(step.old_open),
+                from_version=step.old_open[0].from_version,
                 version=newest,
             )
-        if facts.old_submitted and not step.has_final:
+        if step.old_submitted and not step.has_final:
             return _cell(
                 "old_text_submitted",
                 "decision",
-                people=_people(facts.old_submitted),
-                from_version=facts.old_submitted[0].from_version,
+                people=_people(step.old_submitted),
+                from_version=step.old_submitted[0].from_version,
                 version=newest,
                 note="v2_not_annotated",
             )
@@ -432,12 +435,12 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             target=per_text if counted else None,
             **waiting_note,
         )
-    if facts.finishing and not facts.correction_waiting:
+    if step.finishing and not facts.correction_waiting:
         return _cell(
             "finishing_on_old",
             "running",
-            people=_people(facts.finishing),
-            from_version=facts.finishing[0].from_version,
+            people=_people(step.finishing),
+            from_version=step.finishing[0].from_version,
             version=newest,
             note="carried_on_submit",
         )
@@ -471,7 +474,7 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             round_ordinal=facts.round_ordinal,
             **note,
         )
-    old = facts.old_submitted
+    old = step.old_submitted
     if submitted or old or step.has_final:
         on_old = not submitted and bool(old)
         return _cell(
@@ -539,7 +542,7 @@ def _final(facts: StageFacts, codes: frozenset[str]) -> StageCell:
         or facts.consolidators
     ):
         return _cell("after_review", "waiting")
-    if facts.submissions or facts.old_submitted:
+    if facts.submissions or step.old_submitted:
         return _cell("after_annotation", "waiting")
     return _cell("none", "none")
 

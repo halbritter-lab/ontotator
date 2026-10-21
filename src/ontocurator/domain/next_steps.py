@@ -1,6 +1,7 @@
 """Next step of a Documents row (spec "Concepts: Next step"), pure.
 
-Rules 1-11 (with 4a) are checked in precedence order; ``derive_steps``
+Rules 1-11 (with 4a, and 3a, 3b, 6a of the documents overview's text
+changes, V5) are checked in precedence order; ``derive_steps``
 returns every matching rule, the first is the row's next step. "In plan"
 (Review or Annotate on) is its own fact: a row in the plan always has at
 least one step, a row outside it has none, except an undecided row (plan
@@ -13,12 +14,13 @@ fallback "needs_attention" instead of an error.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 __all__ = [
     "NOT_ACCEPTED_DECISIONS",
     "REVIEWER_NEEDED_STATUSES",
+    "Badge",
     "OldItem",
     "RowAction",
     "Segment",
@@ -38,11 +40,14 @@ StepCode = Literal[
     "decide_report",
     "resume_task",
     "confirm_final",
+    "handle_text_change",
+    "carry_text_change",
     "resolve_rejected",
     "resolve_queried",
     "translation_not_accepted",
     "choose_final",
     "assign_translation_review",
+    "review_source_change",
     "translation_review_in_progress",
     "assign_annotation",
     "annotation_in_progress",
@@ -60,13 +65,16 @@ RowAction = Literal[
     "decide_report",
     "resume_task",
     "review_changes",
+    "handle_text_change",
+    "carry_text_change",
     "resolve",
     "accept_or_review",
     "choose_final",
     "assign_translation_review",
+    "assign_source_review",
     "assign_annotation",
 ]
-Badge = Literal["your_decision", "check_failed", "paused"]
+Badge = Literal["your_decision", "check_failed", "paused", "source_changed"]
 
 # Rule 6: statuses of a translation that still needs a reviewer.
 REVIEWER_NEEDED_STATUSES = frozenset(
@@ -122,6 +130,21 @@ class StepFacts:
     check_failed: bool  # a newest version is automatic_check_failed
     # False: plan row system-written under "Nothing planned" (VD3).
     decided: bool = True
+    # Text changes (V5): work on an exact correction ancestor of a target.
+    # Rule 3a: open, not held, no finish_then_carry resolution.
+    old_open: tuple[OldItem, ...] = ()
+    # Rule 3b: submitted (latest of a live assignment), author without an
+    # annotate assignment on the target, not carried / dismissed / handed over.
+    old_submitted: tuple[OldItem, ...] = ()
+    # Open with a finish_then_carry resolution (rule 9: in progress).
+    finishing: tuple[OldItem, ...] = ()
+    # Rule 8 only (VD22): distinct people with old-version work waiting for
+    # the lead who hold no annotate assignment on the target (minimum over
+    # the targets, as ``annotation_assignments``).
+    pending_old_people: int = 0
+    # Rule 6a: an unresolved SOURCE_UPDATE_UNREVIEWED obligation on the
+    # row's newest translation version.
+    source_changed: bool = False
 
 
 @dataclass(frozen=True)
@@ -133,6 +156,9 @@ class Step:
     badges: tuple[Badge, ...]
     assigned: int | None = None
     target: int | None = None
+    # Rules 3a / 3b: the one old work item the step handles.
+    assignment_id: int | None = None
+    submission_id: str | None = None
 
 
 def in_plan(facts: StepFacts) -> bool:
@@ -204,6 +230,24 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
     # 3: unacknowledged cause on the final result (incl. PLAN_RESTORED).
     if facts.annotate and facts.has_final and facts.unacknowledged_final_cause:
         steps.append(_decision("confirm_final", "final", "review_changes"))
+    # 3a / 3b (V5): one step per old-version work item, target annotatable.
+    if facts.annotate and _may_annotate(facts):
+        steps.extend(
+            replace(
+                _decision("handle_text_change", "annotation", "handle_text_change"),
+                assignment_id=item.assignment_id,
+            )
+            for item in facts.old_open
+        )
+        if not facts.has_final:
+            steps.extend(
+                replace(
+                    _decision("carry_text_change", "annotation", "carry_text_change"),
+                    assignment_id=item.assignment_id,
+                    submission_id=item.submission_id,
+                )
+                for item in facts.old_submitted
+            )
     # 4: rejected or queried translation without an open review.
     if facts.review and translation and not open_review:
         reviewed = [
@@ -252,6 +296,18 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
                 ("check_failed",) if facts.check_failed else (),
             )
         )
+    # 6a (VD14): the source changed under an accepted translation; an assign
+    # step with a warning badge, whatever the Review flag (D26 turns it on).
+    if translation and facts.source_changed and not open_review:
+        steps.append(
+            Step(
+                "review_source_change",
+                "assign",
+                "translation_review",
+                "assign_source_review",
+                ("source_changed",),
+            )
+        )
     # 7: translation review open.
     if open_review:
         steps.append(
@@ -263,12 +319,13 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
                 (),
             )
         )
-    # 8: annotation stage with fewer assignments than "Annotations per text".
+    # 8: annotation stage with fewer assignments than "Annotations per text";
+    # people whose old-version work waits for the lead count too (VD22).
     if (
         facts.annotate
         and _may_annotate(facts)
         and not facts.has_final
-        and facts.annotation_assignments < facts.per_text
+        and facts.annotation_assignments + facts.pending_old_people < facts.per_text
     ):
         counted = facts.per_text > 1
         steps.append(
@@ -282,8 +339,9 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
                 target=facts.per_text if counted else None,
             )
         )
-    # 9: annotation or optional annotation review open.
-    if facts.open_annotations:
+    # 9: annotation or optional annotation review open (a finish_then_carry
+    # assignment on the old version included).
+    if facts.open_annotations or facts.finishing:
         steps.append(
             Step("annotation_in_progress", "in_progress", "annotation", None, ())
         )
@@ -321,6 +379,6 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
 
 
 def segment_of(step: Step) -> Segment | None:
-    """Bar segment: decision (decide_plan, rules 1-5, 4a, fallback), assign
-    (6, 8), progress (7, 9, 10)."""
+    """Bar segment: decision (decide_plan, rules 1-5, 3a, 3b, 4a, fallback),
+    assign (6, 6a, 8), progress (7, 9, 10)."""
     return _SEGMENTS[step.kind]

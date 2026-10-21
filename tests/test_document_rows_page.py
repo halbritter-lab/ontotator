@@ -327,6 +327,7 @@ ROW_KEYS = {
     "version_marker",
     "new",
     "others_activity_at",
+    "moved_work",
 }
 VERSION_KEYS = {
     "document_id",
@@ -358,6 +359,7 @@ WORK_KEYS = {
     "round_ordinal",
     "round_state",
     "lead_correction",
+    "moved_to_version",
 }
 FINAL_KEYS = {
     "author",

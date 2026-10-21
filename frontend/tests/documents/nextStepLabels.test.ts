@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { NextStepView } from "../../src/api/client";
-import { actionLabel, leadSteps, rowActionLabel, secondaryLine, stepLabel, STEP_LABELS } from "../../src/documents/nextStepLabels";
+import { actionLabel, BADGE_LABELS, leadSteps, rowActionLabel, secondaryLine, stepLabel, STEP_FILTER_GROUPS, STEP_LABELS } from "../../src/documents/nextStepLabels";
 import { final, row, stageCell, stages, step, stepOf } from "./fixtures";
 
 describe("next step labels", () => {
@@ -11,11 +11,14 @@ describe("next step labels", () => {
       decide_report: "Decide on problem report",
       resume_task: "Resume paused task",
       confirm_final: "Confirm final result",
+      handle_text_change: "Handle text change",
+      carry_text_change: "Carry to v2",
       resolve_rejected: "Resolve rejected translation",
       resolve_queried: "Resolve queried translation",
       translation_not_accepted: "Translation not accepted",
       choose_final: "Choose final result",
       assign_translation_review: "Assign translation review",
+      review_source_change: "Review source change",
       translation_review_in_progress: "Translation review in progress",
       assign_annotation: "Assign annotation",
       annotation_in_progress: "Annotation in progress",
@@ -36,6 +39,16 @@ describe("next step labels", () => {
     expect(actionLabel("assign_translation_review")).toBe("Assign review…");
     expect(actionLabel("assign_annotation")).toBe("Assign annotation…");
     expect(actionLabel("plan")).toBe("Plan…");
+    // Text changes (documents overview "Copy › Actions").
+    expect(actionLabel("handle_text_change")).toBe("Handle text change…");
+    expect(actionLabel("carry_text_change")).toBe("Carry to v2…");
+    expect(actionLabel("assign_source_review")).toBe("Assign review…");
+    expect(BADGE_LABELS.source_changed).toBe("Source changed");
+  });
+
+  it("offers every step code in the step filter except the fallback", () => {
+    const grouped = STEP_FILTER_GROUPS.flatMap(([, codes]) => codes);
+    expect(new Set(grouped)).toEqual(new Set(Object.keys(STEP_LABELS).filter(code => code !== "decide_plan" && code !== "needs_attention")));
   });
 
   it("labels the secondary line per detail kind", () => {

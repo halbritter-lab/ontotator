@@ -564,9 +564,12 @@ def test_check_failed_and_source_changed_use_decision_tone_with_assign_steps() -
     assert (assign.code, assign.kind) == ("assign_translation_review", "assign")
     c = cells(f)
     assert (c.review.state, c.review.tone) == ("check_failed", "decision")
-    # Source changed: the cell's colour is decision; its step (rule 6a, kind
-    # assign) arrives with O2a, so here only the cell is asserted.
-    c = cells(facts(source_changed_from=1))
+    # Source changed: the cell's colour is decision, its step (rule 6a) is
+    # kind assign.
+    f = facts(source_changed=True, source_changed_from=1)
+    [assign, *_] = derive_steps(f.step)
+    assert (assign.code, assign.kind) == ("review_source_change", "assign")
+    c = cells(f)
     assert (c.review.state, c.review.tone) == ("source_changed", "decision")
     assert c.review.detail.from_version == 1
     # An open review of the changed source shows the re-review instead.
@@ -919,8 +922,12 @@ def _valid(f: StepFacts) -> bool:
 
 
 _ACTIONABLE = {"decision", "todo", "undecided"}
-# Cell states whose step arrives with O2a (rules 3a / 3b / 6a).
-_O2A_STATES = {"source_changed", "old_text_open", "old_text_submitted"}
+# Text-change cells and the step (rules 3a / 3b / 6a) that must name them.
+_TEXT_CHANGE_STEPS = {
+    "old_text_open": "handle_text_change",
+    "old_text_submitted": "carry_text_change",
+    "source_changed": "review_source_change",
+}
 
 
 def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
@@ -993,6 +1000,11 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
             has_final=has_final,
             check_failed=status == "automatic_check_failed",
             decided=decided,
+            old_open=item if extra == "open" else (),
+            old_submitted=item if extra == "submitted" else (),
+            finishing=item if extra == "finishing" else (),
+            pending_old_people=int(extra in ("open", "submitted", "finishing")),
+            source_changed=extra == "source_changed" and not is_source,
         )
         if not _valid(step):
             continue
@@ -1000,9 +1012,6 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
         f = StageFacts(
             step=step,
             paused_task=paused_task,
-            old_open=item if extra == "open" else (),
-            old_submitted=item if extra == "submitted" else (),
-            finishing=item if extra == "finishing" else (),
             source_changed_from=(
                 1 if extra == "source_changed" and not is_source else None
             ),
@@ -1042,9 +1051,12 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
         named = {step_cell(s.code, f) for s in steps}
         for name in ("review", "annotation", "final"):
             cell = getattr(c, name)
-            if cell.state in _O2A_STATES:
-                continue
-            if cell.tone == "todo":
+            if cell.state in _TEXT_CHANGE_STEPS:
+                # A text-change cell is named by its own step.
+                code = _TEXT_CHANGE_STEPS[cell.state]
+                assert code in codes and step_cell(code, f) == name, (cell, f)
+                reverse += 1
+            elif cell.tone == "todo":
                 assert name in named, (name, cell, steps, f)
                 reverse += 1
             elif cell.tone == "undecided":

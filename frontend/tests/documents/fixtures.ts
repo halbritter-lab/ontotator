@@ -80,6 +80,7 @@ export function work(overrides: Partial<WorkItemView> & Pick<WorkItemView, "assi
     round_ordinal: null,
     round_state: null,
     lead_correction: false,
+    moved_to_version: null,
     ...overrides,
   };
 }
@@ -494,6 +495,7 @@ export function step(overrides: Partial<NextStepView> = {}): NextStepView {
     detail: null,
     report_id: null,
     assignment_id: null,
+    submission_id: null,
     document_id: null,
     ...overrides,
   };
@@ -511,12 +513,16 @@ const STEP_ACTIONS: Partial<Record<NextStepView["code"], NonNullable<NextStepVie
   choose_final: "choose_final",
   assign_translation_review: "assign_translation_review",
   assign_annotation: "assign_annotation",
+  handle_text_change: "handle_text_change",
+  carry_text_change: "carry_text_change",
+  review_source_change: "assign_source_review",
 };
 const STEP_KINDS: Record<NextStepView["code"], NextStepView["kind"]> = {
   decide_plan: "decision",
   decide_report: "decision", resume_task: "decision", confirm_final: "decision", resolve_rejected: "decision", resolve_queried: "decision",
   translation_not_accepted: "decision", choose_final: "decision", needs_attention: "decision",
-  assign_translation_review: "assign", assign_annotation: "assign",
+  handle_text_change: "decision", carry_text_change: "decision",
+  assign_translation_review: "assign", assign_annotation: "assign", review_source_change: "assign",
   translation_review_in_progress: "in_progress", annotation_in_progress: "in_progress", annotation_review_in_progress: "in_progress", waiting_for_translation_review: "in_progress",
   done: "done", translation_accepted: "done",
 };

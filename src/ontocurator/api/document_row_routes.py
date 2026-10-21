@@ -26,7 +26,13 @@ from ontocurator.application.document_rows import (
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Task
 from ontocurator.domain.document_rows import BarCategory
-from ontocurator.domain.next_steps import RowAction, Stage, StepCode, StepKind
+from ontocurator.domain.next_steps import (
+    Badge,
+    RowAction,
+    Stage,
+    StepCode,
+    StepKind,
+)
 from ontocurator.domain.stage_cells import (
     AnnotationState,
     CellNote,
@@ -105,6 +111,8 @@ class WorkItemView(_View):
     person: PersonRefView | None = None
     # F1 (FD1): the lead's own correction of a rejected or queried version.
     lead_correction: bool = False
+    # Text changes (V5): version this (revoked) work was moved to.
+    moved_to_version: int | None = None
 
 
 class ReportIssueView(_View):
@@ -257,15 +265,15 @@ class NextStepView(_View):
     kind: StepKind
     stage: Stage
     action: RowAction | None = None
-    badges: list[Literal["your_decision", "check_failed", "paused"]] = Field(
-        default_factory=list
-    )
+    badges: list[Badge] = Field(default_factory=list)
     assigned: int | None = None
     target: int | None = None
     owner: StepOwnerView
     detail: StepDetailView | None = None
     report_id: str | None = None
     assignment_id: int | None = None
+    # Text changes (V5): the submitted old-version work of "Carry to v2…".
+    submission_id: str | None = None
     document_id: str | None = None
 
 
@@ -277,6 +285,8 @@ class DocumentRowView(_View):
     versions: list[DocumentVersionView]
     parallel_roots: bool
     work: list[WorkItemView]
+    # Revoked assignments moved to a newer version (V5, Text versions).
+    moved_work: list[WorkItemView] = Field(default_factory=list)
     final: FinalSelectionSummary | None
     issues: list[RowItemView]
     notes: list[RowItemView]

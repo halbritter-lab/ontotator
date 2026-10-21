@@ -17,11 +17,14 @@ export const STEP_LABELS: Readonly<Record<StepCode, string>> = {
   decide_report: "Decide on problem report",
   resume_task: "Resume paused task",
   confirm_final: "Confirm final result",
+  handle_text_change: "Handle text change",
+  carry_text_change: "Carry to v2",
   resolve_rejected: "Resolve rejected translation",
   resolve_queried: "Resolve queried translation",
   translation_not_accepted: "Translation not accepted",
   choose_final: "Choose final result",
   assign_translation_review: "Assign translation review",
+  review_source_change: "Review source change",
   translation_review_in_progress: "Translation review in progress",
   assign_annotation: "Assign annotation",
   annotation_in_progress: "Annotation in progress",
@@ -37,11 +40,14 @@ export const ACTION_LABELS: Readonly<Record<RowAction, string>> = {
   decide_report: "Decide on report…",
   resume_task: "Resume task…",
   review_changes: "Review changes…",
+  handle_text_change: "Handle text change…",
+  carry_text_change: "Carry to v2…",
   resolve: "Resolve…",
   accept_or_review: "Assign review or accept…",
   // Rendered as "Accept result…" for one submission (`rowActionLabel`, V6/VD16).
   choose_final: "Compare results…",
   assign_translation_review: "Assign review…",
+  assign_source_review: "Assign review…",
   assign_annotation: "Assign annotation…",
 };
 
@@ -49,13 +55,14 @@ export const BADGE_LABELS: Readonly<Record<StepBadge, string>> = {
   your_decision: "Your decision",
   check_failed: "Check failed",
   paused: "Paused",
+  source_changed: "Source changed",
 };
 
 /** Next-step filter options grouped by stage (spec "Filters": Next step grouped by stage). */
 export const STEP_FILTER_GROUPS: readonly (readonly [string, readonly StepCode[]])[] = [
   ["Problem reports and paused tasks", ["decide_report", "resume_task"]],
-  ["Translation review", ["resolve_rejected", "resolve_queried", "translation_not_accepted", "assign_translation_review", "translation_review_in_progress", "waiting_for_translation_review"]],
-  ["Annotation", ["assign_annotation", "annotation_in_progress", "annotation_review_in_progress"]],
+  ["Translation review", ["resolve_rejected", "resolve_queried", "translation_not_accepted", "assign_translation_review", "review_source_change", "translation_review_in_progress", "waiting_for_translation_review"]],
+  ["Annotation", ["handle_text_change", "carry_text_change", "assign_annotation", "annotation_in_progress", "annotation_review_in_progress"]],
   ["Final result", ["choose_final", "confirm_final"]],
   ["Done", ["done", "translation_accepted"]],
 ];

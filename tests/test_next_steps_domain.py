@@ -2,14 +2,18 @@
 
 import itertools
 import logging
+from dataclasses import replace
 
 import pytest
 
 from ontocurator.domain.next_steps import (
     REVIEWER_NEEDED_STATUSES,
+    OldItem,
     StepFacts,
+    _final_ready,
     derive_steps,
     in_plan,
+    row_stage,
     segment_of,
 )
 
@@ -446,3 +450,231 @@ def test_decided_not_in_plan_row_has_no_step():
 def test_decide_plan_segment_is_decision():
     [step] = derive_steps(facts(decided=False))
     assert segment_of(step) == "decision"
+
+
+# --- Text changes after annotation (documents overview V5, VD22) ----------- #
+
+TOM, ANA, LUC = 11, 12, 13
+
+
+def _annotating(**kw):
+    """An accepted translation in the annotation stage, Annotate on."""
+    base = dict(review=True, annotate=True, translation_statuses=("accepted",))
+    base.update(kw)
+    return facts(**base)
+
+
+def test_rule_3a_open_old_version_work():
+    item = OldItem(TOM, 1, assignment_id=41)
+    steps = derive_steps(
+        _annotating(open_annotations=1, old_open=(item,), pending_old_people=1)
+    )
+    first = steps[0]
+    assert (first.code, first.kind, first.stage, first.action) == (
+        "handle_text_change",
+        "decision",
+        "annotation",
+        "handle_text_change",
+    )
+    assert first.badges == ("your_decision",)
+    assert first.assignment_id == 41 and first.submission_id is None
+    assert "assign_annotation" not in {s.code for s in steps}
+    assert segment_of(first) == "decision"
+    # The target must be annotatable (rule on, translation not accepted).
+    not_accepted = _annotating(
+        translation_statuses=("ready_for_review",), old_open=(item,)
+    )
+    assert "handle_text_change" not in {s.code for s in derive_steps(not_accepted)}
+
+
+def test_rule_3a_skipped_when_held_or_finish_then_carry():
+    # The caller leaves held and finish_then_carry items out of old_open: a
+    # held one is decided through its report (rule 1), a finishing one is in
+    # progress (rule 9).
+    item = OldItem(TOM, 1, assignment_id=41)
+    held = derive_steps(
+        _annotating(open_annotations=1, open_report_id="r1", pending_old_people=1)
+    )
+    assert [s.code for s in held][:1] == ["decide_report"]
+    assert "handle_text_change" not in {s.code for s in held}
+    assert "assign_annotation" not in {s.code for s in held}
+    finishing = derive_steps(
+        _annotating(open_annotations=1, finishing=(item,), pending_old_people=1)
+    )
+    assert [s.code for s in finishing] == ["annotation_in_progress"]
+
+
+def test_rule_3b_submitted_on_old_version_without_target_assignment():
+    item = OldItem(ANA, 1, submission_id="sub-1")
+    steps = derive_steps(_annotating(old_submitted=(item,), pending_old_people=1))
+    assert [s.code for s in steps] == ["carry_text_change"]
+    (step,) = steps
+    assert (step.kind, step.stage, step.action) == (
+        "decision",
+        "annotation",
+        "carry_text_change",
+    )
+    assert step.submission_id == "sub-1" and step.assignment_id is None
+
+
+def test_rule_3b_needs_no_final_and_no_resolution():
+    item = OldItem(ANA, 1, submission_id="sub-1")
+    # A final on the row: the final's own cause (rule 3) decides instead.
+    with_final = derive_steps(
+        _annotating(old_submitted=(item,), has_final=True, pending_old_people=1)
+    )
+    assert "carry_text_change" not in {s.code for s in with_final}
+    # A carried or dismissed submission is no item (the caller filters):
+    # nothing waits, so rule 8 asks for an annotation of v2 again.
+    assert codes(review=True, annotate=True, translation_statuses=("accepted",)) == [
+        "assign_annotation"
+    ]
+
+
+def test_rule_6a_source_change_is_assign_with_badge():
+    steps = derive_steps(
+        facts(review=True, source_changed=True, translation_statuses=("accepted",))
+    )
+    assert [s.code for s in steps] == ["review_source_change"]
+    (step,) = steps
+    assert (step.kind, step.stage, step.action, step.badges) == (
+        "assign",
+        "translation_review",
+        "assign_source_review",
+        ("source_changed",),
+    )
+    assert segment_of(step) == "assign"
+    # Review off, Annotate on: the source change still asks for a review.
+    assert "review_source_change" in codes(
+        annotate=True, source_changed=True, translation_statuses=("accepted",)
+    )
+    # An open translation review resolves it: no step, the review runs.
+    assert codes(
+        review=True,
+        source_changed=True,
+        translation_statuses=("accepted",),
+        open_translation_reviews=1,
+    ) == ["translation_review_in_progress"]
+    # Sources have no translation review.
+    assert "review_source_change" not in codes(
+        annotate=True, is_source=True, source_changed=True, translation_statuses=(None,)
+    )
+    # 6a follows rule 6.
+    both = codes(review=True, source_changed=True, translation_statuses=("translated",))
+    assert both == ["assign_translation_review", "review_source_change"]
+
+
+def test_precedence_3_3a_3b_4():
+    steps = derive_steps(
+        facts(
+            review=True,
+            annotate=True,
+            rule_on=False,
+            translation_statuses=("reviewed",),
+            newest_decisions=("rejected",),
+            has_final=True,
+            unacknowledged_final_cause=True,
+            open_annotations=1,
+            old_open=(OldItem(TOM, 1, assignment_id=41),),
+            pending_old_people=1,
+        )
+    )
+    assert [s.code for s in steps][:3] == [
+        "confirm_final",
+        "handle_text_change",
+        "resolve_rejected",
+    ]
+    steps = derive_steps(
+        facts(
+            review=True,
+            annotate=True,
+            rule_on=False,
+            translation_statuses=("reviewed",),
+            newest_decisions=("rejected",),
+            open_annotations=1,
+            old_open=(OldItem(TOM, 1, assignment_id=41),),
+            old_submitted=(OldItem(ANA, 1, submission_id="s1"),),
+            pending_old_people=2,
+        )
+    )
+    assert [s.code for s in steps][:3] == [
+        "handle_text_change",
+        "carry_text_change",
+        "resolve_rejected",
+    ]
+
+
+def test_rule_8_counts_pending_old_people():
+    # Per text 2: Luc's v1 work was moved (he holds a v2 assignment now), Tom
+    # submitted on v1 and waits for the carry: 1 + 1 pending = 2, nothing to
+    # assign.
+    f = _annotating(
+        per_text=2,
+        annotation_assignments=1,
+        open_annotations=1,
+        old_submitted=(OldItem(TOM, 1, submission_id="s-tom"),),
+        pending_old_people=1,
+    )
+    assert "assign_annotation" not in {s.code for s in derive_steps(f)}
+    # Without the pending person one slot is free again.
+    f = _annotating(per_text=2, annotation_assignments=1, open_annotations=1)
+    (assign,) = [s for s in derive_steps(f) if s.code == "assign_annotation"]
+    assert (assign.assigned, assign.target) == (1, 2)
+
+
+def test_pending_old_people_only_affects_rule_8():
+    for kw in (
+        dict(missing_final=True, annotation_assignments=1),
+        dict(missing_final=True, annotation_assignments=2, per_text=2),
+        dict(has_final=True, annotation_assignments=1),
+        dict(annotation_assignments=0, open_annotations=1),
+    ):
+        base = _annotating(**kw)
+        pending = replace(base, pending_old_people=1)
+        assert _final_ready(base) == _final_ready(pending)
+        assert row_stage(base) == row_stage(pending)
+        drop = {"assign_annotation"}
+        assert [s.code for s in derive_steps(base) if s.code not in drop] == [
+            s.code for s in derive_steps(pending) if s.code not in drop
+        ]
+    # choose_final (rule 5) stays on annotation_assignments: per text 2 with
+    # one assignment is not ready even with a pending person (Tom's v1
+    # submission counts for the missing-final rule).
+    f = _annotating(
+        missing_final=True,
+        annotation_assignments=1,
+        per_text=2,
+        old_submitted=(OldItem(TOM, 1, submission_id="s-tom"),),
+        pending_old_people=1,
+    )
+    assert [s.code for s in derive_steps(f)] == ["carry_text_change"]
+
+
+def test_rule_9_finishing_is_in_progress():
+    item = OldItem(TOM, 1, assignment_id=41)
+    # Even without open_annotations the finishing item is in progress.
+    steps = derive_steps(_annotating(finishing=(item,), pending_old_people=1))
+    assert [s.code for s in steps] == ["annotation_in_progress"]
+    assert segment_of(steps[0]) == "progress"
+
+
+def test_one_step_per_old_work_item():
+    items = (OldItem(TOM, 1, assignment_id=41), OldItem(LUC, 1, assignment_id=44))
+    steps = derive_steps(
+        _annotating(open_annotations=2, old_open=items, pending_old_people=2)
+    )
+    handle = [s for s in steps if s.code == "handle_text_change"]
+    assert [s.assignment_id for s in handle] == [41, 44]
+    assert steps[:2] == handle
+    submitted = (
+        OldItem(ANA, 1, submission_id="s-ana"),
+        OldItem(TOM, 1, submission_id="s-tom"),
+    )
+    carry = [
+        s
+        for s in derive_steps(
+            _annotating(old_submitted=submitted, pending_old_people=2)
+        )
+        if s.code == "carry_text_change"
+    ]
+    assert [s.submission_id for s in carry] == ["s-ana", "s-tom"]

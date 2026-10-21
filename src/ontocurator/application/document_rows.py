@@ -204,6 +204,26 @@ class ReviewRecord:
 
 
 @dataclass(frozen=True)
+class ResolutionFact:
+    """A ``text_change_resolutions`` row (documents overview V5)."""
+
+    assignment_id: int | None
+    submission_id: str | None
+    resolution: str
+    from_document_id: str
+    to_document_id: str
+
+
+@dataclass(frozen=True)
+class SourceObligationFact:
+    """An unresolved ``SOURCE_UPDATE_UNREVIEWED`` obligation (unfiltered)."""
+
+    cause_id: str
+    cause_revision: int
+    old_source_document_id: str
+
+
+@dataclass(frozen=True)
 class RowFacts:
     project_key: str
     viewer_user_id: int
@@ -260,6 +280,16 @@ class RowFacts:
     # (None before the first visit: nothing is NEW).
     others_activity: dict[tuple[str, str], datetime] = field(default_factory=dict)
     baseline_at: datetime | None = None
+    # Text changes (V5): every text-change resolution of the project, in
+    # decision order; last submission per submitted annotate assignment
+    # (rule 3b); unresolved source-change obligations per translation
+    # document, oldest source step first (rule 6a), unfiltered, because
+    # ``derive_final_state`` keeps them only for chains with a final or work.
+    resolutions: list[ResolutionFact] = field(default_factory=list)
+    last_submissions: dict[int, str] = field(default_factory=dict)
+    source_obligations: dict[str, tuple[SourceObligationFact, ...]] = field(
+        default_factory=dict
+    )
 
 
 def load_last_activity(
@@ -797,6 +827,61 @@ def _findings(conn: Connection, pid: int) -> dict[int, int]:
     }
 
 
+def _resolutions(conn: Connection, pid: int) -> list[ResolutionFact]:
+    return [
+        ResolutionFact(
+            assignment_id=row.assignment_id,
+            submission_id=row.submission_id,
+            resolution=row.resolution,
+            from_document_id=row.from_document_id,
+            to_document_id=row.to_document_id,
+        )
+        for row in conn.execute(
+            select(
+                TextChangeResolutionRow.assignment_id,
+                TextChangeResolutionRow.submission_id,
+                TextChangeResolutionRow.resolution,
+                TextChangeResolutionRow.from_document_id,
+                TextChangeResolutionRow.to_document_id,
+            )
+            .where(TextChangeResolutionRow.project_id == pid)
+            .order_by(TextChangeResolutionRow.id)
+        )
+    ]
+
+
+def _last_submissions(conn: Connection, pid: int) -> dict[int, str]:
+    """Last submission of each submitted annotate assignment (rule 3b)."""
+    return {
+        row.id: row.last_submission_id
+        for row in conn.execute(
+            select(AssignmentRow.id, AssignmentRow.last_submission_id).where(
+                AssignmentRow.project_id == pid,
+                AssignmentRow.task == "annotate",
+                AssignmentRow.status == "submitted",
+                AssignmentRow.last_submission_id.is_not(None),
+            )
+        )
+    }
+
+
+def _source_obligations(
+    conn: Connection, repo: Repository, key: str, pid: int
+) -> dict[str, tuple[SourceObligationFact, ...]]:
+    result: dict[str, list[SourceObligationFact]] = {}
+    for cause in repo.workflow_causes_in(conn, key, pid):
+        if cause["code"] != "SOURCE_UPDATE_UNREVIEWED":
+            continue
+        result.setdefault(cause["document_id"], []).append(
+            SourceObligationFact(
+                cause_id=cause["cause_id"],
+                cause_revision=cause.get("cause_revision", 1),
+                old_source_document_id=cause["old_source_document_id"],
+            )
+        )
+    return {document_id: tuple(items) for document_id, items in result.items()}
+
+
 def _user_ids(conn: Connection, pseudonyms: Iterable[str]) -> dict[str, int]:
     """User id per pseudonym (pseudonyms without an account are left out)."""
     wanted = sorted(set(pseudonyms))
@@ -894,6 +979,9 @@ def load_facts(
         findings=_findings(conn, pid),
         others_activity=load_others_activity(conn, pid, viewer_user_id),
         baseline_at=documents_visits.baseline(conn, viewer_user_id, pid),
+        resolutions=_resolutions(conn, pid),
+        last_submissions=_last_submissions(conn, pid),
+        source_obligations=_source_obligations(conn, repo, key, pid),
     )
 
 

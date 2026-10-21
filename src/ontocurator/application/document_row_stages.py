@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     from ontocurator.application.document_row_page import _Context
 
 RowKey = tuple[str, str]
+# Resolutions that take a submission out of the eligible ones (VD16).
+_NOT_ELIGIBLE = frozenset({"carried", "moved", "handed_over"})
 _ACCEPTANCE_HOW: Mapping[str, Literal["package", "external"]] = {
     "package": "package",
     "lead": "external",
@@ -39,17 +41,21 @@ def _review_reason(
     ctx: _Context,
     reviews: Sequence[rules.AssignmentFact],
     version_of: Mapping[str, rules.Version],
-) -> tuple[Literal["correction", "new_review"] | None, str | None]:
+) -> tuple[Literal["correction", "new_review", "source_changed"] | None, str | None]:
     """Why an open translation review reviews the text again (D25, D26).
 
     A correction request carries the lead's free-text reason; a review of a
-    correction version is a correction review; a review of an accepted
-    version is a new review (D25). O2a adds ``source_changed``.
+    version with an unresolved source change reviews that change (V5); a
+    review of a correction version is a correction review; a review of an
+    accepted version is a new review (D25).
     """
     reasons = ctx.facts.correction_reasons
     for item in reviews:
         if item.assignment_id in reasons:
             return "correction", reasons[item.assignment_id] or None
+    for item in reviews:
+        if item.document_id in ctx.facts.source_obligations:
+            return "source_changed", None
     for item in reviews:
         version = version_of.get(item.document_id)
         if version is None:
@@ -131,10 +137,12 @@ def stage_facts(
     current: Sequence[rules.AssignmentFact],
     step_facts: StepFacts,
     final: Mapping[str, Any] | None,
+    source_changed_from: int | None = None,
 ) -> StageFacts:
     """``StageFacts`` of one row; ``current`` = non-revoked assignments on
     live versions, ``targets`` = newest counted version per live root,
-    ``final`` = the row's live final result."""
+    ``final`` = the row's live final result, ``source_changed_from`` = the
+    source version of an unreviewed source change (rule 6a)."""
     facts = ctx.facts
     version_of = {v.document_id: v for chain in live for v in chain.versions}
     target_ids = {v.document_id for v in targets}
@@ -151,6 +159,16 @@ def stage_facts(
     running = [
         item for item in annotations if item.status != "submitted" and not item.held
     ]
+
+    def eligible(item: rules.AssignmentFact) -> bool:
+        """Not carried, moved or handed over to another version (VD16)."""
+        if ctx.resolution_of.get(item.assignment_id) in _NOT_ELIGIBLE:
+            return False
+        submission = facts.last_submissions.get(item.assignment_id)
+        return submission is None or not (
+            ctx.submission_resolutions.get(submission, set()) & _NOT_ELIGIBLE
+        )
+
     submitted_by_target = [
         [
             item
@@ -158,6 +176,7 @@ def stage_facts(
             if item.document_id == target.document_id
             and item.status == "submitted"
             and not item.held
+            and eligible(item)
         ]
         for target in targets
     ]
@@ -267,6 +286,7 @@ def stage_facts(
         final_round_ordinal=final["round_ordinal"] if final is not None else None,
         final_version=final["version"] if final is not None else None,
         final_on_newest=final is None or final["document_id"] in target_ids,
+        source_changed_from=source_changed_from,
         submissions=submissions,
         final_submissions=final_submissions,
         parallel_roots=len(live) > 1,

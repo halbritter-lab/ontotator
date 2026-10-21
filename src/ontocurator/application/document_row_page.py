@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 _PREFLIGHT_ONLY = frozenset({"MISSING_FINAL_SELECTION"})
 # Shown as the row's waiting line, never counted as a note.
 _WAITING = frozenset({"ROUND_REVIEW_PENDING"})
+# Unreviewed source change: an issue of category translation (V5).
+_SOURCE_CHANGED = "SOURCE_UPDATE_UNREVIEWED"
 # Header checkbox: at most this many filtered case IDs (spec "Selection").
 MAX_CASE_IDS = 2000
 # Report excerpt length of a next step's secondary line.
@@ -85,6 +87,23 @@ class _Context:
             self.assignments.setdefault(assignment.document_id, []).append(assignment)
             self.assignment_by_id[assignment.assignment_id] = assignment
         self.rounds = {item.round_id: item for item in facts.rounds}
+        # Every version of the project (source versions of a source change).
+        self.version_by_id = {v.document_id: v for v in facts.versions}
+        # Text-change resolutions (V5): per assignment (moved,
+        # finish_then_carry, withdrawn) and per submission (carried,
+        # handed_over, dismissed).
+        self.resolution_of: dict[int, str] = {}
+        self.moved_to: dict[int, str] = {}
+        self.submission_resolutions: dict[str, set[str]] = {}
+        for resolution in facts.resolutions:
+            if resolution.assignment_id is not None:
+                self.resolution_of[resolution.assignment_id] = resolution.resolution
+                if resolution.resolution == "moved":
+                    self.moved_to[resolution.assignment_id] = resolution.to_document_id
+            if resolution.submission_id is not None:
+                self.submission_resolutions.setdefault(
+                    resolution.submission_id, set()
+                ).add(resolution.resolution)
         self.ordinals = rules.round_ordinals(
             (item.round_id, item.predecessor_round_id) for item in facts.rounds
         )
@@ -370,6 +389,32 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
         assignments=[item for item in row_assignments if item.document_id in live_ids],
         per_text=facts.annotations_per_text,
     )
+    if not is_source and not discarded:
+        # A source change is an issue of category translation on rows with
+        # Review applicable (V5), also without a final or work on the chain.
+        listed = {item["cause_id"] for item in issues_and_notes}
+        for item in issues_and_notes:
+            if item["code"] == _SOURCE_CHANGED:
+                item["category"] = "translation"
+                translation_failed = True
+        for chain in live:
+            newest = chain.newest
+            for obligation in facts.source_obligations.get(newest.document_id, ()):
+                if obligation.cause_id in listed:
+                    continue
+                issues_and_notes.append(
+                    {
+                        **_item(
+                            _SOURCE_CHANGED,
+                            obligation.cause_id,
+                            cause_revision=obligation.cause_revision,
+                            document_id=newest.document_id,
+                            version=newest.version,
+                        ),
+                        "category": "translation",
+                    }
+                )
+                translation_failed = True
     reason: str | None = None
     if not has_final and not counts:
         reason = "no_submission" if submission_count == 0 else "work_open"
@@ -445,30 +490,13 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
             for v in chain.versions
         ],
         "parallel_roots": parallel,
-        "work": [
-            {
-                "assignment_id": item.assignment_id,
-                "document_id": item.document_id,
-                "version": version_of[item.document_id].version,
-                "author_label": item.pseudonym,
-                "is_me": item.user_id == facts.viewer_user_id,
-                "person": ctx.person(item.user_id, item.pseudonym),
-                "task": item.task,
-                "status": item.status,
-                "held": item.held,
-                "lead_correction": item.lead_correction,
-                "round_ordinal": (
-                    ctx.ordinals.get(item.active_round_id)
-                    if item.active_round_id is not None
-                    else None
-                ),
-                "round_state": (
-                    ctx.rounds[item.active_round_id].state
-                    if item.active_round_id in ctx.rounds
-                    else None
-                ),
-            }
-            for item in active
+        "work": [_work_item(ctx, item, version_of) for item in active],
+        # Revoked assignments moved to a newer version (Text versions "moved
+        # to v2"); never part of ``work``, which holds active work only.
+        "moved_work": [
+            _work_item(ctx, item, version_of)
+            for item in sorted(row_assignments, key=lambda a: a.assignment_id)
+            if item.revoked and item.assignment_id in ctx.moved_to
         ],
         "final": final,
         "issues": [item for item in issues_and_notes if item["category"] is not None],
@@ -519,6 +547,41 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
             and others_at > facts.baseline_at
         ),
         "others_activity_at": others_at,
+    }
+
+
+def _work_item(
+    ctx: _Context,
+    item: rules.AssignmentFact,
+    version_of: Mapping[str, rules.Version],
+) -> dict[str, Any]:
+    """``WorkItemView`` fields of one assignment of the row."""
+    moved = ctx.moved_to.get(item.assignment_id)
+    moved_version = ctx.version_by_id.get(moved) if moved is not None else None
+    return {
+        "assignment_id": item.assignment_id,
+        "document_id": item.document_id,
+        "version": version_of[item.document_id].version,
+        "author_label": item.pseudonym,
+        "is_me": item.user_id == ctx.facts.viewer_user_id,
+        "person": ctx.person(item.user_id, item.pseudonym),
+        "task": item.task,
+        "status": item.status,
+        "held": item.held,
+        "lead_correction": item.lead_correction,
+        "round_ordinal": (
+            ctx.ordinals.get(item.active_round_id)
+            if item.active_round_id is not None
+            else None
+        ),
+        "round_state": (
+            ctx.rounds[item.active_round_id].state
+            if item.active_round_id in ctx.rounds
+            else None
+        ),
+        "moved_to_version": (
+            moved_version.version if moved_version is not None else None
+        ),
     }
 
 
@@ -600,6 +663,112 @@ def _step_work(
     return ()
 
 
+# Resolutions that settle a submission on an old version (rule 3b; the spec
+# names carried and dismissed, a handover settles it as well).
+_SETTLED = frozenset({"carried", "dismissed", "handed_over"})
+
+
+def _ancestors(
+    target: rules.Version, version_of: Mapping[str, rules.Version]
+) -> dict[str, rules.Version]:
+    """Exact correction ancestors of ``target`` (I2, as
+    ``text_changes.is_exact_ancestor``): each step a correction of the same
+    text whose version is one higher than its parent's."""
+    result: dict[str, rules.Version] = {}
+    current = target
+    while current.origin == "correction":
+        parent = version_of.get(current.derived_from or "")
+        if (
+            parent is None
+            or parent.document_id in result
+            or (
+                parent.external_id,
+                parent.version + 1,
+            )
+            != (current.external_id, current.version)
+        ):
+            break
+        result[parent.document_id] = parent
+        current = parent
+    return result
+
+
+@dataclass(frozen=True)
+class _OldWork:
+    """Annotation work on exact ancestors of the row's targets (V5)."""
+
+    old_open: tuple[steps_rules.OldItem, ...]
+    old_submitted: tuple[steps_rules.OldItem, ...]
+    finishing: tuple[steps_rules.OldItem, ...]
+    # Per target: people with waiting old-version work and no annotate
+    # assignment on that target (VD22).
+    waiting: tuple[int, ...]
+    # Old assignment id -> the target its work belongs to.
+    target_of: dict[int, rules.Version]
+
+
+def _old_work(
+    ctx: _Context,
+    live: Sequence[rules.Chain],
+    targets: Sequence[rules.Version],
+    annotations: Sequence[rules.AssignmentFact],
+) -> _OldWork:
+    """Rules 3a / 3b items and finish_then_carry items per target.
+
+    ``annotations`` are the row's non-revoked annotate assignments on live
+    versions. A held old task is decided through its report first (I5): it
+    is no 3a item but still waits, so it counts for rule 8.
+    """
+    version_of = {v.document_id: v for chain in live for v in chain.versions}
+    old_open: list[steps_rules.OldItem] = []
+    old_submitted: list[steps_rules.OldItem] = []
+    finishing: list[steps_rules.OldItem] = []
+    waiting: list[int] = []
+    target_of: dict[int, rules.Version] = {}
+    for target in targets:
+        ancestors = _ancestors(target, version_of)
+        holders = {
+            item.user_id
+            for item in annotations
+            if item.document_id == target.document_id
+        }
+        people: set[int] = set()
+        for item in annotations:
+            old = ancestors.get(item.document_id)
+            if old is None:
+                continue
+            target_of[item.assignment_id] = target
+            entry = steps_rules.OldItem(
+                item.user_id, old.version, assignment_id=item.assignment_id
+            )
+            if _open(item):
+                if item.held:
+                    pass
+                elif ctx.resolution_of.get(item.assignment_id) == "finish_then_carry":
+                    finishing.append(entry)
+                else:
+                    old_open.append(entry)
+                people.add(item.user_id)
+                continue
+            submission = ctx.facts.last_submissions.get(item.assignment_id)
+            if (
+                submission is None
+                or item.user_id in holders
+                or ctx.submission_resolutions.get(submission, set()) & _SETTLED
+            ):
+                continue
+            old_submitted.append(replace(entry, submission_id=submission))
+            people.add(item.user_id)
+        waiting.append(len(people - holders))
+    return _OldWork(
+        tuple(old_open),
+        tuple(old_submitted),
+        tuple(finishing),
+        tuple(waiting),
+        target_of,
+    )
+
+
 def _row_steps(
     ctx: _Context,
     key: RowKey,
@@ -645,6 +814,33 @@ def _row_steps(
         sum(1 for item in annotations if item.document_id == target.document_id)
         for target in targets
     ]
+    old_work = _old_work(ctx, live, targets, annotations)
+    # Rule 8 compares annotation_assignments + pending_old_people with
+    # "Annotations per text": the pair adds up to the minimum over the
+    # targets of assignments plus waiting people (VD22).
+    assigned_min = min(per_target, default=0)
+    pending_old_people = (
+        min(
+            (n + w for n, w in zip(per_target, old_work.waiting, strict=True)),
+            default=0,
+        )
+        - assigned_min
+    )
+    # Rule 6a: unresolved source changes on the newest translation versions.
+    obligations = (
+        []
+        if is_source
+        else [
+            (chain.newest, obligation)
+            for chain in live
+            for obligation in facts.source_obligations.get(chain.newest.document_id, ())
+        ]
+    )
+    source_versions = [
+        ctx.version_by_id[obligation.old_source_document_id].version
+        for _, obligation in obligations
+        if obligation.old_source_document_id in ctx.version_by_id
+    ]
     # Rule 6 points at the first target that still needs a reviewer.
     needs_reviewer = next(
         (
@@ -679,7 +875,7 @@ def _row_steps(
         if not is_source
         else (None,),
         open_translation_reviews=len(reviews),
-        annotation_assignments=min(per_target, default=0),
+        annotation_assignments=assigned_min,
         open_annotations=len(open_annotations),
         open_annotation_reviews=len(open_reviews),
         missing_final=missing_final,
@@ -687,6 +883,11 @@ def _row_steps(
         check_failed=needs_reviewer is not None
         and needs_reviewer.translation_status == "automatic_check_failed",
         decided=decided,
+        old_open=old_work.old_open,
+        old_submitted=old_work.old_submitted,
+        finishing=old_work.finishing,
+        pending_old_people=pending_old_people,
+        source_changed=bool(obligations),
     )
     ctx.flags[key] = (review, annotate)
     ctx.step_facts[key] = step_facts
@@ -702,6 +903,7 @@ def _row_steps(
             current=current,
             step_facts=step_facts,
             final=final,
+            source_changed_from=min(source_versions, default=None),
         ),
         derived,
     )
@@ -739,7 +941,20 @@ def _row_steps(
         step_report: str | None = None
         assignment_id: int | None = None
         code = step.code
-        if code == "decide_report":
+        if code in ("handle_text_change", "carry_text_change"):
+            # The old work item; ``document_id`` is the target it moves or
+            # carries to, the detail names the old version.
+            assignment_id = step.assignment_id
+            old_item = ctx.assignment_by_id.get(assignment_id or 0)
+            version = old_work.target_of.get(assignment_id or 0, version)
+            detail = _version_detail(
+                "version",
+                version_of.get(old_item.document_id) if old_item else None,
+            )
+        elif code == "review_source_change":
+            version = obligations[0][0] if obligations else version
+            detail = _version_detail("version", version)
+        elif code == "decide_report":
             step_report = report_id
             report = facts.reports.get(report_id) if report_id else None
             assignment_id = report.assignment_id if report else None
@@ -833,6 +1048,7 @@ def _row_steps(
                 "detail": detail,
                 "report_id": step_report,
                 "assignment_id": assignment_id,
+                "submission_id": step.submission_id,
                 "document_id": version.document_id if version is not None else None,
             }
         )

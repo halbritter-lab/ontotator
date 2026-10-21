@@ -2854,11 +2854,14 @@
                       "decide_report",
                       "resume_task",
                       "confirm_final",
+                      "handle_text_change",
+                      "carry_text_change",
                       "resolve_rejected",
                       "resolve_queried",
                       "translation_not_accepted",
                       "choose_final",
                       "assign_translation_review",
+                      "review_source_change",
                       "translation_review_in_progress",
                       "assign_annotation",
                       "annotation_in_progress",
@@ -3386,11 +3389,14 @@
                       "decide_report",
                       "resume_task",
                       "confirm_final",
+                      "handle_text_change",
+                      "carry_text_change",
                       "resolve_rejected",
                       "resolve_queried",
                       "translation_not_accepted",
                       "choose_final",
                       "assign_translation_review",
+                      "review_source_change",
                       "translation_review_in_progress",
                       "assign_annotation",
                       "annotation_in_progress",
@@ -9399,11 +9405,14 @@
                 "decide_report",
                 "resume_task",
                 "confirm_final",
+                "handle_text_change",
+                "carry_text_change",
                 "resolve_rejected",
                 "resolve_queried",
                 "translation_not_accepted",
                 "choose_final",
                 "assign_translation_review",
+                "review_source_change",
                 "translation_review_in_progress",
                 "assign_annotation",
                 "annotation_in_progress",
@@ -9655,11 +9664,14 @@
                   "decide_report",
                   "resume_task",
                   "confirm_final",
+                  "handle_text_change",
+                  "carry_text_change",
                   "resolve_rejected",
                   "resolve_queried",
                   "translation_not_accepted",
                   "choose_final",
                   "assign_translation_review",
+                  "review_source_change",
                   "translation_review_in_progress",
                   "assign_annotation",
                   "annotation_in_progress",
@@ -9678,11 +9690,14 @@
                     "decide_report",
                     "resume_task",
                     "confirm_final",
+                    "handle_text_change",
+                    "carry_text_change",
                     "resolve_rejected",
                     "resolve_queried",
                     "translation_not_accepted",
                     "choose_final",
                     "assign_translation_review",
+                    "review_source_change",
                     "translation_review_in_progress",
                     "assign_annotation",
                     "annotation_in_progress",
@@ -10048,6 +10063,13 @@
             },
             "type": "array",
             "title": "Work"
+          },
+          "moved_work": {
+            "items": {
+              "$ref": "#/components/schemas/WorkItemView"
+            },
+            "type": "array",
+            "title": "Moved Work"
           },
           "final": {
             "anyOf": [
@@ -12477,11 +12499,14 @@
               "decide_report",
               "resume_task",
               "confirm_final",
+              "handle_text_change",
+              "carry_text_change",
               "resolve_rejected",
               "resolve_queried",
               "translation_not_accepted",
               "choose_final",
               "assign_translation_review",
+              "review_source_change",
               "translation_review_in_progress",
               "assign_annotation",
               "annotation_in_progress",
@@ -12522,10 +12547,13 @@
                   "decide_report",
                   "resume_task",
                   "review_changes",
+                  "handle_text_change",
+                  "carry_text_change",
                   "resolve",
                   "accept_or_review",
                   "choose_final",
                   "assign_translation_review",
+                  "assign_source_review",
                   "assign_annotation"
                 ]
               },
@@ -12541,7 +12569,8 @@
               "enum": [
                 "your_decision",
                 "check_failed",
-                "paused"
+                "paused",
+                "source_changed"
               ]
             },
             "type": "array",
@@ -12603,6 +12632,17 @@
               }
             ],
             "title": "Assignment Id"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
           },
           "document_id": {
             "anyOf": [
@@ -20408,6 +20448,17 @@
             "type": "boolean",
             "title": "Lead Correction",
             "default": false
+          },
+          "moved_to_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moved To Version"
           }
         },
         "additionalProperties": false,
