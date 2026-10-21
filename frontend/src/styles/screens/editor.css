@@ -2031,16 +2031,16 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   border-top-right-radius: calc(var(--radius-sm) - 1px);
   border-bottom-right-radius: calc(var(--radius-sm) - 1px);
 }
-/* The native radio stays focusable and operable; the segment is its label. */
+/* The native radio stays focusable and operable; the segment is its label. It covers the
+   segment invisibly, so a pointer on the segment lands on the radio itself. */
 .values-section .axis-option input[type="radio"] {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 1px;
-  height: 1px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
   opacity: 0;
-  pointer-events: none;
+  cursor: inherit;
 }
 .values-section .axis-option:not(:has(input:disabled)):not(:has(input:checked)):hover {
   background: var(--surface-sunken);
