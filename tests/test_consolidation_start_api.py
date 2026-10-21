@@ -23,6 +23,7 @@ from ontocurator.application.consolidation_start import (
     ConsolidationStartService,
     StartConsolidation,
 )
+from ontocurator.assignments.service import AssignmentService
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Access
 from ontocurator.domain.errors import DomainError
@@ -226,7 +227,7 @@ def test_another_member_with_the_role_gets_no_grant(env):
 
 def test_another_member_without_the_role_is_refused_without_grant(env):
     response = env.lead.post(URL, json=body(env, reviewer="ana"))
-    assert response.status_code in {403, 409, 422}, response.text
+    assert response.status_code == 422, response.text
     assert response.json()["code"] == "ASSIGNEE_ROLE_MISSING"
     assert "adjudicator" not in roles(env, "ana")
     assert review_assignments(env, "ana") == []
@@ -404,7 +405,7 @@ def test_service_refuses_a_lead_demoted_meanwhile(env):
             "proj",
             StartConsolidation.model_validate(body(env)),
         )
-    assert caught.value.code in {"PROJECT_NOT_FOUND", "NOT_ALLOWED"}
+    assert caught.value.code == "PROJECT_NOT_FOUND"
     with env.db.transaction() as conn:
         assert (
             conn.execute(
@@ -415,3 +416,118 @@ def test_service_refuses_a_lead_demoted_meanwhile(env):
             ).scalar_one()
             == 0
         )
+
+
+def test_stale_revision_bumped_after_the_unlocked_read_is_a_conflict(env, monkeypatch):
+    """The expected revision reaches ``create_in``: a bump by a writer that
+    does not take the project lock (between the unlocked ``active_for`` read
+    and the row lock) is refused, not accepted silently."""
+    review = assign(env, env.target, "adj", "review")
+    original = AssignmentService._locked
+
+    def bumped(conn, assignment_id):
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == assignment_id)
+            .values(workflow_revision=AssignmentRow.workflow_revision + 1)
+        )
+        return original(conn, assignment_id)
+
+    monkeypatch.setattr(AssignmentService, "_locked", staticmethod(bumped))
+    response = env.lead.post(
+        URL, json=body(env, reviewer="adj", expected_workflow_revision=0)
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "WORKFLOW_REVISION_CONFLICT"
+    assert consolidation_rounds(env) == []
+    assert receipts(env) == 0
+    [row] = review_assignments(env, "adj")
+    assert (row.id, row.workflow_revision) == (review, 0)
+
+
+def test_system_admin_without_membership_gets_no_grant(env):
+    """Only the acting lead is granted the role; a system admin who is not a
+    member and names themself is refused like any non-member reviewer."""
+    admin = logged_in(env.app, "root", system_admin=True, assignments=[])
+    response = admin.post(URL, json=body(env, reviewer="root"))
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "NOT_A_MEMBER"
+    assert roles(env, "root") == set()
+    assert adjudicator_grants(env, "root") == []
+    assert review_assignments(env, "root") == []
+    assert consolidation_rounds(env) == []
+    assert receipts(env) == 0
+
+
+def test_round_refusal_after_the_grant_rolls_the_grant_back(env):
+    response = env.lead.post(
+        URL, json=body(env, source_submission_ids=[FIRST, "sub-unknown"])
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "SUBMISSION_NOT_FOUND"
+    assert_nothing_written(env)
+
+
+def test_reviewer_with_an_editable_round_is_refused(env):
+    first = env.lead.post(URL, json=body(env, reviewer="adj"))
+    assert first.status_code == 200, first.text
+    [assignment] = review_assignments(env, "adj")
+    again = env.lead.post(
+        URL,
+        json=body(
+            env,
+            reviewer="adj",
+            request_id="start-2",
+            expected_workflow_revision=assignment.workflow_revision,
+        ),
+    )
+    assert again.status_code == 409, again.text
+    assert again.json()["code"] == "ROUND_ACTIVE"
+    assert len(consolidation_rounds(env)) == 1
+    assert receipts(env) == 1
+
+
+def test_repeated_sources_are_refused(env):
+    response = env.lead.post(URL, json=body(env, source_submission_ids=[FIRST, FIRST]))
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "ROUND_INPUT_INVALID"
+    assert_nothing_written(env)
+
+
+def test_unknown_reviewer_is_refused(env):
+    response = env.lead.post(URL, json=body(env, reviewer="nobody"))
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "USER_NOT_FOUND"
+    assert_nothing_written(env)
+
+
+def test_inactive_reviewer_is_refused(env):
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(UserRow).where(UserRow.username == "adj").values(active=False)
+        )
+    response = env.lead.post(URL, json=body(env, reviewer="adj"))
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "ASSIGNEE_INACTIVE"
+    assert review_assignments(env, "adj") == []
+    assert_nothing_written(env)
+
+
+def test_document_the_caller_cannot_see_is_refused(env):
+    response = env.lead.post(URL, json=body(env, document_id="no-such-document"))
+    assert response.status_code == 404, response.text
+    assert response.json()["code"] == "DOCUMENT_NOT_FOUND"
+    assert_nothing_written(env)
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"source_submission_ids": [f"sub-{i}" for i in range(21)]},
+        {"reason": "x" * 2001},
+    ],
+)
+def test_oversized_body_is_a_validation_error(env, extra):
+    response = env.lead.post(URL, json=body(env, **extra))
+    assert response.status_code == 422, response.text
+    assert_nothing_written(env)

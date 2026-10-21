@@ -9,7 +9,7 @@ T3, T17, U4).
    ``WorkRoundService.create``), then the actor and target user rows
    (``require_project_management``) and the assignment row. Project
    management authority is re-checked under these locks.
-2. Reviewer = the acting lead without the Adjudicator role: ``grant_roles``
+2. Reviewer = the acting lead (role ``lead``) without the Adjudicator role: ``grant_roles``
    adds it and audits ``project.member_add``. An additive self-grant keeps the
    session: no session is revoked, and every request re-reads the caller's
    roles (``access_for`` / ``current_access``), so the next request already
@@ -27,7 +27,8 @@ nothing, the self-grant included.
 
 ``expected_workflow_revision``: ``None`` means "new assignment" (refused with
 ``WORKFLOW_REVISION_CONFLICT`` while the reviewer has an active review
-assignment on the text); an ``int`` must equal that assignment's revision.
+assignment on the text); an ``int`` must equal that assignment's revision,
+checked on the unlocked read and again on the locked row (``create_in``).
 """
 
 from __future__ import annotations
@@ -69,8 +70,8 @@ class StartConsolidation(BaseModel):
     document_id: str = Field(min_length=1)
     # Username of the consolidator; the acting lead may name themself.
     reviewer: str = Field(min_length=1)
-    source_submission_ids: list[str] = Field(min_length=2)
-    reason: str | None = None
+    source_submission_ids: list[str] = Field(min_length=2, max_length=20)
+    reason: str | None = Field(default=None, max_length=2000)
     confirm_language: bool = False
     request_id: str = Field(min_length=1, max_length=128)
     # None: a new assignment; else the reviewer's current review assignment.
@@ -178,7 +179,14 @@ class ConsolidationStartService:
                 raise DomainError("WORKFLOW_REVISION_CONFLICT")
             now = self._now()
             granted: list[Role] = []
-            if target == actor.user_id and not self._holds_role(conn, pid, target):
+            # Only the acting lead is granted the role (U4). A system admin
+            # without the lead role is refused by ``_assign_locked`` like any
+            # other reviewer without the role.
+            if (
+                target == actor.user_id
+                and "lead" in fresh.roles_in(key)
+                and not self._holds_role(conn, pid, target)
+            ):
                 granted = grant_roles(conn, actor, pid, target, reviewer, [_ROLE], now)
             assignment = self._assignments._assign_locked(
                 conn,
@@ -203,7 +211,14 @@ class ConsolidationStartService:
                 sources=sources,
                 draft_sources=[],
                 reason=body.reason,
-                expected_workflow_revision=int(locked["workflow_revision"]),
+                # The caller's revision, checked again on the locked row: a
+                # writer without the project lock may have bumped it since
+                # the unlocked ``active_for`` read.
+                expected_workflow_revision=(
+                    expected
+                    if expected is not None
+                    else int(locked["workflow_revision"])
+                ),
                 lead=True,
                 owner=owner,
             )
