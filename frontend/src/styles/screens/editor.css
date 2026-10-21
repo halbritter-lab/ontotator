@@ -2326,6 +2326,11 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 .pending-mark-bar.is-hidden {
   visibility: hidden;
 }
+/* While a handle is dragged the bar must not catch the pointer: the text under it stays a drop target. */
+.center-pane:has(.text-container.resizing) ~ .pending-mark-bar {
+  pointer-events: none;
+  opacity: 0.4;
+}
 .pending-mark-bar__hint {
   font-size: var(--size-xs);
   color: var(--text-muted);

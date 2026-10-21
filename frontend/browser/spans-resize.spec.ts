@@ -4,23 +4,23 @@ import { importPackage, mentionWithOffsets, openCase, selectText } from "./helpe
 const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture-spans-resize", annotator);
 const revision = (page: Page) => page.locator(".status-badge");
 
-/** Viewport point just inside the left edge of the character at `offset` (UTF-16) of the document text. */
-async function pointAtOffset(page: Page, offset: number): Promise<{ x: number; y: number }> {
+/** Viewport point just inside the left (or right) edge of the character at `offset` (UTF-16) of the document text. */
+async function pointAtOffset(page: Page, offset: number, side: "left" | "right" = "left"): Promise<{ x: number; y: number }> {
   return page.locator(".text-container").evaluate((container, target) => {
     for (const run of Array.from(container.querySelectorAll<HTMLElement>(".run"))) {
       const start = Number(run.dataset.start);
       const node = run.firstChild;
       const length = node?.textContent?.length ?? 0;
-      if (node && start <= target && target < start + length) {
+      if (node && start <= target.offset && target.offset < start + length) {
         const range = document.createRange();
-        range.setStart(node, target - start);
-        range.setEnd(node, target - start + 1);
+        range.setStart(node, target.offset - start);
+        range.setEnd(node, target.offset - start + 1);
         const rect = range.getBoundingClientRect();
-        return { x: rect.left + 1, y: rect.top + rect.height / 2 };
+        return { x: target.side === "left" ? rect.left + 1 : rect.right - 1, y: rect.top + rect.height / 2 };
       }
     }
-    throw new Error(`no character at offset ${target}`);
-  }, offset);
+    throw new Error(`no character at offset ${target.offset}`);
+  }, { offset, side });
 }
 
 async function dragHandle(page: Page, handle: Locator, toOffset: number, release = true) {
@@ -79,6 +79,26 @@ test.describe("adjusting a pending mark", () => {
     await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).click();
     expect((await created).segments).toEqual([{ start: 0, end: 17 }]);
     await expect(mentionWithOffsets(page, "[0:17]")).toBeVisible();
+  });
+
+  test("pending mark: the end handle drags onto the next line under the mark bar", async ({ page }) => {
+    await importFixture(page, "pending-under-bar");
+    await openCase(page, { task: "annotate" });
+    await selectText(page, 0, 9);
+    const bar = page.locator(".pending-mark-bar");
+    await expect(bar).toBeVisible();
+    // "B" (offset 30) starts the next line, right under the bar.
+    const target = await pointAtOffset(page, 30, "right");
+    expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest(".pending-mark-bar"), target)).toBe(true);
+    const end = page.getByRole("separator", { name: "End of marked text" });
+    const box = (await end.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(bar).toHaveCSS("pointer-events", "none");
+    await page.mouse.move(target.x, target.y, { steps: 8 });
+    await page.mouse.up();
+    await expect(page.locator(".pending-quote")).toHaveText(/B”$/);
+    await expect(bar).toHaveCSS("pointer-events", "auto");
   });
 
   test("pending mark: keyboard Tab to the handle, → twice, Enter in the search", async ({ page }) => {

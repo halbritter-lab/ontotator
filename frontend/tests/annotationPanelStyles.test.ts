@@ -43,3 +43,11 @@ it("keeps the system background on a hovered segment in forced colours", () => {
   // The forced-colours rule comes after the regular hover rule, so it wins at equal specificity.
   expect(editor.lastIndexOf(hover)).toBeGreaterThan(editor.indexOf(hover));
 });
+
+it("lets a handle drag reach the text under the pending mark bar", () => {
+  const editor = readFileSync(new URL("../src/styles/screens/editor.css", import.meta.url), "utf8");
+  // The bar is a sibling after the text pane: during a drag it must not catch the pointer.
+  const rule = editor.match(/\.center-pane:has\(\.text-container\.resizing\) ~ \.pending-mark-bar \{([^}]*)\}/);
+  expect(rule?.[1]).toMatch(/pointer-events: none/);
+  expect(rule?.[1]).toMatch(/opacity: 0\.4/);
+});
