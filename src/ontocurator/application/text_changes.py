@@ -767,12 +767,16 @@ class TextChangeService:
             raise _not_applicable("not_open")
         workspace = round_view.workspace_key
         draft = self.repo._open_draft(conn, workspace, None)
+        profile = self.repo.get_task_profile(key)
         payload = DraftSnapshotPayload(
             origin_key=workspace,
-            scope=build_scope(self.repo.get_task_profile(key), workspace.mode),
+            scope=build_scope(profile, workspace.mode),
             document_version=source.version,
             text_sha256=source.text_sha256,
-            snapshots=self._findings(conn, pid, round_view, draft),
+            # Only editable layers are carried (as the preview counts them).
+            snapshots=editable_findings(
+                self._findings(conn, pid, round_view, draft), profile
+            ),
         )
         snapshot_id: int = conn.execute(
             insert(DraftSnapshotRow)

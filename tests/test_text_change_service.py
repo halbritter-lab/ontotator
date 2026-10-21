@@ -378,6 +378,42 @@ def test_move_snapshots_draft_creates_target_round_and_revokes_old(env):
     assert (resolution.from_document_id, resolution.to_document_id) == tuple(env.docs)
 
 
+def test_move_freezes_only_editable_findings(env):
+    """Reference-layer findings are not carried: the frozen draft leaves them
+    out (as the preview counts), so the target round accepts it."""
+    from ontocurator.domain.work_rounds import DraftSnapshotPayload
+
+    work = _started(env)
+    # The findings' layer becomes a reference layer beside a new editable one.
+    with env.db.transaction() as conn:
+        profile = dict(
+            conn.execute(
+                sa_select(ProjectRow.task_profile).where(
+                    ProjectRow.project_key == env.key
+                )
+            ).scalar_one()
+        )
+        [layer] = profile["layers"]
+        profile["layers"] = [
+            {**layer, "access": "reference"},
+            {**layer, "layer_id": "target", "label": "Target", "access": "editable"},
+        ]
+        profile["default_layer_id"] = "target"
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == env.key)
+            .values(task_profile=profile)
+        )
+    result = _move(env, work["assignment_id"])
+    assert result.round.kind == "text_change"
+    with env.db.transaction() as conn:
+        [snapshot] = conn.execute(
+            sa_select(DraftSnapshotRow).where(DraftSnapshotRow.project_id == _pid(env))
+        ).all()
+    assert DraftSnapshotPayload.model_validate(snapshot.payload).snapshots == []
+    assert env.repo.get_round_input_inventory(env.key, result.round.round_id) == []
+
+
 def test_move_unplaced_inputs_need_resolution_before_submit(env):
     from ontocurator.application.submissions import SubmissionService
     from ontocurator.application.work_rounds import RoundInputResolutionService
