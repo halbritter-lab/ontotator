@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { LAUNCH_URL, TEST_PASSWORD } from "./helpers";
+import { TASKS_HOME, TEST_PASSWORD } from "./helpers";
 import type { LeadPerson, LeadScenario } from "./leadWorkflowHelpers";
 
 /** Scenarios of ``POST /__test_review_flow__`` (tests/browser_review_flow_scenarios.py). */
@@ -41,7 +41,7 @@ export async function reviewFlowScenario(page: Page, name: ReviewFlowScenarioNam
  * ``loginExisting`` (which expects the username in the shell).
  */
 export async function loginScenarioUser(page: Page, scenario: ReviewFlowScenario, name: LeadPerson): Promise<void> {
-  await page.goto(LAUNCH_URL);
+  await page.goto(TASKS_HOME);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username", { exact: true }).fill(scenario.users[name]);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);

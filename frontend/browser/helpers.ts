@@ -2,6 +2,8 @@ import { expect, type Page } from "@playwright/test";
 import type { TaskSummary } from "../src/api/client";
 
 export const LAUNCH_URL = "/";
+/** My tasks on the "All" tab; the login helpers start here so the last-used landing never redirects them. */
+export const TASKS_HOME = "/#/?status=all";
 /** The password ``tests/browser_server.py`` sets for every test user. */
 export const TEST_PASSWORD = "browser test passphrase";
 
@@ -10,7 +12,7 @@ export const usernameFor = (pseudonym: string) => pseudonym.toLowerCase().replac
 
 /** Log in an already provisioned ordinary account without adding any roles/work. */
 export async function loginExisting(page: Page, username: string) {
-  await page.goto(LAUNCH_URL);
+  await page.goto(TASKS_HOME);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username", { exact: true }).fill(username);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
@@ -46,7 +48,7 @@ export async function loginAs(page: Page, pseudonym: string, projects: string[] 
   if (projects.length) query.set("projects", projects.join(","));
   const created = await page.request.post(`/__test_user__?${query.toString()}`);
   expect(created.ok()).toBeTruthy();
-  await page.goto(LAUNCH_URL);
+  await page.goto(TASKS_HOME);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username").fill(username);
   await form.getByLabel("Password").fill(TEST_PASSWORD);
