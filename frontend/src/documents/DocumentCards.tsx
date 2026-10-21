@@ -10,6 +10,7 @@ import { useId, useMemo, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import type { GroupSelectMode } from "../ui/DataTable";
+import type { MenuItem } from "../ui/MenuButton";
 import { caseHeaderText, type TableSelection } from "./DocumentsTable";
 import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
@@ -31,6 +32,8 @@ export interface DocumentCardsProps {
   onAction?: (row: DocumentRowView, step: NextStepView) => void;
   /** Plan saves for the "Plan…" popover (VD2). */
   planSaves?: PlanSaves;
+  /** Lead actions of a row that are no step (its "+n" menu). */
+  rowExtras?: (row: DocumentRowView) => readonly MenuItem[];
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
@@ -71,7 +74,7 @@ function WaitingOnLine({ row }: { row: DocumentRowView }): JSX.Element {
   return <span className="documents-waiting-on">Waiting on: {value}</span>;
 }
 
-function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, select }: DocumentCardProps): JSX.Element {
+function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, select, rowExtras }: DocumentCardProps): JSX.Element {
   const baseId = useId();
   const headingId = documentsRowId(row.case_id, row.language, "header");
   const regionId = `${baseId}-expanded`;
@@ -102,7 +105,7 @@ function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, re
         <WaitingOnLine row={row} />
         <span className="document-card-activity"><LastActivityCell iso={row.last_activity_at} /></span>
       </div>
-      <RowActionCell row={row} onAction={onAction} plan={planSaves ? { saves: planSaves, groupRevision: group.plan_revision } : undefined} block />
+      <RowActionCell row={row} onAction={onAction} extraActions={rowExtras?.(row)} plan={planSaves ? { saves: planSaves, groupRevision: group.plan_revision } : undefined} block />
       <div className="document-card-line document-card-actions">
         <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
         <HistoryToggle row={row} expanded={expanded} controls={showRegion ? regionId : undefined} onToggleRow={onToggleRow}>History</HistoryToggle>

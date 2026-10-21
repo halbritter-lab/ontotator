@@ -130,3 +130,19 @@ it("plan popover stays open when a save moves the row into the plan; closing foc
   expect(document.activeElement?.id).toBe("documents-row-case-101-de-action");
   expect(document.activeElement?.textContent).toBe("Assign review…");
 });
+
+it("lists lead actions that are no step after the other steps, and alone as an Actions menu", () => {
+  const changeFinal = vi.fn();
+  const steps: NextStepView[] = [stepOf("decide_report"), stepOf("assign_annotation")];
+  const target = stagedRow("case-109", "de", { steps });
+  const view = render(<RowActionCell row={target} onAction={onAction} extraActions={[{ id: "change-final", label: "Change final…", onSelect: changeFinal }]} />);
+  fireEvent.click(screen.getByRole("button", { name: "+2 more actions, case-109 · de" }));
+  expect(screen.getAllByRole("menuitem").map(entry => entry.textContent)).toEqual(["Assign annotation…", "Change final…"]);
+  fireEvent.click(screen.getByRole("menuitem", { name: "Change final…" }));
+  expect(changeFinal).toHaveBeenCalledOnce();
+  view.unmount();
+  render(<RowActionCell row={stagedRow("case-110", "de", { steps: [] })} onAction={onAction}
+    extraActions={[{ id: "change-final", label: "Change final…", onSelect: changeFinal }]} />);
+  const actions = screen.getByRole("button", { name: "Actions, case-110 · de" });
+  expect(actions.textContent).toBe("Actions");
+});

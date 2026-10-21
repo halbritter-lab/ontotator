@@ -16,6 +16,11 @@ const REPORT_STATE_TEXT = { open: "Open", resolved: "Closed", withdrawn: "Withdr
 
 export type AssignTaskKind = "translation_review" | "annotate" | "review";
 
+/** A submitted annotation on the current text can get an annotation review ("Assign annotation review…"). */
+export function canAssignAnnotationReview(row: DocumentRowView): boolean {
+  return row.work.some(item => item.task === "annotate" && item.status === "submitted" && item.moved_to_version == null);
+}
+
 export interface ExpandedRowProps {
   row: DocumentRowView;
   projectKey: string;
@@ -91,7 +96,7 @@ export function ExpandedRow({
   /** A reporter's display name (members by pseudonym); the label itself without one. */
   const personOf = (label: string) => textVersionTools?.members.find(member => member.pseudonym === label)?.display_name?.trim() || label;
   const problemReports = row.problem_reports ?? [];
-  const reviewable = onAssign && row.work.some(item => item.task === "annotate" && item.status === "submitted" && item.moved_to_version == null);
+  const reviewable = onAssign && canAssignAnnotationReview(row);
   // D25: a new review of a translation the lead (or the import override) accepted without one.
   const newReview = onAssign && !row.is_source
     && !row.work.some(item => item.task === "translation_review" && item.status !== "submitted" && item.moved_to_version == null)

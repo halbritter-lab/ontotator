@@ -28,6 +28,9 @@ import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
 import { ExpandedRow, type ExpandedRowProps } from "../documents/ExpandedRow";
+import { panelStep } from "../documents/finalPanelText";
+import type { MenuItem } from "../ui/MenuButton";
+import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { FinalPanel, type PanelSection } from "../documents/FinalPanel";
 import { HandleTextChangeDialog } from "../documents/HandleTextChangeDialog";
 import { CarryDialog, carrySourceOfFinal, carrySourceOfStep, type CarrySource } from "../documents/CarryDialog";
@@ -601,6 +604,25 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     closePanel(rowPanel.rowKey);
   }, { allowInInputs: true, enabled: rowPanel != null });
 
+  // Lead actions that are no step, in the row's "+n" menu (also reachable without opening the expansion; annotation
+  // review and consolidation stay in the final-result panel and the expansion).
+  const [correctionFor, setCorrectionFor] = useState<{ row: DocumentRowView; variant: VariantSummary } | null>(null);
+  /** The accepted newest translation a correction can be requested for (Text versions offers the same). */
+  const correctionVariant = (row: DocumentRowView): VariantSummary | null => {
+    if (row.is_source || !textVersionTools) return null;
+    const newest = row.versions.find(version => version.is_newest_in_chain && version.translation_status === "accepted" && !version.discarded);
+    return newest ? textVersionTools.variants.get(newest.document_id) ?? null : null;
+  };
+  const closeCorrection = () => { setCorrectionFor(null); reloadAfterAction(); };
+  const rowExtras = (row: DocumentRowView): MenuItem[] => {
+    const key = rowKeyOf(row);
+    const items: MenuItem[] = [];
+    if (row.final && !panelStep(row)) items.push({ id: "change-final", label: "Change final…", onSelect: () => openFinalPanel(key, { changeFinal: true }) });
+    const variant = correctionVariant(row);
+    if (variant) items.push({ id: "request-correction", label: "Request translation correction…", onSelect: () => setCorrectionFor({ row, variant }) });
+    return items;
+  };
+
   const renderExpanded = (row: DocumentRowView) => {
     const notice = rowNotice(row);
     const key = rowKeyOf(row);
@@ -673,10 +695,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       body = emptyState(page.bar);
     } else if (narrow) {
       body = <DocumentCards page={page} projectKey={projectKey} query={viewQuery} selection={tableSelection} onToggleRow={toggleRow} planSaves={planSaves}
-        renderRowNotice={renderRowNotice} renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} />;
+        renderRowNotice={renderRowNotice} renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras} />;
     } else {
       body = <DocumentsTable page={page} projectKey={projectKey} query={viewQuery} selection={tableSelection} planSaves={planSaves}
-        onToggleRow={toggleRow} renderRowNotice={renderRowNotice} renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
+        onToggleRow={toggleRow} renderRowNotice={renderRowNotice} renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras}
         sort={request.sort} onSort={(next: HeaderSort) => changeFilter({ sort: next === "case" ? undefined : next })} />;
     }
     // Sticky above the table; below 700 px after the cards, so it can stick to the bottom of the viewport.
@@ -732,6 +754,12 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     {assignDialog && <AssignWorkDialog {...assignDialog} />}
     {textChangeDialog}
     {finalPanel}
+    {correctionFor && textVersionTools && <Dialog open title={`Request translation correction · ${rowName(correctionFor.row)}`} size="md"
+      onClose={closeCorrection} footer={<Button onClick={closeCorrection}>Close</Button>}
+      returnFocus={() => rowElement(rowKeyOf(correctionFor.row), "action") ?? rowElement(rowKeyOf(correctionFor.row), "header")}>
+      <TranslationCorrectionAction projectKey={projectKey} variant={correctionFor.variant} username={textVersionTools.username}
+        requiredLanguages={textVersionTools.requiredLanguages(correctionFor.variant.document_id)} defaultOpen inDialog />
+    </Dialog>}
     {idsDialogOpen && <SelectByIdsDialog projectKey={projectKey} current={selection.cases} onClose={() => setIdsDialogOpen(false)} onSelect={selectByIds} />}
   </section>;
 }

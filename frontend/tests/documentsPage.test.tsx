@@ -10,7 +10,7 @@ import { recordDecision } from "../src/documents/visitState";
 import { FINAL_SELECTION_CHANGED } from "../src/variants/finalSelectionState";
 import { DOCUMENTS_CHANGED } from "../src/documents/documentsEvents";
 import { useRegisteredShortcuts } from "../src/ui/shortcuts";
-import { final, finalPanel, group, item, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
+import { final, finalPanel, group, item, panelSubmission, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
 import { ana, cell, scenario7a, stagedRow, tom } from "./documents/tableFixtures";
 import { acceptPanel } from "./documents/panelFixtures";
 import { reviewRecord } from "./translationFixtures";
@@ -1028,6 +1028,24 @@ describe("row actions", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Final result · case-0042 · en" })).toBeNull());
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p" }, { replace: true });
     await waitFor(() => expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action"));
+  });
+
+  it("Change final… in a decided row's Actions menu opens the panel on the compare content", async () => {
+    const decided = row({ case_id: "case-0050", language: "de", final: final({ case_id: "case-0050", language: "de", document_id: "case-0050-de", submission_id: "s-ana", revision: 3 }) });
+    mockRows(page([group("case-0050", [decided])]));
+    vi.mocked(api.finalPanel).mockResolvedValue(finalPanel({ submissions: [
+      panelSubmission({ submission_id: "s-ana", document_id: "case-0050-de", author: ana, author_label: "ann-0003" }),
+      panelSubmission({ submission_id: "s-tom", document_id: "case-0050-de", author: tom, author_label: "ann-0004" }),
+    ] }));
+    const select = vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0050", language: "de", document_id: "case-0050-de", submission_id: "s-tom", revision: 4 });
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Actions, case-0050 · de" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Change final…" }));
+    const panel = await screen.findByRole("dialog", { name: "Final result · case-0050 · de" });
+    const table = await within(panel).findByRole("table", { name: "Submissions, case-0050 · de" });
+    const tomRow = within(table).getAllByRole("row").find(entry => entry.textContent?.includes("Tom Reis"))!;
+    fireEvent.click(within(tomRow).getByRole("button", { name: "Use as final" }));
+    await waitFor(() => expect(select).toHaveBeenCalledWith("p", expect.objectContaining({ submission_id: "s-tom", expected_revision: 3 })));
   });
 
   it("panel route parameter reopens the panel and editor links return to it", async () => {

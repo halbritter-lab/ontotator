@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DocumentRowView, NextStepView } from "../api/client";
 import { Button } from "../ui/Button";
-import { MenuButton } from "../ui/MenuButton";
+import { MenuButton, type MenuItem } from "../ui/MenuButton";
 import { Popover } from "../ui/Popover";
 import { leadSteps, rowActionLabel } from "./nextStepLabels";
 import { PlanChips, type PlanSaves } from "./PlanChips";
@@ -53,6 +53,11 @@ export interface RowActionCellProps {
   plan?: { groupRevision: number; saves: PlanSaves };
   /** Full-width button (narrow cards). */
   block?: boolean;
+  /**
+   * Lead actions that are no step ("Change final…", "Request translation correction…"): listed in
+   * the "+n" menu after the other steps; alone they form an "Actions" menu.
+   */
+  extraActions?: readonly MenuItem[];
 }
 
 /** "+2 more actions, case-107 · de" (starts with the visible "+2", WCAG 2.5.3). */
@@ -60,7 +65,7 @@ export function moreActionsLabel(count: number, row: Pick<DocumentRowView, "case
   return `+${count} more ${count === 1 ? "action" : "actions"}, ${rowName(row)}`;
 }
 
-export function RowActionCell({ row, onAction, plan, block = false }: RowActionCellProps): JSX.Element | null {
+export function RowActionCell({ row, onAction, plan, block = false, extraActions = [] }: RowActionCellProps): JSX.Element | null {
   // The plan popover's open state lives here: a chip save reloads the row, which may change its
   // branch (undecided → in plan); the popover stays open until the user closes it.
   const [planOpen, setPlanOpen] = useState(false);
@@ -89,7 +94,11 @@ export function RowActionCell({ row, onAction, plan, block = false }: RowActionC
     return <span className={className}>{popover(active ? "secondary" : "quiet")}{menuOf(rest)}</span>;
   }
   if (!active) return plan ? <span className={className}>{popover("quiet")}</span> : null;
-  if (!first) return null;
+  if (!first) {
+    return extraActions.length ? <span className={className}>
+      <MenuButton key="more" label={`Actions, ${name}`} buttonLabel="Actions" items={[...extraActions]} />
+    </span> : null;
+  }
   const firstLabel = rowActionLabel(first, row);
   return <span className={className}>
     {first.action === "plan" && plan
@@ -101,7 +110,10 @@ export function RowActionCell({ row, onAction, plan, block = false }: RowActionC
   </span>;
 
   function menuOf(others: NextStepView[]): JSX.Element | null {
-    return others.length > 0 && onAction ? <MenuButton key="more" label={moreActionsLabel(others.length, row)} buttonLabel={`+${others.length}`}
-      items={others.map((step, index) => ({ id: `${step.code}-${index}`, label: rowActionLabel(step, row), onSelect: () => onAction(row, step) }))} /> : null;
+    const items: MenuItem[] = [
+      ...(onAction ? others.map((step, index) => ({ id: `${step.code}-${index}`, label: rowActionLabel(step, row), onSelect: () => onAction(row, step) })) : []),
+      ...extraActions,
+    ];
+    return items.length > 0 ? <MenuButton key="more" label={moreActionsLabel(items.length, row)} buttonLabel={`+${items.length}`} items={items} /> : null;
   }
 }
