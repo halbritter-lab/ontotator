@@ -214,6 +214,9 @@ class StageCellDetailView(_View):
     compared: int | None = None
     causes: list[str] = Field(default_factory=list)  # Final confirm cause codes
     round_ordinal: int | None = None
+    # Final ``choose``: the final-result panel's label rule (VD16); None in
+    # every other state.
+    label_rule: Literal["accept", "compare"] | None = None
 
 
 class StageCellView(_View):

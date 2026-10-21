@@ -1,12 +1,19 @@
 """Real consolidation with colliding input IDs survives frozen T1 serialization."""
 
+import hashlib
 import json
+import re
 import zipfile
 
 import ontospan
 import pytest
+from browser_documents_scenarios import select
 from sqlalchemy import insert
+from test_draft_sourced_inputs import _final_export, _finish
+from test_draft_sourced_inputs import client as client
+from test_draft_sourced_inputs import env as env
 from test_editing import FIXTURE_PATH
+from test_text_change_service import _carry, _submitted
 from test_work_rounds import create_consolidation_fixture
 from test_work_rounds import rounds as rounds
 
@@ -175,3 +182,44 @@ def test_final_export_freezes_human_sources_notes_and_unresolved_collision(
         {"hp": ontospan.ObographOntology.load(FIXTURE_PATH)},
     )
     assert len(research_units) == 3
+
+
+# Values that differ per run; the pinned digest covers everything else.
+_VOLATILE = [
+    (
+        re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"),
+        "<uuid>",
+    ),
+    (re.compile(r"[0-9a-f]{64}"), "<sha256>"),
+    (re.compile(r"sub-[0-9a-f]{16}"), "<submission>"),
+    (re.compile(r"ann-[0-9a-f]{12}"), "<annotation>"),
+    (re.compile(r"carry-text-change-[0-9a-f]{8}"), "<project>"),
+    (re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC"), "<time>"),
+]
+# receipt.json and README.txt of a carry-forward final (no draft-sourced
+# inputs): a change here changes every export of that kind.
+CARRY_FORWARD_DIGEST = (
+    "19661285e5ece21fefcfcc2e88473283a5708dd910b46b85f2a2f2c092c425e0"
+)
+
+
+def _normalized(data: bytes) -> str:
+    text = data.decode("utf-8")
+    for pattern, placeholder in _VOLATILE:
+        text = pattern.sub(placeholder, text)
+    return text
+
+
+def test_carry_forward_final_receipt_and_readme_are_pinned(env):
+    """Ana's v1 submission carried to v2 by its author and selected: the
+    receipt and README keep their exact shape (O2d added draft-only keys)."""
+    ana = _submitted(env, "ana")
+    carried = _carry(env, ana["submission_id"])
+    ana_v2 = _finish(env, "ana", carried.round)
+    select(env.scenario, env.docs[1], ana_v2)
+    archive = _final_export(env, "final-carry-forward")
+    digest = hashlib.sha256()
+    for name in ("receipt.json", "README.txt"):
+        digest.update(name.encode() + b"\0")
+        digest.update(_normalized(archive.read(name)).encode() + b"\0")
+    assert digest.hexdigest() == CARRY_FORWARD_DIGEST

@@ -279,9 +279,17 @@ def _final(
     }
 
 
-def build_row(facts: RowFacts, case_id: str, language: str) -> dict[str, Any]:
-    """One (case_id, language) row; see ``build_page`` for the page context."""
-    return _build_row(_Context(facts), case_id, language)
+def page_context(facts: RowFacts) -> _Context:
+    """The project-wide lookups of ``facts`` (one per request)."""
+    return _Context(facts)
+
+
+def build_row(
+    facts: RowFacts, case_id: str, language: str, *, ctx: _Context | None = None
+) -> dict[str, Any]:
+    """One (case_id, language) row; see ``build_page`` for the page context.
+    ``ctx`` reuses a context built from the same ``facts``."""
+    return _build_row(ctx or _Context(facts), case_id, language)
 
 
 def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
@@ -1485,6 +1493,13 @@ def needs_decision(facts: RowFacts) -> int:
 
 
 def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
+    return build_page_with_context(facts, query)[0]
+
+
+def build_page_with_context(
+    facts: RowFacts, query: RowQuery
+) -> tuple[dict[str, Any], _Context]:
+    """``build_page`` and the context its rows were built from."""
     ctx, rows, matches = _evaluate(facts, query)
 
     # Category counts cover rows in the plan only; the tabs (segment_counts)
@@ -1573,7 +1588,7 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
     group_count = len(groups)
     page_count = max(1, -(-group_count // PAGE_SIZE))
     start = (query.page - 1) * PAGE_SIZE
-    return {
+    page = {
         "groups": groups[start : start + PAGE_SIZE],
         "page": query.page,
         "page_count": page_count,
@@ -1582,3 +1597,4 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
         "case_found": query.case is None or query.case in by_case,
         "adjudicator_not_annotator": facts.adjudicator_not_annotator,
     }
+    return page, ctx

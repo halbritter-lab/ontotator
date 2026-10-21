@@ -13,17 +13,25 @@ import pytest
 from document_rows_support import rows_of
 from document_rows_support import service as rows_service
 from sqlalchemy import insert, select, update
-from test_document_rows_next_step import add_correction
+from test_document_rows_next_step import (
+    SECOND,
+    add_correction,
+    second_root,
+    set_status,
+)
+from test_document_rows_stages import submit_with_findings
 from test_document_rows_submissions import (
     _lead_service,
     _row_of,
     _submit_consolidation,
 )
 from test_work_rounds import create_consolidation_fixture
-from work_plan_support import BASE, assign, doc, plan_env, select_final
+from work_plan_support import BASE, assign, doc, plan_env, select_final, write
 
 from ontocurator.application import document_row_panel
 from ontocurator.application.document_rows import RowQuery
+from ontocurator.assignments.service import AssignmentService
+from ontocurator.auth.audit import Actor
 from ontocurator.domain.annotations import (
     ActorRef,
     Annotation,
@@ -38,14 +46,17 @@ from ontocurator.domain.documents import (
 )
 from ontocurator.domain.errors import AccessDenied
 from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.work_plans import PlanFlags, RowKey
 from ontocurator.domain.workspace import Submission, WorkspaceKey
 from ontocurator.storage.overview_tables import TextChangeResolutionRow
 from ontocurator.storage.repository import _key_str
 from ontocurator.storage.tables import (
     AssignmentRow,
     DocumentRow,
+    ProjectMembershipRow,
     ProjectRow,
     SubmissionRow,
+    UserLanguageRow,
     UserRow,
 )
 
@@ -199,6 +210,7 @@ def test_one_submission_label_rule_accept(env):
     cell = final_cell(env)
     assert (cell["state"], cell["detail"]["submitted"]) == ("choose", 1)
     assert cell["detail"]["matching"] is None and cell["detail"]["compared"] is None
+    assert cell["detail"]["label_rule"] == "accept"
 
 
 def test_several_is_compare_with_agreement(env):
@@ -244,6 +256,7 @@ def test_several_is_compare_with_agreement(env):
     cell = final_cell(env)
     assert (cell["state"], cell["detail"]["submitted"]) == ("choose", 2)
     assert (cell["detail"]["matching"], cell["detail"]["compared"]) == (1, 4)
+    assert cell["detail"]["label_rule"] == "compare"
 
 
 def test_other_version_submissions_not_compared_but_eligible(env):
@@ -398,14 +411,22 @@ def test_consolidation_of_all_others_is_accept(rounds):
     assert set(subs) == {*inputs, consolidation}
     assert all(s["eligible"] and s["comparable"] for s in subs.values())
     # "Compare all 3…" needs the agreement of all three.
-    agreement = result["agreement"]
-    assert agreement is not None and agreement["compared_version"] == 1
-    assert agreement["total"] >= 1
+    # Each input holds one HP:0001252 finding without evidence; the
+    # consolidation confirms both and keeps two: one cluster all three
+    # share, one only the consolidation has.
+    assert result["agreement"] == {
+        "compared_version": 1,
+        "total": 2,
+        "matching": 1,
+        "context_differences": 0,
+    }
+    assert [subs[sid]["only_here"] for sid in [*inputs, consolidation]] == [0, 0, 1]
     # The Final cell shows "3 submissions" without a match count (accept).
     page = lead.page("pkg-1", RowQuery())
     final = rows_of(page)[key]["stages"]["final"]
     assert (final["state"], final["detail"]["submitted"]) == ("choose", 3)
     assert final["detail"]["matching"] is None
+    assert final["detail"]["label_rule"] == "accept"
 
 
 def test_eligible_count_only_on_target_without_carried_moved_handed_over(rounds):
@@ -488,6 +509,131 @@ def test_eligible_count_only_on_target_without_carried_moved_handed_over(rounds)
     final = rows_of(lead.page("pkg-1", RowQuery()))[key]["stages"]["final"]
     assert (final["state"], final["detail"]["submitted"]) == ("choose", 3)
 
+    # A submitted annotate assignment on the target counts until its last
+    # submission is handed over.
+    with repo.db.transaction() as conn:
+        uid = conn.execute(
+            insert(UserRow)
+            .values(username="cara", display_name="cara", pseudonym="cara")
+            .returning(UserRow.id)
+        ).scalar_one()
+        conn.execute(
+            insert(ProjectMembershipRow).values(
+                project_id=pid, user_id=uid, role="annotator"
+            )
+        )
+        conn.execute(insert(UserLanguageRow).values(user_id=uid, language="en"))
+    extra = AssignmentService(repo.db).assign(
+        Actor.cli(), "pkg-1", "doc-1", "cara", "annotate"
+    )
+    new_key = WorkspaceKey(
+        project_key="pkg-1",
+        document_id="doc-1",
+        annotator_id="cara",
+        mode="independent",
+        target_set_id="targets-0",
+    )
+    with repo.db.transaction() as conn:
+        repo._insert_submission(
+            conn,
+            pid,
+            Submission(
+                submission_id="extra-v2",
+                origin_key=new_key,
+                targets=ReviewTargetSet.create([]),
+                draft_revision=1,
+                snapshots=[],
+                decisions=[],
+                created_at="2026-10-16T11:00:00Z",
+            ),
+            local_key=_key_str(new_key),
+            imported=False,
+        )
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == extra.id)
+            .values(status="submitted", last_submission_id="extra-v2")
+        )
+    result = lead.final_panel("pkg-1", *key)
+    assert by_id(result)["extra-v2"]["comparable"] is True
+    assert result["label_rule"] == "compare"
+    final = rows_of(lead.page("pkg-1", RowQuery()))[key]["stages"]["final"]
+    assert final["detail"]["submitted"] == 4
+    assert final["detail"]["label_rule"] == "compare"
+    with repo.db.transaction() as conn:
+        conn.execute(
+            insert(TextChangeResolutionRow).values(
+                project_id=pid,
+                case_id=key[0],
+                language=key[1],
+                submission_id="extra-v2",
+                resolution="handed_over",
+                from_document_id="doc-1",
+                to_document_id="doc-0",
+            )
+        )
+    result = lead.final_panel("pkg-1", *key)
+    extra_view = by_id(result)["extra-v2"]
+    assert (extra_view["comparable"], extra_view["only_here"]) == (False, None)
+    assert result["label_rule"] == "accept"
+    assert result["accept_submission_id"] == consolidation
+    final = rows_of(lead.page("pkg-1", RowQuery()))[key]["stages"]["final"]
+    assert final["detail"]["submitted"] == 3
+    assert final["detail"]["label_rule"] == "accept"
+
+
+def test_parallel_roots_cell_and_panel_compare_the_same_root(env, tmp_path):
+    """VD16: the Final cell counts, and the panel compares, the target with
+    the most eligible submissions; the other root's stay listed."""
+    second_root(env, tmp_path)
+    for document_id in (doc("c1", "fr"), SECOND):
+        set_status(env, document_id, "accepted")
+    write(env, {RowKey("c1", "fr"): PlanFlags(False, True)})
+    submit_findings(
+        env,
+        assign(env, doc("c1", "fr"), "anno", "annotate"),
+        "a1",
+        [finding("a1-1", SEIZURE, None)],
+    )
+    for username, sid in (("anno2", "b1"), ("ana", "b2"), ("ben", "b3")):
+        submit_findings(
+            env,
+            assign(env, SECOND, username, "annotate"),
+            sid,
+            [finding(f"{sid}-1", SEIZURE, None)],
+        )
+    result = panel(env, "c1", "fr")
+    subs = by_id(result)
+    assert {sid for sid, s in subs.items() if s["comparable"]} == {"b1", "b2", "b3"}
+    assert subs["a1"]["comparable"] is False and subs["a1"]["only_here"] is None
+    assert result["label_rule"] == "compare"
+    assert result["agreement"] is not None
+    assert (result["agreement"]["total"], result["agreement"]["matching"]) == (1, 1)
+    cell = final_cell(env, "c1", "fr")
+    assert cell["state"] == "choose"
+    assert cell["detail"]["submitted"] == 3
+    assert cell["detail"]["label_rule"] == "compare"
+    assert (cell["detail"]["matching"], cell["detail"]["compared"]) == (1, 1)
+
+
+def test_undecodable_payload_leaves_agreement_empty(env):
+    target = doc("c1", "en")
+    submit_findings(
+        env,
+        assign(env, target, "anno", "annotate"),
+        "s1",
+        [finding("s1-1", SEIZURE, None)],
+    )
+    # A stored payload whose snapshots do not decode.
+    submit_with_findings(env, assign(env, target, "anno2", "annotate"), "s2", 1)
+    result = panel(env)
+    assert result["label_rule"] == "compare"
+    assert result["agreement"] is None
+    assert {s["only_here"] for s in result["submissions"]} == {None}
+    cell = final_cell(env)
+    assert cell["detail"]["label_rule"] == "compare"
+    assert cell["detail"]["matching"] is None
+
 
 def test_own_result_not_selectable_flag(rounds):
     repo, lead, consolidation, key, inputs = _consolidated(rounds)
@@ -528,6 +674,21 @@ def test_final_panel_http_is_lead_only(env):
     body = response.json()
     assert body["label_rule"] == "accept"
     assert body["submissions"][0]["eligible"] is True
+    # The table's Final cell carries the same label rule (StageCellDetailView).
+    page = env.lead.get(f"{BASE}/document-rows")
+    assert page.status_code == 200, page.text
+    cells = {
+        (row["case_id"], row["language"]): row["stages"]["final"]
+        for group in page.json()["groups"]
+        for row in group["rows"]
+    }
+    assert cells[("c1", "en")]["state"] == "choose"
+    assert cells[("c1", "en")]["detail"]["label_rule"] == "accept"
+    assert {
+        cell["detail"]["label_rule"]
+        for cell in cells.values()
+        if cell["state"] != "choose"
+    } <= {None}
     annotator = logged_in(env.app, "anno", assignments=[])
     denied = annotator.get(f"{BASE}/document-rows/c1/en/final-panel")
     assert denied.status_code == 403, denied.text

@@ -243,7 +243,8 @@ def enrich_inputs(
 
     Round ordinal and recorded time exist only for a submission source; an
     input of a frozen draft (kind ``text_change``) gets its text version from
-    the draft snapshot.
+    the draft snapshot, except in an archived (imported) round, whose draft
+    snapshot ids do not name this database's drafts.
     """
     views = [RoundInputView.model_validate(item) for item in items]
     if not views:
@@ -258,6 +259,13 @@ def enrich_inputs(
             {v.source_submission_id for v in views if v.source_submission_id},
             archived,
         )
+        # An archived round came from a package: its draft snapshot ids are
+        # local to the exporting database, so it keeps the variants' version.
+        archived_ids = {
+            item["input_id"]
+            for entry in archived.values()
+            for item in entry.get("inputs", ())
+        }
         drafts = _draft_versions(
             conn,
             pid,
@@ -265,6 +273,7 @@ def enrich_inputs(
                 v.source_draft_snapshot_id
                 for v in views
                 if v.source_draft_snapshot_id is not None
+                and v.input_id not in archived_ids
             },
         )
     result = []
@@ -274,7 +283,10 @@ def enrich_inputs(
         row = recorded.get(sid)
         variant = variants.get(view.source_snapshot.annotation.document_id)
         version = variant.version if variant else None
-        if view.source_draft_snapshot_id is not None:
+        if (
+            view.source_draft_snapshot_id is not None
+            and view.input_id not in archived_ids
+        ):
             version = drafts.get(view.source_draft_snapshot_id, version)
         result.append(
             view.model_copy(

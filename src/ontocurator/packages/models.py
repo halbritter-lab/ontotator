@@ -228,12 +228,12 @@ class ValidatedPackage(BaseModel):
                 # An input of a frozen draft (kind ``text_change``) has no
                 # source submission; the draft is not packaged, so only its
                 # exact snapshots are checked below.
-                drafted = item.source_draft_snapshot_id is not None
-                if item.input_id in seen or (
-                    view.kind != "text_change"
-                    if drafted
-                    else item.source_submission_id not in view.input_submission_ids
-                ):
+                if item.input_id in seen:
+                    raise ValueError("Ambiguous frozen round input")
+                if item.source_draft_snapshot_id is not None:
+                    if view.kind != "text_change":
+                        raise ValueError("Ambiguous frozen round input")
+                elif item.source_submission_id not in view.input_submission_ids:
                     raise ValueError("Ambiguous frozen round input")
                 seen.add(item.input_id)
                 if item.mapping_status == "needs_review":

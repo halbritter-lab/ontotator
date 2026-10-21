@@ -18647,6 +18647,21 @@
               }
             ],
             "title": "Round Ordinal"
+          },
+          "label_rule": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "accept",
+                  "compare"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Rule"
           }
         },
         "additionalProperties": false,

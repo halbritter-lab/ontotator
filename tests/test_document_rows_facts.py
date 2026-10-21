@@ -30,7 +30,11 @@ def test_documents_takes_only_the_shared_project_lock(case_env, monkeypatch):
         return original(conn, actor, key, exclusive=exclusive)
 
     monkeypatch.setattr(rows_module, "authorize_final_results", spy)
-    monkeypatch.setattr(rows_module, "build_page", lambda facts, query: {})
+    monkeypatch.setattr(
+        rows_module,
+        "build_page_with_context",
+        lambda facts, query: ({"groups": []}, None),
+    )
     monkeypatch.setattr(rows_module, "build_submissions", lambda *args: {})
     service(case_env).page("proj", RowQuery())
     service(case_env).submissions("proj", CASE, "de")

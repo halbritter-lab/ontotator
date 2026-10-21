@@ -16,7 +16,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from ontocurator.application import document_row_panel, documents_visits
 from ontocurator.application.document_row_page import (
-    build_page,
+    build_page_with_context,
     case_ids,
     needs_decision,
 )
@@ -1002,9 +1002,10 @@ class DocumentRowsService:
         with self.db.transaction() as conn:
             pid = authorize_final_results(conn, self.actor, key, exclusive=False)
             facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
-            page = build_page(facts, query)
-            # Final "k of n match" for the shown rows only (after paging).
-            document_row_panel.fill_agreement(conn, self.repo, pid, facts, page)
+            page, ctx = build_page_with_context(facts, query)
+            # Final label rule and "k of n match" for the shown rows only
+            # (after paging).
+            document_row_panel.fill_agreement(conn, pid, ctx, page)
             return page
 
     def case_ids(self, key: str, query: RowQuery) -> dict[str, Any]:
@@ -1050,6 +1051,4 @@ class DocumentRowsService:
         with self.db.transaction() as conn:
             pid = authorize_final_results(conn, self.actor, key, exclusive=False)
             facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
-            return document_row_panel.final_panel(
-                conn, self.repo, facts, key, case_id, language
-            )
+            return document_row_panel.final_panel(conn, facts, key, case_id, language)

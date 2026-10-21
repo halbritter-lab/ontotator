@@ -6176,6 +6176,8 @@ export interface components {
             causes?: string[];
             /** Round Ordinal */
             round_ordinal?: number | null;
+            /** Label Rule */
+            label_rule?: ("accept" | "compare") | null;
         };
         /** StageCellView */
         StageCellView: {

@@ -10,7 +10,7 @@ Nothing is deleted: old assignments are revoked, drafts and submissions stay.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -36,6 +36,7 @@ from ontocurator.domain import document_rows as rules
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import AccessDenied, DomainError
+from ontocurator.domain.profiles import TaskProfile
 from ontocurator.domain.reanchor import NeedsReview, reanchor_annotation, text_map
 from ontocurator.domain.scopes import build_scope
 from ontocurator.domain.serialization import decode_snapshot
@@ -80,6 +81,38 @@ _CHANGED_REASONS = frozenset({"changed_segment", "changed_cue"})
 # ``revoke_assignments`` reasons of the text-change operations (audit details).
 MOVED_REASON = "moved_to_version"
 WITHDRAWN_REASON = "text_change_withdrawn"
+
+
+def editable_findings(
+    snapshots: Iterable[AnnotationSnapshot], profile: TaskProfile
+) -> list[AnnotationSnapshot]:
+    """The findings in the profile's editable layers (the ones a carry
+    re-anchors; read-only layers are not carried)."""
+    editable = {
+        layer.layer_id for layer in profile.layers if layer.access == "editable"
+    }
+    return [item for item in snapshots if item.annotation.layer_id in editable]
+
+
+def unplaced_findings(
+    snapshots: Sequence[AnnotationSnapshot], old_text: str, new_text: str
+) -> list[NeedsReview]:
+    """The findings a carry from ``old_text`` to ``new_text`` cannot place."""
+    mapping = text_map(old_text, new_text)
+    return [
+        mapped
+        for mapped in (
+            reanchor_annotation(item, item.evidence, old_text, new_text, mapping)
+            for item in snapshots
+        )
+        if isinstance(mapped, NeedsReview)
+    ]
+
+
+def findings_in_changed_passages(unplaced: Iterable[NeedsReview]) -> int:
+    """Unplaced findings whose marked text the correction changed (the
+    preview's and the final-result panel's "in changed passages")."""
+    return sum(1 for item in unplaced if item.reason in _CHANGED_REASONS)
 
 
 class CarryPerson(BaseModel):
@@ -523,24 +556,16 @@ class TextChangeService:
             old = self.repo.get_document(key, source.document_id)
             new = self.repo.get_document(key, target.document_id)
             assert old is not None and new is not None
-            mapping = text_map(old.text, new.text)
-            unplaced = [
-                mapped
-                for mapped in (
-                    reanchor_annotation(s, s.evidence, old.text, new.text, mapping)
-                    for s in snapshots
-                )
-                if isinstance(mapped, NeedsReview)
-            ]
+            # Only editable layers are carried (as the final-result panel).
+            snapshots = editable_findings(snapshots, self.repo.get_task_profile(key))
+            unplaced = unplaced_findings(snapshots, old.text, new.text)
             return TextChangePreview(
                 from_version=source.version,
                 to_version=target.version,
                 findings=len(snapshots),
                 placed=len(snapshots) - len(unplaced),
                 unplaced=len(unplaced),
-                in_changed_passages=sum(
-                    1 for item in unplaced if item.reason in _CHANGED_REASONS
-                ),
+                in_changed_passages=findings_in_changed_passages(unplaced),
                 persons=self._persons(conn, pid, source, author),
             )
 

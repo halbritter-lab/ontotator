@@ -223,8 +223,10 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
 def draft_input_ref(project: str, entry: Mapping[str, Any]) -> str:
     """The exported source reference of a round input from a frozen draft.
 
-    The draft (``draft_snapshots``) is not part of any bundle; the reference
-    names its snapshot id so the provenance stays traceable in the project.
+    The draft (``draft_snapshots``) is not part of any bundle, so the
+    reference does not resolve in any bundle; it names the snapshot id, which
+    is local to the exporting database, so the provenance stays traceable in
+    that project only.
     """
     return ontospan.annotation_ref(
         f"{project}:draft-snapshot-{entry['source_draft_snapshot_id']}",

@@ -361,3 +361,78 @@ def test_package_export_keeps_draft_sourced_rounds(env):
         moved["snapshot_id"]
     }
     assert all(item["source_submission_id"] is None for item in archived["inputs"])
+
+
+def test_t1_export_names_draft_sources_by_draft_ref(env, monkeypatch):
+    """The individual T1 export over a text-change submission: every
+    draft-sourced input is exported under ``draft_input_ref``."""
+    from ontocurator.exchange import jobs
+    from ontocurator.exchange.jobs import HANDLERS, draft_input_ref
+    from ontocurator.jobs.queue import JobQueue
+
+    moved = _moved(env)
+    sid = _finish(env, "tom", moved["round"])
+    entries = env.repo.get_round_input_inventory(env.key, moved["round"].round_id)
+    seen: list[dict[str, str]] = []
+    original = jobs.serialize_t1_content
+
+    def spy(*args: Any, **kwargs: Any) -> Any:
+        seen.append(dict(kwargs["source_ref_overrides"]))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(jobs, "serialize_t1_content", spy)
+    _access, lead = env.lead()
+    job_id = JobQueue(env.db, HANDLERS).enqueue(
+        "t1_export", {"project": env.key}, actor=lead
+    )
+    deadline = monotonic() + 60
+    while True:
+        with env.db.transaction() as conn:
+            job = conn.execute(sa_select(JobRow).where(JobRow.id == job_id)).one()
+        if job.status == "succeeded":
+            break
+        assert job.status != "failed", job.error
+        assert monotonic() < deadline, "T1 export did not finish"
+        sleep(0.05)
+    [overrides] = seen
+    assert len(entries) == 2
+    for entry in entries:
+        assert entry["source_submission_id"] is None
+        ref = draft_input_ref(env.key, entry)
+        assert overrides[f"input-{entry['input_id']}"] == ref
+        assert overrides[f"round-input:{entry['input_id']}"] == ref
+        assert f"draft-snapshot-{moved['snapshot_id']}" in ref
+    assert sid not in job.result["provenance_only_submission_ids"]
+
+
+def test_package_round_trip_keeps_draft_inputs_without_local_lookup(
+    env, tmp_path, monkeypatch
+):
+    """An imported text-change round reads its inputs from the archive; its
+    draft snapshot ids are not looked up in the importing database."""
+    from pg_harness import database_for
+
+    from ontocurator.application import round_reads
+    from ontocurator.storage.repository import Repository
+
+    moved = _moved(env)
+    _finish(env, "tom", moved["round"])
+    package = env.repo.export_package(env.key)
+    target = Repository(database_for(tmp_path / "imported.db"))
+    target.import_package(package)
+    looked_up: list[set[int]] = []
+    original = round_reads._draft_versions
+
+    def spy(conn: Any, pid: int, ids: Any) -> dict[int, int]:
+        looked_up.append(set(ids))
+        return original(conn, pid, ids)
+
+    monkeypatch.setattr(round_reads, "_draft_versions", spy)
+    items = target.get_round_input_inventory(env.key, moved["round"].round_id)
+    inputs = round_reads.enrich_inputs(target, env.key, items)
+    assert looked_up == [set()]
+    assert len(inputs) == 2
+    for item in inputs:
+        assert item.source_submission_id is None
+        assert item.source_draft_snapshot_id == moved["snapshot_id"]
+        assert (item.source_language, item.source_version) == ("de", 1)

@@ -6,12 +6,13 @@ panel data (WP O3)". Runs on the caller's connection: the caller
 lock and loaded the row facts. Nothing is stored; the agreement is computed
 per request from the submission snapshots with the pure ``domain/agreement``.
 
-*Eligible* (VD16; the Final cell's "{n} submissions") is the set the Final
-cell counts in ``document_row_stages.stage_facts``: the last submission of
-each submitted annotate assignment on the row's target version that was not
-carried, moved or handed over, and the latest submission of each submitted
-consolidation round on the target. The panel compares the eligible
-submissions of one target version (the *compared version*). The panel's
+*Eligible* (VD16) is ``document_row_stages.eligible_by_target``, the one
+derivation the Final cell's "{n} submissions" also counts: the last
+submission of each submitted annotate assignment on the row's target version
+that was not carried, moved or handed over, and the latest submission of each
+submitted consolidation round on the target. The panel compares the eligible
+submissions of one target version (the *compared version*, the target with
+the most eligible submissions; the Final cell counts the same one). The panel's
 per-submission ``eligible`` flag instead says whether the lead may use the
 submission as final (``OWN_RESULT_NOT_SELECTABLE``); submissions on other
 versions stay selectable.
@@ -26,16 +27,23 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import Connection, select
 
-from ontocurator.application.document_row_page import build_row
+from ontocurator.application.document_row_page import build_row, page_context
 from ontocurator.application.document_row_stages import (
-    _NOT_ELIGIBLE as NOT_ELIGIBLE,
+    NOT_ELIGIBLE,
+    Candidate,
+    compared_target,
+    eligible_by_target,
 )
 from ontocurator.application.document_row_submissions import build_submissions
+from ontocurator.application.text_changes import (
+    editable_findings,
+    findings_in_changed_passages,
+    unplaced_findings,
+)
 from ontocurator.domain import document_rows as rules
 from ontocurator.domain.agreement import Agreement, Finding, compare, with_defaults
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile
-from ontocurator.domain.reanchor import NeedsReview, reanchor_annotation, text_map
 from ontocurator.domain.workspace import Submission
 from ontocurator.projects.service import axis_defaults
 from ontocurator.storage.repository import Repository
@@ -43,23 +51,13 @@ from ontocurator.storage.tables import DocumentRow, ProjectRow, SubmissionRow
 from ontocurator.storage.workflow_tables import RoundInputRow
 
 if TYPE_CHECKING:  # document_rows imports this module
+    from ontocurator.application.document_row_page import _Context
     from ontocurator.application.document_rows import RowFacts
 
+__all__ = ["NOT_ELIGIBLE", "Candidate", "fill_agreement", "final_panel"]
+
 LabelRule = Literal["accept", "compare"]
-# Re-anchoring reasons of a finding in a changed passage (as the text-change
-# preview counts "in changed passages").
-_CHANGED_REASONS = frozenset({"changed_segment", "changed_cue"})
 AxisDefaults = Mapping[str, Mapping[str, str]]
-
-
-@dataclass(frozen=True)
-class Candidate:
-    """An eligible submission (VD16) of a row."""
-
-    submission_id: str
-    document_id: str
-    # The consolidation round the submission belongs to (None: annotation).
-    consolidation_round: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,107 +69,33 @@ class RowComparison:
     target_of: Mapping[str, rules.Version]
     eligible: tuple[Candidate, ...]
     compared: rules.Version | None
-
-    @property
-    def comparable(self) -> tuple[Candidate, ...]:
-        if self.compared is None:
-            return ()
-        wanted = self.compared.document_id
-        return tuple(item for item in self.eligible if item.document_id == wanted)
+    # The compared version's eligible submissions.
+    comparable: tuple[Candidate, ...]
 
 
-class _Index:
-    """Project-wide lookups of the row facts, built once per request."""
-
-    def __init__(self, facts: RowFacts) -> None:
-        self.facts = facts
-        self.versions: dict[tuple[str, str], list[rules.Version]] = {}
-        for version in facts.versions:
-            self.versions.setdefault((version.case_id, version.language), []).append(
-                version
-            )
-        self.assignments: dict[str, list[rules.AssignmentFact]] = {}
-        for item in facts.assignments:
-            self.assignments.setdefault(item.document_id, []).append(item)
-        self.rounds = {item.round_id: item for item in facts.rounds}
-        # As ``document_row_page._Context``: the last resolution per
-        # assignment, every resolution per submission.
-        self.resolution_of: dict[int, str] = {}
-        self.submission_resolutions: dict[str, set[str]] = {}
-        for resolution in facts.resolutions:
-            if resolution.assignment_id is not None:
-                self.resolution_of[resolution.assignment_id] = resolution.resolution
-            if resolution.submission_id is not None:
-                self.submission_resolutions.setdefault(
-                    resolution.submission_id, set()
-                ).add(resolution.resolution)
-
-    def _annotation(self, item: rules.AssignmentFact) -> Candidate | None:
-        if self.resolution_of.get(item.assignment_id) in NOT_ELIGIBLE:
-            return None
-        submission = self.facts.last_submissions.get(item.assignment_id)
-        if submission is None:
-            return None
-        if self.submission_resolutions.get(submission, set()) & NOT_ELIGIBLE:
-            return None
-        return Candidate(submission, item.document_id)
-
-    def _consolidation(self, item: rules.AssignmentFact) -> Candidate | None:
-        round_fact = self.rounds.get(item.active_round_id or "")
-        if (
-            round_fact is None
-            or round_fact.kind != "consolidation"
-            or round_fact.latest_submission_id is None
-        ):
-            return None
-        return Candidate(
-            round_fact.latest_submission_id, item.document_id, round_fact.round_id
-        )
-
-    def row(self, case_id: str, language: str) -> RowComparison:
-        versions = self.versions.get((case_id, language), [])
-        live = [
-            chain
-            for chain in rules.build_chains(versions)
-            if not any(v.document_id in self.facts.discarded for v in chain.versions)
-        ]
-        target_of: dict[str, rules.Version] = {}
-        targets: list[rules.Version] = []
-        for chain in live:
-            target = [v for v in chain.versions if not v.not_newer][-1]
-            targets.append(target)
-            for version in chain.versions:
-                target_of[version.document_id] = target
-        per_target: list[list[Candidate]] = []
-        for target in targets:
-            found: list[Candidate] = []
-            for item in self.assignments.get(target.document_id, []):
-                if item.revoked or item.status != "submitted" or item.held:
-                    continue
-                if item.task == "annotate":
-                    candidate = self._annotation(item)
-                elif item.task == "review":
-                    candidate = self._consolidation(item)
-                else:
-                    candidate = None
-                if candidate is not None and all(
-                    other.submission_id != candidate.submission_id for other in found
-                ):
-                    found.append(candidate)
-            per_target.append(found)
-        # Parallel roots: the target with the most eligible submissions,
-        # the first root on a tie.
-        compared = None
-        best = -1
-        for target, found in zip(targets, per_target, strict=True):
-            if len(found) > best:
-                compared, best = target, len(found)
-        return RowComparison(
-            targets=tuple(targets),
-            target_of=target_of,
-            eligible=tuple(item for found in per_target for item in found),
-            compared=compared,
-        )
+def row_comparison(ctx: _Context, case_id: str, language: str) -> RowComparison:
+    """The row's live targets and their eligible submissions (as the page)."""
+    live = [
+        chain
+        for chain in rules.build_chains(ctx.by_row.get((case_id, language), []))
+        if not any(v.document_id in ctx.dropped for v in chain.versions)
+    ]
+    target_of: dict[str, rules.Version] = {}
+    targets: list[rules.Version] = []
+    for chain in live:
+        target = [v for v in chain.versions if not v.not_newer][-1]
+        targets.append(target)
+        for version in chain.versions:
+            target_of[version.document_id] = target
+    per_target = eligible_by_target(ctx, targets)
+    index = compared_target(per_target)
+    return RowComparison(
+        targets=tuple(targets),
+        target_of=target_of,
+        eligible=tuple(item for found in per_target for item in found),
+        compared=targets[index] if index is not None else None,
+        comparable=per_target[index] if index is not None else (),
+    )
 
 
 def findings_of(
@@ -300,15 +224,17 @@ def _inputs(
     return result
 
 
-def _profile(
-    conn: Connection, repo: Repository, pid: int
-) -> tuple[TaskProfile, AxisDefaults]:
+def _profile(conn: Connection, pid: int) -> tuple[TaskProfile, AxisDefaults]:
     profile = TaskProfile.model_validate(
         conn.execute(
             select(ProjectRow.task_profile).where(ProjectRow.id == pid)
         ).scalar_one()
     )
-    return profile, axis_defaults(profile, repo._pins(conn, pid))
+    return profile, axis_defaults(
+        # The pins on the caller's connection (as ``projects.service``).
+        profile,
+        Repository._pins(conn, pid),
+    )
 
 
 def _agreement(
@@ -318,8 +244,11 @@ def _agreement(
     profile: TaskProfile,
     defaults: AxisDefaults,
 ) -> Agreement | None:
-    """``compare`` over the comparable submissions in submission order."""
-    if len(comparable) < 2:
+    """``compare`` over the comparable submissions in submission order; None
+    with fewer than two of them or when a payload does not decode."""
+    if len(comparable) < 2 or any(
+        item.submission_id not in payloads for item in comparable
+    ):
         return None
     order = sorted(
         (item.submission_id for item in comparable),
@@ -330,55 +259,49 @@ def _agreement(
 
 
 def fill_agreement(
-    conn: Connection,
-    repo: Repository,
-    pid: int,
-    facts: RowFacts,
-    page: dict[str, Any],
+    conn: Connection, pid: int, ctx: _Context, page: dict[str, Any]
 ) -> None:
-    """Fill ``matching``/``compared`` of the Final cells of the page's rows in
-    state ``choose`` whose label rule is "compare" (one ``compare`` per row).
+    """Fill ``label_rule`` of the Final cells of the page's rows in state
+    ``choose`` and, where the rule is "compare", ``matching``/``compared``
+    (one ``compare`` per row).
 
-    Runs after paging, so only the shown rows are compared.
+    ``ctx`` is the context the page was built from. Runs after paging, so
+    only the shown rows are compared.
     """
     rows = [
-        row
+        (row, row_comparison(ctx, row["case_id"], row["language"]))
         for group in page["groups"]
         for row in group["rows"]
         if row["stages"]["final"]["state"] == "choose"
-        and (row["stages"]["final"]["detail"].get("submitted") or 0) >= 2
     ]
     if not rows:
         return
-    index = _Index(facts)
-    comparisons = [index.row(row["case_id"], row["language"]) for row in rows]
-    candidates = [
-        (row, item)
-        for row, item in zip(rows, comparisons, strict=True)
-        if len(item.comparable) >= 2
-    ]
-    if not candidates:
-        return
+    # One eligible submission is accepted without a lookup.
+    queried = [(row, item) for row, item in rows if len(item.eligible) != 1]
     recorded_at = _recorded_at(
-        conn,
-        pid,
-        (c.submission_id for _, item in candidates for c in item.eligible),
+        conn, pid, (c.submission_id for _, item in queried for c in item.eligible)
     )
     inputs = _inputs(
         conn,
         pid,
         (
             c.consolidation_round
-            for _, item in candidates
+            for _, item in queried
             for c in item.eligible
             if c.consolidation_round is not None
         ),
     )
-    compared = [
-        (row, item)
-        for row, item in candidates
-        if label_rule(item.eligible, recorded_at, inputs)[0] == "compare"
-    ]
+    compared: list[tuple[dict[str, Any], RowComparison]] = []
+    for row, item in rows:
+        rule = label_rule(item.eligible, recorded_at, inputs)[0]
+        detail = row["stages"]["final"]["detail"]
+        detail["label_rule"] = rule
+        if (
+            rule == "compare"
+            and len(item.comparable) >= 2
+            and (detail.get("submitted") or 0) >= 2
+        ):
+            compared.append((row, item))
     if not compared:
         return
     payloads = _payloads(
@@ -387,10 +310,8 @@ def fill_agreement(
         (c.submission_id for _, item in compared for c in item.comparable),
         strict=False,
     )
-    profile, defaults = _profile(conn, repo, pid)
+    profile, defaults = _profile(conn, pid)
     for row, item in compared:
-        if any(c.submission_id not in payloads for c in item.comparable):
-            continue
         agreement = _agreement(
             item.comparable, recorded_at, payloads, profile, defaults
         )
@@ -409,11 +330,17 @@ def _changed_passages(
     profile: TaskProfile,
 ) -> int | None:
     """Findings of a final on old text whose evidence lies in changed passages
-    of the newer text (the re-anchoring preview of "Carry to v2…")."""
+    of the newer text (the re-anchoring preview of "Carry to v2…"); None
+    without such a final or when its payload does not decode."""
     if final is None:
         return None
     target = comparison.target_of.get(final["document_id"])
     if target is None or target.document_id == final["document_id"]:
+        return None
+    submission = _payloads(conn, pid, [final["submission_id"]], strict=False).get(
+        final["submission_id"]
+    )
+    if submission is None:
         return None
     texts = {
         row.document_id: row.text
@@ -424,29 +351,16 @@ def _changed_passages(
             )
         )
     }
-    submission = _payloads(conn, pid, [final["submission_id"]]).get(
-        final["submission_id"]
+    unplaced = unplaced_findings(
+        editable_findings(submission.snapshots, profile),
+        texts[final["document_id"]],
+        texts[target.document_id],
     )
-    if submission is None:
-        return None
-    old, new = texts[final["document_id"]], texts[target.document_id]
-    mapping = text_map(old, new)
-    editable = {
-        layer.layer_id for layer in profile.layers if layer.access == "editable"
-    }
-    count = 0
-    for item in submission.snapshots:
-        if item.annotation.layer_id not in editable:
-            continue
-        mapped = reanchor_annotation(item, item.evidence, old, new, mapping)
-        if isinstance(mapped, NeedsReview) and mapped.reason in _CHANGED_REASONS:
-            count += 1
-    return count
+    return findings_in_changed_passages(unplaced)
 
 
 def final_panel(
     conn: Connection,
-    repo: Repository,
     facts: RowFacts,
     key: str,
     case_id: str,
@@ -457,7 +371,8 @@ def final_panel(
     if pid is None:  # the caller authorized the project
         raise DomainError("PROJECT_NOT_FOUND")
     listing = build_submissions(conn, key, pid, case_id, language, facts.viewer_user_id)
-    comparison = _Index(facts).row(case_id, language)
+    ctx = page_context(facts)
+    comparison = row_comparison(ctx, case_id, language)
     recorded_at = {
         item["submission_id"]: item["recorded_at"] for item in listing["submissions"]
     }
@@ -472,11 +387,11 @@ def final_panel(
     )
     rule, accept_id = label_rule(comparison.eligible, recorded_at, inputs)
     comparable = comparison.comparable
-    profile, defaults = _profile(conn, repo, pid)
+    profile, defaults = _profile(conn, pid)
     agreement = _agreement(
         comparable,
         recorded_at,
-        _payloads(conn, pid, (item.submission_id for item in comparable)),
+        _payloads(conn, pid, (item.submission_id for item in comparable), strict=False),
         profile,
         defaults,
     )
@@ -495,7 +410,7 @@ def final_panel(
         }
         for item in listing["submissions"]
     ]
-    row = build_row(facts, case_id, language)
+    row = build_row(facts, case_id, language, ctx=ctx)
     causes = [
         item
         for item in [*row["issues"], *row["notes"]]

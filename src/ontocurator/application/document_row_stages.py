@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from ontocurator.domain import document_rows as rules
@@ -20,12 +21,83 @@ if TYPE_CHECKING:
 
 RowKey = tuple[str, str]
 # Resolutions that take a submission out of the eligible ones (VD16).
-_NOT_ELIGIBLE = frozenset({"carried", "moved", "handed_over"})
+NOT_ELIGIBLE = frozenset({"carried", "moved", "handed_over"})
 _ACCEPTANCE_HOW: Mapping[str, Literal["package", "external"]] = {
     "package": "package",
     "lead": "external",
     "override": "external",
 }
+
+
+@dataclass(frozen=True)
+class Candidate:
+    """An eligible submission (VD16) of a row."""
+
+    submission_id: str
+    document_id: str
+    # The submitted annotate assignment (None: consolidation).
+    assignment_id: int | None = None
+    # The consolidation round the submission belongs to (None: annotation).
+    consolidation_round: str | None = None
+
+
+def eligible_by_target(
+    ctx: _Context, targets: Sequence[rules.Version]
+) -> list[tuple[Candidate, ...]]:
+    """Eligible submissions (VD16) per target version, in ``targets`` order.
+
+    Eligible: the last submission of each cleanly submitted annotate
+    assignment on the target whose assignment and last submission were not
+    carried, moved or handed over (``NOT_ELIGIBLE``), and the latest
+    submission of each cleanly submitted consolidation round on the target.
+    A submitted assignment without a (latest) submission counts nothing.
+    """
+    facts = ctx.facts
+    result: list[tuple[Candidate, ...]] = []
+    for target in targets:
+        found: dict[str, Candidate] = {}
+        for item in ctx.assignments.get(target.document_id, []):
+            if item.revoked or item.status != "submitted" or item.held:
+                continue
+            candidate: Candidate | None = None
+            if item.task == "annotate":
+                submission = facts.last_submissions.get(item.assignment_id)
+                if (
+                    submission is not None
+                    and ctx.resolution_of.get(item.assignment_id) not in NOT_ELIGIBLE
+                    and not (
+                        ctx.submission_resolutions.get(submission, set()) & NOT_ELIGIBLE
+                    )
+                ):
+                    candidate = Candidate(
+                        submission, item.document_id, assignment_id=item.assignment_id
+                    )
+            elif item.task == "review":
+                round_fact = ctx.rounds.get(item.active_round_id or "")
+                if (
+                    round_fact is not None
+                    and round_fact.kind == "consolidation"
+                    and round_fact.latest_submission_id is not None
+                ):
+                    candidate = Candidate(
+                        round_fact.latest_submission_id,
+                        item.document_id,
+                        consolidation_round=round_fact.round_id,
+                    )
+            if candidate is not None:
+                found.setdefault(candidate.submission_id, candidate)
+        result.append(tuple(found.values()))
+    return result
+
+
+def compared_target(per_target: Sequence[Sequence[Candidate]]) -> int | None:
+    """Index of the compared target: the one with the most eligible
+    submissions, the first root on a tie (parallel roots, VD16)."""
+    best: int | None = None
+    for index, found in enumerate(per_target):
+        if best is None or len(found) > len(per_target[best]):
+            best = index
+    return best
 
 
 def _unique(values: Sequence[int]) -> tuple[int, ...]:
@@ -160,23 +232,19 @@ def stage_facts(
         item for item in annotations if item.status != "submitted" and not item.held
     ]
 
-    def eligible(item: rules.AssignmentFact) -> bool:
-        """Not carried, moved or handed over to another version (VD16)."""
-        if ctx.resolution_of.get(item.assignment_id) in _NOT_ELIGIBLE:
-            return False
-        submission = facts.last_submissions.get(item.assignment_id)
-        return submission is None or not (
-            ctx.submission_resolutions.get(submission, set()) & _NOT_ELIGIBLE
-        )
-
+    per_target = eligible_by_target(ctx, targets)
+    eligible_ids = {
+        item.assignment_id
+        for found in per_target
+        for item in found
+        if item.assignment_id is not None
+    }
     submitted_by_target = [
         [
             item
             for item in annotations
             if item.document_id == target.document_id
-            and item.status == "submitted"
-            and not item.held
-            and eligible(item)
+            and item.assignment_id in eligible_ids
         ]
         for target in targets
     ]
@@ -193,23 +261,10 @@ def stage_facts(
         round_fact = ctx.rounds.get(item.active_round_id or "")
         return round_fact is not None and round_fact.kind == "consolidation"
 
-    # Final "choose": annotate and consolidation submissions per target.
-    final_submissions = min(
-        (
-            len(items)
-            + sum(
-                1
-                for item in current
-                if item.task == "review"
-                and item.document_id == target.document_id
-                and item.status == "submitted"
-                and not item.held
-                and consolidating(item)
-            )
-            for target, items in zip(targets, submitted_by_target, strict=True)
-        ),
-        default=0,
-    )
+    # Final "choose": the eligible submissions (annotate and consolidation)
+    # of the compared target, as the final-result panel compares them.
+    compared = compared_target(per_target)
+    final_submissions = len(per_target[compared]) if compared is not None else 0
 
     paused_by: int | None = None
     paused_excerpt: str | None = None
