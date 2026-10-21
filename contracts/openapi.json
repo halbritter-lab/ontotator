@@ -10911,6 +10911,25 @@
               }
             ],
             "title": "Waiting On"
+          },
+          "flags": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "guidelines_unclear"
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "const": "guidelines_unclear"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flags"
           }
         },
         "additionalProperties": false,

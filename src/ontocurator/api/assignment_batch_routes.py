@@ -18,6 +18,7 @@ from ontocurator.api.work_plan_routes import (
     RowRefView,
     require_one_selection,
 )
+from ontocurator.application.document_row_facets import FlagFilter
 from ontocurator.application.document_rows import (
     Decision,
     FinalFilter,
@@ -72,6 +73,7 @@ class DocumentRowFilters(BaseModel):
     final_state: FinalState | list[FinalState] | None = None
     # "me" or a pseudonym.
     waiting_on: str | list[str] | None = None
+    flags: FlagFilter | list[FlagFilter] | None = None
 
     @model_validator(mode="after")
     def _exclusive(self) -> Self:

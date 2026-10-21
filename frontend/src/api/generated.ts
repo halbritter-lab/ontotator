@@ -3402,6 +3402,8 @@ export interface components {
             final_state?: ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final") | ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final")[] | null;
             /** Waiting On */
             waiting_on?: string | string[] | null;
+            /** Flags */
+            flags?: "guidelines_unclear" | "guidelines_unclear"[] | null;
         };
         /**
          * DocumentRowKeys
