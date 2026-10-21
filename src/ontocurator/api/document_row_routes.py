@@ -302,6 +302,10 @@ class DocumentRowView(_View):
     # cell's version marker.
     stages: RowStagesView | None = None
     version_marker: VersionMarkerView | None = None
+    # New-item signal (VD6): a lead-owned next step with activity by others
+    # since the start of the viewer's previous Documents visit.
+    new: bool = False
+    others_activity_at: datetime | None = None
 
 
 class DocumentGroupView(_View):
@@ -365,6 +369,18 @@ class DocumentRowsPage(_View):
     case_found: bool
     # The project's current rule.
     adjudicator_not_annotator: bool
+
+
+class DocumentsVisitView(_View):
+    """Start of the previous visit: NEW compares activity with it (VD6)."""
+
+    baseline_at: datetime
+
+
+class DocumentsSummaryView(_View):
+    """Navigation counter "Documents (n)": rows needing the lead (V10)."""
+
+    needs_decision: int
 
 
 class RowSubmissionView(_View):
@@ -539,3 +555,23 @@ def row_submissions(
 ) -> dict[str, Any]:
     """All submissions, rounds and open translation reviews of one row."""
     return _service(request, principal).submissions(key, case_id, language)
+
+
+@router.post("/documents/visit", response_model=DocumentsVisitView)
+def documents_visit(
+    key: str, principal: PrincipalDep, request: Request
+) -> dict[str, Any]:
+    """Record an opening of Documents; returns the NEW baseline (leads only).
+
+    Openings with gaps under 30 minutes form one visit; after a longer gap the
+    baseline moves to the previous opening.
+    """
+    return _service(request, principal).visit(key)
+
+
+@router.get("/documents/summary", response_model=DocumentsSummaryView)
+def documents_summary(
+    key: str, principal: PrincipalDep, request: Request
+) -> dict[str, Any]:
+    """Rows whose next step needs the lead's decision (leads only)."""
+    return _service(request, principal).summary(key)

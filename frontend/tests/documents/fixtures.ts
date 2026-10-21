@@ -145,6 +145,8 @@ export function row(overrides: Partial<DocumentRowView> & Pick<DocumentRowView, 
     in_plan: true,
     stages: stages(),
     version_marker: null,
+    new: false,
+    others_activity_at: null,
     ...overrides,
   };
 }

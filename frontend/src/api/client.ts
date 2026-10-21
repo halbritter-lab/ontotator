@@ -92,6 +92,8 @@ export type RowRefView = components["schemas"]["RowRefView"];
 export type RowSelection = readonly string[] | { readonly rows: readonly RowRefView[] };
 export type DocumentRowKeysRequest = Defaulted<components["schemas"]["DocumentRowKeysRequest"], "sort">;
 export type DocumentRowKeys = components["schemas"]["DocumentRowKeys"];
+export type DocumentsVisitView = components["schemas"]["DocumentsVisitView"];
+export type DocumentsSummaryView = components["schemas"]["DocumentsSummaryView"];
 /** Optional work-plan part of an upload commit (absent: the old body is sent). */
 export type CommitUploadPlan = Partial<Pick<components["schemas"]["CommitUpload"], "plan_languages" | "plan_cases" | "accept_external_review">>;
 type RowsParameters = Omit<NonNullable<operations["document_rows_api_v1_projects__key__document_rows_get"]["parameters"]["query"]>, "retain">;
@@ -353,6 +355,10 @@ export class ApiClient {
   }
   /** Text keys matching the Documents filters in list order (at most 2000 cases); with `case_ids` only texts of these cases. */
   async documentRowKeys(key: string, body: DocumentRowKeysRequest = {}): Promise<DocumentRowKeys> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/document-rows/keys`, { method: "POST", body: JSON.stringify(body) }); }
+  /** Record an opening of Documents (lead only); returns the NEW baseline (start of the previous visit). */
+  async recordDocumentsVisit(key: string): Promise<DocumentsVisitView> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/documents/visit`, { method: "POST" }); }
+  /** Navigation counter: rows needing the lead's decision, undecided rows included (lead only). */
+  async documentsSummary(key: string): Promise<DocumentsSummaryView> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/documents/summary`, { method: "GET" }); }
   async reassign(id: number, body: ReassignRequest): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reassign`, { method: "POST", body: JSON.stringify(body) }); }
   async reopenAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }); }
   async revokeAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/revoke`, { method: "POST", body: JSON.stringify({ reason }) }); }

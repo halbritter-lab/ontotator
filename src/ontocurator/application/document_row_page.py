@@ -414,6 +414,7 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
         decided=facts.decided.get(PlanKey(case_id, language), True) or discarded,
     )
     row_cells = ctx.cells[key]
+    others_at = facts.others_activity.get(key)
     return {
         "case_id": case_id,
         "language": language,
@@ -509,7 +510,20 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
             for name in ("review", "annotation", "final")
         },
         "version_marker": stages.version_marker(live or chains),
+        # NEW (spec VD6): a lead-owned next step (undecided rows included, V10)
+        # with activity by others since the start of the previous visit.
+        "new": (
+            ctx.segments[key] in _LEAD_OWNED
+            and others_at is not None
+            and facts.baseline_at is not None
+            and others_at > facts.baseline_at
+        ),
+        "others_activity_at": others_at,
     }
+
+
+# Segments of lead-owned next steps (kinds ``decision`` and ``assign``).
+_LEAD_OWNED = frozenset({"decision", "assign"})
 
 
 def _open(item: rules.AssignmentFact) -> bool:
@@ -1231,6 +1245,15 @@ def cases_not_shown(facts: RowFacts, case_ids: Sequence[str], query: RowQuery) -
     """Selected cases without any row matching the filters of ``query``."""
     shown = _matching_cases(facts, query)
     return sum(1 for case_id in dict.fromkeys(case_ids) if case_id not in shown)
+
+
+def needs_decision(facts: RowFacts) -> int:
+    """Rows whose next step needs the lead's decision, undecided rows
+    included (V10): ``bar.needs_decision`` without filters, facets or pages."""
+    ctx = _Context(facts)
+    for key in ctx.by_row:
+        _build_row(ctx, *key)
+    return sum(1 for segment in ctx.segments.values() if segment == "decision")
 
 
 def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:

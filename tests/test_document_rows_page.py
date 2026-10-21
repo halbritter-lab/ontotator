@@ -325,6 +325,8 @@ ROW_KEYS = {
     "in_plan",
     "stages",
     "version_marker",
+    "new",
+    "others_activity_at",
 }
 VERSION_KEYS = {
     "document_id",

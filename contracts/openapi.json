@@ -3721,6 +3721,92 @@
         }
       }
     },
+    "/api/v1/projects/{key}/documents/visit": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Documents Visit",
+        "description": "Record an opening of Documents; returns the NEW baseline (leads only).\n\nOpenings with gaps under 30 minutes form one visit; after a longer gap the\nbaseline moves to the previous opening.",
+        "operationId": "documents_visit_api_v1_projects__key__documents_visit_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentsVisitView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{key}/documents/summary": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Documents Summary",
+        "description": "Rows whose next step needs the lead's decision (leads only).",
+        "operationId": "documents_summary_api_v1_projects__key__documents_summary_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentsSummaryView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/work-plans/annotation-target-preview": {
       "get": {
         "tags": [
@@ -10102,6 +10188,23 @@
                 "type": "null"
               }
             ]
+          },
+          "new": {
+            "type": "boolean",
+            "title": "New",
+            "default": false
+          },
+          "others_activity_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Others Activity At"
           }
         },
         "additionalProperties": false,
@@ -10310,6 +10413,37 @@
           "last_activity_at"
         ],
         "title": "DocumentVersionView"
+      },
+      "DocumentsSummaryView": {
+        "properties": {
+          "needs_decision": {
+            "type": "integer",
+            "title": "Needs Decision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "needs_decision"
+        ],
+        "title": "DocumentsSummaryView",
+        "description": "Navigation counter \"Documents (n)\": rows needing the lead (V10)."
+      },
+      "DocumentsVisitView": {
+        "properties": {
+          "baseline_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Baseline At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "baseline_at"
+        ],
+        "title": "DocumentsVisitView",
+        "description": "Start of the previous visit: NEW compares activity with it (VD6)."
       },
       "Draft": {
         "properties": {

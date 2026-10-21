@@ -885,6 +885,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/documents/visit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documents Visit
+         * @description Record an opening of Documents; returns the NEW baseline (leads only).
+         *
+         *     Openings with gaps under 30 minutes form one visit; after a longer gap the
+         *     baseline moves to the previous opening.
+         */
+        post: operations["documents_visit_api_v1_projects__key__documents_visit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/documents/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documents Summary
+         * @description Rows whose next step needs the lead's decision (leads only).
+         */
+        get: operations["documents_summary_api_v1_projects__key__documents_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/work-plans/annotation-target-preview": {
         parameters: {
             query?: never;
@@ -3111,6 +3154,13 @@ export interface components {
             in_plan: boolean;
             stages?: components["schemas"]["RowStagesView"] | null;
             version_marker?: components["schemas"]["VersionMarkerView"] | null;
+            /**
+             * New
+             * @default false
+             */
+            new: boolean;
+            /** Others Activity At */
+            others_activity_at?: string | null;
         };
         /** DocumentRowsPage */
         DocumentRowsPage: {
@@ -3161,6 +3211,25 @@ export interface components {
             last_activity_at: string | null;
             acceptance?: components["schemas"]["VersionAcceptanceView"] | null;
             discarded?: components["schemas"]["VersionDiscardView"] | null;
+        };
+        /**
+         * DocumentsSummaryView
+         * @description Navigation counter "Documents (n)": rows needing the lead (V10).
+         */
+        DocumentsSummaryView: {
+            /** Needs Decision */
+            needs_decision: number;
+        };
+        /**
+         * DocumentsVisitView
+         * @description Start of the previous visit: NEW compares activity with it (VD6).
+         */
+        DocumentsVisitView: {
+            /**
+             * Baseline At
+             * Format: date-time
+             */
+            baseline_at: string;
         };
         /**
          * Draft
@@ -8734,6 +8803,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RowSubmissions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    documents_visit_api_v1_projects__key__documents_visit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentsVisitView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    documents_summary_api_v1_projects__key__documents_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentsSummaryView"];
                 };
             };
             /** @description Validation Error */

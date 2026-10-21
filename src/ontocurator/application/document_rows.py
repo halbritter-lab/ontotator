@@ -12,8 +12,14 @@ from datetime import datetime
 from typing import Any, Literal
 
 from sqlalchemy import Connection, and_, exists, func, select, union_all
+from sqlalchemy.dialects.postgresql import JSONB
 
-from ontocurator.application.document_row_page import build_page, case_ids
+from ontocurator.application import documents_visits
+from ontocurator.application.document_row_page import (
+    build_page,
+    case_ids,
+    needs_decision,
+)
 from ontocurator.application.document_row_reports import load_row_reports
 from ontocurator.application.document_row_submissions import (
     build_submissions,
@@ -34,6 +40,7 @@ from ontocurator.domain.work_plans import PlanFlags, RowKey
 from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
 from ontocurator.storage.final_tables import FinalSelectionRow
+from ontocurator.storage.overview_tables import TextChangeResolutionRow
 from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import (
     AssignmentRow,
@@ -248,6 +255,11 @@ class RowFacts:
     correction_reasons: dict[int, str] = field(default_factory=dict)
     # assignment id -> finding count of its last submission
     findings: dict[int, int] = field(default_factory=dict)
+    # (case, language) -> newest event on the row not caused by the viewer
+    # (NEW, spec "New-item signal"); the viewer's stored visit baseline
+    # (None before the first visit: nothing is NEW).
+    others_activity: dict[tuple[str, str], datetime] = field(default_factory=dict)
+    baseline_at: datetime | None = None
 
 
 def load_last_activity(
@@ -321,6 +333,119 @@ def load_last_activity(
         )
     }
     return documents, selections
+
+
+# Audit actions that change a version's review state (lead overrides).
+_STATUS_ACTIONS = ("variant.status_override", "translation.accept_external_review")
+
+
+def load_others_activity(
+    conn: Connection, pid: int, viewer_user_id: int
+) -> dict[tuple[str, str], datetime]:
+    """Newest event per row not caused by ``viewer_user_id`` (spec VD6).
+
+    Events: import (``work_plan.import`` rows), correction and review decision
+    (``translation_reviews``, lead status overrides), submission, problem
+    report, hold, assignment or revocation by someone else, and text-change
+    resolutions (``decided_by`` NULL = system carry, V8). An event without an
+    actor (system, imported submission) is never the viewer's.
+    """
+    submitter = (
+        select(UserRow.id)
+        .where(UserRow.pseudonym == SubmissionRow.annotator_id)
+        .scalar_subquery()
+    )
+    by_document = union_all(
+        select(
+            AssignmentRow.document_id.label("document_id"),
+            AssignmentRow.created_at.label("at"),
+            AssignmentRow.created_by.label("actor"),
+        ).where(AssignmentRow.project_id == pid),
+        select(
+            AssignmentRow.document_id,
+            AssignmentRow.revoked_at,
+            AssignmentRow.revoked_by,
+        ).where(AssignmentRow.project_id == pid, AssignmentRow.revoked_at.is_not(None)),
+        select(SubmissionRow.document_id, SubmissionRow.recorded_at, submitter).where(
+            SubmissionRow.project_id == pid
+        ),
+        select(
+            TranslationReviewRow.document_id,
+            TranslationReviewRow.created_at,
+            TranslationReviewRow.reviewer_user_id,
+        ).where(TranslationReviewRow.project_id == pid),
+        select(
+            AuditEventRow.target_id, AuditEventRow.at, AuditEventRow.actor_user_id
+        ).where(
+            AuditEventRow.project_id == pid,
+            AuditEventRow.target_type == "document",
+            AuditEventRow.action.in_(_STATUS_ACTIONS),
+        ),
+        select(
+            AssignmentRow.document_id,
+            ProblemReportRow.created_at,
+            ProblemReportRow.reporter_id,
+        )
+        .join(AssignmentRow, AssignmentRow.id == ProblemReportRow.assignment_id)
+        .where(ProblemReportRow.project_id == pid),
+        select(
+            AssignmentRow.document_id, TaskHoldRow.created_at, TaskHoldRow.created_by
+        )
+        .join(AssignmentRow, AssignmentRow.id == TaskHoldRow.assignment_id)
+        .where(TaskHoldRow.project_id == pid),
+        select(
+            TextChangeResolutionRow.to_document_id,
+            TextChangeResolutionRow.decided_at,
+            TextChangeResolutionRow.decided_by,
+        ).where(TextChangeResolutionRow.project_id == pid),
+    ).subquery()
+    imports = (
+        select(
+            AuditEventRow.at.label("at"),
+            AuditEventRow.actor_user_id.label("actor"),
+            func.jsonb_array_elements(AuditEventRow.details["rows"], type_=JSONB).label(
+                "item"
+            ),
+        )
+        .where(
+            AuditEventRow.project_id == pid,
+            AuditEventRow.action == "work_plan.import",
+        )
+        .subquery()
+    )
+    events = union_all(
+        select(
+            DocumentRow.case_id.label("case_id"),
+            DocumentRow.language.label("language"),
+            by_document.c.at.label("at"),
+            by_document.c.actor.label("actor"),
+        ).join(
+            by_document,
+            and_(
+                DocumentRow.project_id == pid,
+                DocumentRow.document_id == by_document.c.document_id,
+            ),
+        ),
+        select(
+            imports.c.item["case_id"].astext,
+            imports.c.item["language"].astext,
+            imports.c.at,
+            imports.c.actor,
+        ),
+    ).subquery()
+    return {
+        (row.case_id, row.language): row.at
+        for row in conn.execute(
+            select(
+                events.c.case_id, events.c.language, func.max(events.c.at).label("at")
+            )
+            .where(
+                events.c.at.is_not(None),
+                events.c.actor.is_distinct_from(viewer_user_id),
+            )
+            .group_by(events.c.case_id, events.c.language)
+        )
+    }
 
 
 def _versions(conn: Connection, pid: int) -> list[rules.Version]:
@@ -767,6 +892,8 @@ def load_facts(
         latest_reviews=latest_reviews,
         correction_reasons=_correction_reasons(conn, pid, assignments),
         findings=_findings(conn, pid),
+        others_activity=load_others_activity(conn, pid, viewer_user_id),
+        baseline_at=documents_visits.baseline(conn, viewer_user_id, pid),
     )
 
 
@@ -788,6 +915,29 @@ class DocumentRowsService:
             facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
             ids, total, truncated = case_ids(facts, query)
             return {"case_ids": ids, "total": total, "truncated": truncated}
+
+    def visit(self, key: str, now: datetime | None = None) -> dict[str, Any]:
+        """Record an opening of Documents (lead only); returns the baseline.
+
+        ``now`` defaults to the database's transaction time, the clock of
+        every event NEW compares with.
+        """
+        with self.db.transaction() as conn:
+            pid = authorize_final_results(conn, self.actor, key, exclusive=False)
+            if now is None:
+                now = conn.execute(select(func.now())).scalar_one()
+            assert now is not None
+            baseline_at = documents_visits.record_visit(
+                conn, self.access.user_id, pid, now
+            )
+            return {"baseline_at": baseline_at}
+
+    def summary(self, key: str) -> dict[str, Any]:
+        """Navigation counter: rows that need the lead's decision (V10)."""
+        with self.db.transaction() as conn:
+            pid = authorize_final_results(conn, self.actor, key, exclusive=False)
+            facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
+            return {"needs_decision": needs_decision(facts)}
 
     def submissions(self, key: str, case_id: str, language: str) -> dict[str, Any]:
         with self.db.transaction() as conn:
