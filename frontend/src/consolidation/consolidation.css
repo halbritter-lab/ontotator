@@ -193,6 +193,10 @@
   background: var(--surface-raised);
 }
 
+.cons-group-list[hidden] {
+  display: none;
+}
+
 .cons-group {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);

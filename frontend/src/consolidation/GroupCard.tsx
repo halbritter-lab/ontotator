@@ -165,7 +165,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   };
   const reopen = () => { if (group.edited) setConfirmReopen(true); else void props.onReopen(); };
 
-  const header = <h3 className="cons-group-heading">
+  const header = <h2 className="cons-group-heading">
     <button ref={props.toggleRef} type="button" className="cons-group-toggle" aria-expanded={expanded} onClick={props.onExpand}>
       <span className="cons-group-title">{title}</span>
       {open ? <span className="cons-group-kind"> · {kindWords}</span> : <span className="cons-group-done"> ✓ {summary}</span>}
@@ -173,7 +173,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       {group.guidelines_unclear && <span className="cons-tag"> · flagged</span>}
       {open && <span className="cons-group-state"> · open</span>}
     </button>
-  </h3>;
+  </h2>;
 
   const outcomeBlock = outcome?.kind === "conflict"
     ? <InlineConfirm title="Decision not saved" message="" confirmLabel="Save" onConfirm={() => undefined} onCancel={props.onDismissOutcome} outcome={outcome}

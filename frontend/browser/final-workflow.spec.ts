@@ -121,15 +121,25 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     // A started consolidation releases the decision block; the panel stays open.
     await area.getByRole('button', { name: 'Close', exact: true }).click();
     await reviewer.page.goto(`/#/tasks/${consolidation.assignment_id}`);
-    await expect(reviewer.page.getByText('Consolidation review', { exact: true })).toBeVisible();
-    const proposals = reviewer.page.locator('.sidebar .doc-item').filter({ hasText: 'HP:0001252' });
-    await expect(proposals).toHaveCount(2);
-    for (let index = 0; index < 2; index++) {
-      await proposals.nth(index).click();
-      await reviewer.page.getByRole('button', { name: /^Confirm/i }).first().click();
-      await expect(proposals.nth(index)).toContainText(/confirmed/i);
+    // The task opens the consolidation view (acceptance fixes WP-E): every open group takes its first choice per row, then submit.
+    const view = reviewer.page;
+    await expect(view.getByRole('heading', { level: 1, name: /^Consolidate / })).toBeVisible({ timeout: 30_000 });
+    for (let guard = 0; guard < 10 && await view.locator('.cons-group-expanded .cons-choice-row').count(); guard++) {
+      const resolved = view.waitForResponse(r => r.request().method() === 'POST' && r.url().includes('/consolidation-groups/resolve'));
+      const before = await view.locator('.cons-detail').innerText();
+      const rows = view.locator('.cons-group-expanded .cons-choice-row');
+      for (let index = 0, count = await rows.count(); index < count; index++) await rows.nth(index).locator('.cons-chip').first().click();
+      expect((await resolved).ok()).toBeTruthy();
+      await expect(view.locator('.cons-detail')).not.toHaveText(before);
     }
-    await submitCase(reviewer.page);
+    await view.getByRole('button', { name: 'Submit consolidation', exact: true }).click();
+    const summary = view.getByRole('dialog', { name: 'Submit consolidation?' });
+    await summary.getByRole('button', { name: 'Submit', exact: true }).click();
+    // Values filled in by default ask for an acknowledgement first (AXIS_CONFIRMATION_WARNING).
+    const acknowledge = summary.getByLabel('I checked these values');
+    await expect(acknowledge.or(view.getByText('Consolidation submitted. The lead accepts it as the final result.', { exact: true }))).toBeVisible();
+    if (await acknowledge.isVisible()) { await acknowledge.check(); await summary.getByRole('button', { name: 'Submit', exact: true }).click(); }
+    await expect(view.getByText('Consolidation submitted. The lead accepts it as the final result.', { exact: true })).toBeVisible();
     const consolidated = await value<Opened>(reviewer.page, `/api/v1/assignments/${consolidation.assignment_id}/open`, 'POST');
     const finalId = consolidated.assignment.last_submission_id!;
     await page.reload(); await documentsReady(page);
@@ -296,7 +306,8 @@ test('a lead without the Adjudicator role consolidates as You, and full agreemen
   expect(members.find(member => member.username === s.users.lead)!.roles).toContain('adjudicator');
   await page.goto(`/#/tasks/${body.round.assignment_id}`);
   await expect(page.getByRole('textbox', { name: 'Username' })).toHaveCount(0);
-  await expect(page.getByText('Consolidation review', { exact: true })).toBeVisible({ timeout: 30_000 });
+  // The consolidator's task opens the consolidation view (acceptance fixes WP-E).
+  await expect(page.getByRole('heading', { level: 1, name: `Consolidate ${openCase} · en v1`, exact: true })).toBeVisible({ timeout: 30_000 });
 
   // Full agreement on case-1601: "Both submissions have no findings" and one "Accept as final" with a confirmation.
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);

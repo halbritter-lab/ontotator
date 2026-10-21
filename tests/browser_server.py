@@ -1369,6 +1369,11 @@ if __name__ == "__main__":
         from browser_values_scenarios import register_values_scenario_route
 
         register_values_scenario_route(app)
+        from browser_consolidation_scenarios import (
+            register_consolidation_scenario_route,
+        )
+
+        register_consolidation_scenario_route(app)
 
         @app.post("/__test_ontology__")
         def test_ontology(name: str = Query(...)) -> dict[str, str]:
