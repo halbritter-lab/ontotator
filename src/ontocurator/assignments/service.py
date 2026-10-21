@@ -13,7 +13,7 @@ from builtins import list as List
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from pydantic import ValidationError
 from sqlalchemy import (
@@ -159,8 +159,40 @@ def _assignment(row: RowMapping) -> Assignment:
 ReviewReason = Literal["source_changed"]
 
 
+def source_obligation_documents(
+    conn: Connection,
+    project_id: int,
+    project_key: str,
+    variants: Mapping[str, Any] | None = None,
+) -> frozenset[str]:
+    """Versions with an unresolved ``SOURCE_UPDATE_UNREVIEWED`` obligation."""
+    from ontocurator.domain.work_rounds import derive_source_obligations
+    from ontocurator.storage.workflow_tables import ReviewObligationResolutionRow
+
+    if variants is None:
+        variants = load_variants(conn, project_id)
+    resolved = set(
+        conn.execute(
+            select(ReviewObligationResolutionRow.cause_id).where(
+                ReviewObligationResolutionRow.project_id == project_id
+            )
+        ).scalars()
+    )
+    return frozenset(
+        cause.document_id
+        for cause in derive_source_obligations(project_key, variants.values(), resolved)
+    )
+
+
 def enable_source_change_review(
-    conn: Connection, actor: Actor, project_id: int, project_key: str, document_id: str
+    conn: Connection,
+    actor: Actor,
+    project_id: int,
+    project_key: str,
+    document_id: str,
+    *,
+    variants: Mapping[str, Any] | None = None,
+    obligated: frozenset[str] | None = None,
 ) -> bool:
     """VD14: a translation review of a version whose source text changed.
 
@@ -175,31 +207,26 @@ def enable_source_change_review(
     the batch applies too (``assignments.batch``): a review of a row the lead
     took out of the plan does not turn Review back on.
 
+    A batch passes its ``variants`` and ``obligated``
+    (``source_obligation_documents``) once for all targets: assigning a review
+    neither changes the variants nor resolves an obligation.
+
     Raises:
         DomainError: ``SOURCE_REVIEW_NOT_NEEDED`` without such an obligation
             or for a row not in the plan (``{"reason": "not_in_plan"}``).
     """
     from ontocurator.application.work_plans import turn_review_on
     from ontocurator.domain.work_plans import OFF, RowKey
-    from ontocurator.domain.work_rounds import derive_source_obligations
     from ontocurator.storage import work_plan_store
-    from ontocurator.storage.workflow_tables import ReviewObligationResolutionRow
 
-    variants = load_variants(conn, project_id)
+    if variants is None:
+        variants = load_variants(conn, project_id)
     variant = variants.get(document_id)
     if variant is None:
         raise DomainError("DOCUMENT_NOT_FOUND")
-    resolved = set(
-        conn.execute(
-            select(ReviewObligationResolutionRow.cause_id).where(
-                ReviewObligationResolutionRow.project_id == project_id
-            )
-        ).scalars()
-    )
-    if not any(
-        cause.document_id == document_id
-        for cause in derive_source_obligations(project_key, variants.values(), resolved)
-    ):
+    if obligated is None:
+        obligated = source_obligation_documents(conn, project_id, project_key, variants)
+    if document_id not in obligated:
         raise DomainError("SOURCE_REVIEW_NOT_NEEDED")
     row = RowKey(variant.case_id, variant.language)
     flags = work_plan_store.effective_plan(conn, project_id, [row.case_id]).get(

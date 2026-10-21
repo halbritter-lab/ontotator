@@ -202,6 +202,35 @@ def test_batch_assign_review_with_source_changed(app):
     assert service.preview(scenario.key, spec)["targets"] == []
 
 
+def test_batch_commit_derives_source_obligations_once(app, monkeypatch):
+    import ontocurator.assignments.service as assignment_service
+    from ontocurator.domain import work_rounds
+
+    scenario = _project(app, "source-batch-once")
+    service, spec = _batch(scenario, "source_changed")
+    preview = service.preview(scenario.key, spec)
+    calls = {"variants": 0, "obligations": 0}
+    load, derive = (
+        assignment_service.load_variants,
+        work_rounds.derive_source_obligations,
+    )
+
+    def counted_load(*args: Any, **kwargs: Any) -> Any:
+        calls["variants"] += 1
+        return load(*args, **kwargs)
+
+    def counted_derive(*args: Any, **kwargs: Any) -> Any:
+        calls["obligations"] += 1
+        return derive(*args, **kwargs)
+
+    monkeypatch.setattr(assignment_service, "load_variants", counted_load)
+    monkeypatch.setattr(work_rounds, "derive_source_obligations", counted_derive)
+    created = service.commit(scenario.key, spec, expected_digest=preview["digest"])
+    assert [a.document_id for a in created] == [_de(scenario)]
+    # Per batch, not per target: the batch's variants and obligations are reused.
+    assert calls == {"variants": 0, "obligations": 1}
+
+
 def test_refused_without_obligation(app):
     scenario = _project(app, "no-source-change", source_changed=False)
     with pytest.raises(DomainError) as refused:

@@ -27,6 +27,7 @@ from ontocurator.assignments.service import (
     Assignment,
     AssignmentService,
     enable_source_change_review,
+    source_obligation_documents,
 )
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor
@@ -735,6 +736,12 @@ class BatchAssignmentService:
                     {"refused": [], "needs_people": batch.needs_people},
                 )
             variants = load_variants(conn, project["id"])
+            # Once per batch, not per target: the commit holds the exclusive lock.
+            obligated = (
+                source_obligation_documents(conn, project["id"], key, variants)
+                if any(target.source_review for target in batch.targets)
+                else frozenset()
+            )
             service = AssignmentService(self.db)
             created: list[Assignment] = []
             refused: list[dict[str, Any]] = []
@@ -760,6 +767,8 @@ class BatchAssignmentService:
                                     project["id"],
                                     key,
                                     target.document_id,
+                                    variants=variants,
+                                    obligated=obligated,
                                 )
                             created.append(
                                 service._assign_locked(
