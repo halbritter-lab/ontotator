@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, type ProjectSummary, type TaskSummary } from "../src/api/client";
@@ -95,4 +97,12 @@ it("says so when the user has no project", () => {
   expect(screen.getByText("You are not a member of any project yet.")).toBeDefined();
   expect(screen.queryByRole("table")).toBeNull();
   expect(api.listMyTasks).not.toHaveBeenCalled();
+});
+
+it("scopes the forced-colours card border to the narrow card layout", () => {
+  const css = readFileSync(resolve(__dirname, "../src/styles/screens/projects.css"), "utf8");
+  const start = css.indexOf("@media (forced-colors: active) {");
+  const wide = css.slice(start, css.indexOf("@media", start + 1));
+  expect(wide).not.toContain(".projects-table tbody tr {");
+  expect(css).toMatch(/@media \(forced-colors: active\) and \(max-width: 699px\)\s*\{\s*\.projects-table tbody tr \{ border-color: CanvasText; \}/);
 });

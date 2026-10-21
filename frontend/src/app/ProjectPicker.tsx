@@ -43,7 +43,6 @@ export function ProjectSwitcher({ projects, current, route, onNavigate, onChoose
   const [active, setActive] = useState(0);
   const trigger = useRef<HTMLButtonElement>(null);
   const id = useId();
-  const dialogId = `${id}-dialog`;
   const listId = `${id}-list`;
   const optionId = (index: number) => `${id}-option-${index}`;
   const needle = query.toLocaleLowerCase();
@@ -93,7 +92,7 @@ export function ProjectSwitcher({ projects, current, route, onNavigate, onChoose
   return <>
     <button ref={trigger} type="button" className="project-switcher"
       aria-label={current ? `Project: ${current.name}, switch project` : "Choose project"}
-      aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? dialogId : undefined} aria-keyshortcuts="Alt+P"
+      aria-haspopup="dialog" aria-expanded={open} aria-keyshortcuts="Alt+P"
       onClick={() => { if (open) close(); else show(); }}>
       <span className="project-switcher__text">
         <span className="project-switcher__label">Project</span>
@@ -102,7 +101,7 @@ export function ProjectSwitcher({ projects, current, route, onNavigate, onChoose
       <span className="project-switcher__chevron" aria-hidden="true"><IconSortDown /></span>
     </button>
     <Popover open={open} anchorRef={trigger} label="Switch project" onClose={close} width={320} closeOnTabOut>
-      <div id={dialogId} className="project-switcher-panel">
+      <div className="project-switcher-panel">
         <label className="form-label" htmlFor={`${id}-field`}>Find project</label>
         <input id={`${id}-field`} className="form-control" type="text" role="combobox" autoComplete="off"
           aria-autocomplete="list" aria-expanded="true" aria-controls={listId}
@@ -124,7 +123,8 @@ export function ProjectSwitcher({ projects, current, route, onNavigate, onChoose
             </li>;
           })}
         </ul>
-        {!matches.length && <p role="status" className="project-switcher-empty">No matching projects.</p>}
+        {/* Kept mounted so screen readers announce the text when it appears. */}
+        <p role="status" className="project-switcher-empty">{matches.length ? "" : "No matching projects."}</p>
         <hr className="project-switcher-separator" />
         <a href={routeHref({ name: "projects" })} className="project-switcher-all"
           onClick={event => { if (!plainClick(event)) return; event.preventDefault(); onNavigate({ name: "projects" }); close(); }}>All projects</a>

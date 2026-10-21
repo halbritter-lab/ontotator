@@ -45,6 +45,8 @@ it("opens a dialog with a focused combobox controlling the Projects listbox", as
   const { trigger } = setup();
   const { dialog, field } = await open(trigger);
   expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  // aria-haspopup + aria-expanded describe the popup; no aria-controls at an inner element.
+  expect(trigger.hasAttribute("aria-controls")).toBe(false);
   expect(dialog.hasAttribute("aria-modal")).toBe(false);
   expect(document.activeElement).toBe(field);
   expect(field.getAttribute("aria-autocomplete")).toBe("list");
@@ -78,6 +80,9 @@ it.each([3, 9])("filters by name and key, case-insensitively, with %i projects",
   const many = Array.from({ length: count }, (_, n) => project(`key-${n}`, `Study ${n}`));
   const { trigger } = setup({ projects: many, current: undefined, route: { name: "tasks" } });
   const { field } = await open(trigger);
+  // The live region is mounted before its text appears, so the change is announced.
+  const status = screen.getByRole("status");
+  expect(status.textContent).toBe("");
   const user = userEvent.setup();
   await user.type(field, "STUDY 2");
   expect(options().map(option => option.textContent)).toEqual([expect.stringContaining("Study 2")]);
@@ -85,7 +90,8 @@ it.each([3, 9])("filters by name and key, case-insensitively, with %i projects",
   await user.type(field, "KEY-1");
   expect(options()).toHaveLength(1);
   await user.type(field, "zzz");
-  expect(screen.getByRole("status").textContent).toBe("No matching projects.");
+  expect(screen.getByRole("status")).toBe(status);
+  expect(status.textContent).toBe("No matching projects.");
 });
 
 it("moves the active option with arrows without navigating, Enter opens it and closes", async () => {

@@ -29,5 +29,7 @@
 
 @media (forced-colors: active) {
   .projects-table tr.projects-table__row--current > :first-child { box-shadow: none; border-left: 3px solid CanvasText; }
+}
+@media (forced-colors: active) and (max-width: 699px) {
   .projects-table tbody tr { border-color: CanvasText; }
 }

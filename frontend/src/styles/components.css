@@ -658,6 +658,7 @@ textarea.form-control {
 .project-switcher-option__meta { grid-column: 1; color: var(--text-muted); font-size: var(--size-sm); }
 .project-switcher-option__current { grid-column: 2; grid-row: 1 / span 2; align-self: center; display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--size-sm); }
 .project-switcher-empty { margin: var(--space-2) 0 0; color: var(--text-muted); }
+.project-switcher-empty:empty { margin: 0; }
 .project-switcher-separator { margin: var(--space-2) 0; border: 0; border-top: 1px solid var(--border); }
 .project-switcher-all { display: inline-block; padding: var(--space-1) var(--space-2); color: var(--accent); }
 .project-switcher-all:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
