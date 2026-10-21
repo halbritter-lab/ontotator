@@ -517,6 +517,50 @@ def assign(api: Api, document: str, username: str, task: str) -> dict[str, Any]:
     return created
 
 
+# ontospan.default_axes(); mirrored because this script is host-only stdlib.
+CLINICAL_DEFAULTS = {
+    "assertion": "present",
+    "experiencer": "patient",
+    "temporality": "current",
+}
+
+
+def clinical_creation_defaults(
+    profile: dict[str, Any], hidden: dict[str, Any]
+) -> dict[str, dict[str, dict[str, str]]]:
+    """The server's creation-default rule (U5) on a JSON task profile."""
+    result: dict[str, dict[str, dict[str, str]]] = {}
+    for layer in profile["layers"]:
+        if layer["access"] != "editable":
+            continue
+        hidden_here = hidden.get(layer["layer_id"], {})
+        for kind in layer["annotation_types"]:
+            preset = {
+                axis["id"]: CLINICAL_DEFAULTS[axis["id"]]
+                for axis in kind["axes"]
+                if CLINICAL_DEFAULTS.get(axis["id"]) in axis["options"]
+                and CLINICAL_DEFAULTS[axis["id"]] not in hidden_here.get(axis["id"], [])
+            }
+            if preset:
+                result.setdefault(layer["layer_id"], {})[kind["type_id"]] = preset
+    return result
+
+
+def ensure_creation_defaults(api: Any) -> bool:
+    """Set the clinical creation defaults through the settings API; skip when equal."""
+    path = f"/api/v1/projects/{PROJECT_KEY}/settings"
+    settings = api.request("GET", path)
+    wanted = clinical_creation_defaults(
+        settings["profile"], settings.get("hidden_axis_values") or {}
+    )
+    if settings.get("creation_defaults") == wanted:
+        return False
+    changed = api.request("PATCH", path, {"creation_defaults": wanted})
+    if changed["creation_defaults"] != wanted:
+        raise RuntimeError("Creation defaults were not stored as requested")
+    return True
+
+
 def seed(directory: Path) -> None:
     cfg = load_prepared(directory)
     directory = Path(cfg["directory"])
@@ -643,6 +687,7 @@ def seed(directory: Path) -> None:
     lead.request(
         "PATCH", f"/api/v1/projects/{PROJECT_KEY}/settings", {"languages": ["en", "de"]}
     )
+    ensure_creation_defaults(lead)
     stack.cli("import", PROJECT_KEY, "/tmp/t5-acceptance-demo.zip")
     documents = lead.request("GET", f"/api/v1/projects/{PROJECT_KEY}/documents")
     if len(documents) != 6:

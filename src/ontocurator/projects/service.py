@@ -106,6 +106,65 @@ def validate_creation_defaults(
                     raise DomainError("SETTINGS_INVALID", {"path": f"{path}.{axis_id}"})
 
 
+def _allowed_default(
+    profile: TaskProfile, hidden: HiddenValues, layer_id: str, type_id: str
+) -> dict[str, list[str]] | None:
+    """Axis -> values a preset may hold for one editable layer/type, else ``None``."""
+    layer = next((item for item in profile.layers if item.layer_id == layer_id), None)
+    if layer is None or layer.access != "editable":
+        return None
+    kind = next(
+        (item for item in layer.annotation_types if item.type_id == type_id), None
+    )
+    if kind is None:
+        return None
+    hidden_here = hidden.get(layer_id, {})
+    return {
+        axis.id: [
+            value for value in axis.options if value not in hidden_here.get(axis.id, [])
+        ]
+        for axis in kind.axes
+    }
+
+
+def prune_creation_defaults(
+    profile: TaskProfile, defaults: CreationDefaults, hidden: HiddenValues
+) -> CreationDefaults:
+    """Keep only the presets that still validate; drop emptied types and layers."""
+    pruned: CreationDefaults = {}
+    for layer_id, kinds in defaults.items():
+        for type_id, values in kinds.items():
+            allowed = _allowed_default(profile, hidden, layer_id, type_id)
+            if allowed is None:
+                continue
+            kept = {
+                axis_id: value
+                for axis_id, value in values.items()
+                if value in allowed.get(axis_id, [])
+            }
+            if kept:
+                pruned.setdefault(layer_id, {})[type_id] = kept
+    return pruned
+
+
+def clinical_creation_defaults(
+    profile: TaskProfile, hidden: HiddenValues
+) -> CreationDefaults:
+    """``ontospan.default_axes()`` for every editable type that allows them (U5)."""
+    clinical = {key: value.value for key, value in ontospan.default_axes().items()}
+    return prune_creation_defaults(
+        profile,
+        {
+            layer.layer_id: {
+                kind.type_id: dict(clinical) for kind in layer.annotation_types
+            }
+            for layer in profile.layers
+            if layer.access == "editable"
+        },
+        hidden,
+    )
+
+
 def axis_defaults(
     profile: TaskProfile, pins: Mapping[str, Pin]
 ) -> dict[str, dict[str, str]]:
@@ -248,7 +307,10 @@ class ProjectService:
             conn.execute(
                 update(ProjectRow)
                 .where(ProjectRow.id == project_id)
-                .values(languages=sorted(normalized))
+                .values(
+                    languages=sorted(normalized),
+                    creation_defaults=clinical_creation_defaults(profile, {}),
+                )
             )
             record_audit(
                 conn,
@@ -436,8 +498,12 @@ class ProjectService:
             validate_hidden_values(
                 selected_profile, selected_pins, row["hidden_axis_values"]
             )
-            validate_creation_defaults(
+            # Presets the new structure no longer allows are dropped (U5), not refused.
+            creation_defaults = prune_creation_defaults(
                 selected_profile, row["creation_defaults"], row["hidden_axis_values"]
+            )
+            validate_creation_defaults(
+                selected_profile, creation_defaults, row["hidden_axis_values"]
             )
             manifest = PackageManifest.model_validate(row["manifest"]).model_copy(
                 update={
@@ -454,6 +520,7 @@ class ProjectService:
                     task_profile_sha256=profile_hash(selected_profile),
                     manifest=manifest.model_dump(mode="json"),
                     manifest_sha256=canonical_hash(manifest.model_dump()),
+                    creation_defaults=creation_defaults,
                     annotation_policy_revision=row["annotation_policy_revision"] + 1,
                     updated_at=datetime.now(UTC),
                 )
@@ -496,7 +563,14 @@ class ProjectService:
                 target_type="project",
                 target_id=key,
                 project_id=row["id"],
-                details={"fields": ["profile" if profile is not None else "pins"]},
+                details={
+                    "fields": ["profile" if profile is not None else "pins"]
+                    + (
+                        ["creation_defaults"]
+                        if creation_defaults != row["creation_defaults"]
+                        else []
+                    )
+                },
             )
             return self.settings(key)
 

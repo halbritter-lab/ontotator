@@ -315,3 +315,72 @@ def test_existing_attempt_refuses_before_docker_or_network(seed, tmp_path, monke
     monkeypatch.setitem(globals_, "Stack", forbidden)
     with pytest.raises(ValueError, match="already attempted"):
         seed["seed"](tmp_path)
+
+
+class FakeApi:
+    def __init__(self, settings):
+        self.settings = settings
+        self.calls = []
+
+    def request(self, method, path, body=None):
+        self.calls.append((method, path, body))
+        if method == "PATCH":
+            self.settings = self.settings | body
+        return self.settings
+
+
+def shipped_profile():
+    root = Path(__file__).resolve().parents[1] / "examples" / "t5-acceptance"
+    return json.loads((root / "profile.json").read_text(encoding="utf-8"))
+
+
+def test_seed_plan_sets_the_clinical_creation_defaults(seed):
+    assert "ensure_creation_defaults" in seed["seed"].__code__.co_names
+    api = FakeApi(
+        {
+            "profile": shipped_profile(),
+            "creation_defaults": {},
+            "hidden_axis_values": {},
+        }
+    )
+    assert seed["ensure_creation_defaults"](api) is True
+    patches = [call for call in api.calls if call[0] == "PATCH"]
+    assert patches == [
+        (
+            "PATCH",
+            "/api/v1/projects/t5-acceptance/settings",
+            {"creation_defaults": api.settings["creation_defaults"]},
+        )
+    ]
+    for kinds in api.settings["creation_defaults"].values():
+        for values in kinds.values():
+            assert values == {
+                "assertion": "present",
+                "experiencer": "patient",
+                "temporality": "current",
+            }
+
+
+def test_creation_defaults_are_idempotent_on_an_existing_project(seed):
+    api = FakeApi(
+        {
+            "profile": shipped_profile(),
+            "creation_defaults": {},
+            "hidden_axis_values": {},
+        }
+    )
+    seed["ensure_creation_defaults"](api)
+    api.calls.clear()
+    assert seed["ensure_creation_defaults"](api) is False
+    assert [call[0] for call in api.calls] == ["GET"]
+
+
+def test_seed_defaults_match_the_server_rule(seed):
+    from ontocurator.domain.profiles import TaskProfile
+    from ontocurator.projects.service import clinical_creation_defaults
+
+    profile = shipped_profile()
+    hidden = {"hpo-layer": {"temporality": ["current"]}}
+    assert seed["clinical_creation_defaults"](profile, hidden) == (
+        clinical_creation_defaults(TaskProfile.model_validate(profile), hidden)
+    )
