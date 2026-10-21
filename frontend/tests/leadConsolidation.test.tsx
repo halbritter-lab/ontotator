@@ -56,7 +56,7 @@ it('choosing yourself says that you get the Adjudicator role, and starts with on
   });
   expect(create).not.toHaveBeenCalled();
   expect(startRound).not.toHaveBeenCalled();
-  expect(onStarted).toHaveBeenCalledWith(round);
+  expect(onStarted).toHaveBeenCalledWith(round, { self: true, roleGranted: true });
   expect(screen.getByRole('link', { name: 'Open my consolidation task' }).getAttribute('href')).toBe('#/tasks/42');
 });
 

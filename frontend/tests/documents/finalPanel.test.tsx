@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { DecisionBlock, type DecisionBlockProps } from "../../src/documents/FinalPanel";
-import { agreementText, barArrows, compareSummary, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
+import { agreementText, barArrows, compareSummary, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
@@ -112,9 +112,9 @@ describe("choose", () => {
     expect(screen.getByRole("button", { name: "Accept as final" }).classList.contains("btn-primary")).toBe(true);
     expect(screen.queryByText(/All findings match/)).toBeNull();
     const open = screen.getByRole("link", { name: "Open consolidation" });
-    expect(open.getAttribute("href")).toBe("#/projects/p/consolidations/c-r3");
+    expect(open.getAttribute("href")).toBe(`#/projects/p/consolidations/c-r3?documents_panel=${encodeURIComponent("case-108:de")}`);
     fireEvent.click(open);
-    expect(onNavigate).toHaveBeenCalledWith({ name: "projectConsolidation", key: "p", roundId: "c-r3" });
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectConsolidation", key: "p", roundId: "c-r3", documents: { panel: "case-108:de" } });
     fireEvent.click(screen.getByRole("button", { name: "Compare all 3…" }));
     expect(screen.queryByText("Accept this consolidation as final?")).toBeNull();
     const table = screen.getByRole("table", { name: "Submissions, case-108 · de" });
@@ -210,7 +210,8 @@ describe("choose", () => {
     expect(onConsolidationStarted).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Consolidation reviewer"), { target: { value: "rev" } });
     fireEvent.click(screen.getByRole("button", { name: "Start consolidation" }));
-    await waitFor(() => expect(onConsolidationStarted).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-112" })));
+    await waitFor(() => expect(onConsolidationStarted).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-112" }),
+      expect.objectContaining({ round_id: "r-9", assignment_id: 9 }), { self: false, roleGranted: false }));
     expect(api.startConsolidation).toHaveBeenCalledWith("p", expect.objectContaining({ reviewer: "rev", source_submission_ids: ["case-112-s1", "case-112-s2"], expected_workflow_revision: 1 }));
   });
 
@@ -610,5 +611,20 @@ describe("panel text", () => {
     expect(nextOtherDecision(list, "a:de")?.row).toBe(b);
     expect(nextFinalDecision(page([group("a", [a])]), "a:de")).toBeNull();
     expect(ana.display_name).toBe("Ana Weber");
+  });
+});
+
+describe("consolidationStartedToast", () => {
+  it("offers Open consolidation and names the new role when the lead consolidates", () => {
+    expect(consolidationStartedToast("case-112 · de", 9, { self: true, roleGranted: true })).toEqual({
+      message: "Consolidation started for case-112 · de. You now have the Adjudicator role for this project.",
+      actionLabel: "Open consolidation",
+      route: { name: "task", assignmentId: 9 },
+    });
+    expect(consolidationStartedToast("case-112 · de", 9, { self: true, roleGranted: false }).message).toBe("Consolidation started for case-112 · de.");
+  });
+
+  it("is a plain message when someone else consolidates", () => {
+    expect(consolidationStartedToast("case-112 · de", 9, { self: false, roleGranted: false })).toEqual({ message: "Consolidation started for case-112 · de." });
   });
 });

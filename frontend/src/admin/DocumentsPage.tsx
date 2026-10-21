@@ -27,7 +27,7 @@ import { activeTab, chipsOf, clearAllPatch, filtersActive, listOf, rowsRequest, 
 import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
-import { panelStep } from "../documents/finalPanelText";
+import { consolidationStartedToast, panelStep } from "../documents/finalPanelText";
 import type { MenuItem } from "../ui/MenuButton";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { DecisionBlock } from "../documents/FinalPanel";
@@ -604,12 +604,14 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     }}
     onFocusHeading={() => setPanelFocus(value => value + 1)}
     onDirtyChange={setPanelDirty}
-    onConsolidationStarted={row => {
+    onConsolidationStarted={(row, round, started) => {
       setPanelDirty(false);
       decisionKey.current = null;
       setReleasedKey(rowKeyOf(row));
-      const message = `Consolidation started for ${rowName(row)}.`;
-      showToast({ message }); announce(message); refreshAll();
+      // The lead consolidating themselves gets "Open consolidation" (and the role sentence) instead of the launcher's link.
+      const toast = consolidationStartedToast(rowName(row), round.assignment_id, started);
+      showToast({ message: toast.message, ...(toast.route ? { actionLabel: toast.actionLabel, onAction: () => onNavigate(toast.route!) } : {}) });
+      announce(toast.message); refreshAll();
     }} /> : null;
   /** Admin actions per stage: the row panel's Activity and the cards' stage popover (A3). */
   const stageActionProps: Omit<StageActionsProps, "row" | "stage"> = {

@@ -9,7 +9,22 @@ import { decisionCategoryLabels, versionName } from "./labels";
 import { leadSteps } from "./nextStepLabels";
 import { rowKeyOf } from "./RowCells";
 import { roundName, submissionVersion } from "./SubmissionsTable";
-import type { ConsolidationInput } from "../variants/ConsolidationLauncher";
+import type { ConsolidationInput, ConsolidationStarted } from "../variants/ConsolidationLauncher";
+import type { Route } from "../app/router";
+
+/**
+ * Toast after the panel started a consolidation: the lead consolidating themselves gets "Open consolidation"
+ * (their new task) and, when it was just granted, the Adjudicator role sentence.
+ */
+export function consolidationStartedToast(name: string, assignmentId: number, started: ConsolidationStarted): { message: string; actionLabel?: string; route?: Route } {
+  const message = `Consolidation started for ${name}.`;
+  if (!started.self) return { message };
+  return {
+    message: started.roleGranted ? `${message} You now have the Adjudicator role for this project.` : message,
+    actionLabel: "Open consolidation",
+    route: { name: "task", assignmentId },
+  };
+}
 
 /** Panel actions of a row: "Accept as final…" / "Compare results…" and "Review changes…". */
 export const PANEL_ACTIONS: ReadonlySet<string> = new Set(["choose_final", "review_changes"]);

@@ -22,8 +22,11 @@ interface Props {
   /** The project keeps adjudication separate from annotation: people who annotated this text are unavailable. */
   adjudicatorNotAnnotator?: boolean;
   /** The round was started; a caller that closes (the final-result panel) replaces the success line with its own message. */
-  onStarted?: (round: WorkRoundView) => void;
+  onStarted?: (round: WorkRoundView, started: ConsolidationStarted) => void;
 }
+
+/** Who consolidates: the lead themselves (`self`), and whether they just got the Adjudicator role. */
+export interface ConsolidationStarted { self: boolean; roleGranted: boolean }
 
 /** One entry of the reviewer list: the lead ("You") first, then the members with the Adjudicator role. */
 interface Candidate { username: string; label: string; member: Member | null; self: boolean; reason: string | null }
@@ -106,7 +109,7 @@ function ConsolidationContent(props: Props): JSX.Element {
       });
       notifyFinalSelectionChanged(projectKey);
       if (active.current) setCreated({ round: response.round, roleGranted: response.role_granted, self: chosen.self, name: chosen.label });
-      onStarted?.(response.round);
+      onStarted?.(response.round, { self: chosen.self, roleGranted: response.role_granted });
     } catch (failure) {
       if (active.current) setError(failure instanceof ApiError && failure.code === 'ROUND_INPUT_STALE'
         ? new Error('Selected submissions are no longer current. Refresh submission history and choose the exact inputs again.')

@@ -49,6 +49,10 @@ async function tabTo(page: Page, target: Locator, limit = 40): Promise<void> {
 
 async function openTask(page: Page, assignmentId: number): Promise<void> {
   await page.goto(`/#/tasks/${assignmentId}`);
+  await expectOpened(page);
+}
+
+async function expectOpened(page: Page): Promise<void> {
   await expect(heading(page)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("4 findings matched and were kept automatically. Check them in the text.", { exact: true })).toBeVisible();
   await expect(expandedGroup(page)).toHaveText("Hypotonia");
@@ -68,8 +72,13 @@ test("a lead without the Adjudicator role consolidates the 8-group example in 6 
   const response = await started;
   expect(response.ok(), await response.text()).toBeTruthy();
   const { round } = await response.json() as { round: { round_id: string; assignment_id: number } };
-
-  await openTask(page, round.assignment_id);
+  // The toast names the new role and opens the lead's own consolidation task.
+  await expect(page.locator(".ui-toast-message")).toHaveText(`Consolidation started for ${s.case_id} · en. You now have the Adjudicator role for this project.`);
+  await page.locator(".ui-toast").getByRole("button", { name: "Open consolidation", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`#/tasks/${round.assignment_id}$`));
+  await expectOpened(page);
+  // The task's guidelines and problem report stay at hand.
+  await expect(page.locator(".cons-header").getByRole("button", { name: /^Report problem/ })).toBeVisible();
   await expect(page.locator(".cons-detail")).toHaveText(/· 4 open$/);
   // A person label on every member: the comparison names both people; no internal ids anywhere.
   await expect(page.locator(".cons-group-expanded thead th")).toHaveCount(2);
@@ -93,11 +102,12 @@ test("a lead without the Adjudicator role consolidates the 8-group example in 6 
   await expect(dialog.getByText(/^8 decisions → 8 findings: 4 kept automatically \(all matched\) · 3 decided · 1 kept from .+$/)).toBeVisible();
   await evidence(page, "e2a-consolidation-summary-1280");
   await dialog.getByRole("button", { name: "Submit", exact: true }).click();
-  await expect(page.getByText("Consolidation submitted. The lead accepts it as the final result.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Consolidation submitted. Accept it as final in Documents.", { exact: true })).toBeVisible();
 
   // Read-only view for the lead after submission (U9).
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/consolidations/${encodeURIComponent(round.round_id)}`);
-  await expect(heading(page)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Consolidation of case-0107 · en v1", exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("link", { name: "Back to documents", exact: true })).toBeVisible();
   await expect(page.getByText("This consolidation was submitted. You see its final state.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Submit/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Change/ })).toHaveCount(0);
@@ -140,5 +150,5 @@ test("keyboard only: J/K, choice chips, Submit and the summary", async ({ page }
   await expect(dialog.getByText(/^8 decisions → 8 findings: 4 kept automatically \(all matched\) · 3 decided · 1 left out$/)).toBeVisible();
   await tabTo(page, dialog.getByRole("button", { name: "Submit", exact: true }));
   await page.keyboard.press("Enter");
-  await expect(page.getByText("Consolidation submitted. The lead accepts it as the final result.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Consolidation submitted. Accept it as final in Documents.", { exact: true })).toBeVisible();
 });

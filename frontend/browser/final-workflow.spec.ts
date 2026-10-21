@@ -300,7 +300,8 @@ test('a lead without the Adjudicator role consolidates as You, and full agreemen
   const body = await response.json() as { round: Round; role_granted: boolean };
   expect(body.role_granted).toBe(true);
   expect(body.round.kind).toBe('consolidation');
-  await expect(page.locator('.ui-toast-message')).toHaveText(`Consolidation started for ${openCase} · en.`);
+  await expect(page.locator('.ui-toast-message')).toHaveText(`Consolidation started for ${openCase} · en. You now have the Adjudicator role for this project.`);
+  await expect(page.locator('.ui-toast').getByRole('button', { name: 'Open consolidation', exact: true })).toBeVisible();
   // Still signed in: the session survives the self-grant, and the lead now holds the role.
   const members = await value<components['schemas']['Member'][]>(page, `${root(s as unknown as Scenario)}/members`);
   expect(members.find(member => member.username === s.users.lead)!.roles).toContain('adjudicator');

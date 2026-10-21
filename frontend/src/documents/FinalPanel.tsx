@@ -6,13 +6,13 @@
  * final"; "Consolidate…" exists only with at least two eligible submissions on one text.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { api, type DocumentRowView, type DocumentRowsPage, type FinalPanelSubmissionView, type NextStepView, type RowItemView } from "../api/client";
+import { api, type WorkRoundView, type DocumentRowView, type DocumentRowsPage, type FinalPanelSubmissionView, type NextStepView, type RowItemView } from "../api/client";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Time } from "../app/Time";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, InlineMessage, type ButtonVariant } from "../ui";
 import { InlineConfirm } from "../ui/InlineConfirm";
-import { ConsolidationLauncher } from "../variants/ConsolidationLauncher";
+import { ConsolidationLauncher, type ConsolidationStarted } from "../variants/ConsolidationLauncher";
 import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
 import {
@@ -55,7 +55,7 @@ export interface DecisionBlockProps {
   /** "Carry to v2…" with the final's submission, to the corrected version `targetDocumentId`. */
   onCarry?: (row: DocumentRowView, targetDocumentId: string) => void;
   /** A consolidation was started from the block. */
-  onConsolidationStarted?: (row: DocumentRowView) => void;
+  onConsolidationStarted?: (row: DocumentRowView, round: WorkRoundView, started: ConsolidationStarted) => void;
   /** Moves focus to the row panel's heading (after a save or "Review again"). */
   onFocusHeading?: () => void;
   /**
@@ -350,7 +350,8 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
   const isFinal = row.final?.submission_id === submission.submission_id;
   const compared = listed.filter(item => item.comparable).length || listed.length;
   const consolidation = submission.kind === "consolidation" && submission.round_id
-    ? { name: "projectConsolidation" as const, key: props.projectKey, roundId: submission.round_id } : null;
+    ? { name: "projectConsolidation" as const, key: props.projectKey, roundId: submission.round_id,
+      ...(Object.keys(props.query).length ? { documents: props.query } : {}) } : null;
   return <div className="final-panel-choose">
     {submission.kind === "consolidation" && <p className="final-panel-consolidated"><strong>{submissionName(submission)}</strong></p>}
     <p className="final-panel-question">{acceptQuestion(submission)}</p>
@@ -496,7 +497,7 @@ function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[];
       {hint && <>{" "}<span id={hintId} className="cell-secondary">{hint}</span></>}
     </p>}
     {open && <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={username} rows={rows} defaultOpen
-      defaultSelected={preselected} adjudicatorNotAnnotator={page.adjudicator_not_annotator} onStarted={() => onConsolidationStarted?.(row)} />}
+      defaultSelected={preselected} adjudicatorNotAnnotator={page.adjudicator_not_annotator} onStarted={(round, started) => onConsolidationStarted?.(row, round, started)} />}
   </div>;
 }
 
