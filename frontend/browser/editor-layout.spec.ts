@@ -1,7 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { loginExisting } from "./helpers";
+import { guidelineScenario, loginGuidelineUser } from "./guidelineHelpers";
+import { loginExisting, selectText } from "./helpers";
 
 /**
  * Editor layout (editor spec sections 6, 8 and 10; plan F10): dialogs keep Close reachable
@@ -292,4 +293,111 @@ test("forced colours show the grip and the separator focus; focus rings keep 3:1
   expect(outline.width).toBeGreaterThan(0);
   expect(outline.colour).not.toBe(forced.grip);
   await evidence(page, "forced-colours");
+});
+
+
+/**
+ * Half-width window (acceptance finding 4): the clinical text stays readable. Its column keeps at
+ * least 420 px, or the inspector stacks under it, also while the ontology tree or the guidelines
+ * drawer is open. The non-modal drawer (from 1280 px) narrows the page, not the viewport.
+ */
+test.describe("half-width editor", () => {
+  const halfEvidenceDir = () => resolve(test.info().config.rootDir, "../../build/acceptance-fixes/evidence/c2");
+  async function shot(page: Page, name: string) {
+    mkdirSync(halfEvidenceDir(), { recursive: true });
+    await page.screenshot({ path: resolve(halfEvidenceDir(), `${name}.png`) });
+  }
+  const guidelines = (page: Page) => page.getByRole("button", { name: /^Guidelines v1, open the project guidelines/ });
+  const guidelinesPanel = (page: Page) => page.getByRole("complementary", { name: "Guidelines v1", exact: true });
+
+  /** The first paragraph's first characters lie inside the visible text pane and the viewport, on top. */
+  async function expectTextReadable(page: Page, label: string, { covered = false } = {}) {
+    const geometry = await page.evaluate(() => {
+      const box = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) return null;
+        const { left, top, right, bottom, width } = element.getBoundingClientRect();
+        return { left, top, right, bottom, width };
+      };
+      const container = document.querySelector(".text-container")!;
+      const node = document.createTreeWalker(container, NodeFilter.SHOW_TEXT).nextNode()!;
+      const range = document.createRange();
+      range.setStart(node, 0);
+      range.setEnd(node, Math.min(12, node.textContent!.length));
+      const { left, top, right, bottom } = range.getBoundingClientRect();
+      const hit = document.elementFromPoint(left + 2, (top + bottom) / 2);
+      return { first: { left, top, right, bottom }, onTop: !!hit && container.contains(hit),
+        center: box(".center-pane")!, inspector: box(".inspector-pane")!, viewport: { width: innerWidth, height: innerHeight } };
+    });
+    const { first, center, inspector, viewport } = geometry;
+    expect(first.left, label).toBeGreaterThanOrEqual(center.left);
+    expect(first.right, label).toBeLessThanOrEqual(Math.min(center.right, viewport.width));
+    expect(first.top, label).toBeGreaterThanOrEqual(center.top);
+    expect(first.bottom, label).toBeLessThanOrEqual(Math.min(center.bottom, viewport.height));
+    // A column of at least 420 px, or the inspector under the text instead of beside it.
+    const stacked = inspector.top >= center.bottom - 1;
+    expect(center.width >= 420 || stacked, `${label}: text column ${center.width} px, inspector beside it`).toBe(true);
+    if (!covered) expect(geometry.onTop, `${label}: nothing covers the first paragraph`).toBe(true);
+  }
+
+  async function openGuidedTask(page: Page) {
+    const s = await guidelineScenario(page, "PUBLISHED");
+    await loginGuidelineUser(page, s, "ana");
+    await page.goto(`/#/tasks/${s.assignments["annotate-1"]}`);
+    await expect(page.locator(".text-container")).toBeVisible({ timeout: 30_000 });
+    // "The patient has a seizure and hypotonia.": a finding for "seizure" gives the tree something to show.
+    await selectText(page, 18, 25);
+    await page.getByLabel("Search term", { exact: true }).fill("seizure");
+    await page.locator(".candidate-card").filter({ hasText: "HP:0001250" }).first().click();
+    await expect(page.getByRole("button", { name: "Show in tree" })).toBeVisible();
+  }
+
+  test("960 × 1000: tree open and closed, guidelines drawer open and closed", async ({ page }) => {
+    await page.setViewportSize({ width: 960, height: 1000 });
+    await openGuidedTask(page);
+    await expectTextReadable(page, "960 plain");
+    await shot(page, "960-plain");
+
+    // Below 1280 px the drawer is a dialog over the page; the layout behind it stays as it was.
+    await guidelines(page).click();
+    await expect(page.getByRole("dialog", { name: "Guidelines v1" })).toBeVisible();
+    await expectTextReadable(page, "960 drawer", { covered: true });
+    await shot(page, "960-drawer");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Guidelines v1" })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Show in tree" }).click();
+    await expect(page.getByRole("region", { name: "Ontology tree" })).toBeVisible();
+    await expectTextReadable(page, "960 tree");
+    await shot(page, "960-tree");
+
+    await guidelines(page).click();
+    await expect(page.getByRole("dialog", { name: "Guidelines v1" })).toBeVisible();
+    await expectTextReadable(page, "960 tree + drawer", { covered: true });
+    await shot(page, "960-tree-drawer");
+    await page.keyboard.press("Escape");
+    await expectTextReadable(page, "960 tree after the drawer");
+  });
+
+  test("the non-modal guidelines drawer narrows the page: the inspector stacks under the text", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await openGuidedTask(page);
+    await expectTextReadable(page, "1280 plain");
+    await guidelines(page).click();
+    await expect(guidelinesPanel(page)).toBeVisible();
+    await expectTextReadable(page, "1280 drawer");
+    await shot(page, "1280-drawer");
+    await page.getByRole("button", { name: "Show in tree" }).click();
+    await expect(page.getByRole("region", { name: "Ontology tree" })).toBeVisible();
+    await expectTextReadable(page, "1280 drawer + tree");
+    await shot(page, "1280-drawer-tree");
+    // Wider, the three columns come back beside the drawer once the text keeps 420 px.
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await expectTextReadable(page, "1600 drawer + tree");
+    const beside = await page.evaluate(() =>
+      document.querySelector(".inspector-pane")!.getBoundingClientRect().left
+        >= document.querySelector(".center-pane")!.getBoundingClientRect().right - 1);
+    expect(beside).toBe(true);
+    await shot(page, "1600-drawer-tree");
+  });
 });

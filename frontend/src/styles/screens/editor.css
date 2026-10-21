@@ -893,6 +893,79 @@
 @media (max-width: 700px) { .sidebar-resizer { display: none; } }
 @media (forced-colors: active) { .sidebar-resizer-grip { background: CanvasText; } .sidebar-resizer:focus-visible { outline-color: Highlight; } }
 
+/* The columns follow the room the editor really has, not only the viewport: the non-modal
+   guidelines drawer (from 1280 px) narrows the page beside it. Three columns need the text's
+   420 px beside the findings column and the 380 px inspector (1060 px with the default findings
+   width); with less room the inspector stacks under the text as in the 701–1024 px grid. The
+   findings column never takes the text's 420 px. */
+.case-screen:not(.case-comparing) {
+  container: case-screen / inline-size;
+}
+
+@media (min-width: 1025px) {
+  .case-screen:not(.case-comparing) .app-layout > .sidebar {
+    width: min(var(--sidebar-width), max(220px, 100cqi - 800px));
+  }
+  .case-screen:not(.case-comparing) .app-layout.tree-open {
+    grid-template-columns: min(var(--sidebar-width), max(220px, 100cqi - 800px)) minmax(0, 1fr) 380px;
+  }
+
+  @container case-screen (max-width: 1059px) {
+    .case-screen:not(.case-comparing) .app-layout {
+      display: grid;
+      grid-template-columns: min(var(--sidebar-width), 100cqi - 420px) minmax(0, 1fr);
+      grid-template-rows: minmax(260px, 1fr) minmax(180px, 38vh);
+    }
+    .case-screen:not(.case-comparing) .app-layout > .sidebar {
+      width: auto;
+      grid-column: 1;
+      grid-row: 1 / 3;
+      min-height: 0;
+    }
+    .case-screen:not(.case-comparing) .app-layout > .sidebar-resizer {
+      grid-column: 1;
+      grid-row: 1 / -1;
+      justify-self: end;
+      margin-inline: 0 -8px;
+    }
+    .case-screen:not(.case-comparing) .app-layout > .center-pane {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
+      min-height: 0;
+    }
+    .case-screen:not(.case-comparing) .app-layout > .inspector-pane {
+      grid-column: 2;
+      grid-row: 2;
+      width: 100%;
+      min-height: 0;
+      border-left: 0;
+      border-top: 1px solid var(--border);
+    }
+    .case-screen:not(.case-comparing) .inspector-pane .detail-pane {
+      max-height: none;
+      border-top: 0;
+    }
+    /* The tree docks in the strip under the text, next to the inspector. */
+    .case-screen:not(.case-comparing) .app-layout.tree-open {
+      grid-template-columns: min(var(--sidebar-width), 100cqi - 420px) minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: minmax(200px, 1fr) minmax(300px, 55%);
+    }
+    .case-screen:not(.case-comparing) .app-layout.tree-open > .center-pane {
+      grid-column: 2 / 4;
+      grid-row: 1;
+    }
+    .case-screen:not(.case-comparing) .app-layout.tree-open > .inspector-pane {
+      grid-column: 2;
+      grid-row: 2;
+    }
+    .case-screen:not(.case-comparing) .app-layout.tree-open > .tree-host {
+      grid-column: 3;
+      grid-row: 2;
+    }
+  }
+}
+
 /* One pane at a time (up to 700 px): the tree is part of "Details", under the
    annotation panel, and has the larger share of the height. */
 
