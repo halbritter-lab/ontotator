@@ -19,7 +19,8 @@ const setup = (extra: Partial<Parameters<typeof ProjectPicker>[0]> = {}) => {
 
 it("is a closed disclosure with the visible project name", () => {
   const { trigger, panel } = setup();
-  expect(trigger.textContent).toContain("Project: First study");
+  expect(trigger.textContent).toBe("First study");
+  expect(trigger.getAttribute("aria-label")).toBe("Current project: First study");
   expect(trigger.getAttribute("aria-expanded")).toBe("false");
   expect(trigger.getAttribute("aria-controls")).toBe("shell-project-panel");
   expect(panel.hidden).toBe(true);

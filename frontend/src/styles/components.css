@@ -563,6 +563,8 @@ textarea.form-control {
   overflow-wrap: anywhere;
 }
 .ui-dialog-body { flex: 1 1 auto; min-height: 0; overflow: auto; overflow-wrap: anywhere; }
+/* Table cells break long words only when they must: "anywhere" would shrink columns until headers break mid-word. */
+.ui-dialog-body :is(th, td) { overflow-wrap: break-word; }
 .ui-dialog > .modal-actions {
   flex: none;
   display: flex;
@@ -708,6 +710,10 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 }
 
 @media (max-width: 699px) {
+  /* Phones: header and navigation scroll away with the page instead of keeping a third of the screen. */
+  .shell:not(.shell-reading) { overflow-y: auto; }
+  .shell:not(.shell-reading) .shell-body { flex: none; }
+  .shell:not(.shell-reading) .shell-main { overflow: visible; }
   .shell .shell-header { padding: var(--space-3) var(--space-4); }
   .shell-body { flex-direction: column; }
   .app-nav { flex: 0 0 auto; border-right: 0; border-bottom: 1px solid var(--border); padding: var(--space-3) var(--space-4); }

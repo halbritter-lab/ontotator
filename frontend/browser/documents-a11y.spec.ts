@@ -101,7 +101,7 @@ test("Tab-only order: tabs, search, Filter, selection tools, then the case and e
     "a:All, 2",
     "input:Case ID or text",
     "button:Filter",
-    "input:Select all 1 filtered case",
+    "input:Select the filtered case",
     "button:Select by case IDs…",
     `input:Select ${S0_CASE} (2 texts)`,
     `input:Select ${S0_CASE} · en`,

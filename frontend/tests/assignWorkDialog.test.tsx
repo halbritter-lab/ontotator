@@ -209,6 +209,8 @@ it("row mode shows context, Currently and Change task", async () => {
   expect(screen.getByText(/Currently: Ana Weber \(ann-0004\)/)).toBeDefined();
   expect(screen.getByText("1 of 2 annotators assigned")).toBeDefined();
   expect(lastPreview()).toMatchObject({ task: "annotate", language: "de", case_ids: ["case-0101"] });
+  // Nobody chosen yet: no count on the button, the reason beside it.
+  expect(screen.getByRole("button", { name: "Assign" }).getAttribute("aria-disabled")).toBe("true");
   // 3 activations: the row action (outside), the person, Assign.
   fireEvent.click(screen.getByRole("checkbox", { name: /Ben Roth/ }));
   await waitForPreviewOf(["ben"]);

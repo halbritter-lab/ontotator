@@ -22,6 +22,7 @@
 .assign-members th, .assign-members td { text-align: left; vertical-align: middle; padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--border); }
 .assign-members th { color: var(--text-muted); font-weight: var(--weight-strong); }
 .assign-members .assign-open, .assign-members .assign-gets { font-variant-numeric: tabular-nums; }
+.assign-members th, .assign-members .assign-reads { white-space: nowrap; }
 .assign-member { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 24px; }
 .assign-member input { width: 18px; height: 18px; margin: 0; flex: none; }
 .assign-member label { cursor: pointer; }
