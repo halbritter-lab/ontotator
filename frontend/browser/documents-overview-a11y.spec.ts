@@ -5,6 +5,8 @@
  * (cards and sheets); forced colours keep the stage symbols and the decision edge; axe on
  * table, popover, panel and dialogs. Every test builds its own scenario projects.
  */
+import { mkdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   axeViolations, documentsTab, documentsTabs, evidence, expectStage, horizontalOverflow, openDocuments, rowAction, rowCell, rowPanel, textRow,
@@ -181,6 +183,48 @@ test("390 px and 320 px reflow without horizontal scrolling (cards, sheets)", as
   await page.context().clearCookies();
   await loginOverviewUser(page, s7a, "lead");
   for (const width of [390, 320]) await reflowPanel(page, width, s7a);
+});
+
+/** Acceptance-fix screenshots for human review only: `build/acceptance-fixes/evidence/`. */
+async function fixEvidence(page: Page, name: string): Promise<void> {
+  const dir = resolve(test.info().config.rootDir, "../../build/acceptance-fixes/evidence");
+  mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: resolve(dir, `${name}.png`), fullPage: true });
+}
+
+test("320 px: a card's stage cell opens the stage popover; Open full details opens the sheet with Back (axe clean)", async ({ page }) => {
+  const s12 = await overviewScenario(page, "S12");
+  await loginOverviewUser(page, s12, "lead");
+  await page.setViewportSize({ width: 320, height: 800 });
+  await openDocuments(page, s12.project);
+  const card = page.getByRole("article", { name: "case-112 · de", exact: true });
+  const stage = card.getByRole("button", { name: /^Annotation: .+\. Show history, case-112 · de$/ });
+  await stage.click();
+  const popover = page.getByRole("dialog", { name: "Annotation activity, case-112 · de", exact: true });
+  await expect(popover).toBeVisible();
+  await expect(popover.getByText("Loading activity…", { exact: true })).toHaveCount(0);
+  await expect(popover.getByRole("list", { name: "Latest annotation activity" }).getByRole("listitem").first()).toBeVisible();
+  expect(await horizontalOverflow(page), "320 px stage popover").toBeLessThanOrEqual(0);
+  expect(await popover.evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
+  expect(await axeViolations(page, '[role="dialog"]'), "stage popover").toEqual([]);
+  await fixEvidence(page, "a3-stage-popover-320");
+  await page.keyboard.press("Escape");
+  await expect(popover).toHaveCount(0);
+  await expect(stage).toBeFocused();
+
+  await stage.click();
+  await popover.getByRole("button", { name: "Open full details", exact: true }).click();
+  await expect(popover).toHaveCount(0);
+  const sheet = rowPanel(page, "case-112", "de");
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Show all stages", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/panel_stage=annotation/);
+  expect(await horizontalOverflow(page), "320 px sheet").toBeLessThanOrEqual(0);
+  expect(await axeViolations(page, '[role="dialog"]'), "row panel sheet from the stage popover").toEqual([]);
+  await fixEvidence(page, "a3-stage-sheet-320");
+  await sheet.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(stage).toBeFocused();
 });
 
 test("forced colours keep symbols and the decision edge", async ({ page }) => {

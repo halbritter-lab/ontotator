@@ -28,6 +28,20 @@
 .document-card-stage .stage-cell-status { white-space: normal; }
 .document-card-stage .stage-cell-symbol { min-width: 0; }
 .document-card-stage-detail { color: var(--text-muted); font-size: var(--size-sm); }
+/* With the row panel the status is a frameless button (the table's stage-cell rule): a permanent dotted
+   border-strong underline, a solid accent underline on hover and focus. It opens the stage popover. */
+.document-card-stage-button { display: inline-block; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.document-card-stage-button .stage-cell-status { text-decoration: underline dotted var(--border-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.document-card-stage-button:hover .stage-cell-status,
+.document-card-stage-button:focus-visible .stage-cell-status { text-decoration: underline solid var(--accent); text-decoration-thickness: 2px; }
+.document-card-stage-button:focus { outline: none; }
+.document-card-stage-button:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); border-radius: var(--radius-sm); }
+/* Stage popover (a sheet below 700 px): the stage's 3 newest lines, its admin actions; "Open full details" in the footer. */
+.stage-popover { display: grid; gap: var(--space-3); min-width: 0; }
+.stage-popover-lines { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.stage-popover-line { overflow-wrap: anywhere; }
+.stage-popover-empty { margin: 0; color: var(--text-muted); }
+.stage-popover-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .document-card-title:focus, .document-case-card-title:focus { outline: none; }
 .document-card-title:focus-visible, .document-case-card-title:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
 .document-card-owner { justify-content: space-between; }

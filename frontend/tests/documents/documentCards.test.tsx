@@ -1,13 +1,14 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DocumentGroupView, DocumentRowsPage } from "../../src/api/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { api, type DocumentGroupView, type DocumentRowView, type DocumentRowsPage } from "../../src/api/client";
 import { DocumentCards, type DocumentCardsProps } from "../../src/documents/DocumentCards";
 import type { TableSelection } from "../../src/documents/DocumentsTable";
-import { group, notInPlanRow, page, stepOf } from "./fixtures";
-import { waitingOnText } from "../../src/documents/stageLabels";
+import { group, notInPlanRow, page, stepOf, submissions } from "./fixtures";
+import { waitingOnText, type StageName } from "../../src/documents/stageLabels";
 import { ana, cell, stagedRow, tom } from "./tableFixtures";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+beforeEach(() => { vi.spyOn(api, "getRowSubmissions").mockImplementation(async (_key, caseId, language) => submissions(caseId, language)); });
 
 function selection(selected: readonly string[] = []): TableSelection {
   const keys = new Set(selected);
@@ -165,6 +166,43 @@ describe("cards", () => {
     renderCards(page([]), { empty: <p>No texts</p> });
     expect(screen.getByText("No texts")).toBeTruthy();
     expect(screen.queryByRole("list")).toBeNull();
+  });
+
+  it("a stage line opens the stage popover with its admin actions; Open full details opens the sheet filtered to the stage", () => {
+    const onOpenPanel = vi.fn();
+    const stageActions = vi.fn((_row: DocumentRowView, stage: StageName) => (stage === "annotation" ? <button type="button">Assign annotation review…</button> : null));
+    renderCards(page([case106()]), { onOpenPanel, stageActions });
+    const de = cardOf("case-106 · de");
+    const stageButton = within(de).getByRole("button", { name: "Annotation: 0 of 2 assigned. Show history, case-106 · de" });
+    expect(stageButton.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(stageButton.getAttribute("aria-expanded")).toBe("false");
+    // The status word is the button; the stage title and detail stay plain text.
+    expect(stageButton.closest(".document-card-stage")?.textContent).toBe("Annotation: ○ 0 of 2 assigned");
+    fireEvent.click(stageButton);
+    const dialog = screen.getByRole("dialog", { name: "Annotation activity, case-106 · de" });
+    expect(stageButton.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById(stageButton.getAttribute("aria-controls") ?? "")).not.toBeNull();
+    expect(stageActions).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-106", language: "de" }), "annotation");
+    expect(within(dialog).getByRole("button", { name: "Assign annotation review…" })).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Open full details" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-106", language: "de" }), { stage: "annotation", opener: stageButton });
+  });
+
+  it("Escape closes the stage popover and returns focus to the stage cell", () => {
+    renderCards(page([case106()]));
+    const stageButton = within(cardOf("case-106 · de")).getByRole("button", { name: "Review: Accepted. Show history, case-106 · de" });
+    fireEvent.click(stageButton);
+    const dialog = screen.getByRole("dialog", { name: "Review activity, case-106 · de" });
+    expect(within(dialog).getByText("No review activity yet.")).toBeTruthy();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(stageButton);
+  });
+
+  it("stage lines stay plain text without the row panel", () => {
+    renderCards(page([case106()]), { onOpenPanel: undefined });
+    expect(within(cardOf("case-106 · de")).queryByRole("button", { name: /Show history/ })).toBeNull();
   });
 
   it("shows the visit badge next to the heading without changing its name", () => {
