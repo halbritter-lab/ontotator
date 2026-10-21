@@ -1,6 +1,6 @@
 # Annotator acceptance 2026-10-21, UI findings: design
 
-Status: Draft, written from the code on `main` `f6d04bd`; not implemented. The user answered the open questions on 2026-10-21 (table "Decisions"); two of them are recommendations still pending the user's confirmation.
+Status: Draft, written from the code on `main` `f6d04bd`; not implemented. The user answered the open questions on 2026-10-21 (table "Decisions"); all are confirmed.
 Source: manual acceptance on the :18210 stack, findings 1–4, 7 and 8 in `.superpowers/roadmap-execution/manual-findings-2026-10-21-annotator.md` (findings 5 and 6 are product decisions and stay out of this spec).
 Builds on: [Editor axis values and coupled scrolling](2026-10-21-editor-axes-and-coupled-scroll-design.md) ("the axes spec", 1.3 hint, 1.5 keys), [Quick fixes and export](2026-10-19-quick-fixes-and-export-design.md) (Q2 My tasks filter, Q3 project picker), [Lead workflow](2026-10-20-lead-workflow-design.md) (D7 landing). DESIGN.md tokens only; no new tokens.
 Mockups (gitignored, in the main checkout): `.superpowers/brainstorm/161693-1792600358/content/` — `index.html` (overview), `a-pending-selection.html` (F1), `b-values-confirm.html` (F3), `c-submit-unconfirmed.html` (F2), `d-term-search.html` (F4), `e-my-tasks.html` (F7), `f-project-switcher.html` (F8). Where a mockup and this spec differ, this spec wins.
