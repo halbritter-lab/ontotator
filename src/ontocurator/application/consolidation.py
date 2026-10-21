@@ -201,7 +201,11 @@ class ConsolidationReader:
         if item.kind != "consolidation":
             raise DomainError("ROUND_NOT_FOUND")
         assignee = item.annotator_id == access.pseudonym
-        submitted = item.state == "submitted" and item.latest_submission_id is not None
+        # A submitted round stays readable once a later round superseded it.
+        submitted = item.latest_submission_id is not None and item.state in {
+            "submitted",
+            "superseded",
+        }
         if not assignee and not (
             submitted and can(access, Action.MANAGE_ASSIGNMENTS, item.project_key)
         ):
