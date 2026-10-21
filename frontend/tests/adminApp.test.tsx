@@ -62,12 +62,14 @@ it("uses controlled document query routes and actual managed-project documents",
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   render(<App user={user} />);
-  expect(await screen.findByLabelText("Select ID (1 language)")).toHaveProperty("checked", false);
+  expect(await screen.findByLabelText("Select ID (1 text)")).toHaveProperty("checked", false);
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { language: "de", q: "ID" });
   expect(screen.getByRole("link", { name: "Documents" }).getAttribute("aria-current")).toBe("page");
-  fireEvent.change(screen.getByLabelText("Status"), { target: { value: "open" } });
-  await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?language=de&status=open&q=ID"));
-  await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { language: "de", status: "open", q: "ID" }));
+  // Status is a facet of the filter popover now; the search box drives the same controlled route
+  // (an unknown status stays in the address but never reaches the request).
+  fireEvent.change(screen.getByLabelText("Case ID or text"), { target: { value: "ID2" } });
+  await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?language=de&status=invalid&q=ID2"));
+  await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { language: "de", q: "ID2" }));
 });
 
 it("restores native history during reset issuance and acknowledged code, then permits Back and Forward after Close", async () => {

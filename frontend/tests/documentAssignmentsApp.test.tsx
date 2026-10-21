@@ -43,10 +43,10 @@ it("keeps the SAME focused ID input while actual App navigation controls every t
   const user = userEvent.setup();
   render(<App user={testUser("lead", { is_system_admin: false })} />);
   await screen.findByRole("link", { name: "Open z/doc · en" });
-  const input = screen.getByLabelText("Case ID");
+  const input = screen.getByLabelText("Case ID or text");
   await user.type(input, "abc");
   await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?q=abc"));
-  expect(screen.getByLabelText("Case ID")).toBe(input);
+  expect(screen.getByLabelText("Case ID or text")).toBe(input);
   expect(document.activeElement).toBe(input);
   expect(input).toHaveProperty("value", "abc");
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { q: "abc" }));
@@ -63,9 +63,9 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   vi.spyOn(api, "commitAssignmentBatch").mockResolvedValue({ created: [{ ...assignment, username: "alice" }] });
   render(<App user={testUser("lead", { is_system_admin: false })} />);
   await screen.findByRole("link", { name: "Open z/doc · en" });
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 language)" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 text)" }));
   const bar = screen.getByRole("region", { name: "Selection" });
-  expect(within(bar).getByText("1 case selected")).toBeTruthy();
+  expect(within(bar).getByText("1 text in 1 case selected")).toBeTruthy();
   fireEvent.click(within(bar).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign · 1 case" });
   fireEvent.click(await within(dialog).findByRole("radio", { name: /Alice/ }));
