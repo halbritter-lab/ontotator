@@ -21,8 +21,10 @@ import { formatDateTime, labelFor, plural } from "../app/labels";
 import { routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
-import { Button, Checkbox, Dialog, EmptyState, InlineMessage, Select, StatusBadge, TextInput, Toast, Toolbar, useMediaQuery, useToast, type GroupSelectMode } from "../ui";
-import { DecisionBar } from "../documents/DecisionBar";
+import { Button, Checkbox, Dialog, EmptyState, FilterChip, IconButton, IconClose, InlineMessage, StatusBadge, tabId, Toast, Toolbar, useMediaQuery, useToast, type GroupSelectMode } from "../ui";
+import { DocumentsTabs, TabEmptyState } from "../documents/DocumentsTabs";
+import { activeTab, chipsOf, clearAllPatch, filtersActive, rowsRequest, tabCount } from "../documents/filterModel";
+import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
 import { ExpandedRow, FinalChoice, submissionsHeadingId, type ExpandedRowProps, type FinalChoiceProps, type SelectFinalRequest } from "../documents/ExpandedRow";
@@ -30,7 +32,6 @@ import {
   barChanges, failureOf, FinalConfirm, keepRequest, selectionPayload, selectRequest, successMessage,
   type FinalConfirmFailure, type FinalConfirmRequest,
 } from "../documents/FinalConfirm";
-import { STEP_FILTER_GROUPS, STEP_LABELS, stepLabel } from "../documents/nextStepLabels";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
 import { useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { ResolveTranslation } from "../documents/ResolveTranslation";
@@ -48,7 +49,7 @@ import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
 import { AssignWorkDialog, type AssignWorkDialogProps } from "./AssignWorkDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { UploadPanel } from "./UploadPanel";
-import { originLabels, reviewLanguages, translationStatusLabels } from "./variantMetadata";
+import { reviewLanguages, translationStatusLabels } from "./variantMetadata";
 
 export interface DocumentsPageProps {
   projectKey: string;
@@ -63,34 +64,19 @@ export interface DocumentsPageProps {
 /** Narrow viewports render cards instead of the table. */
 export const NARROW_DOCUMENTS_QUERY = "(max-width: 700px)";
 
-export const STATUS_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["status"]>, string])[] = [
-  ["unassigned", "Unassigned"], ["open", "Open"], ["in_progress", "In progress"],
-  ["submitted", "Submitted"], ["reopened", "Reopened"], ["held", "Paused"],
-];
-const TRANSLATION_STATUS_OPTIONS: readonly (readonly [string, string])[] = [
-  ...Object.entries(translationStatusLabels), ["accepted_without_review", "Accepted without review"],
-];
-export const PLAN_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["plan"]>, string])[] = [
-  ["review", "Review"], ["annotate", "Annotate"], ["review_and_annotate", "Review and annotate"], ["not_in_plan", "Not in plan"],
-];
-export const SORT_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["sort"]>, string])[] = [
-  ["case", "Case ID"], ["import", "Import batch"], ["activity", "Last activity"],
-];
-const DECISIONS = new Set(["all", "report-or-pause", "confirm-final", "translation", "missing-final"]);
-const SEGMENTS = new Set(["decision", "assign", "progress"]);
-const STAGE_LABELS: Readonly<Record<string, string>> = { translation_review: "Translation review", annotation: "Annotation", final: "Final result", done: "Done" };
 const DOCUMENT_FIELDS = [
   "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
   "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
+  "review_state", "annotation_state", "final_state", "waiting_on", "panel",
 ] as const;
-/** The ID filter applies this long after the last keystroke (or at once on Enter and blur). */
+/** The search applies this long after the last keystroke (or at once on Enter and blur). */
 export const ID_FILTER_DELAY_MS = 300;
 /** The table's eight columns; "Select" and "Action" headers are visually hidden. */
 const SKELETON_HEADERS: readonly (readonly [string, boolean])[] = [
   ["Select", true], ["Text", false], ["Review", false], ["Annotation", false], ["Final", false], ["Waiting on", false], ["Action", true], ["Last activity", false],
 ];
-/** Server sorts: the Sort select offers the ascending ones; the Text and Last activity headers also set "-case" and "-activity" (VD10). */
-const SORT_VALUES: ReadonlySet<string> = new Set(["case", "-case", "import", "activity", "-activity"]);
+/** ID of the tab panel around the table (the Documents tabs control it). */
+const PANEL_ID = "documents-panel";
 
 /** The Documents fields of a route (the page receives the whole route as `query`). */
 function documentsQuery(query: ProjectDocumentsQuery): ProjectDocumentsQuery {
@@ -100,59 +86,19 @@ function documentsQuery(query: ProjectDocumentsQuery): ProjectDocumentsQuery {
   return result;
 }
 
-/** The known values of a comma-joined route filter: one value as is, several as a list (OR), none as undefined. */
-function listFilter<Value extends string>(value: string | undefined, known: (item: string) => boolean): Value | Value[] | undefined {
-  const values = [...new Set((value ?? "").split(",").filter(known))] as Value[];
-  return values.length > 1 ? values : values[0];
-}
-
-/** The values of a list filter (one value or several). */
-function valuesOf<Value>(value: Value | Value[] | null | undefined): Value[] {
-  return value == null ? [] : Array.isArray(value) ? value : [value];
-}
-
 /**
- * Server query for the rows endpoint; unknown values are dropped. `segment` wins over `decision`;
- * a decision filter wins over every `final` filter (the API takes one of them). `step`, `stage` and
- * `plan` are comma-joined in the route (Progress links) and sent as lists.
+ * Server query for the rows endpoint (`filterModel.rowsRequest`); unknown values are dropped. `segment`
+ * wins over `decision`; a decision filter wins over every `final` filter (the API takes one of them).
+ * Comma-joined route values (facets, Progress links) are sent as lists.
  */
 export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsRequest {
-  const result: DocumentRowsRequest = {};
-  if (query.language) result.language = query.language;
-  if (STATUS_OPTIONS.some(([value]) => value === query.status)) result.status = query.status as DocumentRowsQuery["status"];
-  if (query.q) result.q = query.q;
-  if (query.origin && Object.hasOwn(originLabels, query.origin)) result.origin = query.origin as DocumentRowsQuery["origin"];
-  if (TRANSLATION_STATUS_OPTIONS.some(([value]) => value === query.translation_status)) result.translation_status = query.translation_status as DocumentRowsQuery["translation_status"];
-  if (query.segment && SEGMENTS.has(query.segment)) result.segment = query.segment as DocumentRowsQuery["segment"];
-  else if (query.decision && DECISIONS.has(query.decision)) result.decision = query.decision as DocumentRowsQuery["decision"];
-  if (result.decision === undefined && (query.final === "none" || query.final === "any" || query.final === "missing")) result.final = query.final;
-  const step = listFilter<NonNullable<DocumentRowsQuery["step"]>>(query.step, item => Object.hasOwn(STEP_LABELS, item));
-  if (step !== undefined) result.step = step;
-  const stage = listFilter<NonNullable<DocumentRowsQuery["stage"]>>(query.stage, item => Object.hasOwn(STAGE_LABELS, item));
-  if (stage !== undefined) result.stage = stage;
-  if (query.owner) result.owner = query.owner;
-  const plan = listFilter<NonNullable<DocumentRowsQuery["plan"]>>(query.plan, item => PLAN_OPTIONS.some(([value]) => value === item));
-  if (plan !== undefined) result.plan = plan;
-  if (query.paused === "yes" || query.paused === "no") result.paused = query.paused;
-  if (query.sort && query.sort !== "case" && SORT_VALUES.has(query.sort)) result.sort = query.sort as DocumentRowsQuery["sort"];
-  if (query.case) result.case = query.case;
-  const page = Number(query.page);
-  if (Number.isInteger(page) && page > 1) result.page = page;
-  return result;
+  return rowsRequest(query);
 }
 
 /** The Documents filters for the selection summary and the batch assign dialog: every filter except paging, sort and retain. */
 export function selectionFilters(request: DocumentRowsRequest): DocumentRowFilters {
-  // The batch filters take one language and one origin, no Done tab and no facets yet (row-level
-  // bulk: O0d); the route still holds at most one language and one origin and no Done tab.
-  const { page: _page, sort: _sort, retain: _retain, language, origin, segment, review_state: _review, annotation_state: _annotation, final_state: _final, waiting_on: _waiting, ...filters } = request;
-  const result: DocumentRowFilters = { ...filters };
-  const [firstLanguage] = valuesOf(language);
-  const [firstOrigin] = valuesOf(origin);
-  if (firstLanguage !== undefined) result.language = firstLanguage;
-  if (firstOrigin !== undefined) result.origin = firstOrigin;
-  if (segment != null && segment !== "done") result.segment = segment;
-  return result;
+  const { page: _page, sort: _sort, retain: _retain, ...filters } = request;
+  return filters;
 }
 
 /** The batch dialog's case order: descending orders fall back to their ascending order. */
@@ -331,6 +277,37 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     setIdText(value);
     window.clearTimeout(idTimer.current);
     idTimer.current = window.setTimeout(() => applyId(value), ID_FILTER_DELAY_MS);
+  };
+  const searchRef = useRef<HTMLInputElement>(null);
+  const clearSearch = () => {
+    setIdText("");
+    applyId("");
+    searchRef.current?.focus();
+  };
+
+  // Chips: after a removal focus moves to the next chip (now at the removed chip's index) or the search field.
+  const chipList = useRef<HTMLDivElement>(null);
+  const [chipFocus, setChipFocus] = useState<number | null>(null);
+  const chips = chipsOf(query);
+  const chipIdentity = chips.map(chip => chip.id).join("\n");
+  useEffect(() => {
+    if (chipFocus === null) return;
+    setChipFocus(null);
+    const buttons = chipList.current?.querySelectorAll<HTMLButtonElement>("button.ui-filter-chip");
+    (buttons?.[chipFocus] ?? searchRef.current)?.focus();
+    // Only a changed chip list (the route after the removal) moves focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chipIdentity]);
+  const removeChip = (index: number) => {
+    setChipFocus(index);
+    changeFilter(chips[index].patch);
+  };
+  const clearAll = () => {
+    window.clearTimeout(idTimer.current);
+    setIdText("");
+    sentId.current = undefined;
+    changeFilter(clearAllPatch(query));
+    searchRef.current?.focus();
   };
   const toggleRow = (key: string) => {
     const next = new Set(openKeys);
@@ -806,36 +783,15 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     return badge && <StatusBadge tone={badge.tone}>{badge.text}</StatusBadge>;
   };
 
-  const languages = [...new Set([...(settings?.languages ?? []), ...pageRows.map(row => row.language), ...(query.language ? [query.language] : [])])];
-  const status = STATUS_OPTIONS.some(([value]) => value === query.status) ? query.status! : "";
-  const origin = query.origin && Object.hasOwn(originLabels, query.origin) ? query.origin : "";
-  const translationStatus = TRANSLATION_STATUS_OPTIONS.some(([value]) => value === query.translation_status) ? query.translation_status! : "";
-  // Several values (from a Progress link) show as one extra option naming them all.
-  const stepValues = valuesOf(request.step), planValues = valuesOf(request.plan);
-  const step = stepValues.join(","), plan = planValues.join(",");
-  const finalFilter = request.final === "none" || request.final === "any" ? request.final : "";
-  const stageValues = valuesOf(request.stage);
-  const alsoFiltered = [
-    ...(stageValues.length ? [`Stage ${stageValues.map(value => STAGE_LABELS[value]).join(" or ")}`] : []),
-    ...(request.paused ? [request.paused === "yes" ? "Paused" : "Not paused"] : []),
-  ];
-  const sort = request.sort ?? "case";
-  const moreActive = status !== "" || origin !== "" || translationStatus !== "" || finalFilter !== "" || sort !== "case";
-  // "More filters" is the lead's to open and close; it opens by itself only when one of its filters becomes active.
-  const [moreOpen, setMoreOpen] = useState(moreActive);
-  useEffect(() => { if (moreActive) setMoreOpen(true); }, [moreActive]);
+  const tab = activeTab(query);
   const showAll: Route = { name: "projectDocuments", key: projectKey };
   const navigateLink = (target: Route) => onNavigate(target);
-  const hasFilters = Object.keys(request).some(name => name !== "page" && name !== "sort");
+  const sourceLanguages = useMemo(() => new Set(pageRows.filter(row => row.is_source).map(row => row.language)), [pageRows]);
 
-  const emptyState = (): JSX.Element => {
-    const showAllLink = <RouteLink route={showAll} onNavigate={navigateLink}>Show all texts</RouteLink>;
-    if (request.segment === "assign") return <EmptyState title="Nothing to assign" action={showAllLink} />;
-    if (request.segment === "progress") return <EmptyState title="Nothing in progress" action={showAllLink} />;
-    if (request.segment === "decision" || request.decision) return <EmptyState title="Nothing needs your decision" action={showAllLink} />;
-    if (request.plan === "not_in_plan") return <EmptyState title="Every language version is in the plan." action={showAllLink} />;
-    if (!hasFilters) return <EmptyState title="No texts yet">Upload texts to start.</EmptyState>;
-    return <EmptyState title="No documents" action={showAllLink}>Try another filter.</EmptyState>;
+  /** No rows: the tab is empty (tab counts ignore facets and search), or the filters exclude every row of the tab. */
+  const emptyState = (bar: DocumentRowsPage["bar"]): JSX.Element => {
+    if (tabCount(bar, tab) === 0) return <TabEmptyState tab={tab} projectKey={projectKey} onNavigate={navigateLink} />;
+    return <EmptyState title="No texts match these filters." action={<Button size="sm" onClick={clearAll}>Clear all</Button>} />;
   };
 
   let content: JSX.Element;
@@ -848,7 +804,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     if (query.case && !page.case_found) {
       body = <EmptyState title={`Text ${query.case} not found`} action={<RouteLink route={showAll} onNavigate={navigateLink}>Show all texts</RouteLink>} />;
     } else if (page.groups.length === 0) {
-      body = emptyState();
+      body = emptyState(page.bar);
     } else if (narrow) {
       body = <DocumentCards page={page} projectKey={projectKey} query={viewQuery} selection={tableSelection} onToggleRow={toggleRow} planSaves={planSaves}
         renderRowNotice={renderRowNotice} renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} />;
@@ -864,7 +820,6 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh · <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
-      <DecisionBar bar={page.bar} query={query} projectKey={projectKey} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />
       <div className="documents-selection-tools">
         {page.groups.length > 0 && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
           aria-busy={selectingAll || undefined} onChange={() => { void toggleAll(); }} />}
@@ -889,45 +844,20 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       <h1 ref={headingRef} tabIndex={-1}>Documents</h1>
       <Button variant="quiet" aria-disabled={settings ? undefined : true} onClick={() => { if (settings) setUploadOpen(true); }}>Upload texts…</Button>
     </div>
-    <Toolbar label="Document filters" className="filter-bar documents-filters">
-      <Select id="documents-language" label="Language" value={query.language ?? ""} onChange={event => changeFilter({ language: event.target.value || undefined })}>
-        <option value="">All languages</option>{languages.map(value => <option key={value} value={value}>{value}</option>)}
-      </Select>
-      <Select id="documents-step" label="Next step" value={step} onChange={event => changeFilter({ step: event.target.value || undefined })}>
-        <option value="">Any next step</option>
-        {stepValues.length > 1 && <option value={step}>{stepValues.map(stepLabel).join(" or ")}</option>}
-        {STEP_FILTER_GROUPS.map(([group, codes]) => <optgroup key={group} label={group}>
-          {codes.map(code => <option key={code} value={code}>{stepLabel(code)}</option>)}
-        </optgroup>)}
-      </Select>
-      <Select id="documents-plan" label="Plan" value={plan} onChange={event => changeFilter({ plan: event.target.value || undefined })}>
-        <option value="">Any plan</option>
-        {planValues.length > 1 && <option value={plan}>{planValues.map(value => PLAN_OPTIONS.find(([option]) => option === value)?.[1] ?? value).join(" or ")}</option>}
-        {PLAN_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </Select>
-      <TextInput id="documents-prefix" label="Case ID" value={idText} onChange={event => typeId(event.target.value)} onBlur={() => applyId(idText)}
-        onKeyDown={event => { if (event.key === "Enter") applyId(idText); }} />
-      {alsoFiltered.length > 0 && <p className="muted documents-also-filtered">{`Also filtered: ${alsoFiltered.join(" · ")}`}</p>}
-      <details className="documents-more-filters" open={moreOpen} onToggle={event => setMoreOpen(event.currentTarget.open)}>
-        <summary>More filters</summary>
-        <div className="documents-more-filters-body">
-          <Select id="documents-final" label="Final result" value={finalFilter} onChange={event => changeFilter({ final: event.target.value || undefined })}>
-            <option value="">Any</option><option value="none">None</option><option value="any">Has a final result</option>
-          </Select>
-          <Select id="documents-origin" label="Origin" value={origin} onChange={event => changeFilter({ origin: event.target.value || undefined })}>
-            <option value="">All origins</option>{Object.entries(originLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </Select>
-          <Select id="documents-translation-status" label="Translation status" value={translationStatus} onChange={event => changeFilter({ translation_status: event.target.value || undefined })}>
-            <option value="">All translation statuses</option>{TRANSLATION_STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </Select>
-          <Select id="documents-status" label="Status" value={status} onChange={event => changeFilter({ status: event.target.value || undefined })}>
-            <option value="">All statuses</option>{STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </Select>
-          <Select id="documents-sort" label="Sort" value={sort.replace(/^-/, "")} onChange={event => changeFilter({ sort: event.target.value === "case" ? undefined : event.target.value })}>
-            {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </Select>
-        </div>
-      </details>
+    {page && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />}
+    <Toolbar label="Document filters" className="documents-filters">
+      <div className="documents-search">
+        <input ref={searchRef} id="documents-search" type="search" className="form-control" aria-label="Case ID or text" placeholder="Case ID or text…"
+          value={idText} onChange={event => typeId(event.target.value)} onBlur={() => applyId(idText)}
+          onKeyDown={event => { if (event.key === "Enter") applyId(idText); }} />
+        {idText !== "" && <IconButton size="sm" variant="quiet" label="Clear search" icon={<IconClose />} onClick={clearSearch} />}
+      </div>
+      <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} onChange={changeFilter} onClearAll={clearAll} />
+      {chips.length > 0 && <div ref={chipList} className="documents-filter-chips">
+        {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} onRemove={() => removeChip(index)} />)}
+      </div>}
+      {filtersActive(query) && <Button size="sm" variant="quiet" onClick={clearAll}>Clear all</Button>}
+      {page && filtersActive(query) && <p className="documents-filter-count">{`${page.bar.shown} of ${tabCount(page.bar, tab)}`}</p>}
     </Toolbar>
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}
     {inventoryError !== undefined && <ErrorNotice error={inventoryError} />}
@@ -940,7 +870,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         }}>{nextLabel}: {nameOfKey(success.next)}</a></>}
       </div>
     </div>}
-    {content}
+    <div id={PANEL_ID} {...(page ? { role: "tabpanel", "aria-labelledby": tabId(PANEL_ID, tab) } : {})}>{content}</div>
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <Dialog open={uploadOpen} title="Upload texts" size="lg" onClose={() => setUploadOpen(false)}>
       {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus}

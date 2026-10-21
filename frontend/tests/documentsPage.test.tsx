@@ -57,7 +57,9 @@ function renderStateful(initial: ProjectDocumentsQuery) {
   return { ...render(<Host />), onNavigate };
 }
 
-const loaded = () => screen.findByRole("navigation", { name: "Segments" });
+const loaded = () => screen.findByRole("tablist", { name: "Documents views" });
+const searchField = () => screen.getByRole("searchbox", { name: "Case ID or text" });
+const filterTools = () => screen.getByRole("group", { name: "Document filters" });
 const live = () => document.querySelector(".documents-page > p[aria-live='polite']")!;
 
 /** `count` cases "case-0101"… with one de row each (next step Assign translation review). */
@@ -117,7 +119,7 @@ it("replaces the bar and table with an error and Retry", async () => {
   vi.mocked(api.listDocumentRows).mockRejectedValueOnce(new Error("Rows failed")).mockResolvedValue(scenarioS1().page);
   renderPage();
   const retry = await screen.findByRole("button", { name: "Retry" });
-  expect(screen.queryByRole("navigation", { name: "Segments" })).toBeNull();
+  expect(screen.queryByRole("tablist", { name: "Documents views" })).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
   fireEvent.click(retry);
   await loaded();
@@ -125,47 +127,117 @@ it("replaces the bar and table with an error and Retry", async () => {
   expect(screen.getByRole("table", { name: "Documents" })).toBeTruthy();
 });
 
-it("filters by Next step, Plan, Language and Case ID; More filters holds Final result, Origin, Translation status, Status, Sort", async () => {
+it("tabs, search, Filter popover and chips replace the filter selects (VD9)", async () => {
   mockRows(scenarioS1().page);
   const onNavigate = vi.fn();
   const view = renderPage({ query: { language: "de", segment: "assign", page: "2" }, onNavigate });
   await loaded();
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { language: "de", segment: "assign", page: 2 });
-  const filters = screen.getByRole("group", { name: "Document filters" });
-  const step = within(filters).getByLabelText("Next step") as HTMLSelectElement;
-  expect(Array.from(step.querySelectorAll("optgroup")).map(entry => entry.label)).toEqual(["Problem reports and paused tasks", "Translation review", "Annotation", "Final result", "Done"]);
-  expect(within(step).getByRole("option", { name: "Assign translation review" })).toBeTruthy();
-  fireEvent.change(step, { target: { value: "assign_translation_review" } });
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", step: "assign_translation_review" });
-  const plan = within(filters).getByLabelText("Plan") as HTMLSelectElement;
-  expect(Array.from(plan.options).map(option => option.textContent)).toEqual(["Any plan", "Review", "Annotate", "Review and annotate", "Not in plan"]);
-  fireEvent.change(plan, { target: { value: "not_in_plan" } });
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", plan: "not_in_plan" });
-  fireEvent.change(within(filters).getByLabelText("Language"), { target: { value: "" } });
+  // No select filter is left on the page.
+  expect(document.querySelector(".documents-page select")).toBeNull();
+  expect(screen.queryByText("More filters")).toBeNull();
+  const tools = filterTools();
+  expect(within(tools).getByRole("searchbox", { name: "Case ID or text" }).getAttribute("placeholder")).toBe("Case ID or text…");
+  // The table sits in the tab panel of the active tab.
+  const panel = screen.getByRole("tabpanel");
+  expect(panel.getAttribute("aria-labelledby")).toBe(screen.getByRole("tab", { selected: true }).id);
+  expect(panel.contains(screen.getByRole("table", { name: "Documents" }))).toBe(true);
+  // A chip per active value; removing it drops paging and the selection.
+  fireEvent.click(within(tools).getByRole("button", { name: "Remove filter Language: de" }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "assign" });
-  fireEvent.change(within(filters).getByLabelText("Case ID"), { target: { value: "case-+/" } });
-  fireEvent.keyDown(within(filters).getByLabelText("Case ID"), { key: "Enter" });
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", q: "case-+/" });
-  const more = screen.getByText("More filters").closest("details") as HTMLDetailsElement;
-  expect(Array.from(more.querySelectorAll("label")).map(label => label.textContent)).toEqual(["Final result", "Origin", "Translation status", "Status", "Sort"]);
-  expect(Array.from((within(more).getByLabelText("Final result") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["Any", "None", "Has a final result"]);
-  expect(Array.from((within(more).getByLabelText("Sort") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["Case ID", "Import batch", "Last activity"]);
-  expect(Array.from((within(more).getByLabelText("Translation status") as HTMLSelectElement).options).map(option => option.textContent)).toContain("Accepted without review");
-  fireEvent.change(within(more).getByLabelText("Final result"), { target: { value: "none" } });
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", final: "none" });
-  fireEvent.change(within(more).getByLabelText("Sort"), { target: { value: "activity" } });
+  // A tab keeps the facets.
+  fireEvent.click(screen.getByRole("tab", { name: /^Done/ }));
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "done", language: "de" });
+  // The popover footer sets the order at once.
+  fireEvent.click(within(tools).getByRole("button", { name: "Filter, 1 active" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Last activity" }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", sort: "activity" });
-  fireEvent.change(within(more).getByLabelText("Status"), { target: { value: "held" } });
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", segment: "assign", status: "held" });
   // A filter change announces the new count once the data arrives.
   expect(live().textContent).toBe("");
   mockRows(page([scenarioS1().group, scenarioS5().group]));
-  view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} query={{ plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final" }} onNavigate={onNavigate} />);
+  view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} query={{ plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final", review_state: "accepted,check_failed", waiting_on: "me" }} onNavigate={onNavigate} />);
   await waitFor(() => expect(live().textContent).toBe("2 texts shown"));
-  expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final" });
-  // Only case checkboxes and the header checkbox select; no per-row bulk checkboxes, no old "Assign …".
-  expect(screen.getAllByRole("checkbox").every(box => box.getAttribute("aria-label")?.startsWith("Select ") || box.id === "documents-select-all")).toBe(true);
+  expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final", review_state: ["accepted", "check_failed"], waiting_on: "me" });
+  expect(within(filterTools()).getAllByRole("button", { name: /^Remove filter / }).map(chip => chip.textContent)).toEqual([
+    "Review: Accepted", "Review: Check failed", "Plan: Review", "Waiting on: You", "Step: Choose final result", "Stage: Final result", "Owner: You", "Final result: None",
+  ]);
+  // Only text and case checkboxes select inside the table; no old "Assign …".
+  expect(within(screen.getByRole("table", { name: "Documents" })).getAllByRole("checkbox").every(box => box.getAttribute("aria-label")?.startsWith("Select "))).toBe(true);
   expect(screen.queryByRole("button", { name: "Assign …" })).toBeNull();
+});
+
+it("search debounces 300 ms, also on Enter and blur, clear button", async () => {
+  mockRows(scenarioS1().page);
+  const { onNavigate } = renderPage();
+  await loaded();
+  vi.useFakeTimers();
+  try {
+    const input = searchField();
+    for (const value of ["c", "ca", "cas"]) fireEvent.change(input, { target: { value } });
+    act(() => { vi.advanceTimersByTime(299); });
+    expect(onNavigate).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", q: "cas" });
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    fireEvent.blur(input);
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    // Enter applies at once (the text label form "case-104 de" is sent as typed, VD11).
+    fireEvent.change(input, { target: { value: "case-104 de" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", q: "case-104 de" });
+    // Blur applies at once.
+    fireEvent.change(input, { target: { value: "case-+/" } });
+    fireEvent.blur(input);
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", q: "case-+/" });
+    expect(onNavigate).toHaveBeenCalledTimes(3);
+    act(() => { vi.advanceTimersByTime(400); });
+    expect(onNavigate).toHaveBeenCalledTimes(3);
+    // The clear button empties the field, removes the search and keeps focus in the field.
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p" });
+    expect((input as HTMLInputElement).value).toBe("");
+    expect(document.activeElement).toBe(input);
+    expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("chip removal moves focus to the next chip or the search field", async () => {
+  mockRows(scenarioS1().page);
+  const { onNavigate } = renderStateful({ language: "de,fr", step: "choose_final", segment: "assign" });
+  await loaded();
+  const chip = (name: string) => within(filterTools()).getByRole("button", { name: `Remove filter ${name}` });
+  fireEvent.click(chip("Language: fr"));
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "de", step: "choose_final", segment: "assign" }, undefined);
+  await waitFor(() => expect(document.activeElement).toBe(chip("Step: Choose final result")));
+  fireEvent.click(chip("Step: Choose final result"));
+  await waitFor(() => expect(document.activeElement).toBe(searchField()));
+  expect(within(filterTools()).getAllByRole("button", { name: /^Remove filter / }).map(item => item.textContent)).toEqual(["Language: de"]);
+  // Clear all removes every filter and the search, not the tab or the order.
+  fireEvent.change(searchField(), { target: { value: "case" } });
+  fireEvent.keyDown(searchField(), { key: "Enter" });
+  fireEvent.click(within(filterTools()).getByRole("button", { name: "Clear all" }));
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "assign" }, undefined);
+  await waitFor(() => expect(within(filterTools()).queryAllByRole("button", { name: /^Remove filter / })).toHaveLength(0));
+  expect((searchField() as HTMLInputElement).value).toBe("");
+  expect(within(filterTools()).queryByRole("button", { name: "Clear all" })).toBeNull();
+});
+
+it("{k} of {n} counts the active tab", async () => {
+  mockRows(casesPage(3, { bar: { ...casesPage(3).bar, shown: 3, to_assign: 12, all: 40, needs_decision: 6 } }));
+  const view = renderPage({ query: { segment: "assign", language: "de" } });
+  await loaded();
+  expect(within(filterTools()).getByText("3 of 12")).toBeTruthy();
+  view.unmount();
+  renderPage({ query: { language: "de" } });
+  await loaded();
+  expect(within(filterTools()).getByText("3 of 40")).toBeTruthy();
+  cleanup();
+  // Without a filter or search the line is not shown.
+  renderPage({ query: { segment: "assign" } });
+  await loaded();
+  expect(within(filterTools()).queryByText(/ of /)).toBeNull();
 });
 
 describe("exact filters from Progress links", () => {
@@ -215,41 +287,36 @@ describe("exact filters from Progress links", () => {
     expect(screen.queryByRole("link", { name: "Export final results…" })).toBeNull();
   });
 
-  it("shows a readable filter label for multi-value filters", async () => {
+  it("shows a chip per value of multi-value filters", async () => {
     mockRows(casesPage(1));
     const onNavigate = vi.fn();
     renderPage({ query: { step: "resolve_rejected,resolve_queried", plan: "annotate,review_and_annotate", stage: "final,done", paused: "no", final: "any" }, onNavigate });
     await loaded();
-    const filters = screen.getByRole("group", { name: "Document filters" });
-    const step = within(filters).getByLabelText("Next step") as HTMLSelectElement;
-    expect(step.selectedOptions[0].textContent).toBe("Resolve rejected translation or Resolve queried translation");
-    const plan = within(filters).getByLabelText("Plan") as HTMLSelectElement;
-    expect(plan.selectedOptions[0].textContent).toBe("Annotate or Review and annotate");
-    expect((within(filters).getByLabelText("Final result") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Has a final result");
-    expect(within(filters).getByText("Also filtered: Stage Final result or Done · Not paused")).toBeTruthy();
-    // Picking one value replaces the list.
-    fireEvent.change(plan, { target: { value: "annotate" } });
-    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", step: "resolve_rejected,resolve_queried", plan: "annotate", stage: "final,done", paused: "no", final: "any" });
-    cleanup();
-    mockRows(casesPage(1));
-    renderPage({ query: { step: "assign_annotation", plan: "review" } });
-    await loaded();
-    expect((screen.getByLabelText("Next step") as HTMLSelectElement).selectedOptions[0].textContent).toBe("Assign annotation");
+    const chips = within(filterTools()).getAllByRole("button", { name: /^Remove filter / });
+    expect(chips.map(chip => chip.textContent)).toEqual([
+      "Plan: Annotate", "Plan: Review and annotate", "Step: Resolve rejected translation", "Step: Resolve queried translation",
+      "Stage: Final result", "Stage: Done", "Not paused", "Final result: Has a final result",
+    ]);
     expect(screen.queryByText(/Also filtered/)).toBeNull();
+    // Removing one value keeps the others.
+    fireEvent.click(chips[0]);
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", step: "resolve_rejected,resolve_queried", plan: "review_and_annotate", stage: "final,done", paused: "no", final: "any" });
   });
-});
 
-it("applies the ID filter once after a pause in typing", async () => {
-  mockRows(scenarioS1().page);
-  const { onNavigate } = renderPage();
-  await loaded();
-  const input = screen.getByLabelText("Case ID");
-  for (const value of ["c", "ca", "cas"]) fireEvent.change(input, { target: { value } });
-  expect(onNavigate).not.toHaveBeenCalled();
-  await waitFor(() => expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", q: "cas" }));
-  expect(onNavigate).toHaveBeenCalledTimes(1);
-  fireEvent.blur(input);
-  expect(onNavigate).toHaveBeenCalledTimes(1);
+  it("selection filters pass facets, the Done tab and the descending sort through", async () => {
+    mockRows(casesPage(3));
+    vi.spyOn(api, "documentRowKeys").mockResolvedValueOnce(deKeys(["case-0101"]));
+    renderPage({ query: { segment: "done", language: "de,fr", origin: "correction", review_state: "accepted", annotation_state: "submitted", final_state: "final", waiting_on: "me", plan: "not_decided", sort: "-activity" } });
+    await loaded();
+    const expected = { segment: "done", language: ["de", "fr"], origin: "correction", review_state: "accepted", annotation_state: "submitted", final_state: "final", waiting_on: "me", plan: "not_decided" };
+    fireEvent.click(caseBox("case-0102"));
+    await waitFor(() => expect(api.selectionSummary).toHaveBeenLastCalledWith("p", { rows: [{ case_id: "case-0102", language: "de" }] }, expected));
+    fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Assign…" }));
+    expect(lastAssign()).toMatchObject({ sort: "activity", filters: expected });
+    act(() => { lastAssign().onClose(); });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }));
+    await waitFor(() => expect(api.documentRowKeys).toHaveBeenCalledWith("p", { filters: expected, sort: "-activity" }));
+  });
 });
 
 it("re-announces a repeated message in the live region", async () => {
@@ -273,7 +340,7 @@ it("keeps the rows and shows Could not refresh when a background refetch fails",
   const alert = await screen.findByRole("alert");
   expect(alert.textContent).toContain("Could not refresh");
   expect(screen.getByRole("table", { name: "Documents" })).toBeTruthy();
-  expect(screen.getByRole("navigation", { name: "Segments" })).toBeTruthy();
+  expect(screen.getByRole("tablist", { name: "Documents views" })).toBeTruthy();
   fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
@@ -442,12 +509,13 @@ describe("case selection", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Select by case IDs" })).toBeNull());
     expect(within(selectionRegion()).getByText(selectedText(2))).toBeTruthy();
     expect((caseBox("case-0101") as HTMLInputElement).checked).toBe(false);
-    fireEvent.change(within(screen.getByRole("group", { name: "Document filters" })).getByLabelText("Plan"), { target: { value: "review" } });
-    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^To assign/ }));
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { segment: "assign" }));
     fireEvent.click(screen.getByRole("link", { name: "Next" }));
-    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review", page: 2 }));
+    // Under a tab the request also retains the rows shown before (visit state).
+    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", expect.objectContaining({ segment: "assign", page: 2 })));
     expect(within(selectionRegion()).getByText(selectedText(2))).toBeTruthy();
-    await waitFor(() => expect(api.selectionSummary).toHaveBeenLastCalledWith("p", { rows: deKeys(["case-0102", "case-0999"]).keys }, { plan: "review" }));
+    await waitFor(() => expect(api.selectionSummary).toHaveBeenLastCalledWith("p", { rows: deKeys(["case-0102", "case-0999"]).keys }, { segment: "assign" }));
   });
 
   it("Assign… opens the many-cases dialog with the current sort and filters and clears the selection after success", async () => {
@@ -538,15 +606,17 @@ it("renders the new table with stage columns", async () => {
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", sort: "-case" });
 });
 
-it("shows the descending header sorts by their base option in the Sort select", async () => {
+it("shows the descending header sorts by their base order in the popover footer", async () => {
   mockRows(page([scenarioS1().group]));
   const view = renderPage({ query: { sort: "-activity" } });
   await loaded();
-  expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("activity");
+  fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+  expect((screen.getByRole("radio", { name: "Last activity" }) as HTMLInputElement).checked).toBe(true);
   view.unmount();
   renderPage({ query: { sort: "-case" } });
   await loaded();
-  expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("case");
+  fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+  expect((screen.getByRole("radio", { name: "Case ID" }) as HTMLInputElement).checked).toBe(true);
 });
 
 it("pages with Previous and Next links", async () => {
@@ -625,13 +695,13 @@ it("shows an unknown text and an empty decision filter with Show all texts", asy
   expect(screen.getByRole("link", { name: "Show all texts" })).toBeTruthy();
 });
 
-it("shows the empty states per segment", async () => {
+it("shows the empty states per tab, for filters and for an empty project", async () => {
   mockRows(page([]));
   const cases: [ProjectDocumentsQuery, string][] = [
     [{ segment: "assign" }, "Nothing to assign"],
     [{ segment: "progress" }, "Nothing in progress"],
     [{ segment: "decision" }, "Nothing needs your decision"],
-    [{ plan: "not_in_plan" }, "Every language version is in the plan."],
+    [{ segment: "done", language: "de" }, "Nothing done yet"],
     [{}, "No texts yet"],
   ];
   for (const [query, title] of cases) {
@@ -641,6 +711,13 @@ it("shows the empty states per segment", async () => {
   }
   renderPage();
   expect(await screen.findByText("Upload texts to start.")).toBeTruthy();
+  cleanup();
+  // The tab has rows, the filters exclude them: "No texts match these filters." with Clear all.
+  mockRows(page([], { bar: { ...page([]).bar, all: 3 } }));
+  const { onNavigate } = renderPage({ query: { plan: "not_in_plan", sort: "import" } });
+  expect(await screen.findByRole("heading", { name: "No texts match these filters." })).toBeTruthy();
+  fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: "Clear all" }));
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", sort: "import" });
 });
 
 
@@ -1033,27 +1110,6 @@ describe("lead review fixes", () => {
     expect(screen.getByRole("button", { name: "Show history, case-d · de" }).closest("tr")!.className).toContain("data-table-row--decision");
     // The group row is a label, not a disclosure.
     expect(document.getElementById("documents-group-case-d-toggle")!.tagName).toBe("SPAN");
-  });
-
-  it("leaves More filters to the lead and opens it only when one of its filters becomes active", async () => {
-    mockRows(scenarioS1().page);
-    const onNavigate = vi.fn();
-    const view = renderPage({ query: { sort: "activity" }, onNavigate });
-    await loaded();
-    const more = () => screen.getByText("More filters").closest("details") as HTMLDetailsElement;
-    expect(more().open).toBe(true);
-    const rerender = (query: ProjectDocumentsQuery) => view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "lead", pseudonym: "lead-0002" }} query={query} onNavigate={onNavigate} />);
-    act(() => { more().open = false; fireEvent(more(), new Event("toggle")); });
-    rerender({ sort: "activity", language: "de" });
-    expect(more().open).toBe(false);
-    rerender({});
-    expect(more().open).toBe(false);
-    rerender({ status: "held" });
-    expect(more().open).toBe(true);
-    // Clearing its filter does not close it under the lead.
-    rerender({});
-    expect(more().open).toBe(true);
-    await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", {}));
   });
 
   it("shows not-in-plan rows as muted rows with a quiet Plan… (VD1, VD2)", async () => {

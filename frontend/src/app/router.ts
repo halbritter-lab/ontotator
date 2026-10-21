@@ -7,6 +7,7 @@ export type RouteLeaveGuard = () => Promise<boolean>;
  * Status stays a transport string; the documents page validates supported filters.
  */
 export interface ProjectDocumentsQuery {
+  /** Language facet; several languages comma-joined (OR). */
   language?: string;
   status?: string;
   q?: string;
@@ -30,8 +31,18 @@ export interface ProjectDocumentsQuery {
   plan?: string;
   /** Rows with (`yes`) or without (`no`) a held annotate or review task. */
   paused?: string;
-  /** Sort order (`case` | `import` | `activity`); absent means Case ID. */
+  /** Sort order (`case` | `-case` | `import` | `activity` | `-activity`); absent means Case ID. */
   sort?: string;
+  /** Review stage facet (documents overview); several states comma-joined (OR). */
+  review_state?: string;
+  /** Annotation stage facet; several states comma-joined (OR). */
+  annotation_state?: string;
+  /** Final stage facet; several states comma-joined (OR). */
+  final_state?: string;
+  /** Waiting-on facet: `me` or pseudonyms, comma-joined (OR). */
+  waiting_on?: string;
+  /** Row of the open final-result panel as `<case>:<language>`. */
+  panel?: string;
   /** Expanded rows as `<case>:<language>`; repeatable in the URL. */
   open?: string[];
   page?: string;
@@ -43,6 +54,7 @@ export interface NavigateOptions { replace?: boolean }
 const DOCUMENT_FIELDS = [
   "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
   "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
+  "review_state", "annotation_state", "final_state", "waiting_on", "panel",
 ] as const;
 
 function readDocumentsQuery(params: URLSearchParams, prefix = ""): ProjectDocumentsQuery {

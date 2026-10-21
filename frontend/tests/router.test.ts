@@ -173,6 +173,18 @@ describe("Documents deep-link parameters", () => {
     const viewer: Route = { name: "projectCase", key: "p", caseId: "c", documents: { step: "annotation_in_progress,annotation_review_in_progress" } };
     expect(parseRoute(routeHref(viewer))).toEqual(viewer);
   });
+  it("parses and builds the new repeatable fields and panel", () => {
+    const route: Route = {
+      name: "projectDocuments", key: "p", language: "de,fr", origin: "machine_translation,correction", segment: "done",
+      review_state: "in_progress,re_review", annotation_state: "old_text_open,old_text_submitted", final_state: "none,after_annotation",
+      waiting_on: "me,ann-0001", plan: "not_decided", sort: "-activity", panel: "case-1:de",
+    };
+    expect(routeHref(route)).toBe("#/projects/p/documents?language=de,fr&origin=machine_translation,correction&segment=done&plan=not_decided&sort=-activity"
+      + "&review_state=in_progress,re_review&annotation_state=old_text_open,old_text_submitted&final_state=none,after_annotation&waiting_on=me,ann-0001&panel=case-1%3Ade");
+    expect(parseRoute(routeHref(route))).toEqual(route);
+    const viewer: Route = { name: "projectCase", key: "p", caseId: "c", documents: { review_state: "check_failed", waiting_on: "me", panel: "c:de" } };
+    expect(parseRoute(routeHref(viewer))).toEqual(viewer);
+  });
   it("keeps final=any and paused", () => {
     const route: Route = { name: "projectDocuments", key: "p", plan: "annotate,review_and_annotate", final: "any", paused: "no" };
     expect(routeHref(route)).toBe("#/projects/p/documents?final=any&plan=annotate,review_and_annotate&paused=no");

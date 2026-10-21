@@ -47,9 +47,9 @@ it("keeps the same focused ID input while a controlled parent applies every type
   }
   const user = userEvent.setup(); render(<ControlledDocuments />);
   await screen.findByRole("link", { name: "Open z/doc · en" });
-  const input = screen.getByLabelText("Case ID");
+  const input = screen.getByLabelText("Case ID or text");
   await user.type(input, "abc");
-  expect(screen.getByLabelText("Case ID")).toBe(input);
+  expect(screen.getByLabelText("Case ID or text")).toBe(input);
   expect(input).toHaveProperty("value", "abc");
   expect(document.activeElement).toBe(input);
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { q: "abc" }));
