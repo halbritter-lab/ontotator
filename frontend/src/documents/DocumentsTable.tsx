@@ -2,11 +2,11 @@
  * Documents table, variant A (documents overview "Table", V1, VD1, VD4, VD5): one `<tbody>` per
  * case with a slim group label row (case checkbox, case name, "· en source + 1 translation"),
  * then one flat row per text with eight columns: [checkbox] · Text · Review · Annotation · Final ·
- * Waiting on · Action · Last activity (with the history disclosure ▸). Rows outside the plan are
- * muted rows; nothing collapses. Decision rows get the left edge. Expansion and selection are
- * owned by the page; this component renders them.
+ * Waiting on · Action · Last activity. Rows outside the plan are muted rows; nothing collapses.
+ * Decision rows get the left edge. The text name and the stage cells open the row panel (acceptance
+ * fixes WP-A); the row the panel shows is the active row. Selection and the panel are owned by the page.
  */
-import { useId, useMemo, type ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, DocumentRowsRequest, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import { plural } from "../app/labels";
@@ -16,8 +16,8 @@ import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
 import {
   documentsGroupId,
-  HistoryToggle,
   LastActivityCell,
+  type OpenRowPanel,
   RowHeaderCell,
   RowStageCell,
   rowKeyOf,
@@ -69,12 +69,12 @@ export interface DocumentsTableProps {
   page: DocumentRowsPage;
   projectKey: string;
   query: ProjectDocumentsQuery;
-  /** Toggle membership of `"{case}:{language}"` in `query.open`. */
-  onToggleRow: (key: string) => void;
-  /** Inline notice under a row (plan confirmations, resolve options), also while closed. */
+  /** Opens the row panel (text name: unfiltered; stage cell: filtered to the stage). */
+  onOpenPanel?: OpenRowPanel;
+  /** `"{case}:{language}"` of the row the panel shows (the active row). */
+  activeKey?: string | null;
+  /** Inline notice under a row (plan confirmations, resolve options). */
   renderRowNotice?: (row: DocumentRowView) => ReactNode | null;
-  /** Expanded content of an open row (built by the page). */
-  renderExpanded?: (row: DocumentRowView) => ReactNode;
   /** Visit badge of a row, shown in its row header. */
   rowBadge?: (row: DocumentRowView) => ReactNode;
   /** A lead action of the row (first step's button or a "+n" menu item). */
@@ -94,19 +94,11 @@ export interface DocumentsTableProps {
 }
 
 export function DocumentsTable({
-  page, projectKey, query, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, busy, empty, selection, sort, onSort, rowExtras,
+  page, projectKey, query, onOpenPanel, activeKey = null, renderRowNotice, rowBadge, onAction, planSaves, onNavigate, busy, empty, selection, sort, onSort, rowExtras,
 }: DocumentsTableProps): JSX.Element {
-  const baseId = useId();
-  const open = useMemo(() => new Set(query.open ?? []), [query.open]);
   const order = useMemo(() => page.groups.flatMap(group => group.rows.map(rowKeyOf)), [page.groups]);
   const groupOf = useMemo(() => new Map(page.groups.map(group => [group.case_id, group])), [page.groups]);
-  const regionIds = useMemo(() => {
-    const map = new Map<string, string>();
-    page.groups.forEach((group, groupIndex) => group.rows.forEach((row, rowIndex) => map.set(rowKeyOf(row), `${baseId}-g${groupIndex}-r${rowIndex}-expanded`)));
-    return map;
-  }, [page.groups, baseId]);
 
-  const isOpen = (row: DocumentRowView) => open.has(rowKeyOf(row));
   const sourceOf = (row: DocumentRowView) => groupOf.get(row.case_id)?.rows.find(entry => entry.is_source)?.language ?? null;
 
   const columns: Column<DocumentRowView>[] = [
@@ -115,11 +107,11 @@ export function DocumentsTable({
       header: "Text",
       rowHeader: true,
       sortable: true,
-      cell: row => <RowHeaderCell row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} badge={rowBadge?.(row)} />,
+      cell: row => <RowHeaderCell row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} badge={rowBadge?.(row)} onOpenPanel={onOpenPanel} />,
     },
-    { id: "review", header: "Review", cell: row => <RowStageCell row={row} stage="review" sourceLanguage={sourceOf(row)} /> },
-    { id: "annotation", header: "Annotation", cell: row => <RowStageCell row={row} stage="annotation" /> },
-    { id: "final", header: "Final", cell: row => <RowStageCell row={row} stage="final" /> },
+    { id: "review", header: "Review", cell: row => <RowStageCell row={row} stage="review" sourceLanguage={sourceOf(row)} onOpenPanel={onOpenPanel} /> },
+    { id: "annotation", header: "Annotation", cell: row => <RowStageCell row={row} stage="annotation" onOpenPanel={onOpenPanel} /> },
+    { id: "final", header: "Final", cell: row => <RowStageCell row={row} stage="final" onOpenPanel={onOpenPanel} /> },
     { id: "waiting", header: "Waiting on", cell: row => <WaitingOnCell row={row} /> },
     {
       id: "action",
@@ -131,10 +123,7 @@ export function DocumentsTable({
       id: "activity",
       header: "Last activity",
       sortable: true,
-      cell: row => <span className="documents-activity-cell">
-        <LastActivityCell iso={row.last_activity_at} />
-        <HistoryToggle row={row} expanded={isOpen(row)} controls={isOpen(row) && renderExpanded ? regionIds.get(rowKeyOf(row)) : undefined} onToggleRow={onToggleRow} />
-      </span>,
+      cell: row => <span className="documents-activity-cell"><LastActivityCell iso={row.last_activity_at} /></span>,
     },
   ];
 
@@ -159,13 +148,10 @@ export function DocumentsTable({
 
   const below = (row: DocumentRowView): ReactNode | null => {
     const notice = renderRowNotice?.(row) ?? null;
-    const expandedContent = isOpen(row) && renderExpanded ? renderExpanded(row) : null;
-    if (notice == null && expandedContent == null) return null;
-    return <>
-      {notice != null && <div className="documents-row-notice-slot">{notice}</div>}
-      {expandedContent != null && <div id={regionIds.get(rowKeyOf(row))} className="documents-expanded-slot">{expandedContent}</div>}
-    </>;
+    return notice == null ? null : <div className="documents-row-notice-slot">{notice}</div>;
   };
+  const rowClass = (row: DocumentRowView) => ["documents-row", !isActiveRow(row) && "documents-row--not-in-plan", rowKeyOf(row) === activeKey && "documents-row--active"]
+    .filter(Boolean).join(" ");
 
   return (
     <DataTable
@@ -175,7 +161,7 @@ export function DocumentsTable({
       rows={[]}
       groups={groups}
       rowKey={rowKeyOf}
-      rowProps={row => ({ className: isActiveRow(row) ? "documents-row" : "documents-row documents-row--not-in-plan" })}
+      rowProps={row => ({ className: rowClass(row), ...(rowKeyOf(row) === activeKey ? { "aria-current": true } : {}) })}
       rowEdge={row => (rowNeedsDecision(row) ? "decision" : null)}
       renderExpanded={below}
       busy={busy}

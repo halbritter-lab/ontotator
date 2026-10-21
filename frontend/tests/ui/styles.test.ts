@@ -44,7 +44,7 @@ it("uses_only_defined_tokens", () => {
 
 it("imports_the_documents_screen_stylesheets", () => {
   const index = read("../../src/styles/index.css");
-  for (const name of ["documents-table", "documents-cards", "documents-expanded"]) {
+  for (const name of ["documents-table", "documents-cards", "documents-panel"]) {
     expect(index).toContain(`@import "./screens/${name}.css";`);
     expect(read(`../../src/styles/screens/${name}.css`)).toBeTypeOf("string");
   }

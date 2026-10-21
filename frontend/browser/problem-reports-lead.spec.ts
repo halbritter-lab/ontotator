@@ -9,7 +9,7 @@
  */
 import { expect, request as playwrightRequest, test, type APIRequestContext, type Browser, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
-import { documentsReady, expandHistory, historyToggle, rowAction, rowCell, textRow } from "./documentsHelpers";
+import { documentsReady, openRowPanel, rowAction, rowCell, rowPanel, textRow } from "./documentsHelpers";
 import { authenticatedRequest, loginExisting, TEST_PASSWORD } from "./helpers";
 import { problemReportScenario, type ProblemReportScenario } from "./problemReportHelpers";
 
@@ -123,9 +123,8 @@ async function confirmRestart(box: Locator, reporter: string, reason: string) {
 }
 
 /** Documents table helpers (documentsHelpers.ts; the same accessible names as the Documents specs). */
-const disclosure = historyToggle;
 const languageRow = textRow;
-const expand = expandHistory;
+const expand = openRowPanel;
 
 /** The final result's submission id of the reporter's row (A de), read by the lead. */
 async function finalSubmissionOf(page: Page, s: ProblemReportScenario): Promise<string | null> {
@@ -188,8 +187,10 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   const expanded = await expand(page, caseId, "de");
   await expect(expanded.getByText(/task is paused, but its report is resolved/)).toHaveCount(0);
   await expect(expanded.getByRole("link", { name: "Resume task" })).toHaveCount(0);
-  const reports = expanded.locator("details.expanded-row-more").filter({ has: page.locator("summary", { hasText: /^Problem reports \(1\)$/ }) });
-  await reports.locator("summary").click();
+  // The closed report: no banner, listed under Details.
+  await expect(expanded.locator(".row-panel-banner")).toHaveCount(0);
+  await expanded.getByRole("tab", { name: "Details", exact: true }).click();
+  const reports = expanded.getByRole("tabpanel").locator("section").filter({ has: page.getByRole("heading", { name: "Problem reports (1)" }) });
   const listed = reports.getByRole("listitem");
   await expect(listed).toHaveCount(1);
   await expect(listed).toContainText(REPORT_TEXT);
@@ -345,28 +346,28 @@ test("restart of a translation review keeps the old draft in the history; the re
   }
 });
 
-test("the back link restores the full Documents query (decision, open, page)", async ({ page }) => {
+test("the back link restores the full Documents query (decision, panel, page)", async ({ page }) => {
   const s = await problemReportScenario(page, "base");
   const caseId = s.case_ids.a;
   const report = await fileReport(s.users.reporter, s.tasks.reporter);
   await loginExisting(page, s.users.lead);
 
-  // From Documents: decision filter and an expanded row, then the report and back.
+  // From Documents: decision filter and the row panel, then the report (its banner) and back.
   const open = `${caseId}:de`;
-  await openDocuments(page, s, `?decision=report-or-pause&open=${encodeURIComponent(open)}`);
+  await openDocuments(page, s, `?decision=report-or-pause&panel=${encodeURIComponent(open)}`);
   const area = await expand(page, caseId, "de");
   const query = hashQueryOf(page.url());
-  expect(query).toEqual(["decision=report-or-pause", `open=${open}`]);
-  await area.getByRole("link", { name: "Open report", exact: true }).first().click();
+  expect(query).toEqual(["decision=report-or-pause", `panel=${open}`]);
+  await area.locator(".row-panel-banner").getByRole("link", { name: /^Open problem report, / }).click();
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/problem-reports/${esc(report.report_id)}\\?`));
   const back = page.getByRole("link", { name: "Back to Documents" }).first();
   await back.click();
   await documentsReady(page);
   expect(hashQueryOf(page.url())).toEqual(query);
-  await expect(disclosure(page, caseId, "de")).toHaveAttribute("aria-expanded", "true");
+  await expect(rowPanel(page, caseId, "de")).toBeVisible();
 
-  // A deep link carrying a page number keeps it too.
+  // A deep link carrying a page number keeps it too (a legacy documents_open becomes the row panel).
   await page.goto(reportUrl(s, report.report_id,
     `?${new URLSearchParams([["documents_decision", "report-or-pause"], ["documents_open", open], ["documents_page", "2"]])}`));
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
@@ -375,7 +376,7 @@ test("the back link restores the full Documents query (decision, open, page)", a
   await expect(deepBack).toHaveAttribute("href", /page=2/);
   await deepBack.click();
   await expect(page).toHaveURL(/\/documents\?/);
-  expect(hashQueryOf(page.url())).toEqual(["decision=report-or-pause", `open=${open}`, "page=2"]);
+  expect(hashQueryOf(page.url())).toEqual(["decision=report-or-pause", "page=2", `panel=${open}`]);
 
   // Without a Documents query the back link falls back to the report's text and language.
   await page.goto(reportUrl(s, report.report_id));

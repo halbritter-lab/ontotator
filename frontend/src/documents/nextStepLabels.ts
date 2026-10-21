@@ -44,7 +44,7 @@ export const ACTION_LABELS: Readonly<Record<RowAction, string>> = {
   carry_text_change: "Carry to v2…",
   resolve: "Resolve…",
   accept_or_review: "Assign review or accept…",
-  // Rendered as "Accept result…" for one submission (`rowActionLabel`, V6/VD16).
+  // Rendered as "Accept as final…" for one submission (`rowActionLabel`, V6/VD16).
   choose_final: "Compare results…",
   assign_translation_review: "Assign review…",
   assign_source_review: "Assign review…",
@@ -143,14 +143,14 @@ export function secondaryLine(step: NextStepView, row: DocumentRowView): string 
 
 /**
  * The action name of a step on its row: "Choose final" follows the server's `stages.final.detail.label_rule` (the
- * final-result panel's rule, VD16): "accept" reads "Accept result…", "compare" "Compare results…"; without the field
- * one submission reads "Accept result…".
+ * final-result panel's rule, VD16): "accept" reads "Accept as final…", "compare" "Compare results…"; without the field
+ * one submission reads "Accept as final…".
  */
 export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "stages"> & Partial<Pick<DocumentRowView, "versions" | "work" | "steps" | "next_step">>): string {
   if (step.action === "choose_final") {
     const final = row.stages?.final;
     const rule = final?.detail.label_rule ?? (final?.state === "choose" && final.detail.submitted === 1 ? "accept" : "compare");
-    return rule === "accept" ? "Accept result…" : "Compare results…";
+    return rule === "accept" ? "Accept as final…" : "Compare results…";
   }
   if (step.action === "handle_text_change" || step.action === "carry_text_change") {
     const target = row.versions?.find(version => version.document_id === step.document_id);

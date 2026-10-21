@@ -59,18 +59,18 @@ describe("filter model", () => {
 
   it("Clear all keeps tab and order", () => {
     const query: ProjectDocumentsQuery = {
-      segment: "assign", sort: "-case", open: ["c:de"], page: "2", select: "x", language: "de", q: "case", step: "assign_annotation",
+      segment: "assign", sort: "-case", panel: "c:de", page: "2", select: "x", language: "de", q: "case", step: "assign_annotation",
       review_state: "accepted", waiting_on: "me", case: "c", plan: "review", final: "none",
     };
     const next = { ...query, ...clearAllPatch(query) };
-    expect(Object.fromEntries(Object.entries(next).filter(([, value]) => value !== undefined))).toEqual({ segment: "assign", sort: "-case", open: ["c:de"] });
+    expect(Object.fromEntries(Object.entries(next).filter(([, value]) => value !== undefined))).toEqual({ segment: "assign", sort: "-case", panel: "c:de" });
     expect(clearAllPatch({ decision: "translation", language: "de" })).toMatchObject({ decision: undefined, segment: "decision", language: undefined });
     expect(filtersActive({ segment: "assign", sort: "-case" })).toBe(false);
     expect(filtersActive({ q: "c" })).toBe(true);
   });
 
   it("tab change keeps facets and search, drops page, open, select", () => {
-    const query: ProjectDocumentsQuery = { segment: "assign", language: "de", q: "case-1", review_state: "accepted", sort: "activity", page: "3", open: ["c:de"], select: "x", panel: "c:de", decision: "translation" };
+    const query: ProjectDocumentsQuery = { segment: "assign", language: "de", q: "case-1", review_state: "accepted", sort: "activity", page: "3", select: "x", panel: "c:de", panel_stage: "review", panel_tab: "details", decision: "translation" };
     expect(tabRoute("p", query, "done")).toEqual({ name: "projectDocuments", key: "p", segment: "done", language: "de", q: "case-1", review_state: "accepted", sort: "activity" });
     expect(tabRoute("p", query, "all")).toEqual({ name: "projectDocuments", key: "p", language: "de", q: "case-1", review_state: "accepted", sort: "activity" });
     expect(activeTab({})).toBe("all");

@@ -3,7 +3,8 @@
  * forced colours and reduced motion on the documents overview (spec "Accessibility",
  * "Table", "Tabs", "Final-result panel", "Narrow viewports", "Route query"): tabs with counts,
  * search and filter popover, slim group rows with the case checkbox, one row per text with its
- * checkbox and "Show history" disclosure, the final-result side panel, cards below 700 px.
+ * checkbox, its text name "Details, …" and stage cells that open the row panel (acceptance fixes
+ * WP-A: a non-modal aside, nothing inert), the panel's decision block, cards below 700 px.
  *
  * Every test builds a fresh project through ``POST /__test_documents__`` and logs
  * in as its lead. Narrow cards and forced colours get their polish in O9; the checks
@@ -14,8 +15,8 @@ import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  documentsReady, documentsScenario, documentsTab, documentsTable, expandHistory, filterChip, finalPanel, historyRegion, historyToggle,
-  openFilters, rowAction, textRow, type DocumentsScenario,
+  decisionBlock, detailsButton, documentsReady, documentsScenario, documentsTab, documentsTable, filterChip,
+  openFilters, openRowPanel, rowAction, rowPanel, textRow, type DocumentsScenario,
 } from "./documentsHelpers";
 import { loginExisting } from "./helpers";
 
@@ -72,6 +73,10 @@ async function focused(page: Page): Promise<string> {
   });
 }
 
+/** A Tab stop: an exact "tag:name" or a pattern (stage cell names carry their status word). */
+type Stop = string | RegExp;
+const stopIndex = (stops: readonly string[], stop: Stop) => stops.findIndex(entry => (typeof stop === "string" ? entry === stop : stop.test(entry)));
+
 /** Tab ``count`` times from the "Documents" heading and record every focus stop. */
 async function tabStops(page: Page, count: number): Promise<string[]> {
   await page.getByRole("heading", { name: "Documents", level: 1 }).focus();
@@ -92,10 +97,11 @@ async function axeViolations(page: Page): Promise<string[]> {
 
 test("Tab-only order: tabs, search, Filter, selection tools, then the case and each row's controls", async ({ page }) => {
   await openScenario(page, "S0");
-  await expect(historyToggle(page, S0_CASE, "de")).toBeVisible();
+  await expect(detailsButton(page, S0_CASE, "de")).toBeVisible();
 
   const stops = await tabStops(page, 40);
-  const expected = [
+  const stage = (title: string, language: string) => new RegExp(`^button:${title}: .+\\. Show history, ${S0_CASE} · ${language}$`);
+  const expected: Stop[] = [
     "button:Upload texts…",
     // Only the selected tab is a Tab stop (arrows move between tabs).
     "a:All, 2",
@@ -105,49 +111,58 @@ test("Tab-only order: tabs, search, Filter, selection tools, then the case and e
     "button:Select by case IDs…",
     `input:Select ${S0_CASE} (2 texts)`,
     `input:Select ${S0_CASE} · en`,
-    `a:Open ${S0_CASE} · en`,
+    `button:Details, ${S0_CASE} · en`,
+    `a:Open in editor, ${S0_CASE} · en`,
+    stage("Review", "en"),
+    stage("Annotation", "en"),
     `button:Assign annotation…, ${S0_CASE} · en`,
-    `button:Show history, ${S0_CASE} · en`,
     `input:Select ${S0_CASE} · de`,
-    `a:Open ${S0_CASE} · de`,
+    `button:Details, ${S0_CASE} · de`,
+    `a:Open in editor, ${S0_CASE} · de`,
+    stage("Review", "de"),
+    stage("Annotation", "de"),
+    stage("Final", "de"),
     `button:Review changes…, ${S0_CASE} · de`,
     `button:+1 more action, ${S0_CASE} · de`,
-    `button:Show history, ${S0_CASE} · de`,
   ];
-  const positions = expected.map(stop => stops.indexOf(stop));
+  const positions = expected.map(stop => stopIndex(stops, stop));
   expect(positions.filter(position => position < 0).length, `Tab stops: ${stops.join(" | ")}`).toBe(0);
   // Every control is a stop of its own, in document order; nothing is skipped (no roving tabindex in the table).
   expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   const tableStart = expected.indexOf(`input:Select ${S0_CASE} (2 texts)`);
   const fromCase = positions[tableStart];
-  expect(stops.slice(fromCase, fromCase + expected.length - tableStart)).toEqual(expected.slice(tableStart));
+  const tableStops = stops.slice(fromCase, fromCase + 32).filter(entry => !/^button:Final: .+ · en$/.test(entry));
+  expect(expected.slice(tableStart).map(stop => stopIndex(tableStops, stop))).toEqual(expected.slice(tableStart).map((_, index) => index));
   // The other tabs are not Tab stops.
   expect(stops).not.toContain("a:Needs your decision, 1");
 
-  // Plain arrow keys do not move focus inside the table (Tab and Shift+Tab only).
-  const enDisclosure = historyToggle(page, S0_CASE, "en");
-  await enDisclosure.focus();
+  // Plain arrow keys do not move focus inside the table (Tab and Shift+Tab only; no ↑/↓ row keys, U11).
+  const enOpen = page.getByRole("link", { name: `Open in editor, ${S0_CASE} · en`, exact: true });
+  await enOpen.focus();
   for (const key of ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"]) {
     await page.keyboard.press(key);
-    await expect(enDisclosure).toBeFocused();
+    await expect(enOpen).toBeFocused();
   }
   await page.keyboard.press("Shift+Tab");
-  await expect(rowAction(page, "Assign annotation…", S0_CASE, "en")).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(page.getByRole("link", { name: `Open ${S0_CASE} · en`, exact: true })).toBeFocused();
+  await expect(detailsButton(page, S0_CASE, "en")).toBeFocused();
 
   // No element of the table takes itself out of the Tab order.
   const removed = await documentsTable(page).locator("a[href], button, input, select").evaluateAll(elements =>
     elements.filter(element => (element as HTMLElement).tabIndex < 0).map(element => element.outerHTML.slice(0, 80)));
   expect(removed).toEqual([]);
 
-  // Enter and Space on the row disclosure toggle it.
-  await enDisclosure.focus();
+  // Enter on the text name opens the row panel with focus on its heading; Escape inside returns focus; Space opens it too.
+  const enDetails = detailsButton(page, S0_CASE, "en");
+  await enDetails.focus();
   await page.keyboard.press("Enter");
-  await expect(enDisclosure).toHaveAttribute("aria-expanded", "true");
-  await expect(enDisclosure).toBeFocused();
+  await expect(rowPanel(page, S0_CASE, "en").getByRole("heading", { level: 2 })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(rowPanel(page, S0_CASE, "en")).toHaveCount(0);
+  await expect(enDetails).toBeFocused();
   await page.keyboard.press("Space");
-  await expect(enDisclosure).toHaveAttribute("aria-expanded", "false");
+  await expect(rowPanel(page, S0_CASE, "en")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(enDetails).toBeFocused();
 
   // Arrows move between the tabs; Enter selects.
   const all = documentsTab(page, "All", 2);
@@ -183,12 +198,12 @@ test("Screen reader semantics: tabs and tabpanel, group and row headers, Open na
   });
   expect(groupHeader).toEqual({ scope: "rowgroup", colspan: 7, rowgroup: true, text: S0_GROUP, checkbox: `Select ${S0_CASE} (2 texts)`, button: false });
 
-  // Row headers: <th scope="row"> named "{text} · {language} …" with "Open"; the disclosure "Show history, …" sits in Last activity.
+  // Row headers: <th scope="row"> with the text name "Details, {text} · {language}" and "Open" ("Open in editor, …").
   for (const language of ["en", "de"]) {
     const header = page.getByRole("rowheader").filter({ has: page.locator(rowHeaderId(S0_CASE, language)) });
     await expect(header).toHaveCount(1);
-    await expect(header.getByRole("link", { name: `Open ${S0_CASE} · ${language}`, exact: true })).toHaveText("Open");
-    await expect(historyToggle(page, S0_CASE, language)).toHaveAttribute("aria-expanded", "false");
+    await expect(header.getByRole("link", { name: `Open in editor, ${S0_CASE} · ${language}`, exact: true })).toHaveText("Open");
+    await expect(header.getByRole("button", { name: `Details, ${S0_CASE} · ${language}`, exact: true })).toHaveText(`${S0_CASE} · ${language}`);
   }
   // The stage columns replace the stage blocks: column headers name them.
   for (const name of ["Text", "Review", "Annotation", "Final", "Waiting on", "Last activity"]) {
@@ -198,21 +213,16 @@ test("Screen reader semantics: tabs and tabpanel, group and row headers, Open na
   await expect(textRow(page, S0_CASE, "de").getByRole("rowheader")).toContainText("Needs your decision");
   await expect(textRow(page, S0_CASE, "en").getByRole("rowheader")).not.toContainText("Needs your decision");
 
-  // Expanded row: <tr><td colspan> with a labelled region and <h3> sections.
-  await expandHistory(page, S0_CASE, "de");
-  const de = historyToggle(page, S0_CASE, "de");
-  const controlled = await de.evaluate(button => {
-    const target = document.getElementById(button.getAttribute("aria-controls") ?? "");
-    const section = target?.querySelector('section[role="region"]');
-    return { cell: target?.closest("td")?.colSpan ?? 0, region: section != null, label: section?.getAttribute("aria-label") ?? null };
-  });
-  expect(controlled).toEqual({ cell: 8, region: true, label: `History, ${S0_CASE} · de` });
-
-  // The panel: a labelled side dialog; its submission table has a caption and row headers per person.
+  // The row panel: a labelled non-modal aside (no dialog role, nothing inert) with its h2, tabs and the decision block.
+  await openRowPanel(page, S0_CASE, "de");
+  await rowPanel(page, S0_CASE, "de").getByRole("button", { name: "Close", exact: true }).click();
   await rowAction(page, "Review changes…", S0_CASE, "de").click();
-  const panel = finalPanel(page, S0_CASE, "de");
-  await expect(panel).toHaveAttribute("aria-modal", "true");
-  await expect(panel.getByRole("heading", { name: `Final result · ${S0_CASE} · de` })).toBeVisible();
+  const panel = rowPanel(page, S0_CASE, "de");
+  await expect(panel).not.toHaveAttribute("aria-modal", /.*/);
+  await expect(page.locator("[inert]")).toHaveCount(0);
+  await expect(panel.getByRole("heading", { name: `${S0_CASE} · de v2`, level: 2 })).toBeFocused();
+  await expect(panel.getByRole("tablist", { name: `Details of ${S0_CASE} · de` })).toBeVisible();
+  await expect(decisionBlock(page, S0_CASE, "de").getByRole("heading", { name: "Final result", level: 3 })).toBeVisible();
   await panel.getByRole("button", { name: "Close", exact: true }).click();
   await expect(rowAction(page, "Review changes…", S0_CASE, "de")).toBeFocused();
 
@@ -232,17 +242,17 @@ test("Live announcements: texts shown on filter and tab changes; panel Saving…
   const filters = await openFilters(page);
   await filters.getByRole("checkbox", { name: /^de, 1 text$/ }).check();
   await expect(live(page)).toHaveText("1 text shown");
-  await expect(historyToggle(page, S0_CASE, "en")).toHaveCount(0);
+  await expect(detailsButton(page, S0_CASE, "en")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await documentsTab(page, "Needs your decision", 1).click();
   await expect(documentsTab(page, "Needs your decision", 1)).toHaveAttribute("aria-selected", "true");
   await documentsTab(page, "All", 2).click();
   await filterChip(page, "Language: de").click();
-  await expect(historyToggle(page, S0_CASE, "en")).toBeVisible();
+  await expect(detailsButton(page, S0_CASE, "en")).toBeVisible();
 
-  // Conflict: the server refuses a stale revision; the outcome renders inside the panel.
+  // Conflict: the server refuses a stale revision; the outcome renders inside the decision block.
   await rowAction(page, "Review changes…", S0_CASE, "de").click();
-  const panel = finalPanel(page, S0_CASE, "de");
+  const panel = decisionBlock(page, S0_CASE, "de");
   const keep = panel.getByRole("button", { name: "Keep final on v1", exact: true });
   await expect(keep).toBeVisible();
   const selections = "**/api/v1/projects/*/final-selections";
@@ -270,19 +280,18 @@ test("Live announcements: texts shown on filter and tab changes; panel Saving…
   if (await carry.count()) await expect(carry).toHaveAttribute("aria-disabled", "true");
   expect(await keep.evaluate(button => (button as HTMLButtonElement).disabled)).toBe(false);
   release();
-  await expect(panel.locator('.final-panel > p[role="status"]')).toHaveText(/^Final result saved\./);
+  await expect(panel.locator(':scope > p[role="status"]')).toHaveText(/^Final result saved\./);
   await expect(panel.locator(".final-panel-success")).toContainText(`Final result saved for ${S0_CASE} · de.`);
   await page.unroute(selections);
 });
 
-test("Deep links: case, language, decision, final, repeated open; pinned row; unknown case", async ({ page }) => {
+test("Deep links: case, language, decision, final, legacy open; pinned row; unknown case", async ({ page }) => {
   const { s } = await openScenario(page, "S0");
 
-  // case + language: the row opens and its row header has focus.
+  // case + language: its text name has focus; a deep link opens no panel.
   await openDocuments(page, s, `?case=${S0_CASE}&language=de`);
-  await expect(historyToggle(page, S0_CASE, "de")).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator(rowHeaderId(S0_CASE, "de"))).toBeFocused();
-  await expect(historyRegion(page, S0_CASE, "de").getByRole("heading", { name: "History", level: 3 })).toBeVisible();
+  await expect(page.getByRole("complementary")).toHaveCount(0);
 
   // case alone: the group label has focus.
   await page.goto("about:blank");
@@ -292,43 +301,40 @@ test("Deep links: case, language, decision, final, repeated open; pinned row; un
   // A named row that no longer matches the decision stays visible with a notice.
   await page.goto("about:blank");
   await openDocuments(page, s, `?decision=confirm-final&case=${S0_CASE}&language=en`);
-  await expect(historyToggle(page, S0_CASE, "en")).toHaveAttribute("aria-expanded", "true");
+  await expect(detailsButton(page, S0_CASE, "en")).toBeVisible();
   await expect(page.getByText("This no longer needs your decision.", { exact: true })).toBeVisible();
 
   // decision alone: only matching rows.
   await page.goto("about:blank");
   await openDocuments(page, s, "?decision=confirm-final");
-  await expect(historyToggle(page, S0_CASE, "de")).toBeVisible();
-  await expect(historyToggle(page, S0_CASE, "en")).toHaveCount(0);
+  await expect(detailsButton(page, S0_CASE, "de")).toBeVisible();
+  await expect(detailsButton(page, S0_CASE, "en")).toHaveCount(0);
   await expect(page.getByText("This no longer needs your decision.")).toHaveCount(0);
 
   // final=none (an FD11 link parameter): a chip; only the row without a final result.
   await page.goto("about:blank");
   await openDocuments(page, s, "?final=none");
   await expect(filterChip(page, "Final result: None")).toBeVisible();
-  await expect(historyToggle(page, S0_CASE, "en")).toBeVisible();
-  await expect(historyToggle(page, S0_CASE, "de")).toHaveCount(0);
+  await expect(detailsButton(page, S0_CASE, "en")).toBeVisible();
+  await expect(detailsButton(page, S0_CASE, "de")).toHaveCount(0);
 
   // language: the facet, shown as a chip and checked in the popover.
   await page.goto("about:blank");
   await openDocuments(page, s, "?language=de");
   await expect(filterChip(page, "Language: de")).toBeVisible();
-  await expect(historyToggle(page, S0_CASE, "de")).toBeVisible();
-  await expect(historyToggle(page, S0_CASE, "en")).toHaveCount(0);
+  await expect(detailsButton(page, S0_CASE, "de")).toBeVisible();
+  await expect(detailsButton(page, S0_CASE, "en")).toHaveCount(0);
   await expect((await openFilters(page)).getByRole("checkbox", { name: /^de, / })).toBeChecked();
   await page.keyboard.press("Escape");
 
-  // open, repeated: both rows expanded.
+  // Legacy open= (repeated): the first row opens in the row panel; Close uses replace navigation and drops it.
   await page.goto("about:blank");
   await openDocuments(page, s, `?open=${encodeURIComponent(`${S0_CASE}:en`)}&open=${encodeURIComponent(`${S0_CASE}:de`)}`);
-  for (const language of ["en", "de"]) {
-    await expect(historyToggle(page, S0_CASE, language)).toHaveAttribute("aria-expanded", "true");
-    await expect(historyRegion(page, S0_CASE, language)).toBeVisible();
-  }
-  // Collapsing one uses replace navigation and keeps the other in the query.
-  await historyToggle(page, S0_CASE, "en").click();
-  await expect(historyToggle(page, S0_CASE, "en")).toHaveAttribute("aria-expanded", "false");
-  expect(documentsQueryOf(page.url())).toEqual([`open=${S0_CASE}:de`]);
+  await expect(rowPanel(page, S0_CASE, "en")).toBeVisible();
+  await expect(page.getByRole("complementary")).toHaveCount(1);
+  await rowPanel(page, S0_CASE, "en").getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByRole("complementary")).toHaveCount(0);
+  expect(documentsQueryOf(page.url())).toEqual([]);
 
   // Unknown case: EmptyState with "Show all texts".
   await page.goto("about:blank");
@@ -336,7 +342,7 @@ test("Deep links: case, language, decision, final, repeated open; pinned row; un
   await expect(page.getByText("Text no-such-text not found", { exact: true })).toBeVisible();
   await expect(documentsTable(page)).toHaveCount(0);
   await page.getByRole("link", { name: "Show all texts", exact: true }).click();
-  await expect(historyToggle(page, S0_CASE, "en")).toBeVisible();
+  await expect(detailsButton(page, S0_CASE, "en")).toBeVisible();
   expect(documentsQueryOf(page.url())).toEqual([]);
 });
 
@@ -353,10 +359,10 @@ test("Deep link page: S15 page 2 of 2", async ({ page }) => {
 
 test("Back from the report page and from the case viewer restores the Documents query", async ({ page }) => {
   const caseId = "case-0390";
-  const { s } = await openScenario(page, "S6", `?decision=report-or-pause&open=${encodeURIComponent(`${caseId}:de`)}`);
-  const area = await expandHistory(page, caseId, "de");
+  const { s } = await openScenario(page, "S6", `?decision=report-or-pause&panel=${encodeURIComponent(`${caseId}:de`)}&panel_stage=annotation`);
+  const area = await openRowPanel(page, caseId, "de");
   const query = documentsQueryOf(page.url());
-  expect(query).toEqual(["decision=report-or-pause", `open=${caseId}:de`]);
+  expect(query).toEqual(["decision=report-or-pause", `panel=${caseId}:de`, "panel_stage=annotation"]);
 
   // Report page and back.
   await area.getByRole("link", { name: "Open report", exact: true }).first().click();
@@ -364,19 +370,19 @@ test("Back from the report page and from the case viewer restores the Documents 
   await page.getByRole("link", { name: "Back to Documents" }).first().click();
   await documentsReady(page);
   expect(documentsQueryOf(page.url())).toEqual(query);
-  await expect(historyToggle(page, caseId, "de")).toHaveAttribute("aria-expanded", "true");
+  await expect(rowPanel(page, caseId, "de").getByRole("button", { name: "Remove filter Annotation", exact: true })).toBeVisible();
   await expect(documentsTab(page, "Needs your decision")).toHaveAttribute("aria-selected", "true");
 
   // Case viewer and back.
-  await page.getByRole("link", { name: `Open ${caseId} · de`, exact: true }).click();
+  await page.getByRole("link", { name: `Open in editor, ${caseId} · de`, exact: true }).click();
   await expect(page.getByRole("heading", { name: `Text: ${caseId}`, level: 1 })).toBeVisible();
   await page.getByRole("link", { name: "Back to Documents", exact: true }).click();
   await documentsReady(page);
   expect(documentsQueryOf(page.url())).toEqual(query);
-  await expect(historyToggle(page, caseId, "de")).toHaveAttribute("aria-expanded", "true");
+  await expect(rowPanel(page, caseId, "de").getByRole("button", { name: "Remove filter Annotation", exact: true })).toBeVisible();
 
   // Browser history back from the case viewer restores it too.
-  await page.getByRole("link", { name: `Open ${caseId} · de`, exact: true }).click();
+  await page.getByRole("link", { name: `Open in editor, ${caseId} · de`, exact: true }).click();
   await expect(page.getByRole("heading", { name: `Text: ${caseId}`, level: 1 })).toBeVisible();
   await page.goBack();
   await documentsReady(page);
@@ -386,12 +392,12 @@ test("Back from the report page and from the case viewer restores the Documents 
 
 test("axe: default view, decision tab, filter popover, expanded row, open panel, 390 px cards", async ({ page }) => {
   const { s } = await openScenario(page, "S0");
-  await expect(historyToggle(page, S0_CASE, "de")).toBeVisible();
+  await expect(detailsButton(page, S0_CASE, "de")).toBeVisible();
   expect(await axeViolations(page), "default view").toEqual([]);
 
   await openDocuments(page, s, "?segment=decision");
   await expect(documentsTab(page, "Needs your decision", 1)).toHaveAttribute("aria-selected", "true");
-  await expect(historyToggle(page, S0_CASE, "de")).toBeVisible();
+  await expect(detailsButton(page, S0_CASE, "de")).toBeVisible();
   expect(await axeViolations(page), "decision tab").toEqual([]);
 
   await openDocuments(page, s);
@@ -399,12 +405,14 @@ test("axe: default view, decision tab, filter popover, expanded row, open panel,
   expect(await axeViolations(page), "filter popover").toEqual([]);
   await page.keyboard.press("Escape");
 
-  await expandHistory(page, S0_CASE, "de");
-  expect(await axeViolations(page), "expanded row").toEqual([]);
+  await openRowPanel(page, S0_CASE, "de");
+  expect(await axeViolations(page), "page with the row panel open").toEqual([]);
+  // The panel lies over the right part of the table: close it before the row action.
+  await rowPanel(page, S0_CASE, "de").getByRole("button", { name: "Close", exact: true }).click();
   await rowAction(page, "Review changes…", S0_CASE, "de").click();
-  await expect(finalPanel(page, S0_CASE, "de").getByRole("button", { name: "Keep final on v1", exact: true })).toBeVisible();
-  const panel = await new AxeBuilder({ page }).include(".ui-dialog--side").analyze();
-  expect(panel.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}`)), "final-result panel").toEqual([]);
+  await expect(decisionBlock(page, S0_CASE, "de").getByRole("button", { name: "Keep final on v1", exact: true })).toBeVisible();
+  const panel = await new AxeBuilder({ page }).include(".row-panel").analyze();
+  expect(panel.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}`)), "row panel").toEqual([]);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("about:blank");
@@ -436,8 +444,8 @@ test("320 CSS px: no horizontal scroll; case title, card heading, stages, row ac
         card.getByRole("heading", { name: `${S0_CASE} · ${language}`, level: 4 }),
         card.locator(".document-card-stage").first(),
         card.locator(".documents-action").first(),
-        card.getByRole("link", { name: `Open ${S0_CASE} · ${language}`, exact: true }),
-        card.getByRole("button", { name: "History", exact: true }),
+        card.getByRole("link", { name: `Open in editor, ${S0_CASE} · ${language}`, exact: true }),
+        card.getByRole("button", { name: `Details, ${S0_CASE} · ${language}`, exact: true }),
       ];
       for (const fact of facts) await inView(fact, `${state} ${language}`);
     }
@@ -445,10 +453,15 @@ test("320 CSS px: no horizontal scroll; case title, card heading, stages, row ac
   await checkReflow("collapsed");
   await evidence(page, "320-collapsed");
 
-  await page.getByRole("article", { name: `${S0_CASE} · de`, exact: true }).getByRole("button", { name: "History", exact: true }).click();
-  await expect(historyRegion(page, S0_CASE, "de").getByRole("heading", { name: "History", level: 5 })).toBeVisible();
-  await checkReflow("expanded");
-  await evidence(page, "320-expanded");
+  // The row panel is a full-screen sheet below 700 px: no horizontal scroll, its controls in view; Back returns.
+  await page.getByRole("article", { name: `${S0_CASE} · de`, exact: true }).getByRole("button", { name: `Details, ${S0_CASE} · de`, exact: true }).click();
+  const sheet = rowPanel(page, S0_CASE, "de");
+  await expect(sheet.getByRole("tablist")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  for (const control of [sheet.getByRole("button", { name: "Back", exact: true }), sheet.getByRole("tab", { name: "Activity", exact: true })]) await inView(control, "sheet");
+  await evidence(page, "320-sheet");
+  await sheet.getByRole("button", { name: "Back", exact: true }).click();
+  await checkReflow("after the sheet");
   expect(s.project).toBeTruthy();
 });
 
@@ -456,9 +469,7 @@ test("390 px cards: every interactive target is at least 24 by 24 px, or meets a
   await page.setViewportSize({ width: 390, height: 844 });
   await openScenario(page, "S0");
   await expect(page.getByRole("article")).toHaveCount(2);
-  const de = page.getByRole("article", { name: `${S0_CASE} · de`, exact: true });
-  await de.getByRole("button", { name: "History", exact: true }).click();
-  await expect(historyRegion(page, S0_CASE, "de").getByRole("heading", { name: "History", level: 5 })).toBeVisible();
+  await expect(page.getByRole("article", { name: `${S0_CASE} · de`, exact: true }).getByRole("button", { name: `Details, ${S0_CASE} · de`, exact: true })).toBeVisible();
 
   const report = await page.evaluate(() => {
     const MIN = 24;
@@ -561,14 +572,15 @@ test("Forced colours: decision edge, focus outline, selected tab", async ({ page
   expect(inactive.every(item => item.width !== active.width || item.colour !== active.colour), JSON.stringify(tabs)).toBe(true);
 });
 
-test("Reduced motion: the disclosure chevron does not animate", async ({ page }) => {
+test("Reduced motion: the row panel fades in only without reduced motion and never animates its width", async ({ page }) => {
   await openScenario(page, "S0");
-  const chevron = historyToggle(page, S0_CASE, "de").locator(".disclosure-chevron");
-  await expect(chevron).toHaveCSS("transition-duration", "0.15s");
+  await detailsButton(page, S0_CASE, "de").click();
+  const panel = page.locator(".row-panel");
+  await expect(panel).toHaveCSS("animation-name", "row-panel-in");
+  await expect(panel).toHaveCSS("animation-duration", "0.15s");
+  expect(await panel.evaluate(element => getComputedStyle(element).transitionProperty)).not.toContain("width");
+  await panel.getByRole("button", { name: "Close", exact: true }).click();
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(chevron).toHaveCSS("transition-duration", "0s");
-  await historyToggle(page, S0_CASE, "de").click();
-  await expect(historyToggle(page, S0_CASE, "de")).toHaveAttribute("aria-expanded", "true");
-  const animations = await page.locator(".data-table-expanded > td").evaluateAll(cells => cells.map(cell => getComputedStyle(cell).animationName));
-  for (const name of animations) expect(name).toBe("none");
+  await detailsButton(page, S0_CASE, "de").click();
+  await expect(panel).toHaveCSS("animation-name", "none");
 });

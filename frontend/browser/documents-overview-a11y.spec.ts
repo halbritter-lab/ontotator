@@ -7,7 +7,7 @@
  */
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  axeViolations, documentsTab, documentsTabs, evidence, expectStage, finalPanel, horizontalOverflow, openDocuments, rowAction, rowCell, textRow,
+  axeViolations, documentsTab, documentsTabs, evidence, expectStage, horizontalOverflow, openDocuments, rowAction, rowCell, rowPanel, textRow,
 } from "./documentsOverviewHelpers";
 import { loginOverviewUser, overviewScenario, type OverviewScenario, type OverviewScenarioName } from "./overviewHelpers";
 
@@ -80,12 +80,12 @@ test("keyboard-only: tabs, filter popover, row checkbox range, panel accept, Han
   await expect(de).toBeChecked();
   void s4;
 
-  // Panel accept on scenario 7a (one submission: "Accept result…").
+  // Row panel accept on scenario 7a (one submission: "Accept as final…").
   await leadOn(page, "S7a");
-  const accept = rowAction(page, "Accept result…", "case-107", "de");
+  const accept = rowAction(page, "Accept as final…", "case-107", "de");
   await tabTo(page, accept, 80);
   await page.keyboard.press("Enter");
-  const panel = finalPanel(page, "case-107", "de");
+  const panel = rowPanel(page, "case-107", "de");
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("heading", { level: 2 })).toBeFocused();
   const acceptFinal = panel.getByRole("button", { name: "Accept as final", exact: true });
@@ -158,12 +158,12 @@ async function reflowCardsAndSheets(page: Page, width: number, s12: OverviewScen
   await expect(dialog).toHaveCount(0);
 }
 
-/** At ``width`` px on scenario 7a: the final-result panel as a full-screen sheet. */
+/** At ``width`` px on scenario 7a: the row panel as a full-screen sheet. */
 async function reflowPanel(page: Page, width: number, s7a: OverviewScenario): Promise<void> {
   await page.setViewportSize({ width, height: 800 });
   await openDocuments(page, s7a.project);
-  await rowAction(page, "Accept result…", "case-107", "de").click();
-  const panel = finalPanel(page, "case-107", "de");
+  await rowAction(page, "Accept as final…", "case-107", "de").click();
+  const panel = rowPanel(page, "case-107", "de");
   await expect(panel).toBeVisible();
   expect(await horizontalOverflow(page), `${width} px panel sheet`).toBeLessThanOrEqual(0);
   // After the 150 ms slide the sheet fits the viewport.
@@ -232,9 +232,9 @@ test("axe has no violations on table, popover, panel and dialogs", async ({ page
 
   await leadOn(page, "S7b");
   await rowAction(page, "Compare results…", "case-107", "en").click();
-  const panel = finalPanel(page, "case-107", "en");
+  const panel = rowPanel(page, "case-107", "en");
   await expect(panel).toBeVisible();
   await expect(panel.getByText("Loading submissions…")).toHaveCount(0);
-  expect(await axeViolations(page, '[role="dialog"]'), "final-result panel (compare)").toEqual([]);
+  expect(await axeViolations(page, ".row-panel"), "row panel with the decision block (compare)").toEqual([]);
   await evidence(page, "axe-panel");
 });

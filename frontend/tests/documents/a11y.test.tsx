@@ -2,14 +2,16 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { api } from "../../src/api/client";
 import { DocumentsTable, type TableSelection } from "../../src/documents/DocumentsTable";
+import { RowPanel } from "../../src/documents/RowPanel";
 import { DocumentsTabs } from "../../src/documents/DocumentsTabs";
 import { FilterPopover } from "../../src/documents/FilterPopover";
-import { Dialog, MenuButton, Popover } from "../../src/ui";
-import { bar, group, notInPlanRow, page, stepOf } from "./fixtures";
+import { MenuButton, Popover } from "../../src/ui";
+import { bar, group, notInPlanRow, page, stepOf, submissions } from "./fixtures";
 import { cell, scenario7a, stagedRow } from "./tableFixtures";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function selection(selected: readonly string[] = []): TableSelection {
   const keys = new Set(selected);
@@ -34,7 +36,7 @@ const view = () => page([
 
 describe("table", () => {
   it("caption Documents, one tbody per case, group th colspan 7", () => {
-    render(<DocumentsTable page={view()} projectKey="p" query={{}} onToggleRow={vi.fn()} onAction={vi.fn()} selection={selection()} />);
+    render(<DocumentsTable page={view()} projectKey="p" query={{}} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection()} />);
     const table = screen.getByRole("table", { name: "Documents" });
     const caption = table.querySelector("caption");
     expect(caption?.textContent).toBe("Documents");
@@ -62,7 +64,7 @@ describe("table", () => {
   });
 
   it("row checkbox names and mixed group checkbox", () => {
-    render(<DocumentsTable page={view()} projectKey="p" query={{}} onToggleRow={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
+    render(<DocumentsTable page={view()} projectKey="p" query={{}} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
       sort="case" onSort={vi.fn()} />);
     expect(screen.getByRole("checkbox", { name: "Select case-107 · de" })).toHaveProperty("checked", true);
     expect(screen.getByRole("checkbox", { name: "Select case-107 · en" })).toHaveProperty("checked", false);
@@ -78,7 +80,9 @@ describe("table", () => {
 });
 
 describe("tabs, popover, panel, dialogs", () => {
-  it("tabs, popover, panel, dialogs expose their roles and names", () => {
+  it("tabs, popover, panel, dialogs expose their roles and names", async () => {
+    vi.spyOn(api, "getRowSubmissions").mockResolvedValue(submissions("case-107", "de"));
+    const row = scenario7a();
     function Host() {
       const anchor = useRef<HTMLButtonElement>(null);
       const [panel, setPanel] = useState(false);
@@ -86,10 +90,11 @@ describe("tabs, popover, panel, dialogs", () => {
         <DocumentsTabs bar={bar({ needs_decision: 3, all: 14 })} query={{}} projectKey="p" panelId="documents-panel" onNavigate={vi.fn()} />
         <div id="documents-panel" role="tabpanel" aria-labelledby="documents-panel-tab-all">table</div>
         <FilterPopover query={{}} bar={bar({ shown: 14, facets: { language: { de: 8 } } })} sourceLanguages={new Set(["en"])} onChange={vi.fn()} onClearAll={vi.fn()} />
-        <button ref={anchor} type="button" onClick={() => setPanel(true)}>Accept result…, case-107 · de</button>
+        <button ref={anchor} type="button" onClick={() => setPanel(true)}>Accept as final…, case-107 · de</button>
         <MenuButton label="1 more action for case-107 · de" buttonLabel="+1" items={[{ id: "a", label: "Decide on report…", onSelect: vi.fn() }]} />
         <Popover open={false} anchorRef={anchor} label="Plan" onClose={vi.fn()}>plan</Popover>
-        <Dialog open={panel} variant="side" title="Final result · case-107 · de" onClose={() => setPanel(false)}><p>panel</p></Dialog>
+        {panel && <RowPanel projectKey="p" rowKey="case-107:de" row={row} rows={[row]} query={{}} returnFocusRef={anchor}
+          onNavigate={vi.fn()} onRoute={vi.fn()} onClose={() => setPanel(false)} reportRoute={reportId => ({ name: "projectProblemReport", key: "p", reportId })} />}
       </>;
     }
     render(<Host />);
@@ -115,18 +120,22 @@ describe("tabs, popover, panel, dialogs", () => {
     const more = screen.getByRole("button", { name: "1 more action for case-107 · de" });
     expect(more.getAttribute("aria-haspopup")).toBe("menu");
 
-    const trigger = screen.getByRole("button", { name: "Accept result…, case-107 · de" });
+    const trigger = screen.getByRole("button", { name: "Accept as final…, case-107 · de" });
     trigger.focus();
     fireEvent.click(trigger);
-    const panel = screen.getByRole("dialog", { name: "Final result · case-107 · de" });
-    expect(panel.getAttribute("aria-modal")).toBe("true");
-    // Labelled by its heading; the heading takes focus on open.
+    // The row panel is a non-modal labelled aside: no dialog role, nothing inert; the heading takes focus on open.
+    const panel = screen.getByRole("complementary", { name: "Details, case-107 · de" });
+    expect(panel.tagName).toBe("ASIDE");
+    expect(panel.getAttribute("aria-modal")).toBeNull();
     const heading = within(panel).getByRole("heading", { level: 2 });
-    expect(panel.getAttribute("aria-labelledby")).toBe(heading.id);
+    expect(heading.textContent).toBe("case-107 · de v1");
     expect(document.activeElement).toBe(heading);
-    expect(tablist.closest("[inert]")).not.toBeNull();
+    expect(document.querySelector("[inert]")).toBeNull();
+    expect(within(panel).getByRole("tablist", { name: "Details of case-107 · de" })).toBeTruthy();
+    expect(within(panel).getByRole("tab", { name: "Activity" }).getAttribute("aria-selected")).toBe("true");
+    expect(await within(panel).findByRole("tabpanel", { name: "Activity" })).toBeTruthy();
     fireEvent.click(within(panel).getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("dialog", { name: "Final result · case-107 · de" })).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(screen.queryByRole("complementary", { name: "Details, case-107 · de" })).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 });

@@ -16,12 +16,12 @@ import { documents, members, assignment, deferred } from "./assignmentFixtures";
 import { group, page, row, rowKey, submissions, version } from "./documents/fixtures";
 
 const target: ProjectDocumentSummary = { ...documents[0], origin: "machine_translation", translation_status: "accepted", accepted_without_review: true, status_reason: "translation review 123" };
-/** The Documents row of `target`; `openTarget` expands it so Text versions is rendered. */
+/** The Documents row of `target`; `openTarget` shows it in the row panel on Versions, so Text versions is rendered. */
 const targetPage = (overrides: { document_id?: string; accepted_without_review?: boolean } = {}) => page([group(target.case_id!, [row({
   case_id: target.case_id!, language: target.language,
   versions: [version({ document_id: overrides.document_id ?? target.document_id, origin: "machine_translation", chain_name: "DeepL", translation_status: "accepted", accepted_without_review: overrides.accepted_without_review ?? true })],
 })])]);
-const openTarget = { open: [rowKey(target.case_id!, target.language)] };
+const openTarget = { panel: rowKey(target.case_id!, target.language), panel_tab: "versions" };
 beforeEach(() => {
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue([target]);
   vi.spyOn(api, "getProjectSettings").mockResolvedValue({ ...settings, annotate_accepted_translations_only: false });
@@ -56,16 +56,16 @@ it("sends actual override tuples while preserving the legacy omitted body and tr
 it("shows the server-owned override label and sends controlled filters without remounting the ID input", async () => {
   const navigate = vi.fn();
   const view = render(<DocumentsPage projectKey="p" canManage query={{ ...openTarget, origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
-  await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });
-  // The expanded row's Text versions labels the server-owned flag, not the descriptive status reason.
-  expect((await within(screen.getByRole("table", { name: "Documents" })).findAllByText(/Accepted without review/)).length).toBeGreaterThan(0);
+  await screen.findByRole("link", { name: `Open in editor, ${target.case_id} · ${target.language}` });
+  // The row panel's Text versions labels the server-owned flag, not the descriptive status reason.
+  expect((await within(screen.getByRole("complementary", { name: `Details, ${target.case_id} · ${target.language}` })).findAllByText(/Accepted without review/)).length).toBeGreaterThan(0);
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { origin: "machine_translation", translation_status: "accepted" });
   const prefix = screen.getByLabelText("Case ID or text"); prefix.focus();
   fireEvent.change(prefix, { target: { value: "abc" } });
   fireEvent.keyDown(prefix, { key: "Enter" });
   expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({ origin: "machine_translation", translation_status: "accepted", q: "abc" }));
   view.rerender(<DocumentsPage projectKey="p" canManage query={{ ...openTarget, q: "abc", origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
-  await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });
+  await screen.findByRole("link", { name: `Open in editor, ${target.case_id} · ${target.language}` });
   expect(screen.getByLabelText("Case ID or text")).toBe(prefix);
   expect(document.activeElement).toBe(prefix);
   expect(api.getProjectSettings).toHaveBeenCalledTimes(1);
@@ -158,9 +158,9 @@ it("reads immutable review history for the actual internal ID and discards super
 it("does not infer manual acceptance from a descriptive reason", async () => {
   vi.mocked(api.listDocumentRows).mockImplementation(async () => targetPage({ accepted_without_review: false }));
   render(<DocumentsPage projectKey="p" canManage query={openTarget} onNavigate={vi.fn()} />);
-  // The expanded row's Text versions shows the version's status badge.
+  // The row panel's Text versions shows the version's status badge.
   expect((await screen.findAllByText("Accepted", { selector: ".status-pill" })).length).toBeGreaterThan(0);
-  expect(within(screen.getByRole("table", { name: "Documents" })).queryByText(/Accepted without review/)).toBeNull();
+  expect(within(screen.getByRole("complementary", { name: `Details, ${target.case_id} · ${target.language}` })).queryByText(/Accepted without review/)).toBeNull();
 });
 
 it("shows ordered readonly reviewer snapshots, rationale and created variant", async () => {
@@ -264,10 +264,10 @@ it("binds document state to actual user identity before accepting late replies",
   // The first user's rows request goes out once the visit is recorded.
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(1));
   view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "second", pseudonym: "S" }} query={{}} onNavigate={vi.fn()} />);
-  const link = await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });
+  const link = await screen.findByRole("link", { name: `Open in editor, ${target.case_id} · ${target.language}` });
   expect(link.getAttribute("href")).toContain("new-user-document");
   await act(async () => old.resolve(targetPage({ document_id: "old-user-document" })));
-  expect(screen.getByRole("link", { name: `Open ${target.case_id} · ${target.language}` }).getAttribute("href")).not.toContain("old-user-document");
+  expect(screen.getByRole("link", { name: `Open in editor, ${target.case_id} · ${target.language}` }).getAttribute("href")).not.toContain("old-user-document");
 });
 
 it("renders exact preview variant lineage and every failed code", () => {

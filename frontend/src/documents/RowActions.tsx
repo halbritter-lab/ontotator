@@ -85,7 +85,7 @@ export interface RowActionCellProps {
   block?: boolean;
   /**
    * Lead actions that are no step ("Change final…", "Request translation correction…"): listed in the
-   * "+n" menu after the other steps of a row that has a step (the expansion offers them too).
+   * "+n" menu after the other steps of a row that has a step (the row panel offers them too).
    */
   extraActions?: readonly MenuItem[];
 }
@@ -104,11 +104,11 @@ export function RowActionCell({ row, onAction, plan, block = false, extraActions
     const closed = wasOpen.current && !planOpen;
     wasOpen.current = planOpen;
     if (!closed) return;
-    // Focus left with the popover's button (it may be gone now): the row's action button, else its disclosure.
+    // Focus left with the popover's button (it may be gone now): the row's action button, else its text name.
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected) return;
     (document.getElementById(documentsRowId(row.case_id, row.language, "action"))
-      ?? document.getElementById(documentsRowId(row.case_id, row.language, "disclosure")))?.focus();
+      ?? document.getElementById(documentsRowId(row.case_id, row.language, "header")))?.focus();
   }, [planOpen, row.case_id, row.language]);
 
   const name = rowName(row);
@@ -124,7 +124,7 @@ export function RowActionCell({ row, onAction, plan, block = false, extraActions
     return <span className={className}>{popover(active ? "secondary" : "quiet")}{menuOf(rest)}</span>;
   }
   if (!active) return plan ? <span className={className}>{popover("quiet")}</span> : null;
-  // In-plan rows without a lead step show nothing; their other actions are in the expansion.
+  // In-plan rows without a lead step show nothing; their other actions are in the row panel.
   if (!first) return null;
   const firstLabel = rowActionLabel(first, row);
   return <span className={className}>

@@ -9,7 +9,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { documentsReady, documentsTab, expandHistory, historyRegion, rowAction, rowBox, textRow } from "./documentsHelpers";
+import { documentsReady, documentsTab, openRowPanel, rowAction, rowBox, rowPanel, textRow } from "./documentsHelpers";
 import { TEST_PASSWORD } from "./helpers";
 import { leadScenario, type LeadScenario } from "./leadWorkflowHelpers";
 
@@ -56,14 +56,20 @@ async function axeViolations(page: Page, include: string): Promise<string[]> {
   return results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}: ${n.failureSummary ?? ""}`));
 }
 
-/** Show the Plan line of a row: the table's ▸ or the card's "History". */
+/** Show the Plan line of a row: the row panel's Details (from the text name, or a card's "Details" sheet). */
 async function showPlanLine(page: Page, caseId: string, language: string) {
   const card = page.getByRole("article", { name: `${caseId} · ${language}`, exact: true });
+  let panel: Locator;
   if (await card.count()) {
-    const toggle = card.getByRole("button", { name: "History", exact: true });
-    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-    await expect(historyRegion(page, caseId, language)).toBeVisible();
-  } else await expandHistory(page, caseId, language);
+    // One sheet at a time: Back from another row's sheet first.
+    const open = page.getByRole("dialog", { name: /^Details, / });
+    panel = rowPanel(page, caseId, language);
+    if ((await open.count()) && !(await panel.count())) await open.getByRole("button", { name: "Back", exact: true }).click();
+    if (!(await panel.count())) await card.getByRole("button", { name: `Details, ${caseId} · ${language}`, exact: true }).click();
+    await expect(panel).toBeVisible();
+  } else panel = await openRowPanel(page, caseId, language);
+  await panel.getByRole("tab", { name: "Details", exact: true }).click();
+  await expect(panel.getByRole("group", { name: "Plan", exact: true })).toBeVisible();
 }
 
 /** Toggle Review off on a Review-only fr row (case-0111…0120): saves at once and shows the Undo toast. */
@@ -212,9 +218,10 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
   await evidence(page, "320-documents-selection-toast");
 
   await showPlanLine(page, "case-0101", "de");
-  await expect(historyRegion(page, "case-0101", "de").getByRole("heading", { name: "History", level: 5 })).toBeVisible();
-  expect(await overflow(page), "expanded card").toMatchObject({ scrollWidth: 320, outside: [] });
-  await evidence(page, "320-expanded-card", historyRegion(page, "case-0101", "de"));
+  const sheet = rowPanel(page, "case-0101", "de");
+  expect(await overflow(page), "row panel sheet").toMatchObject({ scrollWidth: 320, outside: [] });
+  await evidence(page, "320-row-panel-sheet", sheet);
+  await sheet.getByRole("button", { name: "Back", exact: true }).click();
 
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();
   const plan = page.getByRole("dialog", { name: "Work plan · 1 case" });
@@ -232,13 +239,13 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
 
 test("forced colours keep pressed chips and the decision edge visible", async ({ page }) => {
   await openRows(page);
-  // In-plan chips sit in the expansion's Plan line (VD2).
-  for (const language of ["de", "fr"]) await expandHistory(page, "case-0101", language);
+  // In-plan chips sit in the row panel's Details (VD2).
+  await showPlanLine(page, "case-0101", "de");
   await page.emulateMedia({ forcedColors: "active" });
   expect(await page.evaluate(() => matchMedia("(forced-colors: active)").matches)).toBe(true);
 
   // Pressed chips: a border in CanvasText and the check icon; unpressed chips have no icon.
-  const chips = await page.locator("main button[aria-pressed]").evaluateAll(elements => {
+  const chips = await page.locator("main button[aria-pressed]:not(.row-panel-stage)").evaluateAll(elements => {
     const probe = document.createElement("span");
     probe.style.color = "CanvasText";
     document.body.append(probe);
@@ -282,8 +289,6 @@ test("forced colours keep pressed chips and the decision edge visible", async ({
 
 test("targets are at least 24 × 24 px (chips, checkboxes) and card actions at least 32 px high", async ({ page }) => {
   await openRows(page);
-  // In-plan chips sit in the expansion's Plan line (VD2): show six rows' chips.
-  for (const caseId of ["case-0101", "case-0106", "case-0107"]) for (const language of ["de", "fr"]) await expandHistory(page, caseId, language);
   const sizes = async (selector: string) => page.locator(selector).evaluateAll(elements => elements
     .filter(element => element.getBoundingClientRect().width > 0)
     .map(element => {
@@ -291,7 +296,12 @@ test("targets are at least 24 × 24 px (chips, checkboxes) and card actions at l
       const label = (element as HTMLInputElement).labels?.[0]?.textContent ?? "";
       return { name: element.getAttribute("aria-label") ?? (label || element.textContent || ""), width: box.width, height: box.height };
     }));
-  const chips = await sizes("main button[aria-pressed]");
+  // In-plan chips sit in the row panel's Details (VD2): measure six rows' chips, one panel at a time.
+  const chips: Awaited<ReturnType<typeof sizes>> = [];
+  for (const caseId of ["case-0101", "case-0106", "case-0107"]) for (const language of ["de", "fr"]) {
+    await showPlanLine(page, caseId, language);
+    chips.push(...await sizes(".row-panel-plan button[aria-pressed]"));
+  }
   const boxes = await sizes("main input[type=checkbox]");
   expect(chips.length).toBeGreaterThan(10);
   expect(boxes.length).toBeGreaterThan(10);

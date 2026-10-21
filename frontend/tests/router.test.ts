@@ -130,29 +130,36 @@ describe("hash route subscription", () => {
 });
 
 describe("Documents deep-link parameters", () => {
-  it("round_trips_documents_decision_final_case_open_and_page", () => {
-    const route: Route = { name: "projectDocuments", key: "p", language: "de", case: "case/1 #é", decision: "confirm-final", open: ["case-1:de", "case-2:en"], page: "2" };
+  it("round_trips_documents_decision_final_case_panel_and_page", () => {
+    const route: Route = { name: "projectDocuments", key: "p", language: "de", case: "case/1 #é", decision: "confirm-final", panel: "case-1:de", page: "2" };
     const href = routeHref(route);
-    expect(href).toContain("open=case-1%3Ade&open=case-2%3Aen");
+    expect(href).toContain("panel=case-1%3Ade");
     expect(parseRoute(href)).toEqual(route);
     expect(parseRoute("#/projects/p/documents?final=missing")).toEqual({ name: "projectDocuments", key: "p", final: "missing" });
   });
-  it("round_trips_a_single_open_row_and_keeps_every_repeated_value", () => {
-    const route: Route = { name: "projectDocuments", key: "p", open: ["c:de"] };
+  it("round_trips_the_row_panel_with_its_stage_filter_and_tab", () => {
+    const route: Route = { name: "projectDocuments", key: "p", stage: "annotation", panel: "c:de", panel_stage: "annotation", panel_tab: "versions" };
+    expect(routeHref(route)).toBe("#/projects/p/documents?stage=annotation&panel=c%3Ade&panel_stage=annotation&panel_tab=versions");
     expect(parseRoute(routeHref(route))).toEqual(route);
-    expect(parseRoute("#/projects/p/documents?open=a%3Ade&open=a%3Ade&open=b%3Aen"))
-      .toEqual({ name: "projectDocuments", key: "p", open: ["a:de", "a:de", "b:en"] });
+  });
+  it("maps_the_legacy_open_parameter_to_the_row_panel", () => {
+    expect(parseRoute("#/projects/p/documents?open=a%3Ade&open=b%3Aen"))
+      .toEqual({ name: "projectDocuments", key: "p", panel: "a:de" });
+    expect(parseRoute("#/projects/p/documents?panel=b%3Aen&open=a%3Ade"))
+      .toEqual({ name: "projectDocuments", key: "p", panel: "b:en" });
+    expect(parseRoute("#/projects/p/cases/c?documents_open=a%3Ade"))
+      .toEqual({ name: "projectCase", key: "p", caseId: "c", documents: { panel: "a:de" } });
   });
   it("passes_the_full_documents_query_through_case_and_report_routes", () => {
-    const documents = { decision: "report-or-pause", open: ["c:de"], page: "3", case: "c", language: "de" };
+    const documents = { decision: "report-or-pause", panel: "c:de", panel_stage: "review", panel_tab: "details", page: "3", case: "c", language: "de" };
     const viewer: Route = { name: "projectCase", key: "p", caseId: "c", variant: "d", annotations: JSON.stringify(["submission", "s1"]), compare: JSON.stringify(["submission", "s2"]), documents };
     expect(parseRoute(routeHref(viewer))).toEqual(viewer);
     const report: Route = { name: "projectProblemReport", key: "p", reportId: "r 1", action: "resume", documents };
     expect(parseRoute(routeHref(report))).toEqual(report);
   });
   it("keeps case parameter order: variant, annotations, compare, then documents_*", () => {
-    const href = routeHref({ name: "projectCase", key: "p", caseId: "c", documents: { q: "x", open: ["c:de"] }, compare: "b", annotations: "a", variant: "v" });
-    expect(href).toBe("#/projects/p/cases/c?variant=v&annotations=a&compare=b&documents_q=x&documents_open=c%3Ade");
+    const href = routeHref({ name: "projectCase", key: "p", caseId: "c", documents: { q: "x", panel: "c:de" }, compare: "b", annotations: "a", variant: "v" });
+    expect(href).toBe("#/projects/p/cases/c?variant=v&annotations=a&compare=b&documents_q=x&documents_panel=c%3Ade");
   });
   it("round_trips_lead_workflow_filters_segment_step_stage_owner_plan_sort_and_final_none", () => {
     const route: Route = { name: "projectDocuments", key: "p", segment: "assign", step: "assign_translation_review", stage: "translation_review", owner: "me", plan: "review_and_annotate", sort: "activity", final: "none", language: "de" };

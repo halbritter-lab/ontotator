@@ -73,10 +73,11 @@ async function documentRow(page: Page, id: string) {
   const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
   const name = `${doc.case_id} · ${doc.language}`;
   // Rows not in the work plan are ordinary (muted) rows under All (VD1).
-  const disclosure = page.getByRole('button', { name: `Show history, ${name}`, exact: true });
-  if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
-  const versions = page.getByRole('region', { name: `History, ${name}`, exact: true }).locator('details').filter({ has: page.locator('summary', { hasText: /^Text versions \(\d+\)$/ }) });
-  if (!await versions.evaluate(node => (node as HTMLDetailsElement).open)) await versions.locator(':scope > summary').click();
+  // The row panel (text name "Details, …") on "Versions (n)".
+  const panel = page.getByRole('complementary', { name: `Details, ${name}`, exact: true });
+  if (!await panel.count()) await page.getByRole('button', { name: `Details, ${name}`, exact: true }).click();
+  await panel.getByRole('tab', { name: /^Versions \(\d+\)$/ }).click();
+  const versions = panel.getByRole('tabpanel');
   const version = versions.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
   await expect(version).toHaveCount(1);
   return version;

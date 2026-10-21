@@ -23,7 +23,7 @@ function selection(selected: readonly string[] = []): TableSelection {
 }
 
 function renderCards(view: DocumentRowsPage, overrides: Partial<DocumentCardsProps> = {}) {
-  const props: DocumentCardsProps = { page: view, projectKey: "p", query: {}, onToggleRow: vi.fn(), onAction: vi.fn(), selection: selection(), ...overrides };
+  const props: DocumentCardsProps = { page: view, projectKey: "p", query: {}, onOpenPanel: vi.fn(), onAction: vi.fn(), selection: selection(), ...overrides };
   const result = render(<DocumentCards {...props} />);
   return { ...result, props };
 }
@@ -64,7 +64,7 @@ describe("cards", () => {
     expect(action.classList.contains("documents-action--block")).toBe(true);
     fireEvent.click(action);
     expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), expect.objectContaining({ code: "assign_annotation" }));
-    expect(within(de).getByRole("link", { name: "Open case-106 · de" })).toBeTruthy();
+    expect(within(de).getByRole("link", { name: "Open in editor, case-106 · de" })).toBeTruthy();
     expect(cardOf("case-106 · fr").textContent).toContain("Waiting on: Ana Weber, Tom Reis");
     expect(screen.queryByText(/not in plan ·/)).toBeNull();
   });
@@ -83,19 +83,19 @@ describe("cards", () => {
     expect(chosen.select).toHaveBeenCalledWith("case-106:fr", "range", order);
   });
 
-  it("stacks the row notice and expanded content inside the article and toggles History", () => {
-    const onToggleRow = vi.fn();
-    const renderExpanded = vi.fn(() => <section aria-label="Expanded">content</section>);
-    renderCards(page([case106()]), { query: { open: ["case-106:de"] }, onToggleRow, renderExpanded, renderRowNotice: entry => (entry.language === "de" ? <p>notice</p> : null) });
+  it("stacks the row notice inside the article; Details opens the row panel's sheet (X19) and marks the card", () => {
+    const onOpenPanel = vi.fn();
+    renderCards(page([case106()]), { onOpenPanel, activeKey: "case-106:de", renderRowNotice: entry => (entry.language === "de" ? <p>notice</p> : null) });
     const card = cardOf("case-106 · de");
-    const toggle = within(card).getByRole("button", { name: "History" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(card.contains(document.getElementById(toggle.getAttribute("aria-controls")!)!)).toBe(true);
     expect(within(card).getByText("notice")).toBeTruthy();
-    expect(renderExpanded).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-106", language: "de" }), { layout: "list" });
-    expect(toggle.id).toBe("documents-row-case-106-de-disclosure");
-    fireEvent.click(toggle);
-    expect(onToggleRow).toHaveBeenCalledWith("case-106:de");
+    expect(within(card).queryByRole("button", { name: "History" })).toBeNull();
+    const details = within(card).getByRole("button", { name: "Details, case-106 · de" });
+    expect(details.textContent).toBe("Details");
+    expect(details.id).toBe("documents-row-case-106-de-details");
+    fireEvent.click(details);
+    expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-106", language: "de" }), { opener: details });
+    expect(card.getAttribute("aria-current")).toBe("true");
+    expect(cardOf("case-106 · fr").getAttribute("aria-current")).toBeNull();
   });
 
   it("one case card with checkbox and header, one article per text with three labelled stage lines", () => {
@@ -120,7 +120,7 @@ describe("cards", () => {
     expect(lines[0].className).toContain("stage-cell--done");
   });
 
-  it("Waiting on line, full-width action ≥ 32 px with +n, Open and History", () => {
+  it("Waiting on line, full-width action ≥ 32 px with +n, Open and Details", () => {
     const people = [ana, tom, { pseudonym: "ann-0005", display_name: "Luc Martin", is_me: false }];
     const fr = stagedRow("case-108", "fr", {
       stages: { annotation: cell("in_progress", "running", { people }) },
@@ -133,8 +133,8 @@ describe("cards", () => {
     const action = within(deCard).getByRole("button", { name: "Assign annotation…, case-108 · de" });
     expect(action.classList.contains("documents-action--block")).toBe(true);
     expect(within(deCard).getByRole("button", { name: /1 more action/ }).textContent).toBe("+1");
-    expect(within(deCard).getByRole("link", { name: "Open case-108 · de" })).toBeTruthy();
-    expect(within(deCard).getByRole("button", { name: "History" })).toBeTruthy();
+    expect(within(deCard).getByRole("link", { name: "Open in editor, case-108 · de" })).toBeTruthy();
+    expect(within(deCard).getByRole("button", { name: "Details, case-108 · de" })).toBeTruthy();
     // More than two people: the visible "+n" line, the full list for assistive technology (not only in a title).
     const waiting = within(cardOf("case-108 · fr")).getByText(/^Waiting on:/).closest(".document-card-owner")!;
     const { text, title } = waitingOnText(fr);

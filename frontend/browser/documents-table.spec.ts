@@ -1,9 +1,9 @@
 /**
  * Documents lead table: rendering of the scenarios S0 to S10 and S13 on the stage-column
- * table of the documents overview (spec "Table", "Stage cells", "Expansion (▸)", V1 to V6):
- * one slim group row per case, one row per text with eight columns (checkbox · Text · Review ·
- * Annotation · Final · Waiting on · Action · Last activity), the slim expansion (History, Plan,
- * Text versions, Problem reports, Technical details) and the final-result side panel.
+ * table of the documents overview (spec "Table", "Stage cells", V1 to V6) and the row panel of the
+ * acceptance fixes (WP-A): one slim group row per case, one row per text with eight columns
+ * (checkbox · Text · Review · Annotation · Final · Waiting on · Action · Last activity), the row panel
+ * (stage strip, decision block, Activity · Versions · Details) without any layout shift.
  *
  * Every test builds a fresh project through ``POST /__test_documents__`` and logs in as its lead.
  * Stage cells name people by display name; Waiting on uses "Display name (pseudonym)" (D1).
@@ -12,8 +12,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
 import {
-  caseBox, documentsReady, documentsScenario, documentsTab, documentsTable, expandHistory, filterChip, finalPanel, historyToggle,
-  openFilters, rowAction, rowBox, rowCell, textRow, textVersionItems, type DocumentsScenario,
+  activityLines, caseBox, decisionBlock, detailsButton, documentsReady, documentsScenario, documentsTab, documentsTable, filterChip,
+  openFilters, openRowPanel, rowAction, rowBox, rowCell, rowPanel, textRow, textVersionItems, type DocumentsScenario,
 } from "./documentsHelpers";
 import { authenticatedRequest, loginExisting } from "./helpers";
 
@@ -63,7 +63,7 @@ const groupLabel = (page: Page, caseId: string) =>
 
 /** Language codes of a case's rows in table order. */
 async function languagesInOrder(page: Page, caseId: string): Promise<string[]> {
-  const names = await documentsTable(page).getByRole("button", { name: new RegExp(`^Show history, ${esc(caseId)} · `) }).evaluateAll(
+  const names = await documentsTable(page).getByRole("button", { name: new RegExp(`^Details, ${esc(caseId)} · `) }).evaluateAll(
     buttons => buttons.map(button => button.getAttribute("aria-label") ?? ""),
   );
   return names.map(name => name.split(" · ").pop() ?? "");
@@ -71,7 +71,7 @@ async function languagesInOrder(page: Page, caseId: string): Promise<string[]> {
 
 /** "Open" opens this document id (its `variant` route parameter). */
 async function openVariant(row: Locator, name: string): Promise<string | null> {
-  const href = await row.getByRole("link", { name: `Open ${name}`, exact: true }).getAttribute("href");
+  const href = await row.getByRole("link", { name: `Open in editor, ${name}`, exact: true }).getAttribute("href");
   return new URLSearchParams(decodeURIComponent(href ?? "").split("?")[1]).get("variant");
 }
 
@@ -96,8 +96,10 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   await expect(rowCell(en, "final")).toHaveText("—");
   await expect(rowCell(en, "action").getByRole("button")).toHaveAccessibleName(`Assign annotation…, ${caseId} · en`);
   expect(await hasDecisionEdge(en)).toBe(false);
-  const enArea = await expandHistory(page, caseId, "en");
+  const enArea = await openRowPanel(page, caseId, "en");
   await expect(await textVersionItems(enArea, 1)).toHaveText([/^v1\s*Native/]);
+  // The panel lies over the right part of the table: close it before the row actions.
+  await enArea.getByRole("button", { name: "Close", exact: true }).click();
 
   // de: v2 corrects the text of the final result chosen on v1: "Final is on old text", Review changes…, decision edge.
   const de = textRow(page, caseId, "de");
@@ -110,31 +112,32 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   // "Open" opens the version of the final result (v1), not the newest version.
   expect(await openVariant(de, `${caseId} · de`)).toBe(s.documents!.v1);
 
-  // The decision lives in the side panel (V6): the text change, the waiting round and "Keep final on v1".
+  // The decision lives in the row panel's decision block (V6): the text change, the waiting round and "Keep final on v1".
   await rowAction(page, "Review changes…", caseId, "de").click();
-  const panel = finalPanel(page, caseId, "de");
+  const panel = decisionBlock(page, caseId, "de");
   await expect(panel).toBeVisible();
   await expect(panel.getByText("The text changed from v1 to v2 after this final was chosen.", { exact: true })).toBeVisible();
   await expect(panel.getByRole("button", { name: "Keep final on v1", exact: true })).toBeVisible();
-  await panel.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(panel).toHaveCount(0);
+  await rowPanel(page, caseId, "de").getByRole("button", { name: "Close", exact: true }).click();
+  await expect(rowPanel(page, caseId, "de")).toHaveCount(0);
 
-  const area = await expandHistory(page, caseId, "de");
-  await expect(area.getByRole("listitem").filter({ hasText: /^Final: chosen/ })).toHaveCount(1);
+  const area = await openRowPanel(page, caseId, "de");
+  await expect(activityLines(area).filter({ hasText: /^Final: chosen/ })).toHaveCount(1);
   await expect(await textVersionItems(area, 2)).toHaveText([/^v1\s*Machine translation/, /^v2\s*Correction of v1\s*Ready for review/]);
 
   // The decision category link selects the de row only.
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents?decision=confirm-final`);
   await documentsReady(page);
   await expect(textRow(page, caseId, "de")).toBeVisible();
-  await expect(historyToggle(page, caseId, "en")).toHaveCount(0);
+  await expect(detailsButton(page, caseId, "en")).toHaveCount(0);
 });
 
-test("S0 expanded table has no axe violations", async ({ page }) => {
+test("S0 with the row panel open (legacy open= link) has no axe violations", async ({ page }) => {
   await openScenario(page, "S0", "?open=synthetic-accepted%3Ade");
-  const area = page.getByRole("region", { name: "History, synthetic-accepted · de", exact: true });
-  await expect(area.getByRole("heading", { name: "History", level: 3 })).toBeVisible();
-  const results = await new AxeBuilder({ page }).include("main").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  const area = rowPanel(page, "synthetic-accepted", "de");
+  await expect(area.getByRole("heading", { name: "synthetic-accepted · de v2", level: 2 })).toBeVisible();
+  await expect(area.getByRole("list", { name: "Activity", exact: true })).toBeVisible();
+  const results = await new AxeBuilder({ page }).include("main").include(".row-panel").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   const violations = results.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}: ${n.failureSummary ?? ""}`));
   expect(violations).toEqual([]);
 });
@@ -155,16 +158,16 @@ test("S1 case-0042: two submissions and a final result, nothing to do", async ({
   await expect(rowCell(en, "action")).toHaveText("");
   expect(await hasDecisionEdge(en)).toBe(false);
 
-  // History: both submissions and the final choice (the Submissions table moved to the panel, V6).
-  const area = await expandHistory(page, caseId, "en");
-  await expect(area.getByRole("listitem").filter({ hasText: /^Annotation: .* · Round 1 · / })).toHaveCount(2);
-  await expect(area.getByRole("listitem").filter({ hasText: /^Final: chosen/ })).toHaveCount(1);
+  // Activity: both submissions and the final choice (the Submissions table is in the decision block, V6).
+  const area = await openRowPanel(page, caseId, "en");
+  await expect(activityLines(area).filter({ hasText: /^Annotation: .* · Round 1 · / })).toHaveCount(2);
+  await expect(activityLines(area).filter({ hasText: /^Final: chosen/ })).toHaveCount(1);
 
   // "Final result: none" (FD11 link parameter, a chip): nothing matches.
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents?final=none`);
   await documentsReady(page);
   await expect(filterChip(page, "Final result: None")).toBeVisible();
-  await expect(historyToggle(page, caseId, "en")).toHaveCount(0);
+  await expect(detailsButton(page, caseId, "en")).toHaveCount(0);
   await expect(page.getByText("No texts match these filters.", { exact: true })).toBeVisible();
 });
 
@@ -193,7 +196,7 @@ test("S2 case-0108: seven languages, final 4 of 7, de failed its automatic check
   await expect(rowCell(textRow(page, caseId, "nl"), "review")).not.toContainText("Check failed");
   await expect(rowCell(textRow(page, caseId, "nl"), "review")).toHaveText(/Unassigned\s*v1 machine translation/);
 
-  const area = await expandHistory(page, caseId, "de");
+  const area = await openRowPanel(page, caseId, "de");
   await expect(await textVersionItems(area, 1)).toHaveText([/^v1\s*Machine translation\s*Check failed/]);
 
   // Facet "No final yet" (replaces the filter "Final result: none") lists exactly the three rows without a final result.
@@ -222,13 +225,12 @@ test("S3 case-0211: final on v1 Round 2, corrections v2 and v3, waiting for the 
 
   // The panel names the text change and the open v3 review; the lead can keep v1.
   await rowAction(page, "Review changes…", caseId, "de").click();
-  const panel = finalPanel(page, caseId, "de");
+  const panel = decisionBlock(page, caseId, "de");
   await expect(panel.getByText(/^The text changed from v1 to v\d after this final was chosen\.$/)).toBeVisible();
   await expect(panel).toContainText(`translation review of v3 by ${names.reviewer}`);
   await expect(panel.getByRole("button", { name: "Keep final on v1", exact: true })).toBeVisible();
-  await panel.getByRole("button", { name: "Close", exact: true }).click();
 
-  const area = await expandHistory(page, caseId, "de");
+  const area = await openRowPanel(page, caseId, "de");
   await expect(await textVersionItems(area, 3)).toHaveText([/^v1\s*Machine translation/, /^v2\s*Correction of v1\s*Accepted/, /^v3\s*Correction of v2\s*Ready for review/]);
 });
 
@@ -241,12 +243,12 @@ test("S4 case-0305 fr: two independent translations, each annotated in its own r
   await expect(rowBox(page, caseId, "fr")).toBeVisible();
   const fr = textRow(page, caseId, "fr");
   await expect(fr.getByRole("rowheader")).toContainText("2 translations");
-  await expect(fr.getByRole("link", { name: `Open ${caseId} · fr`, exact: true })).toHaveAccessibleDescription("Opens Provider B m1 v1, the most recent translation");
+  await expect(fr.getByRole("link", { name: `Open in editor, ${caseId} · fr`, exact: true })).toHaveAccessibleDescription("Opens Provider B m1 v1, the most recent translation");
   await expect(rowCell(fr, "annotation")).toHaveText(new RegExp(`In progress\\s*${esc(names["ann-0001"])}, ${esc(names["ann-0002"])} · Round 1`));
   await expect(rowCell(fr, "final")).toHaveText("—");
 
-  const area = await expandHistory(page, caseId, "fr");
-  await expect(area.getByRole("listitem").filter({ hasText: /^Annotation: .* · Round 1 · / })).toHaveCount(2);
+  const area = await openRowPanel(page, caseId, "fr");
+  await expect(activityLines(area).filter({ hasText: /^Annotation: .* · Round 1 · / })).toHaveCount(2);
   await expect(await textVersionItems(area, 2)).toHaveText([/^Provider A m1 v1\s*Machine translation/, /^Provider B m1 v1\s*Machine translation/]);
 });
 
@@ -260,9 +262,9 @@ test("S5 case-0377: the lead's consolidation is the final result, without a roun
   await expect(documentsTab(page, "Done", 1)).toBeVisible();
   expect(await hasDecisionEdge(en)).toBe(false);
 
-  const area = await expandHistory(page, caseId, "en");
-  await expect(area.getByRole("listitem").filter({ hasText: /^Consolidation: / })).toHaveCount(1);
-  await expect(area.getByRole("listitem").filter({ hasText: /^Annotation: .* · Round 1 · / })).toHaveCount(3);
+  const area = await openRowPanel(page, caseId, "en");
+  await expect(activityLines(area).filter({ hasText: /^Annotation Consolidation: / })).toHaveCount(1);
+  await expect(activityLines(area).filter({ hasText: /^Annotation: .* · Round 1 · / })).toHaveCount(3);
 });
 
 test("S6 case-0390 de: open problem report with a paused task", async ({ page }) => {
@@ -277,11 +279,12 @@ test("S6 case-0390 de: open problem report with a paused task", async ({ page })
   await expect(rowCell(de, "action").getByRole("button").first()).toHaveAccessibleName(`Decide on report…, ${caseId} · de`);
   await expect(documentsTab(page, "Needs your decision", 1)).toBeVisible();
 
-  const area = await expandHistory(page, caseId, "de");
-  const paused = area.getByRole("listitem").filter({ hasText: /^Task paused/ });
+  const area = await openRowPanel(page, caseId, "de");
+  const paused = activityLines(area).filter({ hasText: /^Annotation Task paused/ });
   await expect(paused.getByRole("link", { name: "Open report", exact: true })).toHaveAttribute("href", new RegExp(`/problem-reports/${esc(String(s.report_id))}`));
-  await area.locator("summary", { hasText: /^Problem reports \(1\)$/ }).click();
-  const report = area.locator("details", { has: page.locator("summary", { hasText: /^Problem reports/ }) }).getByRole("listitem");
+  await expect(area.locator(".row-panel-banner")).toHaveText("1 open problem report · Open");
+  await area.getByRole("tab", { name: "Details", exact: true }).click();
+  const report = area.getByRole("tabpanel").locator("section", { has: page.getByRole("heading", { name: "Problem reports (1)" }) }).getByRole("listitem");
   await expect(report).toContainText("Report: Open");
   await expect(report).toContainText("Paused tasks: 1");
   await expect(report.locator("time")).toHaveCount(1);
@@ -289,7 +292,7 @@ test("S6 case-0390 de: open problem report with a paused task", async ({ page })
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents?decision=report-or-pause`);
   await documentsReady(page);
   await expect(textRow(page, caseId, "de")).toBeVisible();
-  await expect(historyToggle(page, caseId, "en")).toHaveCount(0);
+  await expect(detailsButton(page, caseId, "en")).toHaveCount(0);
 });
 
 test("S7 300 texts: 50 groups per page, page 1 of 6, groups never collapse", async ({ page }) => {
@@ -303,9 +306,9 @@ test("S7 300 texts: 50 groups per page, page 1 of 6, groups never collapse", asy
 
   // VD5: the group row is a label, not a disclosure; every text row of the page is shown.
   await expect(documentsTable(page).locator("button.documents-group-toggle")).toHaveCount(0);
-  await expect(historyToggle(page, "case-0007", "de")).toBeVisible();
+  await expect(detailsButton(page, "case-0007", "de")).toBeVisible();
   await expect(rowCell(textRow(page, "case-0007", "de"), "review")).toContainText("Check failed");
-  const rowsOnPage = await documentsTable(page).getByRole("button", { name: /^Show history, / }).count();
+  const rowsOnPage = await documentsTable(page).getByRole("button", { name: /^Details, / }).count();
   expect(rowsOnPage).toBeGreaterThanOrEqual(50);
 
   await pages.getByRole("link", { name: "Next", exact: true }).click();
@@ -335,14 +338,17 @@ test("S8 synthetic-accepted at 390 px: cards instead of a table", async ({ page 
   await expect(de).toContainText(`Round 1 · ${names["ann-0004"]} · v1`);
   await expect(de).toContainText("Waiting on: You");
   await expect(de.getByRole("button", { name: `Review changes…, ${caseId} · de`, exact: true })).toBeVisible();
-  await expect(de.getByRole("link", { name: `Open ${caseId} · de`, exact: true })).toBeVisible();
+  await expect(de.getByRole("link", { name: `Open in editor, ${caseId} · de`, exact: true })).toBeVisible();
 
-  const toggle = de.getByRole("button", { name: "History", exact: true });
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  const area = page.getByRole("region", { name: `History, ${caseId} · de`, exact: true });
-  await expect(area.getByRole("heading", { name: "History", level: 5 })).toBeVisible();
-  await expect(area.locator("summary", { hasText: /^Text versions \(2\)$/ })).toBeVisible();
+  // "Details" is the only way into the row panel's full-screen sheet (X19); Back closes it.
+  await de.getByRole("button", { name: `Details, ${caseId} · de`, exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: `Details, ${caseId} · de`, exact: true });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("tab", { name: "Versions (2)", exact: true })).toBeVisible();
+  const box = await sheet.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(389);
+  await sheet.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
   await expect(page.getByRole("table")).toHaveCount(0);
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
@@ -354,8 +360,8 @@ test("S9 case-0420 fr: equal provider names get the external id", async ({ page 
   const names = s.chain_names as { a: string; b: string };
 
   const fr = textRow(page, caseId, "fr");
-  await expect(fr.getByRole("link", { name: `Open ${caseId} · fr`, exact: true })).toHaveAccessibleDescription(`Opens ${names.b} v1, the most recent translation`);
-  const area = await expandHistory(page, caseId, "fr");
+  await expect(fr.getByRole("link", { name: `Open in editor, ${caseId} · fr`, exact: true })).toHaveAccessibleDescription(`Opens ${names.b} v1, the most recent translation`);
+  const area = await openRowPanel(page, caseId, "fr");
   await expect(await textVersionItems(area, 2)).toHaveText([new RegExp(`^${esc(names.a)} v1`), new RegExp(`^${esc(names.b)} v1`)]);
 });
 
@@ -371,13 +377,12 @@ test("S10 case-0444 de: rejected and queried reviews are translation issues, nev
 
   // Only the accepted child of accepted_corrected corrects the final result; rejected and queried versions do not.
   await rowAction(page, "Review changes…", caseId, "de").click();
-  const panel = finalPanel(page, caseId, "de");
+  const panel = decisionBlock(page, caseId, "de");
   await expect(panel.getByText(/^The text changed from Provider A m1 v1 to Provider A m1 v5 after this final was chosen\.$/)).toBeVisible();
   await expect(panel.getByText(/Provider [BC] m1 v\d .*corrects the text/)).toHaveCount(0);
-  await panel.getByRole("button", { name: "Close", exact: true }).click();
 
-  const area = await expandHistory(page, caseId, "de");
-  await expect(area.locator("summary", { hasText: /^Text versions \(9\)$/ })).toBeVisible();
+  const area = await openRowPanel(page, caseId, "de");
+  await expect(area.getByRole("tab", { name: "Versions (9)", exact: true })).toBeVisible();
   const versions = await textVersionItems(area, 9);
   await expect(versions.filter({ hasText: /^Provider B m1 v2/ })).toContainText("Rejected");
   await expect(versions.filter({ hasText: /^Provider C m1 v2/ })).toContainText("Queried");
@@ -392,18 +397,64 @@ test("S13 case-0713 en: consolidation and carry-forward kinds, the final is the 
   await expect(rowCell(en, "annotation")).toHaveText(new RegExp(`Submitted on v1\\s*${esc(names["ann-0002"])} · v2 not annotated`));
   await expect(rowCell(en, "final")).toHaveText(/Your choice/);
   await expect(rowCell(en, "action").getByRole("button").first()).toHaveAccessibleName(`Carry to v2…, ${caseId} · en`);
-  // "Choose final…" became "Accept result…" / "Compare results…" (V6), here behind "+1".
+  // "Choose final…" became "Accept as final…" / "Compare results…" (V6, X14), here behind "+1".
   await page.getByRole("button", { name: `+1 more action, ${caseId} · en`, exact: true }).click();
-  await page.getByRole("menuitem", { name: /^(Accept|Compare) results?…$/ }).click();
-  const panel = finalPanel(page, caseId, "en");
+  await page.getByRole("menuitem", { name: /^(Accept as final|Compare results)…$/ }).click();
+  const panel = decisionBlock(page, caseId, "en");
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("button", { name: /^(Accept as final|Use as final)$/ }).first()).toBeVisible();
-  await panel.getByRole("button", { name: "Close", exact: true }).click();
 
-  // History: the two annotations, the consolidation and the carry-forward on v2.
-  const area = await expandHistory(page, caseId, "en");
-  await expect(area.getByRole("listitem").filter({ hasText: /^Consolidation: / })).toHaveCount(1);
-  await expect(area.getByRole("listitem").filter({ hasText: /^Annotation: .* · v2 · / })).toHaveCount(1);
-  await expect(area.getByRole("listitem").filter({ hasText: /^Annotation: .* · v1 · / })).toHaveCount(2);
+  // Activity: the two annotations, the consolidation and the carry-forward on v2.
+  const area = await openRowPanel(page, caseId, "en");
+  await expect(activityLines(area).filter({ hasText: /^Annotation Consolidation: / })).toHaveCount(1);
+  await expect(activityLines(area).filter({ hasText: /^Annotation: .* · v2 · / })).toHaveCount(1);
+  await expect(activityLines(area).filter({ hasText: /^Annotation: .* · v1 · / })).toHaveCount(2);
   await expect(await textVersionItems(area, 2)).toHaveText([/^v1\s*Native/, /^v2\s*Correction of v1/]);
+});
+
+test("row panel: no layout shift, J / K walk the rows, Escape from the table keeps it; scenario clicks S1, S2, S9", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await openScenario(page, "S7");
+  const first = textRow(page, "case-0001", "en");
+  const before = await first.boundingBox();
+
+  // S1 (one click): the text name shows everything about a row.
+  await detailsButton(page, "case-0001", "en").click();
+  const panel = rowPanel(page, "case-0001", "en");
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("heading", { level: 2 })).toBeFocused();
+  await expect(page.locator("[inert]")).toHaveCount(0);
+  await expect(first).toHaveAttribute("aria-current", "true");
+  expect(await first.boundingBox()).toEqual(before);
+  const panelBox = await panel.boundingBox();
+  expect(panelBox!.width).toBeLessThanOrEqual(480);
+  expect(Math.round(panelBox!.x + panelBox!.width)).toBe(1280);
+
+  // S2 (one click): a stage cell shows that stage's activity, in the same panel.
+  await rowCell(textRow(page, "case-0002", "en"), "annotation").getByRole("button").click();
+  const filtered = rowPanel(page, "case-0002", "en");
+  await expect(filtered.getByRole("button", { name: "Remove filter Annotation", exact: true })).toBeVisible();
+  await expect(page.getByRole("complementary")).toHaveCount(1);
+
+  // Escape with focus in the table does nothing.
+  await rowBox(page, "case-0003", "en").focus();
+  await page.keyboard.press("Escape");
+  await expect(filtered).toBeVisible();
+
+  // S9 (1 + 9 × Next): ten rows through J; the case group rows are skipped (case-0007 also has de).
+  await detailsButton(page, "case-0001", "en").click();
+  const order = ["case-0002 · en", "case-0003 · en", "case-0004 · en", "case-0005 · en", "case-0006 · en", "case-0007 · en", "case-0007 · de", "case-0008 · en", "case-0009 · en"];
+  for (const name of order) {
+    await page.keyboard.press("j");
+    await expect(page.getByRole("complementary")).toHaveAttribute("aria-label", `Details, ${name}`);
+  }
+  await page.keyboard.press("k");
+  await expect(page.getByRole("complementary")).toHaveAttribute("aria-label", "Details, case-0008 · en");
+
+  // Escape inside closes and returns focus to the opener; the table has not moved.
+  await page.getByRole("complementary").getByRole("heading", { level: 2 }).focus();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("complementary")).toHaveCount(0);
+  await expect(detailsButton(page, "case-0001", "en")).toBeFocused();
+  expect(await first.boundingBox()).toEqual(before);
 });

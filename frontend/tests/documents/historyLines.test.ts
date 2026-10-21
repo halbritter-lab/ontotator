@@ -35,6 +35,11 @@ describe("historyLines", () => {
     ]);
   });
 
+  it("tags every line with its stage for the row panel's Activity filter", () => {
+    const lines = historyLines(walkthroughRow(), [tomSubmission], { me: "lead-0002", now });
+    expect(lines.map(line => line.stage)).toEqual(["review", "annotation", "annotation", "final"]);
+  });
+
   it("names another lead and falls back to the work items while submissions load", () => {
     const lines = historyLines(walkthroughRow(), null, { me: "lead-0009", now });
     expect(lines.map(line => line.text)).toEqual([

@@ -170,7 +170,7 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
         <InlineMessage tone="success">{success}</InlineMessage>
         {link(back, "Back to Documents")}
         {next && documents && <> {link({ name: "projectDocuments", key: projectKey, ...documents,
-          open: [...new Set([...(documents.open ?? []), `${next.case_id}:${next.language}`])] }, `Next decision: ${textLabel(next)}`)}</>}
+          panel: `${next.case_id}:${next.language}`, panel_stage: undefined, panel_tab: undefined }, `Next decision: ${textLabel(next)}`)}</>}
       </div>}
       <LeadDecide report={report} open={open} focusTrigger={focusTrigger}
         onOpen={openIntent}

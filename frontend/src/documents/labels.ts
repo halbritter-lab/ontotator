@@ -13,6 +13,9 @@ export function middleEllipsis(value: string, max: number): string {
   return `${value.slice(0, side)}…${value.slice(value.length - side)}`;
 }
 
+/** One wording for rows outside the plan everywhere in the row panel and its entries (acceptance fixes X14). */
+export const NOT_PLANNED = "Not planned";
+
 /** Latest translation review decision of a version (`translation_reviews.decision`). */
 export type ReviewDecision = string;
 

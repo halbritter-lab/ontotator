@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  caseBox, documentsReady, documentsTab, expandHistory, finalPanel, openFilters, rowAction, rowCell, textRow,
+  caseBox, decisionBlock, detailsButton, documentsReady, documentsTab, openFilters, openRowPanel, rowAction, rowCell, rowPanel, textRow, textVersionItems,
 } from "./documentsHelpers";
 import { authenticatedRequest, TEST_PASSWORD } from "./helpers";
 import { leadScenario, pasteCaseIds, type LeadPerson, type LeadScenario } from "./leadWorkflowHelpers";
@@ -67,7 +67,13 @@ const toast = (page: Page) => page.locator(".ui-toast");
 const live = (page: Page) => page.locator(".documents-page > p[role=\"status\"]");
 /** The table row of one text (case · language). */
 const row = textRow;
-/** A plan chip; in-plan rows show them in the expansion's Plan line, undecided rows also in the "Plan…" popover (VD2). */
+/** The row panel on Details, where the plan chips of an in-plan row live (VD2). */
+async function openPlan(page: Page, caseId: string, language: string): Promise<Locator> {
+  const panel = await openRowPanel(page, caseId, language);
+  await panel.getByRole("tab", { name: "Details", exact: true }).click();
+  return panel;
+}
+/** A plan chip; in-plan rows show them in the row panel's Details, undecided rows also in the "Plan…" popover (VD2). */
 const chip = (page: Page, flag: "Review" | "Annotate", caseId: string, language: string) =>
   page.getByRole("button", { name: `${flag}, ${caseId} · ${language}`, exact: true });
 /** "n texts in m cases selected" of the selection bar (VD4: the selection is a set of texts). */
@@ -249,7 +255,7 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   await filters.getByRole("group", { name: "Review", exact: true }).getByRole("checkbox", { name: "In progress, 6 texts", exact: true }).check();
   await expect(live(page)).toHaveText("6 texts shown");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /^Show history, case-\d{4} · de$/ })).toHaveCount(6);
+  await expect(page.getByRole("button", { name: /^Details, case-\d{4} · de$/ })).toHaveCount(6);
   for (const caseId of s.in_review!) {
     await expect(rowCell(row(page, caseId, "de"), "review")).toHaveText(new RegExp(`In progress\s*${esc(s.display_names.ana)}`));
     await expect(rowCell(row(page, caseId, "de"), "annotation")).toHaveText(/after review/);
@@ -278,9 +284,9 @@ test("DEFAULT_IMPORT: import with 0 extra clicks", async ({ page }) => {
       await expect(rowAction(page, "Assign review…", caseId, language)).toBeVisible();
     }
   }
-  // The chips live in the expansion's Plan line (VD2): both on.
+  // The chips live in the row panel's Details (VD2): both on.
   const first = s.case_ids.de![0];
-  await expandHistory(page, first, "de");
+  await openPlan(page, first, "de");
   await expect(chip(page, "Review", first, "de")).toHaveAttribute("aria-pressed", "true");
   await expect(chip(page, "Annotate", first, "de")).toHaveAttribute("aria-pressed", "true");
   await expect(documentsTab(page, "To assign", 6)).toBeVisible();
@@ -291,17 +297,18 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   await loginLead(page, s);
 
   // Review off on a fr row with Review only (the fixture's "chip" case). The row is in plan, so its chips
-  // sit in the expansion's Plan line (VD2): ▸, then one chip click with the Undo toast.
+  // sit in the row panel's Details (VD2): the text name, Details, then one chip click with the Undo toast.
   const caseId = s.cases!.chip;
   const review = () => chip(page, "Review", caseId, "fr");
   // The lead lands on "Needs your decision" (VD7); the in-plan fr rows are listed under All.
   await documentsTab(page, "All").click();
   await expect(documentsTab(page, "All")).toHaveAttribute("aria-selected", "true");
   const clicks = counter(page);
-  await clicks.click(page.getByRole("button", { name: `Show history, ${caseId} · fr`, exact: true }));
+  await clicks.click(detailsButton(page, caseId, "fr"));
+  await clicks.click(rowPanel(page, caseId, "fr").getByRole("tab", { name: "Details", exact: true }));
   await expect(review()).toHaveAttribute("aria-pressed", "true");
   await clicks.click(review());
-  expect(clicks.total).toBe(2);
+  expect(clicks.total).toBe(3);
   await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Review off`);
   // Out of plan: a muted row under All (VD1), no longer collapsed behind "not in plan · show".
   const collapsed = row(page, caseId, "fr");
@@ -327,7 +334,7 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
 
   // Review off on a review + annotate row with the rule on (the fixture's "acceptance" case) needs the acceptance instead.
   const both = s.cases!.acceptance;
-  await expandHistory(page, both, "fr");
+  await openPlan(page, both, "fr");
   await chip(page, "Review", both, "fr").click();
   const offer = page.getByRole("group", { name: "Annotate without review" });
   await expect(offer.getByText("This translation was reviewed outside Ontocurator — accept it as it is", { exact: true })).toBeVisible();
@@ -421,15 +428,15 @@ test("ACCEPTANCE: annotate without review", async ({ page }) => {
   const accepted = s.not_marked!.at(-1)!;
   const marked = s.marked![0];
   const versions = async (caseId: string) => {
-    const area = await expandHistory(page, caseId, "fr");
-    await area.locator("summary", { hasText: /^Text versions \(1\)$/ }).click();
-    return area.locator("details", { has: page.locator("summary", { hasText: /^Text versions \(1\)$/ }) });
+    const area = await openRowPanel(page, caseId, "fr");
+    await textVersionItems(area, 1);
+    return area.getByRole("tabpanel");
   };
   const lead = (await versions(accepted));
   await expect(lead).toContainText(new RegExp(`Accepted: reviewed outside Ontocurator · Project Lead \\(${esc(s.pseudonyms.lead)}, you\\) · ${TIME} · ${esc(reason)}`));
   const pkg = await versions(marked);
   await expect(pkg).toContainText("Accepted: marked as reviewed in the package · R. Roe, 1 Oct");
-  await evidence(page, "acceptance-text-versions", page.getByRole("region", { name: `History, ${accepted} · fr`, exact: true }));
+  await evidence(page, "acceptance-text-versions", rowPanel(page, marked, "fr"));
 });
 
 test("ROWS: row actions within three clicks", async ({ page }) => {
@@ -437,17 +444,17 @@ test("ROWS: row actions within three clicks", async ({ page }) => {
   await loginLead(page, s);
   const cases = s.cases!;
 
-  // Accept result… with one submission (was "Choose final…", V6): the panel and "Accept as final": 2.
+  // Accept as final… with one submission (was "Choose final…", V6, X14): the row panel and "Accept as final": 2.
   let clicks = counter(page);
-  await clicks.click(rowAction(page, "Accept result…", cases.choose_final, "de"));
-  const accept = finalPanel(page, cases.choose_final, "de");
+  await clicks.click(rowAction(page, "Accept as final…", cases.choose_final, "de"));
+  const accept = decisionBlock(page, cases.choose_final, "de");
   await expect(accept.getByText(/^Accept .+ as final\?$/)).toBeVisible();
   await clicks.click(accept.getByRole("button", { name: "Accept as final", exact: true }));
   expect(clicks.total).toBe(2);
   // VD17: the panel moves to the next final decision of the list (the review_changes case).
-  const next = finalPanel(page, cases.review_changes, "de");
+  const next = decisionBlock(page, cases.review_changes, "de");
   await expect(next.locator(".final-panel-success")).toContainText(`Final result saved for ${cases.choose_final} · de.`);
-  await next.getByRole("button", { name: "Close", exact: true }).click();
+  await rowPanel(page, cases.review_changes, "de").getByRole("button", { name: "Close", exact: true }).first().click();
   await expect(rowCell(row(page, cases.choose_final, "de"), "final")).toHaveText(/^\W*Final/);
 
   // Resolve…: the three options exactly, inline under the row (Change 13); discarding takes 3 (+ typing the reason).
@@ -480,13 +487,13 @@ test("ROWS: row actions within three clicks", async ({ page }) => {
   // Review changes… (PLAN_RESTORED): the panel with "Keep final on v1": 2 (the checkbox confirmation is gone).
   clicks = counter(page);
   await clicks.click(rowAction(page, "Review changes…", cases.review_changes, "de"));
-  const review = finalPanel(page, cases.review_changes, "de");
+  const review = decisionBlock(page, cases.review_changes, "de");
   await expect(review.getByRole("button", { name: "Keep final on v1", exact: true })).toBeVisible();
   await evidence(page, "row-review-changes", review);
   await clicks.click(review.getByRole("button", { name: "Keep final on v1", exact: true }));
   expect(clicks.total).toBe(2);
   await expect(review.locator(".final-panel-success")).toContainText(`Final result saved for ${cases.review_changes} · de.`);
-  await review.getByRole("button", { name: "Close", exact: true }).last().click();
+  await page.getByRole("complementary").getByRole("button", { name: "Close", exact: true }).first().click();
   await expect(rowCell(row(page, cases.review_changes, "de"), "final")).toHaveText(/^\W*Final/);
 });
 
@@ -635,7 +642,7 @@ test("every Progress count opens Documents with the same number of rows", async 
     expect(page.url().endsWith(link.href), `${label}: ${page.url()}`).toBeTruthy();
     await expect(page.locator("table.documents-skeleton")).toHaveCount(0, { timeout: 30_000 });
     await documentsReady(page);
-    const shown = page.getByRole("button", { name: /^Show history, case-\d{4} · [a-z]{2}$/ });
+    const shown = page.getByRole("button", { name: /^Details, case-\d{4} · [a-z]{2}$/ });
     if (Number(count) === 0) {
       await expect(page.getByText(/^(No texts match these filters\.|Nothing needs your decision|Nothing to assign|Nothing in progress|Nothing done yet|No texts yet)$/).first(), label).toBeVisible();
     }

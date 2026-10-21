@@ -25,7 +25,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window
 
 it('opens the comparison with the right side of the compare query when navigated through App', async () => {
   window.history.replaceState(null, '', routeHref({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'target',
-    annotations: refKey(ownRef), compare: refKey(linked), documents: { decision: 'all', open: [`${caseDetail.case_id}:de`] } }));
+    annotations: refKey(ownRef), compare: refKey(linked), documents: { decision: 'all', panel: `${caseDetail.case_id}:de` } }));
   render(<App user={testUser('lead')} />);
   const panel = await screen.findByRole('region', { name: 'Comparison' });
   await waitFor(() => expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'submission', 'sub-2'));

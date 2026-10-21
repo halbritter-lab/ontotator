@@ -1,21 +1,21 @@
 /**
- * Final-result side panel of the Documents page (documents overview spec "Final-result panel", V6,
- * V9 display, VD16, VD17): "Accept result…", "Compare results…" and "Review changes…" open it; it
- * decides (Use as final, Accept as final, Keep, Use the newer result) and then moves to the next
- * final decision of the list.
+ * Decision block of the row panel (acceptance fixes WP-A; documents overview spec "Final-result panel",
+ * V6, V9 display, VD16, VD17): "Accept as final…", "Compare results…" and "Review changes…" open the
+ * panel with this block on top; it decides (Use as final, Accept as final, Keep, Use the newer result)
+ * and then moves the panel to the next final decision of the list.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { api, type DocumentRowView, type DocumentRowsPage, type FinalPanelSubmissionView, type NextStepView, type RowItemView } from "../api/client";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Time } from "../app/Time";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
-import { Button, Dialog, InlineMessage, type ButtonVariant } from "../ui";
+import { Button, InlineMessage, type ButtonVariant } from "../ui";
 import { ConsolidationLauncher } from "../variants/ConsolidationLauncher";
 import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
 import {
   acceptQuestion, AGREEMENT_EXPLANATION, agreementText, barArrows, changedPassagesText, compareSummary, consolidationInputs, decidedLine, decisionKind,
-  keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep, panelTitle, personName, savedText,
+  keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep, personName, savedText,
   submissionLine, submissionWhen, textChangedLine, type NextRow,
 } from "./finalPanelText";
 import { versionName } from "./labels";
@@ -25,11 +25,9 @@ import { acknowledgeableItems, causeLines, notAcceptedLines, OWN_RESULT_REASON, 
 import { useFinalPanel, type FinalPanelData } from "./useFinalPanel";
 import { caseOfTextKey, languageOfTextKey } from "./useTextSelection";
 
-export type PanelSection = "history" | "versions" | "technical";
-
-export interface FinalPanelProps {
+export interface DecisionBlockProps {
   projectKey: string;
-  /** Row shown in the panel, "{case}:{language}" (route parameter `panel`). */
+  /** Row shown in the row panel, "{case}:{language}" (route parameter `panel`). */
   rowKey: string;
   /** Current rows page: the row, the project rule and the list order for the advance (VD17). */
   page: DocumentRowsPage | null;
@@ -39,6 +37,7 @@ export interface FinalPanelProps {
   refreshError?: unknown;
   /** Open on the compare content even when the row has a final ("Change final…"). */
   changeFinal?: boolean;
+  /** "Close" after the last final decision: closes the row panel. */
   onClose: () => void;
   /** A decision was saved: the page records it and reloads the rows. */
   onDecided: (rowKey: string) => void;
@@ -53,12 +52,17 @@ export interface FinalPanelProps {
   onAssign?: (row: DocumentRowView) => void;
   /** "Carry to v2…" with the final's submission, to the corrected version `targetDocumentId`. */
   onCarry?: (row: DocumentRowView, targetDocumentId: string) => void;
-  /** Footer links: open that part of the row's expansion and close the panel. */
-  onSection?: (row: DocumentRowView, section: PanelSection) => void;
-  /** A consolidation was started from the panel: the panel closes. */
+  /** A consolidation was started from the block. */
   onConsolidationStarted?: (row: DocumentRowView) => void;
-  /** Focus target when the panel closes (the shown row's action); default: the element focused before it opened. */
-  returnFocus?: () => HTMLElement | null;
+  /** Moves focus to the row panel's heading (after a save or "Review again"). */
+  onFocusHeading?: () => void;
+  /**
+   * A row without a final decision step: the block shows only once its data lists at least two submissions on
+   * one text version (so "Consolidate…" is possible), else nothing.
+   */
+  optional?: boolean;
+  /** The block holds input that a row switch would discard (the consolidation launcher is open). */
+  onDirtyChange?: (dirty: boolean) => void;
   /** Signed-in username (consolidation launcher). */
   username?: string;
   now?: Date;
@@ -68,7 +72,7 @@ export interface FinalPanelProps {
 interface Success { text: string; bar: string }
 interface Pending { rowKey: string; before: DocumentRowsPage }
 
-/** Polite announcements inside the panel (the page's region is `inert` while the panel is open). */
+/** Polite announcements of the block (saves and their outcome). */
 function useAnnouncer() {
   const [message, setMessage] = useState("");
   const timer = useRef<number | undefined>(undefined);
@@ -81,12 +85,11 @@ function useAnnouncer() {
   return { message, announce };
 }
 
-export function FinalPanel(props: FinalPanelProps): JSX.Element {
+export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
   const { projectKey, rowKey, page, refreshError = null, onClose, onDecided, onAdvance, onReload } = props;
   const caseId = caseOfTextKey(rowKey);
   const language = languageOfTextKey(rowKey);
   const state = useFinalPanel(projectKey, caseId, language, page);
-  const bodyRef = useRef<HTMLDivElement>(null);
   const { message, announce } = useAnnouncer();
   const [busy, setBusy] = useState<string | null>(null);
   const [failure, setFailure] = useState<FinalConfirmFailure | null>(null);
@@ -140,7 +143,9 @@ export function FinalPanel(props: FinalPanelProps): JSX.Element {
 
   useEffect(() => {
     if (!focusHeading) return;
-    bodyRef.current?.closest(".ui-dialog")?.querySelector<HTMLElement>(".ui-dialog-heading")?.focus();
+    props.onFocusHeading?.();
+    // Only a new request moves focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusHeading]);
 
   const save = (request: FinalConfirmRequest, triggerId: string) => {
@@ -166,6 +171,9 @@ export function FinalPanel(props: FinalPanelProps): JSX.Element {
     setFocusHeading(value => value + 1);
   };
   const close = () => { if (!busy) onClose(); };
+  const headingId = useId();
+  const consolidable = state.data ? consolidationDocuments(listedSubmissions(state.data.panel.submissions ?? [])).length > 0 : false;
+  if (props.optional && !consolidable && !noneLeft && !success && !failure) return null;
 
   let content: ReactNode;
   if (noneLeft) {
@@ -181,16 +189,15 @@ export function FinalPanel(props: FinalPanelProps): JSX.Element {
       busy={busy} onSave={save} onAnnounce={announce} />;
   }
 
-  return <Dialog open variant="side" title={panelTitle(caseId, language)} onClose={close} returnFocus={props.returnFocus}>
-    <div ref={bodyRef} className="final-panel">
-      <p className="visually-hidden" role="status" aria-live="polite">{message}</p>
-      {success && <div className="notice notice-success final-panel-success">
-        <div className="notice-content"><p>{success.text}</p>{success.bar && <p>{success.bar}</p>}</div>
-      </div>}
-      {failure && <FailureNotice failure={failure} onReview={reviewAgain} onRetry={retry} busy={busy !== null} />}
-      {content}
-    </div>
-  </Dialog>;
+  return <section className="final-panel row-panel-decision" aria-labelledby={headingId}>
+    <h3 id={headingId} className="row-panel-decision-title">Final result</h3>
+    <p className="visually-hidden" role="status" aria-live="polite">{message}</p>
+    {success && <div className="notice notice-success final-panel-success">
+      <div className="notice-content"><p>{success.text}</p>{success.bar && <p>{success.bar}</p>}</div>
+    </div>}
+    {failure && <FailureNotice failure={failure} onReview={reviewAgain} onRetry={retry} busy={busy !== null} />}
+    {content}
+  </section>;
 }
 
 function FailureNotice({ failure: shown, onReview, onRetry, busy: saving }: { failure: FinalConfirmFailure; onReview: () => void; onRetry: () => void; busy: boolean }): JSX.Element {
@@ -207,7 +214,7 @@ function FailureNotice({ failure: shown, onReview, onRetry, busy: saving }: { fa
   </div>;
 }
 
-function NoneLeft({ other, onRowAction, onClose }: { other: NextRow | null; onRowAction?: FinalPanelProps["onRowAction"]; onClose: () => void }): JSX.Element {
+function NoneLeft({ other, onRowAction, onClose }: { other: NextRow | null; onRowAction?: DecisionBlockProps["onRowAction"]; onClose: () => void }): JSX.Element {
   return <div className="final-panel-none">
     <p>No more final results to decide.</p>
     {other && onRowAction && <p><Button variant="quiet" onClick={() => onRowAction(other.row, other.step)}>
@@ -217,7 +224,7 @@ function NoneLeft({ other, onRowAction, onClose }: { other: NextRow | null; onRo
   </div>;
 }
 
-interface ContentProps extends FinalPanelProps {
+interface ContentProps extends DecisionBlockProps {
   row: DocumentRowView;
   page: DocumentRowsPage;
   data: FinalPanelData;
@@ -280,7 +287,7 @@ function consolidationDocuments(submissions: readonly FinalPanelSubmissionView[]
 }
 
 function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionView; onCompareAll: () => void }): JSX.Element {
-  const { row, data, submission, busy, onSave, onAnnounce, onAssign, onClose, guidelineCurrent, now } = props;
+  const { row, data, submission, busy, onSave, onAnnounce, onAssign, guidelineCurrent, now } = props;
   const id = useId();
   const { route, link } = useEditorRoute(props);
   const listed = listedSubmissions(data.panel.submissions ?? []);
@@ -294,22 +301,20 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
       {link(route(submission.document_id, submission.submission_id), "Open in editor")}
     </p>
     <p className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</p>
-    <div className="final-panel-actions">
-      {!isFinal && <ChoiceButton id={triggerId} label="Accept as final" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
-        onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />}
-      <Button size="sm" variant="quiet" onClick={() => { if (!busy) onClose(); }}>Cancel</Button>
-    </div>
+    {!isFinal && <div className="final-panel-actions">
+      <ChoiceButton id={triggerId} label="Accept as final" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
+        onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />
+    </div>}
     <div className="final-panel-links">
       {onAssign && <Button size="sm" variant="quiet" onClick={() => onAssign(row)}>Assign annotation review…</Button>}
       {submission.kind === "consolidation" && compared > 1 && <Button size="sm" variant="quiet" onClick={props.onCompareAll}>{`Compare all ${compared}…`}</Button>}
     </div>
     <Consolidate {...props} listed={listed} withHint={false} />
-    <SectionLinks {...props} />
   </div>;
 }
 
 function DecidedContent(props: ContentProps & { onChange: () => void }): JSX.Element {
-  const { row, data, onAssign, onClose, guidelineCurrent, now, busy } = props;
+  const { row, data, onAssign, guidelineCurrent, now } = props;
   const { route, link } = useEditorRoute(props);
   const final = (data.panel.submissions ?? []).find(item => item.submission_id === row.final?.submission_id) ?? null;
   const listed = listedSubmissions(data.panel.submissions ?? []);
@@ -322,14 +327,12 @@ function DecidedContent(props: ContentProps & { onChange: () => void }): JSX.Ele
       </p>
       <p className="cell-secondary">{submissionGuidelineLabel(final.guideline_version, final.guideline_withdrawn, guidelineCurrent)}</p>
     </>}
-    <div className="final-panel-actions">
-      {listed.length > 1 && <Button size="sm" onClick={props.onChange}>Change final…</Button>}
-      <Button size="sm" variant="quiet" onClick={() => { if (!busy) onClose(); }}>Close</Button>
-    </div>
+    {listed.length > 1 && <div className="final-panel-actions">
+      <Button size="sm" onClick={props.onChange}>Change final…</Button>
+    </div>}
     {onAssign && <div className="final-panel-links">
       <Button size="sm" variant="quiet" onClick={() => onAssign(row)}>Assign annotation review…</Button>
     </div>}
-    <SectionLinks {...props} />
   </div>;
 }
 
@@ -394,14 +397,20 @@ function CompareContent(props: ContentProps): JSX.Element {
       })}</tbody>)}
     </table>
     <Consolidate {...props} listed={listed} withHint />
-    <SectionLinks {...props} />
   </div>;
 }
 
-/** "Consolidate…": the existing launcher inside the panel; a started consolidation closes the panel. */
+/** "Consolidate…": the existing launcher inside the block; while it is open the block holds unsaved input. */
 function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[]; withHint: boolean }): JSX.Element | null {
-  const { row, projectKey, listed, withHint, username = "", data, onConsolidationStarted, now } = props;
+  const { row, projectKey, listed, withHint, username = "", data, onConsolidationStarted, onDirtyChange, now } = props;
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    onDirtyChange?.(true);
+    return () => onDirtyChange?.(false);
+    // Only the launcher's open state counts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const documents = consolidationDocuments(listed);
   const compared = listed.find(item => item.comparable)?.document_id;
   const documentId = compared && documents.includes(compared) ? compared : documents[0];
@@ -418,15 +427,6 @@ function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[];
     {open && <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={username} rows={rows} defaultOpen
       defaultSelected={preselected} onStarted={() => onConsolidationStarted?.(row)} />}
   </div>;
-}
-
-function SectionLinks({ row, onSection }: ContentProps): JSX.Element | null {
-  if (!onSection) return null;
-  return <p className="final-panel-sections">
-    <Button size="sm" variant="quiet" onClick={() => onSection(row, "history")}>History</Button>{" · "}
-    <Button size="sm" variant="quiet" onClick={() => onSection(row, "versions")}>Text versions</Button>{" · "}
-    <Button size="sm" variant="quiet" onClick={() => onSection(row, "technical")}>Technical details</Button>
-  </p>;
 }
 
 const suffixOf = (item: RowItemView): string => (item.cause_id.startsWith(`${item.code}:`) ? item.cause_id.slice(item.code.length + 1) : item.cause_id);
@@ -472,6 +472,5 @@ function ReviewContent(props: ContentProps): JSX.Element {
       {newer && <ChoiceButton id={newerId} label="Use the newer result" blocked={!newer.eligible} busy={busy} onAnnounce={onAnnounce}
         onChoose={() => onSave(selectRequest(row, data.submissions, newer, newerId), newerId)} />}
     </div>
-    <SectionLinks {...props} />
   </div>;
 }

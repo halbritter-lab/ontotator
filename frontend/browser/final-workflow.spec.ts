@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { documentsReady, expandHistory, finalPanel, textRow } from './documentsHelpers';
+import { activityLines, decisionBlock, documentsReady, rowPanel, textRow } from './documentsHelpers';
 import { authenticatedRequest, loginExisting, selectText, submitCase } from './helpers';
 
 type Assignment = components['schemas']['AssignmentView'];
@@ -94,18 +94,22 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await submitCase(author.page);
     const carried = await value<Opened>(author.page, `/api/v1/assignments/${first.id}/open`, 'POST');
     const carriedId = carried.assignment.last_submission_id!; expect(carriedId).not.toBe(initialId);
-    // Consolidation starts in the Documents row's expansion; the final selection happens in the final-result panel (V6).
+    // Consolidation starts only from the row panel's decision block ("Consolidate…"); the final selection happens there too (V6).
     const docs = await value<components['schemas']['ProjectDocumentSummary'][]>(page, `${root(s)}/documents`);
     const language = docs.find(doc => doc.document_id === s.documents.source)!.language;
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
     await documentsReady(page);
-    const area = await expandHistory(page, s.case_id, language);
-    // History: the three submissions (initial, independent second, carried) with their finding counts.
-    await expect(area.getByRole('listitem').filter({ hasText: /^Annotation: .* · \d+ findings? · / })).toHaveCount(3);
-    await area.getByText('Start consolidation…', { exact: true }).click();
-    await area.getByRole('button', { name: 'Consolidate results', exact: true }).click();
+    const decide = new RegExp(`^(Accept as final|Compare results)…, ${s.case_id} · ${language}$`);
+    // Work is still open (no final decision yet): the text name opens the row panel; two submissions offer Consolidate….
+    await page.getByRole('button', { name: `Details, ${s.case_id} · ${language}`, exact: true }).click();
+    const area = rowPanel(page, s.case_id, language);
+    // Activity: the three submissions (initial, independent second, carried) with their finding counts.
+    await expect(activityLines(area).filter({ hasText: /^Annotation: .* · \d+ findings? · / })).toHaveCount(3);
+    await expect(area.getByText('Start consolidation…')).toHaveCount(0);
+    await decisionBlock(page, s.case_id, language).getByRole('button', { name: 'Consolidate…', exact: true }).click();
     const launcher = area.getByRole('region', { name: 'Consolidate submitted results', exact: true });
     // The inputs are named by person and round (no codes); the exact submissions are picked by their data attribute.
+    for (const box of await launcher.getByRole('checkbox').all()) await box.uncheck();
     await launcher.locator(`input[data-submission-id="${carriedId}"]`).check();
     await launcher.locator(`input[data-submission-id="${secondId}"]`).check();
     await launcher.getByLabel('Consolidation reviewer').selectOption(s.users.consolidator);
@@ -113,6 +117,7 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await launcher.getByRole('button', { name: 'Start consolidation', exact: true }).click();
     const consolidation = await (await launched).json() as Round;
     expect(consolidation.kind).toBe('consolidation'); expect(new Set(consolidation.input_submission_ids)).toEqual(new Set([carriedId, secondId]));
+    await area.getByRole('button', { name: 'Close', exact: true }).click();
     await reviewer.page.goto(`/#/tasks/${consolidation.assignment_id}`);
     await expect(reviewer.page.getByText('Consolidation review', { exact: true })).toBeVisible();
     const proposals = reviewer.page.locator('.sidebar .doc-item').filter({ hasText: 'HP:0001252' });
@@ -126,9 +131,9 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     const consolidated = await value<Opened>(reviewer.page, `/api/v1/assignments/${consolidation.assignment_id}/open`, 'POST');
     const finalId = consolidated.assignment.last_submission_id!;
     await page.reload(); await documentsReady(page);
-    // "Accept result…" (the consolidation alone) or "Compare results…" opens the panel; choose the exact consolidation.
-    await page.getByRole('button', { name: new RegExp(`^(Accept|Compare) results?…, ${s.case_id} · ${language}$`) }).click();
-    const panel = finalPanel(page, s.case_id, language);
+    // "Accept as final…" (the consolidation alone) or "Compare results…" opens the row panel; choose the exact consolidation.
+    await page.getByRole('button', { name: decide }).click();
+    const panel = decisionBlock(page, s.case_id, language);
     await expect(editorLink(panel, finalId)).toHaveCount(1);
     const selecting = page.waitForResponse(r => r.request().method() !== 'GET' && /\/final/.test(new URL(r.url()).pathname));
     const accept = panel.getByRole('button', { name: 'Accept as final', exact: true });

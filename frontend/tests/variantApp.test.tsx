@@ -81,7 +81,7 @@ it('documents Open link preserves opaque IDs, guarded navigation and native modi
   vi.spyOn(api, 'listAssignments').mockResolvedValue([]);
   const onNavigate = vi.fn();
   render(<DocumentsPage projectKey="p/ %" canManage query={{}} onNavigate={onNavigate} />);
-  const link = await screen.findByRole('link', { name: `Open ${caseDetail.case_id} · en` });
+  const link = await screen.findByRole('link', { name: `Open in editor, ${caseDetail.case_id} · en` });
   const destination = { name: 'projectCase' as const, key: 'p/ %', caseId: caseDetail.case_id, variant: 'z/doc' };
   expect(link.getAttribute('href')).toBe(routeHref(destination));
   fireEvent.click(link, { ctrlKey: true }); expect(onNavigate).not.toHaveBeenCalled();

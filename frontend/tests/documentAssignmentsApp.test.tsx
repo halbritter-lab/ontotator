@@ -42,7 +42,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(n
 it("keeps the SAME focused ID input while actual App navigation controls every typed query", async () => {
   const user = userEvent.setup();
   render(<App user={testUser("lead", { is_system_admin: false })} />);
-  await screen.findByRole("link", { name: "Open z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
   const input = screen.getByLabelText("Case ID or text");
   await user.type(input, "abc");
   await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?q=abc"));
@@ -62,7 +62,7 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   vi.spyOn(api, "previewAssignmentBatch").mockImplementation(async (_key, body) => batchPreview(body));
   vi.spyOn(api, "commitAssignmentBatch").mockResolvedValue({ created: [{ ...assignment, username: "alice" }] });
   render(<App user={testUser("lead", { is_system_admin: false })} />);
-  await screen.findByRole("link", { name: "Open z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
   fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 text)" }));
   const bar = screen.getByRole("region", { name: "Selection" });
   expect(within(bar).getByText("1 text in 1 case selected")).toBeTruthy();
@@ -77,12 +77,12 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   await waitFor(() => expect(api.listAssignments).toHaveBeenCalledTimes(2));
   expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
-  expect(screen.getAllByRole("link", { name: /^Open \S+ · \S+$/ }).map(link => link.getAttribute("aria-label") ?? link.textContent)).toEqual(["Open z/doc · en", "Open a · de"]);
+  expect(screen.getAllByRole("link", { name: /^Open in editor, \S+ · \S+$/ }).map(link => link.getAttribute("aria-label") ?? link.textContent)).toEqual(["Open in editor, z/doc · en", "Open in editor, a · de"]);
   expect(window.location.hash).toBe("#/projects/p%2Fkey/documents");
 });
 
 it("reopens the submitted assignee from its real Text versions menu and reloads the assignment status", async () => {
-  window.history.replaceState(null, "", "#/projects/p%2Fkey/documents?open=z%2Fdoc%3Aen");
+  window.history.replaceState(null, "", "#/projects/p%2Fkey/documents?panel=z%2Fdoc%3Aen&panel_tab=versions");
   const submitted = { ...assignment, status: "submitted" as const };
   const reopened = { ...assignment, status: "reopened" as const };
   const z = (status: "submitted" | "reopened") => zRow({ work: [work({ assignment_id: 3, document_id: "z/doc", author_label: "A", status })] });

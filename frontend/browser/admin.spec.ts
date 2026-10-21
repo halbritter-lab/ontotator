@@ -124,18 +124,17 @@ async function selectProject(page: Page, key: string) {
 /** The navigation link "Documents", with the decision counter "Documents, n need your decision" once O8 shows it (V3). */
 const DOCUMENTS_LINK = /^Documents(, \d+ needs? your decision)?$/;
 
-/** Disclosure of the Documents row of one text in English ("Show history, {text} · en"). */
-const rowDisclosure = (page: Page, caseId: string) =>
-  page.getByRole("button", { name: `Show history, ${caseId} · en`, exact: true });
+/** The text name of the Documents row of one text in English: "Details, {text} · en" (opens the row panel). */
+const rowDetails = (page: Page, caseId: string) =>
+  page.getByRole("button", { name: `Details, ${caseId} · en`, exact: true });
 
-/** Expand the Documents row of a text and open its "Text versions" list (one version per text here). */
+/** Open the row panel of a text on "Versions (n)" (one version per text here). */
 async function openTextVersions(page: Page, caseId: string) {
   // "Documents" opens "Needs your decision" while anything waits for the lead (VD7); the row is under All.
   await documentsTab(page, "All").click();
-  const disclosure = rowDisclosure(page, caseId);
-  if ((await disclosure.getAttribute("aria-expanded")) !== "true") await disclosure.click();
-  const area = page.getByRole("region", { name: `History, ${caseId} · en`, exact: true });
-  await area.locator("summary").filter({ hasText: /^Text versions \(\d+\)$/ }).click();
+  const area = page.getByRole("complementary", { name: `Details, ${caseId} · en`, exact: true });
+  if (!(await area.count())) await rowDetails(page, caseId).click();
+  await area.getByRole("tab", { name: /^Versions \(\d+\)$/ }).click();
   const version = area.locator("li.text-version");
   await expect(version).toHaveCount(1);
   return version;
@@ -154,18 +153,18 @@ async function importTwoDocuments(page: Page) {
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
   await expect(preview).toContainText("2 documents added");
   await expect(preview).toContainText("1 with normalized text");
-  const rows = page.getByRole("button", { name: /^Show history, / });
+  const rows = page.getByRole("button", { name: /^Details, / });
   await expect(rows).toHaveCount(0);
   await upload.getByRole("button", { name: "Import 2 texts", exact: true }).click();
   // The upload dialog closes itself after the import; Documents reports the result.
   await expect(upload).toHaveCount(0);
   await expect(page.locator(".ui-toast-message")).toHaveText("Imported 2 documents and 0 proposals.");
-  // One row per text and language, both collapsed, each with its lead action: "Assign annotation…" when the
+  // One row per text and language, no row panel open, each with its lead action: "Assign annotation…" when the
   // project's import plan annotates sources, else "Plan…" (VD1, VD2, VD3).
   await documentsTab(page, "All").click();
   await expect(rows).toHaveCount(2);
   for (const caseId of ["one", "two"]) {
-    await expect(rowDisclosure(page, caseId)).toHaveAttribute("aria-expanded", "false");
+    await expect(rowDetails(page, caseId)).toBeVisible();
     await expect(rowAction(page, "Assign annotation…", caseId, "en").or(rowAction(page, "Plan…", caseId, "en"))).toBeVisible();
   }
 }

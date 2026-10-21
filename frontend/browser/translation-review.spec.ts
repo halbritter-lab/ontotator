@@ -62,16 +62,17 @@ async function leadContext(browser: Browser, s: Scenario) {
   const page = await context.newPage(); await loginExisting(page, s.users.lead);
   return { page, close: () => context.close() };
 }
-/** The "Text versions" entry of one exact document in its expanded Documents row (text · language). */
+/** The "Versions" entry of one exact document in its Documents row panel (text · language). */
 async function documentRow(page: Page, id: string) {
   const project = decodeURIComponent(/#\/projects\/([^/?]+)\/documents/.exec(page.url())![1]);
   const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
   const name = `${doc.case_id} · ${doc.language}`;
-  const disclosure = page.getByRole('button', { name: `Show history, ${name}`, exact: true });
-  if ((await disclosure.getAttribute('aria-expanded')) !== 'true') await disclosure.click();
-  const versions = page.getByRole('region', { name: `History, ${name}`, exact: true }).locator('details').filter({ has: page.locator('summary', { hasText: /^Text versions \(\d+\)$/ }) });
-  if (!await versions.evaluate(node => (node as HTMLDetailsElement).open)) await versions.locator(':scope > summary').click();
+  // The row panel (text name "Details, …") on "Versions (n)".
+  const panel = page.getByRole('complementary', { name: `Details, ${name}`, exact: true });
+  if (!await panel.count()) await page.getByRole('button', { name: `Details, ${name}`, exact: true }).click();
+  await panel.getByRole('tab', { name: /^Versions \(\d+\)$/ }).click();
+  const versions = panel.getByRole('tabpanel');
   const version = versions.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
   await expect(version).toHaveCount(1);
   return version;
@@ -132,12 +133,16 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
     await lead.page.goto(documentsUrl(s));
     const row = await documentRow(lead.page, s.documents.target);
     await expect(row).toContainText('Ready for review');
-    // Work plan: the lead turns Review on in the expansion's Plan line (VD2), then assigns it from the row action.
+    // Work plan: the lead turns Review on in the row panel's Details (VD2), then assigns it from the row action.
     const rowName = `${s.case_id} · de`;
     const table = lead.page.getByRole('table', { name: 'Documents', exact: true });
-    const review = lead.page.getByRole('region', { name: `History, ${rowName}`, exact: true }).getByRole('button', { name: `Review, ${rowName}`, exact: true });
+    const panel = lead.page.getByRole('complementary', { name: `Details, ${rowName}`, exact: true });
+    await panel.getByRole('tab', { name: 'Details', exact: true }).click();
+    const review = panel.getByRole('button', { name: `Review, ${rowName}`, exact: true });
     if ((await review.getAttribute('aria-pressed')) !== 'true') await review.click();
     await expect(review).toHaveAttribute('aria-pressed', 'true');
+    // The panel lies over the right part of the table: close it before the row action.
+    await panel.getByRole('button', { name: 'Close', exact: true }).click();
     await table.getByRole('button', { name: `Assign review…, ${rowName}`, exact: true }).click();
     const dialog = lead.page.getByRole('dialog', { name: 'Assign translation review', exact: true });
     await dialog.getByRole('table', { name: 'Members' }).getByRole('radio', { name: new RegExp(s.users.reviewer) }).check();

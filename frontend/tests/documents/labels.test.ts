@@ -1,8 +1,11 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { decisionCategoryLabels, formatTime, issueAriaLabel, middleEllipsis, statusBadgeText, versionText, workText, type WorkItemLike } from "../../src/documents/labels";
+import { decisionCategoryLabels, formatTime, issueAriaLabel, middleEllipsis, NOT_PLANNED, statusBadgeText, versionText, workText, type WorkItemLike } from "../../src/documents/labels";
 
 describe("documents labels", () => {
+  it("names rows outside the plan with one wording, Not planned", () => {
+    expect(NOT_PLANNED).toBe("Not planned");
+  });
   it("re_exports_shared_helpers", () => {
     expect(formatTime("2026-10-19T00:57:00", { now: new Date("2026-10-19T12:00:00") })).toBe("19 Oct, 00:57");
   });

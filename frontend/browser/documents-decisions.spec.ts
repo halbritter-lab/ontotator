@@ -12,7 +12,7 @@
 import { expect, request as playwrightRequest, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
 import {
-  documentsReady, documentsScenario, documentsTab, finalPanel, historyToggle, rowAction, rowCell, textRow, expandHistory,
+  activityLines, decisionBlock, detailsButton, documentsReady, documentsScenario, documentsTab, openRowPanel, rowAction, rowCell, rowPanel, textRow,
   type DocumentsScenario,
 } from "./documentsHelpers";
 import { authenticatedRequest, loginExisting, TEST_PASSWORD } from "./helpers";
@@ -103,8 +103,8 @@ async function assignmentOf(page: Page, s: DocumentsScenario, documentId: string
 
 /** The visit badge ("Resolved" / "Changed: …") next to a row header. */
 const visitBadge = (row: Locator) => row.locator(".documents-row-badge");
-/** The panel's polite live region (the page is inert while the panel is open). */
-const panelLive = (panel: Locator) => panel.locator('.final-panel > p[role="status"]');
+/** The decision block's polite live region. */
+const panelLive = (panel: Locator) => panel.locator(':scope > p[role="status"]');
 /** Activate a focusable ``aria-disabled`` control by keyboard (Playwright's click refuses such elements). */
 async function activate(control: Locator) {
   await control.focus();
@@ -113,23 +113,23 @@ async function activate(control: Locator) {
 /** Open the panel through the row's "Review changes…" action. */
 async function reviewChanges(page: Page, caseId: string, language: string): Promise<Locator> {
   await rowAction(page, "Review changes…", caseId, language).click();
-  const panel = finalPanel(page, caseId, language);
+  const panel = decisionBlock(page, caseId, language);
   await expect(panel).toBeVisible();
   await expect(panel.getByText("Loading submissions…")).toHaveCount(0);
   return panel;
 }
 
-test("first selection: Accept result… opens the panel, saves, announces and reports no decision left", async ({ page }) => {
+test("first selection: Accept as final… opens the row panel, saves, announces and reports no decision left", async ({ page }) => {
   const { s } = await prepare(page, "S13");
   const caseId = "case-0713";
   await openDocuments(page, s);
   const en = textRow(page, caseId, "en");
   await expect(rowCell(en, "final")).toHaveText(/Your choice\s*1 submission/);
 
-  // "Choose final…" became "Accept result…" (one submission, V6); here it follows "Carry to v2…" in the "+1" menu.
+  // "Choose final…" became "Accept as final…" (one submission, V6, X14); here it follows "Carry to v2…" in the "+1" menu.
   await page.getByRole("button", { name: `+1 more action, ${caseId} · en`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Accept result…", exact: true }).click();
-  const panel = finalPanel(page, caseId, "en");
+  await page.getByRole("menuitem", { name: "Accept as final…", exact: true }).click();
+  const panel = decisionBlock(page, caseId, "en");
   await expect(panel.getByText(/^Accept .+ as final\?$/)).toBeVisible();
   await expect(panel.getByRole("link", { name: "Open in editor", exact: true })).toBeVisible();
   await panel.getByRole("button", { name: "Accept as final", exact: true }).click();
@@ -138,7 +138,7 @@ test("first selection: Accept result… opens the panel, saves, announces and re
   await expect(panel.locator(".final-panel-success")).toContainText(`Final result saved for ${caseId} · en.`);
   await expect(panelLive(panel)).toHaveText("Final result saved. No more final results to decide.");
   await expect(panel.getByText("No more final results to decide.", { exact: true })).toBeVisible();
-  await expect(panel.locator(".ui-dialog-heading")).toBeFocused();
+  await expect(rowPanel(page, caseId, "en").getByRole("heading", { level: 2 })).toBeFocused();
   await panel.getByRole("button", { name: "Close", exact: true }).last().click();
   await expect(panel).toHaveCount(0);
   await expect(rowCell(en, "final")).toHaveText(/^\W*Final/);
@@ -267,19 +267,19 @@ test("S2 keep under a decision filter: the row turns Resolved and the panel move
   await openDocuments(page, s, "?decision=confirm-final");
   await expect(textRow(page, caseId, "es")).toBeVisible();
   await expect(textRow(page, caseId, "fr")).toBeVisible();
-  await expect(historyToggle(page, caseId, "de")).toHaveCount(0);
+  await expect(detailsButton(page, caseId, "de")).toHaveCount(0);
 
   const panel = await reviewChanges(page, caseId, "es");
   await expect(panel.getByText(`Round 1 · ${labels["ann-0001"]} is abandoned.`, { exact: true })).toBeVisible();
   await panel.getByRole("button", { name: "Keep final on v1", exact: true }).click();
 
   // VD17: after the decision the panel shows the next final decision of the list (fr).
-  const next = finalPanel(page, caseId, "fr");
+  const next = decisionBlock(page, caseId, "fr");
   await expect(next).toBeVisible();
   await expect(next.locator(".final-panel-success")).toContainText(`Final result saved for ${caseId} · es.`);
   await expect(panelLive(next)).toHaveText(`Final result saved. Next: ${caseId} · fr.`);
   await expect(next.getByText(`Round 1 · ${labels["ann-0001"]} is abandoned.`, { exact: true })).toBeVisible();
-  await next.getByRole("button", { name: "Close", exact: true }).last().click();
+  await rowPanel(page, caseId, "fr").getByRole("button", { name: "Close", exact: true }).first().click();
 
   // The kept row stays visible and Resolved.
   await expect(visitBadge(textRow(page, caseId, "es"))).toHaveText("Resolved");
@@ -340,8 +340,8 @@ test("S13 session ends during a decision: nothing is saved and the decision stay
   const caseId = "case-0713";
   await openDocuments(page, s);
   await page.getByRole("button", { name: `+1 more action, ${caseId} · en`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Accept result…", exact: true }).click();
-  const panel = finalPanel(page, caseId, "en");
+  await page.getByRole("menuitem", { name: "Accept as final…", exact: true }).click();
+  const panel = decisionBlock(page, caseId, "en");
   const accept = panel.getByRole("button", { name: "Accept as final", exact: true });
   await expect(accept).toBeVisible();
   await page.context().clearCookies();
@@ -362,15 +362,15 @@ test("S12 Resume task opens the report with the pause preselected; releasing it 
   // The fr task is paused by the open en report: a history line with "Open report", not a decision.
   await openDocuments(page, s);
   await expect(rowAction(page, "Resume task…", caseId, "fr")).toHaveCount(0);
-  const fr = await expandHistory(page, caseId, "fr");
-  const paused = fr.getByRole("listitem").filter({ hasText: /^Task paused/ });
+  const fr = await openRowPanel(page, caseId, "fr");
+  const paused = activityLines(fr).filter({ hasText: /^Annotation Task paused/ });
   await expect(paused.getByRole("link", { name: "Open report", exact: true })).toHaveAttribute("href", new RegExp(`/problem-reports/${esc(String((s.reports as Record<string, string>).open))}`));
-  await expect(fr.getByRole("listitem").filter({ hasText: new RegExp(personPattern(labels["ann-0002"])) }).first()).toBeVisible();
+  await expect(activityLines(fr).filter({ hasText: new RegExp(personPattern(labels["ann-0002"])) }).first()).toBeVisible();
 
   // de: the task is paused, but its report is resolved: "Resume task…" (row action) opens the report with the pause preselected.
   await openDocuments(page, s, "?decision=report-or-pause");
   // The filtered list has loaded (fr is not a decision), so the visit remembers de.
-  await expect(historyToggle(page, caseId, "fr")).toHaveCount(0);
+  await expect(detailsButton(page, caseId, "fr")).toHaveCount(0);
   await expect(rowCell(textRow(page, caseId, "de"), "annotation")).toContainText("Paused");
   await rowAction(page, "Resume task…", caseId, "de").click();
 
@@ -406,8 +406,8 @@ test("S14 waiting: an open translation review and open work after an early selec
   await expect(rowCell(en, "annotation")).toContainText("1 of 1 submitted");
   await expect(rowCell(en, "waiting")).toHaveText(labels["ann-0002"]);
   await expect(rowCell(en, "action")).toHaveText("");
-  const area = await expandHistory(page, caseId, "en");
-  await expect(area.getByRole("listitem").filter({ hasText: new RegExp(`^Annotation: ${esc(labels["ann-0002"])} · Round 1 · `) })).toHaveCount(1);
+  const area = await openRowPanel(page, caseId, "en");
+  await expect(activityLines(area).filter({ hasText: new RegExp(`^Annotation: ${esc(labels["ann-0002"])} · Round 1 · `) })).toHaveCount(1);
 });
 
 test("S15 the lead's own result is not selectable when adjudication is separate", async ({ page }) => {
@@ -416,10 +416,10 @@ test("S15 the lead's own result is not selectable when adjudication is separate"
   await openDocuments(page, s);
   await expect(page.getByRole("navigation", { name: "Pages" })).toContainText("Page 1 of 2");
   // VD5: groups never collapse; every row of the page is shown.
-  await expect(historyToggle(page, "case-0002", "en")).toBeVisible();
+  await expect(detailsButton(page, "case-0002", "en")).toBeVisible();
 
   await rowAction(page, "Compare results…", caseId, "en").click();
-  const panel = finalPanel(page, caseId, "en");
+  const panel = decisionBlock(page, caseId, "en");
   const lead = labels.lead.replace(/ \(.*\)$/, "");
   const own = panel.getByRole("row").filter({ has: page.getByRole("rowheader").filter({ hasText: new RegExp(`^${esc(lead)}`) }) });
   const blocked = own.getByRole("button", { name: "Use as final", exact: true });

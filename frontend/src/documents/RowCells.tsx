@@ -1,14 +1,15 @@
 /**
  * Cell renderers of a Documents text row, shared by the table and the narrow cards (documents
- * overview "Columns"): Text (row header), the stage cells, Waiting on, Last activity with the
- * history disclosure. Each renderer takes the row view plus explicit options; none holds state.
+ * overview "Columns"): Text (row header with the "Details" entry of the row panel), the stage cells
+ * (the filtered entry of the row panel), Waiting on, Last activity. Each renderer takes the row view
+ * plus explicit options; none holds state.
  */
 import { useId, type MouseEvent, type ReactNode } from "react";
 import type { DocumentRowView, DocumentVersionView, FinalSelectionSummary } from "../api/client";
 import { kindLabels, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
-import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
-import { IconCheck, IconChevronRight } from "../ui/icons";
+import { routeHref, type PanelStage, type ProjectDocumentsQuery, type Route } from "../app/router";
+import { IconCheck } from "../ui/icons";
 import { StageCell } from "../ui/StageCell";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
@@ -38,7 +39,7 @@ const NOTE_LABELS: Readonly<Record<string, string>> = {
   REVIEWER_NEEDED: "Reviewer needed",
 };
 
-/** `"{case}:{language}"`: the row key used in `query.open`. */
+/** `"{case}:{language}"`: the row key used in `query.panel`. */
 export const rowKeyOf = (row: Pick<DocumentRowView, "case_id" | "language">): string => `${row.case_id}:${row.language}`;
 
 /** "{text ID} · {language}" as used in accessible names. */
@@ -76,10 +77,10 @@ export function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
   return event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
 }
 
-/** Parts of a Documents row with a stable DOM id (focus targets). */
-export type DocumentsRowPart = "header" | "disclosure" | "final-view" | "action" | "plan";
+/** Parts of a Documents row with a stable DOM id (focus targets); `header` is the text name ("Details, …"). */
+export type DocumentsRowPart = "header" | "details" | "final-view" | "action" | "plan";
 
-/** Stable id of a part of the row `{case}:{language}`, e.g. its disclosure or the Final row's View link. */
+/** Stable id of a part of the row `{case}:{language}`, e.g. its text name or the Final row's View link. */
 export function documentsRowId(caseId: string, language: string, part: DocumentsRowPart): string {
   return `documents-row-${encodeURIComponent(caseId)}-${encodeURIComponent(language)}-${part}`;
 }
@@ -264,7 +265,7 @@ export function RowOpenLinks({ row, projectKey, query, onNavigate }: {
   const descriptionId = useId();
   const { route, description } = openLink(row, projectKey, query);
   return <>
-    <RouteLink route={route} onNavigate={onNavigate} className="documents-open" aria-label={`Open ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
+    <RouteLink route={route} onNavigate={onNavigate} className="documents-open" aria-label={`Open in editor, ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
     {description && <span id={descriptionId} className="visually-hidden">{description}</span>}
     {row.own_open_assignment_id != null && (
       <RouteLink route={{ name: "task", assignmentId: row.own_open_assignment_id }} onNavigate={onNavigate} className="documents-open-task">Open my task</RouteLink>
@@ -296,6 +297,9 @@ export function NewBadge(): JSX.Element {
   return <StatusBadge tone="info"><span aria-hidden="true">NEW</span><span className="visually-hidden">New since your last visit</span></StatusBadge>;
 }
 
+/** Opens the row panel for a row: unfiltered (text name) or filtered to a stage (stage cell); `opener` gets focus back. */
+export type OpenRowPanel = (row: DocumentRowView, options: { stage?: PanelStage; opener: HTMLElement }) => void;
+
 export interface RowHeaderCellProps {
   row: DocumentRowView;
   projectKey: string;
@@ -304,17 +308,25 @@ export interface RowHeaderCellProps {
   onNavigate?: (route: Route) => void;
   /** Visit badge ("Resolved" / "Changed: …"). */
   badge?: ReactNode;
+  /** The text name opens the row panel ("Details, {case} · {language}"); without it the name is plain text. */
+  onOpenPanel?: OpenRowPanel;
 }
 
 /**
- * Text cell (row header, named "{case} · {language}"): language, "source", version marker, NEW,
- * visit badge, "Open" and "Open my task"; decision rows add the hidden "Needs your decision".
+ * Text cell (row header, named "{case} · {language}"): the text name (the row panel's entry "Details, …"),
+ * "source", version marker, NEW, visit badge, "Open" and "Open my task"; decision rows add the hidden
+ * "Needs your decision".
  */
-export function RowHeaderCell({ row, projectKey, query, onNavigate, badge }: RowHeaderCellProps): JSX.Element {
+export function RowHeaderCell({ row, projectKey, query, onNavigate, badge, onOpenPanel }: RowHeaderCellProps): JSX.Element {
   const active = isActiveRow(row);
+  const nameId = documentsRowId(row.case_id, row.language, "header");
+  const nameContent = <><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language">{row.language}</span></>;
   return (
     <span className="documents-row-header documents-text-cell">
-      <span id={documentsRowId(row.case_id, row.language, "header")} tabIndex={-1} className="documents-text-name"><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language">{row.language}</span></span>
+      {onOpenPanel
+        ? <button type="button" id={nameId} className="documents-text-name documents-text-button" aria-label={`Details, ${rowName(row)}`}
+          onClick={event => onOpenPanel(row, { opener: event.currentTarget })}>{nameContent}</button>
+        : <span id={nameId} tabIndex={-1} className="documents-text-name">{nameContent}</span>}
       {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
       {row.is_source && <span className="documents-source">source</span>}
       <VersionMarker row={row} />
@@ -325,12 +337,26 @@ export function RowHeaderCell({ row, projectKey, query, onNavigate, badge }: Row
   );
 }
 
-/** One stage cell of the row; rows outside the plan are muted (VD1). */
-export function RowStageCell({ row, stage, sourceLanguage }: { row: DocumentRowView; stage: StageName; sourceLanguage?: string | null }): JSX.Element {
+/** Stage column titles (the accessible names of the stage cell buttons). */
+const STAGE_CELL_TITLES: Readonly<Record<StageName, string>> = { review: "Review", annotation: "Annotation", final: "Final" };
+
+/**
+ * One stage cell of the row; rows outside the plan are muted (VD1). With `onOpenPanel` the cell is a
+ * frameless button with a dotted status underline that opens the row panel filtered to this stage:
+ * "Annotation: 0 of 2 submitted. Show history, case-108 · de" (the detail line is its description).
+ */
+export function RowStageCell({ row, stage, sourceLanguage, onOpenPanel }: {
+  row: DocumentRowView; stage: StageName; sourceLanguage?: string | null; onOpenPanel?: OpenRowPanel;
+}): JSX.Element {
+  const detailId = useId();
   const cell = row.stages?.[stage];
   if (!cell) return <StageCell symbol="" word="—" tone="none" muted={!isActiveRow(row)} />;
   const text = stageText(stage, cell, row, { sourceLanguage });
-  return <StageCell symbol={text.symbol} word={text.word} detail={text.detail} tone={cell.tone} muted={!isActiveRow(row)} />;
+  const content = <StageCell symbol={text.symbol} word={text.word} detail={text.detail ? <span id={detailId}>{text.detail}</span> : undefined}
+    tone={cell.tone} muted={!isActiveRow(row)} />;
+  if (!onOpenPanel) return content;
+  return <button type="button" className="documents-stage-button" aria-label={`${STAGE_CELL_TITLES[stage]}: ${text.word}. Show history, ${rowName(row)}`}
+    aria-describedby={text.detail ? detailId : undefined} onClick={event => onOpenPanel(row, { stage, opener: event.currentTarget })}>{content}</button>;
 }
 
 /** Waiting on: "You" (strong), a person, up to two names and "+n" with the full list (VD8), or "—". */
@@ -339,30 +365,4 @@ export function WaitingOnCell({ row }: { row: DocumentRowView }): JSX.Element {
   if (you) return <strong className="documents-waiting-on">{text}</strong>;
   if (!title || title === text) return <span className="documents-waiting-on">{text}</span>;
   return <span className="documents-waiting-on" title={title}><span aria-hidden="true">{text}</span><span className="visually-hidden">{title}</span></span>;
-}
-
-/** The ▸ disclosure at the end of Last activity: "Show history, case-107 · de". */
-export function HistoryToggle({ row, expanded, controls, onToggleRow, children }: {
-  row: DocumentRowView;
-  expanded: boolean;
-  /** ID of the expanded content; set only while it exists. */
-  controls?: string;
-  onToggleRow: (key: string) => void;
-  /** Visible text after the chevron (cards: "History"). */
-  children?: ReactNode;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      id={documentsRowId(row.case_id, row.language, "disclosure")}
-      className="documents-disclosure target-min"
-      aria-expanded={expanded}
-      aria-controls={controls}
-      aria-label={children ? undefined : `Show history, ${rowName(row)}`}
-      onClick={() => onToggleRow(rowKeyOf(row))}
-    >
-      <IconChevronRight className="disclosure-chevron" />
-      {children}
-    </button>
-  );
 }

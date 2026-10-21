@@ -15,7 +15,7 @@ import { ana, cell, scenario7a, stagedRow, tom } from "./documents/tableFixtures
 import { acceptPanel } from "./documents/panelFixtures";
 import { reviewRecord } from "./translationFixtures";
 
-const { expandedProps, assignProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[], assignProps: [] as unknown[] }));
+const { assignProps } = vi.hoisted(() => ({ assignProps: [] as unknown[] }));
 // The assign dialog has its own tests; here only its wiring (props in, onAssigned / onClose out) matters.
 vi.mock("../src/admin/AssignWorkDialog", () => ({
   AssignWorkDialog: (props: AssignWorkDialogProps) => { assignProps.push(props); return <div role="dialog" aria-label="Assign stub" />; },
@@ -26,13 +26,6 @@ vi.mock("../src/admin/UploadPanel", () => ({
   UploadPanel: ({ onImported }: { onImported: (message: string) => void }) =>
     <button type="button" onClick={() => onImported("Imported 9 documents and 0 proposals.")}>Finish import stub</button>,
 }));
-vi.mock("../src/documents/ExpandedRow", async importOriginal => {
-  const actual = await importOriginal<typeof import("../src/documents/ExpandedRow")>();
-  return {
-    ...actual,
-    ExpandedRow: (props: Parameters<typeof actual.ExpandedRow>[0]) => { expandedProps.push(props as unknown as Record<string, unknown>); return actual.ExpandedRow(props); },
-  };
-});
 
 function mockRows(rows: DocumentRowsPage, rowSubmissions: Record<string, RowSubmissions> = {}) {
   // Every response is a new object, as from the network.
@@ -71,8 +64,10 @@ const casesPage = (count: number, overrides: Partial<DocumentRowsPage> = {}) => 
 }), overrides);
 const caseBox = (caseId: string) => screen.getByRole("checkbox", { name: new RegExp(`^Select ${caseId} \\(`) });
 const rowBox = (caseId: string, language: string) => screen.getByRole("checkbox", { name: `Select ${caseId} · ${language}` });
-/** The Text cell (`th scope="row"`) of a row, found through its history disclosure. */
-const rowHeader = (name: string) => screen.getByRole("button", { name: `Show history, ${name}` }).closest("tr")!.querySelector<HTMLElement>("th[scope=row]")!;
+/** The Text cell (`th scope="row"`) of a row, found through its text name ("Details, …"). */
+const rowHeader = (name: string) => screen.getByRole("button", { name: `Details, ${name}` }).closest("tr")!.querySelector<HTMLElement>("th[scope=row]")!;
+/** The row panel (a labelled aside). */
+const rowPanel = (name: string) => screen.findByRole("complementary", { name: `Details, ${name}` });
 /** "3 texts in 3 cases selected" for cases with one text each. */
 const selectedText = (count: number) => `${count} ${count === 1 ? "text" : "texts"} in ${count} ${count === 1 ? "case" : "cases"} selected`;
 /** Row keys of `document-rows/keys`: the de text of every given case. */
@@ -82,7 +77,6 @@ const selectionRegion = () => screen.getByRole("region", { name: "Selection" });
 const chooseFinalStep = () => stepOf("choose_final", { detail: { kind: "annotations_submitted", submitted: 1, total: 1, task_paused: false } });
 
 beforeEach(() => {
-  expandedProps.length = 0;
   vi.spyOn(api, "finalPanel").mockImplementation(async () => finalPanel());
   vi.spyOn(api, "listGuidelines").mockResolvedValue({ current: null, latest_version: null, versions: [], my_latest_seen: null });
   vi.spyOn(api, "listDocumentRows").mockResolvedValue(page([]));
@@ -438,8 +432,8 @@ describe("case selection", () => {
     } as PlanRowResult);
     vi.spyOn(api, "patchWorkPlan").mockResolvedValueOnce(saved(3)).mockResolvedValueOnce(saved(5));
     vi.spyOn(api, "setWorkPlanRows").mockResolvedValue({ changed_rows: 1, revisions: { "case-0101": 4 }, undo: { rows: [], revisions: {} }, withdrawn: [] });
-    // The plan chips of an in-plan row are in its expansion (VD2).
-    renderPage({ query: { open: ["case-0101:fr"] } });
+    // The plan chips of an in-plan row are in the row panel's Details (VD2).
+    renderPage({ query: { panel: "case-0101:fr", panel_tab: "details" } });
     fireEvent.click(await screen.findByRole("button", { name: "Review, case-0101 · fr" }));
     await screen.findByText("fr of case-0101: Review off");
     const box = caseBox("case-0101");
@@ -602,7 +596,7 @@ it("renders the new table with stage columns", async () => {
   const decision = rowHeader("case-107 · de").closest("tr")!;
   expect(decision.className).toContain("data-table-row--decision");
   expect(within(decision).getByText("Your choice")).toBeTruthy();
-  expect(within(decision).getByRole("button", { name: "Accept result…, case-107 · de" })).toBeTruthy();
+  expect(within(decision).getByRole("button", { name: "Accept as final…, case-107 · de" })).toBeTruthy();
   const running = rowHeader("case-106 · de").closest("tr")!;
   expect(running.textContent).toContain("1 of 2 submitted");
   expect(running.textContent).toContain("waiting: Tom Reis");
@@ -663,32 +657,32 @@ it("keeps the page busy with focus on the paging link while the next page loads,
   expect(screen.getByRole("link", { name: "Previous" }).getAttribute("aria-disabled")).toBeNull();
 });
 
-it("opens the final-result panel from a card as the side dialog", async () => {
+it("opens the row panel from a card's action as the full-screen sheet with the decision block", async () => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
   const s1 = scenarioS1();
   const en = { ...s1.group.rows.find(entry => entry.language === "en")!, next_step: chooseFinalStep(), steps: [chooseFinalStep()] };
   mockRows(page([{ ...s1.group, rows: [en] }]), s1.submissions);
   renderStateful({});
   fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
-  const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
-  expect(panel.classList.contains("ui-dialog--side")).toBe(true);
-  expect(screen.queryByRole("list", { name: "Submissions, case-0042 · en" })).toBeNull();
+  const sheet = await screen.findByRole("dialog", { name: "Details, case-0042 · en" });
+  expect(sheet.classList.contains("row-panel-sheet")).toBe(true);
+  expect(within(sheet).getByRole("region", { name: "Final result" })).toBeTruthy();
+  expect(within(sheet).getByRole("button", { name: "Back" })).toBeTruthy();
 });
 
-it("expands and focuses a deep-linked row that no longer needs a decision", async () => {
+it("focuses a deep-linked row that no longer needs a decision and shows its notice", async () => {
   const s0 = scenarioS0();
   const de = { ...s0.group.rows[1], pinned: true, matches_decision: false, categories: [] };
   mockRows(page([group("synthetic-accepted", [s0.group.rows[0], de])]), s0.submissions);
   renderPage({ query: { case: "synthetic-accepted", language: "de", decision: "all" } });
   expect(await screen.findByText("This no longer needs your decision.")).toBeTruthy();
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { case: "synthetic-accepted", language: "de", decision: "all" });
-  const disclosure = screen.getByRole("button", { name: "Show history, synthetic-accepted · de" });
-  expect(disclosure.getAttribute("aria-expanded")).toBe("true");
-  // Focus goes to the row header's name (spec "Edge cases › Deep links"), not the ▸ disclosure.
+  // Focus goes to the row header's name (spec "Edge cases › Deep links"); a deep link opens no panel.
   const name = document.getElementById(documentsRowId("synthetic-accepted", "de", "header"))!;
   expect(rowHeader("synthetic-accepted · de").contains(name)).toBe(true);
-  expect(name.tabIndex).toBe(-1);
+  expect(name.getAttribute("aria-label")).toBe("Details, synthetic-accepted · de");
   await waitFor(() => expect(document.activeElement).toBe(name));
+  expect(screen.queryByRole("complementary")).toBeNull();
 });
 
 it("shows an unknown text and an empty decision filter with Show all texts", async () => {
@@ -742,42 +736,38 @@ it("explains a preflight-only missing final result on a deep-linked row", async 
   expect(await screen.findByText("No final result. Not counted as a decision yet: no submission.")).toBeTruthy();
 });
 
-it("opens no deep-linked row when the language filter has several values", async () => {
+it("opens no row panel for a deep link with several languages", async () => {
   mockRows(scenarioS1().page);
   renderPage({ query: { case: "case-0042", language: "de,fr" } });
   await loaded();
-  expect(screen.queryAllByRole("button", { name: /^Hide history/ })).toHaveLength(0);
-  expect(expandedProps).toHaveLength(0);
+  expect(screen.queryByRole("complementary")).toBeNull();
 });
 
-it("expands a row with replace navigation", async () => {
+it("the text name opens the row panel with replace navigation", async () => {
   mockRows(scenarioS1().page);
   const { onNavigate } = renderPage({ query: { language: "en" } });
-  fireEvent.click(await screen.findByRole("button", { name: "Show history, case-0042 · en" }));
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en", open: ["case-0042:en"] }, { replace: true });
+  fireEvent.click(await screen.findByRole("button", { name: "Details, case-0042 · en" }));
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en", panel: "case-0042:en" }, { replace: true });
 });
 
-it("passes the case's plan revision, the row assign dialog, the plan chips and the lead to the expanded row", async () => {
+it("gives the row panel the case's plan revision, the plan chips and the lead (Details tab)", async () => {
   const s5 = scenarioS5();
   mockRows(page([{ ...s5.group, plan_revision: 7 }]), s5.submissions);
-  renderPage({ query: { open: [rowKey("case-0377", "en")] } });
-  const region = await screen.findByRole("region", { name: "History, case-0377 · en" });
-  expect(expandedProps.at(-1)?.planRevision).toBe(7);
-  expect(typeof expandedProps.at(-1)?.onAssign).toBe("function");
-  expect(expandedProps.at(-1)?.me).toBe("lead-0002");
-  // VD2 (2): the Plan line with the row's chips is part of the expansion (no separate plan line outside it).
-  const plan = within(region).getByRole("group", { name: "Plan" });
+  renderPage({ query: { panel: rowKey("case-0377", "en"), panel_tab: "details" } });
+  const panel = await rowPanel("case-0377 · en");
+  // VD2 (2): the Plan line with the row's chips is in Details.
+  const plan = await within(panel).findByRole("group", { name: "Plan" });
   expect(within(plan).getAllByRole("button").length).toBeGreaterThan(0);
-  expect(document.querySelectorAll(".documents-expanded-plan")).toHaveLength(1);
-  // No submissions table or final-result decision in the expansion (V1).
-  expect(within(region).queryByRole("heading", { name: /^Submissions/ })).toBeNull();
+  expect(within(panel).getByText("Plan revision").nextElementSibling!.textContent).toBe("7");
+  // No submissions table or final-result decision for a row without a lead decision.
+  expect(within(panel).queryByRole("region", { name: "Final result" })).toBeNull();
 });
 
-it("reloads the submissions of an open row only when its last activity changed", async () => {
+it("reloads the submissions of the panel's row only when its last activity changed", async () => {
   const s1 = scenarioS1();
   mockRows(s1.page, s1.submissions);
-  renderPage({ query: { open: [rowKey("case-0042", "en")] } });
-  await screen.findByRole("region", { name: "History, case-0042 · en" });
+  renderPage({ query: { panel: rowKey("case-0042", "en") } });
+  await rowPanel("case-0042 · en");
   await waitFor(() => expect(api.getRowSubmissions).toHaveBeenCalledTimes(1));
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
@@ -864,7 +854,7 @@ it("opens the translation review history of a version from Text versions", async
   const s3 = scenarioS3();
   mockRows(s3.page, s3.submissions);
   vi.spyOn(api, "listTranslationReviews").mockResolvedValue([]);
-  renderPage({ query: { open: [rowKey("case-0211", "de")] } });
+  renderPage({ query: { panel: rowKey("case-0211", "de"), panel_tab: "versions" } });
   fireEvent.click(await screen.findByRole("button", { name: "Translation reviews for v1" }));
   expect(api.listTranslationReviews).toHaveBeenCalledWith("p", "case-0211-de");
   const dialog = await screen.findByRole("dialog", { name: "Translation reviews: case-0211-de" });
@@ -878,7 +868,7 @@ it("labels each translation review with its guideline version", async () => {
     reviewRecord({ id: 2, guideline_version: 2, guideline_withdrawn: true }),
     reviewRecord({ id: 1, guideline_version: null }),
   ]);
-  renderPage({ query: { open: [rowKey("case-0211", "de")] } });
+  renderPage({ query: { panel: rowKey("case-0211", "de"), panel_tab: "versions" } });
   fireEvent.click(await screen.findByRole("button", { name: "Translation reviews for v1" }));
   const dialog = await screen.findByRole("dialog", { name: "Translation reviews: case-0211-de" });
   await within(dialog).findAllByRole("listitem");
@@ -903,7 +893,6 @@ describe("Resolved and Changed badges", () => {
     await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
   };
   const lastRequest = () => vi.mocked(api.listDocumentRows).mock.calls.at(-1)?.[1];
-  const disclosure = (name: string) => screen.getByRole("button", { name: `Show history, ${name}` });
 
   beforeEach(() => {
     vi.mocked(api.listDocumentRows).mockImplementation(async () => structuredClone(served));
@@ -916,36 +905,31 @@ describe("Resolved and Changed badges", () => {
     categories: ["missing-final"], missing_final: { counts: true, reason: null }, ...overrides,
   });
 
-  it("shows Resolved after the lead's own Keep, retains the row and collapses it once", async () => {
+  it("shows Resolved after the lead's own Keep and retains the row; the row panel stays on it", async () => {
     const s0 = scenarioS0();
     const de = { ...s0.group.rows[1], next_step: stepOf("confirm_final"), steps: [stepOf("confirm_final")] };
     serve(page([group("synthetic-accepted", [de])]));
     vi.mocked(api.getRowSubmissions).mockImplementation(async (_key, caseId, language) => structuredClone(s0.submissions[rowKey(caseId, language)] ?? submissions(caseId, language)));
     // The panel is open on the row (route parameter `panel`).
-    const { onNavigate } = renderPage({ query: { decision: "confirm-final", open: [rowKey("synthetic-accepted", "de")], panel: "synthetic-accepted:de" } });
+    const { onNavigate } = renderPage({ query: { decision: "confirm-final", panel: "synthetic-accepted:de" } });
     await waitFor(() => expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] }));
-    const panel = await screen.findByRole("dialog", { name: "Final result · synthetic-accepted · de" });
+    const panel = await rowPanel("synthetic-accepted · de");
     serve(page([group("synthetic-accepted", [{ ...de, issues: [], categories: [], final: { ...de.final!, revision: 2 }, matches_decision: false, retained: true, next_step: null, steps: [] }])]));
     fireEvent.click(await within(panel).findByRole("button", { name: "Keep final on v1" }));
     expect(await within(panel).findByText("No more final results to decide.")).toBeTruthy();
-    await waitFor(() => expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("false"));
-    expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", decision: "confirm-final", panel: "synthetic-accepted:de" }, { replace: true });
-    expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] });
-    // The badge is on the collapsed row itself, next to its row header.
-    expect(within(rowHeader("synthetic-accepted · de")).getByText("Resolved")).toBeTruthy();
-    fireEvent.click(disclosure("synthetic-accepted · de"));
-    expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("true");
-    // Shown once, not repeated in the expanded content.
+    // The badge is on the row itself, next to its row header, once; nothing collapses or navigates.
+    await waitFor(() => expect(within(rowHeader("synthetic-accepted · de")).getByText("Resolved")).toBeTruthy());
     expect(screen.getAllByText("Resolved")).toHaveLength(1);
-    // A later refresh does not collapse the row again.
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] });
     await refetch();
     expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] });
-    expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("complementary", { name: "Details, synthetic-accepted · de" })).toBe(panel);
   });
 
-  it("shows Changed: Work assigned when work was assigned elsewhere and keeps the row open", async () => {
+  it("shows Changed: Work assigned when work was assigned elsewhere", async () => {
     serve(page([group("case-0042", [missing()])]));
-    renderPage({ query: { decision: "missing-final", open: [rowKey("case-0042", "en")] } });
+    renderPage({ query: { decision: "missing-final", panel: rowKey("case-0042", "en") } });
     await waitFor(() => expect(lastRequest()).toEqual({ decision: "missing-final", retain: ["case-0042:en"] }));
     serve(page([group("case-0042", [missing({
       categories: [], matches_decision: false, retained: true, missing_final: { counts: false, reason: "work_open" },
@@ -954,14 +938,13 @@ describe("Resolved and Changed badges", () => {
     await refetch();
     expect(await screen.findByText("Changed: Work assigned")).toBeTruthy();
     expect(screen.queryByText("Resolved")).toBeNull();
-    expect(disclosure("case-0042 · en").getAttribute("aria-expanded")).toBe("true");
   });
 
   it("shows Changed: Task resumed for an external resume and Resolved for a resume recorded on the report page", async () => {
     const held = missing({ categories: ["report-or-pause"], work: [work({ assignment_id: 7, document_id: "case-0042-en", held: true })] });
     const resumed = { ...held, categories: [], matches_decision: false, retained: true, work: [work({ assignment_id: 7, document_id: "case-0042-en" })] };
     serve(page([group("case-0042", [held])]));
-    const { unmount } = renderPage({ query: { decision: "report-or-pause", open: [rowKey("case-0042", "en")] } });
+    const { unmount } = renderPage({ query: { decision: "report-or-pause", panel: rowKey("case-0042", "en") } });
     await waitFor(() => expect(lastRequest()).toEqual({ decision: "report-or-pause", retain: ["case-0042:en"] }));
     serve(page([group("case-0042", [resumed])]));
     await refetch();
@@ -971,11 +954,10 @@ describe("Resolved and Changed badges", () => {
     // Back from the report page: the remount keeps the visit and sees the recorded resume.
     recordDecision("p", "case-0042:en");
     vi.mocked(api.listDocumentRows).mockClear();
-    renderPage({ query: { decision: "report-or-pause", open: [rowKey("case-0042", "en")] } });
+    renderPage({ query: { decision: "report-or-pause", panel: rowKey("case-0042", "en") } });
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalled());
     expect(vi.mocked(api.listDocumentRows).mock.calls[0][1]).toEqual({ decision: "report-or-pause", retain: ["case-0042:en"] });
-    await waitFor(() => expect(disclosure("case-0042 · en").getAttribute("aria-expanded")).toBe("false"));
-    expect(within(rowHeader("case-0042 · en")).getByText("Resolved")).toBeTruthy();
+    await waitFor(() => expect(within(rowHeader("case-0042 · en")).getByText("Resolved")).toBeTruthy());
   });
 
   it("keeps the visit (retained rows and badges) when paging under the same filters", async () => {
@@ -1010,7 +992,7 @@ describe("row actions", () => {
   });
   const oneSubmission = (caseId = "case-0042", language = "en") => submissions(caseId, language, { submissions: [submission({ submission_id: `sub-${caseId}`, document_id: `${caseId}-${language}`, author_label: "ann-0001" })] });
 
-  it("Accept result… opens the side panel (route parameter panel) and Close returns focus to the row action", async () => {
+  it("Compare results… opens the row panel with the decision block (route parameter panel); Close returns focus to the row action", async () => {
     mockRows(page([group("case-0042", [chooseFinal()])]), { [rowKey("case-0042", "en")]: oneSubmission() });
     vi.mocked(api.finalPanel).mockResolvedValue(acceptPanel("case-0042", "en"));
     const { onNavigate } = renderStateful({});
@@ -1018,20 +1000,22 @@ describe("row actions", () => {
     action.focus();
     fireEvent.click(action);
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", panel: "case-0042:en" }, { replace: true });
-    const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    const panel = await rowPanel("case-0042 · en");
     expect(await within(panel).findByText("Accept Ana Weber’s annotation as final?")).toBeTruthy();
-    // The heading has focus; the page behind is inert.
+    // The heading has focus; the page stays usable (non-modal, nothing inert) and the row is the active row.
     expect(document.activeElement).toBe(within(panel).getByRole("heading", { level: 2 }));
-    expect(screen.getByRole("heading", { level: 1, name: "Documents" }).closest("[inert]")).not.toBeNull();
-    // The expansion stays closed: the decision is not in the expansion (V1).
-    expect(screen.getByRole("button", { name: "Show history, case-0042 · en" }).getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector("[inert]")).toBeNull();
+    expect(rowHeader("case-0042 · en").closest("tr")!.getAttribute("aria-current")).toBe("true");
+    // The decision block sits above the tabs.
+    const decision = within(panel).getByRole("region", { name: "Final result" });
+    expect(decision.compareDocumentPosition(within(panel).getByRole("tablist")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(within(panel).getByRole("button", { name: "Close" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Final result · case-0042 · en" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("complementary", { name: "Details, case-0042 · en" })).toBeNull());
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p" }, { replace: true });
     await waitFor(() => expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action"));
   });
 
-  it("Change final… in a decided row's expansion opens the panel on the compare content", async () => {
+  it("Change final… in a decided row's panel (Final stage) opens the decision block on the compare content", async () => {
     const decided = row({ case_id: "case-0050", language: "de", final: final({ case_id: "case-0050", language: "de", document_id: "case-0050-de", submission_id: "s-ana", revision: 3 }) });
     mockRows(page([group("case-0050", [decided])]));
     vi.mocked(api.finalPanel).mockResolvedValue(finalPanel({ submissions: [
@@ -1039,12 +1023,12 @@ describe("row actions", () => {
       panelSubmission({ submission_id: "s-tom", document_id: "case-0050-de", author: tom, author_label: "ann-0004" }),
     ] }));
     const select = vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0050", language: "de", document_id: "case-0050-de", submission_id: "s-tom", revision: 4 });
-    renderStateful({ open: ["case-0050:de"] });
-    const history = await screen.findByRole("region", { name: "History, case-0050 · de" });
-    // A row without a lead step keeps its Action cell empty (the expansion offers the action).
+    renderStateful({ panel: "case-0050:de", panel_stage: "final" });
+    const panel = await rowPanel("case-0050 · de");
+    // A row without a lead step keeps its Action cell empty (the row panel offers the action).
     expect(screen.queryByRole("button", { name: /more action/ })).toBeNull();
-    fireEvent.click(within(history).getByRole("button", { name: "Change final…" }));
-    const panel = await screen.findByRole("dialog", { name: "Final result · case-0050 · de" });
+    expect(within(panel).queryByRole("region", { name: "Final result" })).toBeNull();
+    fireEvent.click(await within(panel).findByRole("button", { name: "Change final…" }));
     const table = await within(panel).findByRole("table", { name: "Submissions, case-0050 · de" });
     const tomRow = within(table).getAllByRole("row").find(entry => entry.textContent?.includes("Tom Reis"))!;
     fireEvent.click(within(tomRow).getByRole("button", { name: "Use as final" }));
@@ -1055,7 +1039,7 @@ describe("row actions", () => {
     mockRows(page([group("case-0042", [chooseFinal()])]));
     vi.mocked(api.finalPanel).mockResolvedValue(acceptPanel("case-0042", "en"));
     const { onNavigate } = renderPage({ query: { segment: "decision", panel: "case-0042:en" } });
-    const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    const panel = await rowPanel("case-0042 · en");
     expect(api.finalPanel).toHaveBeenCalledWith("p", "case-0042", "en");
     fireEvent.click(await within(panel).findByRole("link", { name: "Open in editor" }));
     expect(onNavigate).toHaveBeenLastCalledWith(expect.objectContaining({ name: "projectCase", caseId: "case-0042", documents: { segment: "decision", panel: "case-0042:en" } }));
@@ -1070,14 +1054,14 @@ describe("row actions", () => {
     const action = await screen.findByRole("button", { name: "Compare results…, case-0042 · en" });
     action.focus();
     fireEvent.click(action);
-    await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    await rowPanel("case-0042 · en");
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(action));
 
     // After the decision the row has no action any more: focus goes to its row header.
     fireEvent.click(action);
-    const again = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    const again = await rowPanel("case-0042 · en");
     const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], categories: [],
       final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1" }) };
     mockRows(page([group("case-0042", [done])]));
@@ -1096,7 +1080,7 @@ describe("row actions", () => {
     mockRows(page([group("synthetic-accepted", [s0.group.rows[0], de])]), s0.submissions);
     renderStateful({});
     fireEvent.click(await screen.findByRole("button", { name: "Review changes…, synthetic-accepted · de" }));
-    const panel = await screen.findByRole("dialog", { name: "Final result · synthetic-accepted · de" });
+    const panel = await rowPanel("synthetic-accepted · de");
     expect(await within(panel).findByText("This language version returned to the plan. Confirm its earlier final result.")).toBeTruthy();
     fireEvent.click(within(panel).getByRole("button", { name: "Keep final on v1" }));
     await waitFor(() => expect(api.selectFinalResult).toHaveBeenCalledWith("p", expect.objectContaining({
@@ -1141,20 +1125,23 @@ describe("row actions", () => {
     window.addEventListener(FINAL_SELECTION_CHANGED, changed);
     const { onNavigate } = renderStateful({ segment: "decision" });
     fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
-    const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    const panel = await rowPanel("case-0042 · en");
     const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], matches_decision: false, retained: true, categories: [],
       final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1" }) };
     mockRows(page([group("case-0042", [done]), group("case-0099", [second])]));
     fireEvent.click(await within(panel).findByRole("button", { name: "Accept as final" }));
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-0042-en", submission_id: "case-0042-s1", expected_revision: 0, acknowledged_cause_ids: [] });
-    await waitFor(() => expect(within(panel).getByRole("heading", { level: 2 }).textContent).toBe("Final result · case-0099 · de"));
+    // The same frame (not remounted) shows the next row at once.
+    await waitFor(() => expect(within(panel).getByRole("heading", { level: 2 }).textContent).toBe("case-0099 · de v1"));
+    expect(panel.getAttribute("aria-label")).toBe("Details, case-0099 · de");
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "decision", panel: "case-0099:de" }, { replace: true });
     expect(within(panel).getByText("Final result saved for case-0042 · en.")).toBeTruthy();
-    await waitFor(() => expect(panel.querySelector("p[role='status']")!.textContent).toBe("Final result saved. Next: case-0099 · de."));
+    const block = within(panel).getByRole("region", { name: "Final result" });
+    await waitFor(() => expect(block.querySelector("p[role='status']")!.textContent).toBe("Final result saved. Next: case-0099 · de."));
     expect(changed).toHaveBeenCalled();
     window.removeEventListener(FINAL_SELECTION_CHANGED, changed);
     // Updated in place: the row stays (retained) without the action.
-    await waitFor(() => expect(within(screen.getByRole("button", { name: "Show history, case-0042 · en" }).closest("tr")!).queryByRole("button", { name: /Compare results…/ })).toBeNull());
+    await waitFor(() => expect(within(screen.getByRole("button", { name: "Details, case-0042 · en" }).closest("tr")!).queryByRole("button", { name: /Compare results…/ })).toBeNull());
   });
 
   it("Next decision closes the panel and runs that row's action without the panel in its links", async () => {
@@ -1165,7 +1152,7 @@ describe("row actions", () => {
     vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1", revision: 1 });
     const { onNavigate } = renderStateful({ segment: "decision" });
     fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
-    const panel = await screen.findByRole("dialog", { name: "Final result · case-0042 · en" });
+    const panel = await rowPanel("case-0042 · en");
     mockRows(page([group("case-0042", [{ ...first, next_step: stepOf("done"), steps: [stepOf("done")], categories: [] }]), group("case-0390", [report])]));
     fireEvent.click(await within(panel).findByRole("button", { name: "Accept as final" }));
     fireEvent.click(await within(panel).findByRole("button", { name: "Next decision: case-0390 · de (problem report)" }));
@@ -1181,7 +1168,7 @@ describe("plan chips on the page", () => {
       case_id: "case-0101", language: "fr", flags: { review: false, annotate: true, review_applicable: true, discarded: false }, revision: 3,
       undo: { rows: [], revisions: { "case-0101": 3 } }, withdrawn: [], accepted_document_ids: [],
     } as PlanRowResult);
-    renderPage({ query: { open: ["case-0101:fr"] } });
+    renderPage({ query: { panel: "case-0101:fr", panel_tab: "details" } });
     fireEvent.click(await screen.findByRole("button", { name: "Review, case-0101 · fr" }));
     expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "fr", { review: false, expected_revision: 2, confirm: false });
     const message = await screen.findByText("fr of case-0101: Review off");
@@ -1233,8 +1220,8 @@ describe("lead review fixes", () => {
     mockRows(page([group("case-d", [planRow("case-d", "de", stepOf("decide_report"))]), ...many], { group_count: 51 }));
     renderPage();
     await loaded();
-    expect(screen.getByRole("button", { name: "Show history, case-000 · de" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Show history, case-d · de" }).closest("tr")!.className).toContain("data-table-row--decision");
+    expect(screen.getByRole("button", { name: "Details, case-000 · de" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Details, case-d · de" }).closest("tr")!.className).toContain("data-table-row--decision");
     // The group row is a label, not a disclosure.
     expect(document.getElementById("documents-group-case-d-toggle")!.tagName).toBe("SPAN");
   });
@@ -1242,7 +1229,7 @@ describe("lead review fixes", () => {
   it("shows not-in-plan rows as muted rows with a quiet Plan… (VD1, VD2)", async () => {
     mockRows(page([group("case-1", [notInPlanRow("case-1", "en", { is_source: true }), notInPlanRow("case-1", "fr")])]));
     renderPage();
-    const fr = (await screen.findByRole("button", { name: "Show history, case-1 · fr" })).closest("tr")!;
+    const fr = (await screen.findByRole("button", { name: "Details, case-1 · fr" })).closest("tr")!;
     expect(fr.className).toContain("documents-row--not-in-plan");
     expect(screen.queryByText(/not in plan ·/)).toBeNull();
     const plan = within(fr).getByRole("button", { name: "Plan…, case-1 · fr" });
@@ -1256,7 +1243,7 @@ describe("lead review fixes", () => {
     mockRows(page([group("case-1", [de], { plan_revision: 2 })]));
     vi.spyOn(api, "patchWorkPlan").mockResolvedValueOnce(planResult("case-1", "de", { review: true, annotate: true }, 5)).mockImplementation(() => new Promise(() => {}));
     // Open, so the expansion's plan chips are in view for the later save.
-    renderPage({ query: { open: ["case-1:de"] } });
+    renderPage({ query: { panel: "case-1:de", panel_tab: "details" } });
     fireEvent.click(await screen.findByRole("button", { name: "Assign review or accept…, case-1 · de" }));
     const box = screen.getByRole("group", { name: "Translation not accepted, case-1 · de" });
     fireEvent.click(within(box).getByRole("button", { name: "Turn Review on" }));
@@ -1290,12 +1277,12 @@ describe("lead review fixes", () => {
     const consequences = { withdrawn: [], finals_leaving: [], restored: [], open_reports: [{ case_id: "case-1", language: "de", held: false }] };
     vi.spyOn(api, "patchWorkPlan").mockRejectedValueOnce(new ApiError(409, "confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences))
       .mockResolvedValueOnce(planResult("case-1", "de", { review: false, annotate: false }, 3));
-    renderPage({ query: { open: ["case-1:de"] } });
+    renderPage({ query: { panel: "case-1:de", panel_tab: "details" } });
     fireEvent.click(await screen.findByRole("button", { name: "Review, case-1 · de" }));
     const box = await screen.findByRole("group", { name: "Change the plan of case-1 · de" });
     mockRows(page([group("case-1", [en, notInPlanRow("case-1", "de")], { plan_revision: 3 })]));
     fireEvent.click(within(box).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Show history, case-1 · de" }).closest("tr")!.className).toContain("documents-row--not-in-plan"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Details, case-1 · de" }).closest("tr")!.className).toContain("documents-row--not-in-plan"));
     await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Review, case-1 · de"));
   });
 });
@@ -1313,15 +1300,15 @@ describe("Resolve renders inline under the row (Change 13, F1, F5)", () => {
     const box = resolveBox()!;
     expect(box.closest(".documents-row-notice-slot")).not.toBeNull();
     expect(within(box).getByRole("button", { name: "Correct the translation…" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Show history, case-1 · de" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("complementary")).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(resolveHeading()));
     expect(screen.getAllByRole("group", { name: "Resolve rejected translation, case-1 · de" })).toHaveLength(1);
   });
 
-  it("stays outside an open expansion", async () => {
+  it("stays outside an open row panel", async () => {
     mockRows(page([group("case-1", [rejected()])]));
-    renderStateful({ open: [rowKey("case-1", "de")] });
-    const region = await screen.findByRole("region", { name: "History, case-1 · de" });
+    renderStateful({ panel: rowKey("case-1", "de") });
+    const region = await rowPanel("case-1 · de");
     fireEvent.click(screen.getByRole("button", { name: "Resolve…, case-1 · de" }));
     expect(region.contains(resolveBox())).toBe(false);
     await waitFor(() => expect(document.activeElement).toBe(resolveHeading()));
@@ -1376,8 +1363,8 @@ describe("Resolve renders inline under the row (Change 13, F1, F5)", () => {
     // The expansion no longer offers its own correction entry.
     cleanup();
     mockRows(page([group("case-1", [rejectedRow("case-1", "de")])]));
-    renderStateful({ open: [rowKey("case-1", "de")] });
-    await screen.findByRole("region", { name: "History, case-1 · de" });
+    renderStateful({ panel: rowKey("case-1", "de") });
+    await rowPanel("case-1 · de");
     expect(screen.queryByRole("button", { name: /Correct the translation/ })).toBeNull();
   });
 

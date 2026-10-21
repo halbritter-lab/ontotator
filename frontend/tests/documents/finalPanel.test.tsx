@@ -1,9 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
-import { FinalPanel, type FinalPanelProps } from "../../src/documents/FinalPanel";
+import { DecisionBlock, type DecisionBlockProps } from "../../src/documents/FinalPanel";
 import { agreementText, barArrows, compareSummary, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
@@ -21,26 +21,32 @@ let rowSubmissions: Record<string, RowSubmissions>;
 /** The page the rows reload returns after a decision (`onDecided`). */
 let afterDecision: DocumentRowsPage | null;
 
-interface HarnessProps extends Partial<FinalPanelProps> { initialKey: string; initialPage: DocumentRowsPage }
+interface HarnessProps extends Partial<DecisionBlockProps> { initialKey: string; initialPage: DocumentRowsPage }
 
+/** The decision block inside a stand-in for the row panel: its heading names the row and takes focus on request. */
 function Harness({ initialKey, initialPage, ...props }: HarnessProps): JSX.Element {
   const [key, setKey] = useState(initialKey);
   const [current, setCurrent] = useState(initialPage);
   const [open, setOpen] = useState(true);
+  const heading = useRef<HTMLHeadingElement>(null);
   return <>
     <button id="trigger">Row action</button>
-    {open && <FinalPanel projectKey="p" rowKey={key} page={current} query={{ panel: key }} now={now}
-      onClose={() => setOpen(false)} onAdvance={setKey} onReload={vi.fn()} onNavigate={vi.fn()}
-      onDecided={() => { if (afterDecision) setCurrent(afterDecision); }} {...props} />}
+    {open && <aside aria-label="Row panel">
+      <h2 ref={heading} tabIndex={-1}>{`Final result · ${key.replace(":", " · ")}`}</h2>
+      <DecisionBlock projectKey="p" rowKey={key} page={current} query={{ panel: key }} now={now}
+        onClose={() => setOpen(false)} onAdvance={setKey} onReload={vi.fn()} onNavigate={vi.fn()} onFocusHeading={() => heading.current?.focus()}
+        onDecided={() => { if (afterDecision) setCurrent(afterDecision); }} {...props} />
+    </aside>}
   </>;
 }
 
-function renderPanel(key: string, initial: DocumentRowsPage, props: Partial<FinalPanelProps> = {}) {
+function renderPanel(key: string, initial: DocumentRowsPage, props: Partial<DecisionBlockProps> = {}) {
   return render(<Harness initialKey={key} initialPage={initial} {...props} />);
 }
 
-const dialog = () => screen.getByRole("dialog");
-const liveRegion = () => dialog().querySelector("p[role='status']")!;
+/** The decision block: a region named by its heading "Final result". */
+const block = () => screen.getByRole("region", { name: "Final result" });
+const liveRegion = () => block().querySelector("p[role='status']")!;
 const time = (iso: string) => formatTime(iso, { now });
 
 beforeEach(() => {
@@ -60,8 +66,9 @@ describe("choose", () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de", { guideline_version: 2 });
     const onNavigate = vi.fn();
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]), { onNavigate });
-    expect(screen.getByRole("dialog", { name: "Final result · case-107 · de" })).toBeTruthy();
-    expect(screen.getByRole("heading", { level: 2, name: "Final result · case-107 · de" })).toBeTruthy();
+    // No dialog of its own: a region inside the row panel, headed "Final result".
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(block()).getByRole("heading", { level: 3, name: "Final result" })).toBeTruthy();
     expect(await screen.findByText("Accept Ana Weber’s annotation as final?")).toBeTruthy();
     const line = screen.getByText(`Round 1 · 3 findings · submitted ${time("2026-10-20T12:01:00Z")} · on de v1`, { exact: false });
     fireEvent.click(within(line).getByRole("link", { name: "Open in editor" }));
@@ -73,13 +80,14 @@ describe("choose", () => {
     expect(await screen.findByText("Guidelines v2 (current: v3)")).toBeTruthy();
     const accept = screen.getByRole("button", { name: "Accept as final" });
     expect(accept.classList.contains("btn-primary")).toBe(true);
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+    // The row panel closes itself; the block has no Cancel.
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
     fireEvent.click(accept);
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-107-de", submission_id: "case-107-s1", expected_revision: 0, acknowledged_cause_ids: [] });
   });
 
-  it("offers Assign annotation review… and closes on Cancel", async () => {
+  it("offers Assign annotation review…", async () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     const onAssign = vi.fn();
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]), { onAssign });
@@ -87,8 +95,6 @@ describe("choose", () => {
     expect(onAssign).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "de" }));
     // One submission: nothing to consolidate.
     expect(screen.queryByRole("button", { name: "Consolidate…" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("consolidation of all others: Accept the consolidation by … plus Compare all 3…", async () => {
@@ -110,7 +116,7 @@ describe("choose", () => {
     renderPanel("case-109:de", page([group("case-109", [chooseRow("case-109", "de")])]));
     expect(await screen.findByText("2 annotations submitted on v1 · 6 findings in total")).toBeTruthy();
     expect(screen.getByText("Agreement: 4 of 6 findings match · 1 differs in context only")).toBeTruthy();
-    const bar = dialog().querySelector("meter")!;
+    const bar = block().querySelector("meter")!;
     expect(bar.getAttribute("aria-hidden")).toBe("true");
     const how = screen.getByRole("button", { name: "How is this counted?" });
     expect(how.getAttribute("aria-expanded")).toBe("false");
@@ -168,18 +174,20 @@ describe("choose", () => {
     await waitFor(() => expect(liveRegion().textContent).toBe(OWN_REASON));
   });
 
-  it("Consolidate… opens the launcher form with the compared submissions by name; only its own start closes the panel", async () => {
+  it("Consolidate… opens the launcher form with the compared submissions by name and marks the block dirty until it starts", async () => {
     panels[rowKey("case-112", "de")] = comparePanel("case-112", "de");
     vi.spyOn(api, "listMembers").mockResolvedValue([{ username: "rev", display_name: "Rita Rev", pseudonym: "rev-0009", roles: ["adjudicator"], languages: ["de"] }]);
     vi.spyOn(api, "listAssignments").mockResolvedValue([{ ...assignment, id: 9, project_key: "p", document_id: "case-112-de", username: "rev", task: "review", workflow_revision: 1 }]);
     vi.spyOn(api, "startWorkRound").mockResolvedValue({ round_id: "r-9", assignment_id: 9 } as WorkRoundView);
     const onConsolidationStarted = vi.fn();
-    renderPanel("case-112:de", page([group("case-112", [chooseRow("case-112", "de")])]), { onConsolidationStarted, username: "lead" });
+    const onDirtyChange = vi.fn();
+    renderPanel("case-112:de", page([group("case-112", [chooseRow("case-112", "de")])]), { onConsolidationStarted, onDirtyChange, username: "lead" });
     fireEvent.click(await screen.findByRole("button", { name: "Consolidate…" }));
-    expect(within(dialog()).queryByRole("button", { name: "Consolidate results" })).toBeNull();
-    expect(within(dialog()).getByRole("region", { name: "Consolidate submitted results" })).toBeTruthy();
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(within(block()).queryByRole("button", { name: "Consolidate results" })).toBeNull();
+    expect(within(block()).getByRole("region", { name: "Consolidate submitted results" })).toBeTruthy();
     await screen.findByLabelText("Consolidation reviewer");
-    const inputs = within(dialog()).getAllByRole("checkbox");
+    const inputs = within(block()).getAllByRole("checkbox");
     expect(inputs.map(input => input.closest("label, .form-check, div")!.textContent)).toEqual([
       `Ana Weber · Round 1 · ${time("2026-10-20T12:01:00Z")}`, `Tom Reis · Round 1 · ${time("2026-10-20T13:30:00Z")}`,
     ]);
@@ -193,15 +201,29 @@ describe("choose", () => {
     expect(api.startWorkRound).toHaveBeenCalledWith(9, expect.objectContaining({ source_submission_ids: ["case-112-s1", "case-112-s2"] }));
   });
 
-  it("links History · Text versions · Technical details to the row's expansion", async () => {
+  it("has no History · Text versions · Technical details links (the row panel's tabs show them)", async () => {
     panels[rowKey("case-109", "de")] = comparePanel("case-109", "de");
-    const onSection = vi.fn();
-    renderPanel("case-109:de", page([group("case-109", [chooseRow("case-109", "de")])]), { onSection });
-    fireEvent.click(await screen.findByRole("button", { name: "Text versions" }));
-    expect(onSection).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-109" }), "versions");
-    fireEvent.click(screen.getByRole("button", { name: "History" }));
-    fireEvent.click(screen.getByRole("button", { name: "Technical details" }));
-    expect(onSection.mock.calls.map(call => call[1])).toEqual(["versions", "history", "technical"]);
+    renderPanel("case-109:de", page([group("case-109", [chooseRow("case-109", "de")])]));
+    expect(await screen.findByRole("table", { name: "Submissions, case-109 · de" })).toBeTruthy();
+    for (const name of ["History", "Text versions", "Technical details"]) expect(screen.queryByRole("button", { name })).toBeNull();
+  });
+});
+
+describe("optional (a row without a final decision step)", () => {
+  const progressRow = (caseId: string) => chooseRow(caseId, "de", { next_step: null, steps: [], categories: [], missing_final: { counts: false, reason: "work_open" } });
+
+  it("renders nothing with fewer than two submissions on one version", async () => {
+    panels[rowKey("case-130", "de")] = acceptPanel("case-130", "de");
+    renderPanel("case-130:de", page([group("case-130", [progressRow("case-130")])]), { optional: true });
+    await waitFor(() => expect(api.finalPanel).toHaveBeenCalled());
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByRole("region", { name: "Final result" })).toBeNull();
+  });
+
+  it("offers Consolidate… once two submissions exist on one version", async () => {
+    panels[rowKey("case-131", "de")] = comparePanel("case-131", "de");
+    renderPanel("case-131:de", page([group("case-131", [progressRow("case-131")])]), { optional: true });
+    expect(await within(await screen.findByRole("region", { name: "Final result" })).findByRole("button", { name: "Consolidate…" })).toBeTruthy();
   });
 });
 
@@ -288,7 +310,7 @@ describe("review changes", () => {
     });
     renderPanel("c:de", page([group("c", [target])]));
     await screen.findByRole("button", { name: "Keep final on v1" });
-    const lines = [...dialog().querySelectorAll(".selection-notice-lines > li")].map(line => line.textContent);
+    const lines = [...block().querySelectorAll(".selection-notice-lines > li")].map(line => line.textContent);
     expect(lines).toEqual([
       "Round 1 (ann-0004) is abandoned.",
       "Round 1 (ann-0004) has been superseded by Round 2.",
@@ -308,7 +330,7 @@ describe("review changes", () => {
     panels[rowKey("q", "de")] = finalPanel({ submissions: [anaSubmission("q", "de")], causes: target.issues });
     renderPanel("q:de", page([group("q", [target])]));
     await screen.findByRole("button", { name: "Keep final on v1" });
-    const lines = [...dialog().querySelectorAll(".selection-notice-lines > li")].map(line => line.textContent);
+    const lines = [...block().querySelectorAll(".selection-notice-lines > li")].map(line => line.textContent);
     expect(lines).toContain("v2 was queried in review. No action needed.");
   });
 
@@ -370,7 +392,7 @@ describe("after a decision", () => {
       const [current, setCurrent] = useState(initial);
       return <>
         <button onClick={() => setKey("case-108:de")}>Show case-108</button>
-        <FinalPanel projectKey="p" rowKey={key} page={current} query={{}} now={now} onClose={vi.fn()} onAdvance={vi.fn()} onReload={vi.fn()}
+        <DecisionBlock projectKey="p" rowKey={key} page={current} query={{}} now={now} onClose={vi.fn()} onAdvance={vi.fn()} onReload={vi.fn()}
           onNavigate={vi.fn()} onDecided={() => setCurrent({ ...initial, groups: [group("case-107", [{ ...first, next_step: null, steps: [] }]), group("case-108", [{ ...other, next_step: null, steps: [] }])] })} />
       </>;
     }
@@ -431,10 +453,9 @@ describe("failures", () => {
     expect(api.selectFinalResult).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps every choice unavailable while a save runs and ignores Escape", async () => {
+  it("keeps every choice unavailable while a save runs", async () => {
     panels[rowKey("case-109", "de")] = comparePanel("case-109", "de");
-    const onClose = vi.fn();
-    renderPanel("case-109:de", page([group("case-109", [chooseRow("case-109", "de")])]), { onClose });
+    renderPanel("case-109:de", page([group("case-109", [chooseRow("case-109", "de")])]));
     vi.mocked(api.selectFinalResult).mockReturnValue(new Promise(() => {}));
     const [first, second] = await screen.findAllByRole("button", { name: "Use as final" });
     fireEvent.click(first);
@@ -442,8 +463,6 @@ describe("failures", () => {
     expect(second.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(second);
     expect(api.selectFinalResult).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(dialog(), { key: "Escape" });
-    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("says so when the row is no longer in the list", async () => {

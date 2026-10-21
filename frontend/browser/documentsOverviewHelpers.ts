@@ -66,14 +66,13 @@ export const rowAction = (page: Page, label: string, caseId: string, language: s
 export const moreActions = (page: Page, caseId: string, language: string): Locator =>
   page.getByRole("button", { name: new RegExp(`^\\+\\d+ more actions?, ${esc(rowName(caseId, language))}$`) });
 
-export const historyToggle = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `Show history, ${rowName(caseId, language)}`, exact: true });
+/** The text name of a row, the row panel's entry "Details, {case} · {language}". */
+export const detailsButton = (page: Page, caseId: string, language: string): Locator =>
+  page.getByRole("button", { name: `Details, ${rowName(caseId, language)}`, exact: true });
 
-export const historyRegion = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("region", { name: `History, ${rowName(caseId, language)}`, exact: true });
-
-export const finalPanel = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("dialog", { name: `Final result · ${rowName(caseId, language)}`, exact: true });
+/** The row panel "Details, {case} · {language}" (aside; a dialog sheet below 700 px). */
+export const rowPanel = (page: Page, caseId: string, language: string): Locator =>
+  page.getByRole(page.viewportSize() && page.viewportSize()!.width < 700 ? "dialog" : "complementary", { name: `Details, ${rowName(caseId, language)}`, exact: true });
 
 /** One stage cell's expectation: line 1 (symbol + word) and line 2 ("" = no second line). */
 export interface CellText {

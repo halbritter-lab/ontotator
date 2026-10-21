@@ -27,7 +27,7 @@ function renderTable(view: DocumentRowsPage, overrides: Partial<DocumentsTablePr
     page: view,
     projectKey: "p",
     query: {},
-    onToggleRow: vi.fn(),
+    onOpenPanel: vi.fn(),
     onAction: vi.fn(),
     selection: selection(),
     ...overrides,
@@ -88,7 +88,7 @@ describe("structure", () => {
     // The accessible name starts with the text label.
     expect(screen.getAllByRole("rowheader", { name: /^case-107 · de\b/ })).toEqual([th]);
     expect(th.querySelector(".documents-text-cell")).not.toBeNull();
-    expect(within(th).getByRole("link", { name: "Open case-107 · de" })).toBeTruthy();
+    expect(within(th).getByRole("link", { name: "Open in editor, case-107 · de" })).toBeTruthy();
     const box = within(rowOf("case-107 · de")).getByRole("checkbox", { name: "Select case-107 · de" });
     fireEvent.click(box);
     expect(props.selection!.select).toHaveBeenCalledWith("case-107:de", "toggle", ["case-107:en", "case-107:de"]);
@@ -167,21 +167,48 @@ describe("structure", () => {
     expect(onSort).toHaveBeenLastCalledWith("case");
   });
 
-  it("disclosure ▸ at the end of Last activity named 'Show history, case-107 · de'", () => {
-    const onToggleRow = vi.fn();
-    const renderExpanded = vi.fn(() => <section aria-label="History">content</section>);
-    renderTable(page([case107()]), { query: { open: ["case-107:de"] }, onToggleRow, renderExpanded });
-    const disclosure = screen.getByRole("button", { name: "Show history, case-107 · de" });
+  it("Last activity shows only the time; no disclosure ▸ and no expansion", () => {
+    renderTable(page([case107()]));
     const last = cellsOf("case-107 · de")[7];
-    expect(last.contains(disclosure)).toBe(true);
-    expect(last.lastElementChild?.contains(disclosure) || last.lastElementChild === disclosure).toBe(true);
     expect(last.querySelector("time")!.getAttribute("title")).toBe(fullTimestamp("2026-10-19T08:15:00Z"));
     expect(last.querySelector("time")!.textContent).toBe(formatTime("2026-10-19T08:15:00Z"));
-    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
-    expect(disclosure.id).toBe("documents-row-case-107-de-disclosure");
-    expect(document.getElementById(disclosure.getAttribute("aria-controls")!)!.textContent).toBe("content");
-    fireEvent.click(disclosure);
-    expect(onToggleRow).toHaveBeenCalledWith("case-107:de");
+    expect(last.querySelector("button")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Show history/ })).toBeNull();
+  });
+});
+
+describe("row panel entries (acceptance fixes WP-A)", () => {
+  it("the text name is a button 'Details, case-107 · de' that opens the panel unfiltered", () => {
+    const { props } = renderTable(page([case107()]));
+    const name = within(header("case-107 · de")).getByRole("button", { name: "Details, case-107 · de" });
+    expect(name.id).toBe("documents-row-case-107-de-header");
+    fireEvent.click(name);
+    expect(props.onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "de" }), { opener: name });
+    expect(within(header("case-107 · de")).getByRole("link", { name: "Open in editor, case-107 · de" }).textContent).toBe("Open");
+  });
+
+  it("a stage cell is a frameless button that opens the panel filtered to its stage; the detail line describes it", () => {
+    const de = stagedRow("case-108", "de", { stages: { annotation: cell("in_progress", "running", { submitted: 0, total: 2, people: [ana, tom] }) } });
+    const { props } = renderTable(page([group("case-108", [de])]));
+    const stage = screen.getByRole("button", { name: "Annotation: 0 of 2 submitted. Show history, case-108 · de" });
+    expect(cellsOf("case-108 · de")[3].contains(stage)).toBe(true);
+    expect(stage.className).toBe("documents-stage-button");
+    expect(stage.querySelector("svg")).toBeNull();
+    expect(document.getElementById(stage.getAttribute("aria-describedby")!)!.textContent).toMatch(/^waiting: /);
+    fireEvent.click(stage);
+    expect(props.onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-108" }), { stage: "annotation", opener: stage });
+    expect(screen.getByRole("button", { name: /^Review: .*\. Show history, case-108 · de$/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Final: .*\. Show history, case-108 · de$/ })).toBeTruthy();
+  });
+
+  it("marks only the active row (aria-current, highlight class), never with opacity or inert", () => {
+    const { container } = renderTable(page([case107()]), { activeKey: "case-107:de" });
+    const active = rowOf("case-107 · de");
+    expect(active.getAttribute("aria-current")).toBe("true");
+    expect(active.classList.contains("documents-row--active")).toBe(true);
+    expect(rowOf("case-107 · en").getAttribute("aria-current")).toBeNull();
+    expect(container.querySelector("[inert]")).toBeNull();
+    expect(container.querySelector("[class*='dim'], [class*='opacity'], [style*='opacity']")).toBeNull();
   });
 });
 
@@ -208,7 +235,7 @@ describe("cells", () => {
     const de = cellsOf("case-107 · de");
     expect(de[4].textContent).toBe("● Your choice1 submission");
     expect(de[5].querySelector("strong")!.textContent).toBe("You");
-    const action = within(de[6]).getByRole("button", { name: "Accept result…, case-107 · de" });
+    const action = within(de[6]).getByRole("button", { name: "Accept as final…, case-107 · de" });
     fireEvent.click(action);
     expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "de" }), expect.objectContaining({ code: "choose_final" }));
     expect(cellsOf("case-107 · en")[2].textContent).toBe("— source");
@@ -231,7 +258,7 @@ describe("cells", () => {
     view.rows[1] = { ...view.rows[1], own_open_assignment_id: 41 };
     const query: ProjectDocumentsQuery = { language: "de", segment: "assign" };
     renderTable(page([view]), { query });
-    const href = screen.getByRole("link", { name: "Open case-107 · de" }).getAttribute("href")!;
+    const href = screen.getByRole("link", { name: "Open in editor, case-107 · de" }).getAttribute("href")!;
     expect(href).toContain("documents_language=de");
     expect(screen.getByRole("link", { name: "Open my task" }).getAttribute("href")).toBe("#/tasks/41");
   });

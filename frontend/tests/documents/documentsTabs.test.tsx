@@ -15,7 +15,7 @@ function renderTabs(query: ProjectDocumentsQuery, overrides: Partial<DocumentsTa
 }
 
 it("Needs your decision (3) · To assign (2) · In progress (4) · Done (5) · All (14)", () => {
-  const { onNavigate } = renderTabs({ segment: "assign", language: "de", page: "2", open: ["c:de"], select: "x" });
+  const { onNavigate } = renderTabs({ segment: "assign", language: "de", page: "2", panel: "c:de", select: "x" });
   const list = screen.getByRole("tablist", { name: "Documents views" });
   const tabs = screen.getAllByRole("tab");
   expect(list.contains(tabs[0])).toBe(true);

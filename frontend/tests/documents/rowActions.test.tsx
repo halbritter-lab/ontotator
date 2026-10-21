@@ -98,9 +98,9 @@ it("plan popover saves on chip click with Undo toast", async () => {
   expect(document.activeElement).toBe(button);
 });
 
-it("Accept result… when the final has one submission to choose (final.state choose, submitted 1), Compare results… otherwise", () => {
+it("Accept as final… when the final has one submission to choose (final.state choose, submitted 1), Compare results… otherwise", () => {
   render(<Harness row={scenario7a()} />);
-  expect(screen.getByRole("button", { name: "Accept result…, case-107 · de" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Accept as final…, case-107 · de" })).toBeTruthy();
   cleanup();
   render(<Harness row={scenario7b()} />);
   expect(screen.getByRole("button", { name: "Compare results…, case-107 · en" })).toBeTruthy();

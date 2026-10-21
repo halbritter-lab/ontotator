@@ -54,9 +54,13 @@
 .documents-table .documents-row > th[scope="row"] { padding-inline-start: 20px; box-shadow: inset 1px 0 var(--border); background: transparent; font-weight: var(--weight-regular); }
 .documents-row-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); font-weight: var(--weight-regular); }
 .documents-language { font-weight: var(--weight-strong); }
-/* Row header name: a focus target of deep links and "Next decision" (tabindex -1) */
+/* Row header name: a focus target of deep links and "Next decision"; in the table a link-styled button
+   that opens the row panel ("Details, case-107 · de"). */
 .documents-text-name:focus { outline: none; }
 .documents-text-name:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
+.documents-text-button { min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.documents-text-button .documents-language { color: inherit; }
+.documents-text-button:hover { color: var(--accent-hover); }
 .documents-version-marker { display: inline-block; padding: 0 var(--space-1); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: var(--size-sm); line-height: var(--leading-sm); white-space: nowrap; }
 .documents-open, .documents-open-task { display: inline-block; min-height: 24px; white-space: nowrap; }
 .documents-muted, .documents-notes, .documents-final--none, .documents-source { color: var(--text-muted); }
@@ -69,16 +73,22 @@
 .documents-actions--block { display: flex; }
 .documents-action { white-space: nowrap; }
 .documents-activity-cell { display: inline-flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
-.documents-disclosure { display: inline-flex; align-items: center; gap: var(--space-2); padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-align: start; cursor: pointer; }
-.documents-disclosure:hover { color: var(--accent); }
+/* Stage cells open the row panel filtered to their stage: no frame or chevron; the status word has a
+   permanent subtle dotted underline, a solid accent underline on hover and focus. */
+.documents-stage-button { display: block; min-height: 24px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.documents-stage-button .stage-cell-status { text-decoration: underline dotted var(--border-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.documents-stage-button:hover .stage-cell-status,
+.documents-stage-button:focus-visible .stage-cell-status { text-decoration: underline solid var(--accent); text-decoration-thickness: 2px; }
+.documents-stage-button:focus { outline: none; }
+.documents-stage-button:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); border-radius: var(--radius-sm); }
+/* The row the row panel shows: a light accent background and an accent edge on its last cell
+   (the first cell's edge belongs to decision rows); `aria-current` names it. */
+.documents-table .documents-row--active > * { background: var(--accent-light); }
+.documents-table .documents-row--active > :last-child { box-shadow: inset -3px 0 var(--accent); }
 /* Rows outside the plan (VD1): muted, the same structure */
 .documents-table .documents-row--not-in-plan > * { color: var(--text-muted); }
 
 /* Inline notices under a row: plan confirmations, Resolve options */
-/* Interim Plan line at the top of an expanded row */
-.documents-expanded-plan { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-3); }
-.documents-expanded-plan-label { color: var(--text-muted); font-weight: var(--weight-strong); }
-.documents-row-notice-slot + .documents-expanded-slot { margin-top: var(--space-3); }
 .documents-plan-notice, .documents-resolve { max-width: 48rem; }
 .documents-plan-consequences { margin: 0; padding-inline-start: var(--space-5); }
 .documents-resolve { display: grid; gap: var(--space-2); }
@@ -114,6 +124,8 @@
   .documents-filter-active { forced-color-adjust: none; background: CanvasText; color: Canvas; }
   .documents-skeleton-bar { background: GrayText; }
   .documents-paging a[aria-disabled="true"] { color: GrayText; }
+  .documents-text-button { color: LinkText; }
+  .documents-table .documents-row--active > :last-child { box-shadow: none; border-right: 3px solid Highlight; }
 }
 
 /* Case selection tools above the table (L3b) */

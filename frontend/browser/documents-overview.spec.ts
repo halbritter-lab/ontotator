@@ -60,7 +60,7 @@ const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, RowExpect[
     { case_id: "case-106", language: "de", review: UNCHANGED, annotation: { line1: "◐ 1 of 2 submitted", line2: `waiting: ${TOM}` }, final: { line1: "○ after annotation", line2: "" }, waiting: [TOM], action: null, edge: false },
   ],
   S7a: [
-    { case_id: "case-107", language: "de", review: UNCHANGED, annotation: { line1: "✓ submitted", line2: `${ANA} · 3 findings` }, final: { line1: "● Your choice", line2: "1 submission" }, waiting: "You", action: "Accept result…", edge: true },
+    { case_id: "case-107", language: "de", review: UNCHANGED, annotation: { line1: "✓ submitted", line2: `${ANA} · 3 findings` }, final: { line1: "● Your choice", line2: "1 submission" }, waiting: "You", action: "Accept as final…", edge: true },
   ],
   S7b: [
     { case_id: "case-107", language: "en", review: SOURCE, annotation: { line1: "✓ 2 of 2 submitted", line2: new RegExp(`^(${ANA}, ${TOM}|${TOM}, ${ANA})$`) }, final: { line1: "● Your choice", line2: "2 submissions · 3 of 3 match" }, waiting: "You", action: "Compare results…", edge: true },

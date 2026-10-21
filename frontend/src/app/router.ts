@@ -41,12 +41,21 @@ export interface ProjectDocumentsQuery {
   final_state?: string;
   /** Waiting-on facet: `me` or pseudonyms, comma-joined (OR). */
   waiting_on?: string;
-  /** Row of the open final-result panel as `<case>:<language>`. */
+  /** Row of the open row panel as `<case>:<language>`; the legacy `open=` parameter maps to it. */
   panel?: string;
-  /** Expanded rows as `<case>:<language>`; repeatable in the URL. */
-  open?: string[];
+  /** Activity filter of the row panel (`review` | `annotation` | `final`); `stage` is the table's stage filter. */
+  panel_stage?: string;
+  /** Tab of the row panel (`activity` | `versions` | `details`); absent means Activity. */
+  panel_tab?: string;
   page?: string;
 }
+
+/** Activity filters of the row panel (route `panel_stage`). */
+export type PanelStage = "review" | "annotation" | "final";
+export const PANEL_STAGES: readonly PanelStage[] = ["review", "annotation", "final"];
+/** Tabs of the row panel (route `panel_tab`). */
+export type PanelTab = "activity" | "versions" | "details";
+export const PANEL_TABS: readonly PanelTab[] = ["activity", "versions", "details"];
 
 /** Options for in-app navigation; `replace` rewrites the current history entry. */
 export interface NavigateOptions { replace?: boolean }
@@ -54,7 +63,7 @@ export interface NavigateOptions { replace?: boolean }
 export const DOCUMENT_FIELDS = [
   "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
   "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
-  "review_state", "annotation_state", "final_state", "waiting_on", "panel",
+  "review_state", "annotation_state", "final_state", "waiting_on", "panel", "panel_stage", "panel_tab",
 ] as const;
 
 function readDocumentsQuery(params: URLSearchParams, prefix = ""): ProjectDocumentsQuery {
@@ -63,8 +72,9 @@ function readDocumentsQuery(params: URLSearchParams, prefix = ""): ProjectDocume
     const value = params.get(`${prefix}${field}`);
     if (value !== null) result[field] = value;
   }
-  const open = params.getAll(`${prefix}open`);
-  if (open.length) result.open = open;
+  // Legacy `open=` (expanded rows before the row panel): the first one opens the panel.
+  const open = params.get(`${prefix}open`);
+  if (open && result.panel === undefined) result.panel = open;
   return result;
 }
 
@@ -75,7 +85,6 @@ function documentsEntries(query: ProjectDocumentsQuery | undefined, prefix = "")
     const value = query[field];
     if (value !== undefined) entries.push([`${prefix}${field}`, value]);
   }
-  for (const value of query.open ?? []) entries.push([`${prefix}open`, value]);
   return entries;
 }
 

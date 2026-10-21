@@ -41,7 +41,8 @@ it('passes the documents query and the resume action from the route to the repor
   vi.spyOn(api, 'listProjects').mockResolvedValue([project]);
   render(<App user={testUser('lead')} />);
   const detail = await screen.findByRole('region', { name: 'Authorized report detail' });
-  expect(JSON.parse(detail.getAttribute('data-route') ?? '{}')).toEqual({ action: 'resume', documents: { decision: 'all', open: ['case 7:en'] } });
+  // A legacy `documents_open` link still names the row: it becomes the row panel.
+  expect(JSON.parse(detail.getAttribute('data-route') ?? '{}')).toEqual({ action: 'resume', documents: { decision: 'all', panel: 'case 7:en' } });
 });
 
 it('passes section=decide from the route to the report detail', async () => {
@@ -177,7 +178,7 @@ it('keeps focus where it is without section=decide', async () => {
 });
 
 it('after a decision offers Back to Documents and Next decision under a segment filter', async () => {
-  const segment = { segment: 'decision', open: ['case 7:en'] };
+  const segment = { segment: 'decision', panel: 'case 7:en', panel_stage: 'annotation' };
   mockReport();
   const rows = vi.mocked(api.listDocumentRows).mockImplementation(async (_key, filters = {}) => filters.segment === 'decision'
     ? page([group('case 7', [row({ case_id: 'case 7', language: 'en' })]), group('case-0101', [row({ case_id: 'case-0101', language: 'en', retained: true })]),
@@ -192,7 +193,8 @@ it('after a decision offers Back to Documents and Next decision under a segment 
   const outcome = (await screen.findByText(/Report closed/)).closest('.lead-outcome') as HTMLElement;
   expect(within(outcome).getByRole('link', { name: 'Back to Documents' }).getAttribute('href')).toBe(routeHref({ name: 'projectDocuments', key: 'p/key', ...segment }));
   const next = await within(outcome).findByRole('link', { name: 'Next decision: case-0102 · de' });
-  const expected: Route = { name: 'projectDocuments', key: 'p/key', segment: 'decision', open: ['case 7:en', 'case-0102:de'] };
+  // The next decision opens in the row panel (the legacy `open=` list became `panel`), unfiltered.
+  const expected: Route = { name: 'projectDocuments', key: 'p/key', segment: 'decision', panel: 'case-0102:de', panel_stage: undefined, panel_tab: undefined };
   expect(next.getAttribute('href')).toBe(routeHref(expected));
   expect(rows).toHaveBeenCalledWith('p/key', expect.objectContaining({ segment: 'decision' }));
   expect(within(outcome).queryAllByRole('button')).toEqual([]);
@@ -202,7 +204,7 @@ it('after a decision offers Back to Documents and Next decision under a segment 
 
 it('offers no Next decision without a segment filter', async () => {
   mockReport(); vi.spyOn(api, 'actOnProblemReport').mockResolvedValue({ ...report, revision: 3, state: 'resolved' });
-  render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage documents={{ language: 'en', open: ['case 7:en'] }} onNavigate={vi.fn()} />);
+  render(<ProblemReportDetail projectKey="p/key" reportId="report-1" canManage documents={{ language: 'en', panel: 'case 7:en' }} onNavigate={vi.fn()} />);
   await loaded();
   confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
   await screen.findByText(/Report closed/);

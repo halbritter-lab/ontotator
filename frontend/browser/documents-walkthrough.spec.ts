@@ -13,8 +13,8 @@
  */
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import {
-  documentsTab, evidence, expectCounterEqualsTab, expectEdge, expectStage, expectWaiting, finalPanel, historyRegion, historyToggle,
-  moreActions, newBadge, openDocuments, rowAction, rowCell, rowHeader, textRow,
+  detailsButton, documentsTab, evidence, expectCounterEqualsTab, expectEdge, expectStage, expectWaiting,
+  moreActions, newBadge, openDocuments, rowAction, rowCell, rowHeader, rowPanel, textRow,
 } from "./documentsOverviewHelpers";
 import { LeadClicks, loginOverviewUser, overviewAct, overviewScenario, type OverviewActBody, type OverviewScenario } from "./overviewHelpers";
 
@@ -171,10 +171,10 @@ test("step 5: Tom submits (Luc keeps a draft)", async () => {
 });
 
 test("step 6: the lead requests a correction, Ana corrects → v2", async () => {
-  await clicks.count(historyToggle(page, CASE, "de"));
-  const area = historyRegion(page, CASE, "de");
-  await expect(area.getByText("Loading history…")).toHaveCount(0);
-  await clicks.count(area.locator("summary", { hasText: /^Text versions \(1\)$/ }));
+  await clicks.count(detailsButton(page, CASE, "de"));
+  const area = rowPanel(page, CASE, "de");
+  await expect(area.getByText(`Loading ${CASE} · de…`)).toHaveCount(0);
+  await clicks.count(area.getByRole("tab", { name: "Versions (1)", exact: true }));
   await clicks.count(area.getByRole("button", { name: "Request translation correction", exact: true }));
   const form = area.getByRole("region", { name: "Request translation correction", exact: true });
   const reviewer = form.getByLabel("Translation reviewer", { exact: true });
@@ -220,14 +220,15 @@ test("step 7: Handle text change… → Move to v2 (preselected) → Apply", asy
   await expectCounterEqualsTab(page);
 
   // Check along the way: Text versions lists Luc's v1 assignment as moved; Tom's v1 submission stays.
-  const toggle = historyToggle(page, CASE, "de");
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-  const area = historyRegion(page, CASE, "de");
-  const versions = area.locator("details", { has: page.locator("summary", { hasText: /^Text versions \(2\)$/ }) });
-  if ((await versions.getAttribute("open")) === null) await versions.locator(":scope > summary").click();
+  const area = rowPanel(page, CASE, "de");
+  if (!(await area.isVisible())) await detailsButton(page, CASE, "de").click();
+  await area.getByRole("tab", { name: "Versions (2)", exact: true }).click();
   const v1 = area.getByRole("list", { name: "Assignments on v1", exact: true });
   await expect(v1.getByRole("listitem").filter({ hasText: LUC })).toContainText("Annotation · moved to v2");
   await expect(v1.getByRole("listitem").filter({ hasText: TOM })).toContainText("Annotation · Submitted");
+  // The row panel lies over the right part of the table: close it before the next row action.
+  await area.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(area).toHaveCount(0);
   record(7);
   await evidence(page, "walkthrough-7");
 
@@ -281,7 +282,7 @@ test("step 9: Tom and Luc resolve the carried findings and submit on v2", async 
 
 test("step 10: Compare results… → agreement 5 of 7 → Consolidate… → Ana → Start consolidation", async () => {
   await clicks.count(action("Compare results…"));
-  const panel = finalPanel(page, CASE, "de");
+  const panel = rowPanel(page, CASE, "de").getByRole("region", { name: "Final result", exact: true });
   await expect(panel).toBeVisible();
   await expect(panel.getByText("2 annotations submitted on v2 · 7 findings in total", { exact: true })).toBeVisible();
   await expect(panel.getByText("Agreement: 5 of 7 findings match", { exact: true })).toBeVisible();
@@ -326,17 +327,17 @@ test("step 11: Ana submits the consolidation", async () => {
   await evidence(page, "walkthrough-11");
 });
 
-test("step 11: the consolidation's row action reads \"Accept result…\" (VD16)", async () => {
-  await expect(action("Accept result…")).toBeVisible();
+test("step 11: the consolidation's row action reads \"Accept as final…\" (VD16, X14)", async () => {
+  await expect(action("Accept as final…")).toBeVisible();
 });
 
-test("step 12: Accept result… → Accept the consolidation by Ana as final", async () => {
+test("step 12: Accept as final… → Accept the consolidation by Ana as final", async () => {
   // The lead works from Needs your decision (where the nav counter lands, VD7), so the row is retained with "Resolved".
   await openDocuments(page, s.project, "?segment=decision");
   await expect(documentsTab(page, "Needs your decision", 1)).toHaveAttribute("aria-selected", "true");
-  const accept = (await action("Accept result…").count()) ? action("Accept result…") : action("Compare results…");
+  const accept = (await action("Accept as final…").count()) ? action("Accept as final…") : action("Compare results…");
   await clicks.count(accept);
-  const panel = finalPanel(page, CASE, "de");
+  const panel = rowPanel(page, CASE, "de").getByRole("region", { name: "Final result", exact: true });
   await expect(panel).toBeVisible();
   await expect(panel.getByText(`Accept the consolidation by ${ANA} as final?`, { exact: true })).toBeVisible();
   await clicks.count(panel.getByRole("button", { name: "Accept as final", exact: true }));

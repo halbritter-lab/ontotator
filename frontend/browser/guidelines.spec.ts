@@ -11,7 +11,7 @@ import { resolve } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
-import { documentsReady, expandHistory, finalPanel } from "./documentsHelpers";
+import { decisionBlock, documentsReady, openRowPanel, rowPanel } from "./documentsHelpers";
 import { authenticatedRequest, submitCase } from "./helpers";
 import { guidelineScenario, loginGuidelineUser, type GuidelinePerson, type GuidelineScenario } from "./guidelineHelpers";
 
@@ -86,10 +86,17 @@ async function publish(page: Page, s: GuidelineScenario, file: "v1.md" | "v2.md"
   await expect(success).toBeFocused();
 }
 
-/** Lead Documents: the final-result side panel of ``case · language`` (route parameter ``panel``), loaded. */
+/**
+ * Lead Documents: the decision block of ``case · language`` in the row panel (route parameters ``panel`` and
+ * ``panel_stage``), loaded; a decided row opens it through "Change final…".
+ */
 async function finalResult(page: Page, s: GuidelineScenario, caseId: string, language: string): Promise<Locator> {
-  await visit(page, `/#/projects/${encodeURIComponent(s.project)}/documents?panel=${encodeURIComponent(`${caseId}:${language}`)}`);
-  const panel = finalPanel(page, caseId, language);
+  await visit(page, `/#/projects/${encodeURIComponent(s.project)}/documents?panel=${encodeURIComponent(`${caseId}:${language}`)}&panel_stage=final`);
+  await expect(rowPanel(page, caseId, language)).toBeVisible();
+  const panel = decisionBlock(page, caseId, language);
+  const change = rowPanel(page, caseId, language).getByRole("button", { name: "Change final…", exact: true });
+  await expect(panel.or(change).first()).toBeVisible();
+  if (!(await panel.count())) await change.click();
   await expect(panel).toBeVisible();
   await expect(panel.getByText("Loading submissions…")).toHaveCount(0);
   return panel;
@@ -99,8 +106,8 @@ async function finalResult(page: Page, s: GuidelineScenario, caseId: string, lan
 async function translationReviews(page: Page, s: GuidelineScenario, caseId: string, language: string): Promise<void> {
   await visit(page, `/#/projects/${encodeURIComponent(s.project)}/documents`);
   await documentsReady(page);
-  const area = await expandHistory(page, caseId, language);
-  await area.locator("summary", { hasText: /^Text versions \(\d+\)$/ }).click();
+  const area = await openRowPanel(page, caseId, language);
+  await area.getByRole("tab", { name: /^Versions \(\d+\)$/ }).click();
   await area.getByRole("button", { name: /^Translation reviews for / }).first().click();
 }
 

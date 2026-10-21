@@ -1,6 +1,6 @@
 /**
- * History lines of the slim expansion (documents overview spec "Expansion (▸)"): one line per
- * review, submission or open task, then pauses and the final choice, e.g.
+ * Activity lines of the row panel (acceptance fixes WP-A): one line per review, submission or open
+ * task, then pauses and the final choice, oldest first, each with its stage, e.g.
  * "Review: Ana Weber (ann-0003) · Accepted unchanged · 20 Oct, 22:09",
  * "Annotation: Tom Reis (ann-0004) · Round 1 · 1 finding · 22:15", "Final: chosen by you · 20 Oct, 22:20".
  */
@@ -10,8 +10,13 @@ import { formatTime, personLabel } from "../app/submissionLabels";
 import { decisionLabels } from "../translation/labels";
 import { acceptanceLabel, acceptanceOf, isDiscarded } from "./TextVersions";
 
+/** Stage of an activity line (the row panel's stage tag and filter). */
+export type HistoryStage = "review" | "annotation" | "final";
+
 export interface HistoryLine {
   key: string;
+  /** Stage the line belongs to: translation review, annotation work or the final choice. */
+  stage: HistoryStage;
   text: string;
   /** Problem report behind a paused task ("Open report"). */
   reportId?: string | null;
@@ -61,11 +66,11 @@ export function historyLines(row: DocumentRowView, submissions: readonly RowSubm
       outcome = join(decision ? labelFor(decisionLabels, decision) : "Submitted", corrected && reviewed ? `v${reviewed.version} → v${corrected.version}` : null);
     } else outcome = join(labelFor(assignmentStatusLabels, item.status), item.held && "Paused");
     const at = item === lastSubmitted ? row.stages?.review.detail.at : null;
-    lines.push({ key: `work-${item.assignment_id}`, text: `Review: ${join(who(item), outcome, at && timeText(at, now))}` });
+    lines.push({ key: `work-${item.assignment_id}`, stage: "review", text: `Review: ${join(who(item), outcome, at && timeText(at, now))}` });
   }
   for (const entry of row.versions) {
     const acceptance = entry.is_newest_in_chain && !isDiscarded(row, entry) ? acceptanceOf(entry) : null;
-    if (acceptance) lines.push({ key: `acceptance-${entry.document_id}`, text: `Review: ${acceptanceLabel(acceptance, now)}` });
+    if (acceptance) lines.push({ key: `acceptance-${entry.document_id}`, stage: "review", text: `Review: ${acceptanceLabel(acceptance, now)}` });
   }
 
   // Annotation: submissions in time order (once loaded), then the tasks not submitted yet.
@@ -75,6 +80,7 @@ export function historyLines(row: DocumentRowView, submissions: readonly RowSubm
       const round = item.kind === "consolidation" ? null : item.round_ordinal == null ? "Initial submission" : `Round ${item.round_ordinal}`;
       lines.push({
         key: `submission-${item.submission_id}`,
+        stage: "annotation",
         text: `${SUBMISSION_PREFIX[item.kind] ?? "Annotation"}: ${join(personLabel(item.author_label, item.is_me, item.author), round,
           plural(item.finding_count, "finding"), several && `v${item.version}`, timeText(item.recorded_at, now))}`,
       });
@@ -85,19 +91,19 @@ export function historyLines(row: DocumentRowView, submissions: readonly RowSubm
     if (item.status === "submitted" && submissions && item.moved_to_version == null) continue;
     const status = item.moved_to_version != null ? `moved to v${item.moved_to_version}` : join(labelFor(assignmentStatusLabels, item.status), item.held && "Paused");
     const round = item.moved_to_version == null && item.round_ordinal != null ? `Round ${item.round_ordinal}` : null;
-    lines.push({ key: `work-${item.assignment_id}`, text: `${workPrefix(item)}: ${join(who(item), round, status)}` });
+    lines.push({ key: `work-${item.assignment_id}`, stage: "annotation", text: `${workPrefix(item)}: ${join(who(item), round, status)}` });
   }
 
   // A task on hold stays a history line (spec "Expansion": TASK_ON_HOLD).
   for (const entry of [...row.issues, ...row.notes]) {
     if (entry.code !== "TASK_ON_HOLD") continue;
-    lines.push({ key: `hold-${entry.cause_id}`, text: `Task paused${entry.author_label ? `: ${entry.author_label}` : ""}`, reportId: entry.report_id ?? null });
+    lines.push({ key: `hold-${entry.cause_id}`, stage: "annotation", text: `Task paused${entry.author_label ? `: ${entry.author_label}` : ""}`, reportId: entry.report_id ?? null });
   }
 
   const chosen = row.final;
   if (chosen) {
     const by = chosen.selected_by ? (options.me && chosen.selected_by === options.me ? "you" : chosen.selected_by) : null;
-    lines.push({ key: "final", text: `Final: ${join(by ? `chosen by ${by}` : "chosen", chosen.selected_at && timeText(chosen.selected_at, now))}` });
+    lines.push({ key: "final", stage: "final", text: `Final: ${join(by ? `chosen by ${by}` : "chosen", chosen.selected_at && timeText(chosen.selected_at, now))}` });
   }
   return lines;
 }

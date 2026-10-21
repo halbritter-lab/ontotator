@@ -17,7 +17,7 @@ import {
   type VariantSummary,
 } from "../api/client";
 import { formatDateTime, labelFor, plural } from "../app/labels";
-import { DOCUMENT_FIELDS, routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
+import { DOCUMENT_FIELDS, PANEL_STAGES, PANEL_TABS, routeHref, type NavigateOptions, type PanelTab, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, Checkbox, Dialog, EmptyState, FilterChip, InlineMessage, StatusBadge, tabId, Toast, Toolbar, useMediaQuery, useToast, type GroupSelectMode } from "../ui";
@@ -27,11 +27,11 @@ import { activeTab, chipsOf, clearAllPatch, filtersActive, listOf, rowsRequest, 
 import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
-import { ExpandedRow, type ExpandedRowProps } from "../documents/ExpandedRow";
 import { panelStep } from "../documents/finalPanelText";
 import type { MenuItem } from "../ui/MenuButton";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
-import { FinalPanel, type PanelSection } from "../documents/FinalPanel";
+import { DecisionBlock } from "../documents/FinalPanel";
+import { RowPanel, type RowPanelTarget } from "../documents/RowPanel";
 import { HandleTextChangeDialog } from "../documents/HandleTextChangeDialog";
 import { CarryDialog, carrySourceOfFinal, carrySourceOfStep, type CarrySource } from "../documents/CarryDialog";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
@@ -39,13 +39,13 @@ import { useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { ResolveTranslation } from "../documents/ResolveTranslation";
 import { SelectByIdsDialog } from "../documents/SelectByIdsDialog";
 import { SelectionBar } from "../documents/SelectionBar";
-import { documentsGroupId, documentsRowId, isPlainClick, type DocumentsRowPart, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
+import { documentsGroupId, documentsRowId, isPlainClick, type DocumentsRowPart, type OpenRowPanel, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
+import { isActiveRow } from "../documents/stageLabels";
 import { caseOfTextKey, languageOfTextKey, MAX_SELECTION_CASES as MAX_SELECTION, textKeyOf, useTextSelection } from "../documents/useTextSelection";
 import { useDocumentRows } from "../documents/useDocumentRows";
 import { notifyDocumentsChanged } from "../documents/documentsEvents";
-import { useRowSubmissions } from "../documents/useRowSubmissions";
 import { clearVisits, recordDecision, rememberShown, retainedKeys, rowBadges, type RowBadge } from "../documents/visitState";
 import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
 import { AssignWorkDialog, type AssignWorkDialogProps } from "./AssignWorkDialog";
@@ -78,8 +78,13 @@ const PANEL_ID = "documents-panel";
 function documentsQuery(query: ProjectDocumentsQuery): ProjectDocumentsQuery {
   const result: ProjectDocumentsQuery = {};
   for (const field of DOCUMENT_FIELDS) if (query[field] !== undefined && query[field] !== "") result[field] = query[field];
-  if (query.open?.length) result.open = [...query.open];
   return result;
+}
+
+/** The query without the row panel (links from the table never carry it). */
+function withoutPanel(query: ProjectDocumentsQuery): ProjectDocumentsQuery {
+  const { panel: _panel, panel_stage: _stage, panel_tab: _tab, ...rest } = query;
+  return rest;
 }
 
 /** The Documents filters for the selection summary and the batch assign dialog: every filter except paging, sort and retain. */
@@ -104,7 +109,13 @@ const rowElement = (key: string, part: DocumentsRowPart): HTMLElement | null =>
  * Resolve options of a row: rule 4 "Resolve…" or rule 4a "Assign review or accept…". They render inline
  * under the row (documents overview Change 13); focus goes to their heading (F5).
  */
-interface RowPanel { rowKey: string; mode: "resolve" | "not_accepted" }
+interface ResolveOptions { rowKey: string; mode: "resolve" | "not_accepted" }
+
+/** How the row panel opens: the opener gets focus back; `focus` moves focus to the panel heading. */
+interface PanelOpenOptions { opener?: HTMLElement | null; focus?: boolean; changeFinal?: boolean }
+
+/** The focused element (the control that ran a row action), as the row panel's opener. */
+const focusedElement = (): HTMLElement | null => (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null);
 export type AssignTask = "translation_review" | "annotate" | "review";
 
 /** Previous / Next; at either end an `aria-disabled` link that stays focusable (focus survives the page change). */
@@ -195,24 +206,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // Deep link `case` + `language`: that row is open until the lead collapses it.
+  // Deep link `case` + `language`: that row gets focus and its notice.
   const deepLanguages = listOf(query.language);
   const deepKey = query.case && deepLanguages.length === 1 ? `${query.case}:${deepLanguages[0]}` : null;
-  const [collapsedDeepKey, setCollapsedDeepKey] = useState<string | null>(null);
-  // Rows collapsed automatically because they became Resolved (until the lead opens them again
-  // or the filter changes).
-  const [autoCollapsedState, setAutoCollapsedState] = useState<{ identity: string; keys: ReadonlySet<string> } | null>(null);
-  const autoCollapsed: ReadonlySet<string> = useMemo(
-    () => (autoCollapsedState?.identity === requestIdentity ? autoCollapsedState.keys : new Set()), [autoCollapsedState, requestIdentity]);
-  const setAutoCollapsed = (keys: ReadonlySet<string>) => setAutoCollapsedState({ identity: requestIdentity, keys });
-  const openKeys = useMemo(() => {
-    const keys = new Set(query.open ?? []);
-    if (deepKey && collapsedDeepKey !== deepKey) keys.add(deepKey);
-    for (const key of autoCollapsed) keys.delete(key);
-    return keys;
-  }, [query.open, deepKey, collapsedDeepKey, autoCollapsed]);
-  const { open: _routeOpen, ...queryWithoutOpen } = query;
-  const viewQuery: ProjectDocumentsQuery = { ...queryWithoutOpen, ...(openKeys.size ? { open: [...openKeys] } : {}) };
+  /** Links from the table keep the whole query, so Back from the editor restores the row panel too. */
+  const tableQuery = query;
 
   // The latest requested Documents query: a navigation applies asynchronously (App `requestRoute`, last wins), so two
   // navigations of one commit (the panel's advance and the badge collapse in their effects) build on each other, not on
@@ -264,24 +262,12 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     changeFilter(clearAllPatch(query));
     search.current?.focus();
   };
-  const toggleRow = (key: string) => {
-    const next = new Set(openKeys);
-    if (next.has(key)) {
-      next.delete(key);
-      if (key === deepKey) setCollapsedDeepKey(key);
-    } else {
-      next.add(key);
-      if (autoCollapsed.has(key)) setAutoCollapsed(new Set([...autoCollapsed].filter(item => item !== key)));
-    }
-    navigateDocuments({ open: [...next] }, { replace: true });
-  };
-  const expandRow = (key: string) => { if (!openKeys.has(key)) toggleRow(key); };
 
   // Visit state: a filter change clears the other visits of the project.
   useEffect(() => { clearVisits(projectKey, filterIdentity); }, [projectKey, filterIdentity]);
 
   // Remember the matching rows of each new page, retain them in later requests and badge the
-  // remembered rows that stopped matching; Resolved rows collapse once.
+  // remembered rows that stopped matching.
   const [badgeState, setBadgeState] = useState<{ identity: string; badges: ReadonlyMap<string, RowBadge> } | null>(null);
   const badges: ReadonlyMap<string, RowBadge> = badgeState?.identity === filterIdentity ? badgeState.badges : new Map();
   useEffect(() => {
@@ -290,15 +276,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     rememberShown(projectKey, filterIdentity, rowsShown);
     const keys = retainedKeys(projectKey, filterIdentity);
     if (keys.some(key => !retain.includes(key))) setRetainState({ identity: filterIdentity, keys });
-    const next = rowBadges(projectKey, filterIdentity, rowsShown);
-    const resolvedBefore = new Set([...badges].filter(([, badge]) => badge.tone === "success").map(([key]) => key));
-    const collapse = [...next].filter(([key, badge]) => badge.tone === "success" && !resolvedBefore.has(key) && openKeys.has(key)).map(([key]) => key);
-    setBadgeState({ identity: filterIdentity, badges: next });
-    if (collapse.length) {
-      setAutoCollapsed(new Set([...autoCollapsed, ...collapse]));
-      if (deepKey && collapse.includes(deepKey)) setCollapsedDeepKey(deepKey);
-      navigateDocuments({ open: [...openKeys].filter(key => !collapse.includes(key)) }, { replace: true });
-    }
+    setBadgeState({ identity: filterIdentity, badges: rowBadges(projectKey, filterIdentity, rowsShown) });
     // Only a new page carries new row states.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
@@ -350,9 +328,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     const caseId = query.case;
     const group = page.groups.find(item => item.case_id === caseId);
     const candidates = [
-      ...(query.language ? [documentsRowId(caseId, query.language, "header"), documentsRowId(caseId, query.language, "disclosure")] : []),
+      ...(query.language ? [documentsRowId(caseId, query.language, "header")] : []),
       documentsGroupId(caseId),
-      ...(group?.rows.flatMap(item => [documentsRowId(item.case_id, item.language, "header"), documentsRowId(item.case_id, item.language, "disclosure")]) ?? []),
+      ...(group?.rows.map(item => documentsRowId(item.case_id, item.language, "header")) ?? []),
     ];
     const target = candidates.map(id => document.getElementById(id)).find(Boolean);
     if (!target) return;
@@ -490,16 +468,14 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   useShortcutHint(["Space"], "Select or deselect the focused row", { group: "Selection", enabled: !!page?.groups.length });
 
   // Row actions.
-  const [rowPanel, setRowPanel] = useState<RowPanel | null>(null);
+  const [resolveOptions, setResolveOptions] = useState<ResolveOptions | null>(null);
   /** The rendered Resolve options under the row. */
   const panelBox = useRef<HTMLDivElement>(null);
-  const openPanel = (row: DocumentRowView, mode: RowPanel["mode"]) => {
-    setRowPanel({ rowKey: rowKeyOf(row), mode });
+  const openPanel = (row: DocumentRowView, mode: ResolveOptions["mode"]) => {
+    setResolveOptions({ rowKey: rowKeyOf(row), mode });
   };
-  /** Row whose expansion opens Text versions (the panel's Text versions link). */
-  const [revealFor, setRevealFor] = useState<string | null>(null);
-  // Links away from the page never carry the open panel (a row action from the panel closes it first).
-  const { panel: _panel, ...linkQuery } = viewQuery;
+  // Links from row actions carry the Documents query without the row panel (an action from the panel closes it first).
+  const linkQuery = withoutPanel(query);
   const reportRoute = (reportId: string, extra: { section?: "decide"; action?: "resume" }): Route => ({
     name: "projectProblemReport", key: projectKey, reportId, ...extra, ...(Object.keys(linkQuery).length ? { documents: linkQuery } : {}),
   });
@@ -530,83 +506,126 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       case "assign_annotation": void onAssign(row, "annotate"); return;
       case "choose_final":
       case "review_changes":
-        setRowPanel(null);
-        openFinalPanel(key);
+        setResolveOptions(null);
+        openRowPanel({ key }, { opener: focusedElement(), focus: true });
         return;
       // Text changes (V5): one dialog per old-version item; the "+n" menu lists one entry per person.
       case "handle_text_change": setTextChange({ kind: "handle", rowKey: key, step }); return;
       case "carry_text_change": setTextChange({ kind: "carry", rowKey: key, source: carrySourceOfStep(row, step) }); return;
       case "assign_source_review": void onAssign(row, "translation_review", { reviewReason: "source_changed" }); return;
       case "decide_report":
-        if (step.report_id) onNavigate(reportRoute(step.report_id, { section: "decide" })); else expandRow(key);
+        if (step.report_id) onNavigate(reportRoute(step.report_id, { section: "decide" })); else openRowPanel({ key }, { opener: focusedElement(), focus: true });
         return;
       case "resume_task": {
         const reportId = pausedReportId(row, step);
-        if (reportId) onNavigate(reportRoute(reportId, { action: "resume" })); else expandRow(key);
+        if (reportId) onNavigate(reportRoute(reportId, { action: "resume" })); else openRowPanel({ key }, { opener: focusedElement(), focus: true });
         return;
       }
       case "resolve": openPanel(row, "resolve"); return;
       case "accept_or_review": openPanel(row, "not_accepted"); return;
-      // "Plan…" opens the plan popover in the Action cell; from elsewhere the expansion's Plan line.
-      case "plan": expandRow(key); return;
+      // "Plan…" opens the plan popover in the Action cell; from elsewhere the row panel (Details: Plan).
+      case "plan": openRowPanel({ key, tab: "details" }, { opener: focusedElement(), focus: true }); return;
       default: return;
     }
   };
   const closePanel = (key: string) => {
-    setRowPanel(null);
-    window.setTimeout(() => (rowElement(key, "action") ?? rowElement(key, "disclosure"))?.focus(), 0);
+    setResolveOptions(null);
+    window.setTimeout(() => (rowElement(key, "action") ?? rowElement(key, "header"))?.focus(), 0);
   };
-  // Final-result side panel (V6): route parameter `panel={case}:{language}`, so Back and the editor return to it.
+  // Row panel (acceptance fixes WP-A): route parameters `panel={case}:{language}`, `panel_stage` and `panel_tab`, so Back
+  // and the editor return to it. The panel is non-modal: the table stays usable and another row's entry switches it.
   const panelKey = query.panel && query.panel.includes(":") ? query.panel : null;
-  /** "Change final…": the panel opens on its compare content (until it closes; a reload shows the decided state). */
+  const panelStage = PANEL_STAGES.find(value => value === query.panel_stage);
+  const panelTab: PanelTab = PANEL_TABS.find(value => value === query.panel_tab) ?? "activity";
+  const panelRow = panelKey ? pageRows.find(entry => rowKeyOf(entry) === panelKey) ?? null : null;
+  /** The control that opened the panel; Close and Escape return focus to it. */
+  const panelOpener = useRef<HTMLElement | null>(null);
+  /** Each explicit open moves focus to the panel heading. */
+  const [panelFocus, setPanelFocus] = useState(0);
+  /** "Change final…": the decision block opens on its compare content (until the panel shows another row). */
   const [changeFinalKey, setChangeFinalKey] = useState<string | null>(null);
-  function openFinalPanel(key: string, options: { changeFinal?: boolean } = {}) {
-    setChangeFinalKey(options.changeFinal ? key : null);
-    navigateDocuments({ panel: key }, { replace: true });
+  /** The decision block holds unsaved input; a row switch asks first. */
+  const [panelDirty, setPanelDirty] = useState(false);
+  const [pendingPanel, setPendingPanel] = useState<{ target: RowPanelTarget; options: PanelOpenOptions } | null>(null);
+  // The decision block stays for its row once shown (its success and "none left" states outlive the step);
+  // a started consolidation releases it (the row waits for the consolidator now).
+  const decisionKey = useRef<string | null>(null);
+  const [releasedKey, setReleasedKey] = useState<string | null>(null);
+  if (releasedKey && releasedKey !== panelKey) setReleasedKey(null);
+  if (panelKey && panelRow && releasedKey !== panelKey && (panelStep(panelRow) || changeFinalKey === panelKey)) decisionKey.current = panelKey;
+  const showPanel = (target: RowPanelTarget, options: PanelOpenOptions) => {
+    if (options.changeFinal) setChangeFinalKey(target.key);
+    else if (target.key !== panelKey) setChangeFinalKey(null);
+    if (options.opener) panelOpener.current = options.opener;
+    if (options.focus) setPanelFocus(value => value + 1);
+    setPendingPanel(null);
+    navigateDocuments({ panel: target.key, panel_stage: target.stage, panel_tab: target.tab && target.tab !== "activity" ? target.tab : undefined }, { replace: true });
+  };
+  /** Shows a row (or another stage or tab) in the panel; a switch away from unsaved decision input asks first. */
+  function openRowPanel(target: RowPanelTarget, options: PanelOpenOptions = {}) {
+    if (panelDirty && panelKey && target.key !== panelKey) { setPendingPanel({ target, options }); return; }
+    showPanel(target, options);
   }
-  /** Closes the panel in one navigation with `patch` (e.g. an expanded row); the dialog returns focus (`panelReturnFocus`). */
-  const closeFinalPanel = (patch: ProjectDocumentsQuery = {}) => {
+  const closeRowPanel = () => {
     setChangeFinalKey(null);
-    navigateDocuments({ ...patch, panel: undefined }, { replace: true });
+    setReleasedKey(null);
+    setPendingPanel(null);
+    setPanelDirty(false);
+    decisionKey.current = null;
+    navigateDocuments({ panel: undefined, panel_stage: undefined, panel_tab: undefined }, { replace: true });
   };
-  /** Focus after the panel: the shown row's action, else its row header, else the page heading. */
-  const panelReturnFocus = () => (panelKey ? rowElement(panelKey, "action") ?? rowElement(panelKey, "header") : null) ?? headingRef.current;
-  const expandedWith = (key: string): ProjectDocumentsQuery => ({ open: [...new Set([...openKeys, key])] });
-  const panelSection = (row: DocumentRowView, section: PanelSection) => {
-    const key = rowKeyOf(row);
-    if (section === "versions") setRevealFor(key);
-    closeFinalPanel(expandedWith(key));
-  };
-  const finalPanel = panelKey ? <FinalPanel projectKey={projectKey} rowKey={panelKey} page={page} query={viewQuery} refreshError={rows.error}
-    username={currentUser?.username ?? ""} changeFinal={changeFinalKey === panelKey} returnFocus={panelReturnFocus}
-    onClose={() => closeFinalPanel()}
+  /** Text name and stage cells: the panel unfiltered or filtered to the stage, on Activity. */
+  const onOpenPanel: OpenRowPanel = (row, { stage, opener }) => openRowPanel({ key: rowKeyOf(row), stage }, { opener, focus: true });
+  const panelSource = panelRow ? groupOf(panelRow.case_id)?.rows.find(entry => entry.is_source)?.language ?? null : null;
+  // Rows without a final decision step still offer "Consolidate…" once two submissions exist on one version.
+  const decisionOptional = !(panelKey && decisionKey.current === panelKey) && panelRow != null && !panelRow.final && isActiveRow(panelRow);
+  const decision = panelKey && releasedKey !== panelKey && (decisionKey.current === panelKey || decisionOptional) ? <DecisionBlock optional={decisionOptional} projectKey={projectKey} rowKey={panelKey} page={page} query={query} refreshError={rows.error}
+    username={currentUser?.username ?? ""} changeFinal={changeFinalKey === panelKey}
+    onClose={closeRowPanel}
     onDecided={key => { notifyFinalSelectionChanged(projectKey); recordDecision(projectKey, key); reloadAfterAction(); }}
-    onAdvance={key => openFinalPanel(key)}
+    onAdvance={key => showPanel({ key, stage: panelStage, tab: panelTab }, {})}
     onReload={() => rows.reload()}
     onNavigate={route => onNavigate(route)}
-    onRowAction={(row, step) => { closeFinalPanel(); onAction(row, step); }}
-    onAssign={row => { closeFinalPanel(); onAssign(row, "review"); }}
-    // Interim (O7 replaces it with the carry dialog): the expansion opens Text versions.
+    onRowAction={(row, step) => { if (step.action !== "choose_final" && step.action !== "review_changes") closeRowPanel(); onAction(row, step); }}
+    onAssign={row => onAssign(row, "review")}
     onCarry={(row, target) => {
       const source = carrySourceOfFinal(row, target);
-      closeFinalPanel();
       if (source) setTextChange({ kind: "carry", rowKey: rowKeyOf(row), source });
     }}
-    onSection={panelSection}
+    onFocusHeading={() => setPanelFocus(value => value + 1)}
+    onDirtyChange={setPanelDirty}
     onConsolidationStarted={row => {
-      closeFinalPanel();
+      setPanelDirty(false);
+      decisionKey.current = null;
+      setReleasedKey(rowKeyOf(row));
       const message = `Consolidation started for ${rowName(row)}.`;
       showToast({ message }); announce(message); refreshAll();
     }} /> : null;
+  const rowPanel = panelKey ? <RowPanel projectKey={projectKey} rowKey={panelKey} row={panelRow} rows={pageRows} stage={panelStage} tab={panelTab}
+    query={query} narrow={narrow} focusRequest={panelFocus} returnFocusRef={panelOpener}
+    onNavigate={target => openRowPanel(target)} onRoute={route => onNavigate(route)} onClose={closeRowPanel}
+    decision={decision} sourceLanguage={panelSource} textVersionTools={textVersionTools} me={currentUser?.pseudonym ?? null}
+    plan={panelRow ? <PlanChips row={panelRow} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} /> : null}
+    planRevision={panelRow ? planSaves.revisionOf(panelRow.case_id, groupOf(panelRow.case_id)?.plan_revision ?? 1) : undefined}
+    onAssign={onAssign} onRequestCorrection={row => { const variant = correctionVariant(row); if (variant) setCorrectionFor({ row, variant }); }}
+    canRequestCorrection={row => correctionVariant(row) != null}
+    onChangeFinal={row => openRowPanel({ key: rowKeyOf(row), stage: panelStage, tab: panelTab }, { changeFinal: true, focus: true })}
+    canChangeFinal={row => row.final != null && !panelStep(row) && decisionKey.current !== rowKeyOf(row)}
+    reportRoute={reportId => ({ name: "projectProblemReport", key: projectKey, reportId, documents: query })}
+    pendingSwitch={pendingPanel ? {
+      name: `${caseOfTextKey(pendingPanel.target.key)} · ${languageOfTextKey(pendingPanel.target.key)}`,
+      onConfirm: () => { setPanelDirty(false); showPanel(pendingPanel.target, pendingPanel.options); },
+      onCancel: () => setPendingPanel(null),
+    } : null} /> : null;
   // Escape inside the options closes them; a discard confirmation inside handles its own Escape first (registered later).
   useShortcut("Escape", event => {
     const scope = panelBox.current;
-    if (!rowPanel || !scope || !(event.target instanceof Node) || !scope.contains(event.target)) return false;
-    closePanel(rowPanel.rowKey);
-  }, { allowInInputs: true, enabled: rowPanel != null });
+    if (!resolveOptions || !scope || !(event.target instanceof Node) || !scope.contains(event.target)) return false;
+    closePanel(resolveOptions.rowKey);
+  }, { allowInInputs: true, enabled: resolveOptions != null });
 
-  // Lead actions that are no step, in the row's "+n" menu (also reachable without opening the expansion; annotation
-  // review and consolidation stay in the final-result panel and the expansion).
+  // Lead actions that are no step, in the row's "+n" menu (also reachable without opening the row panel; annotation
+  // review and consolidation stay in the row panel).
   const [correctionFor, setCorrectionFor] = useState<{ row: DocumentRowView; variant: VariantSummary } | null>(null);
   /** The accepted newest translation a correction can be requested for (Text versions offers the same). */
   const correctionVariant = (row: DocumentRowView): VariantSummary | null => {
@@ -618,33 +637,19 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const rowExtras = (row: DocumentRowView): MenuItem[] => {
     const key = rowKeyOf(row);
     const items: MenuItem[] = [];
-    if (row.final && !panelStep(row)) items.push({ id: "change-final", label: "Change final…", onSelect: () => openFinalPanel(key, { changeFinal: true }) });
+    if (row.final && !panelStep(row)) items.push({ id: "change-final", label: "Change final…", onSelect: () => openRowPanel({ key }, { changeFinal: true, opener: focusedElement(), focus: true }) });
     const variant = correctionVariant(row);
     if (variant) items.push({ id: "request-correction", label: "Request translation correction…", onSelect: () => setCorrectionFor({ row, variant }) });
     return items;
   };
 
-  const renderExpanded = (row: DocumentRowView) => {
-    const notice = rowNotice(row);
-    const key = rowKeyOf(row);
-    return <>
-      {notice && <p className="documents-row-notice">{notice}</p>}
-      <ExpandedRowLoader row={row} projectKey={projectKey} query={viewQuery} onNavigate={route => onNavigate(route)}
-        textVersionTools={textVersionTools} me={currentUser?.pseudonym ?? null}
-        plan={<PlanChips row={row} groupRevision={groupOf(row.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} />}
-        planRevision={planSaves.revisionOf(row.case_id, groupOf(row.case_id)?.plan_revision ?? 1)} onAssign={onAssign}
-        revealTextVersions={revealFor === key} onTextVersionsRevealed={() => setRevealFor(null)} headingLevel={narrow ? 5 : 3}
-        extraActions={rowExtras(row)} />
-    </>;
-  };
-
-  const resolvePanel = (row: DocumentRowView, panel: RowPanel): JSX.Element => {
+  const resolvePanel = (row: DocumentRowView, panel: ResolveOptions): JSX.Element => {
     const key = rowKeyOf(row);
     const groupRevision = groupOf(row.case_id)?.plan_revision ?? 1;
     return <div ref={panelBox}>
       <ResolveTranslation key={panel.mode} mode={panel.mode} row={row} projectKey={projectKey} headingLevel={narrow ? 5 : 3}
         revision={planSaves.revisionOf(row.case_id, groupRevision)}
-        onAssignReview={() => { setRowPanel(null); void onAssign(row, "translation_review"); }}
+        onAssignReview={() => { setResolveOptions(null); void onAssign(row, "translation_review"); }}
         onNavigate={route => onNavigate(route)}
         onDone={(message, saved) => {
           planSaves.noteRevision(saved.caseId, saved.revision);
@@ -660,9 +665,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   const renderRowNotice = (row: DocumentRowView): ReactNode | null => {
     const key = rowKeyOf(row);
-    const panel = rowPanel?.rowKey === key ? rowPanel : null;
-    if (!panel && !planSaves.noticeOf(row)) return null;
+    const panel = resolveOptions?.rowKey === key ? resolveOptions : null;
+    const notice = rowNotice(row);
+    if (!panel && !notice && !planSaves.noticeOf(row)) return null;
     return <>
+      {notice && <p className="documents-row-notice">{notice}</p>}
       <PlanRowNotice row={row} saves={planSaves} />
       {panel && resolvePanel(row, panel)}
     </>;
@@ -696,11 +703,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     } else if (page.groups.length === 0) {
       body = emptyState(page.bar);
     } else if (narrow) {
-      body = <DocumentCards page={page} projectKey={projectKey} query={viewQuery} selection={tableSelection} onToggleRow={toggleRow} planSaves={planSaves}
-        renderRowNotice={renderRowNotice} renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras} />;
+      body = <DocumentCards page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} onOpenPanel={onOpenPanel} activeKey={panelKey} planSaves={planSaves}
+        renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras} />;
     } else {
-      body = <DocumentsTable page={page} projectKey={projectKey} query={viewQuery} selection={tableSelection} planSaves={planSaves}
-        onToggleRow={toggleRow} renderRowNotice={renderRowNotice} renderExpanded={renderExpanded} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras}
+      body = <DocumentsTable page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} planSaves={planSaves}
+        onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras}
         sort={request.sort} onSort={(next: HeaderSort) => changeFilter({ sort: next === "case" ? undefined : next })} />;
     }
     // Sticky above the table; below 700 px after the cards, so it can stick to the bottom of the viewport.
@@ -755,7 +762,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     {reviewDocument !== null && <ReviewHistory key={reviewDocument} projectKey={projectKey} documentId={reviewDocument} onClose={() => setReviewDocument(null)} />}
     {assignDialog && <AssignWorkDialog {...assignDialog} />}
     {textChangeDialog}
-    {finalPanel}
+    {rowPanel}
     {correctionFor && textVersionTools && <Dialog open title={`Request translation correction · ${rowName(correctionFor.row)}`} size="md"
       onClose={closeCorrection} footer={<Button onClick={closeCorrection}>Close</Button>}
       returnFocus={() => rowElement(rowKeyOf(correctionFor.row), "action") ?? rowElement(rowKeyOf(correctionFor.row), "header")}>
@@ -777,42 +784,6 @@ function DocumentsSkeleton(): JSX.Element {
       </tr>)}</tbody>
     </table>
   </div>;
-}
-
-interface ExpandedRowLoaderProps {
-  row: DocumentRowView;
-  projectKey: string;
-  query: ProjectDocumentsQuery;
-  onNavigate: (route: Route) => void;
-  textVersionTools?: TextVersionsTools;
-  me: ExpandedRowProps["me"];
-  plan: ExpandedRowProps["plan"];
-  planRevision?: ExpandedRowProps["planRevision"];
-  onAssign?: ExpandedRowProps["onAssign"];
-  headingLevel?: ExpandedRowProps["headingLevel"];
-  extraActions?: ExpandedRowProps["extraActions"];
-  revealTextVersions: boolean;
-  onTextVersionsRevealed: () => void;
-}
-
-/** Submissions of a row, reloaded when a refreshed rows page reports new activity on the row. */
-function useRefreshedSubmissions(projectKey: string, row: DocumentRowView) {
-  const submissions = useRowSubmissions(projectKey, row.case_id, row.language, true);
-  const mounted = useRef(false);
-  const { reload } = submissions;
-  useEffect(() => {
-    if (!mounted.current) { mounted.current = true; return; }
-    reload();
-    // Only new activity on the row triggers the reload (not every background refresh of the page).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row.last_activity_at]);
-  return submissions;
-}
-
-/** The slim expansion of an open row with its submissions (history times, consolidation, technical details). */
-function ExpandedRowLoader({ row, projectKey, ...props }: ExpandedRowLoaderProps): JSX.Element {
-  const submissions = useRefreshedSubmissions(projectKey, row);
-  return <ExpandedRow row={row} projectKey={projectKey} submissions={submissions} {...props} />;
 }
 
 function ReviewHistory({ projectKey, documentId, onClose }: { projectKey: string; documentId: string; onClose: () => void }): JSX.Element {

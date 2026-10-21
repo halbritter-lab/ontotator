@@ -46,7 +46,7 @@ it("keeps the same focused ID input while a controlled parent applies every type
     return <DocumentsPage projectKey="p/key" canManage query={query} onNavigate={route => { if (route.name === "projectDocuments") setQuery(route); }} />;
   }
   const user = userEvent.setup(); render(<ControlledDocuments />);
-  await screen.findByRole("link", { name: "Open z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
   const input = screen.getByLabelText("Case ID or text");
   await user.type(input, "abc");
   expect(screen.getByLabelText("Case ID or text")).toBe(input);
@@ -58,7 +58,7 @@ it("keeps the same focused ID input while a controlled parent applies every type
 
 it("assigns the selected cases from the selection bar and refreshes rows and inventories after success", async () => {
   render(<DocumentsPage projectKey="p/key" canManage query={{ language: "en" }} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "Open z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
   fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 text)" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
@@ -78,7 +78,7 @@ it("assigns the selected cases from the selection bar and refreshes rows and inv
 
 it("wires actual assignment IDs through the Text versions actions and refreshes after removal", async () => {
   vi.mocked(api.listDocumentRows).mockImplementation(async () => page([group("z/doc", [zRow({ work: [work({ assignment_id: 3, document_id: "z/doc", author_label: "A" })] })])]));
-  render(<DocumentsPage projectKey="p/key" canManage query={{ open: ["z/doc:en"] }} onNavigate={vi.fn()} />);
+  render(<DocumentsPage projectKey="p/key" canManage query={{ panel: "z/doc:en", panel_tab: "versions" }} onNavigate={vi.fn()} />);
   const versions = await screen.findByRole("list", { name: "Assignments on v1" });
   fireEvent.click(await within(versions).findByText("Assignment actions"));
   fireEvent.click(await within(versions).findByRole("button", { name: "Remove assignment", hidden: true }));
@@ -89,7 +89,7 @@ it("wires actual assignment IDs through the Text versions actions and refreshes 
 it("closes an open assign dialog on project change and ignores its pending mutation", async () => {
   const pending = deferred<Awaited<ReturnType<typeof api.commitAssignmentBatch>>>(); vi.mocked(api.commitAssignmentBatch).mockReturnValue(pending.promise);
   const view = render(<DocumentsPage projectKey="p/key" canManage query={{}} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "Open z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
   fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 text)" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign · 1 case" });
@@ -98,7 +98,7 @@ it("closes an open assign dialog on project change and ignores its pending mutat
   await waitFor(() => expect(assign.getAttribute("aria-disabled")).toBeNull());
   fireEvent.click(assign);
   view.rerender(<DocumentsPage projectKey="other" canManage query={{}} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "Open z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
   await act(async () => { pending.resolve({ created: [assignment] }); });
   expect(screen.queryByRole("dialog", { name: "Assign · 1 case" })).toBeNull();
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
