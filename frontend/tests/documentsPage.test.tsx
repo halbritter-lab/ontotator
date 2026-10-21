@@ -395,12 +395,15 @@ describe("case selection", () => {
     const first = caseBox("case-0101");
     first.focus();
     fireEvent.click(first); // Space on a focused checkbox is a click
+    // From a case checkbox the case's own row comes next, then the next case's row.
     fireEvent.keyDown(first, { key: "ArrowDown", shiftKey: true });
-    expect(document.activeElement).toBe(caseBox("case-0102"));
+    expect(document.activeElement).toBe(rowBox("case-0101", "de"));
+    fireEvent.keyDown(rowBox("case-0101", "de"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(rowBox("case-0102", "de"));
     expect((caseBox("case-0102") as HTMLInputElement).checked).toBe(true);
     await waitFor(() => expect(live().textContent).toBe(selectedText(2)));
-    fireEvent.keyDown(caseBox("case-0102"), { key: "ArrowUp", shiftKey: true });
-    expect(document.activeElement).toBe(first);
+    fireEvent.keyDown(rowBox("case-0102", "de"), { key: "ArrowUp", shiftKey: true });
+    expect(document.activeElement).toBe(rowBox("case-0101", "de"));
     fireEvent.click(first);
     expect((first as HTMLInputElement).checked).toBe(false);
     expect(help.filter(row => row.group === "Selection").map(row => row.description)).toEqual(
@@ -770,15 +773,22 @@ it("passes the case's plan revision, the row assign dialog, the plan chips and t
   expect(within(region).queryByRole("heading", { name: /^Submissions/ })).toBeNull();
 });
 
-it("reloads the submissions of open rows when the rows refresh", async () => {
+it("reloads the submissions of an open row only when its last activity changed", async () => {
   const s1 = scenarioS1();
   mockRows(s1.page, s1.submissions);
   renderPage({ query: { open: [rowKey("case-0042", "en")] } });
   await screen.findByRole("region", { name: "History, case-0042 · en" });
   await waitFor(() => expect(api.getRowSubmissions).toHaveBeenCalledTimes(1));
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+  await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
+  await act(async () => { await Promise.resolve(); });
+  expect(api.getRowSubmissions).toHaveBeenCalledTimes(1);
+  const changed = structuredClone(s1.page);
+  for (const entry of changed.groups.flatMap(item => item.rows)) entry.last_activity_at = "2026-10-21T11:59:00Z";
+  mockRows(changed, s1.submissions);
+  fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   await waitFor(() => expect(api.getRowSubmissions).toHaveBeenCalledTimes(2));
-  expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
+  expect(api.listDocumentRows).toHaveBeenCalledTimes(3);
 });
 
 describe("text changes (V5)", () => {

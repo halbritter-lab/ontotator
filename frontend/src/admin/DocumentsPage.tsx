@@ -20,8 +20,9 @@ import { formatDateTime, labelFor, plural } from "../app/labels";
 import { DOCUMENT_FIELDS, routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
-import { Button, Checkbox, Dialog, EmptyState, FilterChip, IconButton, IconClose, InlineMessage, StatusBadge, tabId, Toast, Toolbar, useMediaQuery, useToast, type GroupSelectMode } from "../ui";
+import { Button, Checkbox, Dialog, EmptyState, FilterChip, InlineMessage, StatusBadge, tabId, Toast, Toolbar, useMediaQuery, useToast, type GroupSelectMode } from "../ui";
 import { DocumentsTabs, TabEmptyState } from "../documents/DocumentsTabs";
+import { DocumentsSearch, LiveRegion, type DocumentsSearchHandle, type LiveRegionHandle } from "../documents/DocumentsSearch";
 import { activeTab, chipsOf, clearAllPatch, filtersActive, listOf, rowsRequest, tabCount } from "../documents/filterModel";
 import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
@@ -62,8 +63,7 @@ export interface DocumentsPageProps {
 /** Below 700 px the page renders cards instead of the table (the same breakpoint as popover sheets and the side panel). */
 export const NARROW_DOCUMENTS_QUERY = "(max-width: 699px)";
 
-/** The search applies this long after the last keystroke (or at once on Enter and blur). */
-export const ID_FILTER_DELAY_MS = 300;
+export { ID_FILTER_DELAY_MS } from "../documents/DocumentsSearch";
 /** The table's eight columns; "Select" and "Action" headers are visually hidden. */
 const SKELETON_HEADERS: readonly (readonly [string, boolean])[] = [
   ["Select", true], ["Text", false], ["Review", false], ["Annotation", false], ["Final", false], ["Waiting on", false], ["Action", true], ["Last activity", false],
@@ -158,17 +158,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const rows = useDocumentRows(projectKey, (retain.length ? { ...request, retain: [...retain] } : request) as DocumentRowsQuery, { enabled: visitRecorded });
   const page: DocumentRowsPage | null = rows.page;
 
-  // Live region: a repeated message is cleared first and set again on the next tick so it is re-announced.
-  const [announcement, setAnnouncement] = useState("");
-  const announced = useRef("");
-  const announceTimer = useRef<number | undefined>(undefined);
-  const announce = (message: string) => {
-    window.clearTimeout(announceTimer.current);
-    if (message !== announced.current) { announced.current = message; setAnnouncement(message); return; }
-    setAnnouncement("");
-    announceTimer.current = window.setTimeout(() => setAnnouncement(message), 0);
-  };
-  useEffect(() => () => window.clearTimeout(announceTimer.current), []);
+  // The page's one polite live region (its own component: an announcement re-renders only the region).
+  const liveRegion = useRef<LiveRegionHandle>(null);
+  const announce = (message: string) => liveRegion.current?.announce(message);
 
   // Page data for upload and assignment tools (the rows endpoint does not carry it).
   const [revision, setRevision] = useState(0);
@@ -241,38 +233,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   };
   const changeFilter = (patch: ProjectDocumentsQuery) => navigateDocuments({ ...patch, page: undefined, select: undefined });
 
-  // ID filter: typed locally, applied after a pause, on Enter or on blur (one push, not one per keystroke).
-  const [idText, setIdText] = useState(query.q ?? "");
-  const sentId = useRef(query.q);
-  const idTimer = useRef<number | undefined>(undefined);
-  const latestFilter = useRef({ changeFilter });
-  latestFilter.current = { changeFilter };
-  useEffect(() => {
-    // An outside change (Clear filters, history) replaces the typed text; our own push does not.
-    if (query.q === sentId.current) return;
-    sentId.current = query.q;
-    setIdText(query.q ?? "");
-  }, [query.q]);
-  useEffect(() => () => window.clearTimeout(idTimer.current), []);
-  const applyId = (value: string) => {
-    window.clearTimeout(idTimer.current);
-    const next = value || undefined;
-    // Already sent (or already the route's value): nothing to push.
-    if (next === (sentId.current || undefined)) return;
-    sentId.current = next;
-    latestFilter.current.changeFilter({ q: next });
-  };
-  const typeId = (value: string) => {
-    setIdText(value);
-    window.clearTimeout(idTimer.current);
-    idTimer.current = window.setTimeout(() => applyId(value), ID_FILTER_DELAY_MS);
-  };
-  const searchRef = useRef<HTMLInputElement>(null);
-  const clearSearch = () => {
-    setIdText("");
-    applyId("");
-    searchRef.current?.focus();
-  };
+  // Search: its own component, so a keystroke re-renders only the field.
+  const search = useRef<DocumentsSearchHandle>(null);
 
   // Chips: after a removal focus moves to the next chip (now at the removed chip's index) or the search field.
   const chipList = useRef<HTMLDivElement>(null);
@@ -285,7 +247,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     if (chipFocus === null) return;
     setChipFocus(null);
     const buttons = chipList.current?.querySelectorAll<HTMLButtonElement>("button.ui-filter-chip");
-    (buttons?.[chipFocus] ?? searchRef.current)?.focus();
+    const chip = buttons?.[chipFocus];
+    if (chip) chip.focus(); else search.current?.focus();
     // Only a changed chip list (the route after the removal) moves focus.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chipIdentity]);
@@ -294,11 +257,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     changeFilter(chips[index].patch);
   };
   const clearAll = () => {
-    window.clearTimeout(idTimer.current);
-    setIdText("");
-    sentId.current = undefined;
+    search.current?.reset();
     changeFilter(clearAllPatch(query));
-    searchRef.current?.focus();
+    search.current?.focus();
   };
   const toggleRow = (key: string) => {
     const next = new Set(openKeys);
@@ -645,7 +606,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     const key = rowKeyOf(row);
     return <>
       {notice && <p className="documents-row-notice">{notice}</p>}
-      <ExpandedRowLoader row={row} refresh={page} projectKey={projectKey} query={viewQuery} onNavigate={route => onNavigate(route)}
+      <ExpandedRowLoader row={row} projectKey={projectKey} query={viewQuery} onNavigate={route => onNavigate(route)}
         textVersionTools={textVersionTools} me={currentUser?.pseudonym ?? null}
         plan={<PlanChips row={row} groupRevision={groupOf(row.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} />}
         planRevision={planSaves.revisionOf(row.case_id, groupOf(row.case_id)?.plan_revision ?? 1)} onAssign={onAssign}
@@ -751,12 +712,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     </div>
     {page && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />}
     <Toolbar label="Document filters" className="documents-filters">
-      <div className="documents-search">
-        <input ref={searchRef} id="documents-search" type="search" className="form-control" aria-label="Case ID or text" placeholder="Case ID or text…"
-          value={idText} onChange={event => typeId(event.target.value)} onBlur={() => applyId(idText)}
-          onKeyDown={event => { if (event.key === "Enter") applyId(idText); }} />
-        {idText !== "" && <IconButton size="sm" variant="quiet" label="Clear search" icon={<IconClose />} onClick={clearSearch} />}
-      </div>
+      <DocumentsSearch ref={search} q={query.q} onApply={q => changeFilter({ q })} />
       <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} onChange={changeFilter} onClearAll={clearAll} people={people} />
       {chips.length > 0 && <div ref={chipList} className="documents-filter-chips">
         {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} onRemove={() => removeChip(index)} />)}
@@ -767,7 +723,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}
     {inventoryError !== undefined && <ErrorNotice error={inventoryError} />}
     <div id={PANEL_ID} {...(page ? { role: "tabpanel", "aria-labelledby": tabId(PANEL_ID, tab) } : {})}>{content}</div>
-    <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
+    <LiveRegion ref={liveRegion} />
     <Dialog open={uploadOpen} title="Upload texts" size="lg" onClose={() => setUploadOpen(false)}>
       {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus}
         annotateAcceptedOnly={settings.annotate_accepted_translations_only ?? true} onImported={importDone} />}
@@ -795,8 +751,6 @@ function DocumentsSkeleton(): JSX.Element {
 
 interface ExpandedRowLoaderProps {
   row: DocumentRowView;
-  /** The current rows page; a new page (refetch) reloads this row's submissions. */
-  refresh: DocumentRowsPage | null;
   projectKey: string;
   query: ProjectDocumentsQuery;
   onNavigate: (route: Route) => void;
@@ -810,23 +764,23 @@ interface ExpandedRowLoaderProps {
   onTextVersionsRevealed: () => void;
 }
 
-/** Submissions of a row, reloaded whenever the rows refresh (a new page). */
-function useRefreshedSubmissions(projectKey: string, row: DocumentRowView, refresh: DocumentRowsPage | null) {
+/** Submissions of a row, reloaded when a refreshed rows page reports new activity on the row. */
+function useRefreshedSubmissions(projectKey: string, row: DocumentRowView) {
   const submissions = useRowSubmissions(projectKey, row.case_id, row.language, true);
   const mounted = useRef(false);
   const { reload } = submissions;
   useEffect(() => {
     if (!mounted.current) { mounted.current = true; return; }
     reload();
-    // Only a new rows page triggers the reload.
+    // Only new activity on the row triggers the reload (not every background refresh of the page).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refresh]);
+  }, [row.last_activity_at]);
   return submissions;
 }
 
 /** The slim expansion of an open row with its submissions (history times, consolidation, technical details). */
-function ExpandedRowLoader({ row, refresh, projectKey, ...props }: ExpandedRowLoaderProps): JSX.Element {
-  const submissions = useRefreshedSubmissions(projectKey, row, refresh);
+function ExpandedRowLoader({ row, projectKey, ...props }: ExpandedRowLoaderProps): JSX.Element {
+  const submissions = useRefreshedSubmissions(projectKey, row);
   return <ExpandedRow row={row} projectKey={projectKey} submissions={submissions} {...props} />;
 }
 

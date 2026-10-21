@@ -587,7 +587,9 @@ textarea.form-control {
 .data-table-sort { display: inline-flex; align-items: center; gap: var(--space-1); padding: 0; border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; text-align: inherit; }
 .data-table-sort:hover { color: var(--accent); }
 .data-table-sort-icon { flex: none; }
-.data-table th[aria-sort="none"] .data-table-sort-icon { color: var(--text-muted); }
+/* One visible arrow: the active sort; other sortable headers show theirs on hover and focus only. */
+.data-table th[aria-sort="none"] .data-table-sort-icon { color: var(--text-muted); opacity: 0; }
+.data-table th[aria-sort="none"] .data-table-sort:is(:hover, :focus-visible) .data-table-sort-icon { opacity: 1; }
 
 /* Shared application frame. Scoped header rules survive the editor's legacy header. */
 .shell { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--surface); }
@@ -878,7 +880,8 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .data-table .data-table-select-cell { width: 40px; padding-inline: var(--space-2); }
 .data-table-row-select { margin: 0; }
 .data-table-group--label .data-table-group-select { margin: 0; }
-.data-table .data-table-row--decision > :first-child { box-shadow: inset 3px 0 var(--warning); }
+.data-table .data-table-row--decision > :first-child,
+.data-table .data-table-row--decision.is-selected > td:first-child { box-shadow: inset 3px 0 var(--warning); }
 .checkbox-target:indeterminate {
   background:
     linear-gradient(var(--on-accent), var(--on-accent)) center / 10px 2px no-repeat,
