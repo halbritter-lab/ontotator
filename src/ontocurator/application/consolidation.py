@@ -26,7 +26,7 @@ see the input authors' display names.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,6 +42,7 @@ from ontocurator.authz.policy import Access, Action, can
 from ontocurator.domain.agreement import Finding, Group, groups
 from ontocurator.domain.annotations import (
     Annotation,
+    AnnotationRef,
     AnnotationSnapshot,
     annotation_content,
 )
@@ -63,6 +64,10 @@ __all__ = [
     "consolidated_content_sha256",
     "consolidation_group_id",
     "consolidation_groups",
+    "is_open",
+    "member_ref",
+    "open_group_count",
+    "round_groups",
     "round_members",
 ]
 
@@ -211,12 +216,62 @@ def _groups(order: list[str], members: Mapping[str, RoundMember]) -> tuple[Group
     return groups(findings, order)
 
 
+def round_groups(found: RoundMembers) -> tuple[Group, ...]:
+    """The groups of ``round_members`` in reading order (finding keys are
+    input ids)."""
+    return _groups(found.order, found.members)
+
+
+def member_ref(member: RoundMember) -> AnnotationRef:
+    """The review target of a member: its target snapshot."""
+    return AnnotationRef(
+        annotation_id=member.snapshot.annotation.annotation_id,
+        version=member.snapshot.version,
+    )
+
+
+def is_open(
+    targets: Iterable[tuple[str, str]], decisions: Sequence[ReviewDecision]
+) -> bool:
+    """Whether a group with these member targets is open: a member has no
+    decision or only an ``uncertain`` one (the read and submit gating)."""
+    decided = {
+        (d.target.annotation_id, d.target.version)
+        for d in decisions
+        if d.outcome != "uncertain"
+    }
+    return any(target not in decided for target in targets)
+
+
+def open_group_count(
+    conn: Connection, pid: int, round_id: str, decisions: Sequence[ReviewDecision]
+) -> int:
+    """How many groups of the round are open under ``decisions`` (submit
+    gating, ``CONSOLIDATION_GROUPS_OPEN``)."""
+    profile, defaults = project_profile(conn, pid)
+    found = round_members(conn, pid, round_id, profile, defaults)
+    return sum(
+        1
+        for group in round_groups(found)
+        if is_open(
+            (
+                (ref.annotation_id, ref.version)
+                for ref in (
+                    member_ref(found.members[i]) for i in group.members.values()
+                )
+            ),
+            decisions,
+        )
+    )
+
+
 @dataclass(frozen=True)
 class _Content:
     """The consolidator's state: the live draft or the submitted result."""
 
     annotations: Sequence[AnnotationSnapshot]
     decisions: Sequence[ReviewDecision]
+    revision: int = 0  # the live draft's revision (0 when read-only)
 
 
 class ConsolidationReader:
@@ -286,6 +341,7 @@ class ConsolidationReader:
                 for group in _groups(order, members)
             ],
             "workflow_revision": item.workflow_revision,
+            "draft_revision": 0 if submitted else content.revision,
         }
 
 
@@ -382,15 +438,14 @@ def _state(
     The group is edited when a resulting annotation's hash differs from the
     mark or a replacement no longer exists.
     """
+    if is_open(targets, content.decisions):
+        return {"state": "open"}
     by_target = {
         (d.target.annotation_id, d.target.version): d
         for d in content.decisions
         if d.outcome != "uncertain"
     }
-    decisions = [by_target.get(target) for target in targets]
-    if any(d is None for d in decisions):
-        return {"state": "open"}
-    decided = [d for d in decisions if d is not None]
+    decided = [by_target[target] for target in targets]
     marks = [d.consolidation for d in decided if d.consolidation is not None]
     if marks:
         state = marks[0].action
@@ -450,7 +505,11 @@ def _draft(
     if key is None or repo._draft_row(conn, pid, _key_str(key)) is None:
         return _Content(annotations=(), decisions=())
     draft = repo._open_draft(conn, key, None)
-    return _Content(annotations=draft.annotations, decisions=draft.decisions)
+    return _Content(
+        annotations=draft.annotations,
+        decisions=draft.decisions,
+        revision=draft.revision,
+    )
 
 
 def _withdrawn(

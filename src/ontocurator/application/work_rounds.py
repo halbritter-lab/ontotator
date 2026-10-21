@@ -766,6 +766,14 @@ class WorkRoundService:
             )
         )
         self.repo._create_draft(conn, pid, key, _key_str(key), targets)
+        if kind == "consolidation":
+            # Matching findings are kept automatically (U14, T9); both start
+            # paths (the assignment's rounds and the start command) end here.
+            from ontocurator.application.consolidation_resolve import (
+                take_over_matches,
+            )
+
+            take_over_matches(conn, self.repo, pid, key)
         return self.repo.get_work_round(project, rid)
 
 
@@ -1079,8 +1087,11 @@ class MergeRoundInputsService:
     def merge(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
         from pydantic import BaseModel, ConfigDict, Field
 
+        from ontocurator.application.consolidation_resolve import (
+            merged_annotation,
+            review_decision,
+        )
         from ontocurator.application.reviews import DecisionCommand, ReviewService
-        from ontocurator.domain.review import ReviewDecision
         from ontocurator.domain.serialization import decode_snapshot
 
         class MergeCommand(BaseModel):
@@ -1138,20 +1149,7 @@ class MergeRoundInputsService:
                 )
             document = self.repo.get_document(key.project_key, key.document_id)
             assert document is not None
-            annotation = original.annotation.model_copy(
-                deep=True,
-                update={
-                    "provenance": original.annotation.provenance.model_copy(
-                        update={
-                            "method": "merged",
-                            "source_refs": [
-                                f"round-input:{iid}"
-                                for iid in sorted(command.input_ids)
-                            ],
-                        }
-                    )
-                },
-            )
+            annotation = merged_annotation(original.annotation, command.input_ids)
             merged = snapshot(
                 annotation,
                 original.evidence,
@@ -1183,19 +1181,12 @@ class MergeRoundInputsService:
                     ),
                 )
                 draft.decisions.append(
-                    ReviewDecision(
-                        decision_id="dec-"
-                        + canonical_hash(
-                            {
-                                "workspace": key.model_dump(),
-                                "target": target.model_dump(),
-                            }
-                        ),
-                        target=target,
+                    review_decision(
+                        key,
+                        target,
                         outcome="changed",
                         replacement=ref,
                         note=command.note,
-                        reviewer_id=key.annotator_id,
                     )
                 )
             draft.checked_layer_ids = [

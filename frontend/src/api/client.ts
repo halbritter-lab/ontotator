@@ -141,6 +141,25 @@ export type RoundInputView = components["schemas"]["RoundInputView"];
 export type RoundSourceView = components["schemas"]["RoundSourceView"];
 // Consolidation view (acceptance fixes 2026-10-21, WP-E)
 export type ConsolidationView = components["schemas"]["ConsolidationView"];
+/** Payload of `resolveConsolidationGroup` (backend `ResolveCommand`; the envelope payload is untyped in the OpenAPI). */
+export interface ConsolidationResolvePayload {
+  input_ids: string[];
+  action: "keep" | "choose" | "keep_both" | "leave_out";
+  /** Only with `choose`. Omit `note_from_input_id` to keep the span member's note; `null` drops it. */
+  choice?: { term_id: string; span_from_input_id: string; axes: Record<string, string>; note_from_input_id?: string | null };
+  note?: string | null;
+  guidelines_unclear?: boolean;
+}
+/** Payload of `annotateConsolidationGroup` (backend `AnnotateCommand`); omit `note` to keep it. */
+export interface ConsolidationAnnotatePayload {
+  input_ids: string[];
+  note?: string | null;
+  guidelines_unclear: boolean;
+}
+/** Payload of `reopenConsolidationGroup` (backend `ReopenCommand`). */
+export interface ConsolidationReopenPayload {
+  input_ids: string[];
+}
 export type ConsolidationGroupView = components["schemas"]["ConsolidationGroupView"];
 export type ConsolidationMemberView = components["schemas"]["ConsolidationMemberView"];
 export type ConsolidationPersonView = components["schemas"]["ConsolidationPersonView"];
@@ -906,6 +925,21 @@ export class ApiClient {
 
   async getConsolidation(roundId: string): Promise<ConsolidationView> {
     return this.request<ConsolidationView>(`/api/v1/rounds/${encodeURIComponent(roundId)}/consolidation`, { method: "GET" });
+  }
+
+  /** Resolve one consolidation group; `envelope.payload` is a `ConsolidationResolvePayload`. */
+  async resolveConsolidationGroup(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/consolidation-groups/resolve`, { method: "POST", body: JSON.stringify(envelope) });
+  }
+
+  /** Change note and "Guidelines unclear" of a resolved group; `envelope.payload` is a `ConsolidationAnnotatePayload`. */
+  async annotateConsolidationGroup(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/consolidation-groups/annotate`, { method: "POST", body: JSON.stringify(envelope) });
+  }
+
+  /** Delete a group's decisions and consolidated findings; `envelope.payload` is a `ConsolidationReopenPayload`. */
+  async reopenConsolidationGroup(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/consolidation-groups/reopen`, { method: "POST", body: JSON.stringify(envelope) });
   }
 
   async listRoundSources(assignmentId: number): Promise<RoundSourceView[]> {

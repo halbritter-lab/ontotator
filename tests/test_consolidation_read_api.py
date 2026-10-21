@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 from auth_harness import logged_in
-from sqlalchemy import insert, select
+from sqlalchemy import delete, insert, select
 from test_document_rows_submissions import _submit_consolidation
 from test_final_panel_api import (
     HYPOTONIA,
@@ -136,7 +136,8 @@ def test_assignee_reads_open_groups_with_names(cons):
         ["values_differ"],
         ["partial"],
     ]
-    assert all(g["state"] == "open" for g in groups)
+    # The match was kept automatically when the round started (E1b).
+    assert [g["state"] for g in groups] == ["auto", "open", "open"]
     values = groups[1]
     assert values["differing_axes"] == ["assertion"]
     assert [m["person_id"] for m in values["members"]] == [anno, anno2]
@@ -215,12 +216,16 @@ def _targets(env: Any, round_id: str) -> dict[str, AnnotationRef]:
 
 
 def _insert_decisions(env: Any, key: Any, decisions: list[ReviewDecision]) -> None:
+    """Replace the draft's decisions (also the automatic ones) by ``decisions``."""
     with env.db.transaction() as conn:
         draft_id = conn.execute(
             select(DraftRow.id).where(
                 DraftRow.project_id == env.pid, DraftRow.draft_key == _key_str(key)
             )
         ).scalar_one()
+        conn.execute(
+            delete(ReviewDecisionRow).where(ReviewDecisionRow.draft_id == draft_id)
+        )
         for position, decision in enumerate(decisions):
             conn.execute(
                 insert(ReviewDecisionRow).values(

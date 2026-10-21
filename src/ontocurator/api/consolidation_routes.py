@@ -1,4 +1,5 @@
-"""Consolidation view reads (acceptance fixes spec "WP-E Backend > Read")."""
+"""Consolidation view read and group commands (acceptance fixes spec
+"WP-E Backend > Read / Resolve / Annotate / Reopen")."""
 
 from __future__ import annotations
 
@@ -7,8 +8,9 @@ from typing import Literal
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
-from ontocurator.api.identity import PrincipalDep
+from ontocurator.api.identity import PrincipalDep, own_key
 from ontocurator.api.routes import (
+    decode_workspace_id,
     encode_workspace_id,
     get_access,
     get_ontology,
@@ -16,6 +18,8 @@ from ontocurator.api.routes import (
 )
 from ontocurator.api.work_round_routes import _visible_round
 from ontocurator.application.consolidation import ConsolidationReader
+from ontocurator.application.consolidation_resolve import ConsolidationGroupService
+from ontocurator.domain.workspace import Draft, MutationEnvelope
 
 router = APIRouter(prefix="/api/v1", tags=["consolidation"])
 
@@ -77,6 +81,9 @@ class ConsolidationView(_View):
     people: list[ConsolidationPersonView]
     groups: list[ConsolidationGroupView]
     workflow_revision: int
+    # The live draft's revision, the ``expected_revision`` of the next group
+    # command; 0 in read-only mode.
+    draft_revision: int = 0
 
 
 @router.get("/rounds/{round_id}/consolidation")
@@ -106,3 +113,55 @@ def read_consolidation(
                 labels[term] = status.label or term[1]
             member["term_label"] = labels[term]
     return ConsolidationView.model_validate(data)
+
+
+def _groups_service(request: Request) -> ConsolidationGroupService:
+    repo = get_repo(request)
+    ontology = get_ontology(request)
+
+    def valid_term(project_key: str, layer_id: str, term_id: str) -> bool:
+        status = ontology.for_package_layer(repo, project_key, layer_id).validate_term(
+            term_id
+        )
+        return status.status not in {"obsolete", "unknown"}
+
+    return ConsolidationGroupService(repo, valid_term)
+
+
+@router.post("/workspaces/{workspace_id}/consolidation-groups/resolve")
+def resolve_consolidation_group(
+    workspace_id: str,
+    envelope: MutationEnvelope,
+    request: Request,
+    principal: PrincipalDep,
+) -> Draft:
+    """Resolve one group: ``keep``, ``choose``, ``keep_both`` or
+    ``leave_out`` (payload ``ResolveCommand``)."""
+    key = own_key(principal, decode_workspace_id(workspace_id))
+    return _groups_service(request).resolve(key, envelope)
+
+
+@router.post("/workspaces/{workspace_id}/consolidation-groups/annotate")
+def annotate_consolidation_group(
+    workspace_id: str,
+    envelope: MutationEnvelope,
+    request: Request,
+    principal: PrincipalDep,
+) -> Draft:
+    """Change note and "Guidelines unclear" of a resolved group (payload
+    ``AnnotateCommand``)."""
+    key = own_key(principal, decode_workspace_id(workspace_id))
+    return _groups_service(request).annotate(key, envelope)
+
+
+@router.post("/workspaces/{workspace_id}/consolidation-groups/reopen")
+def reopen_consolidation_group(
+    workspace_id: str,
+    envelope: MutationEnvelope,
+    request: Request,
+    principal: PrincipalDep,
+) -> Draft:
+    """Delete a group's decisions and resulting annotations (payload
+    ``ReopenCommand``)."""
+    key = own_key(principal, decode_workspace_id(workspace_id))
+    return _groups_service(request).reopen(key, envelope)

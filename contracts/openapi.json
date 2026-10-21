@@ -1119,6 +1119,165 @@
         }
       }
     },
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/resolve": {
+      "post": {
+        "tags": [
+          "consolidation"
+        ],
+        "summary": "Resolve Consolidation Group",
+        "description": "Resolve one group: ``keep``, ``choose``, ``keep_both`` or\n``leave_out`` (payload ``ResolveCommand``).",
+        "operationId": "resolve_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_resolve_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/annotate": {
+      "post": {
+        "tags": [
+          "consolidation"
+        ],
+        "summary": "Annotate Consolidation Group",
+        "description": "Change note and \"Guidelines unclear\" of a resolved group (payload\n``AnnotateCommand``).",
+        "operationId": "annotate_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_annotate_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/reopen": {
+      "post": {
+        "tags": [
+          "consolidation"
+        ],
+        "summary": "Reopen Consolidation Group",
+        "description": "Delete a group's decisions and resulting annotations (payload\n``ReopenCommand``).",
+        "operationId": "reopen_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_reopen_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/consolidations": {
       "post": {
         "tags": [
@@ -9735,6 +9894,11 @@
           "workflow_revision": {
             "type": "integer",
             "title": "Workflow Revision"
+          },
+          "draft_revision": {
+            "type": "integer",
+            "title": "Draft Revision",
+            "default": 0
           }
         },
         "additionalProperties": false,

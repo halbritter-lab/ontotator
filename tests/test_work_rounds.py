@@ -406,16 +406,21 @@ def test_deliberate_merge_binds_every_input_to_one_exact_output(rounds):
     from ontocurator.application.editing import EditingService
     from ontocurator.application.submissions import SubmissionService
     from ontocurator.application.work_rounds import MergeRoundInputsService
+    from ontocurator.application.workspaces import WorkspaceService
     from ontocurator.domain.workspace import MutationEnvelope
 
     repo, ontology, reviewer, result, _inputs, _lead, _actor = (
         create_consolidation_fixture(rounds)
     )
+    # The matching inputs were kept automatically (revision 1); the merge
+    # replaces those decisions.
+    opened = WorkspaceService(reviewer, ontology).open(result.workspace_key).draft
+    assert opened.revision == 1
     draft = EditingService(reviewer, ontology).apply(
         result.workspace_key,
         MutationEnvelope(
             mutation_id="replacement",
-            expected_revision=0,
+            expected_revision=opened.revision,
             payload={
                 "command": "create_annotation",
                 "annotation_id": "merged",

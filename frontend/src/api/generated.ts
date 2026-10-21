@@ -365,6 +365,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Consolidation Group
+         * @description Resolve one group: ``keep``, ``choose``, ``keep_both`` or
+         *     ``leave_out`` (payload ``ResolveCommand``).
+         */
+        post: operations["resolve_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/annotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Annotate Consolidation Group
+         * @description Change note and "Guidelines unclear" of a resolved group (payload
+         *     ``AnnotateCommand``).
+         */
+        post: operations["annotate_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_annotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Consolidation Group
+         * @description Delete a group's decisions and resulting annotations (payload
+         *     ``ReopenCommand``).
+         */
+        post: operations["reopen_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/consolidations": {
         parameters: {
             query?: never;
@@ -3084,6 +3147,11 @@ export interface components {
             groups: components["schemas"]["ConsolidationGroupView"][];
             /** Workflow Revision */
             workflow_revision: number;
+            /**
+             * Draft Revision
+             * @default 0
+             */
+            draft_revision: number;
         };
         /** CorrectionAssignmentRequest */
         CorrectionAssignmentRequest: {
@@ -8253,6 +8321,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConsolidationView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MutationEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    annotate_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_annotate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MutationEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MutationEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
                 };
             };
             /** @description Validation Error */
