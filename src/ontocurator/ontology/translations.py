@@ -15,7 +15,8 @@ import hashlib
 import re
 import threading
 from collections import OrderedDict
-from collections.abc import Collection, Iterable
+from collections.abc import Callable, Collection, Iterable
+from concurrent.futures import Future
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -164,6 +165,20 @@ def apply_translations(
     return loaded, skipped
 
 
+# Term id -> language -> the names, as one build left them. Immutable, so any
+# number of pinned views can restore their names from it.
+FrozenTranslations = dict[str, dict[str, tuple[str, ...]]]
+
+
+def freeze_translations(ontology: Ontology) -> FrozenTranslations:
+    """The translated names of every term, in containers nobody can change."""
+    return {
+        term_id: {code: tuple(names) for code, names in term.translations.items()}
+        for term_id, term in ontology.terms.items()
+        if term.translations
+    }
+
+
 def translation_counts(ontology: Ontology) -> dict[str, int]:
     """Language -> number of live terms with at least one name in it."""
     counts: dict[str, int] = {}
@@ -192,6 +207,17 @@ class TranslatedNames:
                         (language, term.hpo_id, name)
                     )
 
+    def with_ontology(self, ontology: Ontology) -> TranslatedNames:
+        """The same names, answering with the terms of ``ontology``.
+
+        Only for an ontology whose translated names are those this index was
+        built from (a pinned view of the same build). The name map is never
+        changed after construction, so it is shared, not copied.
+        """
+        view = copy.copy(self)
+        view.ontology = ontology
+        return view
+
     def exact(self, query: str, languages: Collection[str]) -> list[dict[str, Any]]:
         """Terms with a name in one of ``languages`` that equals the query.
 
@@ -218,6 +244,53 @@ class TranslatedNames:
         return out
 
 
+class _SubsetFits:
+    """Language subsets fitted once and shared by the pinned views of one build.
+
+    Every pinned view of a build restores the same captured names, so a subset
+    one of them fitted is the subset each of them would fit. A fit is shared
+    as fitted data only; each view binds it to its own terms. The first
+    request for a subset fits it outside the lock; concurrent requests for the
+    same subset wait for that fit, other subsets are not held up.
+    """
+
+    def __init__(self, limit: int) -> None:
+        self._limit = limit
+        self._fits: OrderedDict[tuple[str, ...], LexicalIndex] = OrderedDict()
+        self._flights: dict[tuple[str, ...], Future[LexicalIndex]] = {}
+        self._lock = threading.Lock()
+
+    def get(
+        self, key: tuple[str, ...], fit: Callable[[], LexicalIndex]
+    ) -> LexicalIndex:
+        with self._lock:
+            index = self._fits.get(key)
+            if index is not None:
+                self._fits.move_to_end(key)
+                return index
+            flight = self._flights.get(key)
+            owner = flight is None
+            if flight is None:
+                flight = Future()
+                self._flights[key] = flight
+        if not owner:
+            return flight.result()
+        try:
+            index = fit()
+        except BaseException as exc:
+            with self._lock:
+                self._flights.pop(key, None)
+            flight.set_exception(exc)
+            raise
+        with self._lock:
+            self._fits[key] = index
+            if len(self._fits) > self._limit:
+                self._fits.popitem(last=False)
+            self._flights.pop(key, None)
+        flight.set_result(index)
+        return index
+
+
 class LanguageLexicalIndex(LexicalIndex):
     """Fit TF-IDF only on English and the selected translation languages.
 
@@ -241,6 +314,10 @@ class LanguageLexicalIndex(LexicalIndex):
         )
         self._subset_indexes: OrderedDict[tuple[str, ...], LexicalIndex] = OrderedDict()
         self._subset_lock = threading.RLock()
+        # Fits shared by the pinned views of this build (see ``pinned_view``),
+        # and, on such a view, the shared fits it draws from.
+        self._view_fits = _SubsetFits(self._MAX_CACHED_INDEXES)
+        self._shared_fits: _SubsetFits | None = None
 
     def with_ontology(self, ontology: Ontology) -> LanguageLexicalIndex:
         """Bind fitted data to isolated terms, with a separate subset LRU.
@@ -257,12 +334,27 @@ class LanguageLexicalIndex(LexicalIndex):
             view.languages = list(self.languages)
             view._subset_lock = threading.RLock()
             view._subset_indexes = OrderedDict()
+            view._view_fits = _SubsetFits(self._MAX_CACHED_INDEXES)
+            view._shared_fits = None
+        return view
+
+    def pinned_view(self, ontology: Ontology) -> LanguageLexicalIndex:
+        """Like :meth:`with_ontology`, sharing subset fits with sibling views.
+
+        For pinned views whose terms carry exactly the names of this build.
+        A subset is fitted against the terms of the first view that needs it,
+        never against this index's own terms, whose subsets stay in their own
+        cache; the other views reuse that fit bound to their own terms.
+        """
+        view = self.with_ontology(ontology)
+        view._shared_fits = self._view_fits
         return view
 
     def build(self) -> None:
         with self._subset_lock:
             super().build()
             self._subset_indexes.clear()
+            self._view_fits = _SubsetFits(self._MAX_CACHED_INDEXES)
 
     def search(
         self,
@@ -282,8 +374,7 @@ class LanguageLexicalIndex(LexicalIndex):
         with self._subset_lock:
             index = self._subset_indexes.get(allowed)
             if index is None:
-                index = LexicalIndex(self.ontology, languages=allowed)
-                index.build()
+                index = self._fit_subset(allowed)
                 self._subset_indexes[allowed] = index
                 if len(self._subset_indexes) > self._MAX_CACHED_INDEXES:
                     self._subset_indexes.popitem(last=False)
@@ -292,3 +383,17 @@ class LanguageLexicalIndex(LexicalIndex):
         # The local reference stays alive if another request evicts its cache
         # entry. Querying does not change the fitted matrix/vectorizer.
         return index.search(query, k)
+
+    def _fit_subset(self, languages: tuple[str, ...]) -> LexicalIndex:
+        """A subset fitted on these terms, or a sibling view's fit bound to them."""
+
+        def fit() -> LexicalIndex:
+            index = LexicalIndex(self.ontology, languages=languages)
+            index.build()
+            return index
+
+        if self._shared_fits is None:
+            return fit()
+        bound = copy.copy(self._shared_fits.get(languages, fit))
+        bound.ontology = self.ontology
+        return bound

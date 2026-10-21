@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
+import gc
 import hashlib
 import logging
 import re
@@ -28,14 +30,16 @@ from ontocurator.ontology.provenance import (
     TermStatus,
 )
 from ontocurator.ontology.translations import (
+    FrozenTranslations,
     LanguageLexicalIndex,
     LoadedTranslation,
     SkippedTranslation,
     TranslatedNames,
     apply_translations,
+    freeze_translations,
     translation_counts,
 )
-from ontocurator.vendor.hpo_span_annotator.hpo import Ontology
+from ontocurator.vendor.hpo_span_annotator.hpo import Ontology, Term
 from ontocurator.vendor.hpo_span_annotator.hpo import (
     load as load_ontology,
 )
@@ -67,6 +71,8 @@ class OntologyService:
         ref: OntologyRef,
         translations: Sequence[LoadedTranslation] = (),
         skipped_translations: Sequence[SkippedTranslation] = (),
+        *,
+        translated: TranslatedNames | None = None,
     ) -> None:
         self.ontology = ontology
         self.engine = engine
@@ -79,7 +85,12 @@ class OntologyService:
         # it is the ontology itself and always searched.
         self.translation_counts = translation_counts(ontology)
         self.languages = list(self.translation_counts)
-        self._translated = TranslatedNames(ontology)
+        self._translated = (
+            translated if translated is not None else TranslatedNames(ontology)
+        )
+        # The translated names as :meth:`_build` left them, for pinned views.
+        # None for a service assembled any other way.
+        self._built_translations: FrozenTranslations | None = None
         self.search_condition: SearchCondition | None = None
         self.index_identity = self.identity_for_languages(["en", *self.languages])
 
@@ -183,13 +194,15 @@ class OntologyService:
         lexical = LanguageLexicalIndex(ontology, languages=languages)
         lexical.build()
         engine = SearchEngine(ontology=ontology, lexical=lexical)
-        return cls(
+        service = cls(
             ontology=ontology,
             engine=engine,
             ref=ref,
             translations=loaded,
             skipped_translations=skipped,
         )
+        service._built_translations = freeze_translations(ontology)
+        return service
 
     def with_translations(
         self, translation_paths: Iterable[Path | str]
@@ -204,24 +217,91 @@ class OntologyService:
         return self._build(ontology, self.ref, translation_paths)
 
     def _untranslated_snapshot(self) -> Ontology:
-        ontology = copy.deepcopy(self.ontology)
-        for term in ontology.terms.values():
-            term.translations = {}
+        return self._isolated_copy({})
+
+    def _isolated_copy(self, translations: FrozenTranslations) -> Ontology:
+        """The terms in containers of their own, carrying ``translations``.
+
+        What a deep copy gives, without its cost: every term and every list or
+        dict of the ontology is new; strings and tuples are immutable and
+        shared. The name index ``_exact`` holds only such values. A lookup map
+        from keys to terms points at the copied terms.
+
+        The copy creates a few hundred thousand containers and nothing cyclic,
+        so the cyclic collector is paused meanwhile: its passes over the
+        whole heap would cost more than the copy itself.
+        """
+        enabled = gc.isenabled()
+        gc.disable()
+        try:
+            return self._copy_terms(translations)
+        finally:
+            if enabled:
+                gc.enable()
+
+    def _copy_terms(self, translations: FrozenTranslations) -> Ontology:
+        source = self.ontology
+        fields = [field.name for field in dataclasses.fields(Term)]
+        terms: dict[str, Term] = {}
+        copied: dict[int, Term] = {}
+        for term_id, term in source.terms.items():
+            values = {name: getattr(term, name) for name in fields}
+            for name, value in values.items():
+                if isinstance(value, list):
+                    values[name] = list(value)
+            names = translations.get(term_id, {})
+            values["translations"] = {code: list(v) for code, v in names.items()}
+            clone = Term(**values)
+            terms[term_id] = clone
+            copied[id(term)] = clone
+        ontology = copy.copy(source)
+        for name, value in vars(source).items():
+            if name == "terms":
+                ontology.terms = terms
+            elif isinstance(value, dict):
+                setattr(
+                    ontology,
+                    name,
+                    {
+                        key: copied[id(item)]
+                        if isinstance(item, Term)
+                        else list(item)
+                        if isinstance(item, list)
+                        else item
+                        for key, item in value.items()
+                    },
+                )
+            elif isinstance(value, (list, set)):
+                setattr(ontology, name, type(value)(value))
         return ontology
 
     def pinned_view(self, translation_paths: Iterable[Path]) -> OntologyService:
         """Restore captured names and reuse the identical corpus's fitted data.
 
-        Resource equality is checked by the registry before calling this. Terms
-        and their lookup references are isolated; expensive lexical fits are
+        Resource equality is checked by the registry before calling this: the
+        captured files are the files this service was built with. Terms and
+        their lookup references are isolated; expensive lexical fits are
         shared through views bound to this snapshot. Selected-language subsets
-        fit independently against the captured terms.
+        fit against captured terms, once for all views of this build.
+
+        A service built by :meth:`_build` kept its names as the files left
+        them, so the files are not parsed again; any other service re-applies
+        them to a copy.
         """
-        ontology = self._untranslated_snapshot()
-        loaded, skipped = apply_translations(ontology, translation_paths)
         lexical = self.engine.lexical
         if not isinstance(lexical, LanguageLexicalIndex):
             raise TypeError("Pinned views require a language lexical index")
+        if self._built_translations is not None:
+            ontology = self._isolated_copy(self._built_translations)
+            return OntologyService(
+                ontology,
+                SearchEngine(ontology, lexical.pinned_view(ontology)),
+                self.ref,
+                translations=self.translations,
+                translated=self._translated.with_ontology(ontology),
+            )
+        ontology = self._untranslated_snapshot()
+        loaded, skipped = apply_translations(ontology, translation_paths)
         return OntologyService(
             ontology,
             SearchEngine(ontology, lexical.with_ontology(ontology)),
