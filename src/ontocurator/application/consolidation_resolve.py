@@ -26,7 +26,10 @@ event). ``input_ids`` must name exactly one group of the round
 An edit of a ``cons-…`` annotation in the editor keeps the marked decisions
 (``EditingService._update_decision_replacements``): the group stays
 resolved and reads *edited*. Deleting it there drops its decisions, so the
-group reads open again.
+group reads open again. An editor decision on a member target
+(``ReviewService.decide``, ``release_group_of``) first reopens the group in
+the same mutation, so its ``cons-…`` result never stays next to the
+editor's decisions.
 """
 
 from __future__ import annotations
@@ -86,6 +89,7 @@ __all__ = [
     "ResolveCommand",
     "consolidated_annotation_id",
     "merged_annotation",
+    "release_group_of",
     "review_decision",
     "take_over_matches",
 ]
@@ -264,10 +268,13 @@ def _find_group(
     raise _invalid("The inputs are not exactly one consolidation group")
 
 
-def _clear_group(draft: Draft, item: _Group) -> None:
+def _clear_group(
+    draft: Draft, item: _Group, keep: frozenset[str] = frozenset()
+) -> None:
     """Remove the group's decisions and resulting annotations: its
     deterministic ``cons-…`` annotations, replacements no remaining decision
-    names, and adopted copies of its targets; then their unused evidence."""
+    names, and adopted copies of its targets (except the annotation ids in
+    ``keep``); then their unused evidence."""
     refs = {(r.annotation_id, r.version) for r in item.refs.values()}
     removed = [
         d for d in draft.decisions if (d.target.annotation_id, d.target.version) in refs
@@ -286,8 +293,11 @@ def _clear_group(draft: Draft, item: _Group) -> None:
     dropped = [
         a
         for a in draft.annotations
-        if a.annotation.annotation_id in doomed
-        or adopted & set(a.annotation.provenance.source_refs)
+        if a.annotation.annotation_id not in keep
+        and (
+            a.annotation.annotation_id in doomed
+            or adopted & set(a.annotation.provenance.source_refs)
+        )
     ]
     draft.annotations = [a for a in draft.annotations if a not in dropped]
     used = {
@@ -587,6 +597,39 @@ class ConsolidationGroupService:
             _uncheck(draft, item)
 
         return self._run(key, envelope, cmd.input_ids, apply)
+
+
+def release_group_of(
+    repo: Repository,
+    key: WorkspaceKey,
+    draft: Draft,
+    target: AnnotationRef,
+    keep: AnnotationRef | None = None,
+) -> bool:
+    """Reopen the group of ``target`` when its decision is consolidation
+    marked, before an editor decision replaces it; whether it did.
+
+    The editor decision on one member supersedes the group's resolution:
+    like reopen, its ``cons-…`` annotations and the other members' marked
+    decisions go (so no result stays behind next to the editor's
+    decisions). ``keep`` (the editor decision's replacement, e.g. an
+    adopted copy of ``target``) survives. Joins the caller's transaction.
+    """
+    prior = next((d for d in draft.decisions if d.target == target), None)
+    if prior is None or prior.consolidation is None or key.round_id is None:
+        return False
+    with repo.db.transaction() as conn:
+        pid = repo._require_project(conn, key.project_key)
+        profile, defaults = project_profile(conn, pid)
+        found = round_members(conn, pid, key.round_id, profile, defaults)
+    for group in round_groups(found):
+        members = {iid: found.members[iid] for iid in group.members.values()}
+        if any(member_ref(m) == target for m in members.values()):
+            item = _Group(key.round_id, group, members, profile)
+            kept = frozenset({keep.annotation_id} if keep is not None else set())
+            _clear_group(draft, item, keep=kept)
+            return True
+    return False
 
 
 # --- automatic take-over --------------------------------------------------- #

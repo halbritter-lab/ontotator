@@ -657,3 +657,53 @@ def test_a_lead_who_is_not_the_assignee_is_refused(cons):
     assert response.status_code in {403, 404}, response.text
     assert response.json()["code"] == "IDENTITY_MISMATCH"
     assert revision(cons) == before
+
+
+def decide(ns: Any, target: tuple[str, str], outcome: str | None) -> Draft:
+    """Decide a member target in the editor (``POST /workspaces/{id}/decisions``)."""
+    workspace = view(ns)["workspace_id"]
+    ns.count += 1
+    return ok(
+        ns.adj.post(
+            f"/api/v1/workspaces/{workspace}/decisions",
+            json={
+                "mutation_id": f"decide-{ns.count}",
+                "expected_revision": revision(ns),
+                "payload": {
+                    "target": {"annotation_id": target[0], "version": target[1]},
+                    "outcome": outcome,
+                },
+            },
+        )
+    )
+
+
+def test_an_editor_decision_on_an_auto_group_replaces_its_result(cons):
+    """No duplicate: the editor decision drops the ``cons-…`` annotation and
+    the group's other marked decisions, as reopen does."""
+    ids = inputs(group(cons, "match"))
+    cid = cons_id(cons, ids, 0)
+    first, second = sorted(target_refs(cons, ids))
+    draft = decide(cons, first, "confirmed")
+    assert cid not in {s.annotation.annotation_id for s in draft.annotations}
+    assert [d.consolidation for d in decisions_on(draft, {first, second})] == [None]
+    assert group(cons, "match")["state"] == "open"
+    draft = decide(cons, second, "confirmed")
+    assert cid not in {s.annotation.annotation_id for s in draft.annotations}
+    after = group(cons, "match")
+    assert (after["state"], after["annotation_ids"]) == (
+        "keep",
+        sorted({first[0], second[0]}),
+    )
+
+
+def test_clearing_a_decision_of_a_resolved_group_reopens_it(cons):
+    ids = inputs(group(cons, "term_differs"))
+    ok(mutate(cons, "resolve", {"input_ids": ids, "action": "keep_both"}))
+    refs = target_refs(cons, ids)
+    draft = decide(cons, sorted(refs)[0], None)
+    assert not decisions_on(draft, refs)
+    assert not {cons_id(cons, ids, 0), cons_id(cons, ids, 1)} & {
+        s.annotation.annotation_id for s in draft.annotations
+    }
+    assert group(cons, "term_differs")["state"] == "open"

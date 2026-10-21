@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from ontocurator.application.consolidation_resolve import release_group_of
 from ontocurator.application.submissions import validate_annotation_completion
 from ontocurator.domain.annotations import AnnotationRef
 from ontocurator.domain.canonical import canonical_hash
@@ -102,6 +103,7 @@ class ReviewService:
                     "UNEXPECTED_REPLACEMENT",
                     "Replacement must be None when clearing a decision",
                 )
+            release_group_of(self.repo, key, draft, cmd.target)
             self._discard_abandoned_adoptions(draft, cmd)
             draft.decisions = [d for d in draft.decisions if d.target != cmd.target]
             target_layer = target_snap.annotation.layer_id
@@ -183,6 +185,9 @@ class ReviewService:
             reviewer_id=key.annotator_id,
         )
 
+        # A consolidation group decided in the consolidation view (or
+        # automatically) yields to the editor decision: no result stays behind.
+        release_group_of(self.repo, key, draft, cmd.target, cmd.replacement)
         self._discard_abandoned_adoptions(draft, cmd)
         draft.decisions = [d for d in draft.decisions if d.target != cmd.target] + [
             decision
