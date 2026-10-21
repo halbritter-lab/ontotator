@@ -18,7 +18,7 @@ Two independent parts:
 - `frontend/src/editor/AnnotationPanel.tsx:266-330`: one `fieldset.axis-field` per axis, `legend.axis-legend` with "(required)", up to four options as `label.axis-option` with a native radio and the visible tag " · default" (`axis-default-tag`) on an unconfirmed default; more than four options render a `Select` (option text " · default"). Options: "Not specified" first when `allow_empty`, then the profile options (`axisOptionLabel`), then an unavailable stored value as a disabled option "{value} (current unavailable value)" (`:274-281`). "Confirm defaults (n)" with `Kbd` D and the hint "Defaults are not confirmed until you confirm them or choose another value." (`:322-330`).
 - Styles exist in three places and partly override each other: `styles/components.css:69-115` (pill chips, `gap: 5px`, radius 9999px), `components.css:429-445` (radius `radius-sm`, transparent fill), `styles/screens/editor.css:1960-2014` (grid with a 96 px legend column, `calc(2 * var(--space-7))`, dashed border for `is-default`, forced-colours rules), plus focus rules in `styles/base.css:22` and `:49`.
 - Result in the 380 px inspector (`editor.css:361`, content width ≈348 px after `detail-section` padding, so ≈244 px for the options): separate chips with 4–5 px gaps and the same border on every chip; rows are separated by only `space-1`. A defaulted value differs from a chosen one only by a dashed border and the muted word "default".
-- Axes (`src/ontocurator/domain/axes.py:63-81`): Assertion (present, absent, uncertain), Experiencer/Subject (patient, other), Temporality (current, historical, future); all three `allow_empty=True`, so each shows "Not specified" too. Profile labels are long ("Vorhandensein (Assertion)", "Betroffene Person (Experiencer)"); projects can configure further axes with any labels and option counts.
+- Axes (`src/ontocurator/domain/axes.py:63-81`): Assertion (present, absent, uncertain), Experiencer/Subject (patient, other), Temporality (current, historical, future); all three `allow_empty=True`, so each shows "Not specified" too. Profile labels were long German ones until the final review (now "Assertion", "Experiencer", "Temporality"; IDs and options unchanged); projects can configure further axes with any labels and option counts.
 - Estimated widths at `size-sm` (13 px): "Not specified · Present · Absent · Uncertain" needs ≈250 px as connected segments with `space-1`/`space-2` padding. That is at or just over the ≈244 px option column. The standard profile is therefore the borderline case and must be measured in the browser (WP X1), not assumed to fit.
 
 ### 1.1 Decisions (user, 2026-10-20)
@@ -70,7 +70,7 @@ Measurement: a hidden measuring copy is not needed; each control is laid out wit
 
 Values are never abbreviated or truncated in any layout; clinical values are read in full.
 
-**Layout A (boxes):** each `fieldset` is a box: `surface-sunken` fill, 1 px `border`, `radius`, padding `var(--space-2)`, gap `var(--space-2)` between boxes. Legend on top (`size-sm`, weight 500); options as separate wrapping chips (`flex-wrap: wrap`, gap `var(--space-1)`, `radius-sm`, today's chip look). An axis whose value is an unconfirmed default: box border 1 px dashed `warning`, legend suffix " · default, not confirmed" in `warning`; the chosen chip keeps the `warning-light` fill and `warning` text of 1.2. Hint and button as in 1.3.
+**Layout A (boxes):** each `fieldset` is a box: `surface-sunken` fill, 1 px `border`, `radius`, padding `var(--space-2)`, gap `var(--space-2)` between boxes. Legend on top (`size-sm`, weight 500); options as separate wrapping chips (`flex-wrap: wrap`, gap `var(--space-1)`, `radius-sm`, today's chip look). An axis whose value is an unconfirmed default: box border 1 px dashed `warning`, the same "Default" tag under the legend as in B (final review 2026-10-21: one marking in every layout; it replaced the earlier legend suffix " · default, not confirmed"); the chosen chip keeps the `warning-light` fill and `warning` text of 1.2. Hint and button as in 1.3.
 
 ### 1.5 Keyboard and accessibility
 
@@ -152,7 +152,7 @@ Targets: from the translation, the source and the comparison (if shown); from th
 
 Effect, once:
 
-- Each target pane scrolls instantly (no smooth scrolling) so that its paired paragraph starts at the same vertical offset inside its pane as the anchor paragraph inside the anchor pane, clamped to the scroll range; if the anchor paragraph starts above the visible area, the target paragraph is placed at the top with `space-3` offset.
+- Each target pane scrolls instantly (no smooth scrolling) so that its paired paragraph starts at the same vertical offset inside its pane as the anchor paragraph inside the anchor pane, clamped to the scroll range; if the anchor paragraph starts above the visible area (a long paragraph), the line in view is matched instead of the paragraph tops (final review 2026-10-21): the caret line (rule 1; its share of the paragraph in code points, up to the next paragraph start), else the line at the `space-3` inset, is placed at the same height in the target at the same share of the paired paragraph. Limitation: the share is by characters and paragraph height, not by sentence, so a translation that is much longer or shorter in one part of the paragraph lands only approximately.
 - The written positions are registered as programmatic, so they never make the target a leader and never feed back.
 - The paired paragraph numbers get `data-coupled-active`; the polite status reads the result (copy 2.6).
 - Focus, caret and selection stay where they were. Moving the translation pane from a source anchor is allowed because the reviewer asked for it; the caret does not move.
@@ -160,7 +160,7 @@ Effect, once:
 
 Controls:
 
-- Button "Show matching paragraph" (`Button variant="quiet" size="sm"`, `Kbd` "Alt M") in the translation column head next to "Show changes" and "Couple scrolling"; one instance per screen.
+- Button "Show matching paragraph" (`Button size="sm"`, secondary, so it reads as a button (final review 2026-10-21), `Kbd` "Alt M") in the translation column head next to "Show changes" and "Couple scrolling"; one instance per screen.
 - Shortcut `Alt+M`, scope screen, group "Translation review", `allowInInputs: true` (it must work from the textarea), not while a dialog is open. `matches()` (`ui/shortcuts.ts:112-124`) compares `event.key`; on macOS Option+M yields "µ", so Alt bindings with a single letter fall back to `event.code === "KeyM"`. `preventDefault` so no character is typed. Listed in `?` help: "Alt + M: Show the paragraph paired with the one at your cursor".
 
 ### 2.5 Width rule

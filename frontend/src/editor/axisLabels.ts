@@ -7,7 +7,14 @@ export function axisOptionLabel(value: unknown): string {
     present: "Present", absent: "Absent", uncertain: "Uncertain", patient: "Patient",
     family_member: "Family member", other: "Other person", unknown: "Unknown", current: "Current", historical: "Historical", future: "Future",
   };
-  return typeof value === "string" && Object.prototype.hasOwnProperty.call(labels, value) ? labels[value] : String(value);
+  if (typeof value !== "string") return String(value);
+  if (Object.prototype.hasOwnProperty.call(labels, value)) return labels[value];
+  // Profiles store options as identifiers ("clinically_suspected_only"); show them as words, never change other values.
+  if (/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(value)) {
+    const words = value.replace(/_/g, " ");
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+  return value;
 }
 
 export function findingAxes(values: Record<string, unknown>, config?: readonly AxisDefinition[]) {

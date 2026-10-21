@@ -1,4 +1,4 @@
-/* Drawer (ui/Drawer.tsx): non-modal reading panel from 1100 px, lg Dialog between, full-height sheet below 700 px. */
+/* Drawer (ui/Drawer.tsx): non-modal reading panel from 1280 px, lg Dialog between, full-height sheet below 700 px. */
 .ui-drawer {
   position: fixed;
   top: var(--ui-drawer-top, 0);
@@ -8,13 +8,18 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  width: min(36rem, 45vw);
+  width: min(24rem, 30vw);
   padding: var(--space-5);
   border-left: 1px solid var(--border-strong);
   background: var(--surface-raised);
   box-shadow: var(--shadow-2);
   font-size: var(--size-md);
   line-height: var(--leading-md);
+}
+
+/* The page beside the open non-modal drawer narrows instead of being covered (Drawer.tsx sets the inset). */
+:root[data-ui-drawer-open] .shell-main {
+  margin-right: var(--ui-drawer-inset, 0);
 }
 
 .ui-drawer-body {

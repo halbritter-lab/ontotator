@@ -32,7 +32,7 @@ function Host({ onShortcut = vi.fn(), initiallyOpen = false }: { onShortcut?: ()
   </>;
 }
 
-it("is a non-modal aside from 1100 px and the editor stays operable", () => {
+it("is a non-modal aside from 1280 px and the editor stays operable", () => {
   viewport(1280);
   const editorAction = vi.fn();
   render(<><Host initiallyOpen /><button onClick={editorAction}>Save draft</button></>);
@@ -49,8 +49,8 @@ it("is a non-modal aside from 1100 px and the editor stays operable", () => {
   expect(screen.getByRole("complementary", { name: "Guidelines v3" })).toBeDefined();
 });
 
-it("is a modal dialog between 700 and 1099 px", () => {
-  viewport(900);
+it("is a modal dialog between 700 and 1279 px", () => {
+  viewport(1279);
   render(<Host initiallyOpen />);
   const dialog = screen.getByRole("dialog", { name: "Guidelines v3" });
   expect(dialog.getAttribute("aria-modal")).toBe("true");
@@ -133,4 +133,24 @@ it("renders nothing while closed", () => {
   const ref = createRef<HTMLButtonElement>();
   const { container } = render(<Drawer open={false} title="Guidelines v3" onClose={vi.fn()} returnFocusRef={ref}><p>Text</p></Drawer>);
   expect(container.innerHTML).toBe("");
+});
+
+it("makes room for the non-modal drawer, so the page beside it is not covered", () => {
+  viewport(1440);
+  const root = document.documentElement;
+  const view = render(<Host />);
+  expect(root.hasAttribute("data-ui-drawer-open")).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Guidelines v3" }));
+  expect(root.hasAttribute("data-ui-drawer-open")).toBe(true);
+  expect(root.style.getPropertyValue("--ui-drawer-inset")).toMatch(/^\d+px$/);
+  fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+  expect(root.hasAttribute("data-ui-drawer-open")).toBe(false);
+  expect(root.style.getPropertyValue("--ui-drawer-inset")).toBe("");
+  view.unmount();
+});
+
+it("does not reserve room for the modal variants", () => {
+  viewport(900);
+  render(<Host initiallyOpen />);
+  expect(document.documentElement.hasAttribute("data-ui-drawer-open")).toBe(false);
 });

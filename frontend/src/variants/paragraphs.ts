@@ -42,3 +42,11 @@ export function paragraphAt(starts: readonly number[], offset: number): number {
   }
   return low;
 }
+
+/** The paragraph holding a caret (code-point offset) and the caret's share of it, up to the next paragraph start. */
+export function caretInParagraph(text: string, offset: number): { paragraph: number; fraction: number } {
+  const starts = paragraphStarts(text);
+  const paragraph = paragraphAt(starts, offset);
+  const start = starts[paragraph], end = starts[paragraph + 1] ?? Array.from(text).length;
+  return { paragraph, fraction: end > start ? Math.min(1, Math.max(0, (offset - start) / (end - start))) : 0 };
+}

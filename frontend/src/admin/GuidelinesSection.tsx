@@ -42,6 +42,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
   const [note, setNote] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<unknown>();
+  const [republishError, setRepublishError] = useState<unknown>();
   const [reading, setReading] = useState<number | null>(null);
   const [withdrawTarget, setWithdrawTarget] = useState<number | null>(null);
   const [reason, setReason] = useState("");
@@ -50,6 +51,8 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
   const writing = useRef(false);
   const fileRead = useRef(0);
   const successRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLElement>(null);
+  const focusPreview = useRef(false);
   const readerRef = useRef<HTMLElement>(null);
   const focusSuccess = useRef(false);
 
@@ -65,6 +68,9 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
     if (success && focusSuccess.current) { focusSuccess.current = false; successRef.current?.focus(); }
   }, [success]);
   useEffect(() => { if (reading !== null) readerRef.current?.focus(); }, [reading]);
+  useEffect(() => {
+    if (chosen && focusPreview.current) { focusPreview.current = false; previewRef.current?.focus(); }
+  }, [chosen]);
 
   const choose = async (file: File | undefined) => {
     const ticket = ++fileRead.current;
@@ -78,6 +84,25 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
   const discard = () => {
     fileRead.current++;
     setChosen(null); setFileError(null); setNote(""); setPublishError(undefined); setFileKey(value => value + 1);
+  };
+  // Withdrawn texts are deleted, so only a version whose text still exists can be republished: its text
+  // fills the publish form as a new file, for review before "Publish as vN".
+  const republish = async (version: number) => {
+    const ticket = ++fileRead.current;
+    setChosen(null); setFileError(null); setPublishError(undefined); setRepublishError(undefined); setSuccess(null);
+    try {
+      const document = await api.getGuideline(projectKey, version);
+      if (ticket !== fileRead.current) return;
+      if (document.body === null) { setRepublishError(new Error(`The text of v${version} is no longer available.`)); return; }
+      const name = document.filename ?? `guidelines-v${version}.${document.kind === "markdown" ? "md" : "txt"}`;
+      const file = new File([document.body], name, { type: document.kind === "markdown" ? "text/markdown" : "text/plain" });
+      setFileKey(value => value + 1);
+      setNote(`Republished v${version}`);
+      focusPreview.current = true;
+      setChosen({ file, text: document.body, kind: document.kind });
+    } catch (failure: unknown) {
+      if (ticket === fileRead.current) setRepublishError(failure);
+    }
   };
   const showSuccess = (message: string) => { focusSuccess.current = true; setSuccess(message); };
 
@@ -129,6 +154,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
     { id: "seen", header: "Seen by", cell: item => !item.withdrawn && item.reach ? `Seen by ${item.reach.opened} of ${item.reach.members} task members` : "—" },
     { id: "actions", header: "Actions", cell: item => item.withdrawn ? null : <div className="guidelines-row-actions">
       <Button size="sm" aria-label={`Read v${item.version}`} onClick={() => setReading(item.version)}>Read</Button>
+      {item.version !== current?.version && <Button size="sm" onClick={() => { void republish(item.version); }}>Republish v{item.version}…</Button>}
       <Button size="sm" variant="quiet" onClick={() => openWithdraw(item.version)}>Withdraw v{item.version}…</Button>
     </div> },
   ];
@@ -155,7 +181,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
           <Button variant="quiet" onClick={() => openWithdraw(current.version)}>Withdraw v{current.version}…</Button>
         </div>
       </div>
-      : latestWithdrawn ? <InlineMessage tone="warning">{`No guideline is in force. v${listing.latest_version} was withdrawn on ${formatGuidelineDay(latestWithdrawn.at)} by ${personLabel(latestWithdrawn.by)}. Publish a new version; to restore earlier rules, upload that version's file again.`}</InlineMessage>
+      : latestWithdrawn ? <InlineMessage tone="warning">{`No guideline is in force. v${listing.latest_version} was withdrawn on ${formatGuidelineDay(latestWithdrawn.at)} by ${personLabel(latestWithdrawn.by)}. Publish a new version${versions.some(item => !item.withdrawn) ? ", or republish an earlier version from the list below" : ""}.`}</InlineMessage>
       : <p className="guidelines-empty">No guidelines yet. Upload a .md or .txt file. Annotators and reviewers will find it in every task.</p>}
 
       <form className="guidelines-publish" aria-labelledby={`${id}-publish`} onSubmit={event => { void publish(event); }}>
@@ -164,9 +190,10 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
           error={fileError} onChange={event => { void choose(event.target.files?.[0]); }} />
         <TextInput id={`${id}-note`} label="What changed? (optional)" hint="Shown to annotators and reviewers with the update notice." maxLength={280}
           value={note} onChange={event => setNote(event.target.value)} />
+        {republishError !== undefined && <ErrorNotice error={republishError} />}
         {chosen && <>
           <p className="guidelines-file-facts">{`${chosen.file.name} · ${formatSize(chosen.file.size)}`}</p>
-          <section className="guidelines-preview" aria-label={`Preview of ${chosen.file.name}`} tabIndex={0}>
+          <section ref={previewRef} className="guidelines-preview" aria-label={`Preview of ${chosen.file.name}`} tabIndex={0}>
             <GuidelineDocument kind={chosen.kind} body={chosen.text} headingOffset={2} />
           </section>
           <div className="guidelines-facts">

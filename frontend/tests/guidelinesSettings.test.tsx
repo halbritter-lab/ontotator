@@ -252,7 +252,7 @@ describe("Settings › Guidelines", () => {
 
   it("shows No guideline is in force when the current version is withdrawn", async () => {
     renderSection(guidelineListing([withdrawnGuideline(4), guidelineSummary(3)]));
-    expect(await screen.findByText("No guideline is in force. v4 was withdrawn on 21 Oct by Jana Popp (ann-0002). Publish a new version; to restore earlier rules, upload that version's file again.")).toBeDefined();
+    expect(await screen.findByText("No guideline is in force. v4 was withdrawn on 21 Oct by Jana Popp (ann-0002). Publish a new version, or republish an earlier version from the list below.")).toBeDefined();
     // No current-version summary; only the v3 row of the table states its reach.
     expect(screen.getAllByText(/^Seen by \d/).map(line => line.closest("table"))).toEqual([versionsTable()]);
     expect(screen.queryByText(/^No guidelines yet/)).toBeNull();
@@ -262,6 +262,38 @@ describe("Settings › Guidelines", () => {
     const reader = await screen.findByRole("region", { name: "Reading v3" });
     await within(reader).findByRole("heading", { name: "Guidelines v3" });
     expect(within(reader).queryByText(/The current version is/)).toBeNull();
+  });
+
+  it("without an earlier readable version the withdrawal notice only asks for a new version", async () => {
+    renderSection(guidelineListing([withdrawnGuideline(2), withdrawnGuideline(1)]));
+    expect(await screen.findByText("No guideline is in force. v2 was withdrawn on 21 Oct by Jana Popp (ann-0002). Publish a new version.")).toBeDefined();
+    expect(screen.queryByRole("button", { name: /^Republish/ })).toBeNull();
+  });
+
+  it("Republish fills the publish form with an earlier version's text for review", async () => {
+    renderSection(guidelineListing([withdrawnGuideline(4), guidelineSummary(3), withdrawnGuideline(2), guidelineSummary(1)]));
+    await screen.findByText(/^No guideline is in force/);
+    expect(within(row(4)).queryByRole("button", { name: /^Republish/ })).toBeNull();
+    expect(within(row(2)).queryByRole("button", { name: /^Republish/ })).toBeNull();
+    fireEvent.click(within(row(3)).getByRole("button", { name: "Republish v3…" }));
+    const preview = await screen.findByRole("region", { name: "Preview of guide-v3.md" });
+    expect(api.getGuideline).toHaveBeenCalledWith(KEY, 3);
+    expect(await within(preview).findByText("Annotate negations.")).toBeDefined();
+    expect((screen.getByLabelText("What changed? (optional)") as HTMLInputElement).value).toBe("Republished v3");
+    await waitFor(() => expect(document.activeElement).toBe(preview));
+    fireEvent.click(screen.getByRole("button", { name: "Publish as v5" }));
+    await waitFor(() => expect(api.publishGuideline).toHaveBeenCalledTimes(1));
+    const input = vi.mocked(api.publishGuideline).mock.calls[0][1];
+    expect(input.file.name).toBe("guide-v3.md");
+    expect(await readGuidelineFile(input.file)).toEqual({ text: "# Guide v3\n\nAnnotate negations.", kind: "markdown" });
+    expect(input).toMatchObject({ changeNote: "Republished v3", expectedLatestVersion: 4 });
+  });
+
+  it("offers Republish for older versions but not for the one in force", async () => {
+    renderSection();
+    await screen.findByText(/^v3 · guide-v3\.md/);
+    expect(within(row(3)).queryByRole("button", { name: /^Republish/ })).toBeNull();
+    expect(within(row(2)).getByRole("button", { name: "Republish v2…" })).toBeDefined();
   });
 
   it("shows the load error with a retry", async () => {

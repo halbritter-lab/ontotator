@@ -247,6 +247,26 @@ it('align uses topInset when the anchor paragraph starts above the visible area'
   expect(target.element!.scrollTop).toBe(788);
 });
 
+it('align keeps the shown part of a long anchor paragraph level when its top is above the view', () => {
+  // Paragraph 0 is 1000 px in the source and 2000 px in the target; the source shows 500 px into it.
+  const source = pane('source', [0, 1000, 1100]), target = pane('target', [0, 2000, 2200], 4000); const panes = [source, target];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: false }));
+  act(() => { source.element!.scrollTop = 500; });
+  // Without a caret: the line at the top inset (512 px = 51.2 %) is matched to the same share of the partner.
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 0 }, targets: ['target'], anchorOffset: -500, topInset: 12 }); });
+  expect(target.element!.scrollTop).toBe(1012);
+  // With the caret at 55 % of the paragraph (550 px, 50 px into the view): that line is matched, at the same height.
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 0 }, targets: ['target'], anchorOffset: -500, topInset: 12, anchorFraction: 0.55 }); });
+  expect(target.element!.scrollTop).toBe(1050);
+});
+
+it('align still matches paragraph tops when the anchor paragraph starts in view, even with a caret fraction', () => {
+  const source = pane('source', [0, 200, 400, 600]), target = pane('target', [0, 400, 800, 1200]); const panes = [source, target];
+  const { result } = renderHook(() => useCoupledScroll(panes, { enabled: false }));
+  act(() => { result.current.align({ anchor: { paneId: 'source', paragraph: 2 }, targets: ['target'], anchorOffset: 30, topInset: 12, anchorFraction: 0.9 }); });
+  expect(target.element!.scrollTop).toBe(770);
+});
+
 it('align marks the paired markers and reports estimate when counts differ', () => {
   const source = pane('source', [0, 200, 400, 600]), target = pane('target', [0, 200, 400, 600, 800, 1000, 1200], 2200); const panes = [source, target];
   const { result } = renderHook(() => useCoupledScroll(panes, { enabled: false }));

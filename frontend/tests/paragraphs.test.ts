@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { paragraphAt, paragraphStarts } from "../src/variants/paragraphs";
+import { caretInParagraph, paragraphAt, paragraphStarts } from "../src/variants/paragraphs";
 
 describe("paragraphStarts", () => {
   it.each([
@@ -60,5 +60,15 @@ describe("paragraphAt", () => {
     expect(paragraphAt(paragraphStarts(""), 0)).toBe(0);
     expect(paragraphAt([0], 1000)).toBe(0);
     expect(paragraphAt([0], -1000)).toBe(0);
+  });
+});
+
+describe("caretInParagraph", () => {
+  it("gives the caret's paragraph and its share up to the next paragraph start, in code points", () => {
+    const text = "Short.\n\n" + "x".repeat(100) + "\n\nEnd";
+    expect(caretInParagraph(text, 0)).toEqual({ paragraph: 0, fraction: 0 });
+    expect(caretInParagraph(text, 8 + 51)).toEqual({ paragraph: 1, fraction: 0.5 });
+    expect(caretInParagraph(text, Array.from(text).length)).toEqual({ paragraph: 2, fraction: 1 });
+    expect(caretInParagraph("\u{1f600}\u{1f600}", 1)).toEqual({ paragraph: 0, fraction: 0.5 });
   });
 });

@@ -22,14 +22,14 @@ export interface DrawerProps {
 const USER_SCROLL = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 
 /**
- * A reading panel next to the work. From 1100 px a non-modal `<aside>` on the right, so the page behind stays
- * operable; between 700 and 1099 px a modal `lg` Dialog; below 700 px a full-height sheet. Focus moves to the
+ * A reading panel next to the work. From 1280 px a non-modal `<aside>` on the right; the shell's main area narrows
+ * beside it, so the page stays visible and operable (narrower screens have no room for both); between 700 and 1279 px a modal `lg` Dialog; below 700 px a full-height sheet. Focus moves to the
  * heading on open and back to `returnFocusRef` on close; Escape closes. Inside the non-modal drawer, keys
  * do not reach the page's shortcuts (only Escape passes, and closes it). The scroll position is kept
  * across close and reopen for the lifetime of the component.
  */
 export function Drawer({ open, title, headingId, onClose, returnFocusRef, footer, children }: DrawerProps): JSX.Element | null {
-  const wide = useMediaQuery("(min-width: 1100px)");
+  const wide = useMediaQuery("(min-width: 1280px)");
   const sheet = useMediaQuery("(max-width: 699px)");
   const generated = useId();
   const labelId = headingId ?? `${generated}-heading`;
@@ -49,16 +49,25 @@ export function Drawer({ open, title, headingId, onClose, returnFocusRef, footer
   useLayoutEffect(() => { if (open && wide) heading.current?.focus(); }, [open, wide]);
 
   // The aside starts below the AppShell header, so the account and navigation controls stay reachable.
+  // It does not cover the page: the root carries its width (`--ui-drawer-inset`) and the shell's main area
+  // narrows by that much (drawer.css), so the text being worked on stays readable beside it.
   useLayoutEffect(() => {
     const element = aside.current;
     if (!open || !wide || !element) return;
+    const root = document.documentElement;
     const place = () => {
       const header = document.querySelector(".shell-header");
       element.style.setProperty("--ui-drawer-top", `${Math.max(0, Math.round(header?.getBoundingClientRect().bottom ?? 0))}px`);
+      root.style.setProperty("--ui-drawer-inset", `${Math.ceil(element.getBoundingClientRect().width)}px`);
     };
+    root.setAttribute("data-ui-drawer-open", "");
     place();
     window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
+    return () => {
+      window.removeEventListener("resize", place);
+      root.removeAttribute("data-ui-drawer-open");
+      root.style.removeProperty("--ui-drawer-inset");
+    };
   }, [open, wide]);
 
   useLayoutEffect(() => {

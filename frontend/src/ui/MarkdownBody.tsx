@@ -83,7 +83,8 @@ function headingComponents(headingOffset: number): Components {
     // `#` sits one level below the surrounding panel's `h2`, shifted by `headingOffset`.
     const level = Math.min(6, Math.max(1, depth + 1 + headingOffset));
     const Tag = `h${level}` as HeadingTag;
-    components[`h${depth}` as HeadingTag] = ({ children }) => <Tag>{children}</Tag>;
+    // Sized by Markdown depth (guideline-heading-n), not by tag level, so the offset changes structure only.
+    components[`h${depth}` as HeadingTag] = ({ children }) => <Tag className={`guideline-heading-${depth}`}>{children}</Tag>;
   }
   return components;
 }

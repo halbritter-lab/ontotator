@@ -568,7 +568,7 @@ describe("Annotation panel and text pane", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     render(<TextPane text="short" mentions={[{ evidence_id: "bad", segments: [{ start: 2, end: 99 }] }]} selectedEvidenceId={null}
       selectionIntent="new_mention" onSelection={vi.fn()} onPick={vi.fn()} onChangeIntent={vi.fn()} />);
-    expect(screen.getByText(/1 mention\(s\) have offsets outside this text/)).toBeDefined();
+    expect(screen.getByText(/1 mention has offsets outside this text/)).toBeDefined();
     warn.mockRestore();
   });
 

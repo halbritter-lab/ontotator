@@ -123,3 +123,13 @@ def test_builtin_clinical_profile() -> None:
         values={"assertion": "present", "experiencer": None, "temporality": None},
     )
     validate_axes(axes_legacy, EDITOR_AXES_CONFIG, complete=True)
+
+
+def test_standard_axes_have_english_labels_and_stable_ids() -> None:
+    from ontocurator.domain.axes import STANDARD_CLINICAL_AXES
+
+    assert [(axis.id, axis.label, axis.options) for axis in STANDARD_CLINICAL_AXES] == [
+        ("assertion", "Assertion", ["present", "absent", "uncertain"]),
+        ("experiencer", "Experiencer", ["patient", "other"]),
+        ("temporality", "Temporality", ["current", "historical", "future"]),
+    ]

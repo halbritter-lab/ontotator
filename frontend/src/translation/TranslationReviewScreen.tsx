@@ -3,9 +3,9 @@ import { api, ApiError, type ReviewWorkspace, type TaskSummary, type Translation
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { nextOpenTask } from "../app/caseOrder";
 import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
-import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconRetry, InlineMessage, Kbd, Select, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
+import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconRetry, InlineMessage, Kbd, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
-import { paragraphAt, paragraphStarts } from "../variants/paragraphs";
+import { caretInParagraph, paragraphStarts } from "../variants/paragraphs";
 import { useCoupledScroll } from "../variants/useCoupledScroll";
 import { createDraftSaver, type DraftSaver } from "./draftSaver";
 import { DiffView, TextView } from "./DiffView";
@@ -192,7 +192,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   paneElements.current = { source: sourceElement, target: targetElement, comparison: comparison ? comparisonElement : null };
   const lastPointer = useRef<{ paneId: string; paragraph: number } | null>(null), lastPane = useRef("target");
   const matchButton = useRef<HTMLButtonElement | null>(null), caretFocus = useRef(false);
-  const pendingMatch = useRef<{ paneId: string; paragraph: number } | null>(null);
+  const pendingMatch = useRef<{ paneId: string; paragraph: number; fraction?: number } | null>(null);
   const [matchStatus, setMatchStatus] = useState("");
   /** A repeated identical result is cleared first and set again on the next frame, so it is announced again. */
   const matchStatusText = useRef(""), matchStatusFrame = useRef<number | undefined>(undefined);
@@ -228,14 +228,15 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     });
     return () => removals.forEach(remove => remove());
   }, [sourceElement, targetElement, comparisonElement, comparison]);
-  const runMatch = (anchor: { paneId: string; paragraph: number }) => {
+  const runMatch = (anchor: { paneId: string; paragraph: number; fraction?: number }) => {
     const elements = paneElements.current, anchorElement = elements[anchor.paneId];
     if (!anchorElement) return;
     const order = anchor.paneId === "target" ? ["source", "comparison"] : anchor.paneId === "source" ? ["target", "comparison"] : ["target", "source"];
     const targets = order.filter(id => elements[id]);
     const marker = paragraphMarkers(anchorElement).find(row => Number(row.dataset.paragraph) === anchor.paragraph);
     const anchorOffset = marker ? marker.getBoundingClientRect().top - paneTop(anchorElement) : 0;
-    const result = pairing.align({ anchor, targets, anchorOffset, topInset: 12 });
+    // In a long paragraph whose top is scrolled away, the caret line (else the top line) is matched, not the tops.
+    const result = pairing.align({ anchor: { paneId: anchor.paneId, paragraph: anchor.paragraph }, targets, anchorOffset, topInset: 12, anchorFraction: anchor.fraction });
     // Below 700 px the texts stack: the target scrolled internally is also brought into view; focus and caret stay.
     if (!pairing.available && targets[0]) elements[targets[0]]?.scrollIntoView?.({ block: "nearest" });
     const shown = result.pairs.filter(pair => pair.paneId !== anchor.paneId);
@@ -244,11 +245,11 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   const showMatching = () => {
     const elements = paneElements.current, active = document.activeElement;
     const textarea = elements.target?.querySelector("textarea") ?? null;
-    let anchor: { paneId: string; paragraph: number };
+    let anchor: { paneId: string; paragraph: number; fraction?: number };
     if (textarea && (active === textarea || (active === matchButton.current && caretFocus.current))) {
       // Rule 1: the caret's paragraph, in code points, with freshly computed starts.
       const offset = Array.from(textarea.value.slice(0, textarea.selectionStart ?? 0)).length;
-      anchor = { paneId: "target", paragraph: paragraphAt(paragraphStarts(textarea.value), offset) };
+      anchor = { paneId: "target", ...caretInParagraph(textarea.value, offset) };
     } else if (lastPointer.current && elements[lastPointer.current.paneId]) {
       anchor = lastPointer.current;
     } else {
@@ -553,10 +554,12 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           <div className="translation-column">
             <div className="translation-column-head density-compact">
               <h2 id="review-translation-label" className="translation-column-title">Translation ({targetLanguage})</h2>
+              <div className="translation-column-controls">
               <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
               {pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
-              <Button ref={matchButton} variant="quiet" size="sm" title={showMatchingTitle} aria-keyshortcuts="Alt+M" onMouseDown={event => event.preventDefault()} onClick={showMatching}>
+              <Button ref={matchButton} size="sm" title={showMatchingTitle} aria-keyshortcuts="Alt+M" onMouseDown={event => event.preventDefault()} onClick={showMatching}>
                 {showMatchingLabel}<span aria-hidden="true"> <Kbd>Alt M</Kbd></span></Button>
+              </div>
               <span role="status" className="review-sr-only">{matchStatus}</span>
             </div>
             {showChanges
@@ -574,8 +577,11 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           {comparison && <div className="translation-column">
             <div className="translation-column-head density-compact">
               <h2 className="translation-column-title">Comparison</h2>
-              <Select id="review-comparison" label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
-                {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} · {row.variant.language}</option>)}</Select>
+              {/* The heading names the column; the picker keeps its full name for assistive technology only. */}
+              <div className="translation-column-controls">
+              <select id="review-comparison" className="form-select" aria-label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
+                {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} · {row.variant.language}</option>)}</select>
+              </div>
             </div>
             <TextView key={comparisonId} ref={setComparisonElement} text={comparison.text} label="Comparison" lang={comparison.variant.language} />
           </div>}

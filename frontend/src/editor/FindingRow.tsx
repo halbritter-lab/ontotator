@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { AnnotationSnapshot, EditorProposal } from "../api/client";
+import { plural } from "../app/labels";
 import { StatusBadge } from "../ui/StatusBadge";
 import { AiBadge } from "./AiBadge";
 import { axisOptionLabel, type findingAxes } from "./axisLabels";
@@ -39,7 +40,7 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
         )}
       </div>
       <div className="doc-meta">
-        {evCount === 0 ? "Spanless" : `${evCount} mention(s)`}
+        {evCount === 0 ? "Spanless" : plural(evCount, "mention")}
         {" "}<AiBadge provenance={annSnap.annotation.provenance} source={proposal} />
       </div>
       {axes.length > 0 && <dl className="finding-axis-summary" aria-label="Clinical context">

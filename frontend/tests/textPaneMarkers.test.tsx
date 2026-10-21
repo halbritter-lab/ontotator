@@ -38,8 +38,23 @@ it("keeps an invalid-mention warning before the text without polluting its codep
     mentions={[{ evidence_id: "invalid", segments: [{ start: 0, end: 99 }] }]} />);
   const warning = mounted.getByRole("alert");
   const scrollport = mounted.container.querySelector<HTMLDivElement>(".text-container")!;
-  expect(warning.textContent).toContain("1 mention(s) have offsets outside this text");
+  expect(warning.textContent).toContain("1 mention has offsets outside this text");
   expect(warning.compareDocumentPosition(scrollport) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   expect(scrollport.contains(warning)).toBe(false);
   expect(Array.from(scrollport.textContent ?? "")).toEqual(Array.from(text));
+});
+
+it("Escape inside an open drawer or dialog closes that, not the pending mention attach", () => {
+  const cancel = vi.fn();
+  const mounted = render(<>
+    <TextPane {...base} text="Some text" isAttachingMention onCancelAttach={cancel} />
+    <aside className="ui-drawer"><button>Inside drawer</button></aside>
+    <div role="dialog"><button>Inside dialog</button></div>
+  </>);
+  const press = (target: Element) => target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  press(mounted.getByRole("button", { name: "Inside drawer" }));
+  press(mounted.getByRole("button", { name: "Inside dialog" }));
+  expect(cancel).not.toHaveBeenCalled();
+  press(mounted.container.querySelector(".text-container")!);
+  expect(cancel).toHaveBeenCalledTimes(1);
 });

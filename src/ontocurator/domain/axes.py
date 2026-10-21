@@ -63,19 +63,19 @@ class AxesConfig(BaseModel):
 STANDARD_CLINICAL_AXES = [
     AxisDefinition(
         id="assertion",
-        label="Vorhandensein (Assertion)",
+        label="Assertion",
         options=["present", "absent", "uncertain"],
         allow_empty=True,
     ),
     AxisDefinition(
         id="experiencer",
-        label="Betroffene Person (Experiencer)",
+        label="Experiencer",
         options=["patient", "other"],
         allow_empty=True,
     ),
     AxisDefinition(
         id="temporality",
-        label="Zeitlicher Bezug (Temporality)",
+        label="Temporality",
         options=["current", "historical", "future"],
         allow_empty=True,
     ),
