@@ -377,6 +377,40 @@ test("PUBLISHED: refused files show the server messages", async ({ page }) => {
   expect(listing.latest_version).toBe(1);
 });
 
+test("PUBLISHED: Publish and Discard stay above a long preview and stick while it is read", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const s = await guidelineScenario(page, "PUBLISHED");
+  await loginGuidelineUser(page, s, "lead");
+  await visit(page, settingsUrl(s));
+  await expect(page.locator(".guidelines-current-facts")).toContainText("v1 · v1.md · ", { timeout: 20_000 });
+  const paragraphs = Array.from({ length: 120 }, (_, index) => `Paragraph ${index + 1}: annotate what the text states about the patient.`);
+  await fileInput(page).setInputFiles({ name: "long.md", mimeType: "text/markdown", buffer: Buffer.from(`# Long guideline\n\n${paragraphs.join("\n\n")}\n`) });
+  const preview = page.getByRole("region", { name: "Preview of long.md", exact: true });
+  await expect(preview).toBeVisible();
+  const publishButton = page.getByRole("button", { name: "Publish as v2", exact: true });
+  // Without scrolling: the actions are in view and come before the facts and the preview.
+  await expect(publishButton).toBeInViewport();
+  await expect(page.getByRole("button", { name: "Discard", exact: true })).toBeInViewport();
+
+  // Read the preview to its end with the page scrolled past the facts: the action bar sticks to the top.
+  const metrics = await preview.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+    const main = element.closest(".shell-main")!;
+    main.scrollTop += element.getBoundingClientRect().top - main.getBoundingClientRect().top;
+    const bar = document.querySelector(".guidelines-publish-bar")!;
+    return { main: main.getBoundingClientRect().top, bar: bar.getBoundingClientRect().top, position: getComputedStyle(bar).position,
+      scrollTop: main.scrollTop, scrollHeight: main.scrollHeight, clientHeight: main.clientHeight, page: document.scrollingElement?.scrollTop };
+  });
+  expect(Math.abs(metrics.bar - metrics.main), `the action bar is stuck to the top of the scroll area: ${JSON.stringify(metrics)}`).toBeLessThanOrEqual(1);
+  await expect(preview.getByText("Paragraph 120:", { exact: false })).toBeInViewport();
+  await expect(page.getByText("Will be published as v2.", { exact: true })).not.toBeInViewport();
+  await expect(publishButton).toBeInViewport();
+  mkdirSync(resolve(test.info().config.rootDir, "../../build/acceptance-fixes/evidence"), { recursive: true });
+  await page.screenshot({ path: resolve(test.info().config.rootDir, "../../build/acceptance-fixes/evidence/d1-guidelines-sticky-actions.png") });
+  await publishButton.click();
+  await expect(page.locator(".guidelines-success")).toContainText("Published v2.");
+});
+
 test("PUBLISHED: My tasks link and the guidelines page", async ({ page }) => {
   const s = await guidelineScenario(page, "PUBLISHED");
   await loginGuidelineUser(page, s, "ana");

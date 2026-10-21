@@ -78,6 +78,18 @@
   gap: var(--space-1);
 }
 
+/* Publish and Discard above the preview; the bar stays at the top of the scroll area while the preview is read. */
+.guidelines-publish-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
 /* The preview shows the text as annotators will see it, in a bounded scroll box. */
 .guidelines-preview {
   max-height: 60vh;

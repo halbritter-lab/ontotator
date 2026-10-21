@@ -192,20 +192,23 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
           value={note} onChange={event => setNote(event.target.value)} />
         {republishError !== undefined && <ErrorNotice error={republishError} />}
         {chosen && <>
+          {/* The action bar sits above the preview and sticks to the top while a long preview scrolls (finding 9). */}
+          <div className="guidelines-publish-bar">
+            <div className="guidelines-publish-actions">
+              <Button type="submit" variant="primary" loading={publishing}>Publish as v{nextVersion}</Button>
+              <Button variant="quiet" aria-disabled={publishing || undefined} onClick={() => { if (!writing.current) discard(); }}>Discard</Button>
+            </div>
+            {publishError !== undefined && <ErrorNotice error={publishError} />}
+          </div>
           <p className="guidelines-file-facts">{`${chosen.file.name} · ${formatSize(chosen.file.size)}`}</p>
-          <section ref={previewRef} className="guidelines-preview" aria-label={`Preview of ${chosen.file.name}`} tabIndex={0}>
-            <GuidelineDocument kind={chosen.kind} body={chosen.text} headingOffset={2} />
-          </section>
           <div className="guidelines-facts">
             <p><strong>Will be published as v{nextVersion}.</strong></p>
             <p>Annotators and reviewers see a notice the next time they open a task.</p>
             <p>Earlier versions stay readable. Published versions cannot be changed; a version can only be withdrawn.</p>
           </div>
-          {publishError !== undefined && <ErrorNotice error={publishError} />}
-          <div className="guidelines-publish-actions">
-            <Button type="submit" variant="primary" loading={publishing}>Publish as v{nextVersion}</Button>
-            <Button variant="quiet" aria-disabled={publishing || undefined} onClick={() => { if (!writing.current) discard(); }}>Discard</Button>
-          </div>
+          <section ref={previewRef} className="guidelines-preview" aria-label={`Preview of ${chosen.file.name}`} tabIndex={0}>
+            <GuidelineDocument kind={chosen.kind} body={chosen.text} headingOffset={2} />
+          </section>
         </>}
       </form>
 
