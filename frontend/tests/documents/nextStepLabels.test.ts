@@ -7,6 +7,7 @@ import { final, row, step } from "./fixtures";
 describe("next step labels", () => {
   it("labels every step code", () => {
     const expected: Record<NextStepView["code"], string> = {
+      decide_plan: "Decide the plan",
       decide_report: "Decide on problem report",
       resume_task: "Resume paused task",
       confirm_final: "Confirm final result",
@@ -34,6 +35,7 @@ describe("next step labels", () => {
     expect(actionLabel("choose_final")).toBe("Choose final…");
     expect(actionLabel("assign_translation_review")).toBe("Assign translation review…");
     expect(actionLabel("assign_annotation")).toBe("Assign annotation…");
+    expect(actionLabel("plan")).toBe("Plan…");
   });
 
   it("labels the secondary line per detail kind", () => {

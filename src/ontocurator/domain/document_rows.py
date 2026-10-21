@@ -39,6 +39,7 @@ __all__ = [
     "prefix_matches",
     "round_ordinals",
     "segment_counts",
+    "split_text_label",
     "submission_kind",
     "translation_issue",
     "version_label",
@@ -282,6 +283,18 @@ def prefix_matches(q: str, identifiers: Iterable[str]) -> bool:
     )
 
 
+def split_text_label(q: str) -> tuple[str, str] | None:
+    """The text label form of a search: "case-104 de" / "case-104 · de".
+
+    Returns (case ID prefix, exact language) or None when ``q`` is not two
+    parts separated by spaces and/or a middle dot (spec VD11).
+    """
+    parts = unicodedata.normalize("NFKC", q).replace("\u00b7", " ").split()
+    if len(parts) != 2:
+        return None
+    return parts[0], parts[1]
+
+
 # Bar (D21): "Needs your decision" category of a decision step (rules 1-5, 4a).
 STEP_CATEGORIES: dict[str, BarCategory] = {
     "decide_report": "report-or-pause",
@@ -302,20 +315,31 @@ SEGMENT_FIELDS: dict[str, str] = {
 def segment_counts(
     rows: Iterable[tuple[bool, str | None, str | None]],
 ) -> dict[str, Any]:
-    """Bar segments from ``(in_plan, segment, next step code)`` per row.
+    """Tabs from ``(in_plan, segment, next step code)`` per row.
 
-    Every in-plan row counts in ``in_plan`` and in at most one segment (the
-    segment of its next step); decision rows also count in their category.
+    Every row counts in ``all``; in-plan rows count in ``in_plan``. A row
+    counts in at most one segment (the segment of its next step): undecided
+    rows are outside the plan, but their ``decide_plan`` step is a decision
+    (V10) and also counts in ``not_decided``. ``done`` holds in-plan rows
+    without a segment (next step kind ``done``). Decision rows also count in
+    their category.
     """
     counts: dict[str, Any] = {
         "in_plan": 0,
         **dict.fromkeys(SEGMENT_FIELDS.values(), 0),
+        "done": 0,
+        "all": 0,
+        "not_decided": 0,
         "decision_categories": dict.fromkeys(CATEGORIES, 0),
     }
     for in_plan, segment, code in rows:
-        if not in_plan:
-            continue
-        counts["in_plan"] += 1
+        counts["all"] += 1
+        if code == "decide_plan":
+            counts["not_decided"] += 1
+        if in_plan:
+            counts["in_plan"] += 1
+            if segment is None:
+                counts["done"] += 1
         if segment is not None:
             counts[SEGMENT_FIELDS[segment]] += 1
         if segment == "decision" and code in STEP_CATEGORIES:

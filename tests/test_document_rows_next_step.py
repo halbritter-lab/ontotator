@@ -130,6 +130,7 @@ def test_rows_carry_next_step_plan_row_and_group_revision(env):
         "annotate": True,
         "review_applicable": True,
         "discarded": False,
+        "decided": True,
     }
     assert de["in_plan"] is True
     en = rows_of(result)[("c1", "en")]
@@ -324,7 +325,15 @@ def test_detail_and_owner(env, tmp_path):
 
     c1_en = result[("c1", "en")]["next_step"]
     assert c1_en["code"] == "annotation_in_progress"
-    assert c1_en["owner"] == {"kind": "people", "person": None, "count": 2}
+    assert {k: v for k, v in c1_en["owner"].items() if k != "people"} == {
+        "kind": "people",
+        "person": None,
+        "count": 2,
+    }
+    assert [p["pseudonym"] for p in c1_en["owner"]["people"]] == [
+        pseudonym(env, "anno"),
+        pseudonym(env, "anno2"),
+    ]
 
     c1_de = result[("c1", "de")]["next_step"]
     assert c1_de["code"] == "translation_review_in_progress"
@@ -360,7 +369,12 @@ def test_detail_and_owner(env, tmp_path):
         "done",
         "review_only",
     )
-    assert c2_fr["owner"] == {"kind": "none", "person": None, "count": 0}
+    assert c2_fr["owner"] == {
+        "kind": "none",
+        "person": None,
+        "count": 0,
+        "people": [],
+    }
 
 
 # --- review follow-ups: discards, finals, reports, restored plans ---------- #
@@ -639,7 +653,9 @@ def test_bar_counts_only_in_plan_rows_and_shown_follows_the_segment(env):
     assert "translation" in rows_of(result)[("c2", "fr")]["categories"]
     assert result["bar"]["translation"] == 0 and result["bar"]["total"] == 0
     assert result["bar"]["no_final"] == 2  # c1 en and c2 en (Annotate on)
-    assert result["bar"]["shown"] == result["bar"]["in_plan"] == 4
+    assert result["bar"]["in_plan"] == 4
+    # No segment is All: "k of n shown" counts every row (VD7).
+    assert result["bar"]["shown"] == result["bar"]["all"] == 6
     # "k of n shown": n = the active segment's count.
     assign_de = page(env, segment="assign", language="de")["bar"]
     assert (assign_de["shown"], assign_de["to_assign"]) == (2, 4)

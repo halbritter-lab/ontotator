@@ -48,6 +48,11 @@ export type NextStepView = components["schemas"]["NextStepView"];
 export type StepOwnerView = components["schemas"]["StepOwnerView"];
 export type StepDetailView = components["schemas"]["StepDetailView"];
 export type DocumentCaseIds = components["schemas"]["DocumentCaseIds"];
+// Stage cells and version marker per Documents row (documents overview O0c)
+export type StageCellView = components["schemas"]["StageCellView"];
+export type StageCellDetailView = components["schemas"]["StageCellDetailView"];
+export type RowStagesView = components["schemas"]["RowStagesView"];
+export type VersionMarkerView = components["schemas"]["VersionMarkerView"];
 // Work plan (lead workflow L0)
 export type PersonRefView = components["schemas"]["PersonRefView"];
 export type PlanFlagsView = components["schemas"]["PlanFlagsView"];
@@ -84,7 +89,7 @@ export type SelectionSummary = components["schemas"]["SelectionSummary"];
 export type CommitUploadPlan = Partial<Pick<components["schemas"]["CommitUpload"], "plan_languages" | "plan_cases" | "accept_external_review">>;
 type RowsParameters = Omit<NonNullable<operations["document_rows_api_v1_projects__key__document_rows_get"]["parameters"]["query"]>, "retain">;
 type CaseIdsParameters = NonNullable<operations["document_case_ids_api_v1_projects__key__document_rows_case_ids_get"]["parameters"]["query"]>;
-/** Repeatable filters (`step`, `stage`, `plan`) with one value each. */
+/** Repeatable filters (`language`, `origin`, `step`, `stage`, `plan`, stage states, `waiting_on`) with one value each. */
 type SingleFilters<Query> = { [Name in keyof Query]: NonNullable<Query[Name]> extends readonly (infer Item)[] ? Item | null : Query[Name] };
 /** Repeatable filters with one value or several (OR); sent as repeated parameters. */
 type RepeatableFilters<Query> = { [Name in keyof Query]: NonNullable<Query[Name]> extends readonly (infer Item)[] ? Item | Item[] | null : Query[Name] };
@@ -92,9 +97,9 @@ type RepeatableFilters<Query> = { [Name in keyof Query]: NonNullable<Query[Name]
 export type DocumentRowsQuery = SingleFilters<RowsParameters> & { retain?: readonly string[] };
 /** Filters of the filtered case IDs (the Documents filters without page and retain), one value per filter. */
 export type DocumentCaseIdsQuery = SingleFilters<CaseIdsParameters>;
-/** Documents rows request: `step`, `stage` and `plan` may hold several values (FD10). */
+/** Documents rows request: every repeatable filter may hold several values (FD10, documents overview facets). */
 export type DocumentRowsRequest = RepeatableFilters<RowsParameters> & { retain?: readonly string[] };
-/** Filtered case IDs request: `step`, `stage` and `plan` may hold several values (FD10). */
+/** Filtered case IDs request: every repeatable filter may hold several values (FD10, documents overview facets). */
 export type DocumentCaseIdsRequest = RepeatableFilters<CaseIdsParameters>;
 /** One Progress count's Documents query (FD11). */
 export type DocumentLinkQuery = components["schemas"]["DocumentLinkQuery"];
@@ -343,7 +348,7 @@ export class ApiClient {
     return this.request<ProjectDocumentSummary[]>(`/api/v1/projects/${encodeURIComponent(key)}/documents${query.size ? `?${query}` : ""}`, { method: "GET" });
   }
 
-  /** Lead-only Documents rows; empty filters are omitted, `step`/`stage`/`plan` and `retain` repeat. */
+  /** Lead-only Documents rows; empty filters are omitted, list filters and `retain` repeat. */
   async listDocumentRows(key: string, filters: DocumentRowsRequest = {}): Promise<DocumentRowsPage> {
     const query = filterParams(filters, ["retain"]);
     for (const item of filters.retain ?? []) query.append("retain", item);

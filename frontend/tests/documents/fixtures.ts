@@ -15,6 +15,8 @@ import type {
   FinalSelectionSummary,
   NextStepView,
   OpenTranslationReviewView,
+  RowStagesView,
+  StageCellView,
   RowItemView,
   RowRoundView,
   RowSubmissionView,
@@ -36,7 +38,17 @@ export interface DocumentsScenario {
 export const rowKey = (caseId: string, language: string): string => `${caseId}:${language}`;
 
 export function bar(overrides: Partial<DecisionBarView> = {}): DecisionBarView {
-  return { total: 0, report_or_pause: 0, confirm_final: 0, translation: 0, missing_final: 0, no_final: 0, shown: 0, finals: 0, in_plan: 0, needs_decision: 0, to_assign: 0, in_progress: 0, decision_categories: {}, ...overrides };
+  return { total: 0, report_or_pause: 0, confirm_final: 0, translation: 0, missing_final: 0, no_final: 0, shown: 0, finals: 0, in_plan: 0, needs_decision: 0, to_assign: 0, in_progress: 0, decision_categories: {}, done: 0, all: 0, not_decided: 0, facets: {}, ...overrides };
+}
+
+/** A stage cell (documents overview); the detail defaults to empty. */
+export function stageCell(state: string, tone: StageCellView["tone"], detail: Partial<StageCellView["detail"]> = {}): StageCellView {
+  return { state, tone, detail: { people: [], ...detail } };
+}
+
+/** Review, Annotation and Final cells; every cell defaults to "none". */
+export function stages(overrides: Partial<RowStagesView> = {}): RowStagesView {
+  return { review: stageCell("none", "none"), annotation: stageCell("none", "none"), final: stageCell("none", "none"), ...overrides };
 }
 
 export function version(overrides: Partial<DocumentVersionView> & Pick<DocumentVersionView, "document_id">): DocumentVersionView {
@@ -129,8 +141,10 @@ export function row(overrides: Partial<DocumentRowView> & Pick<DocumentRowView, 
     matches_decision: true,
     next_step: null,
     steps: [],
-    plan_row: { review: false, annotate: true, review_applicable: false, discarded: false },
+    plan_row: { review: false, annotate: true, review_applicable: false, discarded: false, decided: true },
     in_plan: true,
+    stages: stages(),
+    version_marker: null,
     ...overrides,
   };
 }
@@ -472,7 +486,7 @@ export function step(overrides: Partial<NextStepView> = {}): NextStepView {
     badges: [],
     assigned: null,
     target: null,
-    owner: { kind: "you", person: null, count: 0 },
+    owner: { kind: "you", person: null, count: 0, people: [] },
     detail: null,
     report_id: null,
     assignment_id: null,
@@ -483,6 +497,7 @@ export function step(overrides: Partial<NextStepView> = {}): NextStepView {
 
 /** Default action of a step code (rule table of the spec). */
 const STEP_ACTIONS: Partial<Record<NextStepView["code"], NonNullable<NextStepView["action"]>>> = {
+  decide_plan: "plan",
   decide_report: "decide_report",
   resume_task: "resume_task",
   confirm_final: "review_changes",
@@ -494,6 +509,7 @@ const STEP_ACTIONS: Partial<Record<NextStepView["code"], NonNullable<NextStepVie
   assign_annotation: "assign_annotation",
 };
 const STEP_KINDS: Record<NextStepView["code"], NextStepView["kind"]> = {
+  decide_plan: "decision",
   decide_report: "decision", resume_task: "decision", confirm_final: "decision", resolve_rejected: "decision", resolve_queried: "decision",
   translation_not_accepted: "decision", choose_final: "decision", needs_attention: "decision",
   assign_translation_review: "assign", assign_annotation: "assign",
@@ -504,7 +520,7 @@ const STEP_KINDS: Record<NextStepView["code"], NextStepView["kind"]> = {
 /** A step of `code` with its kind, action and a "You" owner for lead-owned kinds. */
 export function stepOf(code: NextStepView["code"], overrides: Partial<NextStepView> = {}): NextStepView {
   const kind = STEP_KINDS[code];
-  const owner: NextStepView["owner"] = kind === "decision" || kind === "assign" ? { kind: "you", person: null, count: 0 } : { kind: "none", person: null, count: 0 };
+  const owner: NextStepView["owner"] = kind === "decision" || kind === "assign" ? { kind: "you", person: null, count: 0, people: [] } : { kind: "none", person: null, count: 0, people: [] };
   return step({ code, kind, action: STEP_ACTIONS[code] ?? null, badges: kind === "decision" ? ["your_decision"] : [], owner, ...overrides });
 }
 
@@ -518,7 +534,7 @@ export function planRow(caseId: string, language: string, next: NextStepView | n
     versions: [version({ document_id: `${caseId}-${language}`, chain_name: isSource ? "Source" : "DeepL", origin: isSource ? "native" : "machine_translation", translation_status: isSource ? null : "ready_for_review" })],
     next_step: next,
     steps: next ? [next] : [],
-    plan_row: { review: !isSource, annotate: true, review_applicable: !isSource, discarded: false },
+    plan_row: { review: !isSource, annotate: true, review_applicable: !isSource, discarded: false, decided: true },
     in_plan: next !== null,
     ...overrides,
   });
@@ -527,7 +543,7 @@ export function planRow(caseId: string, language: string, next: NextStepView | n
 /** A row that is not in the plan (both flags off). */
 export function notInPlanRow(caseId: string, language: string, overrides: Partial<DocumentRowView> = {}): DocumentRowView {
   const isSource = overrides.is_source ?? false;
-  return planRow(caseId, language, null, { plan_row: { review: false, annotate: false, review_applicable: !isSource, discarded: false }, in_plan: false, ...overrides });
+  return planRow(caseId, language, null, { plan_row: { review: false, annotate: false, review_applicable: !isSource, discarded: false, decided: true }, in_plan: false, ...overrides });
 }
 
 // ---- Lead workflow (L4): acceptance and discard records on text versions ----

@@ -13,6 +13,7 @@ export type RowAction = NonNullable<NextStepView["action"]>;
 export type StepBadge = NonNullable<NextStepView["badges"]>[number];
 
 export const STEP_LABELS: Readonly<Record<StepCode, string>> = {
+  decide_plan: "Decide the plan",
   decide_report: "Decide on problem report",
   resume_task: "Resume paused task",
   confirm_final: "Confirm final result",
@@ -32,6 +33,7 @@ export const STEP_LABELS: Readonly<Record<StepCode, string>> = {
 };
 
 export const ACTION_LABELS: Readonly<Record<RowAction, string>> = {
+  plan: "Plan…",
   decide_report: "Decide on report…",
   resume_task: "Resume task…",
   review_changes: "Review changes…",

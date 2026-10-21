@@ -27,6 +27,13 @@ from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Task
 from ontocurator.domain.document_rows import BarCategory
 from ontocurator.domain.next_steps import RowAction, Stage, StepCode, StepKind
+from ontocurator.domain.stage_cells import (
+    AnnotationState,
+    CellNote,
+    FinalState,
+    ReviewState,
+    Tone,
+)
 from ontocurator.domain.submission_labels import SubmissionKind
 from ontocurator.domain.variants import TranslationStatus, VariantOrigin
 
@@ -175,6 +182,50 @@ class StepOwnerView(_View):
     kind: Literal["you", "person", "people", "none"]
     person: PersonRefView | None = None
     count: int = 0
+    # Waiting on (VD8): every person of the step; for an in-progress step the
+    # people of every in-progress step of the row.
+    people: list[PersonRefView] = Field(default_factory=list)
+
+
+class StageCellDetailView(_View):
+    """Muted second line of a stage cell (documents overview "Stage cells")."""
+
+    people: list[PersonRefView] = Field(default_factory=list)
+    assigned: int | None = None
+    target: int | None = None
+    submitted: int | None = None
+    total: int | None = None
+    version: int | None = None
+    from_version: int | None = None
+    at: datetime | None = None
+    findings: int | None = None
+    excerpt: str | None = None
+    reason: str | None = None  # free text only ("Dosis prüfen")
+    note: CellNote | None = None
+    matching: int | None = None
+    compared: int | None = None
+    causes: list[str] = Field(default_factory=list)  # Final confirm cause codes
+    round_ordinal: int | None = None
+
+
+class StageCellView(_View):
+    state: str  # ReviewState | AnnotationState | FinalState
+    tone: Tone
+    detail: StageCellDetailView
+
+
+class RowStagesView(_View):
+    review: StageCellView
+    annotation: StageCellView
+    final: StageCellView
+
+
+class VersionMarkerView(_View):
+    """Text cell marker: "v2 corrected", "v2" or "{version} translations"
+    (parallel roots: ``version`` is the number of roots)."""
+
+    kind: Literal["corrected", "version", "parallel"]
+    version: int
 
 
 class StepDetailView(_View):
@@ -247,6 +298,10 @@ class DocumentRowView(_View):
     steps: list[NextStepView] = Field(default_factory=list)
     plan_row: PlanFlagsView | None = None
     in_plan: bool = True
+    # Documents overview: Review, Annotation and Final cells and the Text
+    # cell's version marker.
+    stages: RowStagesView | None = None
+    version_marker: VersionMarkerView | None = None
 
 
 class DocumentGroupView(_View):
@@ -284,6 +339,15 @@ class DecisionBarView(BaseModel):
     in_progress: int = 0
     # "Needs your decision" rows per category (hyphenated category keys).
     decision_categories: dict[str, int] = Field(default_factory=dict)
+    # Tabs (documents overview): in-plan rows whose next step is done, every
+    # row, undecided rows (counted in needs_decision too, V10). Tab counts
+    # ignore filters and search.
+    done: int = 0
+    all: int = 0
+    not_decided: int = 0
+    # Filter popover: group -> value -> rows under the tab, search and every
+    # other group (a group's own selection is ignored).
+    facets: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 class DocumentCaseIds(_View):
@@ -379,10 +443,13 @@ def _exclusive(name: str, other: str) -> RequestValidationError:
 
 
 def _filters(
-    language: str | None = None,
+    language: Annotated[list[str] | None, Query()] = None,
     status: AssignmentFilter | None = None,
-    q: str | None = None,
-    origin: VariantOrigin | None = None,
+    q: Annotated[
+        str | None,
+        Query(description='Case/external/document ID prefix or "case-104 de"'),
+    ] = None,
+    origin: Annotated[list[VariantOrigin] | None, Query()] = None,
     translation_status: TranslationStatus
     | Literal["accepted_without_review"]
     | None = None,
@@ -396,20 +463,27 @@ def _filters(
     plan: Annotated[list[PlanFilter] | None, Query()] = None,
     paused: Paused | None = None,
     sort: Sort = "case",
+    review_state: Annotated[list[ReviewState] | None, Query()] = None,
+    annotation_state: Annotated[list[AnnotationState] | None, Query()] = None,
+    final_state: Annotated[list[FinalState] | None, Query()] = None,
+    waiting_on: Annotated[
+        list[str] | None, Query(description='"me" or a pseudonym')
+    ] = None,
 ) -> dict[str, Any]:
     """Filters shared by the rows page and the filtered case IDs.
 
-    ``step``, ``stage`` and ``plan`` repeat: OR within one, AND across.
+    ``language``, ``origin``, ``step``, ``stage``, ``plan``, the stage states
+    and ``waiting_on`` repeat: OR within one, AND across.
     """
     if decision is not None and final is not None:
         raise _exclusive("final", "decision")
     if decision is not None and segment is not None:
         raise _exclusive("segment", "decision")
     return {
-        "language": language,
+        "language": tuple(language or ()),
         "status": status,
         "q": q,
-        "origin": origin,
+        "origin": tuple(origin or ()),
         "translation_status": translation_status,
         "decision": decision,
         "final": final,
@@ -421,6 +495,10 @@ def _filters(
         "plan": tuple(plan or ()),
         "paused": paused,
         "sort": sort,
+        "review_state": tuple(review_state or ()),
+        "annotation_state": tuple(annotation_state or ()),
+        "final_state": tuple(final_state or ()),
+        "waiting_on": tuple(waiting_on or ()),
     }
 
 

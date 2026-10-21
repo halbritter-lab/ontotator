@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from test_document_rows_next_step import add_correction
+from test_document_rows_stages import undecide
 from test_progress_stages import progress, scenario, set_status
 from work_plan_support import BASE, doc, plan_env, write
 
@@ -77,6 +78,22 @@ def test_every_count_equals_its_documents_link(env):
     assert (review["rejected_or_queried"], review["accepted"]) == (0, 1)
     assert stages["annotation"]["counts"]["paused"] == 1
     assert stages["final"]["counts"]["final"] == 1
+
+
+def test_undecided_rows_count_in_the_lede_and_the_decision_tab(env):
+    """V10: an undecided row is a decision in the lede and under the
+    "Needs your decision" link; every card count still equals its link."""
+    before = progress(env.lead)["lede"]
+    undecide(env, ("c3", "en"))
+    data = progress(env.lead)
+    lede = data["lede"]
+    assert lede["needs_decision"] == before["needs_decision"] + 1
+    assert lede["needs_decision"] == shown(env, {"segment": "decision"})
+    assert lede["to_assign"] == shown(env, {"segment": "assign"})
+    assert lede["not_in_plan"] == before["not_in_plan"]
+    for name, card in data["stages"].items():
+        for count, value in card["counts"].items():
+            assert value == shown(env, card["links"][count]), (name, count)
 
 
 def test_links_match_the_spec_table(env):

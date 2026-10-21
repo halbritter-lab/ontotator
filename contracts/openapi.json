@@ -2599,7 +2599,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -2645,8 +2648,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Case/external/document ID prefix or \"case-104 de\"",
               "title": "Q"
-            }
+            },
+            "description": "Case/external/document ID prefix or \"case-104 de\""
           },
           {
             "name": "origin",
@@ -2655,13 +2660,16 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "native",
-                    "machine_translation",
-                    "human_translation",
-                    "correction"
-                  ],
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "native",
+                      "machine_translation",
+                      "human_translation",
+                      "correction"
+                    ],
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -2767,7 +2775,8 @@
                   "enum": [
                     "decision",
                     "assign",
-                    "progress"
+                    "progress",
+                    "done"
                   ],
                   "type": "string"
                 },
@@ -2788,6 +2797,7 @@
                   "type": "array",
                   "items": {
                     "enum": [
+                      "decide_plan",
                       "decide_report",
                       "resume_task",
                       "confirm_final",
@@ -2871,7 +2881,8 @@
                       "review",
                       "annotate",
                       "review_and_annotate",
-                      "not_in_plan"
+                      "not_in_plan",
+                      "not_decided"
                     ],
                     "type": "string"
                   }
@@ -2910,13 +2921,134 @@
             "schema": {
               "enum": [
                 "case",
+                "-case",
                 "import",
-                "activity"
+                "activity",
+                "-activity"
               ],
               "type": "string",
               "default": "case",
               "title": "Sort"
             }
+          },
+          {
+            "name": "review_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "source",
+                      "not_planned",
+                      "undecided",
+                      "unassigned",
+                      "check_failed",
+                      "in_progress",
+                      "re_review",
+                      "paused",
+                      "rejected",
+                      "query",
+                      "not_accepted",
+                      "source_changed",
+                      "accepted"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Review State"
+            }
+          },
+          {
+            "name": "annotation_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "not_planned",
+                      "undecided",
+                      "after_review",
+                      "blocked",
+                      "unassigned",
+                      "partly_assigned",
+                      "in_progress",
+                      "paused",
+                      "in_review",
+                      "consolidating",
+                      "old_text_open",
+                      "old_text_submitted",
+                      "finishing_on_old",
+                      "submitted"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Annotation State"
+            }
+          },
+          {
+            "name": "final_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "none",
+                      "after_annotation",
+                      "after_review",
+                      "choose",
+                      "confirm",
+                      "old_text",
+                      "may_be_outdated",
+                      "final"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Final State"
+            }
+          },
+          {
+            "name": "waiting_on",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\"me\" or a pseudonym",
+              "title": "Waiting On"
+            },
+            "description": "\"me\" or a pseudonym"
           }
         ],
         "responses": {
@@ -2999,7 +3131,10 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -3045,8 +3180,10 @@
                   "type": "null"
                 }
               ],
+              "description": "Case/external/document ID prefix or \"case-104 de\"",
               "title": "Q"
-            }
+            },
+            "description": "Case/external/document ID prefix or \"case-104 de\""
           },
           {
             "name": "origin",
@@ -3055,13 +3192,16 @@
             "schema": {
               "anyOf": [
                 {
-                  "enum": [
-                    "native",
-                    "machine_translation",
-                    "human_translation",
-                    "correction"
-                  ],
-                  "type": "string"
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "native",
+                      "machine_translation",
+                      "human_translation",
+                      "correction"
+                    ],
+                    "type": "string"
+                  }
                 },
                 {
                   "type": "null"
@@ -3167,7 +3307,8 @@
                   "enum": [
                     "decision",
                     "assign",
-                    "progress"
+                    "progress",
+                    "done"
                   ],
                   "type": "string"
                 },
@@ -3188,6 +3329,7 @@
                   "type": "array",
                   "items": {
                     "enum": [
+                      "decide_plan",
                       "decide_report",
                       "resume_task",
                       "confirm_final",
@@ -3271,7 +3413,8 @@
                       "review",
                       "annotate",
                       "review_and_annotate",
-                      "not_in_plan"
+                      "not_in_plan",
+                      "not_decided"
                     ],
                     "type": "string"
                   }
@@ -3310,13 +3453,134 @@
             "schema": {
               "enum": [
                 "case",
+                "-case",
                 "import",
-                "activity"
+                "activity",
+                "-activity"
               ],
               "type": "string",
               "default": "case",
               "title": "Sort"
             }
+          },
+          {
+            "name": "review_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "source",
+                      "not_planned",
+                      "undecided",
+                      "unassigned",
+                      "check_failed",
+                      "in_progress",
+                      "re_review",
+                      "paused",
+                      "rejected",
+                      "query",
+                      "not_accepted",
+                      "source_changed",
+                      "accepted"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Review State"
+            }
+          },
+          {
+            "name": "annotation_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "not_planned",
+                      "undecided",
+                      "after_review",
+                      "blocked",
+                      "unassigned",
+                      "partly_assigned",
+                      "in_progress",
+                      "paused",
+                      "in_review",
+                      "consolidating",
+                      "old_text_open",
+                      "old_text_submitted",
+                      "finishing_on_old",
+                      "submitted"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Annotation State"
+            }
+          },
+          {
+            "name": "final_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "none",
+                      "after_annotation",
+                      "after_review",
+                      "choose",
+                      "confirm",
+                      "old_text",
+                      "may_be_outdated",
+                      "final"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Final State"
+            }
+          },
+          {
+            "name": "waiting_on",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\"me\" or a pseudonym",
+              "title": "Waiting On"
+            },
+            "description": "\"me\" or a pseudonym"
           }
         ],
         "responses": {
@@ -8133,7 +8397,9 @@
               "ordinary",
               "carry_forward",
               "clean_restart",
-              "consolidation"
+              "consolidation",
+              "text_change",
+              "handover"
             ],
             "title": "Kind",
             "default": "ordinary"
@@ -8326,6 +8592,31 @@
             },
             "type": "object",
             "title": "Decision Categories"
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done",
+            "default": 0
+          },
+          "all": {
+            "type": "integer",
+            "title": "All",
+            "default": 0
+          },
+          "not_decided": {
+            "type": "integer",
+            "title": "Not Decided",
+            "default": 0
+          },
+          "facets": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Facets"
           }
         },
         "additionalProperties": false,
@@ -8589,7 +8880,8 @@
                 "review",
                 "annotate",
                 "review_and_annotate",
-                "not_in_plan"
+                "not_in_plan",
+                "not_decided"
               ]
             },
             "type": "array",
@@ -8599,6 +8891,7 @@
             "items": {
               "type": "string",
               "enum": [
+                "decide_plan",
                 "decide_report",
                 "resume_task",
                 "confirm_final",
@@ -8835,6 +9128,7 @@
               {
                 "type": "string",
                 "enum": [
+                  "decide_plan",
                   "decide_report",
                   "resume_task",
                   "confirm_final",
@@ -8857,6 +9151,7 @@
                 "items": {
                   "type": "string",
                   "enum": [
+                    "decide_plan",
                     "decide_report",
                     "resume_task",
                     "confirm_final",
@@ -8931,7 +9226,8 @@
                   "review",
                   "annotate",
                   "review_and_annotate",
-                  "not_in_plan"
+                  "not_in_plan",
+                  "not_decided"
                 ]
               },
               {
@@ -8941,7 +9237,8 @@
                     "review",
                     "annotate",
                     "review_and_annotate",
-                    "not_in_plan"
+                    "not_in_plan",
+                    "not_decided"
                   ]
                 },
                 "type": "array"
@@ -9135,6 +9432,26 @@
             "type": "boolean",
             "title": "In Plan",
             "default": true
+          },
+          "stages": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowStagesView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version_marker": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionMarkerView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -10919,6 +11236,7 @@
           "code": {
             "type": "string",
             "enum": [
+              "decide_plan",
               "decide_report",
               "resume_task",
               "confirm_final",
@@ -10963,6 +11281,7 @@
               {
                 "type": "string",
                 "enum": [
+                  "plan",
                   "decide_report",
                   "resume_task",
                   "review_changes",
@@ -11801,6 +12120,10 @@
             "type": "boolean",
             "title": "Discarded",
             "default": false
+          },
+          "decided": {
+            "type": "boolean",
+            "title": "Decided"
           }
         },
         "type": "object",
@@ -15321,6 +15644,27 @@
         ],
         "title": "RowRoundView"
       },
+      "RowStagesView": {
+        "properties": {
+          "review": {
+            "$ref": "#/components/schemas/StageCellView"
+          },
+          "annotation": {
+            "$ref": "#/components/schemas/StageCellView"
+          },
+          "final": {
+            "$ref": "#/components/schemas/StageCellView"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "review",
+          "annotation",
+          "final"
+        ],
+        "title": "RowStagesView"
+      },
       "RowSubmissionView": {
         "properties": {
           "submission_id": {
@@ -16086,6 +16430,238 @@
         ],
         "title": "SourceObligationView"
       },
+      "StageCellDetailView": {
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonRefView"
+            },
+            "type": "array",
+            "title": "People"
+          },
+          "assigned": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "submitted": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "from_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Version"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "findings": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Findings"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "machine_translation",
+                  "review_only",
+                  "translation_rejected",
+                  "translation_queried",
+                  "translation_not_accepted",
+                  "unchanged",
+                  "with_corrections",
+                  "in_package",
+                  "outside",
+                  "review_off",
+                  "text_change_waiting",
+                  "may_change",
+                  "not_exported",
+                  "carried_on_submit",
+                  "v2_not_annotated",
+                  "correction",
+                  "new_review",
+                  "source_changed",
+                  "round",
+                  "consolidation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "matching": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matching"
+          },
+          "compared": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compared"
+          },
+          "causes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Causes"
+          },
+          "round_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Ordinal"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StageCellDetailView",
+        "description": "Muted second line of a stage cell (documents overview \"Stage cells\")."
+      },
+      "StageCellView": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "none",
+              "undecided",
+              "waiting",
+              "todo",
+              "running",
+              "decision",
+              "rejected",
+              "done"
+            ],
+            "title": "Tone"
+          },
+          "detail": {
+            "$ref": "#/components/schemas/StageCellDetailView"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "state",
+          "tone",
+          "detail"
+        ],
+        "title": "StageCellView"
+      },
       "StatusOverride": {
         "properties": {
           "external_id": {
@@ -16272,6 +16848,13 @@
             "type": "integer",
             "title": "Count",
             "default": 0
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonRefView"
+            },
+            "type": "array",
+            "title": "People"
           }
         },
         "additionalProperties": false,
@@ -18318,6 +18901,31 @@
         "title": "VersionDiscardView",
         "description": "Discard record of a text version (lead workflow)."
       },
+      "VersionMarkerView": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "corrected",
+              "version",
+              "parallel"
+            ],
+            "title": "Kind"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "version"
+        ],
+        "title": "VersionMarkerView",
+        "description": "Text cell marker: \"v2 corrected\", \"v2\" or \"{version} translations\"\n(parallel roots: ``version`` is the number of roots)."
+      },
       "VersionRef": {
         "properties": {
           "kind": {
@@ -18592,7 +19200,9 @@
               "ordinary",
               "carry_forward",
               "clean_restart",
-              "consolidation"
+              "consolidation",
+              "text_change",
+              "handover"
             ],
             "title": "Kind"
           },

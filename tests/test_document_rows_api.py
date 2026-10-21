@@ -76,6 +76,10 @@ def test_bar_uses_underscore_keys_and_rows_carry_retained(case_env):
         "to_assign",
         "in_progress",
         "decision_categories",
+        "done",
+        "all",
+        "not_decided",
+        "facets",
     }
     for group in body["groups"]:
         for row in group["rows"]:

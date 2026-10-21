@@ -157,10 +157,15 @@ def test_bar_counts_are_project_wide_and_ignore_filters(case_env):
     seed_submission(env, "alice", "english", document=SOURCE)
     all_rows = service(env).page("proj", RowQuery())
     filtered = service(env).page("proj", RowQuery(language="fr"))
-    assert all_rows["bar"] == {**filtered["bar"], "shown": all_rows["bar"]["shown"]}
-    # Without a segment, "k of n shown" counts filtered rows of the plan.
-    assert filtered["bar"]["shown"] <= filtered["bar"]["in_plan"]
-    assert all_rows["bar"]["shown"] == all_rows["bar"]["in_plan"]
+    # Facet counts respect the other filters; every other count ignores them.
+    assert all_rows["bar"] == {
+        **filtered["bar"],
+        "shown": all_rows["bar"]["shown"],
+        "facets": all_rows["bar"]["facets"],
+    }
+    # Without a segment (All), "k of n shown" counts every filtered row.
+    assert filtered["bar"]["shown"] <= filtered["bar"]["all"]
+    assert all_rows["bar"]["shown"] == all_rows["bar"]["all"]
 
 
 def test_case_deep_link_keeps_row_visible_and_unknown_case_is_reported(case_env):
@@ -318,6 +323,8 @@ ROW_KEYS = {
     "steps",
     "plan_row",
     "in_plan",
+    "stages",
+    "version_marker",
 }
 VERSION_KEYS = {
     "document_id",

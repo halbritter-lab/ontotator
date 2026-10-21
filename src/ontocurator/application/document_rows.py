@@ -61,15 +61,31 @@ PAGE_SIZE = rules.PAGE_SIZE  # re-export for existing callers
 Decision = Literal[
     "all", "report-or-pause", "confirm-final", "translation", "missing-final"
 ]
-Segment = Literal["decision", "assign", "progress"]
-PlanFilter = Literal["review", "annotate", "review_and_annotate", "not_in_plan"]
-Sort = Literal["case", "import", "activity"]
+# No segment: the All tab (every row, in plan or not; spec VD7).
+Segment = Literal["decision", "assign", "progress", "done"]
+# ``not_in_plan`` = flags off (undecided rows included); ``not_decided`` =
+# undecided rows only (VD3).
+PlanFilter = Literal[
+    "review", "annotate", "review_and_annotate", "not_in_plan", "not_decided"
+]
+Sort = Literal["case", "-case", "import", "activity", "-activity"]
 MAX_RETAIN = 200
 EXCERPT_LENGTH = 120
 
 
 FinalFilter = Literal["missing", "none", "any"]
 Paused = Literal["yes", "no"]
+REPEATABLE = (
+    "language",
+    "origin",
+    "step",
+    "stage",
+    "plan",
+    "review_state",
+    "annotation_state",
+    "final_state",
+    "waiting_on",
+)
 
 
 def _values(value: Any) -> tuple[Any, ...]:
@@ -83,17 +99,19 @@ def _values(value: Any) -> tuple[Any, ...]:
 
 @dataclass(frozen=True)
 class RowQuery:
-    """Documents filters (follow-up spec FD10).
+    """Documents filters (follow-up spec FD10, documents overview facets).
 
-    ``step``, ``stage`` and ``plan`` are repeatable: OR within one filter, AND
-    across filters; empty means no filter. A single string is accepted as one
-    value.
+    ``language``, ``origin``, ``step``, ``stage``, ``plan``, the stage states
+    and ``waiting_on`` are repeatable: OR within one filter, AND across
+    filters; empty means no filter. A single string is accepted as one value.
     """
 
-    language: str | None = None
+    language: tuple[str, ...] = ()
     status: str | None = None  # unassigned|open|in_progress|submitted|reopened|held
+    # Prefix of case ID, external ID or document ID, or the text label form
+    # "case-104 de" / "case-104 · de" (spec VD11).
     q: str | None = None
-    origin: str | None = None
+    origin: tuple[str, ...] = ()  # VariantOrigin values of the row's versions
     translation_status: str | None = None  # adds accepted_without_review
     decision: Decision | None = None
     # "missing": no final result (any row); "none": Annotate on, no final
@@ -110,13 +128,19 @@ class RowQuery:
     plan: tuple[PlanFilter, ...] = ()
     # "yes": the row has a held annotate or review task; "no": it has none.
     paused: Paused | None = None
+    # Facets of the documents overview: stage cell states and Waiting on
+    # ("me" or a pseudonym).
+    review_state: tuple[str, ...] = ()
+    annotation_state: tuple[str, ...] = ()
+    final_state: tuple[str, ...] = ()
+    waiting_on: tuple[str, ...] = ()
     sort: Sort = "case"
     # "{case_id}:{language}" keys kept visible this visit (Task 5.9). A key
     # splits at the last ":" (case ids may contain ":"; language codes do not).
     retain: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        for name in ("step", "stage", "plan"):
+        for name in REPEATABLE:
             object.__setattr__(self, name, _values(getattr(self, name)))
         if self.decision is not None and self.final is not None:
             raise ValueError("decision and final are mutually exclusive")
@@ -163,6 +187,15 @@ class ReportFact:
 
 
 @dataclass(frozen=True)
+class ReviewRecord:
+    """The latest translation review decision of a version."""
+
+    reviewer_id: int
+    decided_at: datetime
+    decision: str
+
+
+@dataclass(frozen=True)
 class RowFacts:
     project_key: str
     viewer_user_id: int
@@ -201,6 +234,17 @@ class RowFacts:
     people: dict[int, dict[str, Any]] = field(default_factory=dict)
     # pseudonym -> PersonRefView fields (authors of the selected submissions)
     people_by_pseudonym: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # False only for undecided rows (VD3): the stored plan row is not decided
+    # and the project currently imports with "Nothing planned". Rows missing
+    # here are decided.
+    decided: dict[RowKey, bool] = field(default_factory=dict)
+    # document id -> latest translation review (Review cell people and time)
+    latest_reviews: dict[str, ReviewRecord] = field(default_factory=dict)
+    # assignment id -> reason of the correction request of its active round
+    # (Review "re_review" line 2, D26)
+    correction_reasons: dict[int, str] = field(default_factory=dict)
+    # assignment id -> finding count of its last submission
+    findings: dict[int, int] = field(default_factory=dict)
 
 
 def load_last_activity(
@@ -528,6 +572,95 @@ def _selections(conn: Connection, pid: int) -> dict[tuple[str, str], dict[str, A
     }
 
 
+def _decided(conn: Connection, pid: int) -> dict[RowKey, bool]:
+    """Undecided rows (VD3): stored ``decided`` false under "Nothing planned"."""
+    import_plan = conn.execute(
+        select(ProjectRow.import_plan).where(ProjectRow.id == pid)
+    ).scalar_one()
+    if import_plan != "nothing":
+        return {}
+    return {
+        key: False
+        for key, decided in work_plan_store.decided_rows(conn, pid).items()
+        if not decided
+    }
+
+
+def _latest_reviews(conn: Connection, pid: int) -> dict[str, ReviewRecord]:
+    return {
+        row.document_id: ReviewRecord(
+            reviewer_id=row.reviewer_user_id,
+            decided_at=row.created_at,
+            decision=row.decision,
+        )
+        for row in conn.execute(
+            select(
+                TranslationReviewRow.document_id,
+                TranslationReviewRow.reviewer_user_id,
+                TranslationReviewRow.created_at,
+                TranslationReviewRow.decision,
+            )
+            .where(TranslationReviewRow.project_id == pid)
+            .distinct(TranslationReviewRow.document_id)
+            .order_by(
+                TranslationReviewRow.document_id,
+                TranslationReviewRow.created_at.desc(),
+                TranslationReviewRow.id.desc(),
+            )
+        )
+    }
+
+
+def _correction_reasons(
+    conn: Connection, pid: int, assignments: list[rules.AssignmentFact]
+) -> dict[int, str]:
+    """Reason of each correction request (``translation.correction_requested``)
+    whose round is still the assignment's active round."""
+    active = {
+        str(item.assignment_id): item.active_round_id
+        for item in assignments
+        if item.task == "translation_review" and item.active_round_id is not None
+    }
+    reasons: dict[int, str] = {}
+    for row in conn.execute(
+        select(AuditEventRow.target_id, AuditEventRow.details)
+        .where(
+            AuditEventRow.project_id == pid,
+            AuditEventRow.action == "translation.correction_requested",
+            AuditEventRow.target_type == "assignment",
+        )
+        .order_by(AuditEventRow.id)
+    ):
+        details = row.details or {}
+        round_id = active.get(row.target_id)
+        if round_id is not None and details.get("round_id") == round_id:
+            reasons[int(row.target_id)] = str(details.get("reason") or "")
+    return reasons
+
+
+def _findings(conn: Connection, pid: int) -> dict[int, int]:
+    """Finding count of each assignment's last submission."""
+    return {
+        row.id: int(row.findings)
+        for row in conn.execute(
+            select(
+                AssignmentRow.id,
+                func.coalesce(
+                    func.jsonb_array_length(SubmissionRow.payload["snapshots"]), 0
+                ).label("findings"),
+            )
+            .join(
+                SubmissionRow,
+                and_(
+                    SubmissionRow.project_id == AssignmentRow.project_id,
+                    SubmissionRow.submission_id == AssignmentRow.last_submission_id,
+                ),
+            )
+            .where(AssignmentRow.project_id == pid)
+        )
+    }
+
+
 def load_facts(
     conn: Connection, repo: Repository, key: str, pid: int, viewer_user_id: int
 ) -> RowFacts:
@@ -550,6 +683,7 @@ def load_facts(
     assignments = _assignments(conn, pid)
     reports = _reports(conn, pid)
     selected = _selected_submissions(conn, pid)
+    latest_reviews = _latest_reviews(conn, pid)
     people = person_refs(
         conn,
         [
@@ -562,6 +696,7 @@ def load_facts(
                 if item["accepted_by"]
             ),
             *(item["discarded_by"] for item in discarded.values()),
+            *(item.reviewer_id for item in latest_reviews.values()),
         ],
         viewer_id=viewer_user_id,
         viewer_is_lead=True,  # Documents is lead-only
@@ -601,6 +736,10 @@ def load_facts(
             (item.annotator_id for item in selected.values()),
             viewer_id=viewer_user_id,
         ),
+        decided=_decided(conn, pid),
+        latest_reviews=latest_reviews,
+        correction_reasons=_correction_reasons(conn, pid, assignments),
+        findings=_findings(conn, pid),
     )
 
 

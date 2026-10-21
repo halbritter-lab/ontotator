@@ -22,6 +22,10 @@ class PlanFlagsView(BaseModel):
     annotate: bool
     review_applicable: bool
     discarded: bool = False
+    # False only for undecided rows (documents overview VD3). A factory
+    # default keeps the field optional in the generated types (older fixtures
+    # and clients omit it; absent means decided).
+    decided: bool = Field(default_factory=lambda: True)
 
 
 class RowRefView(BaseModel):

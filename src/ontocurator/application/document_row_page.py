@@ -7,12 +7,15 @@ the row and page dictionaries of the Documents read API.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from ontocurator.application import document_row_facets as facets
+from ontocurator.application import document_row_stages as stages
 from ontocurator.domain import document_rows as rules
 from ontocurator.domain import next_steps as steps_rules
+from ontocurator.domain import stage_cells as cells_rules
 from ontocurator.domain.document_rows import PAGE_SIZE
 from ontocurator.domain.work_plans import PlanFlags
 from ontocurator.domain.work_plans import RowKey as PlanKey
@@ -102,6 +105,15 @@ class _Context:
         self.owners: dict[RowKey, frozenset[str]] = {}
         self.in_plan: dict[RowKey, bool] = {}
         self.step_facts: dict[RowKey, steps_rules.StepFacts] = {}
+        # Stage cells per row (documents overview), filled by _row_steps.
+        self.cells: dict[RowKey, cells_rules.StageCells] = {}
+        # Pseudonym <-> user id of everyone with an assignment.
+        self.user_ids: dict[str, int] = {}
+        self.pseudonyms: dict[int, str] = {}
+        for assignment in facts.assignments:
+            self.user_ids.setdefault(assignment.pseudonym, assignment.user_id)
+            self.pseudonyms.setdefault(assignment.user_id, assignment.pseudonym)
+        self.pseudonyms.setdefault(facts.viewer_user_id, facts.viewer_pseudonym)
 
     def person(self, user_id: int, pseudonym: str) -> dict[str, Any]:
         """PersonRefView fields of ``user_id`` (pseudonym alone when unknown)."""
@@ -116,6 +128,14 @@ class _Context:
 
     def viewer(self) -> dict[str, Any]:
         return self.person(self.facts.viewer_user_id, self.facts.viewer_pseudonym)
+
+    def person_of(self, user_id: int) -> dict[str, Any]:
+        """PersonRefView fields of ``user_id`` (stage cells)."""
+        return self.person(user_id, self.pseudonyms.get(user_id, ""))
+
+    def undecided(self, key: RowKey) -> bool:
+        """Not in plan and the plan is not decided yet (VD3)."""
+        return not self.in_plan[key] and not self.step_facts[key].decided
 
 
 def _acceptance(facts: RowFacts, document_id: str) -> dict[str, Any] | None:
@@ -386,7 +406,10 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
         is_source=is_source,
         missing_final=counts,
         final=final if has_final else None,
+        # A discarded row is out of the plan for good, never undecided.
+        decided=facts.decided.get(PlanKey(case_id, language), True) or discarded,
     )
+    row_cells = ctx.cells[key]
     return {
         "case_id": case_id,
         "language": language,
@@ -474,8 +497,14 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
             "annotate": flags.annotate,
             "review_applicable": not is_source,
             "discarded": discarded,
+            "decided": not ctx.undecided(key),
         },
         "in_plan": ctx.in_plan[key],
+        "stages": {
+            name: stages.cell_view(getattr(row_cells, name), ctx.person_of)
+            for name in ("review", "annotation", "final")
+        },
+        "version_marker": stages.version_marker(live or chains),
     }
 
 
@@ -487,21 +516,25 @@ def _open(item: rules.AssignmentFact) -> bool:
 def _owner(
     ctx: _Context, kind: steps_rules.StepKind, work: Sequence[rules.AssignmentFact]
 ) -> dict[str, Any]:
+    """Waiting on: the lead for decision and assign steps, else every person
+    of ``work`` in assignment order (VD8)."""
     if kind in ("decision", "assign"):
-        return {"kind": "you", "person": ctx.viewer(), "count": 1}
+        viewer = ctx.viewer()
+        return {"kind": "you", "person": viewer, "count": 1, "people": [viewer]}
     people: dict[int, rules.AssignmentFact] = {}
     for item in work:
         people.setdefault(item.user_id, item)
-    if not people:
-        return {"kind": "none", "person": None, "count": 0}
-    if len(people) > 1:
-        return {"kind": "people", "person": None, "count": len(people)}
-    (item,) = people.values()
-    person = ctx.person(item.user_id, item.pseudonym)
+    refs = [ctx.person(item.user_id, item.pseudonym) for item in people.values()]
+    if not refs:
+        return {"kind": "none", "person": None, "count": 0, "people": []}
+    if len(refs) > 1:
+        return {"kind": "people", "person": None, "count": len(refs), "people": refs}
+    (person,) = refs
     return {
         "kind": "you" if person["is_me"] else "person",
         "person": person,
         "count": 1,
+        "people": refs,
     }
 
 
@@ -532,6 +565,23 @@ def _version_detail(kind: str, version: rules.Version | None) -> dict[str, Any]:
     )
 
 
+def _step_work(
+    code: str,
+    *,
+    reviews: Sequence[rules.AssignmentFact],
+    open_annotations: Sequence[rules.AssignmentFact],
+    open_reviews: Sequence[rules.AssignmentFact],
+) -> Sequence[rules.AssignmentFact]:
+    """The work items whose people own an in-progress step."""
+    if code == "translation_review_in_progress":
+        return reviews
+    if code == "annotation_in_progress":
+        return open_annotations
+    if code == "annotation_review_in_progress":
+        return open_reviews
+    return ()
+
+
 def _row_steps(
     ctx: _Context,
     key: RowKey,
@@ -543,8 +593,10 @@ def _row_steps(
     is_source: bool,
     missing_final: bool,
     final: Mapping[str, Any] | None,
+    decided: bool = True,
 ) -> list[dict[str, Any]]:
-    """Next step (first) and further steps of a row; fills the ctx side tables."""
+    """Next step (first) and further steps of a row; fills the ctx side tables
+    (stage cells included)."""
     facts = ctx.facts
     # Newest version of each live root, corrections that are not newer skipped.
     targets = [[v for v in c.versions if not v.not_newer][-1] for c in live]
@@ -616,12 +668,25 @@ def _row_steps(
         has_final=final is not None,
         check_failed=needs_reviewer is not None
         and needs_reviewer.translation_status == "automatic_check_failed",
+        decided=decided,
     )
     ctx.flags[key] = (review, annotate)
     ctx.step_facts[key] = step_facts
     ctx.in_plan[key] = steps_rules.in_plan(step_facts)
     derived = steps_rules.derive_steps(step_facts, row=key)
     ctx.segments[key] = steps_rules.segment_of(derived[0]) if derived else None
+    ctx.cells[key] = cells_rules.stage_cells(
+        stages.stage_facts(
+            ctx,
+            key,
+            live=live,
+            targets=targets,
+            current=current,
+            step_facts=step_facts,
+            final=final,
+        ),
+        derived,
+    )
 
     def first(predicate: Callable[[rules.Version], bool]) -> rules.Version | None:
         return next(
@@ -635,6 +700,19 @@ def _row_steps(
         1 for item in on_targets if item.status == "submitted" and not item.held
     )
     total = max(facts.annotations_per_text * len(targets), len(on_targets))
+    # Waiting on of an in-progress step: the people of every in-progress
+    # step of the row (VD8, scenario 16).
+    in_progress_work = [
+        item
+        for step in derived
+        if step.kind == "in_progress"
+        for item in _step_work(
+            step.code,
+            reviews=reviews,
+            open_annotations=open_annotations,
+            open_reviews=open_reviews,
+        )
+    ]
     views: list[dict[str, Any]] = []
     for step in derived:
         work: Sequence[rules.AssignmentFact] = ()
@@ -673,7 +751,12 @@ def _row_steps(
             version = needs_reviewer or version
             detail = _version_detail("version", version)
         elif code == "translation_review_in_progress":
-            work = reviews
+            work = _step_work(
+                code,
+                reviews=reviews,
+                open_annotations=open_annotations,
+                open_reviews=open_reviews,
+            )
             version = version_of.get(reviews[0].document_id, version)
             detail = _version_detail("version", version)
         elif code in ("translation_not_accepted", "waiting_for_translation_review"):
@@ -695,8 +778,11 @@ def _row_steps(
                 else _version_detail("version", version)
             )
         else:  # annotation_in_progress, annotation_review_in_progress
-            work = (
-                open_annotations if code == "annotation_in_progress" else open_reviews
+            work = _step_work(
+                code,
+                reviews=reviews,
+                open_annotations=open_annotations,
+                open_reviews=open_reviews,
             )
             rounds = {
                 ctx.ordinals.get(item.active_round_id)
@@ -709,12 +795,12 @@ def _row_steps(
                 if ordinal is not None
                 else _detail("annotations_submitted", submitted=submitted, total=total)
             )
-        owner = _owner(ctx, step.kind, work)
+        owner = _owner(
+            ctx, step.kind, in_progress_work if step.kind == "in_progress" else work
+        )
         if not views:
             ctx.owners[key] = frozenset(
-                [owner["person"]["pseudonym"]]
-                if owner["person"] is not None
-                else [item.pseudonym for item in work]
+                person["pseudonym"] for person in owner["people"]
             )
         views.append(
             {
@@ -738,9 +824,9 @@ def _row_steps(
 
 
 def _version_matches(
-    facts: RowFacts, query: RowQuery, case_id: str, version: Mapping[str, Any]
+    facts: RowFacts, query: RowQuery, row: Mapping[str, Any], version: Mapping[str, Any]
 ) -> bool:
-    if query.origin is not None and version["origin"] != query.origin:
+    if query.origin and version["origin"] not in query.origin:
         return False
     if query.translation_status is not None:
         if query.translation_status == "accepted_without_review":
@@ -748,12 +834,28 @@ def _version_matches(
                 return False
         elif version["translation_status"] != query.translation_status:
             return False
-    return query.q is None or rules.prefix_matches(
-        query.q, [case_id, version["external_id"], version["document_id"]]
+    return query.q is None or _search_matches(query.q, row, version)
+
+
+def _search_matches(q: str, row: Mapping[str, Any], version: Mapping[str, Any]) -> bool:
+    """Prefix of case ID, external ID or document ID, or the text label form
+    "case-104 de" / "case-104 · de" (case prefix, exact language; VD11)."""
+    case_id = row["case_id"]
+    if rules.prefix_matches(
+        q, [case_id, version["external_id"], version["document_id"]]
+    ):
+        return True
+    label = rules.split_text_label(q)
+    return (
+        label is not None
+        and row["language"] == label[1]
+        and rules.prefix_matches(label[0], [case_id])
     )
 
 
-# Plan filter: an exclusive partition of the rows by their effective flags.
+# Plan filter: an exclusive partition of the rows by their effective flags;
+# ``not_decided`` additionally marks undecided rows (VD3), which are
+# ``not_in_plan`` too.
 _PLAN_OPTIONS: dict[tuple[bool, bool], str] = {
     (True, False): "review",
     (False, True): "annotate",
@@ -762,8 +864,22 @@ _PLAN_OPTIONS: dict[tuple[bool, bool], str] = {
 }
 
 
+def _plan_values(ctx: _Context, key: RowKey) -> tuple[str, ...]:
+    option = _PLAN_OPTIONS[ctx.flags[key]]
+    return (option, "not_decided") if ctx.undecided(key) else (option,)
+
+
 def _plan_matches(ctx: _Context, key: RowKey, query: RowQuery) -> bool:
-    return not query.plan or _PLAN_OPTIONS[ctx.flags[key]] in query.plan
+    return not query.plan or not set(_plan_values(ctx, key)).isdisjoint(query.plan)
+
+
+def _waiting_values(ctx: _Context, key: RowKey) -> tuple[str, ...]:
+    """Waiting-on facet values: "me" for the lead, else pseudonyms."""
+    viewer = ctx.facts.viewer_pseudonym
+    return tuple(
+        "me" if pseudonym == viewer else pseudonym
+        for pseudonym in sorted(ctx.owners[key])
+    )
 
 
 # Tasks whose hold pauses the row (Progress "Paused by a problem report").
@@ -777,12 +893,21 @@ def is_paused(row: Mapping[str, Any]) -> bool:
 
 def _row_level_matches(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -> bool:
     key = (row["case_id"], row["language"])
-    if query.language is not None and row["language"] != query.language:
+    if query.language and row["language"] not in query.language:
         return False
     if query.case is not None and row["case_id"] != query.case:
         return False
     if not _plan_matches(ctx, key, query):
         return False
+    for name in ("review", "annotation", "final"):
+        selected = getattr(query, f"{name}_state")
+        if selected and row["stages"][name]["state"] not in selected:
+            return False
+    if query.waiting_on:
+        viewer = ctx.facts.viewer_pseudonym
+        wanted = {viewer if item == "me" else item for item in query.waiting_on}
+        if wanted.isdisjoint(ctx.owners[key]):
+            return False
     if query.step and not any(step["code"] in query.step for step in row["steps"]):
         return False
     step = row["next_step"]
@@ -804,12 +929,19 @@ def _row_level_matches(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -
     return True
 
 
+def _filtered(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -> bool:
+    """The row matches the non-decision filters (no ``matches_filter`` marks)."""
+    return _row_level_matches(ctx, row, query) and any(
+        _version_matches(ctx.facts, query, row, version) for version in row["versions"]
+    )
+
+
 def _apply_filters(ctx: _Context, row: dict[str, Any], query: RowQuery) -> bool:
     """Mark matching versions; True when the row matches the non-decision filters."""
     row_level = _row_level_matches(ctx, row, query)
     for version in row["versions"]:
         version["matches_filter"] = row_level and _version_matches(
-            ctx.facts, query, row["case_id"], version
+            ctx.facts, query, row, version
         )
     return any(version["matches_filter"] for version in row["versions"])
 
@@ -819,15 +951,27 @@ def _no_final(ctx: _Context, key: RowKey) -> bool:
     return ctx.flags[key][1] and not ctx.has_final[key]
 
 
+def _in_segment(ctx: _Context, key: RowKey, segment: str) -> bool:
+    """The row is under the tab ``segment``: the segment of its next step
+    (undecided rows: ``decision``, V10); ``done`` = in-plan rows whose next
+    step kind is done."""
+    if segment == "done":
+        return ctx.in_plan[key] and ctx.segments[key] is None
+    return ctx.segments[key] == segment
+
+
 def _in_active_segment(
     ctx: _Context, key: RowKey, row: Mapping[str, Any], query: RowQuery
 ) -> bool:
-    """Row counts toward the "n" of the bar's "k of n shown" for ``query``."""
-    if not row["in_plan"]:
-        return False
+    """Row counts toward the "n" of the bar's "k of n shown" for ``query``.
+
+    No segment is the All tab: every row, in plan or not (VD7).
+    """
     if query.segment is not None:
-        return ctx.segments[key] == query.segment
+        return _in_segment(ctx, key, query.segment)
     if query.decision is not None:
+        if not row["in_plan"]:
+            return False
         if query.decision == "all":
             return bool(row["categories"])
         return query.decision in row["categories"]
@@ -844,7 +988,7 @@ def _matches_decision(
         return False
     if query.final == "any" and not ctx.has_final[key]:
         return False
-    if query.segment is not None and ctx.segments[key] != query.segment:
+    if query.segment is not None and not _in_segment(ctx, key, query.segment):
         return False
     if query.decision is None:
         return True
@@ -860,6 +1004,42 @@ def _matches(ctx: _Context, row: dict[str, Any], query: RowQuery) -> bool:
     return filtered and _matches_decision(ctx, key, row, query)
 
 
+def _shown(ctx: _Context, key: RowKey, row: Mapping[str, Any], query: RowQuery) -> bool:
+    """The row counts in ``bar.shown`` for ``query`` (no marks)."""
+    return (
+        _filtered(ctx, row, query)
+        and _matches_decision(ctx, key, row, query)
+        and _in_active_segment(ctx, key, row, query)
+    )
+
+
+def _facets(
+    ctx: _Context, rows: Mapping[RowKey, dict[str, Any]], query: RowQuery
+) -> dict[str, dict[str, int]]:
+    """Facet counts of the filter popover (``document_row_facets``)."""
+    no_origin = replace(query, origin=())
+
+    def values(key: RowKey) -> dict[facets.FacetGroup, tuple[str, ...]]:
+        row = rows[key]
+        return facets.facet_values(
+            row,
+            origins=[
+                version["origin"]
+                for version in row["versions"]
+                if _version_matches(ctx.facts, no_origin, row, version)
+            ],
+            plan=_plan_values(ctx, key),
+            waiting_on=_waiting_values(ctx, key),
+        )
+
+    def matches_without(group: facets.FacetGroup) -> Callable[[RowKey], bool]:
+        without = replace(query, **{str(group): ()})  # type: ignore[arg-type]
+        return lambda key: _shown(ctx, key, rows[key], without)
+
+    counts = facets.facet_counts(rows, values, matches_without)
+    return {str(group): value for group, value in counts.items()}
+
+
 def _retain_keys(query: RowQuery) -> set[RowKey]:
     keys: set[RowKey] = set()
     for item in query.retain:
@@ -867,6 +1047,16 @@ def _retain_keys(query: RowQuery) -> set[RowKey]:
         if separator and case_id and language:
             keys.add((case_id, language))
     return keys
+
+
+def _sort_cases(facts: RowFacts, case_ids: Iterable[str], sort: str) -> list[str]:
+    """Case IDs in list order: Case ID (``-case`` descending), import (lowest
+    position) or last activity (newest first; ``-activity`` oldest first;
+    cases without activity last)."""
+    ids = list(case_ids)
+    if sort == "-case":
+        return sorted(ids, reverse=True)
+    return sorted(ids, key=_case_order(facts, sort))
 
 
 def _case_order(facts: RowFacts, sort: str) -> Callable[[str], tuple[Any, ...]]:
@@ -896,10 +1086,11 @@ def _case_order(facts: RowFacts, sort: str) -> Callable[[str], tuple[Any, ...]]:
         note(version.case_id, facts.last_activity.get(version.document_id))
     for (case_id, _language), at in facts.selection_activity.items():
         note(case_id, at)
+    sign = 1.0 if sort == "-activity" else -1.0
 
     def by_activity(case_id: str) -> tuple[Any, ...]:
         at = activity.get(case_id)
-        return (at is None, -at.timestamp() if at is not None else 0.0, case_id)
+        return (at is None, sign * at.timestamp() if at is not None else 0.0, case_id)
 
     return by_activity
 
@@ -1003,7 +1194,7 @@ def _matching_cases(facts: RowFacts, query: RowQuery) -> set[str]:
 
 def case_ids(facts: RowFacts, query: RowQuery) -> tuple[list[str], int, bool]:
     """Filtered case IDs in list order, at most ``MAX_CASE_IDS``."""
-    ids = sorted(_matching_cases(facts, query), key=_case_order(facts, query.sort))
+    ids = _sort_cases(facts, _matching_cases(facts, query), query.sort)
     return ids[:MAX_CASE_IDS], len(ids), len(ids) > MAX_CASE_IDS
 
 
@@ -1011,9 +1202,8 @@ def sorted_case_ids(facts: RowFacts, case_ids: Sequence[str], sort: str) -> list
     """``case_ids`` (deduplicated) in Documents order; unknown IDs last, as given."""
     known = {version.case_id for version in facts.versions}
     unique = list(dict.fromkeys(case_ids))
-    ordered = sorted(
-        (case_id for case_id in unique if case_id in known),
-        key=_case_order(facts, sort),
+    ordered = _sort_cases(
+        facts, (case_id for case_id in unique if case_id in known), sort
     )
     return ordered + [case_id for case_id in unique if case_id not in known]
 
@@ -1027,7 +1217,8 @@ def cases_not_shown(facts: RowFacts, case_ids: Sequence[str], query: RowQuery) -
 def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
     ctx, rows, matches = _evaluate(facts, query)
 
-    # Every bar count covers rows in the plan only.
+    # Category counts cover rows in the plan only; the tabs (segment_counts)
+    # ignore filters and search and count every row (``all``).
     bar: dict[str, Any] = dict(
         rules.bar_counts(
             set(row["categories"]) for row in rows.values() if row["in_plan"]
@@ -1049,8 +1240,8 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
 
     retain = _retain_keys(query)
     pinned_key = (
-        (query.case, query.language)
-        if query.case is not None and query.language is not None
+        (query.case, query.language[0])
+        if query.case is not None and len(query.language) == 1
         else None
     )
     shown_rows: dict[RowKey, dict[str, Any]] = {}
@@ -1070,6 +1261,8 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
             row["retained"] = True
             shown_rows[key] = row
     bar["shown"] = shown_bar
+    # Filter popover: counts under the tab, search and every other group.
+    bar["facets"] = _facets(ctx, rows, query)
 
     by_case: dict[str, list[RowKey]] = {}
     for key in rows:
@@ -1078,9 +1271,7 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
     def row_order(row: Mapping[str, Any]) -> tuple[bool, str]:
         return (not row["is_source"], row["language"])
 
-    shown_cases = sorted(
-        {key[0] for key in shown_rows}, key=_case_order(facts, query.sort)
-    )
+    shown_cases = _sort_cases(facts, {key[0] for key in shown_rows}, query.sort)
     groups = []
     for case_id in shown_cases:
         all_rows = sorted((rows[key] for key in by_case[case_id]), key=row_order)

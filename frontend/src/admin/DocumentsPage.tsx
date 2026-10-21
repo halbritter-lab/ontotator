@@ -140,8 +140,22 @@ export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsRequest {
 
 /** The Documents filters for the selection summary and the batch assign dialog: every filter except paging, sort and retain. */
 export function selectionFilters(request: DocumentRowsRequest): DocumentRowFilters {
-  const { page: _page, sort: _sort, retain: _retain, ...filters } = request;
-  return filters;
+  // The batch filters take one language and one origin, no Done tab and no facets yet (row-level
+  // bulk: O0d); the route still holds at most one language and one origin and no Done tab.
+  const { page: _page, sort: _sort, retain: _retain, language, origin, segment, review_state: _review, annotation_state: _annotation, final_state: _final, waiting_on: _waiting, ...filters } = request;
+  const result: DocumentRowFilters = { ...filters };
+  const [firstLanguage] = valuesOf(language);
+  const [firstOrigin] = valuesOf(origin);
+  if (firstLanguage !== undefined) result.language = firstLanguage;
+  if (firstOrigin !== undefined) result.origin = firstOrigin;
+  if (segment != null && segment !== "done") result.segment = segment;
+  return result;
+}
+
+/** The batch dialog's case order: descending orders fall back to their ascending order. */
+function batchSort(sort: DocumentRowsRequest["sort"]): "case" | "import" | "activity" {
+  if (sort === "-case" || sort == null) return "case";
+  return sort === "-activity" ? "activity" : sort;
 }
 
 /** "Selection is limited to 2000 cases. Selected the first 2000." */
@@ -667,7 +681,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     const caseIds = [...selection.ids];
     if (!caseIds.length) return;
     setAssignDialog({
-      mode: "cases", projectKey, caseIds, sort: request.sort ?? "case", filters,
+      mode: "cases", projectKey, caseIds, sort: batchSort(request.sort), filters,
       onClose: () => setAssignDialog(null),
       onAssigned: (message, skipped) => {
         // The planned work is done for this selection; the skipped cases stay one click away.
