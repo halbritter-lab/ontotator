@@ -110,7 +110,30 @@ describe("task guidelines button", () => {
   });
 });
 
+describe("task guidelines focus return", () => {
+  it("returns focus to the task toolbar when the Guidelines button is gone after a withdrawal", async () => {
+    const view = render(<Harness assignment={task()} />);
+    await settle();
+    fireEvent.click(entry());
+    expect(await screen.findByText("Annotate negations.")).toBeDefined();
+    view.rerender(<Harness assignment={task({ guideline: null })} />);
+    expect(screen.queryByRole("button", { name: /^Guidelines v\d+, open/ })).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Report problem" }));
+  });
+});
+
 describe("task guidelines notice", () => {
+  it("reading the guidelines from the notice closes the notice", async () => {
+    render(<Harness assignment={task({ guideline_notice: update })} />);
+    const notice = within(screen.getByTestId("notice-slot"));
+    fireEvent.click(await notice.findByRole("button", { name: "Read guidelines v3" }));
+    expect(await screen.findByText("Annotate negations.")).toBeDefined();
+    expect(screen.queryByText("Guidelines updated to v3")).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+    expect(screen.queryByText("Guidelines updated to v3")).toBeNull();
+  });
+
   it("update notice lists change notes, v2: withdrawn and and 2 earlier changes", async () => {
     render(<Harness assignment={task({ guideline_notice: update })} />);
     const notice = within(screen.getByTestId("notice-slot"));

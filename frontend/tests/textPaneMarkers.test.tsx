@@ -43,3 +43,18 @@ it("keeps an invalid-mention warning before the text without polluting its codep
   expect(scrollport.contains(warning)).toBe(false);
   expect(Array.from(scrollport.textContent ?? "")).toEqual(Array.from(text));
 });
+
+it("Escape inside an open drawer or dialog closes that, not the pending mention attach", () => {
+  const cancel = vi.fn();
+  const mounted = render(<>
+    <TextPane {...base} text="Some text" isAttachingMention onCancelAttach={cancel} />
+    <aside className="ui-drawer"><button>Inside drawer</button></aside>
+    <div role="dialog"><button>Inside dialog</button></div>
+  </>);
+  const press = (target: Element) => target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  press(mounted.getByRole("button", { name: "Inside drawer" }));
+  press(mounted.getByRole("button", { name: "Inside dialog" }));
+  expect(cancel).not.toHaveBeenCalled();
+  press(mounted.container.querySelector(".text-container")!);
+  expect(cancel).toHaveBeenCalledTimes(1);
+});

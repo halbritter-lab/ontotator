@@ -32,6 +32,19 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
   const [notice, setNotice] = useState<{ key: string; value: GuidelineNotice } | null>(null);
   const recorded = useRef(new Set<string>());
   const button = useRef<HTMLButtonElement>(null);
+  // The toolbar holding the button, kept so focus can return there when the button unmounts (version withdrawn).
+  const toolbar = useRef<HTMLElement | null>(null);
+  const returnFocus = useRef({
+    get current(): HTMLElement | null {
+      if (button.current?.isConnected) return button.current;
+      const group = toolbar.current?.isConnected ? toolbar.current : null;
+      const inGroup = group?.querySelector<HTMLElement>("button:not(:disabled), a[href], [tabindex]:not([tabindex='-1'])");
+      if (inGroup) return inGroup;
+      const heading = document.querySelector<HTMLElement>("main h1, h1");
+      if (heading && !heading.hasAttribute("tabindex")) heading.tabIndex = -1;
+      return heading;
+    },
+  }).current;
   // Bumped by a focus reload while the drawer is open, so its reader fetches the text again.
   const [readerLoad, setReaderLoad] = useState(0);
   const drawerOpen = useRef(false);
@@ -74,6 +87,7 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
   }, [projectKey, offered]);
 
   const openDrawer = (version: number) => {
+    toolbar.current = button.current?.parentElement ?? toolbar.current;
     setDrawer({ open: true, version });
     setLatestSeen(seen => ({ key: projectKey, version: Math.max(version, seen?.key === projectKey ? seen.version ?? 0 : 0) }));
   };
@@ -88,10 +102,10 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
     </Button>;
 
   const shown = !readOnly && current !== null && notice?.key === projectKey ? notice.value : null;
-  const noticePart = shown && <GuidelineNoticeMessage notice={shown} onRead={() => openDrawer(shown.to_version)} onClose={() => setNotice(null)} />;
+  const noticePart = shown && <GuidelineNoticeMessage notice={shown} onRead={() => { setNotice(null); openDrawer(shown.to_version); }} onClose={() => setNotice(null)} />;
 
   const version = drawer.version;
-  const drawerPart = version !== null && <Drawer open={drawer.open} title={`Guidelines v${version}`} onClose={closeDrawer} returnFocusRef={button}
+  const drawerPart = version !== null && <Drawer open={drawer.open} title={`Guidelines v${version}`} onClose={closeDrawer} returnFocusRef={returnFocus}
     footer={<>
       <a className="btn btn-secondary" href={routeHref({ name: "projectGuidelines", key: projectKey })} target="_blank" rel="noopener noreferrer">All versions</a>
       <Button variant="quiet" onClick={closeDrawer}>Close</Button>
