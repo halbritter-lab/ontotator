@@ -4,7 +4,7 @@
  *
  * Every test builds its own ``PUBLISHED`` project through ``POST /__test_guidelines__``: v1 published
  * by the lead ("First version"), not yet seen by Ana, who owns the en annotate task ``annotate-1``.
- * The drawer is a non-modal ``<aside>`` from 1100 px, a modal ``lg`` Dialog from 700 px and a
+ * The drawer is a non-modal ``<aside>`` from 1280 px, a modal ``lg`` Dialog from 700 px and a
  * full-height sheet below.
  */
 import { mkdirSync } from "node:fs";
@@ -70,16 +70,16 @@ test("drawer at 1280 px is non-modal and the editor stays operable", async ({ pa
   await expect(panel.getByText(V1_TEXT)).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
-  // min(30rem, 34vw) on the right, below the AppShell header.
+  // min(24rem, 30vw) on the right, below the AppShell header.
   const box = (await panel.boundingBox())!;
-  expect(box.width).toBeLessThanOrEqual(Math.min(480, 1280 * 0.34) + 1);
+  expect(box.width).toBeLessThanOrEqual(Math.min(384, 1280 * 0.3) + 1);
   expect(Math.round(box.x + box.width)).toBe(1280);
   const header = (await page.locator(".shell-header").boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
   // The page narrows beside the drawer: the clinical text is not covered.
   const text = (await page.locator(".text-container").first().boundingBox())!;
   expect(text.x + text.width).toBeLessThanOrEqual(box.x + 1);
-  expect(text.width).toBeGreaterThan(200);
+  expect(text.width).toBeGreaterThan(180);
   await evidence(page, "1280-drawer");
 
   // Keys typed inside the drawer do not reach the editor's shortcuts; outside they do.

@@ -32,7 +32,7 @@ function Host({ onShortcut = vi.fn(), initiallyOpen = false }: { onShortcut?: ()
   </>;
 }
 
-it("is a non-modal aside from 1100 px and the editor stays operable", () => {
+it("is a non-modal aside from 1280 px and the editor stays operable", () => {
   viewport(1280);
   const editorAction = vi.fn();
   render(<><Host initiallyOpen /><button onClick={editorAction}>Save draft</button></>);
@@ -49,8 +49,8 @@ it("is a non-modal aside from 1100 px and the editor stays operable", () => {
   expect(screen.getByRole("complementary", { name: "Guidelines v3" })).toBeDefined();
 });
 
-it("is a modal dialog between 700 and 1099 px", () => {
-  viewport(900);
+it("is a modal dialog between 700 and 1279 px", () => {
+  viewport(1279);
   render(<Host initiallyOpen />);
   const dialog = screen.getByRole("dialog", { name: "Guidelines v3" });
   expect(dialog.getAttribute("aria-modal")).toBe("true");
