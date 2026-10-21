@@ -19,23 +19,36 @@ submission order: each finding joins at most one cluster (the same
 assignment against each open cluster's first finding) and a cluster holds at
 most one finding per submission. Two submissions are the special case of the
 cluster rule, so both use one implementation.
+
+``groups`` (acceptance fixes spec "WP-E Grouping") drives the consolidation
+view and the final panel's full agreement: clusters bucketed by
+``(layer_id, type_id, term_id)``, then incomplete clusters of other terms on
+overlapping text of the same layer and type merge into one group, then each
+group gets a set of kinds.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Literal
 
 __all__ = [
     "Agreement",
     "Finding",
+    "Group",
+    "GroupKind",
     "Pair",
     "compare",
+    "groups",
     "match",
     "with_defaults",
 ]
 
 Span = tuple[int, int]
+GroupKind = Literal[
+    "match", "values_differ", "span_differs", "notes_differ", "term_differs", "partial"
+]
 
 
 @dataclass(frozen=True)
@@ -49,6 +62,9 @@ class Finding:
         Span, ...
     ]  # evidence segments; () = spanless (document_level or no mentions)
     order: int
+    type_id: str = ""  # groups() bucket (layer, type, term); compare() ignores it
+    note: str | None = None  # compared by groups() only
+    cues: tuple[Span, ...] = ()  # cue segments, compared with spans by groups()
 
 
 @dataclass(frozen=True)
@@ -57,6 +73,20 @@ class Agreement:
     matching: int
     context_differences: int
     only_here: Mapping[str, int]  # submission id -> count
+
+
+@dataclass(frozen=True)
+class Group:
+    """One consolidation group: the findings of several submissions that
+    describe the same thing (``groups``)."""
+
+    members: Mapping[str, str]  # submission id -> finding key, in ``order``
+    kinds: frozenset[GroupKind]  # {"match"} alone, or a set of the others
+    differing_axes: tuple[str, ...]  # sorted axes differing within one term
+    terms: tuple[str, ...]  # distinct term ids, in order of first member
+    keep: str  # submission id of the default member (earliest in order)
+    start: int | None  # first span start; None = spanless
+    majority: Mapping[str, str]  # axis -> value of > half of >= 3 members
 
 
 @dataclass(frozen=True)
@@ -103,38 +133,8 @@ def compare(
     ``findings`` maps submission id to its findings; a submission without
     findings may be absent. With fewer than two submissions nothing matches.
     """
-    if len(set(order)) != len(order):
-        raise ValueError("order lists a submission twice")
-    unknown = set(findings) - set(order)
-    if unknown:
-        raise ValueError(f"findings of submissions not in order: {sorted(unknown)}")
-
-    clusters: list[_Cluster] = []
-    for index, submission in enumerate(order):
-        own = sorted(findings.get(submission, ()), key=_finding_rank)
-        by_bucket: dict[tuple[str, str], list[Finding]] = {}
-        for finding in own:
-            by_bucket.setdefault(_bucket(finding), []).append(finding)
-        for bucket in sorted(by_bucket):
-            open_clusters = sorted(
-                (c for c in clusters if _bucket(c.first) == bucket),
-                key=lambda c: c.rank,
-            )
-            new = by_bucket[bucket]
-            joined: set[int] = set()
-            for i, j, exact in _assign([c.first for c in open_clusters], new):
-                open_clusters[i].members[submission] = exact
-                joined.add(j)
-            for j, finding in enumerate(new):
-                if j not in joined:
-                    clusters.append(
-                        _Cluster(
-                            first=finding,
-                            rank=(index, *_finding_rank(finding)),
-                            members={submission: True},
-                        )
-                    )
-
+    _check_order(findings, order)
+    clusters = _clusters(findings, order, _bucket)
     complete = [c for c in clusters if len(order) >= 2 and len(c.members) == len(order)]
     matching = sum(1 for c in complete if all(c.members.values()))
     only_here = {submission: 0 for submission in order}
@@ -149,6 +149,202 @@ def compare(
     )
 
 
+def groups(
+    findings: Mapping[str, Sequence[Finding]], order: Sequence[str]
+) -> tuple[Group, ...]:
+    """Consolidation groups of the submissions in ``order``, in reading order.
+
+    Clusters follow the ``compare`` rule per ``(layer_id, type_id,
+    term_id)``. Term merge (U3): only clusters that are not complete, of the
+    same layer and type, with another term and disjoint submission sets, whose
+    member span unions overlap by at least one character. Candidate pairs
+    merge greedily by largest overlap, then lowest cluster rank; a merged
+    group keeps merging while the submission sets stay disjoint, so in a chain
+    X(s1)-Y(s2)-Z(s1) only one of X, Z joins Y. Groups are ordered by first
+    span start (spanless last), then cluster rank.
+    """
+    _check_order(findings, order)
+    clusters = _clusters(findings, order, _group_bucket)
+    position = {submission: index for index, submission in enumerate(order)}
+    by_id = {
+        (submission, finding.key): finding
+        for submission, own in findings.items()
+        for finding in own
+    }
+
+    def spans_of(cluster: _Cluster) -> list[Span]:
+        return [
+            span
+            for submission, key in cluster.keys.items()
+            for span in by_id[(submission, key)].spans
+        ]
+
+    candidates = [
+        i for i, cluster in enumerate(clusters) if len(cluster.members) < len(order)
+    ]
+    edges: list[tuple[int, tuple[int, int, str], tuple[int, int, str], int, int]] = []
+    for offset, i in enumerate(candidates):
+        for j in candidates[offset + 1 :]:
+            a, b = clusters[i], clusters[j]
+            if (
+                (a.first.layer_id, a.first.type_id)
+                != (b.first.layer_id, b.first.type_id)
+                or a.first.term_id == b.first.term_id
+                or set(a.members) & set(b.members)
+            ):
+                continue
+            overlap = _overlap(spans_of(a), spans_of(b))
+            if overlap >= 1:
+                low, high = sorted((i, j), key=lambda k: clusters[k].rank)
+                edges.append(
+                    (-overlap, clusters[low].rank, clusters[high].rank, low, high)
+                )
+
+    # Union-find over cluster indexes; a root covers its group's submissions.
+    parent = list(range(len(clusters)))
+    covered = {i: set(cluster.members) for i, cluster in enumerate(clusters)}
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            i = parent[i]
+        return i
+
+    for _, _, _, i, j in sorted(edges):
+        ri, rj = root(i), root(j)
+        if ri == rj or covered[ri] & covered[rj]:
+            continue
+        kept, gone = sorted((ri, rj), key=lambda k: clusters[k].rank)
+        parent[gone] = kept
+        covered[kept] |= covered.pop(gone)
+
+    merged: dict[int, list[_Cluster]] = {}
+    for i, cluster in enumerate(clusters):
+        merged.setdefault(root(i), []).append(cluster)
+
+    ordered: list[tuple[tuple[bool, int, tuple[int, int, str]], Group]] = []
+    for parts in merged.values():
+        members = sorted(
+            (
+                (submission, by_id[(submission, key)])
+                for part in parts
+                for submission, key in part.keys.items()
+            ),
+            key=lambda item: position[item[0]],
+        )
+        group = _group(members, len(order))
+        rank = min(part.rank for part in parts)
+        ordered.append(((group.start is None, group.start or 0, rank), group))
+    return tuple(group for _, group in sorted(ordered, key=lambda item: item[0]))
+
+
+def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
+    """Kinds and labels of one group; ``members`` in submission order."""
+    terms: list[str] = []
+    by_term: dict[str, list[Finding]] = {}
+    for _, finding in members:
+        if finding.term_id not in by_term:
+            terms.append(finding.term_id)
+        by_term.setdefault(finding.term_id, []).append(finding)
+    differing: set[str] = set()
+    span_differs = notes_differ = False
+    for same in by_term.values():
+        axes = {axis for finding in same for axis in finding.axes}
+        differing |= {
+            axis for axis in axes if len({x.axes.get(axis) for x in same}) > 1
+        }
+        if (
+            len({tuple(sorted(x.spans)) for x in same}) > 1
+            or len({tuple(sorted(x.cues)) for x in same}) > 1
+        ):
+            span_differs = True
+        if len({x.note or None for x in same}) > 1:
+            notes_differ = True
+
+    kinds: set[GroupKind] = set()
+    if len(members) < submissions:
+        kinds.add("partial")
+    if len(terms) > 1:
+        kinds.add("term_differs")
+    if differing:
+        kinds.add("values_differ")
+    if span_differs:
+        kinds.add("span_differs")
+    if notes_differ:
+        kinds.add("notes_differ")
+    if not kinds:
+        kinds.add("match")
+
+    majority: dict[str, str] = {}
+    if len(members) >= 3:
+        for axis in sorted(differing):
+            counts: dict[str, int] = {}
+            for _, finding in members:
+                value = finding.axes.get(axis)
+                if value is not None:
+                    counts[value] = counts.get(value, 0) + 1
+            for value, count in counts.items():
+                if count * 2 > len(members):
+                    majority[axis] = value
+    starts = [start for _, finding in members for start, _ in finding.spans]
+    return Group(
+        members={submission: finding.key for submission, finding in members},
+        kinds=frozenset(kinds),
+        differing_axes=tuple(sorted(differing)),
+        terms=tuple(terms),
+        keep=members[0][0],
+        start=min(starts) if starts else None,
+        majority=majority,
+    )
+
+
+def _check_order(
+    findings: Mapping[str, Sequence[Finding]], order: Sequence[str]
+) -> None:
+    if len(set(order)) != len(order):
+        raise ValueError("order lists a submission twice")
+    unknown = set(findings) - set(order)
+    if unknown:
+        raise ValueError(f"findings of submissions not in order: {sorted(unknown)}")
+
+
+def _clusters(
+    findings: Mapping[str, Sequence[Finding]],
+    order: Sequence[str],
+    bucket: Callable[[Finding], tuple[str, ...]],
+) -> list[_Cluster]:
+    """Clusters in submission order: each finding joins at most one open
+    cluster of its bucket (``_assign`` against the cluster's first finding)
+    and a cluster holds at most one finding per submission."""
+    clusters: list[_Cluster] = []
+    for index, submission in enumerate(order):
+        own = sorted(findings.get(submission, ()), key=_finding_rank)
+        by_bucket: dict[tuple[str, ...], list[Finding]] = {}
+        for finding in own:
+            by_bucket.setdefault(bucket(finding), []).append(finding)
+        for key in sorted(by_bucket):
+            open_clusters = sorted(
+                (c for c in clusters if bucket(c.first) == key),
+                key=lambda c: c.rank,
+            )
+            new = by_bucket[key]
+            joined: set[int] = set()
+            for i, j, exact in _assign([c.first for c in open_clusters], new):
+                open_clusters[i].members[submission] = exact
+                open_clusters[i].keys[submission] = new[j].key
+                joined.add(j)
+            for j, finding in enumerate(new):
+                if j not in joined:
+                    clusters.append(
+                        _Cluster(
+                            first=finding,
+                            rank=(index, *_finding_rank(finding)),
+                            members={submission: True},
+                            keys={submission: finding.key},
+                        )
+                    )
+    return clusters
+
+
 @dataclass
 class _Cluster:
     first: Finding
@@ -156,6 +352,8 @@ class _Cluster:
     # submission id -> exact (True for the first finding, else whether the
     # member matched the first finding exactly or only in position)
     members: dict[str, bool] = field(default_factory=dict)
+    # submission id -> finding key of the member
+    keys: dict[str, str] = field(default_factory=dict)
 
 
 def _finding_rank(finding: Finding) -> tuple[int, str]:
@@ -164,6 +362,10 @@ def _finding_rank(finding: Finding) -> tuple[int, str]:
 
 def _bucket(finding: Finding) -> tuple[str, str]:
     return (finding.layer_id, finding.term_id)
+
+
+def _group_bucket(finding: Finding) -> tuple[str, str, str]:
+    return (finding.layer_id, finding.type_id, finding.term_id)
 
 
 def _buckets(
