@@ -261,6 +261,8 @@ it("binds document state to actual user identity before accepting late replies",
   const old = deferred<Awaited<ReturnType<typeof api.listDocumentRows>>>();
   vi.mocked(api.listDocumentRows).mockReturnValueOnce(old.promise).mockResolvedValueOnce(targetPage({ document_id: "new-user-document" }));
   const view = render(<DocumentsPage projectKey="p" canManage currentUser={{ username: "first", pseudonym: "F" }} query={{}} onNavigate={vi.fn()} />);
+  // The first user's rows request goes out once the visit is recorded.
+  await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(1));
   view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "second", pseudonym: "S" }} query={{}} onNavigate={vi.fn()} />);
   const link = await screen.findByRole("link", { name: `Open ${target.case_id} · ${target.language}` });
   expect(link.getAttribute("href")).toContain("new-user-document");
