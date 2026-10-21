@@ -11,6 +11,7 @@ import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, DocumentRows
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import { plural } from "../app/labels";
 import { DataTable, type Column, type DataTableGroup, type DataTableSort, type GroupSelectMode } from "../ui/DataTable";
+import type { MenuItem } from "../ui/MenuButton";
 import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
 import {
@@ -80,6 +81,8 @@ export interface DocumentsTableProps {
   onAction?: (row: DocumentRowView, step: NextStepView) => void;
   /** Plan saves for the "Plan…" popover (VD2). */
   planSaves?: PlanSaves;
+  /** Lead actions of a row that are no step (its "+n" menu). */
+  rowExtras?: (row: DocumentRowView) => readonly MenuItem[];
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
@@ -91,7 +94,7 @@ export interface DocumentsTableProps {
 }
 
 export function DocumentsTable({
-  page, projectKey, query, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, busy, empty, selection, sort, onSort,
+  page, projectKey, query, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, busy, empty, selection, sort, onSort, rowExtras,
 }: DocumentsTableProps): JSX.Element {
   const baseId = useId();
   const open = useMemo(() => new Set(query.open ?? []), [query.open]);
@@ -121,7 +124,7 @@ export function DocumentsTable({
     {
       id: "action",
       header: <span className="visually-hidden">Action</span>,
-      cell: row => <RowActionCell row={row} onAction={onAction}
+      cell: row => <RowActionCell row={row} onAction={onAction} extraActions={rowExtras?.(row)}
         plan={planSaves ? { saves: planSaves, groupRevision: groupOf.get(row.case_id)?.plan_revision ?? 1 } : undefined} />,
     },
     {

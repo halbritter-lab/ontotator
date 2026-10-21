@@ -279,3 +279,21 @@ it("labels acceptances and discarded versions in Text versions", () => {
   expect(within(list).getByText("Discarded").closest(".status-pill")).toBeTruthy();
 });
 
+
+it("quotes a rejecting review's reason under its History line", async () => {
+  const { api } = await import("../../src/api/client");
+  const { reviewRecord } = await import("../translationFixtures");
+  const spy = vi.spyOn(api, "listTranslationReviews").mockResolvedValue([
+    reviewRecord({ assignment_id: 8, document_id: "c-de", decision: "rejected", rationale: "Dosage is missing", categories: ["omission"] }),
+  ]);
+  const target = row({
+    case_id: "c", language: "de",
+    versions: [version({ document_id: "c-de", chain_name: "DeepL", origin: "machine_translation", translation_status: "reviewed", latest_review_decision: "rejected" })],
+    work: [work({ assignment_id: 8, document_id: "c-de", task: "translation_review", status: "submitted", person: { pseudonym: "ann-0003", display_name: "Ana Weber", is_me: false } })],
+  });
+  renderRow(target, submissions("c", "de"));
+  const quote = await screen.findByText("“Dosage is missing”");
+  expect(quote.closest("li")!.textContent).toMatch(/^Review: Ana Weber/);
+  expect(within(quote.closest("li")!).getByText("Categories: Omission")).toBeTruthy();
+  spy.mockRestore();
+});

@@ -46,9 +46,9 @@ it("four fieldsets with counts, muted zero facets stay checkable when checked", 
   expect(button.getAttribute("aria-expanded")).toBe("true");
   const dialog = screen.getByRole("dialog", { name: "Filter" });
   expect(button.getAttribute("aria-controls")).toBe(dialog.querySelector("[id]")!.id);
-  // Language, Review, Annotation, Final · Origin · Plan; Waiting on when someone has open work.
+  // Language, Review, Annotation, Final, Origin, Plan; Waiting on when someone has open work.
   expect(within(dialog).getAllByRole("group").map(group => group.querySelector("legend")!.textContent))
-    .toEqual(["Language", "Review", "Annotation", "Final · Origin · Plan", "Waiting on", "Order"]);
+    .toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan", "Waiting on", "Order"]);
   // Focus moves to the first checkbox.
   expect(document.activeElement).toBe(within(dialog).getByRole("checkbox", { name: "de, 8 texts" }));
   expect(within(dialog).getByRole("checkbox", { name: "en (source), 3 texts" })).toBeTruthy();

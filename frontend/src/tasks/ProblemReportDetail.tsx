@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
 import { api, ApiError, type DocumentRowView, type FinalSelectionSummary, type ProblemReportView } from "../api/client";
-import { rowsQuery } from "../admin/DocumentsPage";
+import { rowsRequest } from "../documents/filterModel";
 import { textLabel } from "../app/identity";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Time } from "../app/Time";
@@ -21,7 +21,7 @@ const DECIDING: readonly Intent[] = ["close", "release", "restart"];
 
 /** The next row under the Documents segment (or decision) filter the lead came from, same rule as on Documents. */
 async function nextDecision(projectKey: string, documents: ProjectDocumentsQuery, currentKey: string): Promise<DocumentRowView | null> {
-  const request = rowsQuery(documents);
+  const request = rowsRequest(documents);
   if (!request.segment && !request.decision) return null;
   const page = await api.listDocumentRows(projectKey, request);
   const rows = page.groups.flatMap(group => group.rows).filter(row => `${row.case_id}:${row.language}` !== currentKey);

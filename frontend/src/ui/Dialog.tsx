@@ -19,6 +19,11 @@ export interface DialogProps {
   /** Extra class on the dialog element (e.g. `ui-popover-sheet`). */
   className?: string;
   footer?: ReactNode;
+  /**
+   * Focus target when the dialog closes, asked at close time (e.g. the row the panel shows now); null or a
+   * missing element falls back to the element focused when the dialog opened.
+   */
+  returnFocus?: () => HTMLElement | null | undefined;
   children: ReactNode;
 }
 
@@ -52,13 +57,15 @@ function inertOutside(element: HTMLElement): Element[] {
   return changed;
 }
 
-export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false, initialFocus, size = "md", variant = "center", className, footer, children }: DialogProps): JSX.Element | null {
+export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false, initialFocus, size = "md", variant = "center", className, footer, returnFocus, children }: DialogProps): JSX.Element | null {
   const content = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const headingId = useId();
   const side = variant === "side";
   const requestedFocus = useRef(initialFocus);
   requestedFocus.current = initialFocus;
+  const returnTarget = useRef(returnFocus);
+  returnTarget.current = returnFocus;
   useShortcut("Escape", () => {
     if (!content.current || !isActive(content.current)) return false;
     onClose?.();
@@ -92,7 +99,10 @@ export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false,
       const wasTop = activeDialogs.at(-1) === element;
       activeDialogs.splice(activeDialogs.indexOf(element), 1);
       if (!activeDialogs.length) document.body.style.overflow = originalOverflow;
-      if (wasTop && previous?.isConnected && !previous.closest("[inert]")) previous.focus();
+      if (!wasTop) return;
+      const target = returnTarget.current?.();
+      if (target?.isConnected && !target.closest("[inert]")) target.focus();
+      else if (previous?.isConnected && !previous.closest("[inert]")) previous.focus();
     };
   }, [open]);
 

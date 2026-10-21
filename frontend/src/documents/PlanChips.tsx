@@ -90,7 +90,14 @@ export interface PlanSaves {
   flagsOf: (row: DocumentRowView, groupRevision: number) => PlanFlagState;
   isBusy: (row: Pick<DocumentRowView, "case_id" | "language">, flag: PlanFlag) => boolean;
   toggle: (row: DocumentRowView, flag: PlanFlag, groupRevision: number) => void;
+  /**
+   * Sets a flag to `value` (the two-option control of an undecided row): a change saves like a chip; the
+   * value the row already has records the decision ("Don't annotate" on an undecided row).
+   */
+  set: (row: DocumentRowView, flag: PlanFlag, value: boolean, groupRevision: number) => void;
   noticeOf: (row: Pick<DocumentRowView, "case_id" | "language">) => PlanNotice | null;
+  /** A save on this page decided the row (its local flags stand until the rows refetch). */
+  decidedLocally: (row: Pick<DocumentRowView, "case_id" | "language">) => boolean;
   sending: (row: Pick<DocumentRowView, "case_id" | "language">) => boolean;
   dismiss: (row: Pick<DocumentRowView, "case_id" | "language">) => void;
   confirm: (row: Pick<DocumentRowView, "case_id" | "language">) => void;
@@ -245,6 +252,40 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
     });
   };
 
+  /** Records an undecided row's plan with its current flags (`PUT …/work-plans/rows` writes the row as decided). */
+  const decide = (request: PlanRequest, flags: PlanFlagState) => {
+    const key = `${request.caseId}:${request.language}`;
+    const busyKey = `${key}:${request.flag}`;
+    mark(setBusy, busyKey, true);
+    mark(setSendingKeys, key, true);
+    latest.current.onAnnounce("Saving…");
+    enqueue(request.caseId, async () => {
+      try {
+        const result = await api.setWorkPlanRows(projectKey, {
+          rows: [{ case_id: request.caseId, language: request.language, review: flags.review, annotate: flags.annotate }],
+          expected_revisions: { [request.caseId]: revisionFor(request.caseId, request.groupRevision) }, undo: false, confirm: false,
+        });
+        const revision = result.revisions[request.caseId] ?? revisionFor(request.caseId, request.groupRevision);
+        noteRevision(request.caseId, revision);
+        setOverride(key, flags, revision);
+        setNotice(key, null);
+        latest.current.onAnnounce("");
+        latest.current.showToast({
+          message: `${request.language} of ${request.caseId}: ${flagName(request.flag)} ${request.value ? "on" : "off"}`,
+          actionLabel: "Undo", undo: true, onAction: () => undo(key, result.undo, false),
+        });
+        latest.current.onChanged();
+      } catch (error: unknown) {
+        latest.current.onAnnounce("");
+        if (error instanceof ApiError && error.code === "WORK_PLAN_CHANGED") changedElsewhere(key, error);
+        else setNotice(key, { kind: "error", error, retry: () => decide(request, flags) });
+      } finally {
+        mark(setBusy, busyKey, false);
+        mark(setSendingKeys, key, false);
+      }
+    });
+  };
+
   const flagsOf = (row: DocumentRowView, groupRevision: number): PlanFlagState => {
     const override = overrides.get(keyOf(row));
     if (override && override.revision >= groupRevision) return override.flags;
@@ -283,7 +324,17 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
       if (notice) setNotice(key, null);
       send({ caseId: row.case_id, language: row.language, flag, value: !flagsOf(row, groupRevision)[flag], groupRevision });
     },
+    set: (row, flag, value, groupRevision) => {
+      const key = keyOf(row);
+      if (busy.has(`${key}:${flag}`)) return;
+      if (notices.get(key)) setNotice(key, null);
+      const flags = flagsOf(row, groupRevision);
+      const request = { caseId: row.case_id, language: row.language, flag, value, groupRevision };
+      if (flags[flag] !== value) send(request);
+      else if (row.plan_row?.decided === false && !overrides.has(key)) decide(request, flags);
+    },
     noticeOf: row => notices.get(keyOf(row)) ?? null,
+    decidedLocally: row => overrides.has(keyOf(row)),
     dismiss: row => setNotice(keyOf(row), null),
     confirm: row => {
       const notice = notices.get(keyOf(row));

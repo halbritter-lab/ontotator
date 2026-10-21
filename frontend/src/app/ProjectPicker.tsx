@@ -65,7 +65,7 @@ export function ProjectPicker({ projects, current, route, onNavigate, onChoose }
       aria-expanded={open} aria-controls="shell-project-panel"
       aria-label={current ? `Current project: ${current.name}` : "Choose project"}
       onClick={() => { if (open) dismiss(); else setOpen(true); }}>
-      {current ? `Project: ${current.name}` : "Choose project"}
+      {current ? current.name : "Choose project"}
       <span className="shell-project-chevron" aria-hidden="true"><IconChevronRight /></span>
     </Button>
     <div id="shell-project-panel" className="shell-project-menu" hidden={!open}>

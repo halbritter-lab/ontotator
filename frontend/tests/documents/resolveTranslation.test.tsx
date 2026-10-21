@@ -2,7 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError, type AssignmentView, type DiscardResult, type PlanRowResult, type VariantSummary } from "../../src/api/client";
 import { ResolveTranslation, type ResolveTranslationProps } from "../../src/documents/ResolveTranslation";
-import { planRow, rejectedRow, stepOf, version } from "./fixtures";
+import { planRow, rejectedRow, stepOf, version, work } from "./fixtures";
+import { reviewRecord } from "../translationFixtures";
 
 const rejected = () => planRow("case-0101", "de", stepOf("resolve_rejected", { document_id: "case-0101-de" }), {
   versions: [version({ document_id: "case-0101-de", chain_name: "DeepL", origin: "machine_translation", translation_status: "reviewed", latest_review_decision: "rejected" })],
@@ -27,6 +28,7 @@ const discarded = (overrides: Partial<DiscardResult> = {}): DiscardResult => ({
 });
 
 beforeEach(() => {
+  vi.spyOn(api, "listTranslationReviews").mockResolvedValue([]);
   vi.spyOn(api, "discardVariant");
   vi.spyOn(api, "patchWorkPlan");
 });
@@ -203,4 +205,28 @@ it("focus goes to the inline panel heading (F5)", async () => {
   cleanup();
   renderResolve({ mode: "not_accepted", row: notAccepted() });
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Translation not accepted, case-0101 · de" })));
+});
+
+it("heads the options at level 3 under the table and at level 5 in a card (heading order)", () => {
+  renderResolve();
+  expect(screen.getByRole("heading", { level: 3, name: "Resolve rejected translation, case-0101 · de" })).toBeTruthy();
+  cleanup();
+  renderResolve({ headingLevel: 5 });
+  expect(screen.getByRole("heading", { level: 5, name: "Resolve rejected translation, case-0101 · de" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Correct the translation…" }));
+  expect(screen.getByRole("heading", { level: 5, name: "Correct the translation, case-0101 · de" })).toBeTruthy();
+});
+
+it("quotes the reviewer's reason and categories above the options, named by the review's work item", async () => {
+  vi.mocked(api.listTranslationReviews).mockResolvedValue([
+    reviewRecord({ id: 1, assignment_id: 7, decision: "query", rationale: "Older question", created_at: "2026-10-19T08:00:00Z" }),
+    reviewRecord({ id: 2, assignment_id: 8, decision: "rejected", rationale: "Dosage is missing", categories: ["omission", "terminology"], created_at: "2026-10-20T08:00:00Z" }),
+  ]);
+  const row = { ...rejected(), work: [work({ assignment_id: 8, document_id: "case-0101-de", task: "translation_review", status: "submitted", person: { pseudonym: "ann-0003", display_name: "Ana Weber", is_me: false } })] };
+  renderResolve({ row });
+  expect(await screen.findByText("Ana Weber rejected this translation.")).toBeTruthy();
+  expect(screen.getByText("“Dosage is missing”")).toBeTruthy();
+  expect(screen.getByText("Categories: Omission, Terminology")).toBeTruthy();
+  expect(api.listTranslationReviews).toHaveBeenCalledWith("p", "case-0101-de");
+  expect(screen.queryByText(/ann-0003/)).toBeNull();
 });

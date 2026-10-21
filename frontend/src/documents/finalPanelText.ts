@@ -9,6 +9,7 @@ import { decisionCategoryLabels, versionName } from "./labels";
 import { leadSteps } from "./nextStepLabels";
 import { rowKeyOf } from "./RowCells";
 import { roundName, submissionVersion } from "./SubmissionsTable";
+import type { ConsolidationInput } from "../variants/ConsolidationLauncher";
 
 /** Panel actions of a row: "Accept result…" / "Compare results…" and "Review changes…". */
 export const PANEL_ACTIONS: ReadonlySet<string> = new Set(["choose_final", "review_changes"]);
@@ -31,6 +32,20 @@ export function panelMode(row: Pick<DocumentRowView, "next_step" | "steps">): "c
 /** The submission's person as copy: the display name, else the pseudonym (no codes beside a name). */
 export function personName(submission: Pick<FinalPanelSubmissionView, "author" | "author_label">): string {
   return submission.author?.display_name?.trim() || submission.author?.pseudonym || submission.author_label;
+}
+
+/** Consolidation inputs with a visible name "Ana Weber · Round 1 · 21 Oct, 11:25" (no submission or round codes). */
+export function consolidationInputs(submissions: readonly (Pick<FinalPanelSubmissionView, "submission_id" | "document_id" | "author" | "author_label" | "recorded_at" | "mode" | "round_id" | "round_ordinal" | "kind" | "guideline_version" | "guideline_withdrawn">)[], now?: Date): ConsolidationInput[] {
+  return submissions.map(item => ({
+    submission_id: item.submission_id, document_id: item.document_id, author_label: item.author_label, created_at: item.recorded_at,
+    mode: item.mode, round_id: item.round_id, guideline_version: item.guideline_version ?? null, guideline_withdrawn: item.guideline_withdrawn,
+    label: `${personName(item)} · ${roundName(item)} · ${formatTime(item.recorded_at, { now })}`,
+  }));
+}
+
+/** "Final · Consolidation · Ana Weber" (the decided panel's line). */
+export function decidedLine(submission: Pick<FinalPanelSubmissionView, "kind" | "author" | "author_label" | "is_me">): string {
+  return `Final · ${submission.kind === "consolidation" ? "Consolidation" : "Annotation"} · ${submission.is_me ? "You" : personName(submission)}`;
 }
 
 /** "Accept Ana Weber’s annotation as final?" / "Accept the consolidation by Luc Martin as final?" */

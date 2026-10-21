@@ -325,10 +325,10 @@ test("S8 synthetic-accepted at 390 px: cards instead of a table", async ({ page 
   // The case card header: case checkbox and case title.
   const caseCard = page.getByRole("list", { name: "Documents", exact: true }).getByRole("listitem").first();
   await expect(caseCard.getByRole("checkbox", { name: `Select ${caseId} (2 texts)`, exact: true })).toBeVisible();
-  await expect(caseCard.getByRole("heading", { name: `${caseId} · en source + 1 translation`, level: 2 })).toBeVisible();
+  await expect(caseCard.getByRole("heading", { name: `${caseId} · en source + 1 translation`, level: 3 })).toBeVisible();
 
   const de = page.getByRole("article", { name: `${caseId} · de`, exact: true });
-  await expect(de.getByRole("heading", { name: `${caseId} · de`, level: 3 })).toBeVisible();
+  await expect(de.getByRole("heading", { name: `${caseId} · de`, level: 4 })).toBeVisible();
   // The decision edge marks the card that needs the lead (V3).
   await expect(de).toHaveClass(/document-card--decision/);
   await expect(de).toContainText("Final is on old text");
@@ -341,7 +341,7 @@ test("S8 synthetic-accepted at 390 px: cards instead of a table", async ({ page 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   const area = page.getByRole("region", { name: `History, ${caseId} · de`, exact: true });
-  await expect(area.getByRole("heading", { name: "History", level: 3 })).toBeVisible();
+  await expect(area.getByRole("heading", { name: "History", level: 5 })).toBeVisible();
   await expect(area.locator("summary", { hasText: /^Text versions \(2\)$/ })).toBeVisible();
   await expect(page.getByRole("table")).toHaveCount(0);
   const width = await page.evaluate(() => document.documentElement.scrollWidth);

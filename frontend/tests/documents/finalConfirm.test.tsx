@@ -5,17 +5,13 @@
  */
 import { expect, it } from "vitest";
 import { AuthError, ConflictError } from "../../src/api/client";
-import { barChanges, currentFinalLabel, failureOf, keepRequest, selectionPayload, selectRequest, successMessage } from "../../src/documents/FinalConfirm";
-import { bar, final, item, row, submission, submissions, version } from "./fixtures";
+import { currentFinalLabel, failureOf, keepRequest, selectionPayload, selectRequest } from "../../src/documents/FinalConfirm";
+import { final, item, row, submission, submissions, version } from "./fixtures";
 
-it("maps errors, success messages and bar changes", () => {
+it("maps errors", () => {
   expect(failureOf(new AuthError("x", undefined, "NOT_AUTHENTICATED", 401))).toEqual({ kind: "session" });
   expect(failureOf(new ConflictError("x", "OWN_RESULT_NOT_SELECTABLE"))).toEqual({ kind: "conflict", changedBy: null, changedAt: null, ownResult: true });
   expect(failureOf(new Error("offline"))).toEqual({ kind: "error" });
-  expect(barChanges(bar({ total: 2, confirm_final: 1 }), bar({ total: 1, confirm_final: 0 }))).toBe("Needs your decision: 1 (was 2). Final result to confirm: 0 (was 1).");
-  const base = { rowKey: "c:de", caseId: "c", language: "de", documentId: "d", submissionId: "s", expectedRevision: 1, causeIds: [], triggerId: "t", label: "L", oldLabel: null, stillOpen: null, roundNote: null, own: false, causeLines: [] };
-  expect(successMessage({ ...base, kind: "use", waiting: [] })).toBe("L is now the final result.");
-  expect(successMessage({ ...base, kind: "keep", waiting: [] })).toBe("Kept L.");
 });
 
 it("builds Use, Replace and Keep payloads from the row's state", () => {

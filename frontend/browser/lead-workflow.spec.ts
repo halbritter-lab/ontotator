@@ -575,8 +575,8 @@ test("lead corrects a rejected translation and annotation becomes assignable", a
   await expect(panel).toContainText("You review v1 yourself and submit it as Accepted with corrections. The corrected text becomes v2 and counts as accepted.");
   // No language confirmation: the lead reads de and has a qualification.
   await expect(panel.getByRole("checkbox")).toHaveCount(0);
-  // TODO(O9): the inline panel's h4 follows the hidden h2 "Texts" (axe heading-order); revisit once O9 sets the heading levels.
-  expect(await axeViolations(page, ".documents-resolve", ["heading-order"]), "Correct the translation panel").toEqual([]);
+  // The inline panel's h3 follows the hidden h2 "Texts" (heading order checked too).
+  expect(await axeViolations(page, ".documents-resolve"), "Correct the translation panel").toEqual([]);
   await evidence(page, "lead-correction-panel", panel);
 
   // Open translation review: the ordinary review screen of v1, in lead-correction mode.

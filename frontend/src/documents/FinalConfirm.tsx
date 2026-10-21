@@ -1,14 +1,14 @@
-import { ApiError, type DecisionBarView, type DocumentRowView, type FinalSelectionSummary, type RowSubmissionView, type RowSubmissions } from "../api/client";
+import { ApiError, type DocumentRowView, type FinalSelectionSummary, type RowSubmissionView, type RowSubmissions } from "../api/client";
 import type { components } from "../api/generated";
-import { decisionCategoryLabels, workText } from "./labels";
+import { workText } from "./labels";
 import { finalLabel, rowKeyOf } from "./RowCells";
 import { causeLines, waitingLines } from "./SelectionNotice";
 import { rowSubmissionLabel } from "./SubmissionsTable";
 
-export type FinalConfirmKind = "use" | "replace" | "keep";
+type FinalConfirmKind = "use" | "replace" | "keep";
 
 /** One cause line as shown in the selection notice when the Keep confirmation opened. */
-export interface CauseLine { text: string; hint?: string }
+interface CauseLine { text: string; hint?: string }
 
 /**
  * Everything a final-result confirmation needs, captured when it opens and never refreshed
@@ -115,28 +115,6 @@ export function selectionPayload(request: FinalConfirmRequest): components["sche
     expected_revision: request.expectedRevision,
     acknowledged_cause_ids: request.kind === "keep" ? [...request.causeIds] : [],
   };
-}
-
-/** "{label} is now the final result." / "Kept {label}. Still open: {waiting lines}." */
-export function successMessage(request: FinalConfirmRequest): string {
-  if (request.kind !== "keep") return `${request.label} is now the final result.`;
-  const waiting = request.waiting.map(line => line.replace(/^Waiting: /, ""));
-  return `Kept ${request.label}.${waiting.length ? ` Still open: ${waiting.join(" ")}` : ""}`;
-}
-
-const BAR_COUNTS: readonly (readonly [keyof DecisionBarView, string])[] = [
-  ["total", "Needs your decision"],
-  ["report_or_pause", decisionCategoryLabels["report-or-pause"]],
-  ["confirm_final", decisionCategoryLabels["confirm-final"]],
-  ["translation", decisionCategoryLabels.translation],
-  ["missing_final", decisionCategoryLabels["missing-final"]],
-  ["no_final", "No final result"],
-];
-
-/** Changed bar counts, e.g. "Needs your decision: 3 (was 4). Final result to confirm: 0 (was 1)." */
-export function barChanges(before: DecisionBarView, after: DecisionBarView): string {
-  return BAR_COUNTS.filter(([field]) => before[field] !== after[field])
-    .map(([field, label]) => `${label}: ${after[field]} (was ${before[field]}).`).join(" ");
 }
 
 /** Maps a failed save to the confirmation outcome: 401 session, 409 conflict, anything else error. */

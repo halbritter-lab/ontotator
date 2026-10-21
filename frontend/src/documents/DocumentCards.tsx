@@ -10,6 +10,7 @@ import { useId, useMemo, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import type { GroupSelectMode } from "../ui/DataTable";
+import type { MenuItem } from "../ui/MenuButton";
 import { caseHeaderText, type TableSelection } from "./DocumentsTable";
 import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
@@ -31,6 +32,8 @@ export interface DocumentCardsProps {
   onAction?: (row: DocumentRowView, step: NextStepView) => void;
   /** Plan saves for the "Plan…" popover (VD2). */
   planSaves?: PlanSaves;
+  /** Lead actions of a row that are no step (its "+n" menu). */
+  rowExtras?: (row: DocumentRowView) => readonly MenuItem[];
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
@@ -71,7 +74,7 @@ function WaitingOnLine({ row }: { row: DocumentRowView }): JSX.Element {
   return <span className="documents-waiting-on">Waiting on: {value}</span>;
 }
 
-function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, select }: DocumentCardProps): JSX.Element {
+function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, select, rowExtras }: DocumentCardProps): JSX.Element {
   const baseId = useId();
   const headingId = documentsRowId(row.case_id, row.language, "header");
   const regionId = `${baseId}-expanded`;
@@ -87,10 +90,10 @@ function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, re
       <div className="document-card-line document-card-head">
         {select && <input type="checkbox" className="document-card-select checkbox-target" aria-label={`Select ${name}`} checked={select.checked}
           onChange={() => undefined} onClick={event => select.onSelect(selectModeOf(event))} />}
-        <h3 id={headingId} tabIndex={-1} className="document-card-title">
+        <h4 id={headingId} tabIndex={-1} className="document-card-title">
           <span aria-hidden="true"><ShortId value={row.case_id} />{` · ${row.language}`}</span>
           <span className="visually-hidden">{name}</span>
-        </h3>
+        </h4>
         {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
         {row.is_source && <span className="documents-source">source</span>}
         <VersionMarker row={row} />
@@ -102,7 +105,7 @@ function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, re
         <WaitingOnLine row={row} />
         <span className="document-card-activity"><LastActivityCell iso={row.last_activity_at} /></span>
       </div>
-      <RowActionCell row={row} onAction={onAction} plan={planSaves ? { saves: planSaves, groupRevision: group.plan_revision } : undefined} block />
+      <RowActionCell row={row} onAction={onAction} extraActions={rowExtras?.(row)} plan={planSaves ? { saves: planSaves, groupRevision: group.plan_revision } : undefined} block />
       <div className="document-card-line document-card-actions">
         <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
         <HistoryToggle row={row} expanded={expanded} controls={showRegion ? regionId : undefined} onToggleRow={onToggleRow}>History</HistoryToggle>
@@ -129,7 +132,7 @@ export function DocumentCards({ page, busy, empty, query, selection, ...rest }: 
                 ref={element => { if (element) element.indeterminate = state === "some"; }}
                 checked={state === "all"} onChange={() => undefined}
                 onClick={event => selection.selectCase(keys, selectModeOf(event), order)} />}
-              <h2 id={documentsGroupId(group.case_id)} tabIndex={-1} className="document-case-card-title">{caseHeaderText(group)}</h2>
+              <h3 id={documentsGroupId(group.case_id)} tabIndex={-1} className="document-case-card-title">{caseHeaderText(group)}</h3>
             </div>
             {group.rows.map(row => (
               <DocumentCard key={rowKeyOf(row)} {...rest} row={row} group={group} query={query} expanded={open.has(rowKeyOf(row))}

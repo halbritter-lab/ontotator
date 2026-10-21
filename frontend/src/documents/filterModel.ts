@@ -16,7 +16,7 @@ export type Facets = NonNullable<DecisionBarView["facets"]>;
 
 /** One checkbox of the popover; it sets every value of `values` in `param` (OR). */
 export interface FacetOption { id: string; label: string; param: FacetParam; values: readonly string[] }
-export interface FacetGroup { id: "language" | "review" | "annotation" | "final" | "waiting_on"; legend: string; options: readonly FacetOption[] }
+export interface FacetGroup { id: "language" | "review" | "annotation" | "final" | "origin" | "plan" | "waiting_on"; legend: string; options: readonly FacetOption[] }
 
 export type TabId = "decision" | "assign" | "progress" | "done" | "all";
 export const TABS: readonly (readonly [TabId, string, keyof DecisionBarView])[] = [
@@ -45,7 +45,7 @@ const ORIGIN_LABELS: Readonly<Record<string, string>> = { machine_translation: "
 
 const option = (param: FacetParam, label: string, ...values: string[]): FacetOption => ({ id: `${param}-${values[0]}`, label, param, values });
 
-/** The static groups (Review, Annotation, Final · Origin · Plan) with their route values (spec "Filter popover"). */
+/** The static groups (Review, Annotation, Final, Origin, Plan) with their route values (spec "Filter popover"; one column each). */
 export const FACET_GROUPS: readonly FacetGroup[] = [
   { id: "review", legend: "Review", options: [
     option("review_state", "Unassigned", "unassigned"),
@@ -65,11 +65,13 @@ export const FACET_GROUPS: readonly FacetGroup[] = [
     option("annotation_state", "Submitted", "submitted"),
     option("annotation_state", "Not planned", "not_planned"),
   ] },
-  { id: "final", legend: "Final · Origin · Plan", options: [
+  { id: "final", legend: "Final", options: [
     option("final_state", "No final yet", "none", "after_annotation", "after_review", "choose"),
     option("final_state", "To confirm", "confirm", "old_text", "may_be_outdated"),
     option("final_state", "Final", "final"),
-    ...Object.entries(ORIGIN_LABELS).map(([value, label]) => option("origin", label, value)),
+  ] },
+  { id: "origin", legend: "Origin", options: Object.entries(ORIGIN_LABELS).map(([value, label]) => option("origin", label, value)) },
+  { id: "plan", legend: "Plan", options: [
     option("plan", "Not in plan", "not_in_plan"),
     option("plan", "Not decided", "not_decided"),
   ] },
@@ -176,16 +178,20 @@ export function tabRoute(projectKey: string, query: ProjectDocumentsQuery, tab: 
   return route;
 }
 
+/** Display names of people by pseudonym (the waiting-on values); a value without a name shows as it is. */
+export type PeopleNames = ReadonlyMap<string, string>;
+
 /** Popover groups: Language and Waiting on from the facet counts and the route (checked values stay listed). */
-export function facetGroups(facets: Facets, query: ProjectDocumentsQuery, sourceLanguages: ReadonlySet<string>): FacetGroup[] {
+export function facetGroups(facets: Facets, query: ProjectDocumentsQuery, sourceLanguages: ReadonlySet<string>, people: PeopleNames = new Map()): FacetGroup[] {
   const languages = [...new Set([...Object.keys(facets.language ?? {}), ...listOf(query.language)])].sort();
-  const people = [...new Set([...Object.keys(facets.waiting_on ?? {}), ...listOf(query.waiting_on)])]
-    .sort((a, b) => (a === "me" ? -1 : b === "me" ? 1 : a.localeCompare(b)));
+  const label = (value: string) => people.get(value) ?? value;
+  const waiting = [...new Set([...Object.keys(facets.waiting_on ?? {}), ...listOf(query.waiting_on)])]
+    .sort((a, b) => (a === "me" ? -1 : b === "me" ? 1 : label(a).localeCompare(label(b))));
   const groups: FacetGroup[] = [
     { id: "language", legend: "Language", options: languages.map(value => option("language", sourceLanguages.has(value) ? `${value} (source)` : value, value)) },
     ...FACET_GROUPS,
   ];
-  if (people.length) groups.push({ id: "waiting_on", legend: "Waiting on", options: people.map(value => option("waiting_on", value === "me" ? "You" : value, value)) });
+  if (waiting.length) groups.push({ id: "waiting_on", legend: "Waiting on", options: waiting.map(value => option("waiting_on", value === "me" ? "You" : people.get(value) ?? value, value)) });
   return groups;
 }
 
@@ -209,7 +215,7 @@ export function toggleOption(query: ProjectDocumentsQuery, item: FacetOption, on
 /** An active filter as a removable chip; `patch` removes it. */
 export interface Chip { id: string; label: string; patch: ProjectDocumentsQuery }
 
-function facetChips(query: ProjectDocumentsQuery, param: FacetParam): Chip[] {
+function facetChips(query: ProjectDocumentsQuery, param: FacetParam, people: PeopleNames): Chip[] {
   const values = known(param, query[param]);
   const chips: Chip[] = [];
   const done = new Set<string>();
@@ -220,7 +226,7 @@ function facetChips(query: ProjectDocumentsQuery, param: FacetParam): Chip[] {
     const covered = item ? item.values.filter(entry => values.includes(entry)) : [value];
     for (const entry of covered) done.add(entry);
     const label = item?.label
-      ?? (param === "waiting_on" && value === "me" ? "You"
+      ?? (param === "waiting_on" ? (value === "me" ? "You" : people.get(value) ?? value)
         : param === "plan" ? PLAN_LABELS[value]
           : param === "origin" ? ORIGIN_LABELS[value]
             : param in STATE_VALUES ? STATE_VALUES[param as keyof typeof STATE_VALUES][value] : value);
@@ -239,9 +245,9 @@ function listChips(query: ProjectDocumentsQuery, param: "step" | "stage", label:
  * facet (step, stage, owner, paused, status, translation status, final, exact case) with their labels.
  * The search (`q`), the tab and the order have no chip.
  */
-export function chipsOf(query: ProjectDocumentsQuery): Chip[] {
+export function chipsOf(query: ProjectDocumentsQuery, people: PeopleNames = new Map()): Chip[] {
   const chips: Chip[] = [];
-  for (const param of ["language", "review_state", "annotation_state", "final_state", "origin", "plan", "waiting_on"] as const) chips.push(...facetChips(query, param));
+  for (const param of ["language", "review_state", "annotation_state", "final_state", "origin", "plan", "waiting_on"] as const) chips.push(...facetChips(query, param, people));
   if (query.segment === undefined && query.decision && Object.hasOwn(decisionCategoryLabels, query.decision)) {
     chips.push({ id: "decision", label: decisionCategoryLabels[query.decision as DecisionCategory], patch: { decision: undefined, segment: "decision" } });
   }

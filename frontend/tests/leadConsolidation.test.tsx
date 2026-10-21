@@ -5,7 +5,7 @@ import { ConsolidationLauncher } from '../src/variants/ConsolidationLauncher';
 import { assignment } from './assignmentFixtures';
 
 const rows = ['first', 'second'].map((submission_id, index) => ({ submission_id, document_id: 'target',
-  author_label: `Reader ${index + 1}`, created_at: '2026-10-18T12:00:00Z', mode: 'independent', guideline_withdrawn: false }));
+  author_label: `Reader ${index + 1}`, label: `Reader ${index + 1} · Round 1`, created_at: '2026-10-18T12:00:00Z', mode: 'independent', guideline_withdrawn: false }));
 const reviewerTask: AssignmentView = { ...assignment, id: 42, project_key: 'p', document_id: 'target', username: 'reviewer',
   display_name: 'Reviewer', pseudonym: 'R', task: 'review', workflow_revision: 7, status: 'submitted' };
 const round: WorkRoundView = { round_id: 'round-exact', project_key: 'p', assignment_id: 42, document_id: 'target', annotator_id: 'R',
@@ -24,8 +24,8 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 async function selectInputs() {
   fireEvent.click(screen.getByRole('button', { name: 'Consolidate results' }));
   await screen.findByLabelText('Consolidation reviewer');
-  fireEvent.click(screen.getByLabelText('Include submission first'));
-  fireEvent.click(screen.getByLabelText('Include submission second'));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 1 · Round 1' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 2 · Round 1' }));
   fireEvent.change(screen.getByLabelText('Consolidation reviewer'), { target: { value: 'reviewer' } });
 }
 
@@ -35,7 +35,8 @@ it('starts a distinct consolidation from explicit exact immutable submissions an
   render(<ConsolidationLauncher {...props} rows={[...rows, { ...rows[0], submission_id: 'foreign', document_id: 'other' }]} />);
   expect(api.listMembers).not.toHaveBeenCalled();
   await selectInputs();
-  expect(screen.queryByLabelText('Include submission foreign')).toBeNull();
+  expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  expect(screen.queryByText(/first|second|foreign/)).toBeNull();
   expect(screen.queryByRole('option', { name: 'Reader (reader)' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Start consolidation' }));
   await screen.findByText(/Consolidation assigned to Reviewer/);
@@ -57,15 +58,16 @@ it('creates only the deliberate exact reviewer task and leaves stale inputs unch
   expect(create).toHaveBeenCalledWith('p', { task: 'review', rows: [{ document_id: 'target', username: 'reviewer' }], confirm_language: false });
   expect(api.startWorkRound).toHaveBeenCalledTimes(1);
   expect(api.startWorkRound).toHaveBeenCalledWith(42, expect.objectContaining({ source_submission_ids: ['first', 'second'], expected_workflow_revision: 0 }));
-  expect(screen.getByLabelText('Include submission first')).toHaveProperty('checked', true);
-  expect(screen.getByLabelText('Include submission second')).toHaveProperty('checked', true);
+  expect(screen.getByRole('checkbox', { name: 'Reader 1 · Round 1' })).toHaveProperty('checked', true);
+  expect(screen.getByRole('checkbox', { name: 'Reader 2 · Round 1' })).toHaveProperty('checked', true);
 });
 
 it('requires at least two currently offered exact inputs after history replacement', async () => {
   const view = render(<ConsolidationLauncher {...props} />);
   await selectInputs();
   view.rerender(<ConsolidationLauncher {...props} rows={[rows[0]]} />);
-  expect(screen.getByRole('button', { name: 'Start consolidation' })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: 'Start consolidation' }).getAttribute('aria-disabled')).toBe('true');
+  expect(screen.getByText('Select at least two submissions.')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Start consolidation' }));
   expect(api.startWorkRound).not.toHaveBeenCalled();
 });
@@ -75,4 +77,21 @@ it('opens at once with defaultOpen (the final-result panel already asked "Consol
   expect(screen.queryByRole('button', { name: 'Consolidate results' })).toBeNull();
   expect(await screen.findByLabelText('Consolidation reviewer')).toBeTruthy();
   expect(api.listMembers).toHaveBeenCalledWith('p');
+});
+
+it('preselects the given submissions, names the missing reviewer inline and reports the started round', async () => {
+  const onStarted = vi.fn();
+  render(<ConsolidationLauncher {...props} defaultOpen defaultSelected={['first', 'second']} onStarted={onStarted} />);
+  await screen.findByLabelText('Consolidation reviewer');
+  expect(screen.getByRole('checkbox', { name: 'Reader 1 · Round 1' })).toHaveProperty('checked', true);
+  expect(screen.getByRole('checkbox', { name: 'Reader 2 · Round 1' })).toHaveProperty('checked', true);
+  const start = screen.getByRole('button', { name: 'Start consolidation' });
+  expect(start.getAttribute('aria-disabled')).toBe('true');
+  expect(document.getElementById(start.getAttribute('aria-describedby')!)!.textContent).toBe('Choose a reviewer.');
+  fireEvent.change(screen.getByLabelText('Consolidation reviewer'), { target: { value: 'reviewer' } });
+  expect(start.getAttribute('aria-disabled')).toBeNull();
+  fireEvent.click(start);
+  await screen.findByText(/Consolidation assigned to Reviewer/);
+  expect(onStarted).toHaveBeenCalledWith(round);
+  expect(screen.queryByText(/round-exact/)).toBeNull();
 });

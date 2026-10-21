@@ -105,8 +105,9 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await area.getByText('Start consolidation…', { exact: true }).click();
     await area.getByRole('button', { name: 'Consolidate results', exact: true }).click();
     const launcher = area.getByRole('region', { name: 'Consolidate submitted results', exact: true });
-    await launcher.getByRole('checkbox', { name: `Include submission ${carriedId}`, exact: true }).check();
-    await launcher.getByRole('checkbox', { name: `Include submission ${secondId}`, exact: true }).check();
+    // The inputs are named by person and round (no codes); the exact submissions are picked by their data attribute.
+    await launcher.locator(`input[data-submission-id="${carriedId}"]`).check();
+    await launcher.locator(`input[data-submission-id="${secondId}"]`).check();
     await launcher.getByLabel('Consolidation reviewer').selectOption(s.users.consolidator);
     const launched = page.waitForResponse(r => r.request().method() === 'POST' && /\/assignments\/\d+\/rounds$/.test(r.url()));
     await launcher.getByRole('button', { name: 'Start consolidation', exact: true }).click();

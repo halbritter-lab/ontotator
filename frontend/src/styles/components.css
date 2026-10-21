@@ -563,6 +563,8 @@ textarea.form-control {
   overflow-wrap: anywhere;
 }
 .ui-dialog-body { flex: 1 1 auto; min-height: 0; overflow: auto; overflow-wrap: anywhere; }
+/* Table cells break long words only when they must: "anywhere" would shrink columns until headers break mid-word. */
+.ui-dialog-body :is(th, td) { overflow-wrap: break-word; }
 .ui-dialog > .modal-actions {
   flex: none;
   display: flex;
@@ -587,7 +589,9 @@ textarea.form-control {
 .data-table-sort { display: inline-flex; align-items: center; gap: var(--space-1); padding: 0; border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; text-align: inherit; }
 .data-table-sort:hover { color: var(--accent); }
 .data-table-sort-icon { flex: none; }
-.data-table th[aria-sort="none"] .data-table-sort-icon { color: var(--text-muted); }
+/* One visible arrow: the active sort; other sortable headers show theirs on hover and focus only. */
+.data-table th[aria-sort="none"] .data-table-sort-icon { color: var(--text-muted); opacity: 0; }
+.data-table th[aria-sort="none"] .data-table-sort:is(:hover, :focus-visible) .data-table-sort-icon { opacity: 1; }
 
 /* Shared application frame. Scoped header rules survive the editor's legacy header. */
 .shell { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--surface); }
@@ -706,6 +710,10 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 }
 
 @media (max-width: 699px) {
+  /* Phones: header and navigation scroll away with the page instead of keeping a third of the screen. */
+  .shell:not(.shell-reading) { overflow-y: auto; }
+  .shell:not(.shell-reading) .shell-body { flex: none; }
+  .shell:not(.shell-reading) .shell-main { overflow: visible; }
   .shell .shell-header { padding: var(--space-3) var(--space-4); }
   .shell-body { flex-direction: column; }
   .app-nav { flex: 0 0 auto; border-right: 0; border-bottom: 1px solid var(--border); padding: var(--space-3) var(--space-4); }
@@ -878,7 +886,8 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .data-table .data-table-select-cell { width: 40px; padding-inline: var(--space-2); }
 .data-table-row-select { margin: 0; }
 .data-table-group--label .data-table-group-select { margin: 0; }
-.data-table .data-table-row--decision > :first-child { box-shadow: inset 3px 0 var(--warning); }
+.data-table .data-table-row--decision > :first-child,
+.data-table .data-table-row--decision.is-selected > td:first-child { box-shadow: inset 3px 0 var(--warning); }
 .checkbox-target:indeterminate {
   background:
     linear-gradient(var(--on-accent), var(--on-accent)) center / 10px 2px no-repeat,

@@ -10,7 +10,7 @@ import { recordDecision } from "../src/documents/visitState";
 import { FINAL_SELECTION_CHANGED } from "../src/variants/finalSelectionState";
 import { DOCUMENTS_CHANGED } from "../src/documents/documentsEvents";
 import { useRegisteredShortcuts } from "../src/ui/shortcuts";
-import { final, finalPanel, group, item, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
+import { final, finalPanel, group, item, panelSubmission, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
 import { ana, cell, scenario7a, stagedRow, tom } from "./documents/tableFixtures";
 import { acceptPanel } from "./documents/panelFixtures";
 import { reviewRecord } from "./translationFixtures";
@@ -149,6 +149,8 @@ it("tabs, search, Filter popover and chips replace the filter selects (VD9)", as
   // A chip per active value; removing it drops paging and the selection.
   fireEvent.click(within(tools).getByRole("button", { name: "Remove filter Language: de" }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "assign" });
+  // This spy never applies the route: after the event (one task) the route is the base again.
+  await act(async () => { await Promise.resolve(); });
   // A tab keeps the facets.
   fireEvent.click(screen.getByRole("tab", { name: /^Done/ }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "done", language: "de" });
@@ -393,12 +395,15 @@ describe("case selection", () => {
     const first = caseBox("case-0101");
     first.focus();
     fireEvent.click(first); // Space on a focused checkbox is a click
+    // From a case checkbox the case's own row comes next, then the next case's row.
     fireEvent.keyDown(first, { key: "ArrowDown", shiftKey: true });
-    expect(document.activeElement).toBe(caseBox("case-0102"));
+    expect(document.activeElement).toBe(rowBox("case-0101", "de"));
+    fireEvent.keyDown(rowBox("case-0101", "de"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(rowBox("case-0102", "de"));
     expect((caseBox("case-0102") as HTMLInputElement).checked).toBe(true);
     await waitFor(() => expect(live().textContent).toBe(selectedText(2)));
-    fireEvent.keyDown(caseBox("case-0102"), { key: "ArrowUp", shiftKey: true });
-    expect(document.activeElement).toBe(first);
+    fireEvent.keyDown(rowBox("case-0102", "de"), { key: "ArrowUp", shiftKey: true });
+    expect(document.activeElement).toBe(rowBox("case-0101", "de"));
     fireEvent.click(first);
     expect((first as HTMLInputElement).checked).toBe(false);
     expect(help.filter(row => row.group === "Selection").map(row => row.description)).toEqual(
@@ -659,7 +664,7 @@ it("keeps the page busy with focus on the paging link while the next page loads,
 });
 
 it("opens the final-result panel from a card as the side dialog", async () => {
-  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
   const s1 = scenarioS1();
   const en = { ...s1.group.rows.find(entry => entry.language === "en")!, next_step: chooseFinalStep(), steps: [chooseFinalStep()] };
   mockRows(page([{ ...s1.group, rows: [en] }]), s1.submissions);
@@ -737,6 +742,14 @@ it("explains a preflight-only missing final result on a deep-linked row", async 
   expect(await screen.findByText("No final result. Not counted as a decision yet: no submission.")).toBeTruthy();
 });
 
+it("opens no deep-linked row when the language filter has several values", async () => {
+  mockRows(scenarioS1().page);
+  renderPage({ query: { case: "case-0042", language: "de,fr" } });
+  await loaded();
+  expect(screen.queryAllByRole("button", { name: /^Hide history/ })).toHaveLength(0);
+  expect(expandedProps).toHaveLength(0);
+});
+
 it("expands a row with replace navigation", async () => {
   mockRows(scenarioS1().page);
   const { onNavigate } = renderPage({ query: { language: "en" } });
@@ -760,15 +773,22 @@ it("passes the case's plan revision, the row assign dialog, the plan chips and t
   expect(within(region).queryByRole("heading", { name: /^Submissions/ })).toBeNull();
 });
 
-it("reloads the submissions of open rows when the rows refresh", async () => {
+it("reloads the submissions of an open row only when its last activity changed", async () => {
   const s1 = scenarioS1();
   mockRows(s1.page, s1.submissions);
   renderPage({ query: { open: [rowKey("case-0042", "en")] } });
   await screen.findByRole("region", { name: "History, case-0042 · en" });
   await waitFor(() => expect(api.getRowSubmissions).toHaveBeenCalledTimes(1));
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+  await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
+  await act(async () => { await Promise.resolve(); });
+  expect(api.getRowSubmissions).toHaveBeenCalledTimes(1);
+  const changed = structuredClone(s1.page);
+  for (const entry of changed.groups.flatMap(item => item.rows)) entry.last_activity_at = "2026-10-21T11:59:00Z";
+  mockRows(changed, s1.submissions);
+  fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   await waitFor(() => expect(api.getRowSubmissions).toHaveBeenCalledTimes(2));
-  expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
+  expect(api.listDocumentRows).toHaveBeenCalledTimes(3);
 });
 
 describe("text changes (V5)", () => {
@@ -799,6 +819,20 @@ describe("text changes (V5)", () => {
     await waitFor(() => expect(resolve).toHaveBeenCalledWith(42, { resolution: "withdrawn", target_document_id: "case-201-de-v2", expected_workflow_revision: 3 }));
     expect((await screen.findAllByText("Ana Weber’s task is withdrawn. v2 needs a new annotation.")).length).toBeGreaterThan(0);
     expect(screen.queryByRole("dialog", { name: "Handle text change · case-201 · de" })).toBeNull();
+  });
+
+  it("keeps the Handle text change dialog open when a refresh drops its row from the page", async () => {
+    const handle = stepOf("handle_text_change", { stage: "annotation", assignment_id: 42, document_id: "case-202-de-v2" });
+    const de = planRow("case-202", "de", handle, { versions: tcVersions("case-202"),
+      work: [work({ assignment_id: 42, document_id: "case-202-de-v1", person: ana, status: "in_progress" })] });
+    mockRows(page([group("case-202", [de])]));
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Handle text change…, case-202 · de" }));
+    const dialog = await screen.findByRole("dialog", { name: "Handle text change · case-202 · de" });
+    vi.mocked(api.listDocumentRows).mockImplementation(async () => page([]));
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    await waitFor(() => expect(screen.queryByRole("table", { name: "Documents" })).toBeNull());
+    expect(screen.getByRole("dialog", { name: "Handle text change · case-202 · de" })).toBe(dialog);
   });
 
   it("Carry to v2… opens the carry dialog; Annotate v2 from scratch opens the assign dialog", async () => {
@@ -852,7 +886,7 @@ it("labels each translation review with its guideline version", async () => {
 });
 
 it("renders cards on narrow viewports", async () => {
-  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
   mockRows(page([group("case-1", [row({ case_id: "case-1", language: "en", versions: [version({ document_id: "case-1-en" })] })])]));
   renderPage();
   const list = await screen.findByRole("list", { name: "Documents" });
@@ -995,6 +1029,26 @@ describe("row actions", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Final result · case-0042 · en" })).toBeNull());
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p" }, { replace: true });
     await waitFor(() => expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action"));
+  });
+
+  it("Change final… in a decided row's expansion opens the panel on the compare content", async () => {
+    const decided = row({ case_id: "case-0050", language: "de", final: final({ case_id: "case-0050", language: "de", document_id: "case-0050-de", submission_id: "s-ana", revision: 3 }) });
+    mockRows(page([group("case-0050", [decided])]));
+    vi.mocked(api.finalPanel).mockResolvedValue(finalPanel({ submissions: [
+      panelSubmission({ submission_id: "s-ana", document_id: "case-0050-de", author: ana, author_label: "ann-0003" }),
+      panelSubmission({ submission_id: "s-tom", document_id: "case-0050-de", author: tom, author_label: "ann-0004" }),
+    ] }));
+    const select = vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0050", language: "de", document_id: "case-0050-de", submission_id: "s-tom", revision: 4 });
+    renderStateful({ open: ["case-0050:de"] });
+    const history = await screen.findByRole("region", { name: "History, case-0050 · de" });
+    // A row without a lead step keeps its Action cell empty (the expansion offers the action).
+    expect(screen.queryByRole("button", { name: /more action/ })).toBeNull();
+    fireEvent.click(within(history).getByRole("button", { name: "Change final…" }));
+    const panel = await screen.findByRole("dialog", { name: "Final result · case-0050 · de" });
+    const table = await within(panel).findByRole("table", { name: "Submissions, case-0050 · de" });
+    const tomRow = within(table).getAllByRole("row").find(entry => entry.textContent?.includes("Tom Reis"))!;
+    fireEvent.click(within(tomRow).getByRole("button", { name: "Use as final" }));
+    await waitFor(() => expect(select).toHaveBeenCalledWith("p", expect.objectContaining({ submission_id: "s-tom", expected_revision: 3 })));
   });
 
   it("panel route parameter reopens the panel and editor links return to it", async () => {
@@ -1328,7 +1382,7 @@ describe("Resolve renders inline under the row (Change 13, F1, F5)", () => {
   });
 
   it("cards behave the same", async () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
     mockRows(page([group("case-1", [rejected()])]));
     renderStateful({});
     await screen.findByRole("list", { name: "Documents" });
@@ -1354,6 +1408,18 @@ describe("visit baseline and navigation counter (VD6, V3)", () => {
     act(() => { window.dispatchEvent(new Event("focus")); });
     await loaded();
     expect(api.recordDocumentsVisit).toHaveBeenCalledOnce();
+  });
+
+  it("requests the first rows only after the visit was recorded (or failed)", async () => {
+    let finish!: () => void;
+    vi.mocked(api.recordDocumentsVisit).mockReturnValue(new Promise(resolve => { finish = () => resolve({ baseline_at: "2026-10-21T08:00:00Z" }); }));
+    mockRows(scenarioS1().page);
+    renderPage();
+    await act(async () => { await Promise.resolve(); });
+    expect(api.listDocumentRows).not.toHaveBeenCalled();
+    await act(async () => { finish(); });
+    await loaded();
+    expect(api.listDocumentRows).toHaveBeenCalledOnce();
   });
 
   it("fires documents-changed after an own action", async () => {

@@ -180,8 +180,12 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   // assign it through the row's Assign dialog and its seeded "Random distribution…".
   if (await rowAction(page, "Plan…", "one", "en").count()) {
     await rowAction(page, "Plan…", "one", "en").click();
-    const annotate = page.getByRole("dialog", { name: "Plan, one · en", exact: true }).getByRole("button", { name: "Annotate, one · en", exact: true });
-    if ((await annotate.getAttribute("aria-pressed")) !== "true") await annotate.click();
+    const plan = page.getByRole("dialog", { name: "Plan, one · en", exact: true });
+    // An undecided row offers "Annotate" / "Don't annotate"; a decided one its chip.
+    const choice = plan.getByRole("group", { name: "Annotate, one · en", exact: true });
+    const annotate = plan.getByRole("button", { name: "Annotate, one · en", exact: true });
+    if (await choice.count()) await choice.getByRole("button", { name: "Annotate", exact: true }).click();
+    else if ((await annotate.getAttribute("aria-pressed")) !== "true") await annotate.click();
     await expect(annotate).toHaveAttribute("aria-pressed", "true");
     await page.keyboard.press("Escape");
   }

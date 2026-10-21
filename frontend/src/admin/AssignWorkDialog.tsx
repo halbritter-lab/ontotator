@@ -216,7 +216,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   return <Dialog open title={title} size="md" onClose={closing} footer={<>
     {reason && <span id={reasonId} className="assign-footer-reason">{reason}</span>}
     <Button disabled={busy} onClick={props.onClose}>Cancel</Button>
-    <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{`Assign ${count}`}</Button>
+    <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{isRow && !usernames.length ? "Assign" : `Assign ${count}`}</Button>
   </>}>
     <div className="assign-dialog">
       {props.mode === "row" && <div className="assign-context">

@@ -190,19 +190,31 @@ describe("row_selection_edges_and_server_sort", () => {
     expect(a.indeterminate).toBe(true); expect(a.checked).toBe(false);
     expect(b.indeterminate).toBe(false); expect(b.checked).toBe(true);
   });
-  it("Shift+ArrowDown moves and selects over rows in order", () => {
+  it("Shift+ArrowDown moves and selects over rows in order; from a case checkbox its rows come next", () => {
     const onSelect = vi.fn();
-    render(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id} groups={groups} rowSelection={rowSelection(onSelect)} groupSelection={groupSelection()} />);
+    const onGroup = vi.fn();
+    render(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id} groups={groups} rowSelection={rowSelection(onSelect)}
+      groupSelection={{ ...groupSelection(), onSelect: onGroup }} />);
     const box = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
-    box("Select A · de").focus();
+    // From a case checkbox the next box is its first row, not the next case.
+    box("Select A").focus();
+    fireEvent.keyDown(box("Select A"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select A · de"));
+    expect(onSelect).toHaveBeenLastCalledWith(rows[0], "select");
     fireEvent.keyDown(box("Select A · de"), { key: "ArrowDown", shiftKey: true });
     expect(document.activeElement).toBe(box("Select A · fr"));
     expect(onSelect).toHaveBeenLastCalledWith(rows[1], "select");
+    // Row checkboxes walk the rows (the next case's first row).
     fireEvent.keyDown(box("Select A · fr"), { key: "ArrowDown", shiftKey: true });
     expect(document.activeElement).toBe(box("Select B · de"));
     expect(onSelect).toHaveBeenLastCalledWith(rows[2], "select");
     fireEvent.keyDown(box("Select B · de"), { key: "ArrowUp", shiftKey: true });
     expect(document.activeElement).toBe(box("Select A · fr"));
+    // A case checkbox steps up to the row above it.
+    box("Select B").focus();
+    fireEvent.keyDown(box("Select B"), { key: "ArrowUp", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select A · fr"));
+    expect(onGroup).not.toHaveBeenCalled();
     onSelect.mockClear();
     fireEvent.keyDown(box("Select A · fr"), { key: "ArrowDown" });
     box("Select B · de").focus();

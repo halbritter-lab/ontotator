@@ -58,3 +58,13 @@ it('requires explicit missing-language confirmation and does not offer native te
   view.rerender(<TranslationCorrectionAction {...props} variant={variant('native', { translation_status: null })} />);
   expect(screen.queryByRole('button', { name: 'Request translation correction' })).toBeNull();
 });
+
+it('names the step in its heading and reports the request once assigned', async () => {
+  render(<TranslationCorrectionAction {...props} defaultOpen />);
+  expect(screen.getByRole('heading', { name: 'Request translation correction' })).toBeTruthy();
+  expect(screen.queryByText('Another translation review')).toBeNull();
+  fireEvent.change(await screen.findByLabelText('Translation reviewer'), { target: { value: 'reviewer' } });
+  fireEvent.change(screen.getByLabelText('Reason for another review'), { target: { value: 'Check the source wording again' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Assign correction review' }));
+  expect(await screen.findByRole('heading', { name: 'Translation correction requested' })).toBeTruthy();
+});

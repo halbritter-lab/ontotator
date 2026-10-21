@@ -51,7 +51,7 @@ export interface ProjectDocumentsQuery {
 /** Options for in-app navigation; `replace` rewrites the current history entry. */
 export interface NavigateOptions { replace?: boolean }
 
-const DOCUMENT_FIELDS = [
+export const DOCUMENT_FIELDS = [
   "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
   "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
   "review_state", "annotation_state", "final_state", "waiting_on", "panel",

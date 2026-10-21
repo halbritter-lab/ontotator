@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DocumentRowView, NextStepView } from "../api/client";
 import { Button } from "../ui/Button";
-import { MenuButton } from "../ui/MenuButton";
+import { MenuButton, type MenuItem } from "../ui/MenuButton";
 import { Popover } from "../ui/Popover";
 import { leadSteps, rowActionLabel } from "./nextStepLabels";
 import { PlanChips, type PlanSaves } from "./PlanChips";
@@ -35,15 +35,45 @@ export function PlanPopover({ row, groupRevision, saves, variant = "secondary", 
   const button = useRef<HTMLButtonElement>(null);
   const name = rowName(row);
   const popoverId = documentsRowId(row.case_id, row.language, "plan");
+  // Undecided: the two-option controls; once decided (here or by a reload) the chips. The swap keeps focus in the popover.
+  const choices = isUndecided(row) && !saves.decidedLocally(row);
+  const shownChoices = useRef(choices);
+  useEffect(() => {
+    if (shownChoices.current === choices) return;
+    shownChoices.current = choices;
+    const active = document.activeElement;
+    if (open && (!active || active === document.body)) document.getElementById(popoverId)?.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [choices, open, popoverId]);
   return <>
     <Button ref={button} id={documentsRowId(row.case_id, row.language, "action")} size="sm" variant={variant}
       className={["documents-action", block && "documents-action--block"].filter(Boolean).join(" ")}
       aria-label={`Plan…, ${name}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? popoverId : undefined}
       onClick={() => setOpen(!open)}>Plan…</Button>
     <Popover open={open} anchorRef={button} label={`Plan, ${name}`} width={280} onClose={() => setOpen(false)}>
-      <div id={popoverId}><PlanChips row={row} groupRevision={groupRevision} saves={saves} /></div>
+      <div id={popoverId}>{choices
+        ? <PlanChoices row={row} groupRevision={groupRevision} saves={saves} />
+        : <PlanChips row={row} groupRevision={groupRevision} saves={saves} />}</div>
     </Popover>
   </>;
+}
+
+/**
+ * The plan of an undecided row as two-option controls ("Annotate" / "Don't annotate", and Review for
+ * translations): neither option is pressed until the lead decides, so "not decided" never looks like "off".
+ */
+export function PlanChoices({ row, groupRevision, saves }: { row: DocumentRowView; groupRevision: number; saves: PlanSaves }): JSX.Element {
+  const name = rowName(row);
+  const reviewApplicable = row.plan_row?.review_applicable ?? !row.is_source;
+  const choice = (flag: "review" | "annotate", on: string, off: string) => <div key={flag} role="group" aria-label={`${on}, ${name}`} className="documents-plan-choice">
+    {[[true, on], [false, off]].map(([value, label]) => <Button key={String(value)} size="sm" variant="secondary"
+      aria-pressed={false} aria-disabled={saves.isBusy(row, flag) || undefined}
+      onClick={() => { if (!saves.isBusy(row, flag)) saves.set(row, flag, value as boolean, groupRevision); }}>{label as string}</Button>)}
+    <span className="cell-secondary">Not decided yet</span>
+  </div>;
+  return <div className="documents-plan-choices" data-plan-row={`${row.case_id}:${row.language}`}>
+    {reviewApplicable && choice("review", "Review", "Don't review")}
+    {choice("annotate", "Annotate", "Don't annotate")}
+  </div>;
 }
 
 export interface RowActionCellProps {
@@ -53,6 +83,11 @@ export interface RowActionCellProps {
   plan?: { groupRevision: number; saves: PlanSaves };
   /** Full-width button (narrow cards). */
   block?: boolean;
+  /**
+   * Lead actions that are no step ("Change final…", "Request translation correction…"): listed in the
+   * "+n" menu after the other steps of a row that has a step (the expansion offers them too).
+   */
+  extraActions?: readonly MenuItem[];
 }
 
 /** "+2 more actions, case-107 · de" (starts with the visible "+2", WCAG 2.5.3). */
@@ -60,7 +95,7 @@ export function moreActionsLabel(count: number, row: Pick<DocumentRowView, "case
   return `+${count} more ${count === 1 ? "action" : "actions"}, ${rowName(row)}`;
 }
 
-export function RowActionCell({ row, onAction, plan, block = false }: RowActionCellProps): JSX.Element | null {
+export function RowActionCell({ row, onAction, plan, block = false, extraActions = [] }: RowActionCellProps): JSX.Element | null {
   // The plan popover's open state lives here: a chip save reloads the row, which may change its
   // branch (undecided → in plan); the popover stays open until the user closes it.
   const [planOpen, setPlanOpen] = useState(false);
@@ -89,6 +124,7 @@ export function RowActionCell({ row, onAction, plan, block = false }: RowActionC
     return <span className={className}>{popover(active ? "secondary" : "quiet")}{menuOf(rest)}</span>;
   }
   if (!active) return plan ? <span className={className}>{popover("quiet")}</span> : null;
+  // In-plan rows without a lead step show nothing; their other actions are in the expansion.
   if (!first) return null;
   const firstLabel = rowActionLabel(first, row);
   return <span className={className}>
@@ -101,7 +137,10 @@ export function RowActionCell({ row, onAction, plan, block = false }: RowActionC
   </span>;
 
   function menuOf(others: NextStepView[]): JSX.Element | null {
-    return others.length > 0 && onAction ? <MenuButton key="more" label={moreActionsLabel(others.length, row)} buttonLabel={`+${others.length}`}
-      items={others.map((step, index) => ({ id: `${step.code}-${index}`, label: rowActionLabel(step, row), onSelect: () => onAction(row, step) }))} /> : null;
+    const items: MenuItem[] = [
+      ...(onAction ? others.map((step, index) => ({ id: `${step.code}-${index}`, label: rowActionLabel(step, row), onSelect: () => onAction(row, step) })) : []),
+      ...extraActions,
+    ];
+    return items.length > 0 ? <MenuButton key="more" label={moreActionsLabel(items.length, row)} buttonLabel={`+${items.length}`} items={items} /> : null;
   }
 }

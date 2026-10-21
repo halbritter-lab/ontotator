@@ -6,15 +6,21 @@ import { ErrorNotice } from '../admin/ErrorNotice';
 import { Button, Checkbox, InlineMessage, Select, Textarea } from '../ui';
 import { notifyFinalSelectionChanged } from './finalSelectionState';
 
-interface Props { projectKey: string; variant: VariantSummary; username: string; requiredLanguages: readonly string[] | null }
+interface Props {
+  projectKey: string; variant: VariantSummary; username: string; requiredLanguages: readonly string[] | null;
+  /** Starts with the form open (the Documents row menu already asked), skipping the button. */
+  defaultOpen?: boolean;
+  /** Inside a dialog whose title names the action: no heading of its own. */
+  inDialog?: boolean;
+}
 export function TranslationCorrectionAction(props: Props): JSX.Element | null {
   if (props.variant.translation_status !== 'accepted') return null;
   return <CorrectionContent key={JSON.stringify([props.projectKey, props.variant.document_id, props.variant.text_sha256, props.username])} {...props} />;
 }
 
-function CorrectionContent({ projectKey, variant, username, requiredLanguages }: Props): JSX.Element {
+function CorrectionContent({ projectKey, variant, username, requiredLanguages, defaultOpen = false, inDialog = false }: Props): JSX.Element {
   const fieldId = useId(), active = useRef(false), writing = useRef(false);
-  const [open, setOpen] = useState(false), [attempt, setAttempt] = useState(0);
+  const [open, setOpen] = useState(defaultOpen), [attempt, setAttempt] = useState(0);
   const [members, setMembers] = useState<Member[] | null>(null), [error, setError] = useState<unknown>();
   const [reviewer, setReviewer] = useState(''), [reason, setReason] = useState('');
   const [confirmLanguage, setConfirmLanguage] = useState(false), [busy, setBusy] = useState(false);
@@ -41,8 +47,9 @@ function CorrectionContent({ projectKey, variant, username, requiredLanguages }:
     finally { writing.current = false; if (active.current) setBusy(false); }
   };
   if (!open) return <Button size="sm" onClick={() => setOpen(true)}>Request translation correction</Button>;
-  return <section className="detail-section" aria-label="Request translation correction"><h3>Another translation review</h3>
-    <p>Review this exact accepted text again. A submitted correction creates a separate text version and keeps the earlier review.</p>
+  return <section className={inDialog ? undefined : 'detail-section'} aria-label="Request translation correction">
+    {!inDialog && <h3>{assigned ? 'Translation correction requested' : 'Request translation correction'}</h3>}
+    {!assigned && <p>Review this exact accepted text again. A submitted correction creates a separate text version and keeps the earlier review.</p>}
     {!requiredLanguages && <InlineMessage tone="warning">The exact source lineage is unavailable. Reload the text metadata before assigning another review.</InlineMessage>}
     {!members && error == null && <InlineMessage tone="info">Loading translation reviewers…</InlineMessage>}
     {!assigned && members && <>

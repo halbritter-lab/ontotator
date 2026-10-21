@@ -92,9 +92,12 @@ describe("filter model", () => {
 
   it("builds the Language and Waiting on groups from the facet counts and the route", () => {
     const groups = facetGroups({ language: { de: 8, en: 3 }, waiting_on: { "ann-0002": 1, me: 2 } }, { language: "fr", waiting_on: "ann-0009" }, new Set(["en"]));
-    expect(groups.map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final · Origin · Plan", "Waiting on"]);
+    expect(groups.map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan", "Waiting on"]);
     expect(groups[0].options.map(option => option.label)).toEqual(["de", "en (source)", "fr"]);
-    expect(groups[4].options.map(option => option.label)).toEqual(["You", "ann-0002", "ann-0009"]);
-    expect(facetGroups({}, {}, new Set()).map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final · Origin · Plan"]);
+    expect(groups[6].options.map(option => option.label)).toEqual(["You", "ann-0002", "ann-0009"]);
+    const named = facetGroups({ waiting_on: { "ann-0002": 1 } }, {}, new Set(), new Map([["ann-0002", "Ana Weber"]]));
+    expect(named.at(-1)!.options.map(option => option.label)).toEqual(["Ana Weber"]);
+    expect(chipsOf({ waiting_on: "ann-0002" }, new Map([["ann-0002", "Ana Weber"]])).map(chip => chip.label)).toEqual(["Waiting on: Ana Weber"]);
+    expect(facetGroups({}, {}, new Set()).map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan"]);
   });
 });

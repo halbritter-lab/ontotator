@@ -7,23 +7,30 @@ import { eligibleMembers } from '../admin/assignmentUI';
 import { formatDateTime } from '../app/labels';
 import { notifyFinalSelectionChanged } from './finalSelectionState';
 
+/** An input submission; `label` is its visible name ("Ana Weber · Round 1 · 21 Oct, 11:25"), never a code. */
+export type ConsolidationInput = SubmissionHistorySummary & { label?: string };
+
 interface Props {
-  projectKey: string; documentId: string; language: string; username: string; rows: SubmissionHistorySummary[];
+  projectKey: string; documentId: string; language: string; username: string; rows: ConsolidationInput[];
   /** Starts with the form open (the caller's own "Consolidate…" already asked), skipping the "Consolidate results" button. */
   defaultOpen?: boolean;
+  /** Submissions checked when the form opens (e.g. the compared submissions on the current text). */
+  defaultSelected?: readonly string[];
+  /** The round was started; a caller that closes (the final-result panel) replaces the success line with its own message. */
+  onStarted?: (round: WorkRoundView) => void;
 }
 export function ConsolidationLauncher(props: Props): JSX.Element {
   return <ConsolidationContent key={JSON.stringify([props.projectKey, props.documentId, props.username])} {...props} />;
 }
 
-function ConsolidationContent({ projectKey, documentId, language, username, rows, defaultOpen = false }: Props): JSX.Element {
+function ConsolidationContent({ projectKey, documentId, language, username, rows, defaultOpen = false, defaultSelected = [], onStarted }: Props): JSX.Element {
   const fieldId = useId();
   const [open, setOpen] = useState(defaultOpen);
   const [attempt, setAttempt] = useState(0);
   const [inventory, setInventory] = useState<{ attempt: number; members: Member[]; assignments: AssignmentView[] } | null>(null);
   const [loadError, setLoadError] = useState<unknown>();
   const [error, setError] = useState<unknown>();
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set(defaultSelected));
   const [reviewer, setReviewer] = useState('');
   const [confirmLanguage, setConfirmLanguage] = useState(false);
   const [reason, setReason] = useState('');
@@ -38,6 +45,10 @@ function ConsolidationContent({ projectKey, documentId, language, username, rows
   const reviewers = eligibleMembers(current?.members ?? [], 'review');
   const member = reviewers.find(row => row.username === reviewer);
   const missingLanguage = !!member && !member.languages.includes(language);
+  /** Why Start is unavailable, shown inline (never a silent disabled button). */
+  const missing = selectedIds.length < 2 ? 'Select at least two submissions.'
+    : !member ? 'Choose a reviewer.'
+      : missingLanguage && !confirmLanguage ? `Confirm the reviewer despite missing ${language}.` : null;
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   useEffect(() => {
     if (!open) return;
@@ -65,6 +76,7 @@ function ConsolidationContent({ projectKey, documentId, language, username, rows
         kind: 'consolidation', source_submission_ids: selectedIds, ...(reason.trim() ? { reason: reason.trim() } : {}) });
       notifyFinalSelectionChanged(projectKey);
       if (active.current) setCreated(round);
+      onStarted?.(round);
     } catch (failure) {
       if (active.current) setError(failure instanceof ApiError && failure.code === 'ROUND_INPUT_STALE'
         ? new Error('Selected submissions are no longer current. Refresh submission history and choose the exact inputs again.')
@@ -79,9 +91,9 @@ function ConsolidationContent({ projectKey, documentId, language, username, rows
     {loadError != null && <><ErrorNotice error={loadError} /><Button onClick={() => setAttempt(value => value + 1)}>Reload reviewer tasks</Button></>}
     {!current && loadError == null && <InlineMessage tone="info">Loading reviewers and tasks…</InlineMessage>}
     {current && !created && <>
-      <fieldset disabled={busy}><legend>Frozen input submissions</legend>{eligibleRows.map(row => <Checkbox key={row.submission_id}
-        id={`${fieldId}-${encodeURIComponent(row.submission_id)}`} label={`${row.author_label} · ${formatDateTime(row.created_at)} · ${row.submission_id}`}
-        aria-label={`Include submission ${row.submission_id}`} checked={selected.has(row.submission_id)} onChange={event => setSelected(previous => {
+      <fieldset disabled={busy}><legend>Submissions to merge</legend>{eligibleRows.map(row => <Checkbox key={row.submission_id}
+        id={`${fieldId}-${encodeURIComponent(row.submission_id)}`} label={row.label ?? `${row.author_label} · ${formatDateTime(row.created_at)}`}
+        data-submission-id={row.submission_id} checked={selected.has(row.submission_id)} onChange={event => setSelected(previous => {
           const next = new Set(previous); if (event.target.checked) next.add(row.submission_id); else next.delete(row.submission_id); return next;
         })} />)}</fieldset>
       <Select id={`${fieldId}-reviewer`} label="Consolidation reviewer" value={member ? reviewer : ''} disabled={busy}
@@ -91,9 +103,11 @@ function ConsolidationContent({ projectKey, documentId, language, username, rows
       {missingLanguage && <Checkbox id={`${fieldId}-language`} label={`Assign this reviewer despite missing ${language} in their profile`} checked={confirmLanguage} disabled={busy} onChange={event => setConfirmLanguage(event.target.checked)} />}
       <Textarea id={`${fieldId}-reason`} label="Consolidation reason (optional)" value={reason} disabled={busy} onChange={event => setReason(event.target.value)} />
       {error != null && <><ErrorNotice error={error} /><Button disabled={busy} onClick={() => { setError(undefined); setAttempt(value => value + 1); }}>Reload reviewer tasks</Button></>}
-      <Button disabled={!member || selectedIds.length < 2 || (missingLanguage && !confirmLanguage) || busy} loading={busy} onClick={() => { void start(); }}>Start consolidation</Button>
+      {missing && <p id={`${fieldId}-missing`} className="action-reason">{missing}</p>}
+      <Button aria-disabled={missing || busy ? true : undefined} aria-describedby={missing ? `${fieldId}-missing` : undefined} loading={busy}
+        onClick={() => { if (!missing && !busy) void start(); }}>Start consolidation</Button>
     </>}
-    {created && <InlineMessage tone="success">Consolidation assigned to {personLabel(member, { fallback: 'the reviewer' })}. Round {created.round_id}.
+    {created && <InlineMessage tone="success">Consolidation assigned to {personLabel(member, { fallback: 'the reviewer' })}.
       {reviewer === username && <> <a href={`#/tasks/${created.assignment_id}`}>Open my consolidation task</a></>}
     </InlineMessage>}
   </section>;

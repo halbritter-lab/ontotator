@@ -14,6 +14,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea } from "../ui";
 import { correctionDocumentId, LeadCorrectionPanel, openLeadCorrection } from "./LeadCorrectionPanel";
 import { stepLabel } from "./nextStepLabels";
+import { reasonDocumentId, reasonLead, ReviewReason, useReviewReason } from "./reviewReason";
 import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, PLAN_CHANGED_MESSAGE, WITHDRAW_CHECKBOX } from "./PlanChips";
 
 export interface ResolveTranslationProps {
@@ -33,6 +34,8 @@ export interface ResolveTranslationProps {
   /** The page's one shared polite live region ("Saving…"). */
   onAnnounce: (message: string) => void;
   onCancel: () => void;
+  /** Heading level under the row: 3 in the table (below the hidden h2 "Texts"), 5 in a card. */
+  headingLevel?: 3 | 5;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -65,7 +68,8 @@ function useHeadingFocus() {
 }
 
 function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
-  const { row, projectKey, onAssignReview, onNavigate, onDone, onAnnounce, onCancel } = props;
+  const { row, projectKey, onAssignReview, onNavigate, onDone, onAnnounce, onCancel, headingLevel = 3 } = props;
+  const Heading = `h${headingLevel}` as "h3";
   const id = useId();
   const heading = useHeadingFocus();
   const discardButton = useRef<HTMLButtonElement>(null);
@@ -83,6 +87,7 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
   const discardLabel = `Discard the ${row.language} translation`;
 
   const own = openLeadCorrection(row);
+  const reviewReason = useReviewReason(projectKey, reasonDocumentId(row));
 
   // Cancel in the discard or correction step returns to the three options with focus on its option.
   useEffect(() => {
@@ -133,11 +138,12 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
     </div>;
   }
   if (correcting) {
-    return <LeadCorrectionPanel row={row} projectKey={projectKey} onNavigate={onNavigate}
+    return <LeadCorrectionPanel row={row} projectKey={projectKey} onNavigate={onNavigate} headingLevel={headingLevel}
       onCancel={() => { setCorrecting(false); setBackToOptions("correct"); }} />;
   }
   return <div className="documents-resolve" role="group" aria-labelledby={`${id}-title`}>
-    <h4 id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{title}</h4>
+    <Heading id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{title}</Heading>
+    {reviewReason && <ReviewReason record={reviewReason} lead={reasonLead(row, reviewReason)} />}
     <div className="documents-resolve-actions">
       <Button size="sm" onClick={onAssignReview}>Assign a new review…</Button>
       {own
@@ -150,7 +156,8 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
 }
 
 function NotAcceptedOptions(props: ResolveTranslationProps): JSX.Element {
-  const { row, projectKey, revision, onDone, onAnnounce, onCancel } = props;
+  const { row, projectKey, revision, onDone, onAnnounce, onCancel, headingLevel = 3 } = props;
+  const Heading = `h${headingLevel}` as "h3";
   const id = useId();
   const heading = useHeadingFocus();
   const [reason, setReason] = useState("");
@@ -177,7 +184,7 @@ function NotAcceptedOptions(props: ResolveTranslationProps): JSX.Element {
 
   const missing = !reason.trim();
   return <div className="documents-resolve" role="group" aria-labelledby={`${id}-title`}>
-    <h4 id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{`${stepLabel("translation_not_accepted")}, ${name}`}</h4>
+    <Heading id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{`${stepLabel("translation_not_accepted")}, ${name}`}</Heading>
     <p>Annotation needs an accepted translation.</p>
     <div className="documents-resolve-actions">
       <Button size="sm" aria-disabled={busy || undefined} onClick={() => { void save("review"); }}>Turn Review on</Button>

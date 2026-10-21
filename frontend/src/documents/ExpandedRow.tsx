@@ -1,10 +1,12 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { type DocumentRowView, type RowSubmissionView, type RowSubmissions, type SubmissionHistorySummary } from "../api/client";
+import { type DocumentRowView, type RowSubmissions } from "../api/client";
+import { consolidationInputs } from "./finalPanelText";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Time } from "../app/Time";
 import { Button } from "../ui";
 import { ConsolidationLauncher } from "../variants/ConsolidationLauncher";
 import { historyLines } from "./historyLines";
+import { reasonDocumentId, ReviewReason, useReviewReason } from "./reviewReason";
 import { versionName } from "./labels";
 import { isPlainClick } from "./RowCells";
 import { acceptanceLabel, acceptanceOf, discardLabel, isDiscarded, TextVersions, type TextVersionsTools } from "./TextVersions";
@@ -14,6 +16,11 @@ import type { RowSubmissionsState } from "./useRowSubmissions";
 const REPORT_STATE_TEXT = { open: "Open", resolved: "Closed", withdrawn: "Withdrawn" } as const;
 
 export type AssignTaskKind = "translation_review" | "annotate" | "review";
+
+/** A submitted annotation on the current text can get an annotation review ("Assign annotation review…"). */
+export function canAssignAnnotationReview(row: DocumentRowView): boolean {
+  return row.work.some(item => item.task === "annotate" && item.status === "submitted" && item.moved_to_version == null);
+}
 
 export interface ExpandedRowProps {
   row: DocumentRowView;
@@ -31,18 +38,18 @@ export interface ExpandedRowProps {
   planRevision?: number;
   /** Assign dialog for this row ("Assign annotation review…", D25 "Assign a new review…"). */
   onAssign?: (row: DocumentRowView, task: AssignTaskKind, options?: { newReviewOfAccepted?: boolean }) => void;
+  /** Lead actions that are no step ("Change final…", "Request translation correction…"), as quiet links. */
+  extraActions?: readonly { id: string; label: string; onSelect: () => void }[];
   /** The row's Review / Annotate chips (`PlanChips`) for the "Plan" line (VD2 (2)). */
   plan?: ReactNode;
   /** Pseudonym of the signed-in lead ("Final: chosen by you"). */
   me?: string | null;
+  /** Level of the "History" heading: 3 under the table's "Texts", 5 inside a card (case 3, text 4). */
+  headingLevel?: 3 | 5;
   /** Opens Text versions and focuses its summary (interim target of the text-change actions until O7). */
   revealTextVersions?: boolean;
   onTextVersionsRevealed?: () => void;
   now?: Date;
-}
-
-function toHistorySummary(row: RowSubmissionView): SubmissionHistorySummary {
-  return { submission_id: row.submission_id, document_id: row.document_id, author_label: row.author_label, created_at: row.recorded_at, mode: row.mode, round_id: row.round_id, guideline_version: row.guideline_version ?? null, guideline_withdrawn: row.guideline_withdrawn };
 }
 
 function useLink(onNavigate: (route: Route) => void) {
@@ -59,7 +66,10 @@ function useLink(onNavigate: (route: Route) => void) {
  */
 export function ExpandedRow({
   row, projectKey, query, submissions, onNavigate, id, textVersionTools, planRevision, onAssign, plan, me, revealTextVersions = false, onTextVersionsRevealed, now,
+  headingLevel = 3, extraActions = [],
 }: ExpandedRowProps): JSX.Element {
+  const Heading = `h${headingLevel}` as "h3";
+  const SubHeading = `h${headingLevel + 1}` as "h4";
   const ownId = useId();
   const textVersionsRef = useRef<HTMLDetailsElement>(null);
   const [textVersionsOpen, setTextVersionsOpen] = useState(revealTextVersions);
@@ -86,8 +96,12 @@ export function ExpandedRow({
   }, [revealTextVersions]);
 
   const lines = historyLines(row, data ? rows : null, { me, now });
+  // The reason of a rejecting or querying review, quoted under that review's History line.
+  const reason = useReviewReason(projectKey, reasonDocumentId(row));
+  /** A reporter's display name (members by pseudonym); the label itself without one. */
+  const personOf = (label: string) => textVersionTools?.members.find(member => member.pseudonym === label)?.display_name?.trim() || label;
   const problemReports = row.problem_reports ?? [];
-  const reviewable = onAssign && row.work.some(item => item.task === "annotate" && item.status === "submitted" && item.moved_to_version == null);
+  const reviewable = onAssign && canAssignAnnotationReview(row);
   // D25: a new review of a translation the lead (or the import override) accepted without one.
   const newReview = onAssign && !row.is_source
     && !row.work.some(item => item.task === "translation_review" && item.status !== "submitted" && item.moved_to_version == null)
@@ -98,10 +112,11 @@ export function ExpandedRow({
 
   return <section role="region" id={id} aria-label={`History, ${row.case_id} · ${row.language}`} className="expanded-row">
     <div className="expanded-row-section">
-      <h3 id={`${ownId}-history`}>History</h3>
+      <Heading id={`${ownId}-history`}>History</Heading>
       {lines.length > 0
         ? <ul className="expanded-row-issues" aria-labelledby={`${ownId}-history`}>{lines.map(line => <li key={line.key}>
           {line.text}{line.reportId && <>{" · "}{link(reportRoute(line.reportId), "Open report")}</>}
+          {reason && line.key === `work-${reason.assignment_id}` && <ReviewReason record={reason} />}
         </li>)}</ul>
         : <p className="cell-secondary">{submissions.loading && !data ? "Loading history…" : "No history yet."}</p>}
     </div>
@@ -113,7 +128,8 @@ export function ExpandedRow({
         <summary>Text versions ({row.versions.length})</summary>
         <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} now={now} />
       </details>
-      {(reviewable || newReview) && <div className="expanded-row-links">
+      {(reviewable || newReview || extraActions.length > 0) && <div className="expanded-row-links">
+        {extraActions.map(action => <Button key={action.id} size="sm" variant="quiet" onClick={action.onSelect}>{action.label}</Button>)}
         {reviewable && <Button size="sm" variant="quiet" onClick={() => onAssign(row, "review")}>Assign annotation review…</Button>}
         {newReview && <Button size="sm" variant="quiet" onClick={() => onAssign(row, "translation_review", { newReviewOfAccepted: true })}>Assign a new review…</Button>}
       </div>}
@@ -122,15 +138,15 @@ export function ExpandedRow({
         {!data ? <p className="cell-secondary">Submissions are not loaded.</p>
           : consolidationDocuments.length === 0 ? <p className="cell-secondary">Consolidation needs at least two submissions on one text version.</p>
             : consolidationDocuments.map(documentId => <div key={documentId} className="expanded-row-consolidation">
-              {consolidationDocuments.length > 1 && <h4>{nameOf(documentId)}</h4>}
+              {consolidationDocuments.length > 1 && <SubHeading>{nameOf(documentId)}</SubHeading>}
               <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={textVersionTools?.username ?? ""}
-                rows={rows.filter(item => item.document_id === documentId).map(toHistorySummary)} />
+                rows={consolidationInputs(rows.filter(item => item.document_id === documentId), now)} />
             </div>)}
       </details>
       {problemReports.length > 0 && <details className="expanded-row-more">
         <summary>Problem reports ({problemReports.length})</summary>
         <ul className="expanded-row-issues">{problemReports.map(report => <li key={report.report_id}>
-          {report.title}{" · "}{report.reporter_label}{" · "}<Time iso={report.created_at} now={now} />
+          {report.title}{" · "}{personOf(report.reporter_label)}{" · "}<Time iso={report.created_at} now={now} />
           {" · "}Report: {REPORT_STATE_TEXT[report.state]}{" · "}Paused tasks: {report.active_hold_count}{" · "}{link(reportRoute(report.report_id), "Open report")}
         </li>)}</ul>
       </details>}

@@ -101,7 +101,7 @@ test("Tab-only order: tabs, search, Filter, selection tools, then the case and e
     "a:All, 2",
     "input:Case ID or text",
     "button:Filter",
-    "input:Select all 1 filtered case",
+    "input:Select the filtered case",
     "button:Select by case IDs…",
     `input:Select ${S0_CASE} (2 texts)`,
     `input:Select ${S0_CASE} · en`,
@@ -429,11 +429,11 @@ test("320 CSS px: no horizontal scroll; case title, card heading, stages, row ac
   const checkReflow = async (state: string) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth), state).toBeLessThanOrEqual(320);
     await inView(page.getByRole("checkbox", { name: `Select ${S0_CASE} (2 texts)`, exact: true }), `${state} case checkbox`);
-    await inView(page.getByRole("heading", { name: S0_GROUP, level: 2 }), `${state} case title`);
+    await inView(page.getByRole("heading", { name: S0_GROUP, level: 3 }), `${state} case title`);
     for (const language of ["en", "de"]) {
       const card = page.getByRole("article", { name: `${S0_CASE} · ${language}`, exact: true });
       const facts = [
-        card.getByRole("heading", { name: `${S0_CASE} · ${language}`, level: 3 }),
+        card.getByRole("heading", { name: `${S0_CASE} · ${language}`, level: 4 }),
         card.locator(".document-card-stage").first(),
         card.locator(".documents-action").first(),
         card.getByRole("link", { name: `Open ${S0_CASE} · ${language}`, exact: true }),
@@ -446,7 +446,7 @@ test("320 CSS px: no horizontal scroll; case title, card heading, stages, row ac
   await evidence(page, "320-collapsed");
 
   await page.getByRole("article", { name: `${S0_CASE} · de`, exact: true }).getByRole("button", { name: "History", exact: true }).click();
-  await expect(historyRegion(page, S0_CASE, "de").getByRole("heading", { name: "History", level: 3 })).toBeVisible();
+  await expect(historyRegion(page, S0_CASE, "de").getByRole("heading", { name: "History", level: 5 })).toBeVisible();
   await checkReflow("expanded");
   await evidence(page, "320-expanded");
   expect(s.project).toBeTruthy();
@@ -458,7 +458,7 @@ test("390 px cards: every interactive target is at least 24 by 24 px, or meets a
   await expect(page.getByRole("article")).toHaveCount(2);
   const de = page.getByRole("article", { name: `${S0_CASE} · de`, exact: true });
   await de.getByRole("button", { name: "History", exact: true }).click();
-  await expect(historyRegion(page, S0_CASE, "de").getByRole("heading", { name: "History", level: 3 })).toBeVisible();
+  await expect(historyRegion(page, S0_CASE, "de").getByRole("heading", { name: "History", level: 5 })).toBeVisible();
 
   const report = await page.evaluate(() => {
     const MIN = 24;

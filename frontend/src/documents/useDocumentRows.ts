@@ -33,9 +33,11 @@ const withoutRetain = ({ retain: _retain, ...rest }: DocumentRowsQuery): Documen
  * Refetches on window focus, every 60 s and on `reload()`. `query.retain` (from the visit
  * state) is sent with every request; a change of only the retained keys is not a new request.
  * A new request keeps the previous page (marked `stale`) until its response arrives; a failed
- * refetch of the same request keeps the page and sets `error`.
+ * refetch of the same request keeps the page and sets `error`. With `enabled: false` nothing loads yet (the
+ * page records its visit first).
  */
-export function useDocumentRows(projectKey: string, query: DocumentRowsQuery): DocumentRowsState {
+export function useDocumentRows(projectKey: string, query: DocumentRowsQuery, options: { enabled?: boolean } = {}): DocumentRowsState {
+  const enabled = options.enabled ?? true;
   const generation = useRef(0);
   const [state, setState] = useState<Snapshot>({ page: null, error: null, loading: true, stale: false, updatedAt: null });
   const identity = JSON.stringify([projectKey, query]);
@@ -61,6 +63,7 @@ export function useDocumentRows(projectKey: string, query: DocumentRowsQuery): D
   }, [identity]);
 
   useEffect(() => {
+    if (!enabled) return;
     if (shownFilters.current !== null && shownFilters.current !== filters) {
       setState(previous => ({ ...previous, error: null, loading: true, stale: previous.page !== null }));
     }
@@ -68,13 +71,14 @@ export function useDocumentRows(projectKey: string, query: DocumentRowsQuery): D
     load();
     // `filters` is derived from the same render as `load`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load]);
+  }, [load, enabled]);
   useEffect(() => {
+    if (!enabled) return;
     const onFocus = () => load();
     window.addEventListener("focus", onFocus);
     const timer = window.setInterval(load, DOCUMENT_ROWS_REFRESH_MS);
     return () => { window.removeEventListener("focus", onFocus); window.clearInterval(timer); };
-  }, [load]);
+  }, [load, enabled]);
 
   // Discard responses that arrive after unmount.
   useEffect(() => () => { generation.current += 1; }, []);

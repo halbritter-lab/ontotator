@@ -1,14 +1,15 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions } from "../../src/api/client";
+import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { FinalPanel, type FinalPanelProps } from "../../src/documents/FinalPanel";
 import { agreementText, barArrows, compareSummary, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
-import { agreement, bar, finalPanel, group, item, page, panelSubmission, round, rowKey, stepOf, translationReview, version } from "./fixtures";
+import { assignment } from "../assignmentFixtures";
+import { agreement, bar, final, finalPanel, group, item, page, panelSubmission, round, rowKey, stepOf, translationReview, version } from "./fixtures";
 import { acceptPanel, ana, anaSubmission, chooseRow, comparePanel, luc, panelRowSubmissions, reviewRow, tom, tomSubmission } from "./panelFixtures";
 
 const OWN_REASON = "This project keeps adjudication separate from annotation. Another lead must choose this result.";
@@ -132,13 +133,16 @@ describe("choose", () => {
     });
     renderPanel("case-110:de", page([group("case-110", [chooseRow("case-110", "de")])]));
     const table = await screen.findByRole("table", { name: "Submissions, case-110 · de" });
-    expect(within(table).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Submission", "Findings", "Only here", "Actions"]);
+    expect(within(table).getAllByRole("columnheader").slice(0, 4).map(cell => cell.textContent)).toEqual(["Submission", "Findings", "Only here", "Actions"]);
     const rows = within(table).getAllByRole("row").slice(1);
+    // The submissions on the old text are a group of their own.
+    expect(rows[2].textContent).toBe("On v1 (old text)");
+    expect(within(rows[2]).getByRole("columnheader", { name: "On v1 (old text)" }).getAttribute("scope")).toBe("colgroup");
     const ana2 = within(rows[0]).getAllByRole("cell").map(cell => cell.textContent);
     expect(within(rows[0]).getByRole("rowheader").textContent).toContain("Ana Weber");
     expect(within(rows[0]).getByRole("rowheader").textContent).toContain(`Round 1 · ${time("2026-10-20T12:01:00Z")}`);
     expect(ana2.slice(0, 2)).toEqual(["5", "1"]);
-    const old = rows[2];
+    const old = rows[3];
     expect(within(old).getAllByRole("cell")[1].textContent).toBe("on v1 · not compared");
     expect(within(old).getByText("Guidelines v3")).toBeTruthy();
     const use = within(old).getByRole("button", { name: "Use as final" });
@@ -164,20 +168,29 @@ describe("choose", () => {
     await waitFor(() => expect(liveRegion().textContent).toBe(OWN_REASON));
   });
 
-  it("Consolidate… opens the launcher form in the panel (no second click); after start the panel closes", async () => {
+  it("Consolidate… opens the launcher form with the compared submissions by name; only its own start closes the panel", async () => {
     panels[rowKey("case-112", "de")] = comparePanel("case-112", "de");
-    vi.spyOn(api, "listMembers").mockResolvedValue([]);
-    vi.spyOn(api, "listAssignments").mockResolvedValue([]);
+    vi.spyOn(api, "listMembers").mockResolvedValue([{ username: "rev", display_name: "Rita Rev", pseudonym: "rev-0009", roles: ["adjudicator"], languages: ["de"] }]);
+    vi.spyOn(api, "listAssignments").mockResolvedValue([{ ...assignment, id: 9, project_key: "p", document_id: "case-112-de", username: "rev", task: "review", workflow_revision: 1 }]);
+    vi.spyOn(api, "startWorkRound").mockResolvedValue({ round_id: "r-9", assignment_id: 9 } as WorkRoundView);
     const onConsolidationStarted = vi.fn();
     renderPanel("case-112:de", page([group("case-112", [chooseRow("case-112", "de")])]), { onConsolidationStarted, username: "lead" });
     fireEvent.click(await screen.findByRole("button", { name: "Consolidate…" }));
     expect(within(dialog()).queryByRole("button", { name: "Consolidate results" })).toBeNull();
     expect(within(dialog()).getByRole("region", { name: "Consolidate submitted results" })).toBeTruthy();
-    await waitFor(() => expect(api.listMembers).toHaveBeenCalledWith("p"));
-    act(() => { notifyFinalSelectionChanged("other"); });
-    expect(onConsolidationStarted).not.toHaveBeenCalled();
+    await screen.findByLabelText("Consolidation reviewer");
+    const inputs = within(dialog()).getAllByRole("checkbox");
+    expect(inputs.map(input => input.closest("label, .form-check, div")!.textContent)).toEqual([
+      `Ana Weber · Round 1 · ${time("2026-10-20T12:01:00Z")}`, `Tom Reis · Round 1 · ${time("2026-10-20T13:30:00Z")}`,
+    ]);
+    expect(inputs.every(input => (input as HTMLInputElement).checked)).toBe(true);
+    // Another decision on the page (the same event) is not a started consolidation.
     act(() => { notifyFinalSelectionChanged("p"); });
-    expect(onConsolidationStarted).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-112" }));
+    expect(onConsolidationStarted).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Consolidation reviewer"), { target: { value: "rev" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start consolidation" }));
+    await waitFor(() => expect(onConsolidationStarted).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-112" })));
+    expect(api.startWorkRound).toHaveBeenCalledWith(9, expect.objectContaining({ source_submission_ids: ["case-112-s1", "case-112-s2"] }));
   });
 
   it("links History · Text versions · Technical details to the row's expansion", async () => {
@@ -189,6 +202,32 @@ describe("choose", () => {
     fireEvent.click(screen.getByRole("button", { name: "History" }));
     fireEvent.click(screen.getByRole("button", { name: "Technical details" }));
     expect(onSection.mock.calls.map(call => call[1])).toEqual(["versions", "history", "technical"]);
+  });
+});
+
+describe("decided", () => {
+  const decidedRow = (caseId: string) => chooseRow(caseId, "de", {
+    next_step: null, steps: [], categories: [], missing_final: { counts: false, reason: null },
+    final: final({ case_id: caseId, language: "de", document_id: `${caseId}-de`, submission_id: `${caseId}-s1`, author_label: "ann-0003", revision: 4 }),
+  });
+
+  it("a decided row shows its final and Change final…, which replaces it with another submission", async () => {
+    panels[rowKey("case-120", "de")] = { ...comparePanel("case-120", "de"), label_rule: "accept", accept_submission_id: "case-120-s1" };
+    renderPanel("case-120:de", page([group("case-120", [decidedRow("case-120")])]));
+    expect(await screen.findByText("Final · Annotation · Ana Weber")).toBeTruthy();
+    expect(screen.queryByText(/as final\?/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Change final…" }));
+    const table = screen.getByRole("table", { name: "Submissions, case-120 · de" });
+    const tomRow = within(table).getAllByRole("row").find(entry => entry.textContent?.includes("Tom Reis"))!;
+    fireEvent.click(within(tomRow).getByRole("button", { name: "Use as final" }));
+    expect(api.selectFinalResult).toHaveBeenCalledWith("p", expect.objectContaining({ submission_id: "case-120-s2", expected_revision: 4, acknowledged_cause_ids: [] }));
+  });
+
+  it("opens on the compare content with changeFinal", async () => {
+    panels[rowKey("case-121", "de")] = comparePanel("case-121", "de");
+    renderPanel("case-121:de", page([group("case-121", [decidedRow("case-121")])]), { changeFinal: true });
+    expect(await screen.findByRole("table", { name: "Submissions, case-121 · de" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Change final…" })).toBeNull();
   });
 });
 
@@ -320,13 +359,36 @@ describe("after a decision", () => {
     expect(onRowAction).toHaveBeenCalledWith(report, report.next_step);
   });
 
+  it("drops No more final results when the panel shows another row", async () => {
+    const first = chooseRow("case-107", "de");
+    const other = chooseRow("case-108", "de");
+    panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
+    panels[rowKey("case-108", "de")] = acceptPanel("case-108", "de");
+    const initial = page([group("case-107", [first]), group("case-108", [{ ...other, next_step: null, steps: [] }])]);
+    function Switcher(): JSX.Element {
+      const [key, setKey] = useState("case-107:de");
+      const [current, setCurrent] = useState(initial);
+      return <>
+        <button onClick={() => setKey("case-108:de")}>Show case-108</button>
+        <FinalPanel projectKey="p" rowKey={key} page={current} query={{}} now={now} onClose={vi.fn()} onAdvance={vi.fn()} onReload={vi.fn()}
+          onNavigate={vi.fn()} onDecided={() => setCurrent({ ...initial, groups: [group("case-107", [{ ...first, next_step: null, steps: [] }]), group("case-108", [{ ...other, next_step: null, steps: [] }])] })} />
+      </>;
+    }
+    render(<Switcher />);
+    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    expect(await screen.findByText("No more final results to decide.")).toBeTruthy();
+    fireEvent.click(screen.getByText("Show case-108"));
+    expect(await screen.findByText("Accept Ana Weber’s annotation as final?")).toBeTruthy();
+    expect(screen.queryByText("No more final results to decide.")).toBeNull();
+  });
+
   it("reports a save whose reload failed and stays on the row", async () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     const initial = page([group("case-107", [chooseRow("case-107", "de")])]);
     const { rerender } = renderPanel("case-107:de", initial);
     fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
     await waitFor(() => expect(api.selectFinalResult).toHaveBeenCalled());
-    rerender(<Harness initialKey="case-107:de" initialPage={initial} refreshFailed />);
+    rerender(<Harness initialKey="case-107:de" initialPage={initial} refreshError={new Error("offline")} />);
     expect(await screen.findByText("Final result saved for case-107 · de. The list could not be refreshed.")).toBeTruthy();
   });
 });
