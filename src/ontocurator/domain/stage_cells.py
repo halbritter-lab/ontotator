@@ -131,9 +131,10 @@ class StageFacts:
     ``submissions`` with the eligible submissions (minimum over the row's
     target versions; on the target version only, without sources whose
     text-change resolution is carried, moved or handed_over, spec VD16) and
-    ``annotators_submitted`` with their authors. The Annotation and the Final
-    cell both count ``submissions``; ``annotators_submitted`` only names
-    people.
+    ``annotators_submitted`` with their authors. The Annotation cell counts
+    ``submissions``; the Final cell counts ``final_submissions`` (consolidation
+    submissions included), falling back to ``submissions``;
+    ``annotators_submitted`` only names people.
     """
 
     step: StepFacts
@@ -169,6 +170,9 @@ class StageFacts:
     final_version: int | None = None
     final_on_newest: bool = True
     submissions: int = 0  # eligible submissions, see the class docstring
+    # Final "choose": annotate and consolidation submissions on the target
+    # version (walkthrough step 11: "3 submissions"); None = ``submissions``.
+    final_submissions: int | None = None
     parallel_roots: bool = False
 
 
@@ -438,6 +442,11 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             note="carried_on_submit",
         )
     submitted = facts.submissions
+    # A consolidation assignment is a review task, so it also counts in
+    # ``open_annotation_reviews``: consolidators win unless an annotation
+    # review runs beside them.
+    if facts.consolidators and not facts.annotation_reviewers:
+        return _cell("consolidating", "running", people=facts.consolidators)
     if step.open_annotation_reviews or facts.annotation_reviewers:
         return _cell(
             "in_review",
@@ -446,8 +455,6 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             submitted=submitted,
             **waiting_note,
         )
-    if facts.consolidators:
-        return _cell("consolidating", "running", people=facts.consolidators)
     if step.open_annotations or facts.annotators_open:
         note: dict[str, Any] = (
             {"note": "may_change", "version": newest}
@@ -511,7 +518,12 @@ def _final(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             return _cell("old_text", "decision", **_final_detail(facts))
         return _cell("confirm", "decision", causes=facts.final_causes)
     if "choose_final" in codes:
-        return _cell("choose", "decision", submitted=facts.submissions)
+        submissions = (
+            facts.submissions
+            if facts.final_submissions is None
+            else facts.final_submissions
+        )
+        return _cell("choose", "decision", submitted=submissions)
     if step.has_final:
         if facts.source_changed_from is not None:
             return _cell(

@@ -10,6 +10,7 @@ from document_rows_support import rows_of
 from test_document_rows_stages import (
     ANNOTATE,
     BOTH,
+    OFF,
     REVIEW,
     page,
     plan,
@@ -113,6 +114,8 @@ def test_shown_equals_rows_listed_for_each_tab(env):
 def test_every_lead_step_has_an_actionable_cell(env):
     """Contract: a row whose first step is the lead's shows a stage cell in
     an actionable tone (spec "Testing", "Contract")."""
+    # "rejected" counts as actionable: scenario 4's Rejected cell carries
+    # the lead's "Resolve…" action (resolve_rejected).
     actionable = {"decision", "todo", "undecided", "rejected"}
     for key, row in rows_of(page(env)).items():
         step = row["next_step"]
@@ -120,3 +123,16 @@ def test_every_lead_step_has_an_actionable_cell(env):
             continue
         tones = {cell["tone"] for cell in row["stages"].values()}
         assert tones & actionable, (key, step["code"], tones)
+
+
+def test_decided_not_in_plan_row_is_listed_under_all_only(env):
+    plan(env, c2_fr=OFF)  # the lead decides: not in the plan
+    row = rows_of(page(env))[("c2", "fr")]
+    assert row["plan_row"]["decided"] is True and row["in_plan"] is False
+    assert row["next_step"] is None and row["steps"] == []
+    assert ("c2", "fr") in listed(page(env))
+    for tab in TABS[1:]:
+        assert ("c2", "fr") not in listed(page(env, segment=tab)), tab
+    # Nobody is waited on for it.
+    assert ("c2", "fr") not in listed(page(env, waiting_on=("me",)))
+    assert page(env)["bar"]["not_decided"] == 0

@@ -6,6 +6,7 @@ shared project lock. ``document_row_page`` and ``document_row_submissions``
 build the responses from these facts.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -234,6 +235,8 @@ class RowFacts:
     people: dict[int, dict[str, Any]] = field(default_factory=dict)
     # pseudonym -> PersonRefView fields (authors of the selected submissions)
     people_by_pseudonym: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # pseudonym -> user id of the selected submissions' authors (Final cell)
+    author_ids: dict[str, int] = field(default_factory=dict)
     # False only for undecided rows (VD3): the stored plan row is not decided
     # and the project currently imports with "Nothing planned". Rows missing
     # here are decided.
@@ -639,7 +642,9 @@ def _correction_reasons(
 
 
 def _findings(conn: Connection, pid: int) -> dict[int, int]:
-    """Finding count of each assignment's last submission."""
+    """Finding count of the last submission of each submitted annotate
+    assignment (the only ones the Annotation cell reads; restricting the
+    join keeps the payloads of other tasks undetoasted)."""
     return {
         row.id: int(row.findings)
         for row in conn.execute(
@@ -656,7 +661,26 @@ def _findings(conn: Connection, pid: int) -> dict[int, int]:
                     SubmissionRow.submission_id == AssignmentRow.last_submission_id,
                 ),
             )
-            .where(AssignmentRow.project_id == pid)
+            .where(
+                AssignmentRow.project_id == pid,
+                AssignmentRow.task == "annotate",
+                AssignmentRow.status == "submitted",
+                AssignmentRow.held.is_(False),
+                AssignmentRow.revoked_at.is_(None),
+            )
+        )
+    }
+
+
+def _user_ids(conn: Connection, pseudonyms: Iterable[str]) -> dict[str, int]:
+    """User id per pseudonym (pseudonyms without an account are left out)."""
+    wanted = sorted(set(pseudonyms))
+    if not wanted:
+        return {}
+    return {
+        row.pseudonym: row.id
+        for row in conn.execute(
+            select(UserRow.pseudonym, UserRow.id).where(UserRow.pseudonym.in_(wanted))
         )
     }
 
@@ -684,6 +708,7 @@ def load_facts(
     reports = _reports(conn, pid)
     selected = _selected_submissions(conn, pid)
     latest_reviews = _latest_reviews(conn, pid)
+    author_ids = _user_ids(conn, (item.annotator_id for item in selected.values()))
     people = person_refs(
         conn,
         [
@@ -697,6 +722,7 @@ def load_facts(
             ),
             *(item["discarded_by"] for item in discarded.values()),
             *(item.reviewer_id for item in latest_reviews.values()),
+            *author_ids.values(),
         ],
         viewer_id=viewer_user_id,
         viewer_is_lead=True,  # Documents is lead-only
@@ -736,6 +762,7 @@ def load_facts(
             (item.annotator_id for item in selected.values()),
             viewer_id=viewer_user_id,
         ),
+        author_ids=author_ids,
         decided=_decided(conn, pid),
         latest_reviews=latest_reviews,
         correction_reasons=_correction_reasons(conn, pid, assignments),

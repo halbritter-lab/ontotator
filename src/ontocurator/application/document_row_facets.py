@@ -32,55 +32,66 @@ FACET_GROUPS: tuple[FacetGroup, ...] = (
 Key = TypeVar("Key")
 
 
+_STAGE_GROUPS: Mapping[str, str] = {
+    "review_state": "review",
+    "annotation_state": "annotation",
+    "final_state": "final",
+}
+
+
 def facet_values(
     row: Mapping[str, Any],
+    group: FacetGroup,
     *,
-    origins: Iterable[str],
-    plan: Iterable[str],
-    waiting_on: Iterable[str],
-) -> dict[FacetGroup, tuple[str, ...]]:
-    """The facet values of one row.
+    origins: Callable[[], Iterable[str]],
+    plan: Callable[[], Iterable[str]],
+    waiting_on: Callable[[], Iterable[str]],
+) -> tuple[str, ...]:
+    """The facet values of one row in ``group``.
 
     ``origins``: origins of the row's versions that match the version-level
     filters (search, translation status); ``plan``: the row's plan options
     (``not_decided`` beside ``not_in_plan`` for undecided rows); ``waiting_on``:
-    "me" and the pseudonyms of the row's Waiting-on people.
+    "me" and the pseudonyms of the row's Waiting-on people. Each is called
+    only for its own group.
     """
-    stages = row["stages"]
-    return {
-        "language": (row["language"],),
-        "review_state": (stages["review"]["state"],),
-        "annotation_state": (stages["annotation"]["state"],),
-        "final_state": (stages["final"]["state"],),
-        "origin": tuple(dict.fromkeys(origins)),
-        "plan": tuple(dict.fromkeys(plan)),
-        "waiting_on": tuple(dict.fromkeys(waiting_on)),
-    }
+    if group == "language":
+        return (row["language"],)
+    if group in _STAGE_GROUPS:
+        return (row["stages"][_STAGE_GROUPS[group]]["state"],)
+    source = {"origin": origins, "plan": plan, "waiting_on": waiting_on}[group]
+    return tuple(dict.fromkeys(source()))
 
 
 def facet_counts(
     keys: Iterable[Key],
-    values: Callable[[Key], Mapping[FacetGroup, tuple[str, ...]]],
+    values: Callable[[Key, FacetGroup], tuple[str, ...]],
     matches_without: Callable[[FacetGroup], Callable[[Key], bool]],
+    selected: Mapping[FacetGroup, Iterable[str]] | None = None,
 ) -> dict[FacetGroup, dict[str, int]]:
-    """Rows per facet value; ``matches_without(group)`` is the listing
-    predicate (tab, search, every filter) without ``group``'s own selection.
+    """Rows per facet value; ``values(key, group)`` are a row's values in one
+    group (computed in that group's pass only); ``matches_without(group)`` is
+    the listing predicate (tab, search, every filter) without ``group``'s own
+    selection.
 
     Every value present on some row is listed, with 0 when no listed row has
-    it (the popover shows it muted).
+    it (the popover shows it muted); so is every ``selected`` value of the
+    query (checked values stay visible, spec "Filter popover").
     """
     keys = list(keys)
-    row_values = {key: values(key) for key in keys}
+    chosen = selected or {}
     counts: dict[FacetGroup, dict[str, int]] = {}
     for group in FACET_GROUPS:
+        row_values = {key: values(key, group) for key in keys}
         present = sorted(
-            {value for item in row_values.values() for value in item[group]}
+            {value for item in row_values.values() for value in item}
+            | set(chosen.get(group, ()))
         )
         group_counts = dict.fromkeys(present, 0)
         matches = matches_without(group)
         for key in keys:
             if matches(key):
-                for value in row_values[key][group]:
+                for value in row_values[key]:
                     group_counts[value] += 1
         counts[group] = group_counts
     return counts

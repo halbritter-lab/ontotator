@@ -1108,3 +1108,50 @@ def test_annotation_counts_eligible_submissions() -> None:
     )
     assert (c.annotation.state, c.annotation.detail.submitted) == ("in_progress", 0)
     assert c.final.state == "none"
+
+
+def test_consolidation_counts_as_open_review_but_shows_consolidating() -> None:
+    # A consolidation assignment is a review task: it is one of the open
+    # annotation reviews, yet the cell names the consolidator.
+    c = cells(
+        facts(
+            per_text=2,
+            annotation_assignments=2,
+            open_annotation_reviews=1,
+            annotators_submitted=(ANA, TOM),
+            consolidators=(LUC,),
+            submissions=2,
+        )
+    )
+    assert (c.annotation.state, c.annotation.tone) == ("consolidating", "running")
+    assert c.annotation.detail.people == (LUC,)
+    assert (c.final.state, c.final.tone) == ("after_review", "waiting")
+    # An annotation review beside it keeps the cell in review.
+    c = cells(
+        facts(
+            per_text=2,
+            annotation_assignments=2,
+            open_annotation_reviews=2,
+            annotators_submitted=(ANA, TOM),
+            annotation_reviewers=(ANA,),
+            consolidators=(LUC,),
+            submissions=2,
+        )
+    )
+    assert (c.annotation.state, c.annotation.detail.people) == ("in_review", (ANA,))
+
+
+def test_final_choose_counts_consolidation_submissions() -> None:
+    # Walkthrough step 11: two annotations and a consolidation, no final yet.
+    base: dict[str, Any] = dict(
+        per_text=2,
+        annotation_assignments=2,
+        annotators_submitted=(ANA, TOM),
+        missing_final=True,
+        submissions=2,
+    )
+    c = cells(facts(**base, final_submissions=3))
+    assert (c.final.state, c.final.detail.submitted) == ("choose", 3)
+    assert c.annotation.detail.submitted == 2
+    # Without ``final_submissions`` the Final cell counts ``submissions``.
+    assert cells(facts(**base)).final.detail.submitted == 2

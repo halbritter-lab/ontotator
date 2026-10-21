@@ -78,7 +78,8 @@ def _accepted_how(
         parent = version_of.get(target.derived_from or "")
         return "corrected", parent.version if parent is not None else None
     review = ctx.facts.latest_reviews.get(target.document_id)
-    if review is not None and review.decision == "accepted":
+    # Stored decisions are accepted_unchanged / accepted_corrected.
+    if review is not None and review.decision.startswith("accepted"):
         return "unchanged", None
     acceptance = ctx.facts.acceptances.get(target.document_id)
     if acceptance is not None and acceptance["source"] in _ACCEPTANCE_HOW:
@@ -103,7 +104,22 @@ def _latest_decision(
     candidates = [chain.newest for chain in live] + [
         parent for parent in parents if parent is not None
     ]
-    return next((v for v in candidates if v.document_id in reviews), None)
+    decided = [v for v in candidates if v.document_id in reviews]
+    # Parallel roots: the root the Review cell's rejected / query state comes
+    # from wins (rejected before query, as in ``derive_steps``).
+    for wanted in ("rejected", "query"):
+        for version in decided:
+            if reviews[version.document_id].decision == wanted:
+                return version
+    return next(iter(decided), None)
+
+
+def _final_author(ctx: _Context, final: Mapping[str, Any] | None) -> int | None:
+    """User id of the final result's author (``ctx.user_ids`` also holds the
+    selected submissions' authors without an assignment)."""
+    if final is None or final["author_label"] is None:
+        return None
+    return ctx.user_ids.get(final["author_label"])
 
 
 def stage_facts(
@@ -157,6 +173,24 @@ def stage_facts(
     def consolidating(item: rules.AssignmentFact) -> bool:
         round_fact = ctx.rounds.get(item.active_round_id or "")
         return round_fact is not None and round_fact.kind == "consolidation"
+
+    # Final "choose": annotate and consolidation submissions per target.
+    final_submissions = min(
+        (
+            len(items)
+            + sum(
+                1
+                for item in current
+                if item.task == "review"
+                and item.document_id == target.document_id
+                and item.status == "submitted"
+                and not item.held
+                and consolidating(item)
+            )
+            for target, items in zip(targets, submitted_by_target, strict=True)
+        ),
+        default=0,
+    )
 
     paused_by: int | None = None
     paused_excerpt: str | None = None
@@ -229,15 +263,12 @@ def stage_facts(
             if final["kind"] == "consolidation"
             else "round"
         ),
-        final_author=(
-            ctx.user_ids.get(final["author_label"])
-            if final is not None and final["author_label"] is not None
-            else None
-        ),
+        final_author=_final_author(ctx, final),
         final_round_ordinal=final["round_ordinal"] if final is not None else None,
         final_version=final["version"] if final is not None else None,
         final_on_newest=final is None or final["document_id"] in target_ids,
         submissions=submissions,
+        final_submissions=final_submissions,
         parallel_roots=len(live) > 1,
     )
 

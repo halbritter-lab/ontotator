@@ -73,6 +73,12 @@ def test_facet_counts_exclude_own_group(env):
     assert facets["review_state"]["undecided"] == 0
 
 
+def test_checked_value_without_rows_stays_listed(env):
+    facets = get(env, [("review_state", "source_changed")])["bar"]["facets"]
+    assert facets["review_state"]["source_changed"] == 0
+    assert "source_changed" not in get(env, [])["bar"]["facets"]["review_state"]
+
+
 def test_each_facet_filter_equals_shown(env):
     for base in ([], [("segment", "decision")], [("q", "c2")]):
         facets = get(env, base)["bar"]["facets"]

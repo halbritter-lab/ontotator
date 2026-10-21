@@ -10,14 +10,31 @@ import pytest
 from document_rows_support import rows_of
 from document_rows_support import service as rows_service
 from sqlalchemy import insert, select, update
-from test_document_rows_next_step import add_correction, second_root
-from work_plan_support import assign, doc, plan_env, write
+from test_document_rows_next_step import SECOND, add_correction, second_root
+from test_document_rows_submissions import (
+    _lead_service,
+    _row_of,
+    _submit_consolidation,
+)
+from test_work_rounds import create_consolidation_fixture
+from tests_support_reviews import insert_review
+from work_plan_support import assign, doc, plan_env, select_final, submit, write
 from work_plan_support import service as plan_service
 
 from ontocurator.application.document_rows import RowQuery
 from ontocurator.domain.work_plans import PlanFlags, RowKey
+from ontocurator.storage import work_plan_store
 from ontocurator.storage.plan_tables import WorkPlanFlagsRow
-from ontocurator.storage.tables import DocumentRow, ProjectRow
+from ontocurator.storage.tables import (
+    AssignmentRow,
+    DocumentRow,
+    ProjectRow,
+    SubmissionRow,
+    TranslationReviewRow,
+    UserRow,
+)
+
+pytest_plugins = ("test_work_rounds",)
 
 BOTH = PlanFlags(True, True)
 REVIEW = PlanFlags(True, False)
@@ -278,3 +295,190 @@ def test_decided_flag_on_plan_row(env):
     # A lead write decides the row.
     plan(env, c2_fr=OFF)
     assert rows(env)[("c2", "fr")]["plan_row"]["decided"] is True
+
+
+def names(cell: dict[str, Any]) -> list[str | None]:
+    return [person["display_name"] for person in cell["detail"]["people"]]
+
+
+def test_consolidation_round_shows_consolidating_then_counts_in_final(rounds):
+    """Walkthrough steps 10-11: the consolidator works, then the lead chooses
+    among two annotations and the consolidation ("3 submissions")."""
+    repo, ontology, reviewer, result, _inputs, access, actor = (
+        create_consolidation_fixture(rounds)
+    )
+    key = tuple(_row_of(repo, "doc-1"))
+    lead = _lead_service(repo, access, actor)
+
+    def stages() -> dict[str, Any]:
+        found = rows_of(lead.page("pkg-1", RowQuery()))
+        return dict(found[(key[0], key[1])]["stages"])
+
+    annotation = stages()["annotation"]
+    assert (annotation["state"], annotation["tone"]) == ("consolidating", "running")
+    assert [p["pseudonym"] for p in annotation["detail"]["people"]] == ["reviewer"]
+    assert stages()["final"]["state"] == "after_review"
+    _submit_consolidation(ontology, reviewer, result)
+    after = stages()
+    assert (after["final"]["state"], after["final"]["detail"]["submitted"]) == (
+        "choose",
+        3,
+    )
+    # The Annotation cell names the two annotators only.
+    assert after["annotation"]["state"] == "submitted"
+    assert [p["pseudonym"] for p in after["annotation"]["detail"]["people"]] == [
+        "anna",
+        "ben",
+    ]
+
+
+def test_accepted_in_package_and_outside(env):
+    plan(env, c1_de=REVIEW, c2_de=REVIEW)
+    lead = env.app.state.accounts.get_by_username("leader")
+    with env.db.transaction() as conn:
+        for case, source in (("c1", "package"), ("c2", "lead")):
+            work_plan_store.add_acceptance(
+                conn,
+                env.pid,
+                doc(case, "de"),
+                source=source,
+                reason="Reviewed outside Ontocurator",
+                accepted_by=lead.id,
+            )
+    for case in ("c1", "c2"):
+        set_status(env, doc(case, "de"), "accepted")
+    result = rows(env)
+    notes = {
+        case: (
+            result[(case, "de")]["stages"]["review"]["state"],
+            result[(case, "de")]["stages"]["review"]["detail"]["note"],
+        )
+        for case in ("c1", "c2")
+    }
+    assert notes == {"c1": ("accepted", "in_package"), "c2": ("accepted", "outside")}
+
+
+def reviewed(env: Any, document_id: str, decision: str) -> Any:
+    """A finished translation review of ``document_id`` by the project's
+    first assignee; returns the decision's time."""
+    review_id = insert_review(env.db, "proj", document_id, decision)
+    accepted = decision.startswith("accepted")
+    set_status(env, document_id, "accepted" if accepted else "reviewed")
+    with env.db.transaction() as conn:
+        return conn.execute(
+            select(TranslationReviewRow.created_at).where(
+                TranslationReviewRow.id == review_id
+            )
+        ).scalar_one()
+
+
+def finish(env: Any, assignment_id: int) -> None:
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == assignment_id)
+            .values(status="submitted")
+        )
+
+
+def test_rejected_and_query_name_who_decided_and_when(env):
+    """Scenario 4: Rejected / Query name the reviewer and the decision time."""
+    plan(env, c1_de=BOTH, c2_de=BOTH)
+    finish(env, assign(env, doc("c1", "de"), "ana", "translation_review"))
+    rejected_at = reviewed(env, doc("c1", "de"), "rejected")
+    query_at = reviewed(env, doc("c2", "de"), "query")
+    result = rows(env)
+    for case, state, tone, at in (
+        ("c1", "rejected", "rejected", rejected_at),
+        ("c2", "query", "decision", query_at),
+    ):
+        review = result[(case, "de")]["stages"]["review"]
+        assert (review["state"], review["tone"]) == (state, tone), case
+        assert names(review) == ["Ana Weber"], case
+        assert review["detail"]["at"] == at, case
+
+
+def test_parallel_roots_name_the_rejected_root(env, tmp_path):
+    second_root(env, tmp_path)
+    plan(env, c1_fr=REVIEW)
+    finish(env, assign(env, doc("c1", "fr"), "ana", "translation_review"))
+    reviewed(env, doc("c1", "fr"), "accepted_unchanged")
+    rejected_at = reviewed(env, SECOND, "rejected")
+    review = rows(env)[("c1", "fr")]["stages"]["review"]
+    assert review["state"] == "rejected"
+    assert review["detail"]["at"] == rejected_at
+
+
+def submit_with_findings(env: Any, assignment_id: int, sid: str, count: int) -> None:
+    """``submit`` with ``count`` snapshots in the stored payload (submissions
+    are append-only, so the row is written once with them)."""
+    from ontocurator.domain.review import ReviewTargetSet
+    from ontocurator.domain.workspace import Submission, WorkspaceKey
+    from ontocurator.storage.repository import _key_str, _submission_payload
+
+    with env.db.transaction() as conn:
+        row = conn.execute(
+            select(AssignmentRow.document_id, UserRow.pseudonym)
+            .join(UserRow, UserRow.id == AssignmentRow.user_id)
+            .where(AssignmentRow.id == assignment_id)
+        ).one()
+    key = WorkspaceKey(
+        project_key="proj",
+        document_id=row.document_id,
+        annotator_id=row.pseudonym,
+        mode="independent",
+        target_set_id="targets-0",
+    )
+    record = Submission(
+        submission_id=sid,
+        origin_key=key,
+        targets=ReviewTargetSet.create([]),
+        draft_revision=1,
+        snapshots=[],
+        decisions=[],
+        created_at="2026-10-16T10:00:00Z",
+    )
+    payload = {**_submission_payload(record), "snapshots": [{}] * count}
+    with env.db.transaction() as conn:
+        conn.execute(
+            insert(SubmissionRow).values(
+                project_id=env.pid,
+                submission_id=sid,
+                local_key=_key_str(key),
+                origin_key=_key_str(key),
+                document_id=row.document_id,
+                annotator_id=row.pseudonym,
+                mode="independent",
+                draft_revision=1,
+                payload=payload,
+                created_at=record.created_at,
+            )
+        )
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == assignment_id)
+            .values(status="submitted", last_submission_id=sid)
+        )
+
+
+def test_findings_on_a_single_submission_only(env):
+    submit_with_findings(env, assign(env, doc("c1", "en"), "anno", "annotate"), "s1", 2)
+    annotation = rows(env)[("c1", "en")]["stages"]["annotation"]
+    assert (annotation["state"], annotation["detail"]["findings"]) == (
+        "submitted",
+        2,
+    )
+    assert names(annotation) == ["Anne Notator"]
+    submit(env, assign(env, doc("c1", "en"), "anno2", "annotate"), "s2")
+    annotation = rows(env)[("c1", "en")]["stages"]["annotation"]
+    assert annotation["detail"]["findings"] is None
+
+
+def test_final_cell_names_author_and_kind(env):
+    submit(env, assign(env, doc("c1", "en"), "anno", "annotate"), "s1")
+    select_final(env, doc("c1", "en"), "s1")
+    final = rows(env)[("c1", "en")]["stages"]["final"]
+    assert (final["state"], final["tone"]) == ("final", "done")
+    assert names(final) == ["Anne Notator"]
+    assert final["detail"]["note"] == "round"
+    assert final["detail"]["version"] is None  # on the newest version

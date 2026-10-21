@@ -114,6 +114,10 @@ class _Context:
             self.user_ids.setdefault(assignment.pseudonym, assignment.user_id)
             self.pseudonyms.setdefault(assignment.user_id, assignment.pseudonym)
         self.pseudonyms.setdefault(facts.viewer_user_id, facts.viewer_pseudonym)
+        # Authors of final results without an assignment (Final cell).
+        for pseudonym, user_id in facts.author_ids.items():
+            self.user_ids.setdefault(pseudonym, user_id)
+            self.pseudonyms.setdefault(user_id, pseudonym)
 
     def person(self, user_id: int, pseudonym: str) -> dict[str, Any]:
         """PersonRefView fields of ``user_id`` (pseudonym alone when unknown)."""
@@ -1014,29 +1018,44 @@ def _shown(ctx: _Context, key: RowKey, row: Mapping[str, Any], query: RowQuery) 
 
 
 def _facets(
-    ctx: _Context, rows: Mapping[RowKey, dict[str, Any]], query: RowQuery
+    ctx: _Context,
+    rows: Mapping[RowKey, dict[str, Any]],
+    query: RowQuery,
+    shown: Mapping[RowKey, bool],
 ) -> dict[str, dict[str, int]]:
-    """Facet counts of the filter popover (``document_row_facets``)."""
+    """Facet counts of the filter popover (``document_row_facets``).
+
+    ``shown``: the rows counted in ``bar.shown`` for ``query``; a group
+    without a selection reuses it, only a group with a selection re-evaluates
+    the rows without its own selection.
+    """
     no_origin = replace(query, origin=())
 
-    def values(key: RowKey) -> dict[facets.FacetGroup, tuple[str, ...]]:
+    def values(key: RowKey, group: facets.FacetGroup) -> tuple[str, ...]:
         row = rows[key]
         return facets.facet_values(
             row,
-            origins=[
+            group,
+            origins=lambda: [
                 version["origin"]
                 for version in row["versions"]
                 if _version_matches(ctx.facts, no_origin, row, version)
             ],
-            plan=_plan_values(ctx, key),
-            waiting_on=_waiting_values(ctx, key),
+            plan=lambda: _plan_values(ctx, key),
+            waiting_on=lambda: _waiting_values(ctx, key),
         )
 
+    selected: dict[facets.FacetGroup, tuple[str, ...]] = {
+        group: tuple(getattr(query, group)) for group in facets.FACET_GROUPS
+    }
+
     def matches_without(group: facets.FacetGroup) -> Callable[[RowKey], bool]:
+        if not selected[group]:
+            return lambda key: shown[key]
         without = replace(query, **{str(group): ()})  # type: ignore[arg-type]
         return lambda key: _shown(ctx, key, rows[key], without)
 
-    counts = facets.facet_counts(rows, values, matches_without)
+    counts = facets.facet_counts(rows, values, matches_without, selected)
     return {str(group): value for group, value in counts.items()}
 
 
@@ -1245,13 +1264,12 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
         else None
     )
     shown_rows: dict[RowKey, dict[str, Any]] = {}
-    shown_bar = 0
+    shown: dict[RowKey, bool] = {}
     for key, row in rows.items():
         filtered, decision = matches[key]
         row["matches_decision"] = decision
         # "k of n shown": every filter applies, the final filter included.
-        if filtered and decision and _in_active_segment(ctx, key, row, query):
-            shown_bar += 1
+        shown[key] = filtered and decision and _in_active_segment(ctx, key, row, query)
         if key == pinned_key:
             row["pinned"] = True
             shown_rows[key] = row
@@ -1260,9 +1278,9 @@ def build_page(facts: RowFacts, query: RowQuery) -> dict[str, Any]:
         elif filtered and key in retain:
             row["retained"] = True
             shown_rows[key] = row
-    bar["shown"] = shown_bar
+    bar["shown"] = sum(shown.values())
     # Filter popover: counts under the tab, search and every other group.
-    bar["facets"] = _facets(ctx, rows, query)
+    bar["facets"] = _facets(ctx, rows, query, shown)
 
     by_case: dict[str, list[RowKey]] = {}
     for key in rows:
