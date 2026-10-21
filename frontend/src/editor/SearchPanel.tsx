@@ -106,19 +106,23 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotationId, workspaceKey, layerId, searchManager]);
 
-  // The prefill may arrive after mount (the search languages load with the task): apply it once
-  // for the same finding while the user has not typed, shown selected like a prefill on mount.
+  // The prefill follows the marked text (late search languages, an adjusted mark) until the user types or clears:
+  // the first one runs at once and is shown selected; later ones wait for the normal debounce.
   const prefillSettled = useRef(!!initialQuery?.trim());
+  const lastPrefill = useRef(initialQuery ?? "");
   const userTyped = useRef(false);
   const selectPrefill = useRef(false);
   useEffect(() => {
-    if (prefillSettled.current || userTyped.current || !initialQuery?.trim()) return;
+    if (userTyped.current || !initialQuery?.trim()) return;
+    if (prefillSettled.current && initialQuery === lastPrefill.current) return;
     const identity = [annotationId, workspaceKey, layerId, searchManager] as const;
     if (!identity.every((value, index) => Object.is(value, mountIdentity.current[index]))) return;
+    const first = !prefillSettled.current;
     prefillSettled.current = true;
+    lastPrefill.current = initialQuery;
     selectPrefill.current = true;
     setQueryInput(initialQuery);
-    runSearch(initialQuery, true);
+    runSearch(initialQuery, first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
   useLayoutEffect(() => {
@@ -200,6 +204,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   };
 
   const handleClear = () => {
+    userTyped.current = true;
     cancelDebounce();
     setQueryInput("");
     searchManager.clear();

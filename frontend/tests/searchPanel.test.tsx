@@ -127,6 +127,57 @@ describe("SearchPanel", () => {
     });
   });
 
+  describe("a changed prefill (an adjusted mark)", () => {
+    const panel = (manager: SearchManager, initialQuery?: string) => (
+      <SearchPanel searchManager={manager} annotationId="a" workspaceKey={key} layerId="phenotype"
+        onSelectCandidate={vi.fn()} debounceMs={250} autoFocus initialQuery={initialQuery} />
+    );
+
+    it("a changed prefill re-prefills while the user has not typed", () => {
+      vi.useFakeTimers();
+      try {
+        const searchOntology = vi.fn().mockResolvedValue(threeHits);
+        const manager = new SearchManager({ searchOntology } as any);
+        const { rerender } = render(panel(manager, "sever"));
+        const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+        expect(searchOntology).toHaveBeenCalledTimes(1);
+        rerender(panel(manager, "severe hypotonia"));
+        expect(input.value).toBe("severe hypotonia");
+        expect(searchOntology).toHaveBeenCalledTimes(1);
+        act(() => { vi.advanceTimersByTime(249); });
+        expect(searchOntology).toHaveBeenCalledTimes(1);
+        act(() => { vi.advanceTimersByTime(1); });
+        expect(searchOntology).toHaveBeenCalledTimes(2);
+        expect(searchOntology.mock.calls[1][0].query).toBe("severe hypotonia");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it.each([
+      ["typing", (input: HTMLInputElement) => fireEvent.change(input, { target: { value: "x" } })],
+      ["clearing", () => fireEvent.click(screen.getByRole("button", { name: "Clear search" }))],
+    ])("a changed prefill is ignored after %s", (_name, act_) => {
+      vi.useFakeTimers();
+      try {
+        const searchOntology = vi.fn().mockResolvedValue(threeHits);
+        const manager = new SearchManager({ searchOntology } as any);
+        const { rerender } = render(panel(manager, "sever"));
+        const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+        act_(input);
+        act(() => { vi.advanceTimersByTime(300); });
+        const value = input.value;
+        const calls = searchOntology.mock.calls.length;
+        rerender(panel(manager, "severe hypotonia"));
+        act(() => { vi.advanceTimersByTime(300); });
+        expect(input.value).toBe(value);
+        expect(searchOntology).toHaveBeenCalledTimes(calls);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   it("moves the active hit with ArrowDown and ArrowUp without wrap and skips obsolete hits", async () => {
     const input = renderPanel(vi.fn().mockResolvedValue(threeHits));
     fireEvent.change(input, { target: { value: "seizure" } });
