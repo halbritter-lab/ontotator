@@ -26,10 +26,11 @@ async function evidence(page: Page, name: string, part?: Locator) {
   if (part) await part.screenshot({ path }); else await page.screenshot({ path, fullPage: false });
 }
 
-/** Build ``ROWS`` and log in as its lead; D7: the lead lands on Documents. */
+/** Build ``ROWS`` and log in as its lead, who used the project last: the landing (F8) opens its Documents. */
 async function openRows(page: Page): Promise<LeadScenario> {
   const s = await leadScenario(page, "ROWS");
   await page.goto("/");
+  await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontocurator.lastProject.v1:${s.users.lead}`, s.project]);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username", { exact: true }).fill(s.users.lead);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);

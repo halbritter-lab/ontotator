@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 import { documentsTab, rowAction } from "./documentsHelpers";
-import { selectText, submitCase, TEST_PASSWORD } from "./helpers";
+import { selectText, submitCase, TASKS_HOME, TEST_PASSWORD } from "./helpers";
 
 interface Actor { username: string; code: string }
 interface ProjectSetup { key: string; lead: Actor; annotator: Actor }
 
 async function redeemCode(page: Page, actor: Actor) {
-  await page.goto("/");
+  await page.goto(TASKS_HOME);
   await page.getByRole("button", { name: "I have a setup or reset code" }).click();
   const form = page.getByRole("form", { name: "Set your password" });
   await form.getByLabel("Username", { exact: true }).fill(actor.username);
@@ -18,6 +18,8 @@ async function redeemCode(page: Page, actor: Actor) {
   await form.getByLabel("Repeat the new password").fill(TEST_PASSWORD);
   await form.getByRole("button", { name: "Set password and log in" }).click();
   await expect(page.getByTestId("current-user")).toContainText(actor.username);
+  // Setting the password leaves "#/?status=all"; without a last-used project the landing would open Projects.
+  await page.goto(TASKS_HOME);
 }
 
 async function logout(page: Page) {
@@ -26,7 +28,7 @@ async function logout(page: Page) {
 }
 
 async function loginExisting(page: Page, actor: Actor) {
-  await page.goto("/");
+  await page.goto(TASKS_HOME);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username", { exact: true }).fill(actor.username);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
@@ -113,15 +115,14 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
 }
 
 async function selectProject(page: Page, key: string) {
-  // D7: a lead of one project already lands on its Documents (with or without the decision tab, VD7).
-  // The landing redirect waits for the Documents summary ("Loading your projects…" meanwhile); a
-  // redirect landing after the picker opened would close it under the click.
+  // Login goes to My tasks (TASKS_HOME); the sidebar project switcher opens Documents of a led project.
   await expect(page.getByText("Loading your projects…", { exact: true })).toHaveCount(0);
   if (new RegExp(`#/projects/${key}/documents(\\?|$)`).test(page.url())) return;
-  await page.locator(".shell-project-trigger").click();
-  await page.locator(`#shell-project-panel a[href="#/projects/${encodeURIComponent(key)}/documents"]`).click();
+  await page.locator(".project-switcher").click();
+  const dialog = page.getByRole("dialog", { name: "Switch project" });
+  await dialog.locator(`a[href="#/projects/${encodeURIComponent(key)}/documents"]`).click();
   await expect(page).toHaveURL(new RegExp(`#/projects/${key}/documents$`));
-  await expect(page.locator("#shell-project-panel")).toBeHidden();
+  await expect(dialog).toBeHidden();
 }
 
 /** The navigation link "Documents", with the decision counter "Documents, n need your decision" once O8 shows it (V3). */
@@ -238,9 +239,8 @@ test.describe("Administration through real accounts and jobs", () => {
     await logout(page);
     for (const actor of [setup.lead, setup.annotator]) {
       await redeemCode(page, actor);
-      // D7: a lead lands on Documents of the led project; an annotator on My tasks.
-      if (actor === setup.lead) await expect(page.getByRole("heading", { name: "No texts yet", exact: true })).toBeVisible();
-      else await expect(page.getByRole("heading", { name: "No documents are assigned to you yet." })).toBeVisible();
+      // redeemCode ends on My tasks; neither has a task yet.
+      await expect(page.getByRole("heading", { name: "No documents are assigned to you yet." })).toBeVisible();
       await expect(page.getByRole("link", { name: "Users", exact: true })).toHaveCount(0);
       await logout(page);
     }

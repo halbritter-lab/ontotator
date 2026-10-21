@@ -12,7 +12,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   caseBox, decisionBlock, detailsButton, documentsReady, documentsTab, openFilters, openRowPanel, rowAction, rowCell, rowPanel, textRow, textVersionItems,
 } from "./documentsHelpers";
-import { authenticatedRequest, TEST_PASSWORD } from "./helpers";
+import { authenticatedRequest, TASKS_HOME, TEST_PASSWORD } from "./helpers";
 import { leadScenario, pasteCaseIds, type LeadPerson, type LeadScenario } from "./leadWorkflowHelpers";
 
 test.setTimeout(240_000);
@@ -44,9 +44,14 @@ function counter(page: Page) {
 /** "Ana Weber (ann-0006)": display name and pseudonym, as tables and lists show people. */
 const person = (s: LeadScenario, name: LeadPerson) => `${s.display_names[name]} (${s.pseudonyms[name]})`;
 
-/** Log in through the login form; the shell then shows the display name. */
-async function login(page: Page, s: LeadScenario, name: LeadPerson) {
-  await page.goto("/");
+/**
+ * Log in through the login form; the shell then shows the display name. Without `remember` the
+ * login starts on My tasks (TASKS_HOME); with it, at "#/" after seeding the last-used project, so
+ * the landing (F8) opens that project.
+ */
+async function login(page: Page, s: LeadScenario, name: LeadPerson, remember?: string) {
+  await page.goto(remember === undefined ? TASKS_HOME : "/");
+  if (remember !== undefined) await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontocurator.lastProject.v1:${s.users[name]}`, remember]);
   const form = page.getByRole("form", { name: "Log in to Ontocurator" });
   await form.getByLabel("Username", { exact: true }).fill(s.users[name]);
   await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
@@ -54,9 +59,9 @@ async function login(page: Page, s: LeadScenario, name: LeadPerson) {
   await expect(page.getByTestId("current-user")).toContainText(s.display_names[name]);
 }
 
-/** Log in as the lead; D7: the lead lands on Documents of the project. */
+/** Log in as the lead, who used the project last: the landing opens its Documents (F8). */
 async function loginLead(page: Page, s: LeadScenario) {
-  await login(page, s, "lead");
+  await login(page, s, "lead", s.project);
   await expect(page).toHaveURL(new RegExp(`#/projects/${esc(s.project)}/documents`));
   await expect(page.getByRole("heading", { name: "Documents", level: 1 })).toBeVisible();
   await documentsReady(page);
@@ -500,7 +505,7 @@ test("ROWS: row actions within three clicks", async ({ page }) => {
 test("annotator sees only pseudonyms", async ({ page }) => {
   const s = await leadScenario(page, "ROWS");
   await login(page, s, "annotator");
-  // Users who lead no project land on My tasks.
+  // The login helper starts on My tasks.
   await expect(page.getByRole("heading", { name: "My tasks", level: 1 })).toBeVisible();
   const others = (["lead", "ana", "ben"] as const).map(name => s.display_names[name]);
   const noOthers = async (where: string) => {
@@ -521,41 +526,111 @@ test("annotator sees only pseudonyms", async ({ page }) => {
   await noOthers("submitted task screen");
 });
 
-test("lead lands on Documents of the last project (D7)", async ({ page }) => {
+/** One lead ("Dana Lead") of two fresh projects, with every role there and no tasks. */
+async function twoProjectLead(page: Page) {
   const a = await leadScenario(page, "DEFAULT_IMPORT");
   const b = await leadScenario(page, "DEFAULT_IMPORT");
-  // One lead of both projects (every role there, no tasks).
   const username = `lead-d7-${a.project.slice(-8)}`;
   const query = new URLSearchParams({ username, pseudonym: username, display_name: "Dana Lead", projects: `${a.project},${b.project}`, assign: "none" });
   const created = await page.request.post(`/__test_user__?${query.toString()}`);
   expect(created.ok(), await created.text()).toBeTruthy();
-  const loginDana = async () => {
+  /** Log in at "#/" (the landing applies); `remember` seeds the last-used project first. */
+  const loginDana = async (remember?: string) => {
     await page.goto("/");
+    if (remember !== undefined) await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [`ontocurator.lastProject.v1:${username}`, remember]);
     const form = page.getByRole("form", { name: "Log in to Ontocurator" });
     await form.getByLabel("Username", { exact: true }).fill(username);
     await form.getByLabel("Password", { exact: true }).fill(TEST_PASSWORD);
     await form.getByRole("button", { name: "Log in", exact: true }).click();
     await expect(page.getByTestId("current-user")).toContainText("Dana Lead");
   };
-  await loginDana();
-  // First login: Documents of a led project.
-  await expect(page).toHaveURL(new RegExp(`#/projects/(${esc(a.project)}|${esc(b.project)})/documents`));
-  await expect(page.getByRole("heading", { name: "Documents", level: 1 })).toBeVisible();
-  const first = page.url().includes(a.project) ? a.project : b.project;
-  const other = first === a.project ? b.project : a.project;
+  return { a: a.project, b: b.project, username, loginDana };
+}
 
-  // Open the other project's Documents, log out and in again: the last project.
-  await page.goto(`/#/projects/${encodeURIComponent(other)}/documents`);
+test("lead lands on the last-used project, else on Projects (F8, D4)", async ({ page }) => {
+  const { a, b, loginDana } = await twoProjectLead(page);
+  await loginDana();
+  // Nothing remembered yet: the Projects page lists both projects.
+  await expect(page).toHaveURL(/#\/projects$/);
+  await expect(page.getByRole("heading", { name: "Projects", level: 1 })).toBeVisible();
+  const table = page.getByRole("table", { name: "Projects" });
+  for (const key of [a, b]) await expect(table.getByRole("row").filter({ hasText: key })).toHaveCount(1);
+
+  // Open b's Documents, log out and in again: the last-used project.
+  await page.goto(`/#/projects/${encodeURIComponent(b)}/documents`);
   await expect(page.getByRole("heading", { name: "Documents", level: 1 })).toBeVisible();
   await page.getByRole("button", { name: "Log out", exact: true }).click();
   await expect(page.getByRole("form", { name: "Log in to Ontocurator" })).toBeVisible();
   await loginDana();
-  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(other)}/documents`));
+  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(b)}/documents`));
   await expect(page.getByRole("heading", { name: "Documents", level: 1 })).toBeVisible();
-  // Opening the app at "#/" also lands there (replace navigation); within a session "My tasks" stays reachable.
+  // Opening the app at "#/" also lands there (replace navigation).
   await page.goto("about:blank");
   await page.goto("/#/");
-  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(other)}/documents`));
+  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(b)}/documents`));
+});
+
+test("a login with an inaccessible remembered project lands on Projects", async ({ page }) => {
+  const { loginDana } = await twoProjectLead(page);
+  await loginDana("no-such-project");
+  await expect(page).toHaveURL(/#\/projects$/);
+  await expect(page.getByRole("heading", { name: "Projects", level: 1 })).toBeVisible();
+});
+
+test("demo-lead switches project via the sidebar in two clicks", async ({ page }) => {
+  const { a, b, loginDana } = await twoProjectLead(page);
+  await loginDana(a);
+  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(a)}/documents`));
+  const clicks = counter(page);
+  const nav = page.getByRole("navigation", { name: "Sections" });
+  const switcher = nav.locator(".project-switcher");
+  await expect(switcher).toHaveAccessibleName(/^Project: .+, switch project$/);
+  await clicks.click(switcher);
+  const dialog = page.getByRole("dialog", { name: "Switch project" });
+  await expect(dialog.getByRole("combobox", { name: "Find project" })).toBeFocused();
+  await clicks.click(dialog.getByRole("option").filter({ hasText: b }).getByRole("link"));
+  expect(clicks.total).toBe(2);
+  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(b)}/documents`));
+  await expect(dialog).toBeHidden();
+});
+
+test("demo-lead switches project by keyboard: Alt+P, type, Enter", async ({ page }) => {
+  const { a, b, loginDana } = await twoProjectLead(page);
+  await loginDana(a);
+  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(a)}/documents`));
+  await expect(page.getByRole("heading", { name: "Documents", level: 1 })).toBeVisible();
+  await page.keyboard.press("Alt+KeyP");
+  const field = page.getByRole("dialog", { name: "Switch project" }).getByRole("combobox", { name: "Find project" });
+  await expect(field).toBeFocused();
+  await page.keyboard.type(b);
+  await expect(page.getByRole("listbox", { name: "Projects" }).getByRole("option")).toHaveCount(1);
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(b)}/documents`));
+});
+
+test("below 700 px the switcher opens as a sheet and the Projects page shows cards", async ({ page }) => {
+  await page.setViewportSize({ width: 680, height: 900 });
+  const { a, b, loginDana } = await twoProjectLead(page);
+  await loginDana(a);
+  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(a)}/documents`));
+  await page.locator(".project-switcher").click();
+  const sheet = page.getByRole("dialog", { name: "Switch project" });
+  await expect(sheet).toHaveAttribute("aria-modal", "true");
+  await expect(sheet).toHaveClass(/ui-popover-sheet/);
+  const field = sheet.getByRole("combobox", { name: "Find project" });
+  await expect(field).toBeFocused();
+  await page.keyboard.type(b);
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`#/projects/${esc(b)}/documents`));
+
+  await page.goto("/#/projects");
+  await expect(page.getByRole("heading", { name: "Projects", level: 1 })).toBeVisible();
+  const card = page.locator(".projects-table tbody tr").first();
+  await expect(card).toHaveCSS("display", "grid");
+  await expect(page.locator(".projects-table thead")).toHaveCSS("position", "absolute");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  expect(await axeViolations(page, ".projects-page"), "Projects page cards").toEqual([]);
 });
 
 async function axeViolations(page: Page, include: string, disabled: string[] = []): Promise<string[]> {

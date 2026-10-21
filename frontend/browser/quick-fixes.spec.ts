@@ -166,52 +166,54 @@ test('Q1 (B2): the problem dialog keeps New report and Close in a fixed footer',
   }
 });
 
-test('Q3: project picker closes on select, Escape, outside click and Tab-out; arrows and ctrl-click do not navigate', async ({ page, context }) => {
+test('Q3: project switcher closes on select, Escape, outside click and Tab-out; arrows and ctrl-click do not navigate', async ({ page, context }) => {
   const s = await scenario(page);
   await loginExisting(page, s.users.lead);
-  await page.goto('/#/tasks');
-  const trigger = page.locator('.shell-project-trigger');
-  const panel = page.locator('#shell-project-panel');
-  const links = panel.getByRole('link');
-  // Escape returns focus to the trigger.
-  await trigger.click(); await expect(panel).toBeVisible();
+  const trigger = page.getByRole('navigation', { name: 'Sections' }).locator('.project-switcher');
+  const dialog = page.getByRole('dialog', { name: 'Switch project' });
+  const field = dialog.getByRole('combobox', { name: 'Find project' });
+  const option = dialog.getByRole('option').filter({ hasText: s.project }).getByRole('link');
+  // Escape returns focus to the button.
+  await trigger.click(); await expect(dialog).toBeVisible();
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  await page.keyboard.press('Tab'); await expect(links.first()).toBeFocused();
+  await expect(field).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(panel).toBeHidden(); await expect(trigger).toBeFocused();
+  await expect(dialog).toBeHidden(); await expect(trigger).toBeFocused();
   // Outside pointer.
-  await trigger.click(); await expect(panel).toBeVisible();
-  await page.mouse.click(5, page.viewportSize()!.height - 5); await expect(panel).toBeHidden();
-  // Tab-out: Tab from the last link leaves the picker and closes it.
-  await trigger.click(); await expect(panel).toBeVisible();
-  await links.last().focus();
+  await trigger.click(); await expect(dialog).toBeVisible();
+  await page.mouse.click(page.viewportSize()!.width - 5, page.viewportSize()!.height - 5); await expect(dialog).toBeHidden();
+  // Tab-out at either end closes it: Tab from "All projects", Shift+Tab from the field.
+  await trigger.click(); await expect(dialog).toBeVisible();
+  await dialog.getByRole('link', { name: 'All projects' }).focus();
   await page.keyboard.press('Tab');
-  await expect(panel).toBeHidden();
+  await expect(dialog).toBeHidden();
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-  expect(await page.locator('.shell-project-selector').evaluate(el => el.contains(document.activeElement))).toBe(false);
-  // Arrow keys never navigate: the URL is captured before the keypresses.
-  await trigger.click(); await expect(panel).toBeVisible();
-  const link = links.first();
+  await trigger.click(); await expect(field).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog).toBeHidden();
+  // Arrow keys move the active option and never navigate: the URL is captured before the keypresses.
+  await trigger.click(); await expect(field).toBeFocused();
   const url = page.url();
-  await link.focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowUp');
-  await expect(panel).toBeVisible();
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowUp');
+  await expect(dialog).toBeVisible();
+  await expect(field).toHaveAttribute('aria-activedescendant', /.+/);
   expect(page.url()).toBe(url);
-  // Ctrl-click opens a new tab and leaves this page and the panel as they were.
+  // Ctrl-click opens a new tab and leaves this page and the popover as they were.
   const popup = context.waitForEvent('page');
-  await link.click({ modifiers: ['Control'] });
+  await option.click({ modifiers: ['Control'] });
   await (await popup).close();
   expect(page.url()).toBe(url);
-  await expect(panel).toBeVisible();
+  await expect(dialog).toBeVisible();
   // Plain click navigates and closes.
-  await link.click();
+  await option.click();
   await expect(page).not.toHaveURL(url);
-  await expect(panel).toBeHidden();
+  await expect(dialog).toBeHidden();
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-  // Route change closes; the panel never stays over the page.
-  await trigger.click(); await expect(panel).toBeVisible();
-  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Profile' }).click();
+  // A route change closes it; the popover never stays over the page.
+  await trigger.click(); await expect(dialog).toBeVisible();
+  await page.evaluate(() => { window.location.hash = '#/me'; });
   await expect(page).toHaveURL(/#\/me/);
-  await expect(panel).toBeHidden();
+  await expect(dialog).toBeHidden();
 });
 
 test('Q4: export preflight has one primary, Cancel, and tight warning items', async ({ page, browser }) => {
@@ -266,9 +268,10 @@ test('F7: status tabs switch and survive a reload', async ({ page, browser }) =>
     payload: { command: 'submit_workspace', document_checked: true, checked_layer_ids: ['hpo'] },
   });
 
-  // A hash-only goto keeps the task list loaded at login; reload to read the submission.
-  await page.goto('/#/');
+  // Reload to read the submission (at "#/?status=all", so the last-used landing does not apply), then a
+  // hash-only goto to "#/" keeps the reloaded task list and shows the default tab.
   await page.reload();
+  await page.goto('/#/');
   const tabs = page.getByRole('tablist', { name: 'Task status' });
   const rows = page.getByTestId('task-row');
   // D3: no status in the URL opens on All.
