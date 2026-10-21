@@ -179,8 +179,9 @@ it.each(["alice", "bob"])("uses the real AuthGate after an expired translation s
     expect(JSON.parse(writes[1].body as string)).toEqual({ expected_revision: 6, text: "Unsaved Alice text", form: { decision: "accepted_corrected", clinical_change: false } });
     expect(metadata).toHaveBeenCalledTimes(1); expect(open).toHaveBeenCalledTimes(1);
   } else {
-    await screen.findByRole('heading', { name: 'My tasks' });
-    expect(window.location.hash).toBe('#/');
+    // Another user starts afresh at "#/": the landing opens Projects, as they have no last-used project (F8).
+    await screen.findByRole('heading', { name: 'Projects', level: 1 });
+    expect(window.location.hash).toBe('#/projects');
     expect(screen.queryByDisplayValue("Unsaved Alice text")).toBeNull();
     expect(writes).toHaveLength(1); expect(metadata).toHaveBeenCalledTimes(1); expect(open).toHaveBeenCalledTimes(1);
   }

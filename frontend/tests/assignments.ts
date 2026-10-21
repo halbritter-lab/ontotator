@@ -17,8 +17,9 @@ export function assigned(response: OpenWorkspaceResponse, id = 1): AssignmentWor
     revoked_at: null, last_submission_id: null } };
 }
 
+/** My tasks with one task; "All" explicitly, since a bare "#/" lands on the last-used project or Projects (F8). */
 export function assignedList(view: OpenWorkspaceResponse["view"]): void {
-  window.history.replaceState(null, "", "#/");
+  window.history.replaceState(null, "", "#/?status=all");
   vi.spyOn(api, "listMyTasks").mockResolvedValue([taskOf(view)]);
 }
 

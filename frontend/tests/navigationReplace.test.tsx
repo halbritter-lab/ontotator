@@ -20,7 +20,8 @@ vi.mock("../src/tasks/MyTasks", () => ({
 const user = testUser("root", { username: "root", is_system_admin: true });
 
 beforeEach(() => {
-  window.history.replaceState(null, "", "#/");
+  // "#/?status=all": a bare "#/" lands on the Projects page without a last-used project (F8).
+  window.history.replaceState(null, "", "#/?status=all");
   vi.spyOn(api, "listProjects").mockResolvedValue([]);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, "", "#/"); });

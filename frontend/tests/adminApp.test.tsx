@@ -73,8 +73,8 @@ it("uses controlled document query routes and actual managed-project documents",
 });
 
 it("restores native history during reset issuance and acknowledged code, then permits Back and Forward after Close", async () => {
-  window.history.replaceState(null, "", "#/");
-  // An administrator who leads no project stays on My tasks (D7 landing).
+  // My tasks ("All") explicitly: a bare "#/" lands on the last-used project or the Projects page (F8).
+  window.history.replaceState(null, "", "#/?status=all");
   vi.mocked(api.listProjects).mockResolvedValue([{ ...project, roles: [] }]);
   const pending = deferred<{ code: string; expires_at: string }>();
   vi.spyOn(api, "adminIssueResetCode").mockReturnValue(pending.promise);
@@ -142,8 +142,8 @@ it("refreshes authoritative project navigation after creation and a saved name",
 });
 
 it("loads ontology administration only on its route and follows actual pinned-project links", async () => {
-  window.history.replaceState(null, "", "#/");
-  // An administrator who leads no project stays on My tasks (D7 landing).
+  // My tasks ("All") explicitly: a bare "#/" lands on the last-used project or the Projects page (F8).
+  window.history.replaceState(null, "", "#/?status=all");
   vi.mocked(api.listProjects).mockResolvedValue([{ ...project, roles: [] }]);
   vi.spyOn(api, "adminListOntologies").mockResolvedValue([{ filename: "hp.json", kind: "ontology", prefix: "HP", release: "2026", language: null, sha256: "a".repeat(64), uploaded_at: "2026-10-01T12:00:00Z", projects: ["p/key"] }] as never);
   render(<App user={user} />);

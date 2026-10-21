@@ -390,8 +390,9 @@ describe("the login gate", () => {
     await editFinding();
     expect(await screen.findByText("You are now logged in as Bob (from another tab).")).toBeDefined();
     expect(screen.getByTestId("current-user").querySelector(".current-user-name")?.textContent).toBe("Bob (ann-0009)");
-    await screen.findByRole('heading', { name: 'My tasks' });
-    expect(window.location.hash).toBe('#/');
+    // Another user starts afresh at "#/": the landing opens Projects, as they have no last-used project (F8).
+    await screen.findByRole('heading', { name: 'Projects', level: 1 });
+    expect(window.location.hash).toBe('#/projects');
     expect(screen.queryByTestId("annotator-identity")).toBeNull();
   });
 

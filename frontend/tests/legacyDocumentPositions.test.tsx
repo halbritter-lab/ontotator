@@ -24,7 +24,8 @@ function server(mode: WorkspaceMode = "independent") {
     project_key: "pkg", name: "Synthetic cases", description: null, roles: ["annotator", "adjudicator"],
     allowed_modes: [mode], document_count: ids.length, can_manage: false,
   }]);
-  window.history.replaceState(null, "", "#/");
+  // "All" explicitly: a bare "#/" lands on the last-used project or the Projects page (F8).
+  window.history.replaceState(null, "", "#/?status=all");
   const tasks = documents.map((document, index) => Object.freeze({ ...document, assignment_id: 100 + index, workflow_revision: 0, held: false,
     project_key: "pkg", project_name: "Synthetic cases", task: mode === "review" ? "review" as const : "annotate" as const,
     status: "open" as const, updated_at: "2026-10-14T12:00:00Z" }));

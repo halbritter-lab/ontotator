@@ -32,7 +32,7 @@ function clickSection(name: string | RegExp): void {
 }
 
 it("uses the assigned task list, cleans old identity preferences and routes through the real shell", async () => {
-  window.history.replaceState(null, "", "#/");
+  window.history.replaceState(null, "", "#/?status=all");
   localStorage.setItem("ontocurator.annotatorId", "someone-else");
   localStorage.setItem("ontocurator.mode.pkg", "assisted");
   vi.spyOn(api, "listProjects").mockResolvedValue([]);
@@ -100,7 +100,7 @@ it("cancels a raw-hash leave without losing the editor or duplicating its unsave
   clickSection(/^My tasks/);
   fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard edits and leave" }));
   await screen.findByRole("heading", { name: "My tasks" });
-  expect(window.location.hash).toBe("#/");
+  expect(window.location.hash).toBe("#/?status=all");
 });
 
 it("does not leave when a refused save emptied the pending queue", async () => {
@@ -206,7 +206,7 @@ it("ignores an open response after navigating away while it was loading", async 
   await screen.findByRole("heading", { name: "My tasks" });
   await act(async () => finish(assigned(workspaceFixture(), 17)));
   expect(screen.queryByTestId("annotator-identity")).toBeNull();
-  expect(window.location.hash).toBe("#/");
+  expect(window.location.hash).toBe("#/?status=all");
 });
 
 it("refreshes displayed identity from the saved Profile response and keeps the session pseudonym", async () => {
