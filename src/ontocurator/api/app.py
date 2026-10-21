@@ -459,6 +459,11 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     from ontocurator.api.consolidation_routes import router as consolidation_router
 
     app.include_router(consolidation_router)
+    from ontocurator.api.consolidation_start_routes import (
+        router as consolidation_start_router,
+    )
+
+    app.include_router(consolidation_start_router)
     from ontocurator.api.text_change_routes import router as text_change_router
 
     app.include_router(text_change_router)
