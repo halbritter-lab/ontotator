@@ -22,7 +22,7 @@ function load(...views: ConsolidationView[]) {
 async function renderScreen(props: Partial<Parameters<typeof ConsolidationScreen>[0]> = {}) {
   const onNavigate = vi.fn();
   render(<><ConsolidationScreen projectKey="pkg-1" roundId="round-c" onNavigate={onNavigate} {...props} /><ShortcutHelpHost /></>);
-  await screen.findByRole("heading", { name: "Consolidate case-107 · de v2" });
+  await screen.findByRole("heading", { name: /^(Consolidate|Consolidation of) case-107 · de v2$/ });
   return { onNavigate };
 }
 
@@ -34,7 +34,7 @@ describe("ConsolidationScreen", () => {
     expect(screen.getByText("4 findings matched and were kept automatically. Check them in the text.")).toBeTruthy();
     // More than 3 matches: the list starts collapsed behind "Show".
     expect(screen.getByRole("button", { name: "Show" }).getAttribute("aria-expanded")).toBe("false");
-    expect(expandedTitle()).toBe("Hypotonia");
+    await waitFor(() => expect(expandedTitle()).toBe("Hypotonia"));
     // No internal ids, HPO codes shown.
     const text = document.body.textContent ?? "";
     for (const id of ["in-hl", "a-in-hl", "g-hypo", "ws-c", "round-c"]) expect(text).not.toContain(id);
@@ -79,7 +79,7 @@ describe("ConsolidationScreen", () => {
     expect(expandedTitle()).toBe("Global developmental delay");
     await waitFor(() => expect(document.activeElement).toBe(toggle(/^Global developmental delay/)));
     fireEvent.keyDown(window, { key: "k" });
-    expect(expandedTitle()).toBe("Hypotonia");
+    await waitFor(() => expect(expandedTitle()).toBe("Hypotonia"));
     fireEvent.click(screen.getByRole("button", { name: "+ note" }));
     const note = screen.getByLabelText("Note for the lead");
     note.focus();
@@ -90,6 +90,100 @@ describe("ConsolidationScreen", () => {
     const help = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
     expect(within(help).getByText("Next group")).toBeTruthy();
     expect(within(help).getByText("Previous group")).toBeTruthy();
+  });
+
+  it("walks J and K in the shown order (automatic first) and announces the ends", async () => {
+    load(exampleView());
+    await renderScreen();
+    expect(expandedTitle()).toBe("Hypotonia");
+    fireEvent.keyDown(window, { key: "k" });
+    expect(expandedTitle()).toBe("Recurrent fever");
+    expect(screen.getByRole("button", { name: "Hide" }).getAttribute("aria-expanded")).toBe("true");
+    for (let step = 0; step < 3; step++) fireEvent.keyDown(window, { key: "k" });
+    expect(expandedTitle()).toBe("Seizure");
+    fireEvent.keyDown(window, { key: "k" });
+    expect(expandedTitle()).toBe("Seizure");
+    await waitFor(() => expect(document.body.textContent).toContain("First group"));
+    for (let step = 0; step < 8; step++) fireEvent.keyDown(window, { key: "j" });
+    expect(expandedTitle()).toBe("Ataxia / Gait disturbance");
+    await waitFor(() => expect(document.body.textContent).toContain("Last group"));
+  });
+
+  it("names the Undo shortcut of a decision in the help", async () => {
+    const after = withGroup(exampleView(), "g-hypo", { state: "choose", annotation_ids: ["cons-1"] });
+    load(exampleView(), after);
+    vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
+    await renderScreen();
+    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
+    await screen.findByRole("button", { name: "Undo" });
+    fireEvent.keyDown(window, { key: "?" });
+    const help = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+    expect(within(help).getByText("Undo the last decision")).toBeTruthy();
+    expect(within(help).queryByText("Undo the last plan change")).toBeNull();
+  });
+
+  it("shows header actions (guidelines, problem report) next to the title", async () => {
+    load(exampleView());
+    await renderScreen({ headerActions: <button type="button">Report problem</button> });
+    expect(within(document.querySelector(".cons-header") as HTMLElement).getByRole("button", { name: "Report problem" })).toBeTruthy();
+  });
+
+  it("lists added findings with their label: by you live, by the consolidator for the lead", async () => {
+    mockViewport(1280);
+    const [start, end] = span("last week");
+    const added = [{ input_id: "ann-new", person_id: "ann-0005", annotation_id: "ann-new", term_id: "HP:0001250", term_label: "Seizure",
+      layer_id: "phenotype", type_id: "default", axes: {}, spans: [[start, end] as [number, number]], cues: [], note: null }];
+    load({ ...decidedView(), added, added_by: "Ana Weber (ann-0005)" });
+    await renderScreen({ assignmentId: 42 });
+    const list = screen.getByRole("region", { name: "Added findings" });
+    expect(within(list).getByRole("heading", { name: "Added by you" })).toBeTruthy();
+    expect(list.textContent).toContain("Seizure (HP:0001250) · “last week”");
+    expect(document.querySelector(".cons-added")?.textContent).toBe("last week");
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    expect(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByText(/· 1 added ·/)).toBeTruthy();
+    cleanup();
+    load({ ...decidedView(), read_only: true, read_only_reason: "submitted", workspace_id: null, added, added_by: "Ana Weber (ann-0005)" });
+    await renderScreen({ readOnly: true });
+    const lead = screen.getByRole("region", { name: "Added findings" });
+    expect(within(lead).getByRole("heading", { name: "Added by Ana Weber" })).toBeTruthy();
+    expect(lead.textContent).toContain("Seizure (HP:0001250)");
+  });
+
+  it("offers Back to documents in the lead's read-only view", async () => {
+    load({ ...decidedView(), read_only: true, read_only_reason: "submitted", workspace_id: null });
+    const back = { name: "projectDocuments" as const, key: "pkg-1", panel: "case-107:de" };
+    const { onNavigate } = await renderScreen({ readOnly: true, back });
+    expect(screen.getByRole("heading", { name: "Consolidation of case-107 · de v2" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("link", { name: "Back to documents" }));
+    expect(onNavigate).toHaveBeenCalledWith(back);
+  });
+
+  it("tells a lead consolidator to accept the result in Documents", async () => {
+    load(decidedView());
+    vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s-1" } as never);
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([] as never);
+    await renderScreen({ assignmentId: 42, lead: true });
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByRole("button", { name: "Submit" }));
+    expect(await screen.findByText("Consolidation submitted. Accept it as final in Documents.")).toBeTruthy();
+  });
+
+  it("adds a finding from a typed passage without a mouse selection", async () => {
+    mockViewport(1280);
+    load(exampleView());
+    vi.spyOn(api, "searchOntology").mockResolvedValue({ route: "auto", query: "fever", shuffled: false, search_id: "search-1",
+      candidates: [{ term_id: "HP:0001945", label: "Fever", definition: "", matched_term: "Fever", rank: 1 }] } as never);
+    const save = vi.spyOn(api, "applyCommand").mockResolvedValue(draft(4));
+    await renderScreen({ workspaceView: workspaceView() });
+    fireEvent.click(screen.getByRole("button", { name: "Add finding" }));
+    const form = await screen.findByRole("dialog", { name: "Add finding" });
+    fireEvent.change(within(form).getByLabelText("Passage from the text"), { target: { value: "fever" } });
+    fireEvent.click(within(form).getByRole("button", { name: "Continue" }));
+    const picker = await screen.findByRole("dialog", { name: "Add finding" });
+    fireEvent.click(await within(picker).findByRole("option", { name: /Fever/ }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const [start, end] = span("fever");
+    expect(save.mock.calls[0][1].payload).toMatchObject({ term_id: "HP:0001945", segments: [{ start, end }] });
   });
 
   it("keeps Submit unavailable with a reason and Next open group while groups are open", async () => {
@@ -214,9 +308,12 @@ describe("ConsolidationScreen", () => {
     const [start, end] = span("last week");
     const saved = draft(4, [{ annotation: { annotation_id: "ann-new", term_id: "HP:0001250" }, evidence: [{ mention: { segments: [{ start, end }] } }] }]);
     const save = vi.spyOn(api, "applyCommand").mockResolvedValue(saved);
+    // After the save the view is read again: the server lists the added finding.
+    vi.mocked(api.getConsolidation).mockResolvedValueOnce(exampleView()).mockResolvedValue({ ...exampleView(),
+      added: [{ input_id: "ann-new", person_id: "ann-0009", annotation_id: "ann-new", term_id: "HP:0001250", term_label: "Seizure",
+        layer_id: "phenotype", type_id: "default", axes: {}, spans: [[start, end]], cues: [], note: null }], added_by: "Ada Judicator (ann-0009)" });
     await renderScreen({ workspaceView: workspaceView() });
     const add = screen.getByRole("button", { name: "Add finding" });
-    expect(add.getAttribute("aria-disabled")).toBe("true");
     const body = document.querySelector(".cons-text-body")!;
     const node = [...body.querySelectorAll<HTMLElement>("[data-start]")].find(element => element.textContent?.includes("last week"))!;
     const textNode = node.firstChild!;
@@ -225,7 +322,6 @@ describe("ConsolidationScreen", () => {
     range.setStart(textNode, start - offset); range.setEnd(textNode, end - offset);
     window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
     fireEvent.mouseUp(body);
-    expect(add.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(add);
     const picker = await screen.findByRole("dialog", { name: "Add finding" });
     expect((within(picker).getByRole("combobox") as HTMLInputElement).value).toBe("last week");

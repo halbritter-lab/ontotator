@@ -275,7 +275,7 @@ function RowPanelBody(props: RowPanelProps & { name: string; tab: PanelTab }): J
     tabList.current?.querySelectorAll<HTMLButtonElement>("[role=tab]")[target]?.focus();
   };
   const openReports = (row.problem_reports ?? []).filter(report => report.state === "open");
-  const flags = <FlagsBanner row={row} projectKey={props.projectKey} name={name} onRoute={onRoute} />;
+  const flags = <FlagsBanner row={row} projectKey={props.projectKey} name={name} query={props.query} onRoute={onRoute} />;
   const flagged = (row.flagged_unclear ?? 0) > 0;
 
   return <div className="row-panel-body">
@@ -310,14 +310,15 @@ function RowPanelBody(props: RowPanelProps & { name: string; tab: PanelTab }): J
  * X5: "1 finding flagged: guidelines unclear · Open", linked to the (read-only) consolidation view at the
  * flagged group (`?group=` only when the row names one); nothing without flags.
  */
-function FlagsBanner({ row, projectKey, name, onRoute }: { row: DocumentRowView; projectKey: string; name: string; onRoute: (route: Route) => void }): JSX.Element | null {
+function FlagsBanner({ row, projectKey, name, query, onRoute }: { row: DocumentRowView; projectKey: string; name: string; query?: ProjectDocumentsQuery; onRoute: (route: Route) => void }): JSX.Element | null {
   const count = row.flagged_unclear ?? 0;
   if (count <= 0) return null;
   const text = `${count === 1 ? "1 finding" : `${count} findings`} flagged: guidelines unclear`;
   const roundId = row.flagged_round_id;
   return <p className="row-panel-banner">
     {text}
-    {roundId && <>{" · "}<RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId, ...(row.flagged_group_id ? { group: row.flagged_group_id } : {}) }}
+    {roundId && <>{" · "}<RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId, ...(row.flagged_group_id ? { group: row.flagged_group_id } : {}),
+      ...(query && Object.keys(query).length ? { documents: query } : {}) }}
       onNavigate={onRoute} aria-label={`Open flagged finding, ${name}`}>Open</RouteLink></>}
   </p>;
 }

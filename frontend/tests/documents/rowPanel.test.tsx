@@ -422,15 +422,16 @@ describe("flags banner (X5)", () => {
     const banner = [...panel().querySelectorAll(".row-panel-banner")].find(entry => entry.textContent?.includes("flagged")) as HTMLElement;
     expect(banner.textContent).toBe("1 finding flagged: guidelines unclear · Open");
     const link = within(banner).getByRole("link", { name: "Open flagged finding, c · de" });
-    expect(link.getAttribute("href")).toBe("#/projects/p/consolidations/r-9?group=g-1");
+    expect(link.getAttribute("href")).toBe("#/projects/p/consolidations/r-9?group=g-1&documents_decision=all&documents_panel=case-107%3Ade");
     fireEvent.click(link);
-    expect(onRoute).toHaveBeenCalledWith({ name: "projectConsolidation", key: "p", roundId: "r-9", group: "g-1" });
+    // The documents query rides along, so the read-only view returns to this panel.
+    expect(onRoute).toHaveBeenCalledWith({ name: "projectConsolidation", key: "p", roundId: "r-9", group: "g-1", documents: query });
   });
 
   it("links without group when the row names none, counts several, and shows no banner without flags", () => {
     renderPanel([row({ case_id: "c", language: "de", flagged_unclear: 2, flagged_group_id: null, flagged_round_id: "r-9" })], "c:de");
     const banner = within(panel()).getByText(/2 findings flagged: guidelines unclear/).closest(".row-panel-banner") as HTMLElement;
-    expect(within(banner).getByRole("link").getAttribute("href")).toBe("#/projects/p/consolidations/r-9");
+    expect(within(banner).getByRole("link").getAttribute("href")).toBe("#/projects/p/consolidations/r-9?documents_decision=all&documents_panel=case-107%3Ade");
     cleanup();
     renderPanel([row({ case_id: "c", language: "de", flagged_unclear: 0 })], "c:de");
     expect(within(panel()).queryByText(/flagged/)).toBeNull();

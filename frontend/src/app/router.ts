@@ -112,7 +112,7 @@ export type Route =
   | { name: "projectGuidelines"; key: string; version?: number }
   | { name: "projectProblemReport"; key: string; reportId: string; action?: "resume"; section?: "decide"; documents?: ProjectDocumentsQuery }
   /** Consolidation view of one round (acceptance fixes WP-E); `group` scrolls to a finding group. */
-  | { name: "projectConsolidation"; key: string; roundId: string; group?: string }
+  | { name: "projectConsolidation"; key: string; roundId: string; group?: string; documents?: ProjectDocumentsQuery }
   | { name: "notFound"; hash: string };
 
 export function parseRoute(hash: string): Route {
@@ -155,8 +155,9 @@ export function parseRoute(hash: string): Route {
     const consolidation = /^#\/projects\/([^/]+)\/consolidations\/([^/]+)$/.exec(path);
     if (consolidation) {
       const group = params.get("group");
+      const documents = readDocumentsQuery(params, "documents_");
       return { name: "projectConsolidation", key: decodeURIComponent(consolidation[1]), roundId: decodeURIComponent(consolidation[2]),
-        ...(group ? { group } : {}) };
+        ...(group ? { group } : {}), ...(Object.keys(documents).length ? { documents } : {}) };
     }
     const caseRoute = /^#\/projects\/([^/]+)\/cases\/([^/]+)$/.exec(path);
     if (caseRoute) {
@@ -231,7 +232,7 @@ export function routeHref(route: Route): string {
     case "projectProblemReport": return `#/projects/${encodeURIComponent(route.key)}/problem-reports/${encodeURIComponent(route.reportId)}${querySuffix([
       ["action", route.action], ["section", route.section], ...documentsEntries(route.documents, "documents_"),
     ])}`;
-    case "projectConsolidation": return `#/projects/${encodeURIComponent(route.key)}/consolidations/${encodeURIComponent(route.roundId)}${querySuffix([["group", route.group]])}`;
+    case "projectConsolidation": return `#/projects/${encodeURIComponent(route.key)}/consolidations/${encodeURIComponent(route.roundId)}${querySuffix([["group", route.group], ...documentsEntries(route.documents, "documents_")])}`;
     case "notFound": return route.hash;
   }
 }

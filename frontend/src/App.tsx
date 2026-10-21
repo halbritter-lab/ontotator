@@ -260,7 +260,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       break;
     }
     case "projectConsolidation": content = <ConsolidationScreen key={JSON.stringify([user.username, route.key, route.roundId])} projectKey={route.key}
-      roundId={route.roundId} group={route.group} onNavigate={go} />; break;
+      roundId={route.roundId} group={route.group} onNavigate={go} readOnly
+      back={{ name: "projectDocuments", key: route.key, ...(route.documents ?? {}) }} />; break;
     case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
     case "notFound": content = <NotFound onNavigate={go} />; break;
     default: content = <EmptyState title="This page is not available yet.">This section is planned for a later step.</EmptyState>;

@@ -47,7 +47,11 @@ export function useToast(): { toast: ToastMessage | null; show: (t: Omit<ToastMe
  * Undo action also runs on Ctrl+Z / Meta+Z outside text fields. It sits above a bottom-sticky selection bar or a
  * dialog footer at the viewport bottom (`--toast-offset`).
  */
-export function Toast({ toast, onDismiss, durationMs = 10_000 }: { toast: ToastMessage | null; onDismiss: () => void; durationMs?: number }): JSX.Element {
+export function Toast({ toast, onDismiss, durationMs = 10_000, undoDescription = "Undo the last plan change", undoGroup = "Selection" }: {
+  toast: ToastMessage | null; onDismiss: () => void; durationMs?: number;
+  /** The Ctrl+Z line of the shortcut help ("Undo the last decision" in the consolidation view). */
+  undoDescription?: string; undoGroup?: string;
+}): JSX.Element {
   const [paused, setPaused] = useState({ hover: false, focus: false });
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
@@ -89,7 +93,7 @@ export function Toast({ toast, onDismiss, durationMs = 10_000 }: { toast: ToastM
     action();
   };
   // Checkboxes and radios are not typing targets, so this also works from a focused case checkbox.
-  useShortcut(["Ctrl+z", "Meta+z"], runAction, { scope: "screen", description: "Undo the last plan change", group: "Selection", enabled: !!toast?.onAction && !!toast.undo });
+  useShortcut(["Ctrl+z", "Meta+z"], runAction, { scope: "screen", description: undoDescription, group: undoGroup, enabled: !!toast?.onAction && !!toast.undo });
 
   return (
     <div ref={region} role="status" aria-live="polite" className="ui-toast-region">
