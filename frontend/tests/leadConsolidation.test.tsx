@@ -69,3 +69,10 @@ it('requires at least two currently offered exact inputs after history replaceme
   fireEvent.click(screen.getByRole('button', { name: 'Start consolidation' }));
   expect(api.startWorkRound).not.toHaveBeenCalled();
 });
+
+it('opens at once with defaultOpen (the final-result panel already asked "Consolidate…")', async () => {
+  render(<ConsolidationLauncher {...props} defaultOpen />);
+  expect(screen.queryByRole('button', { name: 'Consolidate results' })).toBeNull();
+  expect(await screen.findByLabelText('Consolidation reviewer')).toBeTruthy();
+  expect(api.listMembers).toHaveBeenCalledWith('p');
+});

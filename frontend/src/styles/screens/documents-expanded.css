@@ -8,9 +8,6 @@
 /* Optional assignments below Text versions */
 .expanded-row-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
 
-/* Interim final-result choice under a row (Compare results…, Accept result…, Review changes…) */
-.documents-final-choice { gap: var(--space-3); padding: var(--space-3) var(--space-2); }
-
 .text-version-record { margin: 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
 .expanded-row-issues,
@@ -60,6 +57,30 @@
 .technical-details dt { color: var(--text-muted); }
 .technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
 
+/* Final-result panel (V6, Dialog variant "side"): choose, compare, review changes */
+.final-panel { display: grid; gap: var(--space-4); min-width: 0; }
+.final-panel p { margin: 0; }
+.final-panel-success .notice-content { display: grid; gap: var(--space-1); }
+.final-panel-choose,
+.final-panel-compare,
+.final-panel-review,
+.final-panel-none { display: grid; gap: var(--space-3); min-width: 0; }
+.final-panel-question { font-size: var(--size-base); line-height: var(--leading-base); font-weight: var(--weight-strong); }
+.final-panel-actions,
+.final-panel-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.final-panel-agreement { display: grid; gap: var(--space-1); justify-items: start; }
+.final-panel-agreement-bar { width: 100%; max-width: 16rem; height: 8px; }
+.final-panel-table { width: 100%; }
+.final-panel-table th[scope="row"] { font-weight: var(--weight-strong); }
+.final-panel-row-actions { white-space: nowrap; text-align: end; }
+.final-panel-row-actions > * { vertical-align: middle; }
+.final-panel-consolidate { display: grid; gap: var(--space-2); min-width: 0; }
+.final-panel-text-change { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-left: 3px solid var(--warning); background: var(--surface-sunken); }
+.final-panel-sections { padding-top: var(--space-3); border-top: 1px solid var(--border); color: var(--text-muted); }
+@media (max-width: 699px) {
+  .final-panel-row-actions { white-space: normal; text-align: start; }
+}
+
 @media (max-width: 700px) {
   .technical-details { grid-template-columns: minmax(0, 1fr); }
   .technical-details dd { margin-bottom: var(--space-1); }
@@ -68,4 +89,6 @@
 @media (forced-colors: active) {
   .selection-notice { border-left-color: CanvasText; }
   .text-version { border-left-color: CanvasText; }
+  .final-panel-text-change { border-left-color: CanvasText; }
+  .final-panel-agreement-bar { forced-color-adjust: auto; }
 }

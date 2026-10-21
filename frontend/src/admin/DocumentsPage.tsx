@@ -774,7 +774,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 /** Skeleton rows while the first page loads. */
 function DocumentsSkeleton(): JSX.Element {
   return <div className="data-table-scroll">
-    <table aria-label="Documents" aria-busy="true" className="data-table density-compact documents-table documents-skeleton">
+    <table aria-busy="true" className="data-table density-compact documents-table documents-skeleton">
+      <caption className="visually-hidden">Documents</caption>
       <thead><tr>{SKELETON_HEADERS.map(([header, hidden]) => <th key={header} scope="col">{hidden ? <span className="visually-hidden">{header}</span> : header}</th>)}</tr></thead>
       <tbody>{[0, 1, 2, 3, 4].map(index => <tr key={index} className="documents-skeleton-row">
         {SKELETON_HEADERS.map(([header]) => <td key={header}><span className="documents-skeleton-bar" aria-hidden="true" /></td>)}

@@ -7,14 +7,18 @@ import { eligibleMembers } from '../admin/assignmentUI';
 import { formatDateTime } from '../app/labels';
 import { notifyFinalSelectionChanged } from './finalSelectionState';
 
-interface Props { projectKey: string; documentId: string; language: string; username: string; rows: SubmissionHistorySummary[] }
+interface Props {
+  projectKey: string; documentId: string; language: string; username: string; rows: SubmissionHistorySummary[];
+  /** Starts with the form open (the caller's own "Consolidate…" already asked), skipping the "Consolidate results" button. */
+  defaultOpen?: boolean;
+}
 export function ConsolidationLauncher(props: Props): JSX.Element {
   return <ConsolidationContent key={JSON.stringify([props.projectKey, props.documentId, props.username])} {...props} />;
 }
 
-function ConsolidationContent({ projectKey, documentId, language, username, rows }: Props): JSX.Element {
+function ConsolidationContent({ projectKey, documentId, language, username, rows, defaultOpen = false }: Props): JSX.Element {
   const fieldId = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [attempt, setAttempt] = useState(0);
   const [inventory, setInventory] = useState<{ attempt: number; members: Member[]; assignments: AssignmentView[] } | null>(null);
   const [loadError, setLoadError] = useState<unknown>();

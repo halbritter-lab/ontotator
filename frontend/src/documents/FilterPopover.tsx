@@ -65,7 +65,7 @@ export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAl
   </>;
 
   return <>
-    <Button ref={anchor} aria-expanded={open} aria-controls={contentId} aria-label={active > 0 ? `Filter, ${active} active` : "Filter"}
+    <Button ref={anchor} aria-expanded={open} aria-controls={open ? contentId : undefined} aria-label={active > 0 ? `Filter, ${active} active` : "Filter"}
       onClick={() => setOpen(value => !value)}>
       Filter
       {active > 0 && <span className="documents-filter-active" aria-hidden="true">{active}</span>}

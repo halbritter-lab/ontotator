@@ -78,6 +78,15 @@ describe("next step labels", () => {
     expect(rowActionLabel(stepOf("assign_annotation"), one)).toBe("Assign annotation…");
   });
 
+  it("follows the server's stages.final.detail.label_rule, the same rule as the final-result panel (VD16)", () => {
+    const choose = stepOf("choose_final");
+    // A consolidation of all submissions: two submitted, yet the panel accepts the consolidation.
+    const consolidated = row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 2, label_rule: "accept" }) }) });
+    const single = row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 1, label_rule: "compare" }) }) });
+    expect(rowActionLabel(choose, consolidated)).toBe("Accept result…");
+    expect(rowActionLabel(choose, single)).toBe("Compare results…");
+  });
+
   it("names the text-change actions by target version and person when one row has several (VD18)", () => {
     const versions = [version({ document_id: "d1", version: 1, is_newest_in_chain: false }), version({ document_id: "d3", version: 3 })];
     const tom = { pseudonym: "ann-0004", display_name: "Tom Reis", is_me: false };

@@ -370,7 +370,7 @@ function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[];
       <Button size="sm" variant="quiet" onClick={() => setOpen(true)}>Consolidate…</Button>
       {withHint && <span className="cell-secondary"> merge both into a new final (you or someone else)</span>}
     </p>}
-    {open && <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={username} rows={rows} />}
+    {open && <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={username} rows={rows} defaultOpen />}
   </div>;
 }
 

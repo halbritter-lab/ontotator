@@ -164,12 +164,16 @@ describe("choose", () => {
     await waitFor(() => expect(liveRegion().textContent).toBe(OWN_REASON));
   });
 
-  it("Consolidate… opens the launcher in the panel; after start the panel closes", async () => {
+  it("Consolidate… opens the launcher form in the panel (no second click); after start the panel closes", async () => {
     panels[rowKey("case-112", "de")] = comparePanel("case-112", "de");
+    vi.spyOn(api, "listMembers").mockResolvedValue([]);
+    vi.spyOn(api, "listAssignments").mockResolvedValue([]);
     const onConsolidationStarted = vi.fn();
     renderPanel("case-112:de", page([group("case-112", [chooseRow("case-112", "de")])]), { onConsolidationStarted, username: "lead" });
     fireEvent.click(await screen.findByRole("button", { name: "Consolidate…" }));
-    expect(within(dialog()).getByRole("button", { name: "Consolidate results" })).toBeTruthy();
+    expect(within(dialog()).queryByRole("button", { name: "Consolidate results" })).toBeNull();
+    expect(within(dialog()).getByRole("region", { name: "Consolidate submitted results" })).toBeTruthy();
+    await waitFor(() => expect(api.listMembers).toHaveBeenCalledWith("p"));
     act(() => { notifyFinalSelectionChanged("other"); });
     expect(onConsolidationStarted).not.toHaveBeenCalled();
     act(() => { notifyFinalSelectionChanged("p"); });

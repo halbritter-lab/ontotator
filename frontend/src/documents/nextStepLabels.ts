@@ -141,11 +141,16 @@ export function secondaryLine(step: NextStepView, row: DocumentRowView): string 
   return [assigned, detail].filter(Boolean).join(" · ");
 }
 
-/** The action name of a step on its row: "Choose final" reads "Accept result…" with one submission, else "Compare results…" (V6, VD16). */
+/**
+ * The action name of a step on its row: "Choose final" follows the server's `stages.final.detail.label_rule` (the
+ * final-result panel's rule, VD16): "accept" reads "Accept result…", "compare" "Compare results…"; without the field
+ * one submission reads "Accept result…".
+ */
 export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "stages"> & Partial<Pick<DocumentRowView, "versions" | "work" | "steps" | "next_step">>): string {
   if (step.action === "choose_final") {
     const final = row.stages?.final;
-    return final?.state === "choose" && final.detail.submitted === 1 ? "Accept result…" : "Compare results…";
+    const rule = final?.detail.label_rule ?? (final?.state === "choose" && final.detail.submitted === 1 ? "accept" : "compare");
+    return rule === "accept" ? "Accept result…" : "Compare results…";
   }
   if (step.action === "handle_text_change" || step.action === "carry_text_change") {
     const target = row.versions?.find(version => version.document_id === step.document_id);

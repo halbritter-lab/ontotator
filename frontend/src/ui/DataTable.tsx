@@ -154,7 +154,8 @@ export function DataTable<T>({ label, columns, rows, rowKey, initialSort, empty,
   const sortBy = (column: Column<T>) => onSort
     ? onSort(column.id)
     : setSort({ column: column.id, direction: sort?.column === column.id && sort.direction === "asc" ? "desc" : "asc" });
-  return <div className="data-table-scroll"><table aria-label={label} aria-busy={busy ? true : undefined} className={["data-table", "density-compact", className].filter(Boolean).join(" ")}>
+  return <div className="data-table-scroll"><table aria-busy={busy ? true : undefined} className={["data-table", "density-compact", className].filter(Boolean).join(" ")}>
+    <caption className="visually-hidden">{label}</caption>
     <thead><tr>{selectColumn && <th scope="col" className="data-table-select-cell">{selectionHeader ?? <span className="visually-hidden">Select</span>}</th>}
       {columns.map((column) => <th key={column.id} scope="col" style={{ width: column.width, textAlign: column.align ?? "start" }} aria-sort={sortable(column) ? sort?.column === column.id ? sort.direction === "asc" ? "ascending" : "descending" : "none" : undefined}>
       {sortable(column) ? <button className="data-table-sort" type="button" onClick={() => sortBy(column)}>{column.header}<svg className="data-table-sort-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d={sort?.column === column.id && sort.direction === "desc" ? "M4 6l4 4 4-4" : "M4 10l4-4 4 4"} fill="none" stroke="currentColor" strokeWidth="1.5" /></svg></button> : column.header}

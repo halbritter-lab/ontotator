@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useId, useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 import { IconButton } from "./IconButton";
 import { IconClose } from "./icons";
 import { useShortcut } from "./shortcuts";
@@ -55,6 +55,7 @@ function inertOutside(element: HTMLElement): Element[] {
 export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false, initialFocus, size = "md", variant = "center", className, footer, children }: DialogProps): JSX.Element | null {
   const content = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const headingId = useId();
   const side = variant === "side";
   const requestedFocus = useRef(initialFocus);
   requestedFocus.current = initialFocus;
@@ -100,7 +101,8 @@ export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false,
     <div className={side ? "modal-overlay modal-overlay--side" : "modal-overlay"} onClick={(event) => {
       if (event.target === event.currentTarget && closeOnBackdrop && content.current && isActive(content.current)) onClose?.();
     }}>
-      <div ref={content} className={["modal-content", "ui-dialog", side ? "ui-dialog--side" : `ui-dialog--${size}`, className].filter(Boolean).join(" ")} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
+      <div ref={content} className={["modal-content", "ui-dialog", side ? "ui-dialog--side" : `ui-dialog--${size}`, className].filter(Boolean).join(" ")} role="dialog" aria-modal="true"
+        {...(heading == null ? { "aria-labelledby": headingId } : { "aria-label": title })} tabIndex={-1}
         onKeyDown={(event) => {
           if (event.key !== "Tab" || !isActive(event.currentTarget)) return;
           const elements = focusableElements(event.currentTarget);
@@ -110,7 +112,7 @@ export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false,
           else if (!event.shiftKey && (document.activeElement === last || document.activeElement === event.currentTarget)) { event.preventDefault(); first.focus(); }
         }}>
         <div className="ui-dialog-header">
-          <h2 ref={headingRef} className="ui-dialog-heading" tabIndex={side ? -1 : undefined}>{heading ?? title}</h2>
+          <h2 ref={headingRef} id={headingId} className="ui-dialog-heading" tabIndex={side ? -1 : undefined}>{heading ?? title}</h2>
           {onClose && <IconButton className="ui-dialog-close" label="Close" icon={<IconClose />} variant="quiet" size="sm" data-dialog-close onClick={onClose} />}
         </div>
         <div className="ui-dialog-body">{children}</div>

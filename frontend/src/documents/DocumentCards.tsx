@@ -3,7 +3,8 @@
  * checkbox + "case-107 · en source + 1 translation"), one `<article>` per text with its checkbox,
  * heading "{case · language}" with version marker and NEW, the three stage lines, "Waiting on: …",
  * the row action full width with the "+n" menu, "Open" and "History". Rows outside the plan are
- * muted articles; nothing collapses (VD1). O9 completes the layout.
+ * muted articles; nothing collapses (VD1). Card and case headings carry the table's row-header and
+ * group-label ids, so deep links, plan saves and the panel find the same focus targets in both layouts.
  */
 import { useId, useMemo, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView } from "../api/client";
@@ -12,7 +13,7 @@ import type { GroupSelectMode } from "../ui/DataTable";
 import { caseHeaderText, type TableSelection } from "./DocumentsTable";
 import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
-import { HistoryToggle, LastActivityCell, NewBadge, RowOpenLinks, rowIsNew, rowKeyOf, rowName, rowNeedsDecision, ShortId, VersionMarker } from "./RowCells";
+import { documentsGroupId, documentsRowId, HistoryToggle, LastActivityCell, NewBadge, RowOpenLinks, rowIsNew, rowKeyOf, rowName, rowNeedsDecision, ShortId, VersionMarker } from "./RowCells";
 import { isActiveRow, stageText, waitingOnText, type StageName } from "./stageLabels";
 
 export interface DocumentCardsProps {
@@ -49,17 +50,30 @@ const STAGE_TITLES: readonly (readonly [StageName, string])[] = [["review", "Rev
 const selectModeOf = (event: MouseEvent<HTMLInputElement>): GroupSelectMode =>
   event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle-keep-anchor" : "toggle";
 
-/** "Review: ✓ Accepted · unchanged" */
-function stageLine(row: DocumentRowView, stage: StageName, title: string, sourceLanguage: string | null): string {
+/** "Review: ✓ Accepted · unchanged": the stage title labels the line; the glyph is decorative, the tone colours the status. */
+function StageLine({ row, stage, title, sourceLanguage }: { row: DocumentRowView; stage: StageName; title: string; sourceLanguage: string | null }): JSX.Element {
   const cell = row.stages?.[stage];
-  if (!cell) return `${title}: —`;
-  const text = stageText(stage, cell, row, { sourceLanguage });
-  return `${title}: ${[[text.symbol, text.word].filter(Boolean).join(" "), text.detail].filter(Boolean).join(" · ")}`;
+  const text = cell ? stageText(stage, cell, row, { sourceLanguage }) : { symbol: "", word: "—", detail: "" };
+  const tone = cell?.tone ?? "none";
+  return <p className={["document-card-line", "document-card-stage", `stage-cell--${tone}`, !isActiveRow(row) && "stage-cell--muted"].filter(Boolean).join(" ")}>
+    <span className="document-card-stage-label">{`${title}:`}</span>{" "}
+    <span className="stage-cell-status">{text.symbol && <><span className="stage-cell-symbol" aria-hidden="true">{text.symbol}</span>{" "}</>}{text.word}</span>
+    {text.detail ? <span className="document-card-stage-detail">{` · ${text.detail}`}</span> : null}
+  </p>;
+}
+
+/** "Waiting on: You" (strong); with "+n" the full list is spoken instead of the short one (not only a title). */
+function WaitingOnLine({ row }: { row: DocumentRowView }): JSX.Element {
+  const { text, title, you } = waitingOnText(row);
+  const value = you ? <strong>{text}</strong>
+    : title && title !== text ? <span title={title}><span aria-hidden="true">{text}</span><span className="visually-hidden">{title}</span></span>
+      : <span>{text}</span>;
+  return <span className="documents-waiting-on">Waiting on: {value}</span>;
 }
 
 function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, select }: DocumentCardProps): JSX.Element {
   const baseId = useId();
-  const headingId = `${baseId}-heading`;
+  const headingId = documentsRowId(row.case_id, row.language, "header");
   const regionId = `${baseId}-expanded`;
   const name = rowName(row);
   const showRegion = expanded && renderExpanded != null;
@@ -67,25 +81,25 @@ function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, re
   const notice = renderRowNotice?.(row) ?? null;
   const active = isActiveRow(row);
   const source = group.rows.find(entry => entry.is_source)?.language ?? null;
-  const waiting = waitingOnText(row);
 
   return (
     <article className={["document-card", !active && "document-card--muted", rowNeedsDecision(row) && "document-card--decision"].filter(Boolean).join(" ")} aria-labelledby={headingId}>
       <div className="document-card-line document-card-head">
         {select && <input type="checkbox" className="document-card-select checkbox-target" aria-label={`Select ${name}`} checked={select.checked}
           onChange={() => undefined} onClick={event => select.onSelect(selectModeOf(event))} />}
-        <h3 id={headingId} className="document-card-title">
+        <h3 id={headingId} tabIndex={-1} className="document-card-title">
           <span aria-hidden="true"><ShortId value={row.case_id} />{` · ${row.language}`}</span>
           <span className="visually-hidden">{name}</span>
         </h3>
+        {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
         {row.is_source && <span className="documents-source">source</span>}
         <VersionMarker row={row} />
         {active && rowIsNew(row) && <NewBadge />}
         {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
       </div>
-      {STAGE_TITLES.map(([stage, title]) => <div key={stage} className="document-card-line document-card-stage">{stageLine(row, stage, title, source)}</div>)}
+      {STAGE_TITLES.map(([stage, title]) => <StageLine key={stage} row={row} stage={stage} title={title} sourceLanguage={source} />)}
       <div className="document-card-line document-card-owner">
-        <span title={waiting.title && waiting.title !== waiting.text ? waiting.title : undefined}>{`Waiting on: ${waiting.text}`}</span>
+        <WaitingOnLine row={row} />
         <span className="document-card-activity"><LastActivityCell iso={row.last_activity_at} /></span>
       </div>
       <RowActionCell row={row} onAction={onAction} plan={planSaves ? { saves: planSaves, groupRevision: group.plan_revision } : undefined} block />
@@ -115,7 +129,7 @@ export function DocumentCards({ page, busy, empty, query, selection, ...rest }: 
                 ref={element => { if (element) element.indeterminate = state === "some"; }}
                 checked={state === "all"} onChange={() => undefined}
                 onClick={event => selection.selectCase(keys, selectModeOf(event), order)} />}
-              <h2 className="document-case-card-title">{caseHeaderText(group)}</h2>
+              <h2 id={documentsGroupId(group.case_id)} tabIndex={-1} className="document-case-card-title">{caseHeaderText(group)}</h2>
             </div>
             {group.rows.map(row => (
               <DocumentCard key={rowKeyOf(row)} {...rest} row={row} group={group} query={query} expanded={open.has(rowKeyOf(row))}

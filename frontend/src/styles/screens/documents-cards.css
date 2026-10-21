@@ -13,12 +13,23 @@
   background: var(--surface);
   min-width: 0;
 }
+/* Decision edge (spec "Narrow"): the article's left border, 3 px warning; the hidden text carries the meaning. */
+.document-card--decision { border-left: 3px solid var(--warning); padding-left: calc(var(--space-3) - 2px); }
+.document-card--muted { color: var(--text-muted); }
 .document-card-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-width: 0; }
 .document-card-head { flex-wrap: nowrap; align-items: flex-start; }
 .document-card-title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: var(--size-md); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
 .document-card-head .documents-issues,
 .document-card-head .documents-row-badge { flex: none; }
 .document-card-activity { color: var(--text-muted); }
+/* Stage lines "Review: ✓ Accepted · unchanged": label muted, status in the tone colour (stage-cell--{tone}), detail muted. */
+.document-card-stage { display: block; margin: 0; overflow-wrap: anywhere; }
+.document-card-stage-label { color: var(--text-muted); }
+.document-card-stage .stage-cell-status { white-space: normal; }
+.document-card-stage .stage-cell-symbol { min-width: 0; }
+.document-card-stage-detail { color: var(--text-muted); font-size: var(--size-sm); }
+.document-card-title:focus, .document-case-card-title:focus { outline: none; }
+.document-card-title:focus-visible, .document-case-card-title:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
 .document-card-owner { justify-content: space-between; }
 /* The row action spans the card (at least 32px high). */
 .document-card .documents-action--block { width: 100%; min-height: 32px; justify-content: center; white-space: normal; }
@@ -37,5 +48,6 @@
 
 @media (forced-colors: active) {
   .document-card { border-color: CanvasText; }
+  .document-card--decision { border-left-color: CanvasText; }
   .document-card-toggle { color: LinkText; }
 }
