@@ -458,8 +458,15 @@ def test_system_admin_without_membership_can_upload_and_gets_no_notice(world) ->
 
 @pytest.mark.parametrize(
     "filename",
-    ["ru\x00les.md", "ru\nles.md", "ru\x7fles.md", "a" * 253 + ".md"],
-    ids=["nul", "newline", "del", "too-long"],
+    [
+        "ru\x00les.md",
+        "ru\nles.md",
+        "ru\x7fles.md",
+        "a" * 253 + ".md",
+        "rules‮dm.txt",
+        "ru​les.md",
+    ],
+    ids=["nul", "newline", "del", "too-long", "rtl-override", "zero-width"],
 )
 def test_upload_refuses_unsafe_filenames(world, filename) -> None:
     with pytest.raises(DomainError) as error:

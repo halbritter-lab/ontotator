@@ -629,10 +629,12 @@ MAX_FILENAME_LENGTH = 255
 
 
 def _clean_filename(filename: str) -> str:
-    """The base name of an upload; control characters or overlong names refused."""
+    """The base name of an upload; control and format characters (``Cc``,
+    ``Cf``: e.g. U+202E, which reverses how the name reads) or overlong names
+    refused."""
     name = filename.replace("\\", "/").rsplit("/", 1)[-1]
     if len(name) > MAX_FILENAME_LENGTH or any(
-        unicodedata.category(char) == "Cc" for char in name
+        unicodedata.category(char) in {"Cc", "Cf"} for char in name
     ):
         raise DomainError(
             "GUIDELINE_FILE_TYPE", {"filename": name[:MAX_FILENAME_LENGTH]}
