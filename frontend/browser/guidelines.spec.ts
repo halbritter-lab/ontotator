@@ -304,7 +304,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await expect(withdraw).toHaveCount(0);
     await expect(page.locator(".guidelines-success")).toContainText("v2 withdrawn.");
     await expect(page.locator(".guidelines-success")).toBeFocused();
-    await expect(page.getByText(/^No guideline is in force\. v2 was withdrawn on .+ by .+\. Publish a new version; to restore earlier rules, upload that version's file again\.$/)).toBeVisible();
+    await expect(page.getByText(/^No guideline is in force\. v2 was withdrawn on .+ by .+\. Publish a new version, or republish an earlier version from the list below\.$/)).toBeVisible();
     await evidence(page, "lead-withdrawn-v2");
 
     await openTask(ana.page, s, "annotate-2");
@@ -320,6 +320,20 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     result = await finalResult(page, s, "guide-0001", "en");
     await expect(result.getByText("Guidelines v1", { exact: true })).toBeVisible();
     await evidence(page, "documents-withdrawn-v2");
+
+    // 9. Lead republishes v1: its text fills the publish form for review and becomes v3.
+    await visit(page, settingsUrl(s));
+    const versions = page.getByRole("table", { name: "Guideline versions" });
+    await expect(versions.getByRole("button", { name: "Republish v2…" })).toHaveCount(0);
+    await versions.getByRole("button", { name: "Republish v1…", exact: true }).click();
+    const preview = page.locator(".guidelines-preview");
+    await expect(preview).toBeFocused();
+    await expect(preview.getByRole("heading", { name: "Annotation guideline" })).toBeVisible();
+    await expect(page.getByLabel("What changed? (optional)")).toHaveValue("Republished v1");
+    await page.getByRole("button", { name: "Publish as v3", exact: true }).click();
+    await expect(page.locator(".guidelines-success")).toContainText("Published v3.");
+    await expect(page.locator(".guidelines-current-facts")).toContainText(/^v3 · v1\.md/);
+    await evidence(page, "lead-republished-v1");
   } finally {
     await Promise.all([ana.close(), ben.close()]);
   }

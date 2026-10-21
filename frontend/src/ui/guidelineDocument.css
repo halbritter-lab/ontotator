@@ -34,13 +34,13 @@
   line-height: var(--leading-xl);
 }
 
-.guideline-markdown h2,
-.guideline-markdown h3 {
-  font-size: var(--size-xl);
+/* Sizes follow the Markdown depth, not the shifted tag: the top heading reads as a title in the drawer and the preview alike. */
+.guideline-markdown :is(h2, h3, h4, h5, h6) {
+  font-size: var(--body-size);
 }
 
-.guideline-markdown :is(h4, h5, h6) {
-  font-size: var(--body-size);
+.guideline-markdown .guideline-heading-1 {
+  font-size: var(--size-xl);
 }
 
 .guideline-markdown :is(p, ul, ol, blockquote, pre) {

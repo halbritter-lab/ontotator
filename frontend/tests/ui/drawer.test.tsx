@@ -134,3 +134,23 @@ it("renders nothing while closed", () => {
   const { container } = render(<Drawer open={false} title="Guidelines v3" onClose={vi.fn()} returnFocusRef={ref}><p>Text</p></Drawer>);
   expect(container.innerHTML).toBe("");
 });
+
+it("makes room for the non-modal drawer, so the page beside it is not covered", () => {
+  viewport(1440);
+  const root = document.documentElement;
+  const view = render(<Host />);
+  expect(root.hasAttribute("data-ui-drawer-open")).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Guidelines v3" }));
+  expect(root.hasAttribute("data-ui-drawer-open")).toBe(true);
+  expect(root.style.getPropertyValue("--ui-drawer-inset")).toMatch(/^\d+px$/);
+  fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+  expect(root.hasAttribute("data-ui-drawer-open")).toBe(false);
+  expect(root.style.getPropertyValue("--ui-drawer-inset")).toBe("");
+  view.unmount();
+});
+
+it("does not reserve room for the modal variants", () => {
+  viewport(900);
+  render(<Host initiallyOpen />);
+  expect(document.documentElement.hasAttribute("data-ui-drawer-open")).toBe(false);
+});

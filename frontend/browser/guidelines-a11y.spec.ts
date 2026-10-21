@@ -70,12 +70,16 @@ test("drawer at 1280 px is non-modal and the editor stays operable", async ({ pa
   await expect(panel.getByText(V1_TEXT)).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
-  // min(36rem, 45vw) on the right, below the AppShell header.
+  // min(30rem, 34vw) on the right, below the AppShell header.
   const box = (await panel.boundingBox())!;
-  expect(box.width).toBeLessThanOrEqual(Math.min(576, 1280 * 0.45) + 1);
+  expect(box.width).toBeLessThanOrEqual(Math.min(480, 1280 * 0.34) + 1);
   expect(Math.round(box.x + box.width)).toBe(1280);
   const header = (await page.locator(".shell-header").boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
+  // The page narrows beside the drawer: the clinical text is not covered.
+  const text = (await page.locator(".text-container").first().boundingBox())!;
+  expect(text.x + text.width).toBeLessThanOrEqual(box.x + 1);
+  expect(text.width).toBeGreaterThan(200);
   await evidence(page, "1280-drawer");
 
   // Keys typed inside the drawer do not reach the editor's shortcuts; outside they do.
@@ -85,7 +89,6 @@ test("drawer at 1280 px is non-modal and the editor stays operable", async ({ pa
   // The editor behind stays operable: select text, search a term, add a finding.
   await selectText(page, 0, 11);
   await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");
-  // The drawer lies over the right of the workspace; the term is taken with the keyboard.
   await expect(page.locator(".candidate-card").filter({ hasText: "HP:0001252" })).toHaveAttribute("aria-selected", "true");
   await page.getByLabel("Search term", { exact: true }).press("Enter");
   await expect(page.locator(".sidebar .doc-item")).toHaveCount(1);

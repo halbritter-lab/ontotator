@@ -100,6 +100,12 @@ describe("GuidelineDocument", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Scope" })).toBeTruthy();
   });
 
+  it("styles headings by their Markdown depth, so the top heading looks the same at any offset", async () => {
+    await renderMarkdown("# Scope\n\n## Terms", 2);
+    expect(screen.getByRole("heading", { level: 4, name: "Scope" }).classList.contains("guideline-heading-1")).toBe(true);
+    expect(screen.getByRole("heading", { level: 5, name: "Terms" }).classList.contains("guideline-heading-2")).toBe(true);
+  });
+
   it("renders GFM tables inside a horizontally scrollable container", async () => {
     const { container } = await renderMarkdown("| Term | Rule |\n| --- | --- |\n| HP:1 | ~~old~~ keep |");
     const table = screen.getByRole("table");
