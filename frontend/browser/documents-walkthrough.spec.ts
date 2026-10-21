@@ -1,0 +1,372 @@
+/**
+ * Acceptance walkthrough (spec "Acceptance walkthrough", V7; plan O10c Step 1) on the
+ * WALKTHROUGH project at 1280 px: two annotators, a text change midway, compare,
+ * consolidate, final. The lead (Mia Kühn) acts only in the browser through `LeadClicks`;
+ * Ana, Tom and Luc act through the act route. After each step: the row's cells and
+ * Waiting on as the spec's table, the tab counts, the navigation counter equal to Needs
+ * your decision, NEW after a > 30-minute gap (steps 3, 6, 9, 11, `age_visit`), and the
+ * "Checks along the way". Lead activations count clicks and option choices, never typing
+ * (as lead-workflow.spec.ts). Evidence `walkthrough-{step}.png`.
+ *
+ * The steps are serial tests on one page so a known deviation can be a `test.fixme` of its
+ * own while the walkthrough still runs to the final result.
+ */
+import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
+import {
+  documentsTab, evidence, expectCounterEqualsTab, expectEdge, expectStage, expectWaiting, finalPanel, historyRegion, historyToggle,
+  moreActions, newBadge, openDocuments, rowAction, rowCell, rowHeader, textRow,
+} from "./documentsOverviewHelpers";
+import { LeadClicks, loginOverviewUser, overviewAct, overviewScenario, type OverviewActBody, type OverviewScenario } from "./overviewHelpers";
+
+test.describe.configure({ mode: "serial" });
+test.setTimeout(240_000);
+
+const ANA = "Ana Weber", TOM = "Tom Reis", LUC = "Luc Martin";
+const CASE = "case-201";
+/** Spec "Acceptance walkthrough": running lead-click totals after steps 1-12. */
+const PLAN_TOTALS = [1, 4, 4, 9, 9, 13, 15, 17, 17, 21, 21, 23] as const;
+const either = (a: string, b: string) => new RegExp(`^(${a}, ${b}|${b}, ${a})$`);
+
+let page: Page;
+let s: OverviewScenario;
+const clicks = new LeadClicks();
+/** Running totals after each step (index = step - 1). */
+const totals: number[] = [];
+
+const de = () => textRow(page, CASE, "de");
+const en = () => textRow(page, CASE, "en");
+const cell = (column: Parameters<typeof rowCell>[1]) => rowCell(de(), column);
+const action = (label: string) => rowAction(page, label, CASE, "de");
+
+async function act(body: Omit<OverviewActBody, "project" | "case_id" | "language">): Promise<ReturnType<typeof overviewAct>> {
+  return overviewAct(page, { project: s.project, case_id: CASE, language: "de", ...body });
+}
+
+/** Reload Documents (the page mounts again; `gap` first moves the lead's visit back by 31 minutes). */
+async function revisit(gap: boolean): Promise<void> {
+  if (gap) await act({ actor: "lead", action: "age_visit" });
+  // A full page load (the same hash URL alone would not remount Documents).
+  await openDocuments(page, s.project);
+  await page.reload();
+  await expect(de()).toHaveCount(1, { timeout: 30_000 });
+}
+
+/** Count one option choice of a `<select>` as one lead activation. */
+async function chooseOption(select: Locator, person: string): Promise<void> {
+  const value = await select.locator("option", { hasText: person }).first().getAttribute("value");
+  await select.selectOption(value ?? "");
+  clicks.total += 1;
+}
+
+function record(step: number): void {
+  totals[step - 1] = clicks.total;
+  test.info().annotations.push({ type: "lead clicks", description: `step ${step}: ${clicks.total} (plan ${PLAN_TOTALS[step - 1]})` });
+}
+
+/** No "Assign annotation…" anywhere on the row while old-version work waits (VD22). */
+async function expectNoAssignAnnotation(): Promise<void> {
+  await expect(action("Assign annotation…")).toHaveCount(0);
+  const more = moreActions(page, CASE, "de");
+  if (await more.count()) {
+    await more.click();
+    await expect(page.getByRole("menuitem", { name: /Assign annotation/ })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+  }
+}
+
+async function contextFor(browser: Browser): Promise<Page> {
+  const baseURL = test.info().project.use.baseURL;
+  const context = await browser.newContext({ baseURL, viewport: { width: 1280, height: 900 } });
+  return context.newPage();
+}
+
+test.beforeAll(async ({ browser }) => {
+  page = await contextFor(browser);
+  s = await overviewScenario(page, "WALKTHROUGH");
+  await loginOverviewUser(page, s, "lead");
+});
+
+test.afterAll(async () => {
+  await page?.context().close();
+});
+
+test("step 1: the lead imports the package (1 click)", async () => {
+  await openDocuments(page, s.project);
+  await page.getByRole("button", { name: "Upload texts…", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Upload texts" });
+  await dialog.locator("input[type=file]").setInputFiles(s.bundle_path!);
+  await dialog.getByRole("button", { name: "Check", exact: true }).click();
+  await expect(dialog.getByRole("region", { name: "Work plan" })).toBeVisible({ timeout: 60_000 });
+  // Counting starts at the checked preview (as lead-workflow.spec.ts): "Import" is the step's one click.
+  await clicks.count(dialog.getByRole("button", { name: /^Import 1 case/ }));
+  await expect(dialog).toHaveCount(0, { timeout: 90_000 });
+
+  await expect(page.locator(".documents-group-label")).toHaveText(`${CASE} · en source + 1 translation`);
+  await expectStage(cell("review"), { line1: "○ Unassigned", line2: "v1 machine translation" });
+  await expectStage(cell("annotation"), { line1: "○ after review", line2: "" });
+  await expectStage(cell("final"), { line1: "—", line2: "" });
+  await expectWaiting(de(), "You");
+  await expect(action("Assign review…")).toBeVisible();
+  await expect(en()).toHaveClass(/documents-row--not-in-plan/);
+  await expectStage(rowCell(en(), "annotation"), { line1: "— not planned" });
+  await expectCounterEqualsTab(page);
+  record(1);
+  await evidence(page, "walkthrough-1");
+});
+
+test("step 2: the lead assigns the review to Ana (3 clicks)", async () => {
+  await clicks.count(action("Assign review…"));
+  const dialog = page.getByRole("dialog", { name: /^Assign/ });
+  await clicks.count(dialog.getByRole("radio", { name: new RegExp(`^${ANA}`) }));
+  await clicks.count(dialog.getByRole("button", { name: "Assign 1", exact: true }));
+  await expect(dialog).toHaveCount(0);
+
+  await expectStage(cell("review"), { line1: "◐ In progress", line2: ANA });
+  await expectWaiting(de(), [ANA]);
+  await expect(documentsTab(page, "To assign", 0)).toBeVisible();
+  await expectCounterEqualsTab(page);
+  record(2);
+  await evidence(page, "walkthrough-2");
+});
+
+test("step 3: Ana accepts unchanged; NEW on the next visit", async () => {
+  await act({ actor: "ana", action: "accept_review" });
+  await revisit(true);
+  await expectStage(cell("review"), { line1: "✓ Accepted", line2: "unchanged" });
+  await expectStage(cell("annotation"), { line1: "○ 0 of 2 assigned" });
+  await expect(newBadge(de())).toHaveCount(1);
+  await expect(documentsTab(page, "To assign", 1)).toBeVisible();
+  await expectCounterEqualsTab(page);
+  record(3);
+  await evidence(page, "walkthrough-3");
+});
+
+test("step 4: the lead assigns the annotation to Tom and Luc", async () => {
+  await clicks.count(action("Assign annotation…"));
+  const dialog = page.getByRole("dialog", { name: /^Assign/ });
+  // Row mode lists people as checkboxes (one per needed annotator); "Split evenly" is the cases mode's choice.
+  const split = dialog.getByRole("radio", { name: "Split evenly", exact: true });
+  if (await split.count()) await clicks.count(split);
+  await clicks.count(dialog.getByRole("checkbox", { name: new RegExp(`^${TOM}`) }));
+  await clicks.count(dialog.getByRole("checkbox", { name: new RegExp(`^${LUC}`) }));
+  await clicks.count(dialog.getByRole("button", { name: "Assign 2", exact: true }));
+  await expect(dialog).toHaveCount(0);
+
+  await expectStage(cell("annotation"), { line1: "◐ 0 of 2 submitted", line2: new RegExp(`^waiting: (${TOM}, ${LUC}|${LUC}, ${TOM})$`) });
+  await expectWaiting(de(), [TOM, LUC]);
+  await expectCounterEqualsTab(page);
+  record(4);
+  await evidence(page, "walkthrough-4");
+});
+
+test("step 5: Tom submits (Luc keeps a draft)", async () => {
+  await act({ actor: "tom", action: "submit_annotation", preset: "tom_v1" });
+  await act({ actor: "luc", action: "draft_annotation", preset: "luc_v1" });
+  await revisit(false);
+  await expectStage(cell("annotation"), { line1: "◐ 1 of 2 submitted", line2: `waiting: ${LUC}` });
+  await expectStage(cell("final"), { line1: "○ after annotation", line2: "" });
+  await expectCounterEqualsTab(page);
+  record(5);
+  await evidence(page, "walkthrough-5");
+});
+
+test("step 6: the lead requests a correction, Ana corrects → v2", async () => {
+  await clicks.count(historyToggle(page, CASE, "de"));
+  const area = historyRegion(page, CASE, "de");
+  await expect(area.getByText("Loading history…")).toHaveCount(0);
+  await clicks.count(area.locator("summary", { hasText: /^Text versions \(1\)$/ }));
+  await clicks.count(area.getByRole("button", { name: "Request translation correction", exact: true }));
+  const form = area.getByRole("region", { name: "Request translation correction", exact: true });
+  const reviewer = form.getByLabel("Translation reviewer", { exact: true });
+  await expect(reviewer.locator("option", { hasText: ANA })).toHaveCount(1);
+  if ((await reviewer.inputValue()) === "") await chooseOption(reviewer, ANA);
+  await form.getByLabel("Reason for another review", { exact: true }).fill("Dosis prüfen");
+  await clicks.count(form.getByRole("button", { name: "Assign correction review", exact: true }));
+  await expect(form.getByText(/^Translation correction assigned to/)).toBeVisible();
+
+  await act({ actor: "ana", action: "correct_translation" });
+  await revisit(true);
+  const header = rowHeader(de());
+  await expect(header.locator(".documents-version-marker")).toHaveText("v2 corrected");
+  await expect(newBadge(de())).toHaveCount(1);
+  await expectStage(cell("review"), { line1: "✓ Accepted", line2: `with corrections · v1 → v2 · ${ANA}` });
+  await expectStage(cell("annotation"), { line1: "⚠ In progress on old text", line2: `${LUC} works on v1` });
+  await expectEdge(page, de(), true);
+  await expect(rowCell(de(), "action").getByRole("button").first()).toHaveAccessibleName(`Handle text change…, ${CASE} · de`);
+  const more = moreActions(page, CASE, "de");
+  await expect(more).toHaveAccessibleName(`+1 more action, ${CASE} · de`);
+  await more.click();
+  await expect(page.getByRole("menuitem", { name: "Carry to v2…", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(documentsTab(page, "Needs your decision", 1)).toBeVisible();
+  await expect(await expectCounterEqualsTab(page)).toBe(1);
+  await expectNoAssignAnnotation();
+  record(6);
+  await evidence(page, "walkthrough-6");
+});
+
+test("step 7: Handle text change… → Move to v2 (preselected) → Apply", async ({ browser }) => {
+  await clicks.count(action("Handle text change…"));
+  const dialog = page.getByRole("dialog", { name: `Handle text change · ${CASE} · de`, exact: true });
+  await expect(dialog.getByRole("radio", { name: /^Move to v2/ })).toBeChecked();
+  await clicks.count(dialog.getByRole("button", { name: "Apply", exact: true }));
+  await expect(dialog).toHaveCount(0);
+
+  await expectStage(cell("annotation"), { line1: "⚠ Submitted on v1", line2: `${TOM} · v2 not annotated` });
+  await expect(rowCell(de(), "action").getByRole("button").first()).toHaveAccessibleName(`Carry to v2…, ${CASE} · de`);
+  await expectNoAssignAnnotation();
+  await expectCounterEqualsTab(page);
+
+  // Check along the way: Text versions lists Luc's v1 assignment as moved; Tom's v1 submission stays.
+  const toggle = historyToggle(page, CASE, "de");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  const area = historyRegion(page, CASE, "de");
+  const versions = area.locator("details", { has: page.locator("summary", { hasText: /^Text versions \(2\)$/ }) });
+  if ((await versions.getAttribute("open")) === null) await versions.locator(":scope > summary").click();
+  const v1 = area.getByRole("list", { name: "Assignments on v1", exact: true });
+  await expect(v1.getByRole("listitem").filter({ hasText: LUC })).toContainText("Annotation · moved to v2");
+  await expect(v1.getByRole("listitem").filter({ hasText: TOM })).toContainText("Annotation · Submitted");
+  record(7);
+  await evidence(page, "walkthrough-7");
+
+  // Luc's task on v2 shows his draft findings marked "Check after text change".
+  const luc = await contextFor(browser);
+  try {
+    await loginOverviewUser(luc, s, "luc");
+    const task = luc.getByTestId("task-row").filter({ hasText: CASE }).first();
+    await task.locator("a.btn").click();
+    await expect(luc.getByText("Check after text change").first()).toBeVisible({ timeout: 30_000 });
+    await evidence(luc, "walkthrough-7-luc-editor");
+  } finally {
+    await luc.context().close();
+  }
+});
+
+test("step 8: Carry to v2… → Tom (author, preselected) → Assign", async () => {
+  await clicks.count(action("Carry to v2…"));
+  const dialog = page.getByRole("dialog", { name: `Carry to v2 · ${CASE} · de`, exact: true });
+  await expect(dialog.getByRole("radio", { name: new RegExp(`^${TOM}.*\\(author\\)`) })).toBeChecked();
+  await clicks.count(dialog.getByRole("button", { name: "Assign", exact: true }));
+  await expect(dialog).toHaveCount(0);
+
+  await expectStage(cell("annotation"), { line1: "◐ 0 of 2 submitted", line2: new RegExp(`^waiting: (${TOM}, ${LUC}|${LUC}, ${TOM})$`) });
+  await expect(documentsTab(page, "Needs your decision", 0)).toBeVisible();
+  await expectCounterEqualsTab(page);
+  await expectNoAssignAnnotation();
+  record(8);
+  await evidence(page, "walkthrough-8");
+});
+
+test.fixme("step 8: Final reads \"○ after annotation\" after the carry", async () => {
+  // Spec step 8: Final "○ after annotation". The server shows "—" (state none): Tom's v1
+  // submission is carried (not eligible) and nothing is submitted on v2 yet (O10a hand-back).
+  await expectStage(cell("final"), { line1: "○ after annotation", line2: "" });
+});
+
+test("step 9: Tom and Luc resolve the carried findings and submit on v2", async () => {
+  await act({ actor: "tom", action: "resolve_carried_and_submit", preset: "tom_v2" });
+  await act({ actor: "luc", action: "resolve_carried_and_submit", preset: "luc_v2" });
+  await revisit(true);
+  await expectStage(cell("annotation"), { line1: "✓ 2 of 2 submitted", line2: either(TOM, LUC) });
+  await expectStage(cell("final"), { line1: "● Your choice", line2: "2 submissions · 5 of 7 match" });
+  await expectEdge(page, de(), true);
+  await expect(newBadge(de())).toHaveCount(1);
+  await expect(action("Compare results…")).toBeVisible();
+  await expectCounterEqualsTab(page);
+  record(9);
+  await evidence(page, "walkthrough-9");
+});
+
+test("step 10: Compare results… → agreement 5 of 7 → Consolidate… → Ana → Start consolidation", async () => {
+  await clicks.count(action("Compare results…"));
+  const panel = finalPanel(page, CASE, "de");
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("2 annotations submitted on v2 · 7 findings in total", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Agreement: 5 of 7 findings match", { exact: true })).toBeVisible();
+  const compared = panel.getByRole("table").getByRole("row").filter({ hasText: /Round/ }).filter({ hasNotText: /not compared/ });
+  await expect(compared).toHaveCount(2);
+  for (const row of await compared.all()) await expect(row.getByRole("cell").nth(1)).toHaveText("1");
+  await evidence(page, "walkthrough-10-panel");
+
+  await clicks.count(panel.getByRole("button", { name: "Consolidate…", exact: true }));
+  const open = panel.getByRole("button", { name: "Consolidate results", exact: true });
+  if (await open.count()) await clicks.count(open);
+  const launcher = panel.getByRole("region", { name: "Consolidate submitted results", exact: true });
+  await expect(launcher).toBeVisible();
+  const reviewer = launcher.getByLabel("Consolidation reviewer", { exact: true });
+  await expect(reviewer).toBeVisible({ timeout: 30_000 });
+  const boxes = launcher.getByRole("checkbox", { name: /^Include submission / });
+  await expect(boxes).toHaveCount(2);
+  for (const box of await boxes.all()) {
+    if (!(await box.isChecked())) await clicks.count(box);
+    await expect(box).toBeChecked();
+  }
+  await expect(reviewer.locator("option", { hasText: ANA })).toHaveCount(1);
+  if (!(await reviewer.inputValue()) || !(await reviewer.locator("option:checked").textContent())?.includes(ANA)) await chooseOption(reviewer, ANA);
+  await clicks.count(launcher.getByRole("button", { name: "Start consolidation", exact: true }));
+  await expect(panel).toHaveCount(0, { timeout: 30_000 });
+
+  await expectStage(cell("annotation"), { line1: "◐ Consolidating", line2: ANA });
+  await expectStage(cell("final"), { line1: "○ after review", line2: "" });
+  await expectCounterEqualsTab(page);
+  record(10);
+  await evidence(page, "walkthrough-10");
+});
+
+test("step 11: Ana submits the consolidation", async () => {
+  await act({ actor: "ana", action: "submit_consolidation" });
+  await revisit(true);
+  await expectStage(cell("final"), { line1: "● Your choice", line2: /^3 submissions/ });
+  await expect(newBadge(de())).toHaveCount(1);
+  await expectCounterEqualsTab(page);
+  record(11);
+  await evidence(page, "walkthrough-11");
+});
+
+test("step 11: the consolidation's row action reads \"Accept result…\" (VD16)", async () => {
+  await expect(action("Accept result…")).toBeVisible();
+});
+
+test("step 12: Accept result… → Accept the consolidation by Ana as final", async () => {
+  // The lead works from Needs your decision (where the nav counter lands, VD7), so the row is retained with "Resolved".
+  await openDocuments(page, s.project, "?segment=decision");
+  await expect(documentsTab(page, "Needs your decision", 1)).toHaveAttribute("aria-selected", "true");
+  const accept = (await action("Accept result…").count()) ? action("Accept result…") : action("Compare results…");
+  await clicks.count(accept);
+  const panel = finalPanel(page, CASE, "de");
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText(`Accept the consolidation by ${ANA} as final?`, { exact: true })).toBeVisible();
+  await clicks.count(panel.getByRole("button", { name: "Accept as final", exact: true }));
+  await expect(panel.getByText("No more final results to decide.", { exact: true })).toBeVisible();
+  await evidence(page, "walkthrough-12-panel");
+  await panel.getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(panel).toHaveCount(0);
+
+  await expectStage(cell("final"), { line1: "✓ Final", line2: `Consolidation · ${ANA}` });
+  await expect(rowHeader(de())).toContainText("Resolved");
+  await expect(documentsTab(page, "Done", 1)).toBeVisible();
+  await expect(documentsTab(page, "Needs your decision", 0)).toBeVisible();
+  await expectCounterEqualsTab(page);
+  record(12);
+  await evidence(page, "walkthrough-12");
+});
+
+test("step 13: Export preflight: 1 final, no omission for de, en not in plan", async () => {
+  await page.getByRole("link", { name: "Export final results…", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Export preflight" })).toBeVisible({ timeout: 30_000 });
+  const preflight = page.locator(".final-export-preflight");
+  await expect(preflight).toContainText("1 selected results · 0 warnings · 0 omitted");
+  await expect(preflight.getByRole("list", { name: "Omitted without a final selection" })).toHaveCount(0);
+  await expect(preflight.getByRole("list", { name: "Not in plan, not exported" })).toHaveCount(0);
+  await evidence(page, "walkthrough-13");
+});
+
+// Measured 2026-10-21: 1, 4, 4, 8, 8, 13, 15, 17, 17, 23, 23, 25. Deviations from the plan:
+// step 4 −1 (the row assign dialog lists people as checkboxes; no "Split evenly" in row mode),
+// step 6 +1 (the correction form preselects no reviewer: choosing Ana is an extra activation),
+// step 10 +2 (the panel's consolidation form does not preselect the two compared submissions;
+// the plan counts Consolidate… → Ana → Start consolidation only).
+test.fixme("lead click totals equal the plan (1, 4, 4, 9, 9, 13, 15, 17, 17, 21, 21, 23)", async () => {
+  expect(totals).toEqual([...PLAN_TOTALS]);
+});
+
