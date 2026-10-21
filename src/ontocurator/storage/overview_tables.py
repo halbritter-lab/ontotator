@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Identity,
+    Index,
     UniqueConstraint,
     func,
 )
@@ -99,7 +100,10 @@ class DraftSnapshotRow(Base):
     """A frozen copy of an assignment's draft (append-only, spec I1)."""
 
     __tablename__ = "draft_snapshots"
-    __table_args__ = (_document_fk("document_id"),)
+    __table_args__ = (
+        _document_fk("document_id"),
+        Index("ix_draft_snapshots_project_assignment", "project_id", "assignment_id"),
+    )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     project_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey(f"{SCHEMA}.projects.id")

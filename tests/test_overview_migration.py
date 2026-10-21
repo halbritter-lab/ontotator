@@ -273,6 +273,7 @@ def test_resolutions_and_snapshots_are_append_only(migrated) -> None:
         for statement in (
             f"UPDATE {S}.{table} SET project_id = project_id",
             f"DELETE FROM {S}.{table}",
+            f"TRUNCATE {S}.{table} CASCADE",
         ):
             with pytest.raises(DBAPIError, match="append-only"), engine.begin() as conn:
                 _exec(conn, statement)

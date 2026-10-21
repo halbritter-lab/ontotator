@@ -104,6 +104,7 @@ class RoundInputRow(Base):
             "num_nonnulls(source_submission_id, source_draft_snapshot_id) = 1",
             name="one_source",
         ),
+        Index("ix_round_inputs_source_draft_snapshot_id", "source_draft_snapshot_id"),
     )
     input_id: Mapped[str] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(BigInteger)

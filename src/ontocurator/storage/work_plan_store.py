@@ -367,7 +367,8 @@ def write_rows(
     The revision is bumped even when no flag actually changes, so callers
     should skip no-op change sets. ``updated_by`` is ``actor_id`` (rows created
     by ``ensure_rows`` or the 0016 migration have NULL ``updated_by``).
-    Every written row counts as decided (spec VD3).
+    Every written row counts as decided (spec VD3), even with
+    ``actor_id=None``: ``decided``, not ``updated_by``, is the source of truth.
     """
     if not rows:
         return {}
@@ -421,14 +422,15 @@ def ensure_rows(
 
     Inserted rows have NULL ``updated_by`` (system defaults, like the 0016
     migration rows); existing rows and revisions are left untouched. Under
-    "Nothing planned" they are undecided (spec VD3), otherwise decided.
+    "Nothing planned" a row the import leaves out of plan is undecided (spec
+    VD3); rows it puts in plan, and all rows under other plans, are decided.
     """
     if not defaults:
         return 0
     import_plan = conn.execute(
         select(ProjectRow.import_plan).where(ProjectRow.id == project_id)
     ).scalar_one()
-    decided = import_plan != "nothing"
+    nothing_planned = import_plan == "nothing"
     conn.execute(
         insert(WorkPlanRow)
         .values(
@@ -451,7 +453,7 @@ def ensure_rows(
                     "language": key.language,
                     "review": flags.review,
                     "annotate": flags.annotate,
-                    "decided": decided,
+                    "decided": not nothing_planned or flags.review or flags.annotate,
                 }
                 for key, flags in defaults.items()
             ]

@@ -127,6 +127,12 @@ def upgrade() -> None:
         _composite_fk("document_id", "documents", "document_id"),
         schema=SCHEMA,
     )
+    op.create_index(
+        "ix_draft_snapshots_project_assignment",
+        "draft_snapshots",
+        ["project_id", "assignment_id"],
+        schema=SCHEMA,
+    )
 
     op.alter_column(
         "round_inputs", "source_submission_id", nullable=True, schema=SCHEMA
@@ -144,6 +150,12 @@ def upgrade() -> None:
         ["id"],
         source_schema=SCHEMA,
         referent_schema=SCHEMA,
+    )
+    op.create_index(
+        "ix_round_inputs_source_draft_snapshot_id",
+        "round_inputs",
+        ["source_draft_snapshot_id"],
+        schema=SCHEMA,
     )
     op.create_check_constraint(
         op.f("ck_round_inputs_one_source"),
@@ -180,12 +192,19 @@ def downgrade() -> None:
             "Cannot downgrade: round inputs come from draft snapshots;"
             " their source would be lost"
         )
+    # No round input uses a snapshot, so dropping the text_change_resolutions
+    # and draft_snapshots rows below is intended (nothing depends on them).
     op.drop_constraint(
         op.f("ck_round_inputs_one_source"), "round_inputs", schema=SCHEMA
     )
     op.drop_constraint(
         op.f("fk_round_inputs_source_draft_snapshot_id"),
         "round_inputs",
+        schema=SCHEMA,
+    )
+    op.drop_index(
+        "ix_round_inputs_source_draft_snapshot_id",
+        table_name="round_inputs",
         schema=SCHEMA,
     )
     op.drop_column("round_inputs", "source_draft_snapshot_id", schema=SCHEMA)
