@@ -10,7 +10,6 @@ import { CarriedProgress } from "../editor/carried/CarriedProgress";
 import { SidebarResizer } from "../editor/SidebarResizer";
 import { useSidebarWidth } from "../editor/sidebarWidth";
 import { RoundInputEvidenceDialog } from "../tasks/RoundInputEvidenceDialog";
-import { MergeInputs } from "../tasks/MergeInputs";
 import { ComparePane } from "../variants/ComparePane";
 import { Toolbar } from "../ui/Toolbar";
 import { VariantSelectors } from "../variants/VariantSelectors";
@@ -21,7 +20,7 @@ import { annotationOptions, pickVariant, refForKey } from "../variants/versionSt
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { errorMessage } from "../admin/errors";
 import type { AnnotationVersion } from "../api/client";
-import type { Route } from "./router";
+import { routeHref, type Route } from "./router";
 import { InlineMessage } from "../ui/InlineMessage";
 import { Textarea } from "../ui/Textarea";
 import { Button } from "../ui/Button";
@@ -507,6 +506,28 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const sourceForTarget = (target: {annotation_id: string; version: string}) =>
     (view.available_inputs ?? []).find(p => p.annotation.annotation_id === target.annotation_id && p.version === target.version);
 
+  // Consolidation mode (U8): the consolidator sees the author of every submitted finding by name.
+  const consolidationRoundId = roundKind === "consolidation" ? view.key.round_id ?? null : null;
+  const [entryAuthors, setEntryAuthors] = useState<{ roundId: string; labels: ReadonlyMap<string, string> } | null>(null);
+  useEffect(() => {
+    if (!consolidationRoundId) return;
+    let live = true;
+    api.getConsolidation(consolidationRoundId).then(value => {
+      if (!live) return;
+      const people = new Map(value.people.map(person => [person.person_id, person.label]));
+      const labels = new Map<string, string>();
+      for (const group of value.groups) for (const member of group.members) {
+        const label = people.get(member.person_id);
+        if (label) labels.set(member.annotation_id, label);
+      }
+      setEntryAuthors({ roundId: consolidationRoundId, labels });
+    }, () => undefined); // Without the read the entries stay usable, only without names.
+    return () => { live = false; };
+  }, [consolidationRoundId]);
+  const entryAuthorOf = (annotationId: string): string | undefined =>
+    entryAuthors && entryAuthors.roundId === consolidationRoundId ? entryAuthors.labels.get(annotationId) : undefined;
+  const consolidationAssignmentId = roundKind === "consolidation" ? assignmentNavigation?.current.assignment_id ?? versionContext?.assignmentId : undefined;
+
   // Review mode targets
   const reviewTargets: TargetProposal[] = useMemo(() => {
     if (view.key.mode !== "review" || !view.targets) return [];
@@ -963,24 +984,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       reanchorContext.reveal(item.new_context);
       leftTextElement?.focus();
     } catch(error) {reportError(error);}
-  };
-
-  const mergeInputs = async (inputIds: string[], outputId: string, note?: string) => {
-    await flushAnnotationNotes();
-    if (unsavedAnnotationNotes().length) throw new ValidationError("Save the annotation note before merging inputs.");
-    assertWritable();
-    const mutationId = crypto.randomUUID();
-    let envelope: Parameters<typeof api.mergeRoundInputs>[1] | undefined;
-    await queueRef.current.enqueue(async expectedRevision => {
-      assertWritable();
-      if (!envelope) {
-        const saved = latestDraft.current.annotations?.find(value => value.annotation.annotation_id === outputId);
-        if (!saved) throw new ValidationError("Select a current saved finding before merging inputs.");
-        envelope = { mutation_id: mutationId, expected_revision: expectedRevision, payload: { input_ids: inputIds, replacement: { annotation_id: saved.annotation.annotation_id, version: saved.version }, ...(note ? { note } : {}) } };
-      }
-      const updated = await api.mergeRoundInputs(workspaceId, envelope).catch(assignmentFailure);
-      latestDraft.current = updated; setDraft(updated); return updated;
-    });
   };
 
   const handleDeselectAll = () => {
@@ -2641,6 +2644,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               ? "Assisted annotation"
               : "Independent annotation"}
           </span>
+          {consolidationAssignmentId ? <a className="btn btn-quiet btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })}>Back to consolidation</a> : null}
           {/* The display name has a bounded width (full text in the title), so the header
               does not need another line; the pseudonym is never shortened. */}
           <span
@@ -2764,7 +2768,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           />
 
           <div className="sidebar-scroll" ref={sidebarScrollRef}>
-            {!readOnly && roundKind === "consolidation" && <MergeInputs inputs={roundInputs} annotations={draft.annotations ?? []} labelFor={termLabel} onMerge={mergeInputs} />}
             <ReanchorPanel key={versionIdentity} items={pendingReanchorItems} labelFor={termLabel} onContext={reanchorContext.reveal}
               onOpenFinding={id => { setSelectedTargetId(null); setSelectedSourceId(null); cancelPending(); setSelectedAnnotationId(id); setMobilePane("details"); }}
               resolutions={draft.reanchor_resolutions} annotations={draft.annotations} busy={queueState === "saving"}
@@ -2873,6 +2876,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                             </>
                           )}
                         </div>
+                        {entryAuthorOf(t.annotation_id) && <div className="doc-meta">{entryAuthorOf(t.annotation_id)}</div>}
                       </li>
                     );
                   })}
