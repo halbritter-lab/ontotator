@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { carriedChosenAxisIds, carriedListOrder, checkStateBadge, deriveCarriedStates, nextUncheckedKey, progressText, rowKeyOf } from "../../src/editor/carried/checkState";
+import { carriedChosenAxisIds, carriedListOrder, checkStateBadge, deriveCarriedStates, nextUncheckedKey, progressText, rowKeyOf, type CarriedInputLike } from "../../src/editor/carried/checkState";
 
 const snap = (id: string, version = "v1", evidence = 0) => ({ annotation: { annotation_id: id, layer_id: "hpo", type_id: "phenotype", term_id: "HP:1", evidence_refs: Array.from({ length: evidence }, (_, i) => ({ evidence_id: `e${i}`, version: "1" })), axes_values: {}, axes_defaulted: [] }, version, evidence: [], text_sha256: "t1" }) as any;
 const input = (id: string, target: any) => ({ input_id: id, source_submission_id: "s1", source_snapshot: snap("orig"), target_snapshot: target, mapping_status: target ? "carried" : "needs_review" }) as any;
@@ -21,6 +21,11 @@ describe("deriveCarriedStates", () => {
   it("removed_when_the_linked_finding_is_gone_and_placeholder_when_carried_is_gone_too", () => {
     const [s] = deriveCarriedStates([input("i1", snap("input-i1"))], [{ input_id: "i1", outcome: "completed", annotation_ref: { annotation_id: "input-i1", version: "v1" } }], []);
     expect(s).toMatchObject({ variant: "removed", home: "placeholder", homeId: null, missing: "deleted" });
+  });
+  it("derives the state of an input from a frozen draft (no source submission)", () => {
+    const drafted: CarriedInputLike = { ...input("i1", snap("input-i1")), source_submission_id: null };
+    const [s] = deriveCarriedStates([drafted], [], [snap("input-i1")]);
+    expect(s).toMatchObject({ variant: "needed", unchecked: true, home: "carried", homeId: "input-i1" });
   });
   it("dismissed", () => {
     const [s] = deriveCarriedStates([input("i1", null)], [{ input_id: "i1", outcome: "dismissed", reason: "No" }], []);

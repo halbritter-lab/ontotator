@@ -16832,8 +16832,26 @@
             "title": "Input Id"
           },
           "source_submission_id": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Source Submission Id"
+          },
+          "source_draft_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Draft Snapshot Id"
           },
           "source_ref": {
             "$ref": "#/components/schemas/AnnotationRef"
@@ -16920,7 +16938,6 @@
         "type": "object",
         "required": [
           "input_id",
-          "source_submission_id",
           "source_ref",
           "source_snapshot",
           "target_snapshot",

@@ -18,6 +18,12 @@ it("requires two explicitly chosen inputs and a saved compatible output", async 
   fireEvent.click(button);
   await waitFor(() => expect(merge).toHaveBeenCalledWith(["first", "second"], snapshot.annotation.annotation_id, undefined));
 });
+it("labels an input from the draft before the text change without a submission id", () => {
+  const drafted = inputs.map(value => ({ ...value, source_submission_id: null, source_draft_snapshot_id: 4 }));
+  render(<MergeInputs inputs={drafted} annotations={[snapshot]} labelFor={() => "Seizure"} onMerge={vi.fn()} />);
+  expect(screen.getByRole("checkbox", { name: "Input 1: Seizure" })).toBeDefined();
+  expect(screen.getByRole("checkbox", { name: "Input 2: Seizure" })).toBeDefined();
+});
 it("preserves selected input manifest, output and note after a failed merge", async () => {
   const merge = vi.fn().mockRejectedValue(new Error("Output changed"));
   render(<MergeInputs inputs={inputs} annotations={[snapshot]} labelFor={() => "Seizure"} onMerge={merge} />);

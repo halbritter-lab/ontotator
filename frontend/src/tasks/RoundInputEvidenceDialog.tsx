@@ -8,6 +8,8 @@ import { quoteSegments } from "../editor/AnnotationPanel";
 import { Time } from "../app/Time";
 import "./workRounds.css";
 
+const DRAFT_SOURCE = "Draft before the text change";
+
 /** "assertion" → "Assertion"; snapshots carry axis IDs, not the profile labels. */
 const axisName = (id: string): string => {
   const words = id.replace(/[_-]+/g, " ").trim();
@@ -31,7 +33,9 @@ export function RoundInputEvidenceDialog({ projectKey, input, onClose, labelFor,
   const snapshot = input.source_snapshot, annotation = snapshot.annotation;
   const name = sourceName ?? (input.source_round_ordinal ? `Round ${input.source_round_ordinal}` : null);
   const version = [input.source_language ?? "", input.source_version != null ? `v${input.source_version}` : ""].filter(Boolean).join(" ");
-  const meta: ReactNode[] = [input.source_recorded_at ? <>Submitted <Time iso={input.source_recorded_at} /></> : "Submitted"];
+  // An input of a text change comes from a frozen draft, not a submission.
+  const drafted = input.source_submission_id == null;
+  const meta: ReactNode[] = [drafted ? DRAFT_SOURCE : input.source_recorded_at ? <>Submitted <Time iso={input.source_recorded_at} /></> : "Submitted"];
   if (version) meta.push(version);
   meta.push(annotation.provenance.actor.actor_id);
   const evidence = (annotation.evidence_refs ?? []).flatMap(ref => snapshot.evidence.filter(value => value.mention.evidence_id === ref.evidence_id && value.version === ref.version));
@@ -52,7 +56,7 @@ export function RoundInputEvidenceDialog({ projectKey, input, onClose, labelFor,
     <details className="round-evidence__technical">
       <summary>Technical details</summary>
       <dl>
-        <dt>Submission</dt><dd><code>{input.source_submission_id}</code></dd>
+        {drafted ? <><dt>Source</dt><dd>{DRAFT_SOURCE}</dd></> : <><dt>Submission</dt><dd><code>{input.source_submission_id}</code></dd></>}
         <dt>Original finding</dt><dd><code>{input.source_ref.annotation_id}</code></dd>
         <dt>Version</dt><dd><code>{input.source_ref.version}</code></dd>
       </dl>

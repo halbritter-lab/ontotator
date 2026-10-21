@@ -22,6 +22,7 @@ from ontocurator.storage.final_tables import ExportSelectionSnapshotRow
 def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     from ontocurator.exchange.jobs import (
         _audit,
+        draft_input_ref,
         requester,
         serialize_t1_content,
         store_file,
@@ -89,19 +90,27 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     for entries in payload["round_inputs"].values():
         for entry in entries:
             source_id = entry["source_submission_id"]
-            bundle_kind = "selected" if source_id in selected_ids else "provenance"
-            external = ontospan.annotation_ref(
-                f"submission-{source_id}",
-                entry["source_ref"]["annotation_id"],
-                bundle_id=f"{bundle_kind}-{row['snapshot_id']}",
-            )
+            # An input of a frozen draft (kind ``text_change``) names the draft
+            # snapshot instead of a source submission; the draft is in no bundle.
+            source: dict[str, Any]
+            if source_id is None:
+                external = draft_input_ref(project, entry)
+                source = {"source_draft_snapshot_id": entry["source_draft_snapshot_id"]}
+            else:
+                bundle_kind = "selected" if source_id in selected_ids else "provenance"
+                external = ontospan.annotation_ref(
+                    f"submission-{source_id}",
+                    entry["source_ref"]["annotation_id"],
+                    bundle_id=f"{bundle_kind}-{row['snapshot_id']}",
+                )
+                source = {"source_submission_id": source_id}
             overrides[f"input-{entry['input_id']}"] = external
             overrides[f"round-input:{entry['input_id']}"] = external
             input_receipt.append(
                 {
                     "input_id": entry["input_id"],
                     "input_alias": f"input-{entry['input_id']}",
-                    "source_submission_id": source_id,
+                    **source,
                     "source_ref": entry["source_ref"],
                     "exported_ref": external,
                 }

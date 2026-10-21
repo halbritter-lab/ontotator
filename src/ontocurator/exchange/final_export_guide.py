@@ -12,6 +12,8 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS
+
 INDEX_COLUMNS = (
     "row_type",
     "case_id",
@@ -44,7 +46,10 @@ def submission_kind(
     submission: Mapping[str, Any], round_kinds: Mapping[str, str]
 ) -> str:
     kind = round_kinds.get(submission["submission_id"])
-    if kind in {"consolidation", "carry_forward"}:
+    # Text-change and handover rounds keep the submission kind carry_forward.
+    if kind in CARRY_ROUND_KINDS:
+        return "carry_forward"
+    if kind == "consolidation":
         return kind
     return "review" if submission["origin_key"]["mode"] == "review" else "annotation"
 
@@ -180,6 +185,14 @@ def _utc(value: datetime) -> str:
     return moment.strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
+def _has_draft_inputs(payload: Mapping[str, Any]) -> bool:
+    return any(
+        entry.get("source_draft_snapshot_id") is not None
+        for entries in payload.get("round_inputs", {}).values()
+        for entry in entries
+    )
+
+
 def build_readme(
     payload: Mapping[str, Any],
     *,
@@ -262,6 +275,17 @@ def build_readme(
             "this archive; read them in Ontocurator.",
             "- ",
             "  ",
+        ),
+        *(
+            _wrap(
+                "Findings carried from a draft frozen at a text change name "
+                '"source_draft_snapshot_id" in receipt.json instead of '
+                '"source_submission_id"; that draft is not part of this archive.',
+                "- ",
+                "  ",
+            )
+            if _has_draft_inputs(payload)
+            else []
         ),
         *_wrap(
             "Names inside the bundles (bundle_id, set ids, field names) follow the "

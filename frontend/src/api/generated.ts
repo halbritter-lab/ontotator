@@ -5580,7 +5580,9 @@ export interface components {
             /** Input Id */
             input_id: string;
             /** Source Submission Id */
-            source_submission_id: string;
+            source_submission_id?: string | null;
+            /** Source Draft Snapshot Id */
+            source_draft_snapshot_id?: number | null;
             source_ref: components["schemas"]["AnnotationRef"];
             source_snapshot: components["schemas"]["AnnotationSnapshot"];
             target_snapshot: components["schemas"]["AnnotationSnapshot"] | null;

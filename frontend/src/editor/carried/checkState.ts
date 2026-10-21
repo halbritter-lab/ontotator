@@ -20,7 +20,9 @@ export interface SnapshotLike {
 
 export interface CarriedInputLike {
   input_id: string;
-  source_submission_id: string;
+  /** Null (or absent) for an input from a frozen draft (round kind `text_change`). */
+  source_submission_id?: string | null;
+  source_draft_snapshot_id?: number | null;
   source_snapshot: SnapshotLike;
   target_snapshot: SnapshotLike | null;
   mapping_status: "carried" | "needs_review";

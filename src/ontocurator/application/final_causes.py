@@ -17,6 +17,7 @@ from ontocurator.authz.project_authority import require_project_management
 from ontocurator.authz.scoped import project_not_found
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.work_plans import PlanFlags, RowKey
+from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS
 from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.storage import work_plan_store
 from ontocurator.storage.final_tables import FinalSelectionRow
@@ -266,7 +267,7 @@ def derive_final_state(
         if roots[work["document_id"]] not in selected_chains:
             continue
         annotation_review = (
-            work["kind"] in {"carry_forward", "consolidation"}
+            work["kind"] in CARRY_ROUND_KINDS | {"consolidation"}
             and work["round_state"] == "editable"
         )
         if work["task"] != "translation_review" and not annotation_review:

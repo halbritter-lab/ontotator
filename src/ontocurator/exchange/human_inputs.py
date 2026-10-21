@@ -27,8 +27,12 @@ def human_input_closure(
             kinds[sid] = work_round.kind
             entries = repo.get_round_input_inventory(project, work_round.round_id)
             inputs[sid] = entries
+            # Inputs of a frozen draft (kind ``text_change``) have no source
+            # submission; the draft is not exported, only its snapshot id.
             for source in dict.fromkeys(
-                entry["source_submission_id"] for entry in entries
+                entry["source_submission_id"]
+                for entry in entries
+                if entry["source_submission_id"] is not None
             ):
                 visit(source)
         visiting.remove(sid)

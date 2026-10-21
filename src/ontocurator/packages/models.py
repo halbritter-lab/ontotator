@@ -225,16 +225,25 @@ class ValidatedPackage(BaseModel):
             needs_review: set[str] = set()
             for raw in archived["inputs"]:
                 item = RoundInputView.model_validate(raw)
-                if (
-                    item.input_id in seen
-                    or item.source_submission_id not in view.input_submission_ids
+                # An input of a frozen draft (kind ``text_change``) has no
+                # source submission; the draft is not packaged, so only its
+                # exact snapshots are checked below.
+                drafted = item.source_draft_snapshot_id is not None
+                if item.input_id in seen or (
+                    view.kind != "text_change"
+                    if drafted
+                    else item.source_submission_id not in view.input_submission_ids
                 ):
                     raise ValueError("Ambiguous frozen round input")
                 seen.add(item.input_id)
                 if item.mapping_status == "needs_review":
                     needs_review.add(item.input_id)
-                source = self.submissions[item.source_submission_id]
-                if not any(
+                source = (
+                    None
+                    if item.source_submission_id is None
+                    else self.submissions[item.source_submission_id]
+                )
+                if source is not None and not any(
                     s == item.source_snapshot
                     and (s.annotation.annotation_id, s.version)
                     == (item.source_ref.annotation_id, item.source_ref.version)

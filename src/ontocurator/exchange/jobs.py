@@ -25,6 +25,7 @@ from ontocurator.authz.memberships import MembershipService
 from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS
 from ontocurator.exchange.final_export import final_t1_export
 from ontocurator.exchange.reanchor_job import reanchor
 from ontocurator.exchange.review_export import translation_review_export
@@ -192,12 +193,17 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     overrides: dict[str, str] = {}
     for entries in inputs.values():
         for entry in entries:
-            source = submissions[entry["source_submission_id"]]
-            source_key = source.origin_key
-            overrides[f"input-{entry['input_id']}"] = ontospan.annotation_ref(
-                f"{project}:{source_key.annotator_id}:{source_key.mode}:{source.submission_id}",
-                entry["source_ref"]["annotation_id"],
-            )
+            if entry["source_submission_id"] is None:
+                overrides[f"input-{entry['input_id']}"] = draft_input_ref(
+                    project, entry
+                )
+            else:
+                source = submissions[entry["source_submission_id"]]
+                source_key = source.origin_key
+                overrides[f"input-{entry['input_id']}"] = ontospan.annotation_ref(
+                    f"{project}:{source_key.annotator_id}:{source_key.mode}:{source.submission_id}",
+                    entry["source_ref"]["annotation_id"],
+                )
             overrides[f"round-input:{entry['input_id']}"] = overrides[
                 f"input-{entry['input_id']}"
             ]
@@ -212,6 +218,18 @@ def t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
     )
     result["provenance_only_submission_ids"] = sorted(set(closure) - set(latest_ids))
     return result
+
+
+def draft_input_ref(project: str, entry: Mapping[str, Any]) -> str:
+    """The exported source reference of a round input from a frozen draft.
+
+    The draft (``draft_snapshots``) is not part of any bundle; the reference
+    names its snapshot id so the provenance stays traceable in the project.
+    """
+    return ontospan.annotation_ref(
+        f"{project}:draft-snapshot-{entry['source_draft_snapshot_id']}",
+        entry["source_ref"]["annotation_id"],
+    )
 
 
 def serialize_t1_content(
@@ -323,6 +341,9 @@ def serialize_t1_content(
             or case_sizes[stored.variant.case_id] == 1,
         )
         kind = (round_kinds or {}).get(submission.submission_id)
+        # Every carry kind exports as ``carry_forward`` (no new stage names).
+        if kind in CARRY_ROUND_KINDS:
+            kind = "carry_forward"
         if kind in {"consolidation", "carry_forward"}:
             unit = unit.model_copy(
                 update={

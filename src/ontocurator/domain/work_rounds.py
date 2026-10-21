@@ -79,7 +79,10 @@ def is_exact_ancestor(
 class RoundInputView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     input_id: str
-    source_submission_id: str
+    # Exactly one source: a submission, or the frozen draft of a text change
+    # (kind ``text_change``; ``draft_snapshots.id``).
+    source_submission_id: str | None = None
+    source_draft_snapshot_id: int | None = None
     source_ref: AnnotationRef
     source_snapshot: AnnotationSnapshot
     target_snapshot: AnnotationSnapshot | None
@@ -113,6 +116,14 @@ class RoundInputView(BaseModel):
                 if isinstance(value.get(field), dict):
                     value[field] = decode_snapshot(value[field])
         return value
+
+    @model_validator(mode="after")
+    def one_source(self) -> "RoundInputView":
+        if (self.source_submission_id is None) == (
+            self.source_draft_snapshot_id is None
+        ):
+            raise ValueError("A round input has exactly one source")
+        return self
 
 
 class DraftSnapshotPayload(BaseModel):

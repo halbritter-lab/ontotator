@@ -168,6 +168,28 @@ def readable_case_documents(
             )
         ).scalars()
     )
+    # The text of a frozen draft (a ``text_change`` round's source) is visible
+    # the same way: only to the owner of a task offering one of its inputs.
+    from ontocurator.storage.overview_tables import DraftSnapshotRow
+
+    ids.update(
+        conn.execute(
+            select(DraftSnapshotRow.document_id)
+            .join(
+                RoundInputRow,
+                and_(
+                    RoundInputRow.project_id == DraftSnapshotRow.project_id,
+                    RoundInputRow.source_draft_snapshot_id == DraftSnapshotRow.id,
+                ),
+            )
+            .join(WorkRoundRow, WorkRoundRow.round_id == RoundInputRow.round_id)
+            .join(AssignmentRow, AssignmentRow.id == WorkRoundRow.assignment_id)
+            .where(
+                RoundInputRow.project_id == project_id,
+                qualifying_assignment(fresh.user_id),
+            )
+        ).scalars()
+    )
     if not ids:
         return DocumentFilter(False)
     if can(fresh, Action.BROWSE_VERSIONS, project_key):

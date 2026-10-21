@@ -213,10 +213,38 @@ def enrich_rounds(
     return result
 
 
+def _draft_versions(conn: Connection, pid: int, ids: Iterable[int]) -> dict[int, int]:
+    """draft_snapshots.id -> version of the frozen draft's text."""
+    from ontocurator.storage.overview_tables import DraftSnapshotRow
+
+    wanted = set(ids)
+    if not wanted:
+        return {}
+    return {
+        r.id: int(r.version)
+        for r in conn.execute(
+            select(
+                DraftSnapshotRow.id,
+                DraftSnapshotRow.payload["document_version"]
+                .as_integer()
+                .label("version"),
+            ).where(
+                DraftSnapshotRow.project_id == pid,
+                DraftSnapshotRow.id.in_(sorted(wanted)),
+            )
+        )
+    }
+
+
 def enrich_inputs(
     repo: Repository, project_key: str, items: list[dict[str, Any]]
 ) -> list[RoundInputView]:
-    """Validate authorized input payloads and add their source facts."""
+    """Validate authorized input payloads and add their source facts.
+
+    Round ordinal and recorded time exist only for a submission source; an
+    input of a frozen draft (kind ``text_change``) gets its text version from
+    the draft snapshot.
+    """
     views = [RoundInputView.model_validate(item) for item in items]
     if not views:
         return []
@@ -225,13 +253,29 @@ def enrich_inputs(
         pid = repo._require_project(conn, project_key)
         archived = repo._archived_rounds(conn, pid)
         owners, ordinals, recorded = _source_facts(
-            conn, pid, {v.source_submission_id for v in views}, archived
+            conn,
+            pid,
+            {v.source_submission_id for v in views if v.source_submission_id},
+            archived,
+        )
+        drafts = _draft_versions(
+            conn,
+            pid,
+            {
+                v.source_draft_snapshot_id
+                for v in views
+                if v.source_draft_snapshot_id is not None
+            },
         )
     result = []
     for view in views:
-        owner = owners.get(view.source_submission_id)
-        row = recorded.get(view.source_submission_id)
+        sid = view.source_submission_id or ""
+        owner = owners.get(sid)
+        row = recorded.get(sid)
         variant = variants.get(view.source_snapshot.annotation.document_id)
+        version = variant.version if variant else None
+        if view.source_draft_snapshot_id is not None:
+            version = drafts.get(view.source_draft_snapshot_id, version)
         result.append(
             view.model_copy(
                 update={
@@ -240,7 +284,7 @@ def enrich_inputs(
                     ),
                     "source_recorded_at": row.recorded_at if row is not None else None,
                     "source_language": variant.language if variant else None,
-                    "source_version": variant.version if variant else None,
+                    "source_version": version,
                 }
             )
         )

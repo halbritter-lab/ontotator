@@ -514,12 +514,19 @@ class Repository:
             if archived is not None:
                 return archived_inputs(archived)
             self.get_work_round(project_key, round_id)
+            # A frozen-draft input names its snapshot; submission inputs keep
+            # their exact stored shape (exports and archives hash it).
             return [
                 dict(row.payload)
                 | {
                     "input_id": row.input_id,
                     "source_submission_id": row.source_submission_id,
                 }
+                | (
+                    {"source_draft_snapshot_id": row.source_draft_snapshot_id}
+                    if row.source_draft_snapshot_id is not None
+                    else {}
+                )
                 for row in conn.execute(
                     select(RoundInputRow)
                     .where(

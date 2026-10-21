@@ -20,7 +20,7 @@ from ontocurator.domain.reanchor_resolution import (
     ReanchorResolution,
 )
 from ontocurator.domain.review import ReviewDecision
-from ontocurator.domain.work_rounds import RoundInputView
+from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS, RoundInputView
 from ontocurator.domain.workspace import RoundInputResolution, Submission
 from ontocurator.storage.guidelines import guideline_facts
 from ontocurator.storage.repository import Repository
@@ -61,7 +61,7 @@ class SubmissionHistoryDetail(BaseModel):
 def _carried_inputs(
     repo: Repository, key: str, round_id: str | None
 ) -> list[RoundInputView]:
-    """The carried inputs of a carry-forward round, read through the caller's scope.
+    """The carried inputs of a carry round, read through the caller's scope.
 
     A reader who may see the submission but not its round (no access rule is
     widened here) gets no inputs instead of an error.
@@ -69,7 +69,7 @@ def _carried_inputs(
     if round_id is None:
         return []
     try:
-        if repo.get_work_round(key, round_id).kind != "carry_forward":
+        if repo.get_work_round(key, round_id).kind not in CARRY_ROUND_KINDS:
             return []
         return enrich_inputs(repo, key, repo.get_round_input_inventory(key, round_id))
     except DomainError:

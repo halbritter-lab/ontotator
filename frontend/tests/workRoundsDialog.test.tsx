@@ -231,6 +231,18 @@ describe("Original evidence dialog", () => {
     expect(screen.getByText("Technical details")).toBeDefined();
   });
 
+  it("names the draft before the text change instead of a submission", async () => {
+    vi.spyOn(api, "getVariantText").mockResolvedValue({ document_id: "target", text: "Had seizure today.", text_sha256: "hash" });
+    const drafted = input({ source_submission_id: null, source_draft_snapshot_id: 4, source_round_ordinal: null, source_recorded_at: null });
+    render(<RoundInputEvidenceDialog projectKey="p" input={drafted} onClose={vi.fn()} labelFor={labelFor} />);
+    const box = screen.getByRole("dialog", { name: "Original finding from an earlier round" });
+    expect(box.querySelector(".round-evidence__meta")!.textContent).toBe("Draft before the text change · de v1 · ann-0004");
+    const details = screen.getByText("Technical details").closest("details")!;
+    expect(details.textContent).toContain("SourceDraft before the text change");
+    expect(details.textContent).not.toContain("Submission");
+    await waitFor(() => expect(box.querySelector(".text-container")).not.toBeNull());
+  });
+
   it("keeps the plain title for callers without the new prop", () => {
     vi.spyOn(api, "getVariantText").mockReturnValue(new Promise(() => undefined));
     const legacy = input({ source_round_ordinal: null, source_recorded_at: null, source_language: null, source_version: null });
