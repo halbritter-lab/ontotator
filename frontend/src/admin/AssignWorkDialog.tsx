@@ -10,7 +10,7 @@ import { memberReason, memberUnavailable, needsPeopleMessage, onePersonSummary, 
 
 export type AssignWorkTask = "translation_review" | "annotate" | "review";
 export type AssignWorkDialogProps =
-  | { mode: "row"; projectKey: string; row: DocumentRowView; task: AssignWorkTask; newReviewOfAccepted?: boolean; onClose: () => void; onAssigned: (message: string) => void }
+  | { mode: "row"; projectKey: string; row: DocumentRowView; task: AssignWorkTask; newReviewOfAccepted?: boolean; reviewReason?: "source_changed"; onClose: () => void; onAssigned: (message: string) => void }
   | { mode: "cases"; projectKey: string; caseIds: readonly string[]; sort: "case" | "import" | "activity"; filters: DocumentRowFilters; onClose: () => void; onAssigned: (message: string, skipped: readonly string[]) => void };
 
 type Preview = BatchPreview;
@@ -20,7 +20,7 @@ const stepKey = (task: string, language: string) => `${task}:${language}`;
 const isTask = (value: string): value is AssignWorkTask => value === "translation_review" || value === "annotate" || value === "review";
 
 export function AssignWorkDialog(props: AssignWorkDialogProps): JSX.Element {
-  const identity = props.mode === "row" ? ["row", props.projectKey, props.row.case_id, props.row.language, props.task, !!props.newReviewOfAccepted] : ["cases", props.projectKey, props.caseIds];
+  const identity = props.mode === "row" ? ["row", props.projectKey, props.row.case_id, props.row.language, props.task, !!props.newReviewOfAccepted, props.reviewReason ?? null] : ["cases", props.projectKey, props.caseIds];
   return <AssignWorkEditor key={JSON.stringify(identity)} {...props} />;
 }
 
@@ -85,13 +85,15 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [taskText, language] = current ? [current.slice(0, current.indexOf(":")), current.slice(current.indexOf(":") + 1)] : ["", ""];
   const task: AssignWorkTask | null = isTask(taskText) ? taskText : null;
   const rowMulti = isRow && task === "annotate";
+  /** "Assign review…" for a changed source: the review resolves the source-change obligation (spec V5). */
+  const sourceChanged = props.mode === "row" && props.reviewReason === "source_changed" && task === "translation_review";
   const shown = preview?.value ?? null;
   const people = shown ? sortMembers(shown.people) : [];
   const order = people.map(person => person.username);
   const usernames = order.filter(name => chosen.includes(name));
   const apiMode: "one" | "split" = isRow ? (usernames.length > 1 ? "split" : "one") : distribute;
   const request: BatchAssignRequest | null = !task ? null : props.mode === "row"
-    ? { task, language, case_ids: [props.row.case_id], mode: apiMode, usernames, ...(props.newReviewOfAccepted && task === "translation_review" ? { review_accepted_translation: true } : {}) }
+    ? { task, language, case_ids: [props.row.case_id], mode: apiMode, usernames, ...(props.newReviewOfAccepted && task === "translation_review" ? { review_accepted_translation: true } : {}), ...(sourceChanged ? { review_reason: "source_changed" as const } : {}) }
     : { task, language, case_ids: [...props.caseIds], sort: props.sort, filters: props.filters, mode: apiMode, usernames };
   const requestKey = request ? JSON.stringify([request, reload]) : "";
 
@@ -183,7 +185,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   };
 
   const title = props.mode === "cases" ? `Assign · ${plural(props.caseIds.length, "case")}`
-    : props.newReviewOfAccepted && task === "translation_review" ? "Assign a new review" : `Assign ${(task ? stepName(task) : "task").toLowerCase()}`;
+    : props.newReviewOfAccepted && task === "translation_review" ? "Assign a new review"
+    : sourceChanged ? "Assign review after source change" : `Assign ${(task ? stepName(task) : "task").toLowerCase()}`;
 
   const summaryLines: string[] = [];
   if (calculating) summaryLines.push("Calculating…");
@@ -229,7 +232,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       {task && (props.mode === "row" ? <div className="assign-field">
         {changingTask
           ? <Select id={`${id}-task`} label="Task" value={current ?? ""} disabled={busy} onChange={event => changeStep(event.target.value)}>{stepOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
-          : <p><strong>Task</strong> <span>{props.newReviewOfAccepted && task === "translation_review" ? "New review of the accepted translation" : stepName(task)}</span> <Button variant="quiet" size="sm" disabled={busy} onClick={() => setChangingTask(true)}>Change task</Button></p>}
+          : <p><strong>Task</strong> <span>{props.newReviewOfAccepted && task === "translation_review" ? "New review of the accepted translation" : sourceChanged ? "Review after a source change" : stepName(task)}</span> <Button variant="quiet" size="sm" disabled={busy} onClick={() => setChangingTask(true)}>Change task</Button></p>}
       </div> : steps && steps.length > 1
         ? <div className="assign-field"><Select id={`${id}-task`} label="Task" hint="from the plan" value={current ?? ""} disabled={busy} onChange={event => changeStep(event.target.value)}>{stepOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></div>
         : <p className="assign-field"><strong>Task</strong> <span className="assign-step">{stepOptions[0]?.label}</span> <span className="assign-muted">from the plan</span></p>)}

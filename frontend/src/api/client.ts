@@ -355,7 +355,10 @@ export class ApiClient {
     this.baseUrl = options.baseUrl ?? "";
   }
 
-  async listAssignments(key: string): Promise<AssignmentView[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments`, { method: "GET" }); }
+  async listAssignments(key: string, filter: { document_id?: string } = {}): Promise<AssignmentView[]> {
+    const query = filter.document_id ? `?document_id=${encodeURIComponent(filter.document_id)}` : "";
+    return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments${query}`, { method: "GET" });
+  }
   async createAssignments(key: string, body: AssignRequest): Promise<AssignResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments`, { method: "POST", body: JSON.stringify(body) }); }
   async proposeDistribution(key: string, body: ProposalRequest): Promise<ProposalResponse> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/proposal`, { method: "POST", body: JSON.stringify(body) }); }
   async previewAssignmentBatch(key: string, body: BatchAssignRequest): Promise<BatchPreview> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/assignments/batch/preview`, { method: "POST", body: JSON.stringify(body) }); }

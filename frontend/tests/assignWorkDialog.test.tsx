@@ -277,3 +277,15 @@ it("row mode can assign a new review of an accepted translation", async () => {
   await waitFor(() => expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ task: "translation_review", review_accepted_translation: true, usernames: ["ana"] })));
   await waitFor(() => expect(onAssigned).toHaveBeenCalledWith("1 translation review assigned to Ana Weber"));
 });
+
+it("row mode assigns a translation review after a source change with review_reason source_changed", async () => {
+  const onAssigned = vi.fn();
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="translation_review" reviewReason="source_changed" onClose={vi.fn()} onAssigned={onAssigned} />);
+  await ready();
+  expect(screen.getByRole("dialog", { name: "Assign review after source change" })).toBeDefined();
+  expect(screen.getByText("Review after a source change")).toBeDefined();
+  expect(lastPreview()).toMatchObject({ task: "translation_review", review_reason: "source_changed", case_ids: ["case-0101"] });
+  fireEvent.click(radio(/Ana Weber/)); await waitForPreviewOf(["ana"]);
+  fireEvent.click(screen.getByRole("button", { name: "Assign 1" }));
+  await waitFor(() => expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ review_reason: "source_changed", usernames: ["ana"] })));
+});

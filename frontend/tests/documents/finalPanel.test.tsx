@@ -203,7 +203,7 @@ describe("review changes", () => {
     const keep = screen.getByRole("button", { name: "Keep final on v1" });
     expect(keep.classList.contains("btn-primary")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Carry to v2…" }));
-    expect(onCarry).toHaveBeenCalledWith(target);
+    expect(onCarry).toHaveBeenCalledWith(target, "case-113-de-v2");
     expect(screen.queryByRole("button", { name: "Use the newer result" })).toBeNull();
     fireEvent.click(keep);
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", {

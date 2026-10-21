@@ -48,8 +48,8 @@ export interface FinalPanelProps {
   onRowAction?: (row: DocumentRowView, step: NextStepView) => void;
   /** "Assign annotation review…". */
   onAssign?: (row: DocumentRowView) => void;
-  /** "Carry to v2…" with the final's submission. */
-  onCarry?: (row: DocumentRowView) => void;
+  /** "Carry to v2…" with the final's submission, to the corrected version `targetDocumentId`. */
+  onCarry?: (row: DocumentRowView, targetDocumentId: string) => void;
   /** Footer links: open that part of the row's expansion and close the panel. */
   onSection?: (row: DocumentRowView, section: PanelSection) => void;
   /** A consolidation was started from the panel: the panel closes. */
@@ -422,7 +422,7 @@ function ReviewContent(props: ContentProps): JSX.Element {
     <div className="final-panel-actions">
       <ChoiceButton id={keepId} label={keepLabel(row)} variant={onlyTextChange ? "primary" : "secondary"} blocked={ownBlocked} busy={busy} onAnnounce={onAnnounce}
         onChoose={() => onSave(keepRequest(row, data.submissions, causes.map(item => item.cause_id), keepId), keepId)} />
-      {corrected && onCarry && <Button size="sm" aria-disabled={busy !== null || undefined} onClick={() => { if (busy === null) onCarry(row); }}>{`Carry to ${correctedName}…`}</Button>}
+      {corrected?.document_id && onCarry && <Button size="sm" aria-disabled={busy !== null || undefined} onClick={() => { if (busy === null && corrected.document_id) onCarry(row, corrected.document_id); }}>{`Carry to ${correctedName}…`}</Button>}
       {newer && <ChoiceButton id={newerId} label="Use the newer result" blocked={!newer.eligible} busy={busy} onAnnounce={onAnnounce}
         onChoose={() => onSave(selectRequest(row, data.submissions, newer, newerId), newerId)} />}
     </div>

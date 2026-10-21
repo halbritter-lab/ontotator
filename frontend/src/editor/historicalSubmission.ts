@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import type { AnnotationSnapshot, Submission, SubmissionHistoryDetail } from "../api/client";
 import type { CarriedCheckItem } from "./carried/CarriedChecksReadOnly";
 import { deriveCarriedStates, type CarriedInputLike, type ResolutionLike, type SnapshotLike } from "./carried/checkState";
-import { carriedFromLine } from "./carried/instructions";
+import { carriedOriginLine } from "./carried/instructions";
 
 type EvidenceSnapshot = AnnotationSnapshot["evidence"][number];
 type ReviewDecision = Submission["decisions"][number];
@@ -59,7 +59,7 @@ export function carriedCheckItems(
     term: term(state.input.target_snapshot ?? state.input.source_snapshot),
     state: state.variant === "checked" || state.variant === "dismissed" ? state.variant : "needed",
     reason: state.resolution?.reason ?? undefined,
-    origin: carriedFromLine(state.input.source_round_ordinal ?? null),
+    origin: carriedOriginLine(state.input),
   }));
 }
 

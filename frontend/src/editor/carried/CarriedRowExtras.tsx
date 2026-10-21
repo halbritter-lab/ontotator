@@ -19,14 +19,16 @@ export function CarriedStateBadge({ variant }: { variant: CheckVariant }): JSX.E
  * meta line ("Carried from Round 2" or "Linked to …") and, while unchecked, the instruction line.
  * `linked` lists the inputs linked to this finding through the exception path.
  */
-export function CarriedRowExtras({ state, sourceOrdinal, instruction, linked }: {
+export function CarriedRowExtras({ state, sourceOrdinal, origin, instruction, linked }: {
   state: Pick<CarriedState, "variant" | "unchecked">;
   sourceOrdinal: number | null;
+  /** Meta line instead of "Carried from Round n" (e.g. "Check after text change"). */
+  origin?: string;
   instruction: string | null;
   linked?: readonly LinkedSource[];
 }): JSX.Element {
   const { line } = checkStateBadge(state.variant);
-  const meta = linked && linked.length > 0 ? linkedMetaLine(linked) : carriedFromLine(sourceOrdinal);
+  const meta = linked && linked.length > 0 ? linkedMetaLine(linked) : origin ?? carriedFromLine(sourceOrdinal);
   return (
     <div className="carried-extras">
       <div className="carried-extras__badge"><CarriedStateBadge variant={state.variant} /></div>

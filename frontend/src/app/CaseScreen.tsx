@@ -1,7 +1,7 @@
 import { ReanchorPanel, currentReanchorResolution, reanchorKey, reanchorRef, useReanchorContext } from "../variants/ReanchorPanel";
 import { useCarriedReview } from "../editor/carried/useCarriedReview";
 import { carriedChosenAxisIds, carriedListOrder as orderCarriedFirst, deriveCarriedStates, nextUncheckedKey, rowKeyOf, type CarriedState, type SnapshotLike } from "../editor/carried/checkState";
-import { carriedFromLine, instructionLine, missingReason, roundName, textSpanLine, valuesLines, whatToCheckContext, type WhatToCheckContext } from "../editor/carried/instructions";
+import { carriedOriginLine, TEXT_CHANGE_ORIGIN, instructionLine, missingReason, roundName, textSpanLine, valuesLines, whatToCheckContext, type WhatToCheckContext } from "../editor/carried/instructions";
 import { CarriedSection, type CarriedReadOnly } from "../editor/carried/CarriedSection";
 import { ExceptionPanel } from "../editor/carried/ExceptionPanel";
 import { CarriedRowExtras } from "../editor/carried/CarriedRowExtras";
@@ -195,6 +195,8 @@ export interface CaseScreenProps {
 }
 
 const NO_ROUND_INPUTS: readonly import("../api/client").RoundInputView[] = [];
+/** Round kinds whose inputs are carried findings to check (a text change and a lead's handover included). */
+const isCarryKind = (kind: CaseScreenProps["roundKind"]): boolean => kind === "carry_forward" || kind === "text_change" || kind === "handover";
 
 export const CaseScreen: React.FC<CaseScreenProps> = ({
   view,
@@ -282,7 +284,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const pendingReanchorItems = view.key.mode === "review" ? view.pending_reanchor_items ?? [] : [];
   const unresolvedReanchorCount = pendingReanchorItems.filter(item =>
     !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? [])).length;
-  const carriedInputs = roundKind === "carry_forward" || (view.key.mode === "independent" && roundInputs.length) ? roundInputs : NO_ROUND_INPUTS;
+  const carriedInputs = isCarryKind(roundKind) || (view.key.mode === "independent" && roundInputs.length) ? roundInputs : NO_ROUND_INPUTS;
   const [originalRoundInput, setOriginalRoundInput] = useState<import("../api/client").RoundInputView | null>(null);
 
   const [layerSelection, setLayerSelection] = useState<LayerSelection>(() =>
@@ -1228,7 +1230,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const own = states.find(state => state.home === "carried");
     const shown = carriedShownState(states);
     const linked = own ? undefined : states.map(state => ({ term: carriedTermText(state.input.source_snapshot), sourceOrdinal: state.input.source_round_ordinal ?? null }));
-    return <CarriedRowExtras state={shown} sourceOrdinal={(own ?? shown).input.source_round_ordinal ?? null}
+    return <CarriedRowExtras state={shown} sourceOrdinal={(own ?? shown).input.source_round_ordinal ?? null} origin={carriedOriginLine((own ?? shown).input)}
       instruction={carriedInstruction(shown, shown.home === "placeholder" ? "linked" : undefined)} linked={linked} />;
   };
 
@@ -1379,7 +1381,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const sourceNote = input.source_snapshot.annotation.note?.trim() ?? "";
     const defaulted = new Set(selectedAnnotation.annotation.axes_defaulted ?? []);
     return <CarriedSection key={input.input_id} state={state}
-      origin={carriedFromLine(input.source_round_ordinal ?? null)} recordedAt={input.source_recorded_at}
+      origin={carriedOriginLine(input)} recordedAt={input.source_draft_snapshot_id != null ? null : input.source_recorded_at}
       whatToCheck={{
         textSpan: carriedTextSpan(input),
         values: valuesLines(carriedAxes(selectedAnnotation).filter(axis => defaulted.has(axis.id)).map(axis => axis.label)),
@@ -2624,7 +2626,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           ) : null}
           <h1 className="case-title" title={view.document.document_id}>{assignmentNavigation?.current.external_id || view.document.document_id}</h1>
           <span
-            title={roundTitle ?? (roundKind !== "consolidation" && roundKind !== "carry_forward" && view.key.mode === "independent" ? "You do not see proposals from other people or tools." : undefined)}
+            title={roundTitle ?? (roundKind !== "consolidation" && !isCarryKind(roundKind) && view.key.mode === "independent" ? "You do not see proposals from other people or tools." : undefined)}
             className={`badge ${
               view.key.mode === "review"
                 ? "badge-review"
@@ -2633,7 +2635,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 : "badge-independent"
             }`}
           >
-            {roundKind === "consolidation" ? "Consolidation review" : roundKind === "carry_forward" ? roundBadge ?? "Review carried findings" : view.key.mode === "review"
+            {roundKind === "consolidation" ? "Consolidation review" : roundKind === "text_change" ? TEXT_CHANGE_ORIGIN : isCarryKind(roundKind) ? roundBadge ?? "Review carried findings" : view.key.mode === "review"
               ? "Review proposals"
               : view.key.mode === "assisted"
               ? "Assisted annotation"
@@ -3086,7 +3088,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             const sourceNote = source.annotation.note?.trim();
             return <div className="detail-pane">
               <ExceptionPanel key={state.input.input_id} state={state}
-                origin={carriedFromLine(state.input.source_round_ordinal ?? null)} recordedAt={state.input.source_recorded_at}
+                origin={carriedOriginLine(state.input)} recordedAt={state.input.source_draft_snapshot_id != null ? null : state.input.source_recorded_at}
                 reason={missingReason(state.missing ?? "mapping_failed", state.input.review_reason)}
                 original={{
                   term: <TermName termId={source.annotation.term_id} label={termLabel(source.annotation.layer_id, source.annotation.term_id)} />,

@@ -53,6 +53,11 @@ export function valuesLines(defaultedAxisLabels: readonly string[]): string[] {
 /** List meta line of a carried row, e.g. "Carried from Round 2". */
 export const carriedFromLine = (ordinal: number | null): string => (ordinal ? `Carried from Round ${ordinal}` : "Carried from an earlier submission");
 
+export const TEXT_CHANGE_ORIGIN = "Check after text change";
+/** Origin of a carried input: inputs frozen from a draft (a lead moved the work to a corrected text) read "Check after text change". */
+export const carriedOriginLine = (input: { source_draft_snapshot_id?: number | null; source_round_ordinal?: number | null }): string =>
+  input.source_draft_snapshot_id != null ? TEXT_CHANGE_ORIGIN : carriedFromLine(input.source_round_ordinal ?? null);
+
 /** Meta line of a finding that inputs were linked to through the exception path. */
 export function linkedMetaLine(sources: readonly { term: string; sourceOrdinal: number | null }[]): string {
   if (sources.length === 1) {
