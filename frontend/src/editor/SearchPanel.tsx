@@ -299,6 +299,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
         </InlineMessage>
       )}
 
+      {expanded && <SearchDetail hit={candidates[shownActive >= 0 ? shownActive : 0]} />}
+
       {expanded && (
         <ul ref={listRef} id={listboxId} role="listbox" aria-label="Terms" className="candidate-list">
           {candidates.map((cand, index) => {
@@ -325,11 +327,15 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 <div className="candidate-header">
                   <strong className="candidate-label">{cand.label}</strong>
                   <span className="candidate-id">{cand.term_id}</span>
-                  {isActive && canAssign && <Kbd>Enter</Kbd>}
+                  {canAssign && (
+                    // Reserved in every row and shown only on the active one, so activity never changes the layout.
+                    <span className="candidate-enter" aria-hidden="true"><Kbd>Enter</Kbd></span>
+                  )}
                 </div>
                 {match && <div className="candidate-match" title={cand.match_kind}>{match}</div>}
                 {cand.definition && (
-                  <div className={`candidate-def${isActive ? "" : " is-clamped"}`}>{cand.definition}</div>
+                  // Clamped visually; the full definition stays in the option for screen readers.
+                  <div className="candidate-def">{cand.definition}</div>
                 )}
                 {cand.obsolete && (
                   <span className="warning-badge">
@@ -349,3 +355,18 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     </div>
   );
 };
+
+/** Fixed-height area above the hits with the active hit in full; a visual duplicate of the active option.
+ * Label and code are drawn from data attributes (CSS generated content), so the option stays the only
+ * element with that text: text queries and find-in-page land on the hit, not on its duplicate. */
+const SearchDetail: React.FC<{ hit: SearchCandidate }> = ({ hit }) => (
+  <div className="search-detail" data-search-detail aria-hidden="true">
+    <p className="search-detail__head">
+      <span className="search-detail__label" data-text={hit.label} />{" "}
+      <span className="search-detail__code" data-text={hit.term_id} />
+    </p>
+    <p>{hit.definition || "No definition."}</p>
+    {matchLine(hit) && hit.matched_term && <p className="search-detail__match">Matched: {hit.matched_term}</p>}
+    {hit.obsolete && <p className="warning-badge">Obsolete term (assignment not allowed)</p>}
+  </div>
+);

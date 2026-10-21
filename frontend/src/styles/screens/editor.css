@@ -413,7 +413,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .candidate-card:hover:not(.candidate-obsolete) {
@@ -445,12 +444,6 @@
   font-family: var(--font-mono);
   font-size: var(--size-xs);
   color: var(--text-muted);
-}
-
-.candidate-def {
-  font-size: var(--size-sm);
-  color: var(--text-muted);
-  line-height: var(--leading-sm);
 }
 
 .warning-badge {
@@ -1127,9 +1120,58 @@
   font-size: var(--size-md);
 }
 
+/* The only .candidate-def rule: two lines in every state, so a row never changes height on ↓ / ↑ or hover. */
 .candidate-def {
   font-size: var(--size-sm);
   line-height: var(--leading-sm);
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* The Enter slot is reserved in every row and shown only on the active one. */
+.candidate-enter {
+  visibility: hidden;
+}
+
+.candidate-card[aria-selected="true"] .candidate-enter {
+  visibility: visible;
+}
+
+/* The active hit in full, between the hint and the list; its height never depends on the content. */
+.search-detail {
+  box-sizing: border-box;
+  height: calc(5 * var(--leading-sm) + 2 * var(--space-2));
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  overflow-y: auto;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+
+.search-detail p {
+  margin: 0;
+}
+
+/* Label and code come from data-text, so the hit's option keeps the only DOM copy of that text. */
+.search-detail__label::before,
+.search-detail__code::before {
+  content: attr(data-text);
+}
+
+.search-detail__label {
+  font-weight: var(--weight-strong);
+}
+
+.search-detail__code {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+  color: var(--text-muted);
 }
 
 /* Term search combobox: the field row, the hint line and the active hit. */
@@ -1161,16 +1203,6 @@
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.candidate-card[aria-selected="true"] .candidate-def {
-  color: var(--text);
-}
-
-.candidate-def.is-clamped {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .candidate-match {
   margin-bottom: var(--space-1);
   font-size: var(--size-sm);
@@ -1199,6 +1231,10 @@
   .candidate-card[aria-selected="true"] {
     outline: var(--focus-width) solid Highlight;
     outline-offset: calc(-1 * var(--focus-width));
+  }
+
+  .search-detail {
+    border: 1px solid CanvasText;
   }
 }
 
@@ -2151,8 +2187,17 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 .values-section .axis-option input:focus-visible {
   outline: none;
 }
+.values-section .values-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.values-section .values-heading-row h3 {
+  margin: 0;
+}
 .values-section .values-confirm {
-  margin-top: var(--space-1);
+  flex-shrink: 0;
 }
 .values-section .form-hint {
   margin: var(--space-1) 0 0;
