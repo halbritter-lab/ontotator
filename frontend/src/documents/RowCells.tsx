@@ -1,16 +1,16 @@
 /**
- * Cell renderers of a Documents language row, shared by the table (D4) and the narrow cards (D5).
- * Each renderer takes the row view plus explicit options; none holds state.
+ * Cell renderers of a Documents text row, shared by the table and the narrow cards (documents
+ * overview "Columns"): Text (row header), the stage cells, Waiting on, Last activity with the
+ * history disclosure. Each renderer takes the row view plus explicit options; none holds state.
  */
 import { useId, type MouseEvent, type ReactNode } from "react";
-import type { DocumentRowView, DocumentVersionView, FinalSelectionSummary, NextStepView } from "../api/client";
+import type { DocumentRowView, DocumentVersionView, FinalSelectionSummary } from "../api/client";
 import { kindLabels, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
-import { Button } from "../ui/Button";
 import { IconCheck, IconChevronRight } from "../ui/icons";
+import { StageCell } from "../ui/StageCell";
 import { StatusBadge } from "../ui/StatusBadge";
-import { actionLabel, BADGE_LABELS, moreStepsLabel, ownerLabel, secondaryLine, stepLabel } from "./nextStepLabels";
 import {
   decisionCategoryLabels,
   issueAriaLabel,
@@ -23,6 +23,7 @@ import {
   workText,
   type DecisionCategory,
 } from "./labels";
+import { isActiveRow, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
 
 /** Longest ID shown in full in a cell; longer IDs get a middle ellipsis with the full value in `title`. */
 export const ID_DISPLAY_MAX = 24;
@@ -83,19 +84,14 @@ export function documentsRowId(caseId: string, language: string, part: Documents
   return `documents-row-${encodeURIComponent(caseId)}-${encodeURIComponent(language)}-${part}`;
 }
 
-/** Stable id of a text group's header disclosure. */
+/** Stable id of a case's group row label (a focus fallback; the group row is no disclosure, VD5). */
 export function documentsGroupId(caseId: string): string {
   return `documents-group-${encodeURIComponent(caseId)}-toggle`;
 }
 
-/** Stable id of a case's "not in plan · show" toggle. */
+/** Stable id of the former not-in-plan toggle of a case; no element has it since VD1 (plan chips keep it as a focus fallback). */
 export function documentsNotInPlanId(caseId: string): string {
   return `documents-group-${encodeURIComponent(caseId)}-not-in-plan`;
-}
-
-/** Accessible name of a case's "not in plan · show/hide" toggle (starts with the visible text). */
-export function notInPlanToggleLabel(caseId: string, languages: readonly string[], shown: boolean): string {
-  return `${shown ? "Hide" : "Show"} ${languages.join(", ")} not in plan, ${caseId}`;
 }
 
 /** A link with a real `href`; plain left clicks go through `onNavigate` when given. */
@@ -276,80 +272,97 @@ export function RowOpenLinks({ row, projectKey, query, onNavigate }: {
   </>;
 }
 
+/** NEW since the lead's last visit (O1 `new`; absent before the regeneration). */
+export function rowIsNew(row: DocumentRowView): boolean {
+  return (row as DocumentRowView & { new?: boolean }).new === true;
+}
+
+/** The decision edge: the row's next step is a lead decision (in plan or undecided, V10). */
+export function rowNeedsDecision(row: DocumentRowView): boolean {
+  return isActiveRow(row) && row.next_step?.kind === "decision";
+}
+
+/** "v2 corrected" / "v2" / "2 translations" with the full version label as `title`. */
+export function VersionMarker({ row }: { row: DocumentRowView }): JSX.Element | null {
+  const text = versionMarkerText(row);
+  if (!text) return null;
+  const shown = displayedVersion(row);
+  const title = shown && !row.parallel_roots ? versionLabel(row, shown) : chainNames(row).join(", ");
+  return <span className="documents-version-marker" title={title || undefined}>{text}</span>;
+}
+
+/** Small info badge "NEW"; accessible text "New since your last visit". */
+export function NewBadge(): JSX.Element {
+  return <StatusBadge tone="info"><span aria-hidden="true">NEW</span><span className="visually-hidden">New since your last visit</span></StatusBadge>;
+}
+
 export interface RowHeaderCellProps {
   row: DocumentRowView;
   projectKey: string;
   /** Current Documents query; passed through as `documents_*` so the case viewer can return. */
   query: ProjectDocumentsQuery;
-  expanded: boolean;
-  /** ID of the expanded content; set only while it exists. */
-  controls?: string;
-  onToggleRow: (key: string) => void;
   onNavigate?: (route: Route) => void;
-  /** Visit badge ("Resolved" / "Changed: …") shown next to the disclosure, outside its name. */
+  /** Visit badge ("Resolved" / "Changed: …"). */
   badge?: ReactNode;
 }
 
-/** Disclosure, language code, "source", visit badge, "Open" and "Open my task". */
-export function RowHeaderCell({ row, projectKey, query, expanded, controls, onToggleRow, onNavigate, badge }: RowHeaderCellProps): JSX.Element {
+/**
+ * Text cell (row header, named "{case} · {language}"): language, "source", version marker, NEW,
+ * visit badge, "Open" and "Open my task"; decision rows add the hidden "Needs your decision".
+ */
+export function RowHeaderCell({ row, projectKey, query, onNavigate, badge }: RowHeaderCellProps): JSX.Element {
+  const active = isActiveRow(row);
   return (
-    <span className="documents-row-header">
-      <button
-        type="button"
-        id={documentsRowId(row.case_id, row.language, "disclosure")}
-        className="documents-disclosure target-min"
-        aria-expanded={expanded}
-        aria-controls={controls}
-        aria-label={`Show details, ${rowName(row)}`}
-        onClick={() => onToggleRow(rowKeyOf(row))}
-      >
-        <IconChevronRight className="disclosure-chevron" />
-        <span className="documents-language">{row.language}</span>
-      </button>
+    <span className="documents-row-header documents-text-cell">
+      <span className="documents-text-name"><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language">{row.language}</span></span>
+      {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
       {row.is_source && <span className="documents-source">source</span>}
+      <VersionMarker row={row} />
+      {active && rowIsNew(row) && <NewBadge />}
       {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
       <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
     </span>
   );
 }
 
-const BADGE_TONES: Readonly<Record<keyof typeof BADGE_LABELS, "warning" | "info">> = { your_decision: "info", check_failed: "warning", paused: "warning" };
-
-/** Next step: step, badges, muted secondary line and "+1 more step" (opens the row). Rows not in plan read "Not in plan". */
-export function NextStepCell({ row, onToggleRow, strong = false }: { row: DocumentRowView; onToggleRow?: (key: string) => void; strong?: boolean }): JSX.Element {
-  if (!row.in_plan) return <span className="documents-next-step documents-muted">Not in plan</span>;
-  const step = row.next_step;
-  if (!step) return <span className="documents-next-step documents-muted">—</span>;
-  const secondary = secondaryLine(step, row);
-  const more = moreStepsLabel(row);
-  return (
-    <span className="documents-next-step">
-      <span className="documents-step-line">
-        <span className={strong ? "documents-step documents-step--strong" : "documents-step"}>{stepLabel(step.code)}</span>
-        {(step.badges ?? []).map(badge => <StatusBadge key={badge} tone={BADGE_TONES[badge]}>{BADGE_LABELS[badge]}</StatusBadge>)}
-      </span>
-      {secondary && <span className="documents-step-secondary">{secondary}</span>}
-      {more && (
-        <button type="button" className="documents-more-steps" aria-label={`${more}, ${rowName(row)}`} onClick={() => onToggleRow?.(rowKeyOf(row))}>{more}</button>
-      )}
-    </span>
-  );
+/** One stage cell of the row; rows outside the plan are muted (VD1). */
+export function RowStageCell({ row, stage, sourceLanguage }: { row: DocumentRowView; stage: StageName; sourceLanguage?: string | null }): JSX.Element {
+  const cell = row.stages?.[stage];
+  if (!cell) return <StageCell symbol="" word="—" tone="none" muted={!isActiveRow(row)} />;
+  const text = stageText(stage, cell, row, { sourceLanguage });
+  return <StageCell symbol={text.symbol} word={text.word} detail={text.detail} tone={cell.tone} muted={!isActiveRow(row)} />;
 }
 
-/** Owner: "You" (strong), a person, "2 annotators", or "—". */
-export function OwnerCell({ row }: { row: DocumentRowView }): JSX.Element {
-  const step = row.in_plan ? row.next_step : null;
-  const label = ownerLabel(step);
-  return step?.owner.kind === "you" ? <strong className="documents-owner">{label}</strong> : <span className="documents-owner">{label}</span>;
+/** Waiting on: "You" (strong), a person, up to two names and "+n" with the full list (VD8), or "—". */
+export function WaitingOnCell({ row }: { row: DocumentRowView }): JSX.Element {
+  const { text, title, you } = waitingOnText(row);
+  if (you) return <strong className="documents-waiting-on">{text}</strong>;
+  if (!title || title === text) return <span className="documents-waiting-on">{text}</span>;
+  return <span className="documents-waiting-on" title={title}><span aria-hidden="true">{text}</span><span className="visually-hidden">{title}</span></span>;
 }
 
-/** One small secondary button for a lead-owned step, named "{action}, {case · language}". */
-export function ActionCell({ row, onAction, block = false }: { row: DocumentRowView; onAction?: (row: DocumentRowView, step: NextStepView) => void; block?: boolean }): JSX.Element | null {
-  const step = row.in_plan ? row.next_step : null;
-  if (!step?.action || !onAction) return null;
-  const label = actionLabel(step.action);
+/** The ▸ disclosure at the end of Last activity: "Show history, case-107 · de". */
+export function HistoryToggle({ row, expanded, controls, onToggleRow, children }: {
+  row: DocumentRowView;
+  expanded: boolean;
+  /** ID of the expanded content; set only while it exists. */
+  controls?: string;
+  onToggleRow: (key: string) => void;
+  /** Visible text after the chevron (cards: "History"). */
+  children?: ReactNode;
+}): JSX.Element {
   return (
-    <Button id={documentsRowId(row.case_id, row.language, "action")} size="sm" className={block ? "documents-action documents-action--block" : "documents-action"}
-      aria-label={`${label}, ${rowName(row)}`} onClick={() => onAction(row, step)}>{label}</Button>
+    <button
+      type="button"
+      id={documentsRowId(row.case_id, row.language, "disclosure")}
+      className="documents-disclosure target-min"
+      aria-expanded={expanded}
+      aria-controls={controls}
+      aria-label={children ? undefined : `Show history, ${rowName(row)}`}
+      onClick={() => onToggleRow(rowKeyOf(row))}
+    >
+      <IconChevronRight className="disclosure-chevron" />
+      {children}
+    </button>
   );
 }

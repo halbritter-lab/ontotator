@@ -1,23 +1,24 @@
 /**
  * "Select by case IDs…" (spec "Selection on Documents (D17)", `approved/work-plan-by-language.html`
- * step 2): paste a list, look it up live, then replace the selection (or add to it). The selection
- * holds at most `MAX_SELECTION` cases; beyond that the first ones in pasted order are selected.
+ * step 2): paste a list, look it up live, then replace the selection (or add to it) with every text
+ * of the found cases (documents overview VD4, through `document-rows/keys`). The selection holds
+ * texts of at most `MAX_SELECTION_CASES` cases; beyond that the first ones in pasted order are selected.
  */
 import { useEffect, useId, useRef, useState } from "react";
-import { api, type CaseIdLookupResult } from "../api/client";
+import { api, type CaseIdLookupResult, type RowRefView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { plural } from "../app/labels";
 import { Button, Checkbox, Dialog, Textarea } from "../ui";
 import { parseCaseIds } from "./caseIds";
-import { MAX_SELECTION } from "./useCaseSelection";
+import { MAX_SELECTION_CASES as MAX_SELECTION, textKeyOf } from "./useTextSelection";
 
 export interface SelectByIdsDialogProps {
   projectKey: string;
-  /** The current selection (replaced by default). */
+  /** Case IDs of the current selection (replaced by default). */
   current: ReadonlySet<string>;
   onClose: () => void;
-  /** Found IDs in pasted order; the caller applies them (and the cap) and closes the dialog. */
-  onSelect: (ids: readonly string[], mode: "replace" | "add") => void;
+  /** Text keys `"{case}:{language}"` of the found cases in pasted order; the caller applies them (and the cap) and closes the dialog. */
+  onSelect: (keys: readonly string[], mode: "replace" | "add") => void;
 }
 
 /** Lookup waits this long after the last keystroke. */
@@ -26,6 +27,15 @@ export const LOOKUP_DELAY_MS = 250;
 const LOOKUP_CHUNK = 5000;
 const UNKNOWN_SHOWN = 20;
 export const LIMIT_NOTE = `Selection is limited to ${MAX_SELECTION} cases.`;
+
+/** Every text of the given cases (at most `MAX_SELECTION` cases), in the given case order. */
+async function textsOf(projectKey: string, caseIds: readonly string[]): Promise<string[]> {
+  const wanted = caseIds.slice(0, MAX_SELECTION);
+  const result = await api.documentRowKeys(projectKey, { case_ids: wanted });
+  const byCase = new Map<string, RowRefView[]>();
+  for (const key of result.keys) byCase.set(key.case_id, [...(byCase.get(key.case_id) ?? []), key]);
+  return wanted.flatMap(caseId => (byCase.get(caseId) ?? []).map(textKeyOf));
+}
 
 async function lookup(projectKey: string, ids: readonly string[]): Promise<CaseIdLookupResult> {
   const result: CaseIdLookupResult = { found: [], unknown: [] };
@@ -45,6 +55,8 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
   const [retry, setRetry] = useState(0);
   const [adding, setAdding] = useState(false);
   const [copied, setCopied] = useState("");
+  const [selecting, setSelecting] = useState(false);
+  const [selectError, setSelectError] = useState<unknown>();
   const generation = useRef(0);
   const ids = parseCaseIds(text);
   const key = JSON.stringify(ids);
@@ -77,6 +89,18 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
   else if (!found.length) blocked = "None of these case IDs exist in this project.";
 
   const reasonId = `${id}-reason`;
+  const choose = async () => {
+    if (selecting) return;
+    setSelecting(true); setSelectError(undefined);
+    try {
+      const keys = await textsOf(projectKey, found);
+      onSelect(keys, add ? "add" : "replace");
+    } catch (failure: unknown) {
+      setSelectError(failure);
+    } finally {
+      setSelecting(false);
+    }
+  };
   const primary = limited ? `Select the first ${MAX_SELECTION}` : `Select ${found.length}`;
   const copyUnknown = () => {
     void navigator.clipboard?.writeText(unknown.join("\n")).then(() => setCopied(`Copied ${plural(unknown.length, "unknown ID")}.`), () => setCopied("Could not copy."));
@@ -86,7 +110,7 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
     {blocked && <span id={reasonId} className="select-ids-reason">{blocked}</span>}
     <Button onClick={onClose}>Cancel</Button>
     <Button variant="primary" aria-disabled={blocked ? true : undefined} aria-describedby={blocked ? reasonId : undefined}
-      onClick={() => { if (!blocked) onSelect(found, add ? "add" : "replace"); }}>{primary}</Button>
+      loading={selecting} onClick={() => { if (!blocked) void choose(); }}>{primary}</Button>
   </>;
 
   return <Dialog open title="Select by case IDs" size="md" onClose={onClose} footer={footer}>
@@ -108,6 +132,7 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
         <Checkbox id={`${id}-add`} label="Add to the current selection instead" checked={adding} onChange={event => setAdding(event.target.checked)} />
       </>}
       {limited && <p className="select-ids-limit">{LIMIT_NOTE}</p>}
+      {selectError !== undefined && <ErrorNotice error={selectError} />}
     </div>
   </Dialog>;
 }

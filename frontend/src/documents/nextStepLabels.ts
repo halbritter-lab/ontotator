@@ -1,11 +1,11 @@
 /**
- * Copy of the Documents "Next step" and "Owner" columns (spec "Next step" and "Copy › Steps,
- * Row actions"). Pure functions over the server-derived `NextStepView`; the table, the narrow
- * cards and the row actions share them so names stay identical.
+ * Copy of the Documents next steps and row actions (spec "Next step" and "Copy › Steps, Row
+ * actions"; documents overview "Copy › Actions"). Pure functions over the server-derived
+ * `NextStepView`; the table, the narrow cards and the row actions share them so names stay
+ * identical. The Waiting on column lives in `stageLabels.ts` (`waitingOnText`).
  */
 import type { DocumentRowView, NextStepView, StepDetailView } from "../api/client";
 import { personLabel } from "../app/identity";
-import { plural } from "../app/labels";
 import { kindLabels, type SubmissionKind } from "../app/submissionLabels";
 
 export type StepCode = NextStepView["code"];
@@ -39,8 +39,9 @@ export const ACTION_LABELS: Readonly<Record<RowAction, string>> = {
   review_changes: "Review changes…",
   resolve: "Resolve…",
   accept_or_review: "Assign review or accept…",
-  choose_final: "Choose final…",
-  assign_translation_review: "Assign translation review…",
+  // Rendered as "Accept result…" for one submission (`rowActionLabel`, V6/VD16).
+  choose_final: "Compare results…",
+  assign_translation_review: "Assign review…",
   assign_annotation: "Assign annotation…",
 };
 
@@ -133,20 +134,17 @@ export function secondaryLine(step: NextStepView, row: DocumentRowView): string 
   return [assigned, detail].filter(Boolean).join(" · ");
 }
 
-/** Owner column: "You", "Ana Weber (ann-0004)", "2 annotators", or "—". */
-export function ownerLabel(step: NextStepView | null | undefined): string {
-  const owner = step?.owner;
-  if (!step || !owner) return "—";
-  switch (owner.kind) {
-    case "you": return "You";
-    case "person": return personLabel(owner.person);
-    case "people": return plural(owner.count, step.stage === "translation_review" ? "reviewer" : "annotator");
-    default: return "—";
+/** The action name of a step on its row: "Choose final" reads "Accept result…" with one submission, else "Compare results…" (V6, VD16). */
+export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "stages">): string {
+  if (step.action === "choose_final") {
+    const final = row.stages?.final;
+    return final?.state === "choose" && final.detail.submitted === 1 ? "Accept result…" : "Compare results…";
   }
+  return step.action ? actionLabel(step.action) : "";
 }
 
-/** "+1 more step" for rows matching several rules. */
-export function moreStepsLabel(row: Pick<DocumentRowView, "steps">): string | null {
-  const more = (row.steps?.length ?? 0) - 1;
-  return more > 0 ? `+${plural(more, "more step")}` : null;
+/** The row's lead-owned steps with an action, in the server's order (VD18); falls back to the next step. */
+export function leadSteps(row: Pick<DocumentRowView, "next_step" | "steps">): NextStepView[] {
+  const steps = row.steps?.length ? row.steps : row.next_step ? [row.next_step] : [];
+  return steps.filter(step => step.owner.kind === "you" && step.action != null);
 }

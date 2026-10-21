@@ -259,7 +259,7 @@ it("links the next decision while a decision filter is active", async () => {
   expect(liveRegion().textContent).toContain("Next decision: case-0099 · de.");
   fireEvent.click(next);
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", decision: "all", open: ["case-0042:en", "case-0099:de"] }, { replace: true });
-  await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Show details, case-0099 · de"));
+  await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Show history, case-0099 · de"));
 });
 
 it("maps errors, success messages and bar changes", () => {

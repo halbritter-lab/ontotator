@@ -10,6 +10,7 @@ import { stageBlockHeadingId } from "../src/documents/StageBlocks";
 import { recordDecision } from "../src/documents/visitState";
 import { useRegisteredShortcuts } from "../src/ui/shortcuts";
 import { final, group, item, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
+import { ana, cell, scenario7a, stagedRow, tom } from "./documents/tableFixtures";
 import { reviewRecord } from "./translationFixtures";
 
 const { expandedProps, assignProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[], assignProps: [] as unknown[] }));
@@ -65,6 +66,13 @@ const casesPage = (count: number, overrides: Partial<DocumentRowsPage> = {}) => 
   return group(caseId, [planRow(caseId, "de", stepOf("assign_translation_review"))]);
 }), overrides);
 const caseBox = (caseId: string) => screen.getByRole("checkbox", { name: new RegExp(`^Select ${caseId} \\(`) });
+const rowBox = (caseId: string, language: string) => screen.getByRole("checkbox", { name: `Select ${caseId} · ${language}` });
+/** The Text cell (`th scope="row"`) of a row, found through its history disclosure. */
+const rowHeader = (name: string) => screen.getByRole("button", { name: `Show history, ${name}` }).closest("tr")!.querySelector<HTMLElement>("th[scope=row]")!;
+/** "3 texts in 3 cases selected" for cases with one text each. */
+const selectedText = (count: number) => `${count} ${count === 1 ? "text" : "texts"} in ${count} ${count === 1 ? "case" : "cases"} selected`;
+/** Row keys of `document-rows/keys`: the de text of every given case. */
+const deKeys = (caseIds: readonly string[], truncated = false) => ({ keys: caseIds.map(caseId => ({ case_id: caseId, language: "de" })), cases: caseIds.length, total: caseIds.length, truncated });
 const selectionRegion = () => screen.getByRole("region", { name: "Selection" });
 
 beforeEach(() => {
@@ -171,18 +179,18 @@ describe("exact filters from Progress links", () => {
 
   it("selection filters include q and decision", async () => {
     mockRows(casesPage(3));
-    vi.spyOn(api, "listDocumentCaseIds").mockResolvedValueOnce({ case_ids: ["case-0101"], total: 1, truncated: false });
+    vi.spyOn(api, "documentRowKeys").mockResolvedValueOnce(deKeys(["case-0101"]));
     renderPage({ query: { ...linked, decision: "translation" } });
     await loaded();
     const expected = { q: "case-01", decision: "translation", step: ["resolve_rejected", "resolve_queried"], stage: "translation_review", plan: ["review", "review_and_annotate"], paused: "no" };
     fireEvent.click(caseBox("case-0102"));
-    await waitFor(() => expect(api.selectionSummary).toHaveBeenLastCalledWith("p", ["case-0102"], expected));
+    await waitFor(() => expect(api.selectionSummary).toHaveBeenLastCalledWith("p", { rows: [{ case_id: "case-0102", language: "de" }] }, expected));
     fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Assign…" }));
     expect(lastAssign()).toMatchObject({ sort: "import", filters: expected });
     expect(Object.keys((lastAssign() as { filters?: object }).filters ?? {}).sort()).toEqual(Object.keys(expected).sort());
     act(() => { lastAssign().onClose(); });
     fireEvent.click(screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }));
-    await waitFor(() => expect(api.listDocumentCaseIds).toHaveBeenCalledWith("p", { ...expected, sort: "import" }));
+    await waitFor(() => expect(api.documentRowKeys).toHaveBeenCalledWith("p", { filters: expected, sort: "import" }));
   });
 
   it("drops a final filter under a decision filter (the API takes one of them)", async () => {
@@ -246,11 +254,11 @@ it("re-announces a repeated message in the live region", async () => {
   renderPage();
   await loaded();
   fireEvent.click(caseBox("case-0101"), { shiftKey: true });
-  await waitFor(() => expect(live().textContent).toBe("1 case selected"));
+  await waitFor(() => expect(live().textContent).toBe(selectedText(1)));
   // The same range again: the same message is cleared and set again.
   fireEvent.click(caseBox("case-0101"), { shiftKey: true });
   expect(live().textContent).toBe("");
-  await waitFor(() => expect(live().textContent).toBe("1 case selected"));
+  await waitFor(() => expect(live().textContent).toBe(selectedText(1)));
 });
 
 it("keeps the rows and shows Could not refresh when a background refetch fails", async () => {
@@ -268,16 +276,20 @@ it("keeps the rows and shows Could not refresh when a background refetch fails",
 });
 
 describe("case selection", () => {
-  it("case checkbox is named with the case and its language count", async () => {
+  it("case checkbox is named with the case and its text count and selects every text", async () => {
     mockRows(page([group("case-0101", [planRow("case-0101", "en", stepOf("assign_annotation"), { is_source: true }), planRow("case-0101", "de", stepOf("assign_translation_review")), notInPlanRow("case-0101", "fr")])]));
     renderPage();
     await loaded();
-    const box = screen.getByRole("checkbox", { name: "Select case-0101 (3 languages)" });
-    expect(box.closest("th")?.getAttribute("scope")).toBe("rowgroup");
+    const box = screen.getByRole("checkbox", { name: "Select case-0101 (3 texts)" });
+    expect(box.closest("td")!.nextElementSibling?.getAttribute("scope")).toBe("rowgroup");
     expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
     fireEvent.click(box);
     expect((box as HTMLInputElement).checked).toBe(true);
-    expect(within(selectionRegion()).getByText("1 case selected")).toBeTruthy();
+    expect(within(selectionRegion()).getByText("3 texts in 1 case selected")).toBeTruthy();
+    // One text off: the case checkbox is mixed.
+    fireEvent.click(rowBox("case-0101", "fr"));
+    expect((box as HTMLInputElement).indeterminate).toBe(true);
+    expect(within(selectionRegion()).getByText("2 texts in 1 case selected")).toBeTruthy();
   });
 
   it("Shift-click selects a range and announces the count", async () => {
@@ -286,15 +298,15 @@ describe("case selection", () => {
     await loaded();
     fireEvent.click(caseBox("case-0101"));
     fireEvent.click(caseBox("case-0120"), { shiftKey: true });
-    await waitFor(() => expect(live().textContent).toBe("20 cases selected"));
-    expect(within(selectionRegion()).getByText("20 cases selected")).toBeTruthy();
+    await waitFor(() => expect(live().textContent).toBe(selectedText(20)));
+    expect(within(selectionRegion()).getByText(selectedText(20))).toBeTruthy();
     expect((caseBox("case-0110") as HTMLInputElement).checked).toBe(true);
     expect((caseBox("case-0121") as HTMLInputElement).checked).toBe(false);
     // Ctrl-click removes one case and keeps the anchor.
     fireEvent.click(caseBox("case-0110"), { ctrlKey: true });
-    await waitFor(() => expect(live().textContent).toBe("19 cases selected"));
+    await waitFor(() => expect(live().textContent).toBe(selectedText(19)));
     fireEvent.click(caseBox("case-0122"), { shiftKey: true });
-    await waitFor(() => expect(live().textContent).toBe("22 cases selected"));
+    await waitFor(() => expect(live().textContent).toBe(selectedText(22)));
   });
 
   it("Shift+ArrowDown moves and selects; Space toggles; listed in ? help under Selection", async () => {
@@ -310,13 +322,32 @@ describe("case selection", () => {
     fireEvent.keyDown(first, { key: "ArrowDown", shiftKey: true });
     expect(document.activeElement).toBe(caseBox("case-0102"));
     expect((caseBox("case-0102") as HTMLInputElement).checked).toBe(true);
-    await waitFor(() => expect(live().textContent).toBe("2 cases selected"));
+    await waitFor(() => expect(live().textContent).toBe(selectedText(2)));
     fireEvent.keyDown(caseBox("case-0102"), { key: "ArrowUp", shiftKey: true });
     expect(document.activeElement).toBe(first);
     fireEvent.click(first);
     expect((first as HTMLInputElement).checked).toBe(false);
     expect(help.filter(row => row.group === "Selection").map(row => row.description)).toEqual(
-      expect.arrayContaining(["Move to the next or previous case and select it", "Select or deselect the focused case"]));
+      expect.arrayContaining(["Move to the next or previous row and select it", "Select or deselect the focused row"]));
+  });
+
+  it("Space toggles the focused row checkbox", async () => {
+    mockRows(casesPage(3));
+    renderPage();
+    await loaded();
+    const first = rowBox("case-0101", "de");
+    first.focus();
+    fireEvent.click(first); // Space on a focused checkbox is a click
+    expect((first as HTMLInputElement).checked).toBe(true);
+    expect((caseBox("case-0101") as HTMLInputElement).checked).toBe(true);
+    await waitFor(() => expect(live().textContent).toBe(selectedText(1)));
+    // Shift+ArrowDown moves to the next row's checkbox and selects it.
+    fireEvent.keyDown(first, { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(rowBox("case-0102", "de"));
+    expect((rowBox("case-0102", "de") as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(first);
+    expect((first as HTMLInputElement).checked).toBe(false);
+    expect(within(selectionRegion()).getByText(selectedText(1))).toBeTruthy();
   });
 
   it("Ctrl+Z and Meta+Z undo the last plan change while a case checkbox has focus", async () => {
@@ -328,7 +359,8 @@ describe("case selection", () => {
     } as PlanRowResult);
     vi.spyOn(api, "patchWorkPlan").mockResolvedValueOnce(saved(3)).mockResolvedValueOnce(saved(5));
     vi.spyOn(api, "setWorkPlanRows").mockResolvedValue({ changed_rows: 1, revisions: { "case-0101": 4 }, undo: { rows: [], revisions: {} }, withdrawn: [] });
-    renderPage();
+    // The plan chips of an in-plan row are in its expansion (VD2).
+    renderPage({ query: { open: ["case-0101:fr"] } });
     fireEvent.click(await screen.findByRole("button", { name: "Review, case-0101 · fr" }));
     await screen.findByText("fr of case-0101: Review off");
     const box = caseBox("case-0101");
@@ -347,33 +379,34 @@ describe("case selection", () => {
   it("header checkbox selects all filtered cases across pages", async () => {
     mockRows(casesPage(3, { group_count: 50, page_count: 17 }));
     const all = Array.from({ length: 50 }, (_, index) => `case-${String(101 + index).padStart(4, "0")}`);
-    vi.spyOn(api, "listDocumentCaseIds").mockResolvedValueOnce({ case_ids: all, total: 50, truncated: false });
+    vi.spyOn(api, "documentRowKeys").mockResolvedValueOnce(deKeys(all));
     const view = renderPage({ query: { language: "de", segment: "assign", page: "2" } });
     await loaded();
     const header = screen.getByRole("checkbox", { name: "Select all 50 filtered cases" });
     expect(header.className).toContain("checkbox-target");
     fireEvent.click(header);
-    await waitFor(() => expect(within(selectionRegion()).getByText("50 cases selected")).toBeTruthy());
-    expect(api.listDocumentCaseIds).toHaveBeenCalledWith("p", { language: "de", segment: "assign" });
+    await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(50))).toBeTruthy());
+    expect(api.documentRowKeys).toHaveBeenCalledWith("p", { filters: { language: "de", segment: "assign" }, sort: "case" });
     expect((header as HTMLInputElement).checked).toBe(true);
-    await waitFor(() => expect(live().textContent).toBe("50 cases selected"));
+    await waitFor(() => expect(live().textContent).toBe(selectedText(50)));
     fireEvent.click(header);
     await waitFor(() => expect(screen.queryByRole("region", { name: "Selection" })).toBeNull());
     view.unmount();
     // More than 2000 match: the first 2000 are selected and the bar says so.
     mockRows(casesPage(3, { group_count: 2500, page_count: 50 }));
     const first = Array.from({ length: 2000 }, (_, index) => `c-${index}`);
-    vi.mocked(api.listDocumentCaseIds).mockResolvedValueOnce({ case_ids: first, total: 2500, truncated: true });
+    vi.mocked(api.documentRowKeys).mockResolvedValueOnce(deKeys(first, true));
     renderPage();
     await loaded();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select the first 2000 of 2500 filtered cases" }));
-    await waitFor(() => expect(within(selectionRegion()).getByText("2000 cases selected")).toBeTruthy());
+    await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(2000))).toBeTruthy());
     expect(within(selectionRegion()).getByText("Selection is limited to 2000 cases. Selected the first 2000.")).toBeTruthy();
   });
 
   it("Select by case IDs… replaces the selection and the selection survives paging and filters", async () => {
     mockRows(casesPage(3, { page_count: 2 }));
     vi.spyOn(api, "lookupCaseIds").mockResolvedValue({ found: ["case-0102", "case-0999"], unknown: [] });
+    vi.spyOn(api, "documentRowKeys").mockResolvedValue(deKeys(["case-0102", "case-0999"]));
     renderStateful({});
     await loaded();
     fireEvent.click(caseBox("case-0101"));
@@ -383,14 +416,14 @@ describe("case selection", () => {
     await within(dialog).findByText("2 found · 0 unknown");
     fireEvent.click(within(dialog).getByRole("button", { name: "Select 2" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Select by case IDs" })).toBeNull());
-    expect(within(selectionRegion()).getByText("2 cases selected")).toBeTruthy();
+    expect(within(selectionRegion()).getByText(selectedText(2))).toBeTruthy();
     expect((caseBox("case-0101") as HTMLInputElement).checked).toBe(false);
     fireEvent.change(within(screen.getByRole("group", { name: "Document filters" })).getByLabelText("Plan"), { target: { value: "review" } });
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review" }));
     fireEvent.click(screen.getByRole("link", { name: "Next" }));
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review", page: 2 }));
-    expect(within(selectionRegion()).getByText("2 cases selected")).toBeTruthy();
-    await waitFor(() => expect(api.selectionSummary).toHaveBeenLastCalledWith("p", ["case-0102", "case-0999"], { plan: "review" }));
+    expect(within(selectionRegion()).getByText(selectedText(2))).toBeTruthy();
+    await waitFor(() => expect(api.selectionSummary).toHaveBeenLastCalledWith("p", { rows: deKeys(["case-0102", "case-0999"]).keys }, { plan: "review" }));
   });
 
   it("Assign… opens the many-cases dialog with the current sort and filters and clears the selection after success", async () => {
@@ -414,7 +447,7 @@ describe("case selection", () => {
     fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Assign…" }));
     act(() => { lastAssign().onClose(); });
     expect(screen.queryByRole("dialog", { name: "Assign stub" })).toBeNull();
-    expect(within(selectionRegion()).getByText("1 case selected")).toBeTruthy();
+    expect(within(selectionRegion()).getByText(selectedText(1))).toBeTruthy();
   });
 
   it("offers Select the 6 skipped cases in the toast", async () => {
@@ -426,8 +459,10 @@ describe("case selection", () => {
     fireEvent.click(within(selectionRegion()).getByRole("button", { name: "Assign…" }));
     const skipped = ["case-0103", "case-0104", "case-0105", "case-0105", "case-0106", "case-0107", "case-0108"];
     act(() => { const props = lastAssign(); if (props.mode === "cases") props.onAssigned("2 translation reviews assigned to Ana Weber", skipped); });
+    vi.spyOn(api, "documentRowKeys").mockImplementation(async (_key, body) => deKeys(body?.case_ids ?? []));
     fireEvent.click(await screen.findByRole("button", { name: "Select the 6 skipped cases" }));
-    expect(within(selectionRegion()).getByText("6 cases selected")).toBeTruthy();
+    await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(6))).toBeTruthy());
+    expect(api.documentRowKeys).toHaveBeenCalledWith("p", { case_ids: ["case-0103", "case-0104", "case-0105", "case-0106", "case-0107", "case-0108"] });
     expect((caseBox("case-0103") as HTMLInputElement).checked).toBe(true);
     expect((caseBox("case-0101") as HTMLInputElement).checked).toBe(false);
   });
@@ -435,7 +470,7 @@ describe("case selection", () => {
   it("row Assign actions open the row dialog", async () => {
     mockRows(page([group("case-1", [planRow("case-1", "de", stepOf("assign_translation_review")), planRow("case-1", "fr", stepOf("assign_annotation"))])]));
     renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Assign translation review…, case-1 · de" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Assign review…, case-1 · de" }));
     expect(lastAssign()).toMatchObject({ mode: "row", projectKey: "p", task: "translation_review", row: { case_id: "case-1", language: "de" } });
     act(() => { lastAssign().onClose(); });
     fireEvent.click(screen.getByRole("button", { name: "Assign annotation…, case-1 · fr" }));
@@ -447,6 +482,36 @@ describe("case selection", () => {
     expect(await screen.findByText("1 annotation assigned to Ana Weber", { selector: ".ui-toast-message" })).toBeTruthy();
     await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
   });
+});
+
+it("renders the new table with stage columns", async () => {
+  const progress = stagedRow("case-106", "de", {
+    stages: {
+      review: cell("accepted", "done", { note: "unchanged" }),
+      annotation: cell("in_progress", "running", { people: [tom], submitted: 1, total: 2 }),
+      final: cell("after_annotation", "waiting"),
+    },
+    steps: [stepOf("annotation_in_progress", { owner: { kind: "people", person: null, count: 2, people: [ana, tom] } })],
+  });
+  mockRows(page([group("case-107", [scenario7a()]), group("case-106", [progress])]));
+  const { onNavigate } = renderPage();
+  await loaded();
+  const table = screen.getByRole("table", { name: "Documents" });
+  expect(within(table).getAllByRole("columnheader").map(header => header.textContent)).toEqual(["Select", "Text", "Review", "Annotation", "Final", "Waiting on", "Action", "Last activity"]);
+  const decision = rowHeader("case-107 · de").closest("tr")!;
+  expect(decision.className).toContain("data-table-row--decision");
+  expect(within(decision).getByText("Your choice")).toBeTruthy();
+  expect(within(decision).getByRole("button", { name: "Accept result…, case-107 · de" })).toBeTruthy();
+  const running = rowHeader("case-106 · de").closest("tr")!;
+  expect(running.textContent).toContain("1 of 2 submitted");
+  expect(running.textContent).toContain("waiting: Tom Reis");
+  expect(running.textContent).toContain("Ana Weber, Tom Reis");
+  // No group disclosure, no Plan / Next step / Owner columns.
+  expect(screen.queryByRole("columnheader", { name: "Next step" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^case-107 · / })).toBeNull();
+  // Sorting by the Text header.
+  fireEvent.click(within(screen.getByRole("columnheader", { name: /Text/ })).getByRole("button"));
+  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", sort: "-case" });
 });
 
 it("pages with Previous and Next links", async () => {
@@ -501,7 +566,7 @@ it("expands and focuses a deep-linked row that no longer needs a decision", asyn
   renderPage({ query: { case: "synthetic-accepted", language: "de", decision: "all" } });
   expect(await screen.findByText("This no longer needs your decision.")).toBeTruthy();
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { case: "synthetic-accepted", language: "de", decision: "all" });
-  const disclosure = screen.getByRole("button", { name: "Show details, synthetic-accepted · de" });
+  const disclosure = screen.getByRole("button", { name: "Show history, synthetic-accepted · de" });
   expect(disclosure.getAttribute("aria-expanded")).toBe("true");
   await waitFor(() => expect(document.activeElement).toBe(disclosure));
 });
@@ -553,7 +618,7 @@ it("explains a preflight-only missing final result on a deep-linked row", async 
 it("expands a row with replace navigation", async () => {
   mockRows(scenarioS1().page);
   const { onNavigate } = renderPage({ query: { language: "en" } });
-  fireEvent.click(await screen.findByRole("button", { name: "Show details, case-0042 · en" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Show history, case-0042 · en" }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en", open: ["case-0042:en"] }, { replace: true });
 });
 
@@ -629,7 +694,7 @@ describe("Resolved and Changed badges", () => {
     await waitFor(() => expect(vi.mocked(api.listDocumentRows).mock.calls.length).toBeGreaterThan(calls));
   };
   const lastRequest = () => vi.mocked(api.listDocumentRows).mock.calls.at(-1)?.[1];
-  const disclosure = (name: string) => screen.getByRole("button", { name: `Show details, ${name}` });
+  const disclosure = (name: string) => screen.getByRole("button", { name: `Show history, ${name}` });
 
   beforeEach(() => {
     vi.mocked(api.listDocumentRows).mockImplementation(async () => structuredClone(served));
@@ -658,7 +723,7 @@ describe("Resolved and Changed badges", () => {
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", decision: "confirm-final" }, { replace: true });
     expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] });
     // The badge is on the collapsed row itself, next to its row header.
-    expect(within(disclosure("synthetic-accepted · de").closest("th")!).getByText("Resolved")).toBeTruthy();
+    expect(within(rowHeader("synthetic-accepted · de")).getByText("Resolved")).toBeTruthy();
     fireEvent.click(disclosure("synthetic-accepted · de"));
     expect(disclosure("synthetic-accepted · de").getAttribute("aria-expanded")).toBe("true");
     // Shown once, not repeated in the expanded content.
@@ -701,7 +766,7 @@ describe("Resolved and Changed badges", () => {
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalled());
     expect(vi.mocked(api.listDocumentRows).mock.calls[0][1]).toEqual({ decision: "report-or-pause", retain: ["case-0042:en"] });
     await waitFor(() => expect(disclosure("case-0042 · en").getAttribute("aria-expanded")).toBe("false"));
-    expect(within(disclosure("case-0042 · en").closest("th")!).getByText("Resolved")).toBeTruthy();
+    expect(within(rowHeader("case-0042 · en")).getByText("Resolved")).toBeTruthy();
   });
 
   it("keeps the visit (retained rows and badges) when paging under the same filters", async () => {
@@ -739,10 +804,10 @@ describe("row actions", () => {
   it("Choose final… expands the row and opens Use as final for one eligible submission", async () => {
     mockRows(page([group("case-0042", [chooseFinal()])]), { [rowKey("case-0042", "en")]: oneSubmission() });
     const { onNavigate } = renderStateful({});
-    fireEvent.click(await screen.findByRole("button", { name: "Choose final…, case-0042 · en" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", open: ["case-0042:en"] }, { replace: true });
     const confirm = await screen.findByRole("group", { name: "Use as final result" });
-    expect(screen.getByRole("button", { name: "Show details, case-0042 · en" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "Show history, case-0042 · en" }).getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
     expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action");
   });
@@ -753,7 +818,7 @@ describe("row actions", () => {
     ] });
     mockRows(page([group("case-0042", [chooseFinal()])]), { [rowKey("case-0042", "en")]: two });
     renderStateful({});
-    fireEvent.click(await screen.findByRole("button", { name: "Choose final…, case-0042 · en" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
     await waitFor(() => expect(document.activeElement?.textContent).toBe("Submissions (2)"));
     expect(screen.queryByRole("group", { name: "Use as final result" })).toBeNull();
   });
@@ -819,7 +884,7 @@ describe("row actions", () => {
     mockRows(page([group("case-0042", [first]), group("case-0099", [second])]), rowSubmissions);
     vi.spyOn(api, "selectFinalResult").mockResolvedValue({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "sub-case-0042", revision: 1 });
     renderStateful({ segment: "decision" });
-    fireEvent.click(await screen.findByRole("button", { name: "Choose final…, case-0042 · en" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
     const confirm = await screen.findByRole("group", { name: "Use as final result" });
     const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], matches_decision: false, retained: true, categories: [],
       final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "sub-case-0042" }) };
@@ -827,8 +892,8 @@ describe("row actions", () => {
     fireEvent.click(within(confirm).getByRole("button", { name: "Use as final" }));
     await waitFor(() => expect(live().textContent).toContain("Next: case-0099 · de."));
     expect(screen.getByRole("link", { name: "Next: case-0099 · de" })).toBeTruthy();
-    // Updated in place: the row stays (retained) with its new step.
-    expect(within(screen.getByRole("button", { name: "Show details, case-0042 · en" }).closest("tr")!).getByText("Done")).toBeTruthy();
+    // Updated in place: the row stays (retained) without the action.
+    await waitFor(() => expect(within(screen.getByRole("button", { name: "Show history, case-0042 · en" }).closest("tr")!).queryByRole("button", { name: /Compare results…/ })).toBeNull());
   });
 });
 
@@ -840,7 +905,7 @@ describe("plan chips on the page", () => {
       case_id: "case-0101", language: "fr", flags: { review: false, annotate: true, review_applicable: true, discarded: false }, revision: 3,
       undo: { rows: [], revisions: { "case-0101": 3 } }, withdrawn: [], accepted_document_ids: [],
     } as PlanRowResult);
-    renderPage();
+    renderPage({ query: { open: ["case-0101:fr"] } });
     fireEvent.click(await screen.findByRole("button", { name: "Review, case-0101 · fr" }));
     expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "fr", { review: false, expected_revision: 2, confirm: false });
     const message = await screen.findByText("fr of case-0101: Review off");
@@ -886,22 +951,16 @@ describe("lead review fixes", () => {
     withdrawn: [], accepted_document_ids: [],
   } as PlanRowResult);
 
-  it("keeps a group expanded after its decision is resolved when more than 50 cases match", async () => {
+  it("never collapses case groups, also above 50 matching cases (VD5)", async () => {
     const plain = (caseId: string) => group(caseId, [planRow(caseId, "de", stepOf("assign_annotation"))]);
     const many = Array.from({ length: 50 }, (_, index) => plain(`case-${String(index).padStart(3, "0")}`));
-    mockRows(page([group("case-d", [planRow("case-d", "de", stepOf("decide_report"))]), ...many]));
+    mockRows(page([group("case-d", [planRow("case-d", "de", stepOf("decide_report"))]), ...many], { group_count: 51 }));
     renderPage();
     await loaded();
-    const toggle = () => document.getElementById("documents-group-case-d-toggle")!;
-    expect(toggle().getAttribute("aria-expanded")).toBe("true");
-    expect(document.getElementById("documents-group-case-000-toggle")!.getAttribute("aria-expanded")).toBe("false");
-    // The decision is resolved and the rows reload: the group keeps its expansion.
-    mockRows(page([plain("case-d"), ...many]));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.queryByText("1 decision")).toBeNull());
-    expect(toggle().getAttribute("aria-expanded")).toBe("true");
-    expect(document.getElementById("documents-group-case-000-toggle")!.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: "Show history, case-000 · de" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show history, case-d · de" }).closest("tr")!.className).toContain("data-table-row--decision");
+    // The group row is a label, not a disclosure.
+    expect(document.getElementById("documents-group-case-d-toggle")!.tagName).toBe("SPAN");
   });
 
   it("leaves More filters to the lead and opens it only when one of its filters becomes active", async () => {
@@ -925,22 +984,24 @@ describe("lead review fixes", () => {
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", {}));
   });
 
-  it("shows the not-in-plan rows expanded under the Plan filter Not in plan", async () => {
+  it("shows not-in-plan rows as muted rows with a quiet Plan… (VD1, VD2)", async () => {
     mockRows(page([group("case-1", [notInPlanRow("case-1", "en", { is_source: true }), notInPlanRow("case-1", "fr")])]));
-    renderPage({ query: { plan: "not_in_plan" } });
-    const hide = await screen.findByRole("button", { name: "Hide en, fr not in plan, case-1" });
-    expect(hide.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("button", { name: "Show details, case-1 · fr" })).toBeTruthy();
-    fireEvent.click(hide);
-    expect(screen.getByRole("button", { name: "Show en, fr not in plan, case-1" }).getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByRole("button", { name: "Show details, case-1 · fr" })).toBeNull();
+    renderPage();
+    const fr = (await screen.findByRole("button", { name: "Show history, case-1 · fr" })).closest("tr")!;
+    expect(fr.className).toContain("documents-row--not-in-plan");
+    expect(screen.queryByText(/not in plan ·/)).toBeNull();
+    const plan = within(fr).getByRole("button", { name: "Plan…, case-1 · fr" });
+    expect(plan.className).toContain("btn-quiet");
+    fireEvent.click(plan);
+    expect(within(screen.getByRole("dialog", { name: "Plan, case-1 · fr" })).getByRole("button", { name: "Annotate, case-1 · fr" })).toBeTruthy();
   });
 
   it("Assign review or accept… saves through the panel and later chip saves use the returned revision", async () => {
     const de = planRow("case-1", "de", stepOf("translation_not_accepted", { document_id: "case-1-de" }), { plan_row: { review: false, annotate: true, review_applicable: true, discarded: false } });
     mockRows(page([group("case-1", [de], { plan_revision: 2 })]));
     vi.spyOn(api, "patchWorkPlan").mockResolvedValueOnce(planResult("case-1", "de", { review: true, annotate: true }, 5)).mockImplementation(() => new Promise(() => {}));
-    renderPage();
+    // Open, so the expansion's plan chips are in view for the later save.
+    renderPage({ query: { open: ["case-1:de"] } });
     fireEvent.click(await screen.findByRole("button", { name: "Assign review or accept…, case-1 · de" }));
     const box = screen.getByRole("group", { name: "Translation not accepted, case-1 · de" });
     fireEvent.click(within(box).getByRole("button", { name: "Turn Review on" }));
@@ -967,20 +1028,20 @@ describe("lead review fixes", () => {
     expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-1", "de", { review: true, expected_revision: 8, confirm: false });
   });
 
-  it("focuses the case's not-in-plan toggle when a confirmed save moved the row out of view", async () => {
+  it("keeps focus on the plan chip when a confirmed save takes the row out of the plan (the row stays, muted)", async () => {
     const en = notInPlanRow("case-1", "en", { is_source: true });
     const de = planRow("case-1", "de", stepOf("assign_translation_review"), { plan_row: { review: true, annotate: false, review_applicable: true, discarded: false } });
     mockRows(page([group("case-1", [en, de], { plan_revision: 2 })]));
     const consequences = { withdrawn: [], finals_leaving: [], restored: [], open_reports: [{ case_id: "case-1", language: "de", held: false }] };
     vi.spyOn(api, "patchWorkPlan").mockRejectedValueOnce(new ApiError(409, "confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences))
       .mockResolvedValueOnce(planResult("case-1", "de", { review: false, annotate: false }, 3));
-    renderPage();
+    renderPage({ query: { open: ["case-1:de"] } });
     fireEvent.click(await screen.findByRole("button", { name: "Review, case-1 · de" }));
     const box = await screen.findByRole("group", { name: "Change the plan of case-1 · de" });
     mockRows(page([group("case-1", [en, notInPlanRow("case-1", "de")], { plan_revision: 3 })]));
     fireEvent.click(within(box).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(document.activeElement?.id).toBe("documents-group-case-1-not-in-plan"));
-    expect(document.activeElement?.getAttribute("aria-label")).toBe("Show en, de not in plan, case-1");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Show history, case-1 · de" }).closest("tr")!.className).toContain("documents-row--not-in-plan"));
+    await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Review, case-1 · de"));
   });
 });
 
@@ -994,7 +1055,7 @@ describe("Resolve focuses the Translation review block", () => {
     mockRows(page([group("case-1", [rejected()])]));
     renderStateful({});
     fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Show details, case-1 · de" }).getAttribute("aria-expanded")).toBe("true"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Show history, case-1 · de" }).getAttribute("aria-expanded")).toBe("true"));
     await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
     expect(translationHeading()).not.toBeNull();
   });
@@ -1064,7 +1125,7 @@ describe("Resolve focuses the Translation review block", () => {
     cleanup();
     mockRows(page([group("case-1", [rejectedRow("case-1", "de")])]));
     renderStateful({});
-    fireEvent.click(await screen.findByRole("button", { name: "Show details, case-1 · de" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show history, case-1 · de" }));
     fireEvent.click(await screen.findByRole("button", { name: "Correct the translation yourself…" }));
     expect(screen.getByRole("group", { name: "Correct the translation, case-1 · de" })).toBeTruthy();
   });

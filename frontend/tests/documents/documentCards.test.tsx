@@ -2,99 +2,99 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DocumentGroupView, DocumentRowsPage } from "../../src/api/client";
 import { DocumentCards, type DocumentCardsProps } from "../../src/documents/DocumentCards";
-import { group, notInPlanRow, page, planRow, stepOf } from "./fixtures";
+import type { TableSelection } from "../../src/documents/DocumentsTable";
+import { group, notInPlanRow, page, stepOf } from "./fixtures";
+import { ana, cell, stagedRow, tom } from "./tableFixtures";
 
 afterEach(cleanup);
 
-function renderCards(view: DocumentRowsPage, overrides: Partial<DocumentCardsProps> = {}) {
-  const props: DocumentCardsProps = {
-    page: view,
-    projectKey: "p",
-    query: {},
-    onToggleRow: vi.fn(),
-    shownNotInPlan: new Set(),
-    onToggleNotInPlan: vi.fn(),
-    onAction: vi.fn(),
-    renderPlan: entry => <span>{`chips ${entry.language}`}</span>,
-    ...overrides,
+function selection(selected: readonly string[] = []): TableSelection {
+  const keys = new Set(selected);
+  return {
+    keys,
+    caseState: caseKeys => {
+      const count = caseKeys.filter(key => keys.has(key)).length;
+      return count === 0 ? "none" : count === caseKeys.length ? "all" : "some";
+    },
+    select: vi.fn(),
+    selectCase: vi.fn(),
   };
+}
+
+function renderCards(view: DocumentRowsPage, overrides: Partial<DocumentCardsProps> = {}) {
+  const props: DocumentCardsProps = { page: view, projectKey: "p", query: {}, onToggleRow: vi.fn(), onAction: vi.fn(), selection: selection(), ...overrides };
   const result = render(<DocumentCards {...props} />);
   return { ...result, props };
 }
 
 const cardOf = (name: string) => screen.getByRole("article", { name });
 
-function case0101(): DocumentGroupView {
-  return group("case-0101", [
-    notInPlanRow("case-0101", "en", { is_source: true }),
-    planRow("case-0101", "de", stepOf("assign_translation_review", { badges: ["check_failed"], detail: { kind: "version", version: 1, origin: "machine_translation", translation_status: "automatic_check_failed", task_paused: false } })),
-    planRow("case-0101", "fr", stepOf("annotation_in_progress", { stage: "annotation", owner: { kind: "people", person: null, count: 2 } })),
+function case106(): DocumentGroupView {
+  return group("case-106", [
+    notInPlanRow("case-106", "en", { is_source: true, stages: { review: cell("source", "none"), annotation: cell("not_planned", "none"), final: cell("none", "none") } }),
+    stagedRow("case-106", "de", {
+      stages: {
+        review: cell("accepted", "done", { note: "unchanged" }),
+        annotation: cell("unassigned", "todo", { assigned: 0, target: 2 }),
+        final: cell("none", "none"),
+      },
+      steps: [stepOf("assign_annotation")],
+    }),
+    stagedRow("case-106", "fr", {
+      stages: { annotation: cell("in_progress", "running", { people: [tom], submitted: 1, total: 2 }) },
+      steps: [stepOf("annotation_in_progress", { owner: { kind: "people", person: null, count: 2, people: [ana, tom] } })],
+    }),
   ]);
 }
 
 describe("cards", () => {
-  it("renders one article per language row with chips, next step, owner and a full-width action", () => {
-    const { props } = renderCards(page([case0101()]));
-    const list = screen.getByRole("list", { name: "Documents" });
-    const caseCard = within(list).getByRole("listitem");
-    expect(within(caseCard).getByRole("heading", { level: 2, name: "case-0101 · en source + 2 translations" })).toBeTruthy();
-    expect(within(caseCard).queryByText(/decision/)).toBeNull();
-    expect(within(caseCard).getAllByRole("article")).toHaveLength(2);
-    const de = cardOf("case-0101 · de");
-    expect(within(de).getByRole("heading", { name: "case-0101 · de" })).toBeTruthy();
-    expect(within(de).getByText("chips de")).toBeTruthy();
-    const step = within(de).getByText("Assign translation review");
-    expect(step.classList.contains("documents-step--strong")).toBe(true);
-    expect(within(de).getByText("Check failed")).toBeTruthy();
-    expect(within(de).getByText("v1 machine translation · check failed")).toBeTruthy();
-    expect(de.textContent).toContain("Owner: You");
-    const action = within(de).getByRole("button", { name: "Assign translation review…, case-0101 · de" });
+  it("renders one article per text with stage lines, Waiting on and a full-width action; not-in-plan texts are muted, never collapsed", () => {
+    const { props } = renderCards(page([case106()]));
+    const caseCard = within(screen.getByRole("list", { name: "Documents" })).getByRole("listitem");
+    expect(within(caseCard).getByRole("heading", { level: 2, name: "case-106 · en source + 2 translations" })).toBeTruthy();
+    expect(within(caseCard).getAllByRole("article")).toHaveLength(3);
+    expect(cardOf("case-106 · en").className).toContain("document-card--muted");
+    const de = cardOf("case-106 · de");
+    expect(de.textContent).toContain("Review: ✓ Accepted · unchanged");
+    expect(de.textContent).toContain("Annotation: ○ 0 of 2 assigned");
+    expect(de.textContent).toContain("Final: —");
+    expect(de.textContent).toContain("Waiting on: You");
+    const action = within(de).getByRole("button", { name: "Assign annotation…, case-106 · de" });
     expect(action.classList.contains("documents-action--block")).toBe(true);
     fireEvent.click(action);
-    expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), expect.objectContaining({ code: "assign_translation_review" }));
-    expect(within(de).getByRole("link", { name: "Open case-0101 · de" })).toBeTruthy();
-    expect(within(de).getByRole("button", { name: "Show details, case-0101 · de" }).textContent).toBe("Details");
-    const fr = cardOf("case-0101 · fr");
-    expect(fr.textContent).toContain("Owner: 2 annotators");
-    expect(within(fr).queryByRole("button", { name: /…, case-0101 · fr/ })).toBeNull();
+    expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), expect.objectContaining({ code: "assign_annotation" }));
+    expect(within(de).getByRole("link", { name: "Open case-106 · de" })).toBeTruthy();
+    expect(cardOf("case-106 · fr").textContent).toContain("Waiting on: Ana Weber, Tom Reis");
+    expect(screen.queryByText(/not in plan ·/)).toBeNull();
   });
 
-  it("collapses not-in-plan rows of a case card into one line with show", () => {
-    const onToggleNotInPlan = vi.fn();
-    const { unmount } = renderCards(page([case0101()]), { onToggleNotInPlan });
-    expect(screen.queryByRole("article", { name: "case-0101 · en" })).toBeNull();
-    const line = screen.getByText(/not in plan ·/);
-    expect(line.textContent).toBe("en not in plan · show");
-    fireEvent.click(within(line).getByRole("button", { name: "Show en not in plan, case-0101" }));
-    expect(onToggleNotInPlan).toHaveBeenCalledWith("case-0101");
-    unmount();
-    renderCards(page([case0101()]), { shownNotInPlan: new Set(["case-0101"]) });
-    expect(cardOf("case-0101 · en").textContent).toContain("Not in plan");
+  it("selects texts and cases with mixed case state", () => {
+    const view = page([case106()]);
+    const chosen = selection(["case-106:de"]);
+    renderCards(view, { selection: chosen });
+    const caseBox = screen.getByRole("checkbox", { name: "Select case-106 (3 texts)" }) as HTMLInputElement;
+    expect(caseBox.indeterminate).toBe(true);
+    expect((within(cardOf("case-106 · de")).getByRole("checkbox", { name: "Select case-106 · de" }) as HTMLInputElement).checked).toBe(true);
+    const order = ["case-106:en", "case-106:de", "case-106:fr"];
+    fireEvent.click(caseBox);
+    expect(chosen.selectCase).toHaveBeenCalledWith(order, "toggle", order);
+    fireEvent.click(within(cardOf("case-106 · fr")).getByRole("checkbox"), { shiftKey: true });
+    expect(chosen.select).toHaveBeenCalledWith("case-106:fr", "range", order);
   });
 
-  it("shows the case's decision count next to the case card heading", () => {
-    renderCards(page([group("case-0102", [
-      planRow("case-0102", "de", stepOf("decide_report")),
-      planRow("case-0102", "fr", stepOf("choose_final")),
-    ])]));
-    const heading = screen.getByRole("heading", { level: 2, name: "case-0102 · 2 languages" });
-    expect(heading.parentElement!.textContent).toContain("2 decisions");
-  });
-
-  it("stacks the row notice and expanded content inside the article and toggles the row", () => {
+  it("stacks the row notice and expanded content inside the article and toggles History", () => {
     const onToggleRow = vi.fn();
     const renderExpanded = vi.fn(() => <section aria-label="Expanded">content</section>);
-    renderCards(page([case0101()]), { query: { open: ["case-0101:de"] }, onToggleRow, renderExpanded, renderRowNotice: entry => (entry.language === "de" ? <p>notice</p> : null) });
-    const card = cardOf("case-0101 · de");
-    const toggle = within(card).getByRole("button", { name: "Show details, case-0101 · de" });
+    renderCards(page([case106()]), { query: { open: ["case-106:de"] }, onToggleRow, renderExpanded, renderRowNotice: entry => (entry.language === "de" ? <p>notice</p> : null) });
+    const card = cardOf("case-106 · de");
+    const toggle = within(card).getByRole("button", { name: "History" });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    const region = document.getElementById(toggle.getAttribute("aria-controls")!)!;
-    expect(card.contains(region)).toBe(true);
+    expect(card.contains(document.getElementById(toggle.getAttribute("aria-controls")!)!)).toBe(true);
     expect(within(card).getByText("notice")).toBeTruthy();
-    expect(renderExpanded).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-0101", language: "de" }), { layout: "list" });
-    expect(toggle.id).toBe("documents-row-case-0101-de-disclosure");
+    expect(renderExpanded).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-106", language: "de" }), { layout: "list" });
+    expect(toggle.id).toBe("documents-row-case-106-de-disclosure");
     fireEvent.click(toggle);
-    expect(onToggleRow).toHaveBeenCalledWith("case-0101:de");
+    expect(onToggleRow).toHaveBeenCalledWith("case-106:de");
   });
 
   it("shows the empty content when there are no rows", () => {
@@ -104,9 +104,9 @@ describe("cards", () => {
   });
 
   it("shows the visit badge next to the heading without changing its name", () => {
-    renderCards(page([case0101()]), { rowBadge: entry => (entry.language === "de" ? <span className="badge">Changed: Work plan changed</span> : null) });
-    const card = cardOf("case-0101 · de");
-    const heading = within(card).getByRole("heading", { name: "case-0101 · de" });
+    renderCards(page([case106()]), { rowBadge: entry => (entry.language === "de" ? <span className="badge">Changed: Work plan changed</span> : null) });
+    const card = cardOf("case-106 · de");
+    const heading = within(card).getByRole("heading", { name: "case-106 · de" });
     expect(heading.contains(within(card).getByText("Changed: Work plan changed"))).toBe(false);
   });
 });

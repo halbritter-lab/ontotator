@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { NextStepView } from "../../src/api/client";
-import { actionLabel, ownerLabel, secondaryLine, stepLabel, STEP_LABELS } from "../../src/documents/nextStepLabels";
-import { final, row, step } from "./fixtures";
+import { actionLabel, leadSteps, rowActionLabel, secondaryLine, stepLabel, STEP_LABELS } from "../../src/documents/nextStepLabels";
+import { final, row, stageCell, stages, step, stepOf } from "./fixtures";
 
 describe("next step labels", () => {
   it("labels every step code", () => {
@@ -32,8 +32,8 @@ describe("next step labels", () => {
     expect(actionLabel("resume_task")).toBe("Resume task…");
     expect(actionLabel("review_changes")).toBe("Review changes…");
     expect(actionLabel("resolve")).toBe("Resolve…");
-    expect(actionLabel("choose_final")).toBe("Choose final…");
-    expect(actionLabel("assign_translation_review")).toBe("Assign translation review…");
+    expect(actionLabel("choose_final")).toBe("Compare results…");
+    expect(actionLabel("assign_translation_review")).toBe("Assign review…");
     expect(actionLabel("assign_annotation")).toBe("Assign annotation…");
     expect(actionLabel("plan")).toBe("Plan…");
   });
@@ -56,12 +56,19 @@ describe("next step labels", () => {
     expect(secondaryLine(step({ code: "assign_annotation", kind: "assign", assigned: 1, target: 2, detail: null }), plain)).toBe("1 of 2 assigned");
   });
 
-  it("labels the owner", () => {
-    expect(ownerLabel(step({ owner: { kind: "you", person: null, count: 0 } }))).toBe("You");
-    expect(ownerLabel(step({ owner: { kind: "person", person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false }, count: 1 } }))).toBe("Ana Weber (ann-0004)");
-    expect(ownerLabel(step({ code: "annotation_in_progress", stage: "annotation", owner: { kind: "people", person: null, count: 2 } }))).toBe("2 annotators");
-    expect(ownerLabel(step({ code: "translation_review_in_progress", stage: "translation_review", owner: { kind: "people", person: null, count: 2 } }))).toBe("2 reviewers");
-    expect(ownerLabel(step({ owner: { kind: "none", person: null, count: 0 } }))).toBe("—");
-    expect(ownerLabel(null)).toBe("—");
+  it("names Choose final as Accept result… for one submission and Compare results… otherwise (V6, VD16)", () => {
+    const choose = stepOf("choose_final");
+    const one = row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 1 }) }) });
+    const two = row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 2 }) }) });
+    expect(rowActionLabel(choose, one)).toBe("Accept result…");
+    expect(rowActionLabel(choose, two)).toBe("Compare results…");
+    expect(rowActionLabel(stepOf("assign_annotation"), one)).toBe("Assign annotation…");
+  });
+
+  it("lists the lead-owned steps with an action in server order", () => {
+    const steps = [stepOf("decide_report"), stepOf("annotation_in_progress"), stepOf("choose_final"), stepOf("needs_attention")];
+    const target = row({ case_id: "c", language: "de", next_step: steps[0], steps });
+    expect(leadSteps(target).map(entry => entry.code)).toEqual(["decide_report", "choose_final"]);
+    expect(leadSteps(row({ case_id: "c", language: "de", next_step: steps[0], steps: [] })).map(entry => entry.code)).toEqual(["decide_report"]);
   });
 });

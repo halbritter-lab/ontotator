@@ -1,12 +1,14 @@
 /**
- * Selection bar of Documents (spec "Selection bar"): "{n} cases selected", the common next step,
+ * Selection bar of Documents (spec "Selection bar"; documents overview VD4, VD21): "3 texts in 2
+ * cases selected", the common next step,
  * "{k} not shown with these filters" (from the selection summary with the current filters) and
  * "Clear selection"; primary "Assign…" (the page's only primary button) and the plan actions
  * "Review + annotate translations", "Annotate only" (one click when no existing work is affected)
- * and "Plan…". Every plan save keeps the selection and shows an Undo toast (D22).
+ * and "Plan…". Every plan save keeps the selection and shows an Undo toast (D22). The summary and
+ * the quick plan actions send the selected texts (`rows`); the plan dialog still edits whole cases.
  */
 import { useEffect, useId, useRef, useState } from "react";
-import { api, ApiError, type BulkResult, type ConsequencesView, type DocumentRowFilters, type SelectionSummary, type UndoView } from "../api/client";
+import { api, ApiError, type BulkResult, type ConsequencesView, type DocumentRowFilters, type RowRefView, type SelectionSummary, type UndoView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { plural } from "../app/labels";
 import { Button, Checkbox, InlineConfirm, InlineMessage, type ToastMessage, type TriState } from "../ui";
@@ -14,13 +16,15 @@ import { PLAN_CHANGED_MESSAGE, UNDO_WITHDRAWN_NOTE, WITHDRAW_CHECKBOX, withdrawn
 import { PlanDialog } from "./PlanDialog";
 import { savedSummary, SOURCE_KEY, type PlanChoices } from "./planSummary";
 import { runPlanUndo } from "./planUndo";
+import { caseOfTextKey, rowRefOf } from "./useTextSelection";
 
 type Preset = "review_and_annotate_translations" | "annotate_only";
 
 export interface SelectionBarProps {
   projectKey: string;
-  ids: ReadonlySet<string>;
-  /** The current Documents filters; "{k} not shown" counts selected cases without a matching row. */
+  /** Selected texts `"{case}:{language}"`. */
+  keys: ReadonlySet<string>;
+  /** The current Documents filters; "{k} not shown" counts selected texts without a matching row. */
   filters: DocumentRowFilters;
   /** Changes whenever the rows reload, so the summary follows plan and assignment changes. */
   refresh?: unknown;
@@ -61,7 +65,7 @@ function presetChoices(preset: Preset, languages: readonly string[]): PlanChoice
 type Undo = { kind: "conflict"; undo: UndoView; consequences: ConsequencesView } | { kind: "changed" };
 
 export function SelectionBar({
-  projectKey, ids, filters, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions,
+  projectKey, keys, filters, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions,
 }: SelectionBarProps): JSX.Element | null {
   const id = useId().replace(/:/g, "");
   const latest = useRef({ showToast, onAnnounce, onChanged, onRevisions });
@@ -69,16 +73,17 @@ export function SelectionBar({
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
-  const caseIds = [...ids];
-  const idsKey = JSON.stringify(caseIds);
+  const rows: RowRefView[] = [...keys].map(rowRefOf);
+  const caseIds = [...new Set([...keys].map(caseOfTextKey))];
+  const idsKey = JSON.stringify([...keys]);
   const filtersKey = JSON.stringify(filters);
   const [summary, setSummary] = useState<{ key: string; value: SelectionSummary } | null>(null);
   useEffect(() => {
-    if (!caseIds.length) return;
+    if (!rows.length) return;
     let active = true;
     const key = idsKey + filtersKey;
     const timer = window.setTimeout(() => {
-      api.selectionSummary(projectKey, caseIds, filters).then(value => { if (active) setSummary({ key, value }); }, () => { if (active) setSummary(null); });
+      api.selectionSummary(projectKey, { rows }, filters).then(value => { if (active) setSummary({ key, value }); }, () => { if (active) setSummary(null); });
     }, SUMMARY_DELAY_MS);
     return () => { active = false; window.clearTimeout(timer); };
     // The keys stand for the selection and the filters.
@@ -136,25 +141,26 @@ export function SelectionBar({
   };
 
   const quick = async (preset: Preset) => {
-    if (busy || !caseIds.length) return;
-    const selected = caseIds;
+    if (busy || !rows.length) return;
+    const selected = rows;
+    const cases = caseIds;
     setBusy(preset); setError(undefined); setUndoState(null);
     latest.current.onAnnounce("Saving…");
     try {
-      const result = await api.saveWorkPlans(projectKey, { case_ids: selected, preset, confirm: false });
+      const result = await api.saveWorkPlans(projectKey, { rows: selected, preset, confirm: false });
       if (!alive.current) return;
       const languages = [...new Set(result.undo.rows.map(row => row.language))];
-      saved(result, savedSummary(selected.length, presetChoices(preset, languages)));
+      saved(result, savedSummary(cases.length, presetChoices(preset, languages)));
     } catch (failure: unknown) {
       if (!alive.current) return;
       const needsDialog = failure instanceof ApiError && (failure.code === "WORK_PLAN_CONFIRMATION_REQUIRED" || failure.code === "WORK_PLAN_INVALID");
       if (!needsDialog) { latest.current.onAnnounce(""); setError(failure); return; }
       // Existing work is affected or translations need an acceptance: the plan dialog with the preset.
       try {
-        const preview = await api.previewWorkPlans(projectKey, { case_ids: selected, preset, confirm: false });
+        const preview = await api.previewWorkPlans(projectKey, { rows: selected, preset, confirm: false });
         if (!alive.current) return;
         latest.current.onAnnounce("");
-        setPlan({ caseIds: selected, initial: presetChoices(preset, preview.languages.map(language => language.key)) });
+        setPlan({ caseIds: cases, initial: presetChoices(preset, preview.languages.map(language => language.key)) });
       } catch (previewFailure: unknown) {
         if (alive.current) { latest.current.onAnnounce(""); setError(previewFailure); }
       }
@@ -163,15 +169,15 @@ export function SelectionBar({
     }
   };
 
-  const visible = ids.size > 0 || undoState !== null;
+  const visible = keys.size > 0 || undoState !== null;
   if (!visible && !plan) return null;
   const withdrawing = undoState?.kind === "conflict" && undoState.consequences.withdrawn.length > 0;
 
   return <>
     {visible && <section className={["selection-bar", narrow && "selection-bar--bottom"].filter(Boolean).join(" ")} aria-label="Selection">
-      {ids.size > 0 && <div className="selection-bar-line">
+      {keys.size > 0 && <div className="selection-bar-line">
         <p className="selection-bar-summary">
-          <strong>{plural(ids.size, "case")} selected</strong>
+          <strong>{`${plural(keys.size, "text")} in ${plural(caseIds.length, "case")} selected`}</strong>
           {current?.common && <span className="selection-bar-step"> · {commonStepText(current.common)}</span>}
           {current && current.not_shown > 0 && <span className="selection-bar-hidden"> · {current.not_shown} not shown with these filters</span>}
         </p>
@@ -184,7 +190,7 @@ export function SelectionBar({
           <Button variant="quiet" onClick={onClear}>Clear selection</Button>
         </div>
       </div>}
-      {limitNote && ids.size > 0 && <p className="selection-bar-limit">{limitNote}</p>}
+      {limitNote && keys.size > 0 && <p className="selection-bar-limit">{limitNote}</p>}
       {error !== undefined && <div className="selection-bar-error"><ErrorNotice error={error} /></div>}
       {undoState?.kind === "changed" && <InlineMessage tone="info">{PLAN_CHANGED_MESSAGE}</InlineMessage>}
       {undoState?.kind === "conflict" && <div className="selection-bar-undo">

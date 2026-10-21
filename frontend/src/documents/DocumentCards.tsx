@@ -1,19 +1,19 @@
 /**
- * Narrow-viewport Documents list (spec "Narrow (Documents)"): one case card per case with one
- * `<article>` per language row: heading "{case · language}", the plan chips, the next step
- * (strong) with badges and secondary line, "Owner: …", the row action full width, "Open" and
- * "Details". Not-in-plan rows collapse into one line per case card, as in the table.
+ * Narrow-viewport Documents list (documents overview "Narrow"): one case card per case (case
+ * checkbox + "case-107 · en source + 1 translation"), one `<article>` per text with its checkbox,
+ * heading "{case · language}" with version marker and NEW, the three stage lines, "Waiting on: …",
+ * the row action full width with the "+n" menu, "Open" and "History". Rows outside the plan are
+ * muted articles; nothing collapses (VD1). O9 completes the layout.
  */
 import { useId, useMemo, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
-import { plural } from "../app/labels";
-import type { GroupSelection, GroupSelectMode } from "../ui/DataTable";
-import { IconChevronRight } from "../ui/icons";
-import { StatusBadge } from "../ui/StatusBadge";
-import { caseHeaderText, decisionCount, notInPlanLanguages } from "./DocumentsTable";
-import { ownerLabel } from "./nextStepLabels";
-import { ActionCell, documentsNotInPlanId, documentsRowId, LastActivityCell, notInPlanToggleLabel, NextStepCell, RowOpenLinks, ShortId, rowKeyOf, rowName } from "./RowCells";
+import type { GroupSelectMode } from "../ui/DataTable";
+import { caseHeaderText, type TableSelection } from "./DocumentsTable";
+import type { PlanSaves } from "./PlanChips";
+import { RowActionCell } from "./RowActions";
+import { HistoryToggle, LastActivityCell, NewBadge, RowOpenLinks, rowIsNew, rowKeyOf, rowName, rowNeedsDecision, ShortId, VersionMarker } from "./RowCells";
+import { isActiveRow, stageText, waitingOnText, type StageName } from "./stageLabels";
 
 export interface DocumentCardsProps {
   page: DocumentRowsPage;
@@ -21,31 +21,43 @@ export interface DocumentCardsProps {
   query: ProjectDocumentsQuery;
   /** Toggle membership of `"{case}:{language}"` in `query.open`. */
   onToggleRow: (key: string) => void;
-  shownNotInPlan: ReadonlySet<string>;
-  onToggleNotInPlan: (caseId: string) => void;
-  /** Plan chips of a row (card size; built by the page). */
-  renderPlan?: (row: DocumentRowView, group: DocumentGroupView) => ReactNode;
   /** Inline notice under a row (plan confirmations, resolve options). */
   renderRowNotice?: (row: DocumentRowView) => ReactNode | null;
   /** Expanded content of an open row (built by the page); stacks inside the card, with `layout: "list"` for Submissions. */
   renderExpanded?: (row: DocumentRowView, options: { layout: "list" }) => ReactNode;
-  /** Visit badge of a row, shown next to the card heading (also while collapsed). */
+  /** Visit badge of a row, shown next to the card heading. */
   rowBadge?: (row: DocumentRowView) => ReactNode;
   onAction?: (row: DocumentRowView, step: NextStepView) => void;
+  /** Plan saves for the "Plan…" popover (VD2). */
+  planSaves?: PlanSaves;
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
-  /** Case checkbox in each case card header (spec D17); the page owns the selection. */
-  groupSelection?: GroupSelection;
+  /** Case and text checkboxes (VD4); the page owns the selection. */
+  selection?: TableSelection;
 }
 
-interface DocumentCardProps extends Omit<DocumentCardsProps, "page" | "busy" | "empty" | "shownNotInPlan" | "onToggleNotInPlan" | "groupSelection"> {
+interface DocumentCardProps extends Omit<DocumentCardsProps, "page" | "busy" | "empty" | "selection"> {
   row: DocumentRowView;
   group: DocumentGroupView;
   expanded: boolean;
+  select?: { checked: boolean; onSelect: (mode: GroupSelectMode) => void };
 }
 
-function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, renderPlan, renderRowNotice, renderExpanded, rowBadge, onAction, onNavigate }: DocumentCardProps): JSX.Element {
+const STAGE_TITLES: readonly (readonly [StageName, string])[] = [["review", "Review"], ["annotation", "Annotation"], ["final", "Final"]];
+
+const selectModeOf = (event: MouseEvent<HTMLInputElement>): GroupSelectMode =>
+  event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle-keep-anchor" : "toggle";
+
+/** "Review: ✓ Accepted · unchanged" */
+function stageLine(row: DocumentRowView, stage: StageName, title: string, sourceLanguage: string | null): string {
+  const cell = row.stages?.[stage];
+  if (!cell) return `${title}: —`;
+  const text = stageText(stage, cell, row, { sourceLanguage });
+  return `${title}: ${[[text.symbol, text.word].filter(Boolean).join(" "), text.detail].filter(Boolean).join(" · ")}`;
+}
+
+function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, select }: DocumentCardProps): JSX.Element {
   const baseId = useId();
   const headingId = `${baseId}-heading`;
   const regionId = `${baseId}-expanded`;
@@ -53,38 +65,33 @@ function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, re
   const showRegion = expanded && renderExpanded != null;
   const badge = rowBadge?.(row);
   const notice = renderRowNotice?.(row) ?? null;
+  const active = isActiveRow(row);
+  const source = group.rows.find(entry => entry.is_source)?.language ?? null;
+  const waiting = waitingOnText(row);
 
   return (
-    <article className="document-card" aria-labelledby={headingId}>
+    <article className={["document-card", !active && "document-card--muted", rowNeedsDecision(row) && "document-card--decision"].filter(Boolean).join(" ")} aria-labelledby={headingId}>
       <div className="document-card-line document-card-head">
+        {select && <input type="checkbox" className="document-card-select checkbox-target" aria-label={`Select ${name}`} checked={select.checked}
+          onChange={() => undefined} onClick={event => select.onSelect(selectModeOf(event))} />}
         <h3 id={headingId} className="document-card-title">
           <span aria-hidden="true"><ShortId value={row.case_id} />{` · ${row.language}`}</span>
           <span className="visually-hidden">{name}</span>
         </h3>
         {row.is_source && <span className="documents-source">source</span>}
+        <VersionMarker row={row} />
+        {active && rowIsNew(row) && <NewBadge />}
         {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
       </div>
-      <div className="document-card-line document-card-plan">{renderPlan?.(row, group)}</div>
-      <div className="document-card-line document-card-step"><NextStepCell row={row} strong onToggleRow={key => { if (!expanded) onToggleRow(key); }} /></div>
+      {STAGE_TITLES.map(([stage, title]) => <div key={stage} className="document-card-line document-card-stage">{stageLine(row, stage, title, source)}</div>)}
       <div className="document-card-line document-card-owner">
-        <span>{`Owner: ${row.in_plan ? ownerLabel(row.next_step) : "—"}`}</span>
+        <span title={waiting.title && waiting.title !== waiting.text ? waiting.title : undefined}>{`Waiting on: ${waiting.text}`}</span>
         <span className="document-card-activity"><LastActivityCell iso={row.last_activity_at} /></span>
       </div>
-      <ActionCell row={row} onAction={onAction} block />
+      <RowActionCell row={row} onAction={onAction} plan={planSaves ? { saves: planSaves, groupRevision: group.plan_revision } : undefined} block />
       <div className="document-card-line document-card-actions">
         <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
-        <button
-          type="button"
-          id={documentsRowId(row.case_id, row.language, "disclosure")}
-          className="document-card-toggle"
-          aria-expanded={expanded}
-          aria-controls={showRegion ? regionId : undefined}
-          aria-label={`Show details, ${name}`}
-          onClick={() => onToggleRow(rowKeyOf(row))}
-        >
-          <IconChevronRight className="disclosure-chevron" />
-          Details
-        </button>
+        <HistoryToggle row={row} expanded={expanded} controls={showRegion ? regionId : undefined} onToggleRow={onToggleRow}>History</HistoryToggle>
       </div>
       {notice != null && <div className="document-card-notice">{notice}</div>}
       {showRegion && <div id={regionId} className="document-card-expanded">{renderExpanded(row, { layout: "list" })}</div>}
@@ -92,40 +99,27 @@ function DocumentCard({ row, group, projectKey, query, expanded, onToggleRow, re
   );
 }
 
-const selectModeOf = (event: MouseEvent<HTMLInputElement>): GroupSelectMode =>
-  event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle-keep-anchor" : "toggle";
-
-export function DocumentCards({ page, busy, empty, query, shownNotInPlan, onToggleNotInPlan, groupSelection, ...rest }: DocumentCardsProps): JSX.Element {
+export function DocumentCards({ page, busy, empty, query, selection, ...rest }: DocumentCardsProps): JSX.Element {
   const open = useMemo(() => new Set(query.open ?? []), [query.open]);
+  const order = useMemo(() => page.groups.flatMap(group => group.rows.map(rowKeyOf)), [page.groups]);
   if (page.groups.length === 0) return <div className="document-cards-empty">{empty}</div>;
   return (
     <ul className="document-cards" aria-label="Documents" aria-busy={busy || undefined}>
       {page.groups.map(group => {
-        const hidden = notInPlanLanguages(group);
-        const shown = shownNotInPlan.has(group.case_id);
-        const rows = group.rows.filter(row => row.in_plan || shown);
-        const decisions = decisionCount(group);
+        const keys = group.rows.map(rowKeyOf);
+        const state = selection?.caseState(keys) ?? "none";
         return (
           <li key={group.case_id} className="document-case-card">
             <div className="document-case-card-head">
-              {groupSelection && <input type="checkbox" className="document-case-card-select" aria-label={groupSelection.checkboxLabel(group.case_id)}
-                checked={groupSelection.selected(group.case_id)} onChange={() => undefined}
-                onClick={event => groupSelection.onSelect(group.case_id, selectModeOf(event))} />}
+              {selection && <input type="checkbox" className="document-case-card-select checkbox-target" aria-label={`Select ${group.case_id} (${group.rows.length === 1 ? "1 text" : `${group.rows.length} texts`})`}
+                ref={element => { if (element) element.indeterminate = state === "some"; }}
+                checked={state === "all"} onChange={() => undefined}
+                onClick={event => selection.selectCase(keys, selectModeOf(event), order)} />}
               <h2 className="document-case-card-title">{caseHeaderText(group)}</h2>
-              {decisions > 0 && <StatusBadge tone="warning">{plural(decisions, "decision")}</StatusBadge>}
             </div>
-            {rows.filter(row => row.in_plan).map(row => (
-              <DocumentCard key={rowKeyOf(row)} {...rest} row={row} group={group} query={query} expanded={open.has(rowKeyOf(row))} />
-            ))}
-            {hidden.length > 0 && (
-              <p className="documents-not-in-plan">
-                {`${hidden.join(", ")} not in plan · `}
-                <button type="button" id={documentsNotInPlanId(group.case_id)} className="documents-not-in-plan-toggle" aria-expanded={shown}
-                  aria-label={notInPlanToggleLabel(group.case_id, hidden, shown)} onClick={() => onToggleNotInPlan(group.case_id)}>{shown ? "hide" : "show"}</button>
-              </p>
-            )}
-            {rows.filter(row => !row.in_plan).map(row => (
-              <DocumentCard key={rowKeyOf(row)} {...rest} row={row} group={group} query={query} expanded={open.has(rowKeyOf(row))} />
+            {group.rows.map(row => (
+              <DocumentCard key={rowKeyOf(row)} {...rest} row={row} group={group} query={query} expanded={open.has(rowKeyOf(row))}
+                select={selection ? { checked: selection.keys.has(rowKeyOf(row)), onSelect: mode => selection.select(rowKeyOf(row), mode, order) } : undefined} />
             ))}
           </li>
         );

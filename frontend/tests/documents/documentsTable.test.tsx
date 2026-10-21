@@ -1,214 +1,255 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DocumentGroupView, DocumentRowsPage } from "../../src/api/client";
+import type { DocumentGroupView, DocumentRowsPage, DocumentRowView } from "../../src/api/client";
 import type { ProjectDocumentsQuery } from "../../src/app/router";
-import { caseHeaderText, DocumentsTable, initialExpandedGroups, type DocumentsTableProps } from "../../src/documents/DocumentsTable";
+import { caseHeaderText, DocumentsTable, type DocumentsTableProps, type TableSelection } from "../../src/documents/DocumentsTable";
 import { formatTime, fullTimestamp } from "../../src/documents/labels";
 import { group, notInPlanRow, page, planRow, row, stepOf } from "./fixtures";
+import { ana, cell, scenario7a, stagedRow, tom } from "./tableFixtures";
 
 afterEach(cleanup);
 
-/** Every group expanded unless the test says otherwise. */
+function selection(selected: readonly string[] = []): TableSelection {
+  const keys = new Set(selected);
+  return {
+    keys,
+    caseState: caseKeys => {
+      const count = caseKeys.filter(key => keys.has(key)).length;
+      return count === 0 ? "none" : count === caseKeys.length ? "all" : "some";
+    },
+    select: vi.fn(),
+    selectCase: vi.fn(),
+  };
+}
+
 function renderTable(view: DocumentRowsPage, overrides: Partial<DocumentsTableProps> = {}) {
   const props: DocumentsTableProps = {
     page: view,
     projectKey: "p",
     query: {},
-    expandedGroups: new Set(view.groups.map(entry => entry.case_id)),
-    onToggleGroup: vi.fn(),
     onToggleRow: vi.fn(),
-    shownNotInPlan: new Set(),
-    onToggleNotInPlan: vi.fn(),
     onAction: vi.fn(),
+    selection: selection(),
     ...overrides,
   };
   const result = render(<DocumentsTable {...props} />);
   return { ...result, props };
 }
 
-const rowOf = (name: string) => screen.getByRole("button", { name: `Show details, ${name}` }).closest("tr")!;
+/** The text row header (`th scope="row"`) whose name starts with "{case} · {language}" (the group label is a rowheader too). */
+const header = (name: string) => {
+  const found = screen.getAllByRole("rowheader").filter(element => element.getAttribute("scope") === "row" && (element.textContent ?? "").startsWith(name));
+  expect(found).toHaveLength(1);
+  return found[0];
+};
+const rowOf = (name: string) => header(name).closest("tr")!;
 const cellsOf = (name: string) => Array.from(rowOf(name).children) as HTMLElement[];
 
-/** case-0101: en source (not in plan), de to assign a review, fr choose final. */
-function case0101(): DocumentGroupView {
-  return group("case-0101", [
-    notInPlanRow("case-0101", "en", { is_source: true }),
-    planRow("case-0101", "de", stepOf("assign_translation_review", { badges: ["check_failed"], detail: { kind: "version", version: 1, origin: "machine_translation", translation_status: "automatic_check_failed", task_paused: false } }), { last_activity_at: "2026-10-19T08:15:00Z" }),
-    planRow("case-0101", "fr", stepOf("choose_final", { detail: { kind: "annotations_submitted", submitted: 2, total: 2, task_paused: false } })),
-  ], { not_in_plan_languages: ["en"] });
+/** case-107: en source (not in plan, decided), de with one submission to accept (decision). */
+function case107(de: DocumentRowView = scenario7a()): DocumentGroupView {
+  const en = notInPlanRow("case-107", "en", {
+    is_source: true,
+    stages: { review: cell("source", "none"), annotation: cell("not_planned", "none"), final: cell("none", "none") },
+  });
+  return group("case-107", [en, { ...de, last_activity_at: "2026-10-19T08:15:00Z" }]);
 }
 
 describe("structure", () => {
-  it("renders six columns in order", () => {
-    renderTable(page([case0101()]));
-    expect(screen.getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Text · language", "Plan", "Next step", "Owner", "Action", "Last activity"]);
-    expect(cellsOf("case-0101 · de")).toHaveLength(6);
-    const disclosure = screen.getByRole("button", { name: "Show details, case-0101 · de" });
-    const header = disclosure.closest("th")!;
-    expect(header.getAttribute("scope")).toBe("row");
-    expect(within(header).getByRole("link", { name: "Open case-0101 · de" })).toBeTruthy();
-    expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(screen.queryByText("Choose in Text versions")).toBeNull();
+  it("has 8 columns with hidden Select and Action headers", () => {
+    renderTable(page([case107()]));
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers.map(cell => cell.textContent)).toEqual(["Select", "Text", "Review", "Annotation", "Final", "Waiting on", "Action", "Last activity"]);
+    expect(headers[0].querySelector(".visually-hidden")?.textContent).toBe("Select");
+    expect(headers[6].querySelector(".visually-hidden")?.textContent).toBe("Action");
+    expect(cellsOf("case-107 · de")).toHaveLength(8);
   });
 
-  it("renders the case header with source plus translations and a decision badge", () => {
-    const onToggleGroup = vi.fn();
-    renderTable(page([case0101()]), { onToggleGroup });
-    const toggle = screen.getByRole("button", { name: "case-0101 · en source + 2 translations" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    const header = toggle.closest("th")!;
-    expect(header.getAttribute("scope")).toBe("rowgroup");
-    expect(within(header).getByText("1 decision")).toBeTruthy();
-    expect(header.querySelector("time")).not.toBeNull();
-    fireEvent.click(toggle);
-    expect(onToggleGroup).toHaveBeenCalledWith("case-0101");
+  it("group row is a label: case checkbox td, rowgroup th, no disclosure", () => {
+    const { props } = renderTable(page([case107()]));
+    const box = screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" });
+    expect(box.closest("td")).not.toBeNull();
+    const groupRow = box.closest("tr")!;
+    const label = groupRow.querySelector("th")!;
+    expect(label.getAttribute("scope")).toBe("rowgroup");
+    expect(label.getAttribute("colspan")).toBe("7");
+    expect(label.textContent).toBe("case-107 · en source + 1 translation");
+    expect(within(groupRow).queryByRole("button")).toBeNull();
+    expect(groupRow.querySelector("time")).toBeNull();
+    fireEvent.click(box, { shiftKey: true });
+    expect(props.selection!.selectCase).toHaveBeenCalledWith(["case-107:en", "case-107:de"], "range", ["case-107:en", "case-107:de"]);
     expect(caseHeaderText(group("case-9", [row({ case_id: "case-9", language: "fr", is_source: true })]))).toBe("case-9 · fr source");
-    expect(caseHeaderText(group("case-9", [row({ case_id: "case-9", language: "de" })], { language_count: 3 }))).toBe("case-9 · 3 languages");
   });
 
-  it("collapses not-in-plan rows into one line with show", () => {
-    const view = group("case-0101", [
-      notInPlanRow("case-0101", "en", { is_source: true }),
-      planRow("case-0101", "de", stepOf("assign_translation_review")),
-      notInPlanRow("case-0101", "fr"),
-      notInPlanRow("case-0101", "es"),
-    ], { not_in_plan_languages: ["en", "fr", "es"] });
-    const onToggleNotInPlan = vi.fn();
-    const renderPlan = vi.fn(entry => <span>{`chips ${entry.language}`}</span>);
-    const { unmount } = renderTable(page([view]), { onToggleNotInPlan, renderPlan });
-    expect(screen.queryByRole("button", { name: "Show details, case-0101 · fr" })).toBeNull();
-    const line = screen.getByText(/not in plan ·/).closest("th")!;
-    expect(line.textContent).toBe("en, fr, es not in plan · show");
-    const show = within(line).getByRole("button", { name: "Show en, fr, es not in plan, case-0101" });
-    expect(show.textContent).toBe("show");
-    expect(show.id).toBe("documents-group-case-0101-not-in-plan");
-    expect(show.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(show);
-    expect(onToggleNotInPlan).toHaveBeenCalledWith("case-0101");
+  it("rows: th scope=row named 'case-107 · de', 20 px indent class", () => {
+    const { props } = renderTable(page([case107()]));
+    const th = header("case-107 · de");
+    expect(th.tagName).toBe("TH");
+    expect(th.getAttribute("scope")).toBe("row");
+    // The accessible name starts with the text label.
+    expect(screen.getAllByRole("rowheader", { name: /^case-107 · de\b/ })).toEqual([th]);
+    expect(th.querySelector(".documents-text-cell")).not.toBeNull();
+    expect(within(th).getByRole("link", { name: "Open case-107 · de" })).toBeTruthy();
+    const box = within(rowOf("case-107 · de")).getByRole("checkbox", { name: "Select case-107 · de" });
+    fireEvent.click(box);
+    expect(props.selection!.select).toHaveBeenCalledWith("case-107:de", "toggle", ["case-107:en", "case-107:de"]);
+    expect(within(header("case-107 · en")).getByText("source")).toBeTruthy();
+  });
+
+  it("group checkbox is mixed when one of two texts is selected", () => {
+    renderTable(page([case107()]), { selection: selection(["case-107:de"]) });
+    const box = screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" }) as HTMLInputElement;
+    expect(box.indeterminate).toBe(true);
+    expect(box.checked).toBe(false);
+    expect((within(rowOf("case-107 · de")).getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
+    cleanup();
+    renderTable(page([case107()]), { selection: selection(["case-107:de", "case-107:en"]) });
+    const all = screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" }) as HTMLInputElement;
+    expect(all.indeterminate).toBe(false);
+    expect(all.checked).toBe(true);
+  });
+
+  it("decision rows get the edge class and hidden text Needs your decision", () => {
+    const undecided = notInPlanRow("case-101", "de", {
+      next_step: stepOf("decide_plan"), steps: [stepOf("decide_plan")],
+      plan_row: { review: false, annotate: false, review_applicable: true, discarded: false, decided: false },
+    });
+    renderTable(page([case107(), group("case-101", [undecided])]));
+    expect(rowOf("case-107 · de").className).toContain("data-table-row--decision");
+    expect(within(header("case-107 · de")).getByText("Needs your decision").className).toBe("visually-hidden");
+    expect(rowOf("case-107 · en").className).not.toContain("data-table-row--decision");
+    expect(within(header("case-107 · en")).queryByText("Needs your decision")).toBeNull();
+    // Undecided rows are decisions too (V10).
+    expect(rowOf("case-101 · de").className).toContain("data-table-row--decision");
+  });
+
+  it("NEW badge with accessible text New since your last visit", () => {
+    const fresh = { ...scenario7a(), new: true } as DocumentRowView;
+    renderTable(page([case107(fresh)]));
+    const th = header("case-107 · de");
+    expect(within(th).getByText("NEW").getAttribute("aria-hidden")).toBe("true");
+    expect(within(th).getByText("New since your last visit").className).toBe("visually-hidden");
+    expect(within(header("case-107 · en")).queryByText("NEW")).toBeNull();
+  });
+
+  it("not-in-plan rows are muted rows, never collapsed", () => {
+    const view = group("case-101", [
+      notInPlanRow("case-101", "en", { is_source: true }),
+      planRow("case-101", "de", stepOf("assign_translation_review")),
+      notInPlanRow("case-101", "fr"),
+    ], { not_in_plan_languages: ["en", "fr"] });
+    renderTable(page([view]));
+    expect(screen.queryByText(/not in plan ·/)).toBeNull();
+    expect(rowOf("case-101 · fr").className).toContain("documents-row--not-in-plan");
+    expect(rowOf("case-101 · de").className).not.toContain("documents-row--not-in-plan");
+    expect(cellsOf("case-101 · fr")[2].querySelector(".stage-cell--muted")).not.toBeNull();
+    // Quiet "Plan…" on rows outside the plan (VD2) when the plan chips are wired.
+    expect(within(rowOf("case-101 · fr")).queryByRole("button", { name: "Plan…, case-101 · fr" })).toBeNull();
+  });
+
+  it("Text and Last activity headers sort via onSort with aria-sort", () => {
+    const onSort = vi.fn();
+    const { unmount } = renderTable(page([case107()]), { sort: "case", onSort });
+    const text = screen.getByRole("columnheader", { name: /Text/ });
+    const activity = screen.getByRole("columnheader", { name: /Last activity/ });
+    expect(text.getAttribute("aria-sort")).toBe("ascending");
+    expect(activity.getAttribute("aria-sort")).toBe("none");
+    expect(screen.getByRole("columnheader", { name: "Review" }).getAttribute("aria-sort")).toBeNull();
+    fireEvent.click(within(text).getByRole("button"));
+    expect(onSort).toHaveBeenLastCalledWith("-case");
+    fireEvent.click(within(activity).getByRole("button"));
+    expect(onSort).toHaveBeenLastCalledWith("activity");
     unmount();
-    renderTable(page([view]), { shownNotInPlan: new Set(["case-0101"]), renderPlan });
-    expect(screen.getByText(/not in plan ·/).closest("th")!.textContent).toBe("en, fr, es not in plan · hide");
-    expect(screen.getByRole("button", { name: "Hide en, fr, es not in plan, case-0101" }).getAttribute("aria-expanded")).toBe("true");
-    expect(within(rowOf("case-0101 · fr")).getByText("chips fr")).toBeTruthy();
-    expect(cellsOf("case-0101 · fr")[2].textContent).toBe("Not in plan");
+    renderTable(page([case107()]), { sort: "activity", onSort });
+    expect(screen.getByRole("columnheader", { name: /Last activity/ }).getAttribute("aria-sort")).toBe("descending");
+    fireEvent.click(within(screen.getByRole("columnheader", { name: /Last activity/ })).getByRole("button"));
+    expect(onSort).toHaveBeenLastCalledWith("-activity");
+    fireEvent.click(within(screen.getByRole("columnheader", { name: /Text/ })).getByRole("button"));
+    expect(onSort).toHaveBeenLastCalledWith("case");
   });
 
-  it("expands groups with a decision initially and collapses the others above 50 cases", () => {
-    const plain = (caseId: string) => group(caseId, [planRow(caseId, "de", stepOf("assign_annotation"))]);
-    const deciding = group("case-d", [planRow("case-d", "de", stepOf("decide_report"))]);
-    expect([...initialExpandedGroups(page([plain("a"), deciding]))]).toEqual(["a", "case-d"]);
-    expect([...initialExpandedGroups(page([plain("a"), deciding], { group_count: 51 }))]).toEqual(["case-d"]);
-    // Not-in-plan rows never count as a decision.
-    const hidden = group("case-h", [notInPlanRow("case-h", "de", { next_step: stepOf("choose_final") })]);
-    expect([...initialExpandedGroups(page([hidden], { group_count: 51 }))]).toEqual([]);
-  });
-
-  it("toggles a row and marks the open row expanded with its region", () => {
+  it("disclosure ▸ at the end of Last activity named 'Show history, case-107 · de'", () => {
     const onToggleRow = vi.fn();
-    const renderExpanded = vi.fn(() => <section aria-label="Expanded">content</section>);
-    renderTable(page([case0101()]), { query: { open: ["case-0101:de"] }, onToggleRow, renderExpanded });
-    const disclosure = screen.getByRole("button", { name: "Show details, case-0101 · de" });
+    const renderExpanded = vi.fn(() => <section aria-label="History">content</section>);
+    renderTable(page([case107()]), { query: { open: ["case-107:de"] }, onToggleRow, renderExpanded });
+    const disclosure = screen.getByRole("button", { name: "Show history, case-107 · de" });
+    const last = cellsOf("case-107 · de")[7];
+    expect(last.contains(disclosure)).toBe(true);
+    expect(last.lastElementChild?.contains(disclosure) || last.lastElementChild === disclosure).toBe(true);
+    expect(last.querySelector("time")!.getAttribute("title")).toBe(fullTimestamp("2026-10-19T08:15:00Z"));
+    expect(last.querySelector("time")!.textContent).toBe(formatTime("2026-10-19T08:15:00Z"));
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(disclosure.id).toBe("documents-row-case-107-de-disclosure");
     expect(document.getElementById(disclosure.getAttribute("aria-controls")!)!.textContent).toBe("content");
     fireEvent.click(disclosure);
-    expect(onToggleRow).toHaveBeenCalledWith("case-0101:de");
-  });
-
-  it("renders the row notice below a collapsed row", () => {
-    renderTable(page([case0101()]), { renderRowNotice: entry => (entry.language === "fr" ? <p>notice fr</p> : null) });
-    const notice = screen.getByText("notice fr");
-    expect(notice.closest("tr")!.previousElementSibling).toBe(rowOf("case-0101 · fr"));
+    expect(onToggleRow).toHaveBeenCalledWith("case-107:de");
   });
 });
 
 describe("cells", () => {
-  it("names the row action with step and text", () => {
-    const { props } = renderTable(page([case0101()]));
-    const action = screen.getByRole("button", { name: "Assign translation review…, case-0101 · de" });
-    expect(action.textContent).toBe("Assign translation review…");
-    expect(action.id).toBe("documents-row-case-0101-de-action");
+  it("renders the stage cells, Waiting on and one action", () => {
+    const steps = [stepOf("annotation_in_progress", { owner: { kind: "people", person: null, count: 2, people: [ana, tom] } })];
+    const progress = stagedRow("case-106", "de", {
+      stages: {
+        review: cell("accepted", "done", { note: "unchanged" }),
+        annotation: cell("in_progress", "running", { people: [tom], submitted: 1, total: 2 }),
+        final: cell("after_annotation", "waiting"),
+      },
+      steps,
+    });
+    const { props } = renderTable(page([case107(), group("case-106", [progress])]));
+    const cells = cellsOf("case-106 · de");
+    expect(cells[2].textContent).toBe("✓ Acceptedunchanged");
+    expect(cells[2].querySelector(".stage-cell-symbol")!.getAttribute("aria-hidden")).toBe("true");
+    expect(cells[3].textContent).toBe("◐ 1 of 2 submittedwaiting: Tom Reis");
+    expect(cells[4].textContent).toBe("○ after annotation");
+    expect(within(cells[5]).getByText("Ana Weber, Tom Reis").getAttribute("aria-hidden")).toBe("true");
+    expect(cells[5].querySelector("[title]")!.getAttribute("title")).toBe("Ana Weber (ann-0003), Tom Reis (ann-0004)");
+    expect(cells[6].textContent).toBe("");
+    const de = cellsOf("case-107 · de");
+    expect(de[4].textContent).toBe("● Your choice1 submission");
+    expect(de[5].querySelector("strong")!.textContent).toBe("You");
+    const action = within(de[6]).getByRole("button", { name: "Accept result…, case-107 · de" });
     fireEvent.click(action);
-    expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-0101", language: "de" }), expect.objectContaining({ code: "assign_translation_review" }));
-    expect(screen.getByRole("button", { name: "Choose final…, case-0101 · fr" })).toBeTruthy();
-    expect(cellsOf("case-0101 · fr")[2].textContent).toBe("Choose final resultYour decision2 of 2 annotations submitted");
-    expect(cellsOf("case-0101 · fr")[3].textContent).toBe("You");
-    expect(cellsOf("case-0101 · fr")[3].querySelector("strong")).not.toBeNull();
+    expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "de" }), expect.objectContaining({ code: "choose_final" }));
+    expect(cellsOf("case-107 · en")[2].textContent).toBe("— source");
   });
 
-  it("shows badges Your decision, Check failed, Paused and +1 more step", () => {
-    const steps = [stepOf("decide_report", { badges: ["your_decision", "paused"], detail: { kind: "report", excerpt: "Negation dropped", reporter: { pseudonym: "ann-0005", display_name: "Ben Roth", is_me: false }, task_paused: true } }), stepOf("choose_final")];
-    const view = group("case-0102", [
-      planRow("case-0102", "de", steps[0], { steps }),
-      planRow("case-0102", "fr", stepOf("assign_translation_review", { badges: ["check_failed"] })),
-      planRow("case-0102", "it", stepOf("annotation_in_progress", { stage: "annotation", owner: { kind: "people", person: null, count: 2 } })),
-      planRow("case-0102", "nl", stepOf("translation_review_in_progress", { owner: { kind: "person", person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false }, count: 1 } })),
-    ]);
-    const onToggleRow = vi.fn();
-    renderTable(page([view]), { onToggleRow });
-    const de = cellsOf("case-0102 · de")[2];
-    expect(within(de).getByText("Your decision")).toBeTruthy();
-    expect(within(de).getByText("Paused")).toBeTruthy();
-    expect(within(de).getByText("“Negation dropped” · Ben Roth (ann-0005) · task paused")).toBeTruthy();
-    fireEvent.click(within(de).getByRole("button", { name: "+1 more step, case-0102 · de" }));
-    expect(onToggleRow).toHaveBeenCalledWith("case-0102:de");
-    expect(within(cellsOf("case-0102 · fr")[2]).getByText("Check failed")).toBeTruthy();
-    expect(cellsOf("case-0102 · it")[3].textContent).toBe("2 annotators");
-    expect(cellsOf("case-0102 · it")[4].textContent).toBe("");
-    expect(cellsOf("case-0102 · nl")[3].textContent).toBe("Ana Weber (ann-0004)");
-    expect(rowOf("case-0102 · nl").textContent).not.toContain("username");
+  it("names the source language in a source-changed Review cell and shows the version marker", () => {
+    const de = stagedRow("case-115", "de", {
+      stages: { review: cell("source_changed", "decision", { from_version: 1 }) },
+      steps: [stepOf("assign_translation_review")],
+      overrides: { version_marker: { kind: "corrected", version: 2 } },
+    });
+    const en = notInPlanRow("case-115", "en", { is_source: true });
+    renderTable(page([group("case-115", [en, de])]));
+    expect(cellsOf("case-115 · de")[2].textContent).toBe("⚠ Source changedtranslation from en v1");
+    expect(within(header("case-115 · de")).getByText("v2 corrected").className).toBe("documents-version-marker");
   });
 
   it("passes the Documents query with the Open link and offers Open my task", () => {
-    const view = case0101();
+    const view = case107();
     view.rows[1] = { ...view.rows[1], own_open_assignment_id: 41 };
     const query: ProjectDocumentsQuery = { language: "de", segment: "assign" };
     renderTable(page([view]), { query });
-    const href = screen.getByRole("link", { name: "Open case-0101 · de" }).getAttribute("href")!;
+    const href = screen.getByRole("link", { name: "Open case-107 · de" }).getAttribute("href")!;
     expect(href).toContain("documents_language=de");
-    expect(href).toContain("documents_segment=assign");
     expect(screen.getByRole("link", { name: "Open my task" }).getAttribute("href")).toBe("#/tasks/41");
   });
 
-  it("marks the source row and renders last activity as a time with a full title", () => {
-    renderTable(page([case0101()]), { shownNotInPlan: new Set(["case-0101"]) });
-    expect(within(cellsOf("case-0101 · en")[0]).getByText("source")).toBeTruthy();
-    const time = cellsOf("case-0101 · de")[5].querySelector("time")!;
-    expect(time.getAttribute("title")).toBe(fullTimestamp("2026-10-19T08:15:00Z"));
-    expect(time.textContent).toBe(formatTime("2026-10-19T08:15:00Z"));
-  });
-
-  it("middle-truncates long IDs with the full value in title", () => {
+  it("middle-truncates long IDs in the group row with the full value in title", () => {
     const longId = "case-2026-10-19-0211-imported-batch";
     renderTable(page([group(longId, [planRow(longId, "de", stepOf("assign_annotation"))])]));
-    const header = screen.getByRole("button", { name: `${longId} · 1 language` });
-    const short = header.querySelector("[title]")!;
+    const short = screen.getByRole("checkbox", { name: `Select ${longId} (1 text)` }).closest("tr")!.querySelector("th [title]")!;
     expect(short.getAttribute("title")).toBe(longId);
     expect(short.textContent).toContain("…");
   });
 
-  it("shows the visit badge next to the row header, outside the row's names", () => {
-    renderTable(page([case0101()]), { rowBadge: entry => (entry.language === "de" ? <span className="badge">Resolved</span> : null) });
-    const disclosure = screen.getByRole("button", { name: "Show details, case-0101 · de" });
-    expect(within(disclosure.closest("th")!).getByText("Resolved")).toBeTruthy();
-    expect(disclosure.textContent).not.toContain("Resolved");
-  });
-});
-
-describe("case selection", () => {
-  it("puts the case checkbox first in each case header and passes the click mode", () => {
-    const onSelect = vi.fn();
-    renderTable(page([case0101(), group("case-0102", [planRow("case-0102", "de", stepOf("assign_annotation"))])]), {
-      groupSelection: { selected: caseId => caseId === "case-0102", onSelect, checkboxLabel: caseId => `Select ${caseId}` },
+  it("shows the visit badge in the row header and the row notice below the row", () => {
+    renderTable(page([case107()]), {
+      rowBadge: entry => (entry.language === "de" ? <span className="badge">Resolved</span> : null),
+      renderRowNotice: entry => (entry.language === "de" ? <p>notice de</p> : null),
     });
-    const first = screen.getByRole("checkbox", { name: "Select case-0101" }) as HTMLInputElement;
-    expect(first.closest("th")?.firstElementChild).toBe(first);
-    expect(first.checked).toBe(false);
-    expect((screen.getByRole("checkbox", { name: "Select case-0102" }) as HTMLInputElement).checked).toBe(true);
-    fireEvent.click(first, { shiftKey: true });
-    expect(onSelect).toHaveBeenLastCalledWith("case-0101", "range");
-    fireEvent.click(first, { metaKey: true });
-    expect(onSelect).toHaveBeenLastCalledWith("case-0101", "toggle-keep-anchor");
-    // Rows themselves have no bulk checkboxes.
-    expect(within(rowOf("case-0101 · de")).queryByRole("checkbox")).toBeNull();
+    expect(within(header("case-107 · de")).getByText("Resolved")).toBeTruthy();
+    expect(screen.getByText("notice de").closest("tr")!.previousElementSibling).toBe(rowOf("case-107 · de"));
   });
 });

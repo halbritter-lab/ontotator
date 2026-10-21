@@ -8,7 +8,14 @@ const idsOf = (count: number, start = 0) => Array.from({ length: count }, (_, in
 
 beforeEach(() => {
   vi.spyOn(api, "lookupCaseIds").mockImplementation(async (_key, ids) => ({ found: ids.filter(id => known.has(id)), unknown: ids.filter(id => !known.has(id)) }));
+  // Two texts per case, in reversed list order (the dialog keeps the pasted order).
+  vi.spyOn(api, "documentRowKeys").mockImplementation(async (_key, body) => {
+    const cases = [...(body?.case_ids ?? [])].reverse();
+    return { keys: cases.flatMap(caseId => [{ case_id: caseId, language: "en" }, { case_id: caseId, language: "de" }]), cases: cases.length, total: cases.length * 2, truncated: false };
+  });
 });
+/** Text keys of the given cases as the dialog reports them. */
+const keysOf = (ids: readonly string[]) => ids.flatMap(id => [`${id}:en`, `${id}:de`]);
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function renderDialog(current: readonly string[] = []) {
@@ -44,11 +51,13 @@ it("replaces the selection by default and can add instead", async () => {
   await within(dialog).findByText("2 found · 0 unknown");
   expect(within(dialog).getByText("This replaces the current selection of 5 cases.")).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Select 2" }));
-  expect(onSelect).toHaveBeenLastCalledWith(["case-0001", "case-0002"], "replace");
+  // Every text of the found cases (VD4), looked up through the row keys.
+  await waitFor(() => expect(onSelect).toHaveBeenLastCalledWith(keysOf(["case-0001", "case-0002"]), "replace"));
+  expect(api.documentRowKeys).toHaveBeenLastCalledWith("p", { case_ids: ["case-0001", "case-0002"] });
   fireEvent.click(within(dialog).getByLabelText("Add to the current selection instead"));
   expect(within(dialog).queryByText("This replaces the current selection of 5 cases.")).toBeNull();
   fireEvent.click(within(dialog).getByRole("button", { name: "Select 2" }));
-  expect(onSelect).toHaveBeenLastCalledWith(["case-0001", "case-0002"], "add");
+  await waitFor(() => expect(onSelect).toHaveBeenLastCalledWith(keysOf(["case-0001", "case-0002"]), "add"));
 });
 
 it("caps at 2000 with Select the first 2000", async () => {
@@ -57,7 +66,8 @@ it("caps at 2000 with Select the first 2000", async () => {
   await within(dialog).findByText("2500 found · 0 unknown");
   expect(within(dialog).getByText("Selection is limited to 2000 cases.")).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Select the first 2000" }));
-  expect(onSelect).toHaveBeenCalledWith(idsOf(2500), "replace");
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(keysOf(idsOf(2000)), "replace"));
+  expect(api.documentRowKeys).toHaveBeenCalledWith("p", { case_ids: idsOf(2000) });
   cleanup();
   // Adding beyond 2000 likewise.
   const second = renderDialog(idsOf(1990, 100));
@@ -86,4 +96,14 @@ it("keeps Select unavailable with a reason when nothing is found", async () => {
   const retry = await within(dialog).findByRole("button", { name: "Retry" });
   fireEvent.click(retry);
   await waitFor(() => expect(within(dialog).getByText("1 found · 0 unknown")).toBeTruthy());
+});
+
+it("shows an error when the texts of the found cases cannot be loaded", async () => {
+  vi.mocked(api.documentRowKeys).mockRejectedValueOnce(new Error("offline"));
+  const { dialog, paste, onSelect } = renderDialog();
+  paste("case-0001");
+  await within(dialog).findByText("1 found · 0 unknown");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Select 1" }));
+  expect(await within(dialog).findByText(/offline/)).toBeTruthy();
+  expect(onSelect).not.toHaveBeenCalled();
 });

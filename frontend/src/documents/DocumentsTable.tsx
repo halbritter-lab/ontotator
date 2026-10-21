@@ -1,42 +1,31 @@
 /**
- * Documents table under the work plan (spec "Screens › Documents" item 6): one `<tbody>` per case
- * with a case header, one row per language with six columns (Text · language, Plan, Next step,
- * Owner, Action, Last activity). Rows that are not in the plan collapse into one line per case
- * ("en, fr not in plan · show"). Expansion and case selection are owned by the page; this component renders them.
+ * Documents table, variant A (documents overview "Table", V1, VD1, VD4, VD5): one `<tbody>` per
+ * case with a slim group label row (case checkbox, case name, "· en source + 1 translation"),
+ * then one flat row per text with eight columns: [checkbox] · Text · Review · Annotation · Final ·
+ * Waiting on · Action · Last activity (with the history disclosure ▸). Rows outside the plan are
+ * muted rows; nothing collapses. Decision rows get the left edge. Expansion and selection are
+ * owned by the page; this component renders them.
  */
 import { useId, useMemo, type ReactNode } from "react";
-import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView } from "../api/client";
+import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, DocumentRowsRequest, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import { plural } from "../app/labels";
-import { DataTable, type Column, type DataTableGroup, type GroupSelection } from "../ui/DataTable";
-import { IconChevronRight } from "../ui/icons";
-import { StatusBadge } from "../ui/StatusBadge";
+import { DataTable, type Column, type DataTableGroup, type DataTableSort, type GroupSelectMode } from "../ui/DataTable";
+import type { PlanSaves } from "./PlanChips";
+import { RowActionCell } from "./RowActions";
 import {
-  ActionCell,
   documentsGroupId,
-  documentsNotInPlanId,
+  HistoryToggle,
   LastActivityCell,
-  notInPlanToggleLabel,
-  NextStepCell,
-  OwnerCell,
   RowHeaderCell,
-  ShortId,
+  RowStageCell,
   rowKeyOf,
+  rowName,
+  rowNeedsDecision,
+  ShortId,
+  WaitingOnCell,
 } from "./RowCells";
-
-/** Above this many matching cases, groups without a decision start collapsed. */
-export const COLLAPSE_GROUPS_ABOVE = 50;
-
-/** In-plan rows of a group whose next step is a lead decision. */
-export function decisionCount(group: Pick<DocumentGroupView, "rows">): number {
-  return group.rows.filter(row => row.in_plan && row.next_step?.kind === "decision").length;
-}
-
-/** Initial group expansion: groups with a decision step expanded; all expanded while at most 50 cases match. */
-export function initialExpandedGroups(page: Pick<DocumentRowsPage, "groups" | "group_count">): Set<string> {
-  const expandAll = page.group_count <= COLLAPSE_GROUPS_ABOVE;
-  return new Set(page.groups.filter(group => expandAll || decisionCount(group) > 0).map(group => group.case_id));
-}
+import { isActiveRow } from "./stageLabels";
 
 /** "case-0101 · en source + 2 translations"; without the source row in view "case-0101 · 3 languages". */
 export function caseHeaderText(group: Pick<DocumentGroupView, "case_id" | "rows" | "language_count">): string {
@@ -46,140 +35,131 @@ export function caseHeaderText(group: Pick<DocumentGroupView, "case_id" | "rows"
   return `${group.case_id} · ${source.language} source${translations > 0 ? ` + ${plural(translations, "translation")}` : ""}`;
 }
 
-/** Languages of the group's shown rows that are not in the plan, source first. */
-export function notInPlanLanguages(group: Pick<DocumentGroupView, "rows">): string[] {
-  return group.rows.filter(row => !row.in_plan).map(row => row.language);
+/** The page's text selection as the table needs it (`"{case}:{language}"` keys, list order passed back). */
+export interface TableSelection {
+  keys: ReadonlySet<string>;
+  caseState: (caseKeys: readonly string[]) => "all" | "some" | "none";
+  select: (key: string, mode: GroupSelectMode, order: readonly string[]) => void;
+  selectCase: (caseKeys: readonly string[], mode: GroupSelectMode, order: readonly string[]) => void;
 }
 
-/** A table line: a language row or the collapsed "not in plan" line of a case. */
-type Line = { kind: "row"; row: DocumentRowView } | { kind: "hidden"; caseId: string; languages: string[]; shown: boolean };
-const lineKey = (line: Line): string => (line.kind === "row" ? rowKeyOf(line.row) : `${line.caseId}:not-in-plan`);
+/** Server sorts the headers can set (VD10). */
+export type HeaderSort = "case" | "-case" | "activity" | "-activity";
+
+/** The route sort as the header state: Text = case ID, Last activity = newest first ("activity"). */
+export function headerSortOf(sort: DocumentRowsRequest["sort"] | undefined): DataTableSort | undefined {
+  switch (sort ?? "case") {
+    case "case": return { column: "text", direction: "asc" };
+    case "-case": return { column: "text", direction: "desc" };
+    case "activity": return { column: "activity", direction: "desc" };
+    case "-activity": return { column: "activity", direction: "asc" };
+    default: return undefined;
+  }
+}
+
+/** The sort after a click on a header: Text toggles case ↔ -case, Last activity newest ↔ oldest first. */
+export function nextHeaderSort(column: string, sort: DocumentRowsRequest["sort"] | undefined): HeaderSort {
+  const current = sort ?? "case";
+  if (column === "activity") return current === "activity" ? "-activity" : "activity";
+  return current === "case" ? "-case" : "case";
+}
 
 export interface DocumentsTableProps {
   page: DocumentRowsPage;
   projectKey: string;
   query: ProjectDocumentsQuery;
-  expandedGroups: ReadonlySet<string>;
-  onToggleGroup: (caseId: string) => void;
   /** Toggle membership of `"{case}:{language}"` in `query.open`. */
   onToggleRow: (key: string) => void;
-  /** Cases whose not-in-plan rows are shown. */
-  shownNotInPlan: ReadonlySet<string>;
-  onToggleNotInPlan: (caseId: string) => void;
-  /** Plan chips of a row (built by the page). */
-  renderPlan?: (row: DocumentRowView, group: DocumentGroupView) => ReactNode;
-  /** Inline notice under a row (plan confirmations, resolve options), also while collapsed. */
+  /** Inline notice under a row (plan confirmations, resolve options), also while closed. */
   renderRowNotice?: (row: DocumentRowView) => ReactNode | null;
   /** Expanded content of an open row (built by the page). */
   renderExpanded?: (row: DocumentRowView) => ReactNode;
-  /** Visit badge of a row, shown next to its row header (also while collapsed). */
+  /** Visit badge of a row, shown in its row header. */
   rowBadge?: (row: DocumentRowView) => ReactNode;
-  /** The row action of a lead-owned step. */
+  /** A lead action of the row (first step's button or a "+n" menu item). */
   onAction?: (row: DocumentRowView, step: NextStepView) => void;
+  /** Plan saves for the "Plan…" popover (VD2). */
+  planSaves?: PlanSaves;
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
-  /** Case checkboxes in the case header rows (spec D17); the page owns the selection. */
-  groupSelection?: GroupSelection;
+  /** Row and case checkboxes (VD4); the page owns the selection. */
+  selection?: TableSelection;
+  /** Current server sort; with `onSort` the Text and Last activity headers sort (VD10). */
+  sort?: DocumentRowsRequest["sort"];
+  onSort?: (sort: HeaderSort) => void;
 }
 
 export function DocumentsTable({
-  page, projectKey, query, expandedGroups, onToggleGroup, onToggleRow, shownNotInPlan, onToggleNotInPlan,
-  renderPlan, renderRowNotice, renderExpanded, rowBadge, onAction, onNavigate, busy, empty, groupSelection,
+  page, projectKey, query, onToggleRow, renderRowNotice, renderExpanded, rowBadge, onAction, planSaves, onNavigate, busy, empty, selection, sort, onSort,
 }: DocumentsTableProps): JSX.Element {
   const baseId = useId();
   const open = useMemo(() => new Set(query.open ?? []), [query.open]);
+  const order = useMemo(() => page.groups.flatMap(group => group.rows.map(rowKeyOf)), [page.groups]);
   const groupOf = useMemo(() => new Map(page.groups.map(group => [group.case_id, group])), [page.groups]);
-
-  // Stable DOM IDs per row key: the group header controls its rows, a row controls its region.
-  const ids = useMemo(() => {
-    const map = new Map<string, { row: string; region: string }>();
-    page.groups.forEach((group, groupIndex) => group.rows.forEach((row, rowIndex) => {
-      map.set(rowKeyOf(row), { row: `${baseId}-g${groupIndex}-r${rowIndex}`, region: `${baseId}-g${groupIndex}-r${rowIndex}-expanded` });
-    }));
+  const regionIds = useMemo(() => {
+    const map = new Map<string, string>();
+    page.groups.forEach((group, groupIndex) => group.rows.forEach((row, rowIndex) => map.set(rowKeyOf(row), `${baseId}-g${groupIndex}-r${rowIndex}-expanded`)));
     return map;
   }, [page.groups, baseId]);
 
   const isOpen = (row: DocumentRowView) => open.has(rowKeyOf(row));
-  const rowCell = (render: (row: DocumentRowView) => ReactNode) => (line: Line) => (line.kind === "row" ? render(line.row) : null);
+  const sourceOf = (row: DocumentRowView) => groupOf.get(row.case_id)?.rows.find(entry => entry.is_source)?.language ?? null;
 
-  const columns: Column<Line>[] = [
+  const columns: Column<DocumentRowView>[] = [
     {
       id: "text",
-      header: "Text · language",
+      header: "Text",
       rowHeader: true,
-      cell: line => (line.kind === "hidden"
-        ? <span className="documents-not-in-plan">
-          {`${line.languages.join(", ")} not in plan · `}
-          <button type="button" id={documentsNotInPlanId(line.caseId)} className="documents-not-in-plan-toggle" aria-expanded={line.shown}
-            aria-label={notInPlanToggleLabel(line.caseId, line.languages, line.shown)} onClick={() => onToggleNotInPlan(line.caseId)}>{line.shown ? "hide" : "show"}</button>
-        </span>
-        : <RowHeaderCell
-          row={line.row}
-          projectKey={projectKey}
-          query={query}
-          expanded={isOpen(line.row)}
-          controls={isOpen(line.row) && renderExpanded ? ids.get(rowKeyOf(line.row))?.region : undefined}
-          onToggleRow={onToggleRow}
-          onNavigate={onNavigate}
-          badge={rowBadge?.(line.row)}
-        />),
+      sortable: true,
+      cell: row => <RowHeaderCell row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} badge={rowBadge?.(row)} />,
     },
-    { id: "plan", header: "Plan", cell: rowCell(row => renderPlan?.(row, groupOf.get(row.case_id)!) ?? null) },
-    { id: "step", header: "Next step", cell: rowCell(row => <NextStepCell row={row} onToggleRow={key => { if (!open.has(key)) onToggleRow(key); }} />) },
-    { id: "owner", header: "Owner", cell: rowCell(row => <OwnerCell row={row} />) },
-    { id: "action", header: "Action", cell: rowCell(row => <ActionCell row={row} onAction={onAction} />) },
-    { id: "activity", header: "Last activity", cell: rowCell(row => <LastActivityCell iso={row.last_activity_at} />) },
+    { id: "review", header: "Review", cell: row => <RowStageCell row={row} stage="review" sourceLanguage={sourceOf(row)} /> },
+    { id: "annotation", header: "Annotation", cell: row => <RowStageCell row={row} stage="annotation" /> },
+    { id: "final", header: "Final", cell: row => <RowStageCell row={row} stage="final" /> },
+    { id: "waiting", header: "Waiting on", cell: row => <WaitingOnCell row={row} /> },
+    {
+      id: "action",
+      header: <span className="visually-hidden">Action</span>,
+      cell: row => <RowActionCell row={row} onAction={onAction}
+        plan={planSaves ? { saves: planSaves, groupRevision: groupOf.get(row.case_id)?.plan_revision ?? 1 } : undefined} />,
+    },
+    {
+      id: "activity",
+      header: "Last activity",
+      sortable: true,
+      cell: row => <span className="documents-activity-cell">
+        <LastActivityCell iso={row.last_activity_at} />
+        <HistoryToggle row={row} expanded={isOpen(row)} controls={isOpen(row) && renderExpanded ? regionIds.get(rowKeyOf(row)) : undefined} onToggleRow={onToggleRow} />
+      </span>,
+    },
   ];
 
-  const groups: DataTableGroup<Line>[] = page.groups.map(group => {
-    const expanded = expandedGroups.has(group.case_id);
-    const hidden = notInPlanLanguages(group);
-    const shown = shownNotInPlan.has(group.case_id);
-    const lines: Line[] = group.rows.filter(row => row.in_plan).map(row => ({ kind: "row", row }));
-    if (hidden.length) {
-      lines.push({ kind: "hidden", caseId: group.case_id, languages: hidden, shown });
-      if (shown) lines.push(...group.rows.filter(row => !row.in_plan).map(row => ({ kind: "row" as const, row })));
-    }
-    const controls = expanded ? lines.flatMap(line => (line.kind === "row" ? [ids.get(rowKeyOf(line.row))?.row] : [])).filter(Boolean).join(" ") : "";
-    const decisions = decisionCount(group);
+  const groups: DataTableGroup<DocumentRowView>[] = page.groups.map(group => {
     const title = caseHeaderText(group);
     return {
       key: group.case_id,
-      expanded,
-      rows: lines,
-      headerProps: { className: decisions ? "documents-group documents-group--issue" : "documents-group" },
+      expanded: true,
+      rows: group.rows,
+      headerProps: { className: "documents-group" },
       header: (
-        <span className="documents-group-header">
-          <button
-            type="button"
-            id={documentsGroupId(group.case_id)}
-            className="documents-group-toggle target-min"
-            aria-expanded={expanded}
-            aria-controls={controls || undefined}
-            aria-label={title}
-            onClick={() => onToggleGroup(group.case_id)}
-          >
-            <IconChevronRight className="disclosure-chevron" />
-            <ShortId value={group.case_id} />
-            <span className="documents-group-meta">{title.slice(group.case_id.length)}</span>
-          </button>
-          {decisions > 0 && <StatusBadge tone="warning">{plural(decisions, "decision")}</StatusBadge>}
-          {group.last_activity_at && <span className="documents-group-activity"><LastActivityCell iso={group.last_activity_at} /></span>}
+        <span id={documentsGroupId(group.case_id)} tabIndex={-1} className="documents-group-label">
+          <ShortId value={group.case_id} />
+          <span className="documents-group-meta">{title.slice(group.case_id.length)}</span>
         </span>
       ),
     };
   });
 
-  const below = (line: Line): ReactNode | null => {
-    if (line.kind !== "row") return null;
-    const row = line.row;
+  const caseKeys = (caseId: string) => (groupOf.get(caseId)?.rows ?? []).map(rowKeyOf);
+
+  const below = (row: DocumentRowView): ReactNode | null => {
     const notice = renderRowNotice?.(row) ?? null;
     const expandedContent = isOpen(row) && renderExpanded ? renderExpanded(row) : null;
     if (notice == null && expandedContent == null) return null;
     return <>
       {notice != null && <div className="documents-row-notice-slot">{notice}</div>}
-      {expandedContent != null && <div id={ids.get(rowKeyOf(row))?.region} className="documents-expanded-slot">{expandedContent}</div>}
+      {expandedContent != null && <div id={regionIds.get(rowKeyOf(row))} className="documents-expanded-slot">{expandedContent}</div>}
     </>;
   };
 
@@ -190,14 +170,26 @@ export function DocumentsTable({
       columns={columns}
       rows={[]}
       groups={groups}
-      rowKey={lineKey}
-      rowProps={line => (line.kind === "row"
-        ? { id: ids.get(rowKeyOf(line.row))?.row, className: line.row.in_plan ? "documents-row" : "documents-row documents-row--not-in-plan" }
-        : { className: "documents-not-in-plan-row" })}
+      rowKey={rowKeyOf}
+      rowProps={row => ({ className: isActiveRow(row) ? "documents-row" : "documents-row documents-row--not-in-plan" })}
+      rowEdge={row => (rowNeedsDecision(row) ? "decision" : null)}
       renderExpanded={below}
       busy={busy}
       empty={empty}
-      groupSelection={groupSelection}
+      groupLayout="label"
+      rowSelection={selection ? {
+        selected: row => selection.keys.has(rowKeyOf(row)),
+        onSelect: (row, mode) => selection.select(rowKeyOf(row), mode, order),
+        label: row => `Select ${rowName(row)}`,
+      } : undefined}
+      groupSelection={selection ? {
+        selected: caseId => selection.caseState(caseKeys(caseId)) === "all",
+        state: caseId => selection.caseState(caseKeys(caseId)),
+        onSelect: (caseId, mode) => selection.selectCase(caseKeys(caseId), mode, order),
+        checkboxLabel: caseId => `Select ${caseId} (${plural(groupOf.get(caseId)?.rows.length ?? 0, "text")})`,
+      } : undefined}
+      sort={onSort ? headerSortOf(sort) : undefined}
+      onSort={onSort ? column => onSort(nextHeaderSort(column, sort)) : undefined}
     />
   );
 }

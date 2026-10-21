@@ -102,7 +102,7 @@ export interface PlanSaves {
   revisionOf: (caseId: string, groupRevision: number) => number;
   /**
    * The rows refetched: drop local flags older than the group's revision and, when a save moved
-   * the row out of view and focus fell to the body, focus the case's "not in plan · show" or header.
+   * the row out of view and focus fell to the body, focus the case's group label.
    */
   refreshed: (groups: readonly { case_id: string; plan_revision: number }[]) => void;
 }

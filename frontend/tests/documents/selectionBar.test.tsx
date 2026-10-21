@@ -17,6 +17,9 @@ const preview = (overrides: Partial<BulkPreview> = {}): BulkPreview => ({
   revisions: { "case-0101": 1 }, rule_on: true, ...overrides,
 });
 const caseIds = Array.from({ length: 20 }, (_, index) => `case-${String(101 + index).padStart(4, "0")}`);
+/** One de text per case. */
+const textKeys = caseIds.map(caseId => `${caseId}:de`);
+const rows = caseIds.map(caseId => ({ case_id: caseId, language: "de" }));
 const result: BulkResult = {
   changed_rows: 20, revisions: { "case-0101": 2 }, withdrawn: [],
   undo: { rows: caseIds.map(caseId => ({ case_id: caseId, language: "de", review: false, annotate: false, restored_revision: null })), revisions: { "case-0101": 2 } },
@@ -36,10 +39,10 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function Harness(props: Partial<SelectionBarProps> & { initial?: readonly string[] }) {
-  const [ids, setIds] = useState<ReadonlySet<string>>(new Set(props.initial ?? caseIds));
+  const [keys, setKeys] = useState<ReadonlySet<string>>(new Set(props.initial ?? textKeys));
   const { toast, show, dismiss } = useToast();
   return <div>
-    <SelectionBar projectKey="p" ids={ids} filters={filters} onClear={() => setIds(new Set())} onAssign={vi.fn()} showToast={show}
+    <SelectionBar projectKey="p" keys={keys} filters={filters} onClear={() => setKeys(new Set())} onAssign={vi.fn()} showToast={show}
       onAnnounce={vi.fn()} onChanged={vi.fn()} {...props} />
     <Toast toast={toast} onDismiss={dismiss} />
   </div>;
@@ -49,12 +52,30 @@ const bar = () => screen.getByRole("region", { name: "Selection" });
 
 it("shows count, common next step, hidden count and Clear selection", async () => {
   render(<Harness />);
-  expect(within(bar()).getByText("20 cases selected")).toBeTruthy();
+  expect(within(bar()).getByText("20 texts in 20 cases selected")).toBeTruthy();
   expect(await within(bar()).findByText("· next step: Assign translation review (de)")).toBeTruthy();
   expect(within(bar()).getByText("· 3 not shown with these filters")).toBeTruthy();
-  expect(api.selectionSummary).toHaveBeenCalledWith("p", caseIds, filters);
+  expect(api.selectionSummary).toHaveBeenCalledWith("p", { rows }, filters);
   fireEvent.click(within(bar()).getByRole("button", { name: "Clear selection" }));
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
+});
+
+it("counts texts in cases", () => {
+  render(<Harness initial={["case-0101:en", "case-0101:de", "case-0102:de"]} />);
+  expect(within(bar()).getByText("3 texts in 2 cases selected")).toBeTruthy();
+  cleanup();
+  render(<Harness initial={["case-0101:de"]} />);
+  expect(within(bar()).getByText("1 text in 1 case selected")).toBeTruthy();
+});
+
+it("sends rows to selection-summary and bulk plan", async () => {
+  render(<Harness initial={["case-0101:en", "case-0101:de", "case-0102:de"]} />);
+  const selected = [{ case_id: "case-0101", language: "en" }, { case_id: "case-0101", language: "de" }, { case_id: "case-0102", language: "de" }];
+  await waitFor(() => expect(api.selectionSummary).toHaveBeenCalledWith("p", { rows: selected }, filters));
+  fireEvent.click(within(bar()).getByRole("button", { name: "Annotate only" }));
+  expect(api.saveWorkPlans).toHaveBeenCalledWith("p", { rows: selected, preset: "annotate_only", confirm: false });
+  // The saved message counts the cases of the selected texts.
+  expect(await screen.findByText(/^Plan saved for 2 cases/)).toBeTruthy();
 });
 
 it("bulk Undo after an intervening assignment shows the message and the normal confirmation", async () => {
@@ -92,13 +113,13 @@ it("Review + annotate translations saves at once without a dialog when nothing i
   const onRevisions = vi.fn();
   render(<Harness onRevisions={onRevisions} />);
   fireEvent.click(within(bar()).getByRole("button", { name: "Review + annotate translations" }));
-  expect(api.saveWorkPlans).toHaveBeenCalledWith("p", { case_ids: caseIds, preset: "review_and_annotate_translations", confirm: false });
+  expect(api.saveWorkPlans).toHaveBeenCalledWith("p", { rows, preset: "review_and_annotate_translations", confirm: false });
   const toast = await screen.findByText("Plan saved for 20 cases · de: review + annotate");
   expect(toast.closest(".ui-toast")?.querySelector("button")?.textContent).toBe("Undo");
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(onRevisions).toHaveBeenCalledWith({ "case-0101": 2 });
   // The selection stays.
-  expect(within(bar()).getByText("20 cases selected")).toBeTruthy();
+  expect(within(bar()).getByText("20 texts in 20 cases selected")).toBeTruthy();
   // Withdrawn tasks: the toast notes that Undo does not restore them.
   vi.mocked(api.saveWorkPlans).mockResolvedValueOnce({ ...result, withdrawn: [{ assignment_id: 1, case_id: "case-0101", language: "de", task: "annotate", person: { pseudonym: "ann-0004", is_me: false } }] });
   fireEvent.click(within(bar()).getByRole("button", { name: "Annotate only" }));
@@ -112,7 +133,7 @@ it("Annotate only opens the plan dialog with the acceptance section when transla
   render(<Harness />);
   fireEvent.click(within(bar()).getByRole("button", { name: "Annotate only" }));
   const dialog = await screen.findByRole("dialog", { name: "Work plan · 20 cases" });
-  expect(api.previewWorkPlans).toHaveBeenCalledWith("p", { case_ids: caseIds, preset: "annotate_only", confirm: false });
+  expect(api.previewWorkPlans).toHaveBeenCalledWith("p", { rows, preset: "annotate_only", confirm: false });
   expect(await within(dialog).findByText("de: 12 of 20 translations are not marked as reviewed in the package. Annotation needs an accepted translation.")).toBeTruthy();
   expect(within(dialog).getByLabelText("These translations were reviewed outside Ontocurator — accept them as they are")).toBeTruthy();
   expect(within(dialog).getByRole("button", { name: "Annotate, de, on" })).toBeTruthy();
@@ -129,7 +150,7 @@ it("opens the plan dialog for Plan… and keeps the selection after save", async
   await act(async () => { fireEvent.click(save); });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(await screen.findByText("Plan saved for 20 cases · de: review + annotate")).toBeTruthy();
-  expect(within(bar()).getByText("20 cases selected")).toBeTruthy();
+  expect(within(bar()).getByText("20 texts in 20 cases selected")).toBeTruthy();
 });
 
 it("is a labelled region Selection and bottom-sticky below 700 px", () => {
