@@ -100,10 +100,19 @@ CellNote = Literal[
     "not_exported",
     "carried_on_submit",
     "v2_not_annotated",
+    # Review re_review: why the translation is reviewed again.
+    "correction",
+    "new_review",
+    "source_changed",  # also Final may_be_outdated
+    # Final: kind of the final result ("Round 1 · Ana Weber" /
+    # "Consolidation · Luc Martin").
+    "round",
+    "consolidation",
 ]
 CellName = Literal["review", "annotation", "final"]
 
-# Spec: the paused cell quotes at most 60 characters of the report.
+# Spec: the paused cell quotes at most 60 characters of the report; a cut
+# excerpt ends in "…" (so it is at most 61 characters long).
 PAUSED_EXCERPT_LENGTH = 60
 
 _ACCEPTED_NOTES: Mapping[str, CellNote] = {
@@ -116,10 +125,21 @@ _ACCEPTED_NOTES: Mapping[str, CellNote] = {
 
 @dataclass(frozen=True)
 class StageFacts:
+    """Facts of one row the cells read on top of ``step``.
+
+    "Decided" (VD3) is only ``step.decided``. Submissions: the caller fills
+    ``submissions`` with the eligible submissions (minimum over the row's
+    target versions; on the target version only, without sources whose
+    text-change resolution is carried, moved or handed_over, spec VD16) and
+    ``annotators_submitted`` with their authors. The Annotation and the Final
+    cell both count ``submissions``; ``annotators_submitted`` only names
+    people.
+    """
+
     step: StepFacts
-    decided: bool = True
     review_people: tuple[int, ...] = ()  # open translation review(s)
     review_reason: Literal["correction", "new_review", "source_changed"] | None = None
+    review_reason_text: str | None = None  # free text, e.g. "Dosis prüfen"
     review_decided_by: int | None = None  # latest decision on the newest version
     review_decided_at: datetime | None = None
     accepted_how: Literal["unchanged", "corrected", "package", "external"] | None = None
@@ -127,7 +147,7 @@ class StageFacts:
     newest_version: int = 1
     newest_origin: str | None = None  # VariantOrigin of the target
     annotators_open: tuple[int, ...] = ()  # on the target(s), not held
-    annotators_submitted: tuple[int, ...] = ()  # on the target(s)
+    annotators_submitted: tuple[int, ...] = ()  # authors of ``submissions``
     round_ordinal: int | None = None  # the one open round, if exactly one
     findings: int | None = None  # finding_count when exactly one submission
     annotation_reviewers: tuple[int, ...] = ()
@@ -148,13 +168,23 @@ class StageFacts:
     final_round_ordinal: int | None = None
     final_version: int | None = None
     final_on_newest: bool = True
-    submissions: int = 0  # eligible submissions (Final "n submissions"): on the target version only, without
-    # sources whose text-change resolution is carried, moved or handed_over (spec VD16)
+    submissions: int = 0  # eligible submissions, see the class docstring
     parallel_roots: bool = False
 
 
 @dataclass(frozen=True)
 class CellDetail:
+    """Muted second line of a cell.
+
+    ``assigned`` / ``total``: in Review with parallel roots they count
+    versions ("1 of 2 versions in review": versions in review, or accepted
+    versions, of ``total`` roots); in Annotation and Final the counts are the
+    minimum over the row's target versions ("1 of 2 assigned", "1 of 2
+    submitted"). ``reason`` is free text only (Review re_review: "Dosis
+    prüfen"); codes go to ``note``, Final ``confirm`` cause codes to
+    ``causes``.
+    """
+
     people: tuple[int, ...] = ()
     assigned: int | None = None
     target: int | None = None
@@ -168,6 +198,7 @@ class CellDetail:
     reason: str | None = None
     note: CellNote | None = None
     matching: int | None = None  # Final "4 of 6 match" (O3b fills for shown rows)
+    causes: tuple[str, ...] = ()  # Final confirm: unacknowledged cause codes
     compared: int | None = None
     # "Round 2" (Annotation in progress) / "Round 1 · Ana Weber" (Final).
     round_ordinal: int | None = None
@@ -240,18 +271,23 @@ def _held(facts: StageFacts) -> bool:
     )
 
 
+def _excerpt(text: str | None) -> str | None:
+    if text is None or len(text) <= PAUSED_EXCERPT_LENGTH:
+        return text
+    return text[:PAUSED_EXCERPT_LENGTH] + "…"
+
+
 def _paused(facts: StageFacts) -> StageCell:
-    excerpt = facts.paused_excerpt
     return _cell(
         "paused",
         "decision",
         people=() if facts.paused_by is None else (facts.paused_by,),
-        excerpt=None if excerpt is None else excerpt[:PAUSED_EXCERPT_LENGTH],
+        excerpt=_excerpt(facts.paused_excerpt),
     )
 
 
 def _undecided(facts: StageFacts) -> bool:
-    return not in_plan(facts.step) and not (facts.decided and facts.step.decided)
+    return not in_plan(facts.step) and not facts.step.decided
 
 
 def _accepted(step: StepFacts) -> bool:
@@ -288,7 +324,8 @@ def _review(facts: StageFacts, codes: frozenset[str]) -> StageCell:
                 "re_review",
                 "running",
                 people=people,
-                reason=facts.review_reason,
+                note=facts.review_reason,
+                reason=facts.review_reason_text,
                 **roots,
             )
         return _cell("in_progress", "running", people=people, **roots)
@@ -335,9 +372,10 @@ def _review(facts: StageFacts, codes: frozenset[str]) -> StageCell:
         )
     if not step.review:
         return _cell("not_planned", "none")
-    # Review on, not accepted and no rule matched (e.g. reviewed and waiting
-    # for its effect): the lead still has to assign a reviewer.
-    return _cell("unassigned", "todo", version=facts.newest_version)
+    # Review on, not accepted, no open review and no step names this cell
+    # (e.g. reviewed and waiting for the decision's effect): nothing for the
+    # lead to do here.
+    return _cell("in_progress", "waiting", version=facts.newest_version)
 
 
 def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
@@ -399,7 +437,7 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             version=newest,
             note="carried_on_submit",
         )
-    submitted = len(facts.annotators_submitted)
+    submitted = facts.submissions
     if step.open_annotation_reviews or facts.annotation_reviewers:
         return _cell(
             "in_review",
@@ -439,7 +477,9 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             version=old[0].from_version if on_old else newest,
             **waiting_note,
         )
-    return _cell("unassigned", "todo", **waiting_note)
+    # Enough assignments, nothing open and nothing submitted: no step names
+    # this cell (an application invariant broke), so it is no lead task.
+    return _cell("submitted", "done", version=newest, **waiting_note)
 
 
 def _people(items: Sequence[OldItem]) -> tuple[int, ...]:
@@ -450,7 +490,7 @@ def _final_detail(facts: StageFacts) -> dict[str, Any]:
     return {
         "people": () if facts.final_author is None else (facts.final_author,),
         "round_ordinal": facts.final_round_ordinal,
-        "reason": facts.final_kind,
+        "note": facts.final_kind,
         "version": None if facts.final_on_newest else facts.final_version,
     }
 
@@ -459,12 +499,17 @@ def _final(facts: StageFacts, codes: frozenset[str]) -> StageCell:
     step = facts.step
     if not step.annotate:
         if step.has_final:
-            return _cell("final", "done", note="not_exported", **_final_detail(facts))
+            # "not exported" outranks the kind note; round_ordinal stays.
+            detail = {**_final_detail(facts), "note": "not_exported"}
+            return _cell("final", "done", **detail)
         return _cell("none", "none")
     if "confirm_final" in codes:
-        if not facts.final_on_newest:
+        if (
+            "SELECTED_TEXT_CORRECTED" in facts.final_causes
+            and not facts.final_on_newest
+        ):
             return _cell("old_text", "decision", **_final_detail(facts))
-        return _cell("confirm", "decision", reason=",".join(facts.final_causes) or None)
+        return _cell("confirm", "decision", causes=facts.final_causes)
     if "choose_final" in codes:
         return _cell("choose", "decision", submitted=facts.submissions)
     if step.has_final:
@@ -472,7 +517,7 @@ def _final(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             return _cell(
                 "may_be_outdated",
                 "waiting",
-                reason="source_changed",
+                note="source_changed",
                 from_version=facts.source_changed_from,
             )
         return _cell("final", "done", **_final_detail(facts))
@@ -482,7 +527,7 @@ def _final(facts: StageFacts, codes: frozenset[str]) -> StageCell:
         or facts.consolidators
     ):
         return _cell("after_review", "waiting")
-    if facts.submissions or facts.annotators_submitted or facts.old_submitted:
+    if facts.submissions or facts.old_submitted:
         return _cell("after_annotation", "waiting")
     return _cell("none", "none")
 

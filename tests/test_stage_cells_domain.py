@@ -67,8 +67,6 @@ def facts(**overrides: Any) -> StageFacts:
     }
     stage: dict[str, Any] = {"accepted_how": "unchanged"}
     stage.update({k: v for k, v in overrides.items() if k not in _STEP_FIELDS})
-    if "decided" in overrides:
-        stage["decided"] = overrides["decided"]
     return StageFacts(step=StepFacts(**step), **stage)
 
 
@@ -290,7 +288,8 @@ SCENARIOS: list[tuple[str, StageFacts, tuple[str, ...], dict[str, dict[str, Any]
             "final": {
                 "people": (ANA,),
                 "round_ordinal": 1,
-                "reason": "round",
+                "note": "round",
+                "reason": None,
                 "version": None,
             },
         },
@@ -307,7 +306,7 @@ SCENARIOS: list[tuple[str, StageFacts, tuple[str, ...], dict[str, dict[str, Any]
             submissions=2,
         ),
         ("accepted", "done", "submitted", "done", "final", "done"),
-        {"final": {"people": (LUC,), "reason": "consolidation"}},
+        {"final": {"people": (LUC,), "note": "consolidation"}},
     ),
     (
         "11-en-source",
@@ -426,7 +425,7 @@ SCENARIOS: list[tuple[str, StageFacts, tuple[str, ...], dict[str, dict[str, Any]
         {
             "review": {"from_version": 1},
             "annotation": {"version": 1},
-            "final": {"reason": "source_changed"},
+            "final": {"note": "source_changed", "from_version": 1},
         },
     ),
     (
@@ -435,13 +434,18 @@ SCENARIOS: list[tuple[str, StageFacts, tuple[str, ...], dict[str, dict[str, Any]
             open_translation_reviews=1,
             review_people=(ANA,),
             review_reason="correction",
+            review_reason_text="Dosis prüfen",
             annotation_assignments=1,
             open_annotations=1,
             annotators_open=(TOM,),
         ),
         ("re_review", "running", "in_progress", "running", "none", "none"),
         {
-            "review": {"people": (ANA,), "reason": "correction"},
+            "review": {
+                "people": (ANA,),
+                "note": "correction",
+                "reason": "Dosis prüfen",
+            },
             "annotation": {"people": (TOM,), "version": 1, "note": "may_change"},
         },
     ),
@@ -574,7 +578,8 @@ def test_check_failed_and_source_changed_use_decision_tone_with_assign_steps() -
             review_reason="source_changed",
         )
     )
-    assert (c.review.state, c.review.detail.reason) == ("re_review", "source_changed")
+    assert (c.review.state, c.review.detail.note) == ("re_review", "source_changed")
+    assert c.review.detail.reason is None
 
 
 def test_final_cell_before_decision() -> None:
@@ -636,7 +641,45 @@ def test_final_cell_before_decision() -> None:
         )
     )
     assert (c.final.state, c.final.tone) == ("confirm", "decision")
-    assert c.final.detail.reason == "SELECTED_NEWER_RESULT"
+    assert c.final.detail.causes == ("SELECTED_NEWER_RESULT",)
+    assert (c.final.detail.reason, c.final.detail.note) == (None, None)
+    # A final kept on v1 with another cause than a text correction: confirm.
+    c = cells(
+        facts(
+            newest_version=2,
+            accepted_how="corrected",
+            accepted_from_version=1,
+            annotation_assignments=1,
+            annotators_submitted=(ANA,),
+            submissions=1,
+            has_final=True,
+            unacknowledged_final_cause=True,
+            final_causes=("SELECTED_NEWER_RESULT",),
+            final_kind="round",
+            final_author=ANA,
+            final_round_ordinal=1,
+            final_version=1,
+            final_on_newest=False,
+        )
+    )
+    assert (c.final.state, c.final.tone) == ("confirm", "decision")
+    assert c.final.detail.causes == ("SELECTED_NEWER_RESULT",)
+    # The text correction among several causes makes it old_text.
+    c = cells(
+        facts(
+            newest_version=2,
+            has_final=True,
+            unacknowledged_final_cause=True,
+            final_causes=("SELECTED_NEWER_RESULT", "SELECTED_TEXT_CORRECTED"),
+            final_kind="round",
+            final_author=ANA,
+            final_round_ordinal=1,
+            final_version=1,
+            final_on_newest=False,
+        )
+    )
+    assert (c.final.state, c.final.detail.version) == ("old_text", 1)
+    assert c.final.detail.note == "round"
     # A kept final on an older version names its version.
     c = cells(
         facts(
@@ -719,7 +762,10 @@ def test_paused_translation_review_shows_in_review_cell() -> None:
     c = stage_cells(f, steps)
     assert (c.review.state, c.review.tone) == ("paused", "decision")
     assert c.review.detail.people == (ANA,)
-    assert c.review.detail.excerpt == "x" * 60
+    # Cut at 60 characters, "…" marks the cut.
+    assert c.review.detail.excerpt == "x" * 60 + "…"
+    exact = stage_cells(dataclasses.replace(f, paused_excerpt="y" * 60), steps)
+    assert exact.review.detail.excerpt == "y" * 60
     assert c.annotation.state == "not_planned"
     # The default for decide_report / resume_task is the annotation cell.
     assert STEP_CELL["decide_report"] == STEP_CELL["resume_task"] == "annotation"
@@ -760,7 +806,7 @@ def test_paused_translation_review_shows_in_review_cell() -> None:
                 review_reason="new_review",
             ),
             ("re_review", "running", "unassigned", "todo", "none", "none"),
-            {"review": {"reason": "new_review", "people": (LUC,)}},
+            {"review": {"note": "new_review", "reason": None, "people": (LUC,)}},
             id="D25",
         ),
         pytest.param(
@@ -779,7 +825,7 @@ def test_paused_translation_review_shows_in_review_cell() -> None:
                 final_version=1,
             ),
             ("re_review", "running", "submitted", "done", "final", "done"),
-            {"review": {"reason": "correction"}},
+            {"review": {"note": "correction"}},
             id="D26",
         ),
     ],
@@ -872,12 +918,15 @@ def _valid(f: StepFacts) -> bool:
     )
 
 
-# "rejected" carries the edge of a decision row (spec: "rejected + edge").
-_ACTIONABLE = {"decision", "todo", "undecided", "rejected"}
+_ACTIONABLE = {"decision", "todo", "undecided"}
+# Cell states whose step arrives with O2a (rules 3a / 3b / 6a).
+_O2A_STATES = {"source_changed", "old_text_open", "old_text_submitted"}
 
 
 def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
-    checked = 0
+    """Each lead-owned step lands on an actionable cell, and each todo or
+    undecided cell has a step that names it."""
+    checked = reverse = 0
     item = (OldItem(TOM, 1),)
     for (
         review,
@@ -887,6 +936,7 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
         decided,
         per_text,
         held,
+        paused_task,
         cause,
         root,
         open_reviews,
@@ -903,6 +953,7 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
         (False, True),
         (1, 2),
         (None, "report", "pause"),
+        (None, "annotate", "translation_review"),
         (False, True),
         _ROOTS,
         (0, 1),
@@ -916,6 +967,12 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
             continue  # one representative: sources ignore translation facts
         if not decided and (review or annotate):
             continue  # in-plan rows ignore the flag
+        if (held is None) != (paused_task is None):
+            continue  # a held task exactly when a report or pause is open
+        if paused_task == "annotate" and not annotate:
+            continue
+        if paused_task == "translation_review" and (is_source or not open_reviews):
+            continue  # a held translation review is an open one
         status, decision = (None, None) if is_source else root
         step = StepFacts(
             review=review,
@@ -939,14 +996,10 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
         )
         if not _valid(step):
             continue
+        on_old = cause and extra == "submitted"
         f = StageFacts(
             step=step,
-            decided=decided,
-            paused_task=(
-                None
-                if held is None
-                else ("annotate" if annotate else "translation_review")
-            ),
+            paused_task=paused_task,
             old_open=item if extra == "open" else (),
             old_submitted=item if extra == "submitted" else (),
             finishing=item if extra == "finishing" else (),
@@ -954,13 +1007,21 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
                 1 if extra == "source_changed" and not is_source else None
             ),
             correction_waiting=extra == "waiting",
-            final_causes=("SELECTED_NEWER_RESULT",) if cause else (),
-            final_on_newest=not (cause and extra == "submitted"),
+            final_causes=(
+                ("SELECTED_TEXT_CORRECTED",)
+                if on_old
+                else ("SELECTED_NEWER_RESULT",)
+                if cause
+                else ()
+            ),
+            final_on_newest=not on_old,
             submissions=1 if missing_final else 0,
+            annotators_submitted=(ANA,) if missing_final else (),
         )
         steps = derive_steps(step)
         assert bool(steps) == (in_plan(step) or not decided), f
         c = stage_cells(f, steps)
+        codes = {s.code for s in steps}
         for s in steps:
             if s.kind not in ("decision", "assign"):
                 continue
@@ -968,9 +1029,29 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
             if name is None:
                 assert s.code == "needs_attention", (s, f)
                 continue
-            assert getattr(c, name).tone in _ACTIONABLE, (s.code, name, c, f)
+            tone = getattr(c, name).tone
+            # "rejected" carries the edge of a decision row ("rejected + edge"),
+            # only for the row's resolve_rejected (an assign step of the same
+            # rejected translation lands there too).
+            assert tone in _ACTIONABLE or (
+                tone == "rejected" and "resolve_rejected" in codes
+            ), (s.code, name, c, f)
             checked += 1
+        # Reverse: a todo cell is named by a step; an undecided cell (Review
+        # and Annotation both show "not decided") by the row's decide_plan.
+        named = {step_cell(s.code, f) for s in steps}
+        for name in ("review", "annotation", "final"):
+            cell = getattr(c, name)
+            if cell.state in _O2A_STATES:
+                continue
+            if cell.tone == "todo":
+                assert name in named, (name, cell, steps, f)
+                reverse += 1
+            elif cell.tone == "undecided":
+                assert [s.code for s in steps] == ["decide_plan"], (name, cell, f)
+                reverse += 1
     assert checked >= 500
+    assert reverse >= 500
 
 
 def test_step_cell_covers_every_step_code() -> None:
@@ -1001,3 +1082,29 @@ def test_reviewer_needed_statuses_unchanged() -> None:
     assert {"translated", "automatic_check_failed", "ready_for_review"} == set(
         REVIEWER_NEEDED_STATUSES
     )
+
+
+def test_reviewed_translation_without_step_waits() -> None:
+    # Reviewed, decision not yet in effect: no step names the Review cell.
+    f = facts(
+        translation_statuses=("reviewed",), newest_decisions=(None,), accepted_how=None
+    )
+    assert "assign_translation_review" not in {s.code for s in derive_steps(f.step)}
+    c = cells(f)
+    assert (c.review.state, c.review.tone) == ("in_progress", "waiting")
+
+
+def test_annotation_counts_eligible_submissions() -> None:
+    # Annotation and Final both count ``submissions``; the authors only name.
+    c = cells(
+        facts(
+            per_text=2,
+            annotation_assignments=2,
+            open_annotations=1,
+            annotators_open=(TOM,),
+            annotators_submitted=(ANA,),
+            submissions=0,
+        )
+    )
+    assert (c.annotation.state, c.annotation.detail.submitted) == ("in_progress", 0)
+    assert c.final.state == "none"
