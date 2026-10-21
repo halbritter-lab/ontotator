@@ -17,12 +17,12 @@ import {
   type VariantSummary,
 } from "../api/client";
 import { formatDateTime, labelFor, plural } from "../app/labels";
-import { routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
+import { DOCUMENT_FIELDS, routeHref, type NavigateOptions, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, Checkbox, Dialog, EmptyState, FilterChip, IconButton, IconClose, InlineMessage, StatusBadge, tabId, Toast, Toolbar, useMediaQuery, useToast, type GroupSelectMode } from "../ui";
 import { DocumentsTabs, TabEmptyState } from "../documents/DocumentsTabs";
-import { activeTab, chipsOf, clearAllPatch, filtersActive, rowsRequest, tabCount } from "../documents/filterModel";
+import { activeTab, chipsOf, clearAllPatch, filtersActive, listOf, rowsRequest, tabCount } from "../documents/filterModel";
 import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
@@ -38,7 +38,7 @@ import { SelectionBar } from "../documents/SelectionBar";
 import { documentsGroupId, documentsRowId, isPlainClick, type DocumentsRowPart, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
-import { MAX_SELECTION_CASES as MAX_SELECTION, textKeyOf, useTextSelection } from "../documents/useTextSelection";
+import { caseOfTextKey, languageOfTextKey, MAX_SELECTION_CASES as MAX_SELECTION, textKeyOf, useTextSelection } from "../documents/useTextSelection";
 import { useDocumentRows } from "../documents/useDocumentRows";
 import { notifyDocumentsChanged } from "../documents/documentsEvents";
 import { useRowSubmissions } from "../documents/useRowSubmissions";
@@ -59,14 +59,9 @@ export interface DocumentsPageProps {
   currentUser?: Pick<CurrentUser, "username" | "pseudonym">;
 }
 
-/** Narrow viewports render cards instead of the table. */
-export const NARROW_DOCUMENTS_QUERY = "(max-width: 700px)";
+/** Below 700 px the page renders cards instead of the table (the same breakpoint as popover sheets and the side panel). */
+export const NARROW_DOCUMENTS_QUERY = "(max-width: 699px)";
 
-const DOCUMENT_FIELDS = [
-  "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
-  "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
-  "review_state", "annotation_state", "final_state", "waiting_on", "panel",
-] as const;
 /** The search applies this long after the last keystroke (or at once on Enter and blur). */
 export const ID_FILTER_DELAY_MS = 300;
 /** The table's eight columns; "Select" and "Action" headers are visually hidden. */
@@ -84,15 +79,6 @@ function documentsQuery(query: ProjectDocumentsQuery): ProjectDocumentsQuery {
   return result;
 }
 
-/**
- * Server query for the rows endpoint (`filterModel.rowsRequest`); unknown values are dropped. `segment`
- * wins over `decision`; a decision filter wins over every `final` filter (the API takes one of them).
- * Comma-joined route values (facets, Progress links) are sent as lists.
- */
-export function rowsQuery(query: ProjectDocumentsQuery): DocumentRowsRequest {
-  return rowsRequest(query);
-}
-
 /** The Documents filters for the selection summary and the batch assign dialog: every filter except paging, sort and retain. */
 export function selectionFilters(request: DocumentRowsRequest): DocumentRowFilters {
   const { page: _page, sort: _sort, retain: _retain, ...filters } = request;
@@ -108,10 +94,8 @@ function batchSort(sort: DocumentRowsRequest["sort"]): "case" | "import" | "acti
 /** "Selection is limited to 2000 cases. Selected the first 2000." (texts of at most 2000 cases, VD4) */
 export const SELECTION_LIMITED = `Selection is limited to ${MAX_SELECTION} cases. Selected the first ${MAX_SELECTION}.`;
 
-const caseOfKey = (key: string): string => key.slice(0, Math.max(0, key.lastIndexOf(":")));
-const languageOfKey = (key: string): string => key.slice(key.lastIndexOf(":") + 1);
 const rowElement = (key: string, part: DocumentsRowPart): HTMLElement | null =>
-  document.getElementById(documentsRowId(caseOfKey(key), languageOfKey(key), part));
+  document.getElementById(documentsRowId(caseOfTextKey(key), languageOfTextKey(key), part));
 
 /**
  * Resolve options of a row: rule 4 "Resolve…" or rule 4a "Assign review or accept…". They render inline
@@ -151,7 +135,7 @@ export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
 function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTranslationStatus = false, currentUser }: DocumentsPageProps): JSX.Element {
   const narrow = useMediaQuery(NARROW_DOCUMENTS_QUERY);
   const query = documentsQuery(route);
-  const request = rowsQuery(query);
+  const request = rowsRequest(query);
   const requestIdentity = JSON.stringify(request);
   const filterIdentity = JSON.stringify({ ...request, page: undefined, case: undefined });
   // Visit state (Resolved / Changed badges) exists only under a decision or segment filter; it is keyed
@@ -160,16 +144,19 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const [retainState, setRetainState] = useState<{ identity: string; keys: readonly string[] } | null>(null);
   const retain = !decisionActive ? []
     : retainState?.identity === filterIdentity ? retainState.keys : retainedKeys(projectKey, filterIdentity);
-  // `useDocumentRows` is typed with one value per filter; the client sends lists as repeated parameters.
-  const rows = useDocumentRows(projectKey, (retain.length ? { ...request, retain: [...retain] } : request) as DocumentRowsQuery);
-  const page: DocumentRowsPage | null = rows.page;
-  // Visit baseline for NEW (VD6): once per mount (the component is keyed by project and user), not on refetch, tab or filter change.
+  // Visit baseline for NEW (VD6): once per mount (the component is keyed by project and user), not on refetch, tab or
+  // filter change. The first rows request waits for it (or its failure), so NEW never compares against an older baseline.
+  const [visitRecorded, setVisitRecorded] = useState(false);
   const visited = useRef(false);
   useEffect(() => {
     if (visited.current) return;
     visited.current = true;
-    void api.recordDocumentsVisit(projectKey).catch(() => { /* NEW then compares against the previous baseline. */ });
+    void api.recordDocumentsVisit(projectKey).catch(() => { /* NEW then compares against the previous baseline. */ })
+      .finally(() => setVisitRecorded(true));
   }, [projectKey]);
+  // `useDocumentRows` is typed with one value per filter; the client sends lists as repeated parameters.
+  const rows = useDocumentRows(projectKey, (retain.length ? { ...request, retain: [...retain] } : request) as DocumentRowsQuery, { enabled: visitRecorded });
+  const page: DocumentRowsPage | null = rows.page;
 
   // Live region: a repeated message is cleared first and set again on the next tick so it is re-announced.
   const [announcement, setAnnouncement] = useState("");
@@ -214,7 +201,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   }, [page]);
 
   // Deep link `case` + `language`: that row is open until the lead collapses it.
-  const deepKey = query.case && query.language ? `${query.case}:${query.language}` : null;
+  const deepLanguages = listOf(query.language);
+  const deepKey = query.case && deepLanguages.length === 1 ? `${query.case}:${deepLanguages[0]}` : null;
   const [collapsedDeepKey, setCollapsedDeepKey] = useState<string | null>(null);
   // Rows collapsed automatically because they became Resolved (until the lead opens them again
   // or the filter changes).
@@ -231,14 +219,27 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const { open: _routeOpen, ...queryWithoutOpen } = query;
   const viewQuery: ProjectDocumentsQuery = { ...queryWithoutOpen, ...(openKeys.size ? { open: [...openKeys] } : {}) };
 
-  const documentsRoute = (patch: ProjectDocumentsQuery): Route => {
-    const next: Route = { name: "projectDocuments", key: projectKey };
-    for (const [name, value] of Object.entries({ ...query, ...patch })) {
+  // The latest requested Documents query: a navigation applies asynchronously (App `requestRoute`, last wins), so two
+  // navigations of one commit (the panel's advance and the badge collapse in their effects) build on each other, not on
+  // this render's query. After that commit the route is the base again.
+  const requested = useRef<ProjectDocumentsQuery | null>(null);
+  const documentsQueryOf = (patch: ProjectDocumentsQuery): ProjectDocumentsQuery => {
+    const next: ProjectDocumentsQuery = {};
+    for (const [name, value] of Object.entries({ ...(requested.current ?? query), ...patch })) {
       if (value !== undefined && value !== "" && !(Array.isArray(value) && value.length === 0)) Object.assign(next, { [name]: value });
     }
     return next;
   };
-  const changeFilter = (patch: ProjectDocumentsQuery) => onNavigate(documentsRoute({ ...patch, page: undefined, select: undefined }));
+  const documentsRoute = (patch: ProjectDocumentsQuery): Route => ({ name: "projectDocuments", key: projectKey, ...documentsQueryOf(patch) });
+  /** Navigates within the page; later navigations of the same commit start from this one. */
+  const navigateDocuments = (patch: ProjectDocumentsQuery, options?: NavigateOptions) => {
+    const next = documentsQueryOf(patch);
+    requested.current = next;
+    queueMicrotask(() => { if (requested.current === next) requested.current = null; });
+    const route: Route = { name: "projectDocuments", key: projectKey, ...next };
+    if (options) onNavigate(route, options); else onNavigate(route);
+  };
+  const changeFilter = (patch: ProjectDocumentsQuery) => navigateDocuments({ ...patch, page: undefined, select: undefined });
 
   // ID filter: typed locally, applied after a pause, on Enter or on blur (one push, not one per keystroke).
   const [idText, setIdText] = useState(query.q ?? "");
@@ -276,7 +277,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // Chips: after a removal focus moves to the next chip (now at the removed chip's index) or the search field.
   const chipList = useRef<HTMLDivElement>(null);
   const [chipFocus, setChipFocus] = useState<number | null>(null);
-  const chips = chipsOf(query);
+  const people = useMemo(() => new Map((inventory?.members ?? []).filter(member => member.display_name?.trim())
+    .map(member => [member.pseudonym, member.display_name.trim()] as const)), [inventory]);
+  const chips = chipsOf(query, people);
   const chipIdentity = chips.map(chip => chip.id).join("\n");
   useEffect(() => {
     if (chipFocus === null) return;
@@ -306,7 +309,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       next.add(key);
       if (autoCollapsed.has(key)) setAutoCollapsed(new Set([...autoCollapsed].filter(item => item !== key)));
     }
-    onNavigate(documentsRoute({ open: [...next] }), { replace: true });
+    navigateDocuments({ open: [...next] }, { replace: true });
   };
   const expandRow = (key: string) => { if (!openKeys.has(key)) toggleRow(key); };
 
@@ -330,7 +333,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     if (collapse.length) {
       setAutoCollapsed(new Set([...autoCollapsed, ...collapse]));
       if (deepKey && collapse.includes(deepKey)) setCollapsedDeepKey(deepKey);
-      onNavigate(documentsRoute({ open: [...openKeys].filter(key => !collapse.includes(key)) }), { replace: true });
+      navigateDocuments({ open: [...openKeys].filter(key => !collapse.includes(key)) }, { replace: true });
     }
     // Only a new page carries new row states.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -537,7 +540,12 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   });
   // Text-change dialogs; they read the current row, so a reload after a conflict shows the new state.
   const [textChange, setTextChange] = useState<{ kind: "handle"; rowKey: string; step: NextStepView } | { kind: "carry"; rowKey: string; source: CarrySource } | null>(null);
-  const textChangeRow = textChange ? pageRows.find(entry => rowKeyOf(entry) === textChange.rowKey) ?? null : null;
+  const lastTextChangeRow = useRef<DocumentRowView | null>(null);
+  const textChangeOnPage = textChange ? pageRows.find(entry => rowKeyOf(entry) === textChange.rowKey) ?? null : null;
+  if (textChangeOnPage) lastTextChangeRow.current = textChangeOnPage;
+  // A refresh that drops the row (it left the filter or page) keeps the dialog on the row's last state.
+  const textChangeRow = textChangeOnPage
+    ?? (textChange && lastTextChangeRow.current && rowKeyOf(lastTextChangeRow.current) === textChange.rowKey ? lastTextChangeRow.current : null);
   const textChangeDone = (message: string) => { setTextChange(null); showToast({ message }); announce(message); reloadAfterAction(); };
   const textChangeDialog = !textChange || !textChangeRow ? null : textChange.kind === "handle" ? (() => {
     const step = (textChangeRow.steps ?? []).find(entry => entry.action === "handle_text_change" && entry.assignment_id === textChange.step.assignment_id) ?? textChange.step;
@@ -585,26 +593,27 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   };
   // Final-result side panel (V6): route parameter `panel={case}:{language}`, so Back and the editor return to it.
   const panelKey = query.panel && query.panel.includes(":") ? query.panel : null;
-  function openFinalPanel(key: string) { onNavigate(documentsRoute({ panel: key }), { replace: true }); }
-  /** Closes the panel in one navigation with `patch` (e.g. an expanded row); focus returns to the row action. */
+  /** "Change final…": the panel opens on its compare content (until it closes; a reload shows the decided state). */
+  const [changeFinalKey, setChangeFinalKey] = useState<string | null>(null);
+  function openFinalPanel(key: string, options: { changeFinal?: boolean } = {}) {
+    setChangeFinalKey(options.changeFinal ? key : null);
+    navigateDocuments({ panel: key }, { replace: true });
+  }
+  /** Closes the panel in one navigation with `patch` (e.g. an expanded row); the dialog returns focus (`panelReturnFocus`). */
   const closeFinalPanel = (patch: ProjectDocumentsQuery = {}) => {
-    const key = panelKey;
-    onNavigate(documentsRoute({ ...patch, panel: undefined }), { replace: true });
-    // The dialog returns focus to its trigger; when that left the page, the row action, the row header or the heading.
-    window.setTimeout(() => {
-      const active = document.activeElement;
-      if (active && active !== document.body) return;
-      ((key ? rowElement(key, "action") ?? rowElement(key, "header") : null) ?? headingRef.current)?.focus();
-    }, 0);
+    setChangeFinalKey(null);
+    navigateDocuments({ ...patch, panel: undefined }, { replace: true });
   };
+  /** Focus after the panel: the shown row's action, else its row header, else the page heading. */
+  const panelReturnFocus = () => (panelKey ? rowElement(panelKey, "action") ?? rowElement(panelKey, "header") : null) ?? headingRef.current;
   const expandedWith = (key: string): ProjectDocumentsQuery => ({ open: [...new Set([...openKeys, key])] });
   const panelSection = (row: DocumentRowView, section: PanelSection) => {
     const key = rowKeyOf(row);
     if (section === "versions") setRevealFor(key);
     closeFinalPanel(expandedWith(key));
   };
-  const finalPanel = panelKey ? <FinalPanel projectKey={projectKey} rowKey={panelKey} page={page} query={viewQuery} refreshFailed={rows.error != null}
-    username={currentUser?.username ?? ""}
+  const finalPanel = panelKey ? <FinalPanel projectKey={projectKey} rowKey={panelKey} page={page} query={viewQuery} refreshError={rows.error}
+    username={currentUser?.username ?? ""} changeFinal={changeFinalKey === panelKey} returnFocus={panelReturnFocus}
     onClose={() => closeFinalPanel()}
     onDecided={key => { notifyFinalSelectionChanged(projectKey); recordDecision(projectKey, key); reloadAfterAction(); }}
     onAdvance={key => openFinalPanel(key)}
@@ -748,7 +757,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
           onKeyDown={event => { if (event.key === "Enter") applyId(idText); }} />
         {idText !== "" && <IconButton size="sm" variant="quiet" label="Clear search" icon={<IconClose />} onClick={clearSearch} />}
       </div>
-      <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} onChange={changeFilter} onClearAll={clearAll} />
+      <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} onChange={changeFilter} onClearAll={clearAll} people={people} />
       {chips.length > 0 && <div ref={chipList} className="documents-filter-chips">
         {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} onRemove={() => removeChip(index)} />)}
       </div>}

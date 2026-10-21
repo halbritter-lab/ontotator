@@ -149,6 +149,8 @@ it("tabs, search, Filter popover and chips replace the filter selects (VD9)", as
   // A chip per active value; removing it drops paging and the selection.
   fireEvent.click(within(tools).getByRole("button", { name: "Remove filter Language: de" }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "assign" });
+  // This spy never applies the route: after the event (one task) the route is the base again.
+  await act(async () => { await Promise.resolve(); });
   // A tab keeps the facets.
   fireEvent.click(screen.getByRole("tab", { name: /^Done/ }));
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", segment: "done", language: "de" });
@@ -659,7 +661,7 @@ it("keeps the page busy with focus on the paging link while the next page loads,
 });
 
 it("opens the final-result panel from a card as the side dialog", async () => {
-  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
   const s1 = scenarioS1();
   const en = { ...s1.group.rows.find(entry => entry.language === "en")!, next_step: chooseFinalStep(), steps: [chooseFinalStep()] };
   mockRows(page([{ ...s1.group, rows: [en] }]), s1.submissions);
@@ -737,6 +739,14 @@ it("explains a preflight-only missing final result on a deep-linked row", async 
   expect(await screen.findByText("No final result. Not counted as a decision yet: no submission.")).toBeTruthy();
 });
 
+it("opens no deep-linked row when the language filter has several values", async () => {
+  mockRows(scenarioS1().page);
+  renderPage({ query: { case: "case-0042", language: "de,fr" } });
+  await loaded();
+  expect(screen.queryAllByRole("button", { name: /^Hide history/ })).toHaveLength(0);
+  expect(expandedProps).toHaveLength(0);
+});
+
 it("expands a row with replace navigation", async () => {
   mockRows(scenarioS1().page);
   const { onNavigate } = renderPage({ query: { language: "en" } });
@@ -800,6 +810,20 @@ describe("text changes (V5)", () => {
     expect(screen.queryByRole("dialog", { name: "Handle text change · case-201 · de" })).toBeNull();
   });
 
+  it("keeps the Handle text change dialog open when a refresh drops its row from the page", async () => {
+    const handle = stepOf("handle_text_change", { stage: "annotation", assignment_id: 42, document_id: "case-202-de-v2" });
+    const de = planRow("case-202", "de", handle, { versions: tcVersions("case-202"),
+      work: [work({ assignment_id: 42, document_id: "case-202-de-v1", person: ana, status: "in_progress" })] });
+    mockRows(page([group("case-202", [de])]));
+    renderStateful({});
+    fireEvent.click(await screen.findByRole("button", { name: "Handle text change…, case-202 · de" }));
+    const dialog = await screen.findByRole("dialog", { name: "Handle text change · case-202 · de" });
+    vi.mocked(api.listDocumentRows).mockImplementation(async () => page([]));
+    act(() => { window.dispatchEvent(new Event("focus")); });
+    await waitFor(() => expect(screen.queryByRole("table", { name: "Documents" })).toBeNull());
+    expect(screen.getByRole("dialog", { name: "Handle text change · case-202 · de" })).toBe(dialog);
+  });
+
   it("Carry to v2… opens the carry dialog; Annotate v2 from scratch opens the assign dialog", async () => {
     const carry = stepOf("carry_text_change", { stage: "annotation", assignment_id: 51, submission_id: "sub-1", document_id: "case-202-de-v2" });
     const de = planRow("case-202", "de", carry, { versions: tcVersions("case-202"),
@@ -851,7 +875,7 @@ it("labels each translation review with its guideline version", async () => {
 });
 
 it("renders cards on narrow viewports", async () => {
-  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
   mockRows(page([group("case-1", [row({ case_id: "case-1", language: "en", versions: [version({ document_id: "case-1-en" })] })])]));
   renderPage();
   const list = await screen.findByRole("list", { name: "Documents" });
@@ -1327,7 +1351,7 @@ describe("Resolve renders inline under the row (Change 13, F1, F5)", () => {
   });
 
   it("cards behave the same", async () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 699px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
     mockRows(page([group("case-1", [rejected()])]));
     renderStateful({});
     await screen.findByRole("list", { name: "Documents" });
@@ -1353,6 +1377,18 @@ describe("visit baseline and navigation counter (VD6, V3)", () => {
     act(() => { window.dispatchEvent(new Event("focus")); });
     await loaded();
     expect(api.recordDocumentsVisit).toHaveBeenCalledOnce();
+  });
+
+  it("requests the first rows only after the visit was recorded (or failed)", async () => {
+    let finish!: () => void;
+    vi.mocked(api.recordDocumentsVisit).mockReturnValue(new Promise(resolve => { finish = () => resolve({ baseline_at: "2026-10-21T08:00:00Z" }); }));
+    mockRows(scenarioS1().page);
+    renderPage();
+    await act(async () => { await Promise.resolve(); });
+    expect(api.listDocumentRows).not.toHaveBeenCalled();
+    await act(async () => { finish(); });
+    await loaded();
+    expect(api.listDocumentRows).toHaveBeenCalledOnce();
   });
 
   it("fires documents-changed after an own action", async () => {

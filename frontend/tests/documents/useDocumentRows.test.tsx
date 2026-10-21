@@ -191,3 +191,13 @@ it("exposes a submissions error and retries", async () => {
   await waitFor(() => expect(result.current.data).toBe(loaded));
   expect(result.current.error).toBeNull();
 });
+
+it("loads nothing until enabled (the page records its visit first)", async () => {
+  vi.mocked(api.listDocumentRows).mockResolvedValue(page([]));
+  const { result, rerender } = renderHook(({ enabled }: { enabled: boolean }) => useDocumentRows("p", { q: "a" }, { enabled }), { initialProps: { enabled: false } });
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  expect(api.listDocumentRows).not.toHaveBeenCalled();
+  rerender({ enabled: true });
+  await waitFor(() => expect(result.current.page).not.toBeNull());
+  expect(api.listDocumentRows).toHaveBeenCalledTimes(1);
+});

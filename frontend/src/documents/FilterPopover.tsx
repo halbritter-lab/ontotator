@@ -3,7 +3,7 @@ import type { DecisionBarView } from "../api/client";
 import { plural } from "../app/labels";
 import type { ProjectDocumentsQuery } from "../app/router";
 import { Button, IconSortDown, Popover, useMediaQuery } from "../ui";
-import { chipsOf, facetGroups, ORDER_OPTIONS, optionChecked, optionCount, toggleOption, type FacetOption } from "./filterModel";
+import { chipsOf, facetGroups, ORDER_OPTIONS, optionChecked, optionCount, toggleOption, type FacetOption, type PeopleNames } from "./filterModel";
 
 export interface FilterPopoverProps {
   query: ProjectDocumentsQuery;
@@ -14,18 +14,20 @@ export interface FilterPopoverProps {
   /** Applies a route patch at once (facets and order); the page drops paging and the selection. */
   onChange: (patch: ProjectDocumentsQuery) => void;
   onClearAll: () => void;
+  /** Display names by pseudonym for the Waiting on group. */
+  people?: PeopleNames;
 }
 
 const matchText = (count: number) => `${plural(count, "text")} ${count === 1 ? "matches" : "match"}`;
 
 /**
  * "Filter" button and its non-modal popover (spec "Filter popover", V4): fieldsets Language,
- * Review, Annotation, Final · Origin · Plan and Waiting on, each checkbox with its count under the
+ * Review, Annotation, Final, Origin, Plan and Waiting on, each checkbox with its count under the
  * current tab, search and the other groups. Checking applies at once and the popover stays open;
  * a zero facet is muted and checkable only while checked. Footer: Order (VD10) and "Clear all";
  * below 700 px a full-height sheet with "Show {n} texts".
  */
-export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAll }: FilterPopoverProps): JSX.Element {
+export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAll, people }: FilterPopoverProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   const narrow = useMediaQuery("(max-width: 699px)");
@@ -73,7 +75,7 @@ export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAl
     </Button>
     <Popover open={open} anchorRef={anchor} label="Filter" onClose={() => setOpen(false)} footer={footer}>
       <div id={contentId} className="documents-filter-groups">
-        {facetGroups(facets, query, sourceLanguages).map(group => <fieldset key={group.id} className="documents-filter-group">
+        {facetGroups(facets, query, sourceLanguages, people).map(group => <fieldset key={group.id} className="documents-filter-group">
           <legend>{group.legend}</legend>
           {group.options.map(facet)}
         </fieldset>)}
