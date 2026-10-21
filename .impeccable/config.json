@@ -57,6 +57,15 @@
         ],
         "createdAt": "2026-10-20T23:38:59.003Z",
         "reason": "orchestrator: neutral border-strong left rule on Markdown blockquote is standard quote typography in rendered guideline text, not a coloured card accent"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/styles/screens/documents-panel.css"
+        ],
+        "createdAt": "2026-10-21T15:30:25.616Z",
+        "reason": "assistant decided: rules moved verbatim from documents-expanded.css on main (selection-notice, final-panel-text-change); row-panel-banner reuses that established notice style"
       }
     ]
   }
