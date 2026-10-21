@@ -41,7 +41,14 @@ from ontocurator.application.text_changes import (
     unplaced_findings,
 )
 from ontocurator.domain import document_rows as rules
-from ontocurator.domain.agreement import Agreement, Finding, compare, with_defaults
+from ontocurator.domain.agreement import (
+    Agreement,
+    Finding,
+    compare,
+    groups,
+    with_defaults,
+)
+from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile
 from ontocurator.domain.workspace import Submission
@@ -54,7 +61,15 @@ if TYPE_CHECKING:  # document_rows imports this module
     from ontocurator.application.document_row_page import _Context
     from ontocurator.application.document_rows import RowFacts
 
-__all__ = ["NOT_ELIGIBLE", "Candidate", "fill_agreement", "final_panel"]
+__all__ = [
+    "NOT_ELIGIBLE",
+    "Candidate",
+    "fill_agreement",
+    "final_panel",
+    "finding_of",
+    "findings_of",
+    "project_profile",
+]
 
 LabelRule = Literal["accept", "compare"]
 AxisDefaults = Mapping[str, Mapping[str, str]]
@@ -112,35 +127,49 @@ def findings_of(
     editable = {
         layer.layer_id for layer in profile.layers if layer.access == "editable"
     }
-    defaults = defaults or {}
-    result: list[Finding] = []
-    for order, item in enumerate(submission.snapshots):
-        annotation = item.annotation
-        if annotation.layer_id not in editable:
-            continue
-        refs = {(ref.evidence_id, ref.version) for ref in annotation.evidence_refs}
-        spans = tuple(
-            sorted(
-                (segment.start, segment.end)
-                for evidence in item.evidence
-                if (evidence.mention.evidence_id, evidence.version) in refs
-                for segment in evidence.mention.segments
-            )
+    return [
+        finding_of(
+            item, key=item.annotation.annotation_id, order=order, defaults=defaults
         )
-        result.append(
-            Finding(
-                key=annotation.annotation_id,
-                layer_id=annotation.layer_id,
-                term_id=annotation.term_id,
-                axes=with_defaults(
-                    annotation.axes_values, defaults.get(annotation.layer_id, {})
-                ),
-                modifiers=frozenset(),
-                spans=spans,
-                order=order,
-            )
-        )
-    return result
+        for order, item in enumerate(submission.snapshots)
+        if item.annotation.layer_id in editable
+    ]
+
+
+def finding_of(
+    item: AnnotationSnapshot,
+    *,
+    key: str,
+    order: int,
+    defaults: AxisDefaults | None = None,
+) -> Finding:
+    """One snapshot as a ``Finding`` (the one rule the final panel's agreement
+    and the consolidation grouping share).
+
+    Axis values are filled with the layer's defaults; ``type_id``, the note
+    and the cue segments are filled for ``groups``; ``compare`` ignores them.
+    """
+    annotation = item.annotation
+    refs = {(ref.evidence_id, ref.version) for ref in annotation.evidence_refs}
+    mentions = [
+        evidence.mention
+        for evidence in item.evidence
+        if (evidence.mention.evidence_id, evidence.version) in refs
+    ]
+    return Finding(
+        key=key,
+        layer_id=annotation.layer_id,
+        term_id=annotation.term_id,
+        axes=with_defaults(
+            annotation.axes_values, (defaults or {}).get(annotation.layer_id, {})
+        ),
+        modifiers=frozenset(),
+        spans=tuple(sorted((s.start, s.end) for m in mentions for s in m.segments)),
+        order=order,
+        type_id=annotation.type_id,
+        note=annotation.note or None,
+        cues=tuple(sorted((s.start, s.end) for m in mentions for s in m.cue_segments)),
+    )
 
 
 def label_rule(
@@ -224,7 +253,7 @@ def _inputs(
     return result
 
 
-def _profile(conn: Connection, pid: int) -> tuple[TaskProfile, AxisDefaults]:
+def project_profile(conn: Connection, pid: int) -> tuple[TaskProfile, AxisDefaults]:
     profile = TaskProfile.model_validate(
         conn.execute(
             select(ProjectRow.task_profile).where(ProjectRow.id == pid)
@@ -256,6 +285,36 @@ def _agreement(
     )
     findings = {sid: findings_of(payloads[sid], profile, defaults) for sid in order}
     return compare(findings, order)
+
+
+def _all_match(
+    comparable: Sequence[Candidate],
+    recorded_at: Mapping[str, datetime],
+    payloads: Mapping[str, Submission],
+    profile: TaskProfile,
+    defaults: AxisDefaults,
+    submissions: Sequence[Mapping[str, Any]],
+) -> str | None:
+    """Full agreement (W1, U7): the earliest eligible compared submission when
+    at least two are compared and every consolidation group is ``match``
+    (zero findings everywhere included); else None.
+
+    The caller only asks under the label rule "compare", so no consolidation
+    covers the compared submissions (VD16).
+    """
+    if len(comparable) < 2 or any(
+        item.submission_id not in payloads for item in comparable
+    ):
+        return None
+    order = sorted(
+        (item.submission_id for item in comparable),
+        key=lambda sid: (recorded_at[sid], sid),
+    )
+    findings = {sid: findings_of(payloads[sid], profile, defaults) for sid in order}
+    if any(group.kinds != {"match"} for group in groups(findings, order)):
+        return None
+    eligible = {item["submission_id"] for item in submissions if item["eligible"]}
+    return next((sid for sid in order if sid in eligible), None)
 
 
 def fill_agreement(
@@ -310,7 +369,7 @@ def fill_agreement(
         (c.submission_id for _, item in compared for c in item.comparable),
         strict=False,
     )
-    profile, defaults = _profile(conn, pid)
+    profile, defaults = project_profile(conn, pid)
     for row, item in compared:
         agreement = _agreement(
             item.comparable, recorded_at, payloads, profile, defaults
@@ -387,14 +446,11 @@ def final_panel(
     )
     rule, accept_id = label_rule(comparison.eligible, recorded_at, inputs)
     comparable = comparison.comparable
-    profile, defaults = _profile(conn, pid)
-    agreement = _agreement(
-        comparable,
-        recorded_at,
-        _payloads(conn, pid, (item.submission_id for item in comparable), strict=False),
-        profile,
-        defaults,
+    profile, defaults = project_profile(conn, pid)
+    payloads = _payloads(
+        conn, pid, (item.submission_id for item in comparable), strict=False
     )
+    agreement = _agreement(comparable, recorded_at, payloads, profile, defaults)
     comparable_ids = {item.submission_id for item in comparable}
     own_not_selectable = bool(listing["adjudicator_not_annotator"])
     submissions = [
@@ -410,6 +466,11 @@ def final_panel(
         }
         for item in listing["submissions"]
     ]
+    all_match_id = (
+        _all_match(comparable, recorded_at, payloads, profile, defaults, submissions)
+        if rule == "compare"
+        else None
+    )
     row = build_row(facts, case_id, language, ctx=ctx)
     causes = [
         item
@@ -430,6 +491,8 @@ def final_panel(
         ),
         "label_rule": rule,
         "accept_submission_id": accept_id,
+        "all_match": all_match_id is not None,
+        "all_match_submission_id": all_match_id,
         "causes": causes,
         "changed_passages": _changed_passages(
             conn, pid, row["final"], comparison, profile

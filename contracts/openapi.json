@@ -1076,6 +1076,49 @@
         }
       }
     },
+    "/api/v1/rounds/{round_id}/consolidation": {
+      "get": {
+        "tags": [
+          "consolidation"
+        ],
+        "summary": "Read Consolidation",
+        "description": "The consolidation of a round: live for its assignee, read-only for a\nlead after submission; every other refusal is ``ROUND_NOT_FOUND`` (U9).",
+        "operationId": "read_consolidation_api_v1_rounds__round_id__consolidation_get",
+        "parameters": [
+          {
+            "name": "round_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Round Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsolidationView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/text-changes/preview": {
       "post": {
         "tags": [
@@ -9257,6 +9300,366 @@
         ],
         "title": "ConsequencesView"
       },
+      "ConsolidationGroupView": {
+        "properties": {
+          "group_id": {
+            "type": "string",
+            "title": "Group Id"
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Kinds"
+          },
+          "differing_axes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Differing Axes"
+          },
+          "majority": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Majority"
+          },
+          "keep_input_id": {
+            "type": "string",
+            "title": "Keep Input Id"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ConsolidationMemberView"
+            },
+            "type": "array",
+            "title": "Members"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "auto",
+              "keep",
+              "choose",
+              "keep_both",
+              "leave_out"
+            ],
+            "title": "State"
+          },
+          "edited": {
+            "type": "boolean",
+            "title": "Edited",
+            "default": false
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "guidelines_unclear": {
+            "type": "boolean",
+            "title": "Guidelines Unclear",
+            "default": false
+          },
+          "annotation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Annotation Ids",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "group_id",
+          "kinds",
+          "differing_axes",
+          "majority",
+          "keep_input_id",
+          "start",
+          "members",
+          "state"
+        ],
+        "title": "ConsolidationGroupView"
+      },
+      "ConsolidationMark": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "keep",
+              "choose",
+              "keep_both",
+              "leave_out"
+            ],
+            "title": "Action"
+          },
+          "guidelines_unclear": {
+            "type": "boolean",
+            "title": "Guidelines Unclear",
+            "default": false
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "ConsolidationMark",
+        "description": "How a consolidation group was resolved (acceptance fixes spec,\nPersistence): stored on the resolving decisions of the group."
+      },
+      "ConsolidationMemberView": {
+        "properties": {
+          "input_id": {
+            "type": "string",
+            "title": "Input Id"
+          },
+          "person_id": {
+            "type": "string",
+            "title": "Person Id"
+          },
+          "annotation_id": {
+            "type": "string",
+            "title": "Annotation Id"
+          },
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "term_label": {
+            "type": "string",
+            "title": "Term Label"
+          },
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "type_id": {
+            "type": "string",
+            "title": "Type Id"
+          },
+          "axes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Axes"
+          },
+          "spans": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Spans"
+          },
+          "cues": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Cues"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "input_id",
+          "person_id",
+          "annotation_id",
+          "term_id",
+          "term_label",
+          "layer_id",
+          "type_id",
+          "axes",
+          "spans",
+          "cues"
+        ],
+        "title": "ConsolidationMemberView"
+      },
+      "ConsolidationPersonView": {
+        "properties": {
+          "person_id": {
+            "type": "string",
+            "title": "Person Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "lane": {
+            "type": "integer",
+            "title": "Lane"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "person_id",
+          "label",
+          "lane"
+        ],
+        "title": "ConsolidationPersonView",
+        "description": "An input author; display name for the assignee and leads only (U8)."
+      },
+      "ConsolidationView": {
+        "properties": {
+          "round_id": {
+            "type": "string",
+            "title": "Round Id"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only"
+          },
+          "read_only_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "submitted",
+                  "input_withdrawn",
+                  "not_assigned"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read Only Reason"
+          },
+          "case_id": {
+            "type": "string",
+            "title": "Case Id"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "document_version": {
+            "type": "integer",
+            "title": "Document Version"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "default": ""
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/ConsolidationPersonView"
+            },
+            "type": "array",
+            "title": "People"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ConsolidationGroupView"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "workflow_revision": {
+            "type": "integer",
+            "title": "Workflow Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "round_id",
+          "workspace_id",
+          "read_only",
+          "case_id",
+          "language",
+          "document_version",
+          "document_id",
+          "people",
+          "groups",
+          "workflow_revision"
+        ],
+        "title": "ConsolidationView"
+      },
       "CorrectionAssignmentRequest": {
         "properties": {
           "username": {
@@ -11535,6 +11938,22 @@
               }
             ],
             "title": "Accept Submission Id"
+          },
+          "all_match": {
+            "type": "boolean",
+            "title": "All Match",
+            "default": false
+          },
+          "all_match_submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "All Match Submission Id"
           },
           "causes": {
             "items": {
@@ -16897,6 +17316,16 @@
           "reviewer_id": {
             "type": "string",
             "title": "Reviewer Id"
+          },
+          "consolidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsolidationMark"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

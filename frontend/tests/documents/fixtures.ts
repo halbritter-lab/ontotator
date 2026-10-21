@@ -248,7 +248,7 @@ export function agreement(overrides: Partial<AgreementView> = {}): AgreementView
 }
 
 export function finalPanel(overrides: Partial<FinalPanelView> = {}): FinalPanelView {
-  return { submissions: [], agreement: null, label_rule: "compare", accept_submission_id: null, causes: [], changed_passages: null, ...overrides };
+  return { submissions: [], agreement: null, label_rule: "compare", accept_submission_id: null, all_match: false, all_match_submission_id: null, causes: [], changed_passages: null, ...overrides };
 }
 
 function scenario(group: DocumentGroupView, rows: Record<string, RowSubmissions>): DocumentsScenario {

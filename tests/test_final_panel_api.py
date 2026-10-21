@@ -769,3 +769,103 @@ def test_label_rule_consolidation_needs_every_other_submission_as_input():
     assert label_rule(eligible, times, {}) == ("compare", None)
     assert label_rule(eligible[:1], times, {}) == ("accept", "a")
     assert label_rule([], times, {}) == ("compare", None)
+
+
+# --- Full agreement (W1, acceptance fixes U7) ------------------------------ #
+
+
+def test_all_match_identical_findings_selects_earliest(env):
+    target = doc("c1", "en")
+    seizure = span_of(env, target, "Neonatalzeit")
+    same = [finding("x1", SEIZURE, seizure), finding("x2", HYPOTONIA, None)]
+    submit_findings(env, assign(env, target, "anno", "annotate"), "s1", same)
+    submit_findings(
+        env,
+        assign(env, target, "anno2", "annotate"),
+        "s2",
+        [finding("y1", SEIZURE, seizure), finding("y2", HYPOTONIA, None)],
+    )
+    result = panel(env)
+    assert result["label_rule"] == "compare"
+    assert result["all_match"] is True
+    assert result["all_match_submission_id"] == "s1"
+
+
+def test_all_match_skips_the_leads_own_submission(env):
+    from auth_harness import grant
+
+    assert grant(env.app, "leader", "proj", ["lead", "annotator"])
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == "proj")
+            .values(adjudicator_not_annotator=True)
+        )
+    target = doc("c1", "en")
+    seizure = span_of(env, target, "Neonatalzeit")
+    submit_findings(
+        env,
+        assign(env, target, "leader", "annotate"),
+        "own",
+        [finding("x1", SEIZURE, seizure)],
+    )
+    submit_findings(
+        env,
+        assign(env, target, "anno", "annotate"),
+        "other",
+        [finding("y1", SEIZURE, seizure)],
+    )
+    result = panel(env)
+    subs = by_id(result)
+    assert subs["own"]["eligible"] is False
+    assert result["all_match"] is True
+    assert result["all_match_submission_id"] == "other"
+
+
+def test_all_match_false_for_overlapping_but_different_spans(env):
+    target = doc("c1", "en")
+    neonatal = span_of(env, target, "Neonatalzeit")
+    submit_findings(
+        env,
+        assign(env, target, "anno", "annotate"),
+        "s1",
+        [finding("x1", SEIZURE, neonatal)],
+    )
+    submit_findings(
+        env,
+        assign(env, target, "anno2", "annotate"),
+        "s2",
+        [finding("y1", SEIZURE, (neonatal[0] + 2, neonatal[1]))],
+    )
+    result = panel(env)
+    # compare() counts this as a match; the consolidation grouping does not.
+    assert result["agreement"]["matching"] == 1
+    assert result["all_match"] is False
+    assert result["all_match_submission_id"] is None
+
+
+def test_all_match_with_zero_findings_everywhere(env):
+    target = doc("c1", "en")
+    submit_findings(env, assign(env, target, "anno", "annotate"), "s1", [])
+    submit_findings(env, assign(env, target, "anno2", "annotate"), "s2", [])
+    result = panel(env)
+    assert result["all_match"] is True
+    assert result["all_match_submission_id"] == "s1"
+
+
+def test_all_match_false_when_a_consolidation_covers_both(rounds):
+    _repo, lead, _consolidation, key, _inputs = _consolidated(rounds)
+    result = lead.final_panel("pkg-1", *key)
+    assert result["label_rule"] == "accept"
+    assert result["all_match"] is False
+    assert result["all_match_submission_id"] is None
+
+
+def test_all_match_in_http_answer(env):
+    target = doc("c1", "en")
+    submit_findings(env, assign(env, target, "anno", "annotate"), "s1", [])
+    submit_findings(env, assign(env, target, "anno2", "annotate"), "s2", [])
+    response = env.lead.get(f"{BASE}/document-rows/c1/en/final-panel")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["all_match"], body["all_match_submission_id"]) == (True, "s1")

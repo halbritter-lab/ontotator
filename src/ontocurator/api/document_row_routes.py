@@ -475,6 +475,11 @@ class FinalPanelView(_View):
     agreement: AgreementView | None = None
     label_rule: Literal["accept", "compare"] = "compare"
     accept_submission_id: str | None = None
+    # Full agreement (W1): every consolidation group of the compared eligible
+    # submissions matches; "Accept as final" selects this submission (the
+    # earliest eligible one). False under the label rule "accept".
+    all_match: bool = False
+    all_match_submission_id: str | None = None
     causes: list[RowItemView] = Field(default_factory=list)
     # Findings of a final on old text in changed passages of the newer text.
     changed_passages: int | None = None

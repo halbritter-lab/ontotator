@@ -139,6 +139,11 @@ export type OpenWorkspaceResponse = components["schemas"]["OpenWorkspaceResponse
 export type WorkRoundView = components["schemas"]["WorkRoundView"];
 export type RoundInputView = components["schemas"]["RoundInputView"];
 export type RoundSourceView = components["schemas"]["RoundSourceView"];
+// Consolidation view (acceptance fixes 2026-10-21, WP-E)
+export type ConsolidationView = components["schemas"]["ConsolidationView"];
+export type ConsolidationGroupView = components["schemas"]["ConsolidationGroupView"];
+export type ConsolidationMemberView = components["schemas"]["ConsolidationMemberView"];
+export type ConsolidationPersonView = components["schemas"]["ConsolidationPersonView"];
 // Carried review (editor-carried-review plan)
 export type AssignmentSubmissionView = components["schemas"]["AssignmentSubmissionView"];
 export type SourceObligationView = components["schemas"]["SourceObligationView"];
@@ -890,6 +895,10 @@ export class ApiClient {
 
   async listRoundInputs(roundId: string): Promise<RoundInputView[]> {
     return this.request(`/api/v1/rounds/${encodeURIComponent(roundId)}/inputs`, { method: "GET" });
+  }
+
+  async getConsolidation(roundId: string): Promise<ConsolidationView> {
+    return this.request<ConsolidationView>(`/api/v1/rounds/${encodeURIComponent(roundId)}/consolidation`, { method: "GET" });
   }
 
   async listRoundSources(assignmentId: number): Promise<RoundSourceView[]> {

@@ -344,6 +344,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rounds/{round_id}/consolidation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Consolidation
+         * @description The consolidation of a round: live for its assignee, read-only for a
+         *     lead after submission; every other refusal is ``ROUND_NOT_FOUND`` (U9).
+         */
+        get: operations["read_consolidation_api_v1_rounds__round_id__consolidation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/text-changes/preview": {
         parameters: {
             query?: never;
@@ -2907,6 +2928,141 @@ export interface components {
             /** Open Reports */
             open_reports?: components["schemas"]["OpenReportView"][];
         };
+        /** ConsolidationGroupView */
+        ConsolidationGroupView: {
+            /** Group Id */
+            group_id: string;
+            /** Kinds */
+            kinds: string[];
+            /** Differing Axes */
+            differing_axes: string[];
+            /** Majority */
+            majority: {
+                [key: string]: string;
+            };
+            /** Keep Input Id */
+            keep_input_id: string;
+            /** Start */
+            start: number | null;
+            /** Members */
+            members: components["schemas"]["ConsolidationMemberView"][];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "open" | "auto" | "keep" | "choose" | "keep_both" | "leave_out";
+            /**
+             * Edited
+             * @default false
+             */
+            edited: boolean;
+            /** Note */
+            note?: string | null;
+            /**
+             * Guidelines Unclear
+             * @default false
+             */
+            guidelines_unclear: boolean;
+            /**
+             * Annotation Ids
+             * @default []
+             */
+            annotation_ids: string[];
+        };
+        /**
+         * ConsolidationMark
+         * @description How a consolidation group was resolved (acceptance fixes spec,
+         *     Persistence): stored on the resolving decisions of the group.
+         */
+        ConsolidationMark: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "auto" | "keep" | "choose" | "keep_both" | "leave_out";
+            /**
+             * Guidelines Unclear
+             * @default false
+             */
+            guidelines_unclear: boolean;
+            /** Content Sha256 */
+            content_sha256?: string | null;
+        };
+        /** ConsolidationMemberView */
+        ConsolidationMemberView: {
+            /** Input Id */
+            input_id: string;
+            /** Person Id */
+            person_id: string;
+            /** Annotation Id */
+            annotation_id: string;
+            /** Term Id */
+            term_id: string;
+            /** Term Label */
+            term_label: string;
+            /** Layer Id */
+            layer_id: string;
+            /** Type Id */
+            type_id: string;
+            /** Axes */
+            axes: {
+                [key: string]: string;
+            };
+            /** Spans */
+            spans: [
+                number,
+                number
+            ][];
+            /** Cues */
+            cues: [
+                number,
+                number
+            ][];
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * ConsolidationPersonView
+         * @description An input author; display name for the assignee and leads only (U8).
+         */
+        ConsolidationPersonView: {
+            /** Person Id */
+            person_id: string;
+            /** Label */
+            label: string;
+            /** Lane */
+            lane: number;
+        };
+        /** ConsolidationView */
+        ConsolidationView: {
+            /** Round Id */
+            round_id: string;
+            /** Workspace Id */
+            workspace_id: string | null;
+            /** Read Only */
+            read_only: boolean;
+            /** Read Only Reason */
+            read_only_reason?: ("submitted" | "input_withdrawn" | "not_assigned") | null;
+            /** Case Id */
+            case_id: string;
+            /** Language */
+            language: string;
+            /** Document Version */
+            document_version: number;
+            /** Document Id */
+            document_id: string;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /** People */
+            people: components["schemas"]["ConsolidationPersonView"][];
+            /** Groups */
+            groups: components["schemas"]["ConsolidationGroupView"][];
+            /** Workflow Revision */
+            workflow_revision: number;
+        };
         /** CorrectionAssignmentRequest */
         CorrectionAssignmentRequest: {
             /** Username */
@@ -3605,6 +3761,13 @@ export interface components {
             label_rule: "accept" | "compare";
             /** Accept Submission Id */
             accept_submission_id?: string | null;
+            /**
+             * All Match
+             * @default false
+             */
+            all_match: boolean;
+            /** All Match Submission Id */
+            all_match_submission_id?: string | null;
             /** Causes */
             causes?: components["schemas"]["RowItemView"][];
             /** Changed Passages */
@@ -5598,6 +5761,7 @@ export interface components {
             note?: string | null;
             /** Reviewer Id */
             reviewer_id: string;
+            consolidation?: components["schemas"]["ConsolidationMark"] | null;
         };
         /** ReviewDraft */
         ReviewDraft: {
@@ -7992,6 +8156,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_consolidation_api_v1_rounds__round_id__consolidation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                round_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsolidationView"];
                 };
             };
             /** @description Validation Error */
