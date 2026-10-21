@@ -1,12 +1,26 @@
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ontocurator.domain.annotations import AnnotationRef
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import InvalidAnnotation
 
 ReviewOutcome = Literal["confirmed", "rejected", "changed", "uncertain"]
+ConsolidationAction = Literal["auto", "keep", "choose", "keep_both", "leave_out"]
+
+
+class ConsolidationMark(BaseModel):
+    """How a consolidation group was resolved (acceptance fixes spec,
+    Persistence): stored on the resolving decisions of the group."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: ConsolidationAction
+    guidelines_unclear: bool = False
+    # Hash of the consolidated annotation's content when resolved; None for
+    # "leave_out". A differing current hash means "edited in the editor".
+    content_sha256: str | None = None
 
 
 class ReviewDecision(BaseModel):
@@ -20,6 +34,10 @@ class ReviewDecision(BaseModel):
     replacement: AnnotationRef | None = None
     note: str | None = None
     reviewer_id: str
+    # Left out of the dump while unset, so existing decision hashes stay.
+    consolidation: ConsolidationMark | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def validate_outcome_and_replacement(self) -> Self:
