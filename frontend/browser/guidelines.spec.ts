@@ -11,6 +11,7 @@ import { resolve } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
+import { documentsReady, expandHistory, finalPanel } from "./documentsHelpers";
 import { authenticatedRequest, submitCase } from "./helpers";
 import { guidelineScenario, loginGuidelineUser, type GuidelinePerson, type GuidelineScenario } from "./guidelineHelpers";
 
@@ -85,13 +86,22 @@ async function publish(page: Page, s: GuidelineScenario, file: "v1.md" | "v2.md"
   await expect(success).toBeFocused();
 }
 
-/** Lead Documents: expand the row ``case · language`` and return its region. */
-async function documentsRow(page: Page, s: GuidelineScenario, caseId: string, language: string): Promise<Locator> {
+/** Lead Documents: the final-result side panel of ``case · language`` (route parameter ``panel``), loaded. */
+async function finalResult(page: Page, s: GuidelineScenario, caseId: string, language: string): Promise<Locator> {
+  await visit(page, `/#/projects/${encodeURIComponent(s.project)}/documents?panel=${encodeURIComponent(`${caseId}:${language}`)}`);
+  const panel = finalPanel(page, caseId, language);
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("Loading submissions…")).toHaveCount(0);
+  return panel;
+}
+
+/** Lead Documents: open the "Translation reviews" dialog of the row ``case · language`` (Text versions in its history). */
+async function translationReviews(page: Page, s: GuidelineScenario, caseId: string, language: string): Promise<void> {
   await visit(page, `/#/projects/${encodeURIComponent(s.project)}/documents`);
-  const disclosure = page.getByRole("button", { name: `Show details, ${caseId} · ${language}`, exact: true });
-  if ((await disclosure.getAttribute("aria-expanded")) !== "true") await disclosure.click();
-  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-  return page.getByRole("region", { name: `${caseId} · ${language}`, exact: true });
+  await documentsReady(page);
+  const area = await expandHistory(page, caseId, language);
+  await area.locator("summary", { hasText: /^Text versions \(\d+\)$/ }).click();
+  await area.getByRole("button", { name: /^Translation reviews for / }).first().click();
 }
 
 /** Run an export job to the end and return the downloaded archive. */
@@ -227,17 +237,17 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await confirm.getByRole("button", { name: "Submit review", exact: true }).click();
     await expect(ben.page.getByText("Review submitted", { exact: true })).toBeVisible();
 
-    // Documents: each submission is labelled with its version.
-    let row = await documentsRow(page, s, "guide-0001", "en");
-    await expect(row.locator(".submission-guideline")).toHaveText(["Guidelines v1 (current: v2)"]);
-    row = await documentsRow(page, s, "guide-0002", "en");
-    await expect(row.locator(".submission-guideline")).toHaveText(["Guidelines v2"]);
+    // Documents: the final-result panel labels each submission with its version.
+    let result = await finalResult(page, s, "guide-0001", "en");
+    await expect(result.getByText("Guidelines v1 (current: v2)", { exact: true })).toBeVisible();
+    result = await finalResult(page, s, "guide-0002", "en");
+    await expect(result.getByText("Guidelines v2", { exact: true })).toBeVisible();
+    await evidence(page, "documents-final-panel-v2");
     // Ben's review records v2: in the records and as the guideline line of the Documents "Translation reviews" dialog.
     const review = await value<Assignment>(ben.page, `/api/v1/assignments/${s.assignments["review-de"]}`);
     const reviews = () => value<TranslationReview[]>(page, `${root(s)}/documents/${encodeURIComponent(review.document_id)}/translation-reviews`);
     expect((await reviews()).map(record => [record.guideline_version, record.guideline_withdrawn])).toEqual([[2, false]]);
-    row = await documentsRow(page, s, "guide-0001", "de");
-    await row.getByRole("button", { name: "Translation reviews", exact: true }).click();
+    await translationReviews(page, s, "guide-0001", "de");
     const reviewDialog = page.getByRole("dialog", { name: `Translation reviews: ${review.document_id}`, exact: true });
     await expect(reviewDialog.getByRole("listitem").first()).toBeVisible();
     await expect(reviewDialog.locator(".review-guideline")).toHaveText(["Guidelines v2"]);
@@ -305,10 +315,10 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await expect(anyGuidelinesButton(ben.page)).toHaveCount(0);
 
     expect((await reviews()).map(record => [record.guideline_version, record.guideline_withdrawn])).toEqual([[2, true]]);
-    row = await documentsRow(page, s, "guide-0002", "en");
-    await expect(row.locator(".submission-guideline")).toHaveText(["Guidelines v2 (withdrawn)"]);
-    row = await documentsRow(page, s, "guide-0001", "en");
-    await expect(row.locator(".submission-guideline")).toHaveText(["Guidelines v1"]);
+    result = await finalResult(page, s, "guide-0002", "en");
+    await expect(result.getByText("Guidelines v2 (withdrawn)", { exact: true })).toBeVisible();
+    result = await finalResult(page, s, "guide-0001", "en");
+    await expect(result.getByText("Guidelines v1", { exact: true })).toBeVisible();
     await evidence(page, "documents-withdrawn-v2");
   } finally {
     await Promise.all([ana.close(), ben.close()]);
