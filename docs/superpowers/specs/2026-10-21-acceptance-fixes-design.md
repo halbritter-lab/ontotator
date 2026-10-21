@@ -6,15 +6,15 @@ Branch `fix/acceptance-20261021`, worktree `.worktrees/acceptance-fixes`.
 
 ## User decisions (2026-10-21)
 
-| ID  | Topic                         | Decision                                                                                                                                                                                                 |
-| --- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| U1  | Row expansion (finding 1)     | Variant **C+E**: no inline expansion; one side panel per row with two entry points (text name = everything, stage cell = filtered to that stage). Below 700 px a popover at the cell.                    |
-| U2  | Consolidation (findings 10, 11) | Variant **B**: dedicated consolidation view, clinical text left, finding groups right; matches taken over automatically; one decision per open group.                                                  |
-| U3  | Different terms on one span   | Overlapping spans with different terms form **one** group "Term differs" (choose one term, keep both, or search another).                                                                               |
-| U4  | Who may consolidate (finding 8) | The lead is always offered as consolidator ("You"); when no member has the Adjudicator role, the launcher explains it and links Settings → Members.                                                    |
-| U5  | Axis defaults (finding 5)     | New projects start with clinical creation defaults (assertion present, experiencer patient, temporality current) for the standard axes; editable in Settings; existing projects unchanged; seed sets them. |
-| U6  | Term search prefill (finding 2) | Always prefill the marked text (selected, so typing replaces it). When the document language is not searched, the hint "Names are searched in English…" stays visible under the field.                 |
-| U7  | Full agreement (W1)           | Final panel offers one click "All findings match – accept as final".                                                                                                                                      |
+| ID  | Topic                           | Decision                                                                                                                                                                                                   |
+| --- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| U1  | Row expansion (finding 1)       | Variant **C+E**: no inline expansion; one side panel per row with two entry points (text name = everything, stage cell = filtered to that stage). Below 700 px a popover at the cell.                      |
+| U2  | Consolidation (findings 10, 11) | Variant **B**: dedicated consolidation view, clinical text left, finding groups right; matches taken over automatically; one decision per open group.                                                      |
+| U3  | Different terms on one span     | Overlapping spans with different terms form **one** group "Term differs" (choose one term, keep both, or search another).                                                                                  |
+| U4  | Who may consolidate (finding 8) | The lead is always offered as consolidator ("You"); when no member has the Adjudicator role, the launcher explains it and links Settings → Members.                                                        |
+| U5  | Axis defaults (finding 5)       | New projects start with clinical creation defaults (assertion present, experiencer patient, temporality current) for the standard axes; editable in Settings; existing projects unchanged; seed sets them. |
+| U6  | Term search prefill (finding 2) | Always prefill the marked text (selected, so typing replaces it). When the document language is not searched, the hint "Names are searched in English…" stays visible under the field.                     |
+| U7  | Full agreement (W1)             | Final panel offers one click "All findings match – accept as final".                                                                                                                                       |
 
 Finding 6 (display name + pseudonym) stays as is. Guidelines F2/F3 and narrow layout G are out of scope.
 
@@ -70,13 +70,13 @@ The publish form gets an action bar above the preview: file + note inputs, then 
 
 `domain/agreement.py` gets a public `groups(findings, order) -> tuple[Group, ...]` built on the existing cluster rule (same layer + term, ≥ 1 character overlap or both spanless; one finding per submission per cluster). A second pass merges clusters of the same layer with **different terms**, overlapping spans and disjoint submission sets into one group (U3). Each `Group` has members `{submission_id: finding_key}` and a kind:
 
-| Kind            | Rule                                                                                       | Decision offered                                                        |
-| --------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `match`         | all submissions present, all exact, identical spans                                        | taken over automatically (undo possible)                                |
-| `value_differs` | all present, same term, at least one axis or modifier differs                              | per differing axis: choose one person's value                           |
-| `span_differs`  | all present, same term, spans differ (may combine with `value_differs`: both rows shown)    | choose one person's span                                                |
-| `term_differs`  | merged clusters with different terms                                                       | choose one term, keep both, or "Other term…" (term search)               |
-| `partial`       | present in some but not all submissions (with 2 people: "only Luc Martin")                 | Take over (optionally "edit values…") or Discard                        |
+| Kind            | Rule                                                                                     | Decision offered                                           |
+| --------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `match`         | all submissions present, all exact, identical spans                                      | taken over automatically (undo possible)                   |
+| `value_differs` | all present, same term, at least one axis or modifier differs                            | per differing axis: choose one person's value              |
+| `span_differs`  | all present, same term, spans differ (may combine with `value_differs`: both rows shown) | choose one person's span                                   |
+| `term_differs`  | merged clusters with different terms                                                     | choose one term, keep both, or "Other term…" (term search) |
+| `partial`       | present in some but not all submissions (with 2 people: "only Luc Martin")               | Take over (optionally "edit values…") or Discard           |
 
 Groups are ordered by the first span start (reading order), spanless groups last. With three or more people, a value chosen by a majority is labelled "2 of 3" but never preselected.
 
@@ -113,15 +113,15 @@ Example with 8 groups (4 match, 1 value, 1 span, 1 partial, 1 term): 6 consolida
 
 ## Work packages and order
 
-| WP  | Content                                    | Size | Files (disjoint)                                                                     | Review         |
-| --- | ------------------------------------------ | ---- | ------------------------------------------------------------------------------------ | -------------- |
-| E1  | `groups()` + consolidation read/resolve/reopen/auto take-over/submit gating API | L    | `domain/agreement.py`, `application/work_rounds.py` (+ new module), `api/work_round_routes.py`, tests | yes (backend)  |
-| B1  | Lead self-consolidation (role grant) backend | M    | `application/document_rows.py` or consolidation start, `assignments/service.py`, tests | yes (authz)    |
-| C1  | Creation defaults + search warm-up/cache   | M    | `projects/service.py`, `ontology/registry.py`, `ontology/translations.py`, seed        | no             |
-| A1  | Row panel (replaces expansion)             | L    | `documents/*`, `admin/DocumentsPage.tsx`                                             | yes            |
-| B2  | Final panel W1 + Consolidate button + launcher list | M | `documents/FinalPanel.tsx`, `finalPanelText.ts`, `variants/ConsolidationLauncher.tsx` | no             |
-| C2  | Prefill always + 960 px layout             | S/M  | `editor/termSearch.ts`, `editor/SearchPanel.tsx`, `styles/screens/editor.css`        | no             |
-| D1  | Guidelines action bar                      | S    | `admin/GuidelinesSection.tsx`, `guidelines/guidelines.css`                           | no             |
-| E2  | Consolidation view frontend                | L    | new `consolidation/*`, route, `tasks/MergeInputs.tsx` removal, `CaseScreen.tsx` sidebar names | yes  |
+| WP  | Content                                                                         | Size | Files (disjoint)                                                                                      | Review        |
+| --- | ------------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------- | ------------- |
+| E1  | `groups()` + consolidation read/resolve/reopen/auto take-over/submit gating API | L    | `domain/agreement.py`, `application/work_rounds.py` (+ new module), `api/work_round_routes.py`, tests | yes (backend) |
+| B1  | Lead self-consolidation (role grant) backend                                    | M    | `application/document_rows.py` or consolidation start, `assignments/service.py`, tests                | yes (authz)   |
+| C1  | Creation defaults + search warm-up/cache                                        | M    | `projects/service.py`, `ontology/registry.py`, `ontology/translations.py`, seed                       | no            |
+| A1  | Row panel (replaces expansion)                                                  | L    | `documents/*`, `admin/DocumentsPage.tsx`                                                              | yes           |
+| B2  | Final panel W1 + Consolidate button + launcher list                             | M    | `documents/FinalPanel.tsx`, `finalPanelText.ts`, `variants/ConsolidationLauncher.tsx`                 | no            |
+| C2  | Prefill always + 960 px layout                                                  | S/M  | `editor/termSearch.ts`, `editor/SearchPanel.tsx`, `styles/screens/editor.css`                         | no            |
+| D1  | Guidelines action bar                                                           | S    | `admin/GuidelinesSection.tsx`, `guidelines/guidelines.css`                                            | no            |
+| E2  | Consolidation view frontend                                                     | L    | new `consolidation/*`, route, `tasks/MergeInputs.tsx` removal, `CaseScreen.tsx` sidebar names         | yes           |
 
 Waves (max 3 agents): 1 = E1, C1, D1 · 2 = B1, C2, A1 · 3 = B2 (after A1, same panel), E2 (after E1). Then one code review over the branch, one fix agent, full gate, rebuild embedded bundle, fast-forward main, rebuild the :18210 stack.
