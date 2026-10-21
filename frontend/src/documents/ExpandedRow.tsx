@@ -85,7 +85,7 @@ function excerpt(text: string): string {
 }
 
 function toHistorySummary(row: RowSubmissionView): SubmissionHistorySummary {
-  return { submission_id: row.submission_id, document_id: row.document_id, author_label: row.author_label, created_at: row.recorded_at, mode: row.mode, round_id: row.round_id };
+  return { submission_id: row.submission_id, document_id: row.document_id, author_label: row.author_label, created_at: row.recorded_at, mode: row.mode, round_id: row.round_id, guideline_version: row.guideline_version ?? null, guideline_withdrawn: row.guideline_withdrawn };
 }
 
 /** Expanded content of one Documents row: stage blocks, Issues, Submissions (n) and More. */

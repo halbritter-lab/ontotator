@@ -5,7 +5,7 @@ import { ConsolidationLauncher } from '../src/variants/ConsolidationLauncher';
 import { assignment } from './assignmentFixtures';
 
 const rows = ['first', 'second'].map((submission_id, index) => ({ submission_id, document_id: 'target',
-  author_label: `Reader ${index + 1}`, created_at: '2026-10-18T12:00:00Z', mode: 'independent' }));
+  author_label: `Reader ${index + 1}`, created_at: '2026-10-18T12:00:00Z', mode: 'independent', guideline_withdrawn: false }));
 const reviewerTask: AssignmentView = { ...assignment, id: 42, project_key: 'p', document_id: 'target', username: 'reviewer',
   display_name: 'Reviewer', pseudonym: 'R', task: 'review', workflow_revision: 7, status: 'submitted' };
 const round: WorkRoundView = { round_id: 'round-exact', project_key: 'p', assignment_id: 42, document_id: 'target', annotator_id: 'R',

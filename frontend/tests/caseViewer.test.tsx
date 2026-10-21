@@ -228,8 +228,8 @@ it('restricts ordinary annotators to text without generic browsing or forbidden 
 it('lets an annotator open an old own submission from the history as an own ref, never as a submission ref', async () => {
   const { CaseViewer } = await import('../src/variants/CaseViewer');
   vi.mocked(api.listProjects).mockResolvedValue([{ project_key: 'pkg', roles: ['annotator'], can_manage: false } as any]);
-  vi.spyOn(api, 'listSubmissionHistory').mockResolvedValue([{ submission_id: ownRef.id, document_id: 'target', author_label: 'Reader A', created_at: '2026-10-16T00:00:00Z', mode: 'independent', round_id: null }]);
-  vi.spyOn(api, 'getSubmissionHistory').mockResolvedValue({ summary: { submission_id: ownRef.id, document_id: 'target', author_label: 'Reader A', created_at: '2026-10-16T00:00:00Z', mode: 'independent', round_id: null },
+  vi.spyOn(api, 'listSubmissionHistory').mockResolvedValue([{ submission_id: ownRef.id, document_id: 'target', author_label: 'Reader A', created_at: '2026-10-16T00:00:00Z', mode: 'independent', round_id: null, guideline_withdrawn: false }]);
+  vi.spyOn(api, 'getSubmissionHistory').mockResolvedValue({ summary: { submission_id: ownRef.id, document_id: 'target', author_label: 'Reader A', created_at: '2026-10-16T00:00:00Z', mode: 'independent', round_id: null, guideline_withdrawn: false },
     annotations: historical.annotations, evidence: [], decisions: [], checked_layer_ids: [], document_checked: false, reanchor_inputs: [], reanchor_resolutions: [], round_inputs: [], round_input_resolutions: [] });
   const rows = vi.spyOn(api, 'getRowSubmissions');
   const onNavigate = vi.fn();

@@ -24,7 +24,7 @@ const input = (id: string, source: typeof snapshot, target: typeof snapshot | nu
   source_ref: { annotation_id: source.annotation.annotation_id, version: source.version }, source_snapshot: source, target_snapshot: target,
   mapping_status: "carried" as const, source_round_ordinal: 2 });
 const carryDetail: SubmissionHistoryDetail = {
-  summary: { submission_id: "sub-carried", document_id: "target", author_label: "alice", created_at: "2026-10-19T00:57:00Z", mode: "independent", round_id: "round-3" },
+  summary: { submission_id: "sub-carried", document_id: "target", author_label: "alice", created_at: "2026-10-19T00:57:00Z", mode: "independent", round_id: "round-3", guideline_withdrawn: false },
   annotations: [snapshot], evidence: [evidence], decisions: [], checked_layer_ids: ["phenotype"], document_checked: false,
   reanchor_inputs: [], reanchor_resolutions: [],
   round_inputs: [input("in-1", snapshot, snapshot), input("in-2", gone, null)],

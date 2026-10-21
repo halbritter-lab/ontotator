@@ -36,7 +36,7 @@ const carriedInput = (id: string, source: AnnotationSnapshot, target: Annotation
   source_snapshot: source, target_snapshot: target, mapping_status: target ? "carried" : "needs_review", source_round_ordinal: 1,
 });
 const detail = (id: string, carried: boolean): SubmissionHistoryDetail => ({
-  summary: { submission_id: id, document_id: "doc", author_label: "alice", created_at: carried ? round2At : round1At, mode: "independent", round_id: carried ? "round-2" : "round-1" },
+  summary: { submission_id: id, document_id: "doc", author_label: "alice", created_at: carried ? round2At : round1At, mode: "independent", round_id: carried ? "round-2" : "round-1", guideline_withdrawn: false },
   annotations: [snapshot("kept")], evidence: [], decisions: [], checked_layer_ids: [], document_checked: true, reanchor_inputs: [], reanchor_resolutions: [],
   round_inputs: carried ? [carriedInput("in-1", snapshot("gone", "HP:gone"), null)] : [],
   round_input_resolutions: carried ? [{ input_id: "in-1", outcome: "dismissed", reason: "Not in this text" }] : [],

@@ -5438,6 +5438,13 @@ export interface components {
             /** Finding Count */
             finding_count: number;
             author?: components["schemas"]["PersonRefView"] | null;
+            /** Guideline Version */
+            guideline_version?: number | null;
+            /**
+             * Guideline Withdrawn
+             * @default false
+             */
+            guideline_withdrawn: boolean;
         };
         /** RowSubmissions */
         RowSubmissions: {
@@ -5852,6 +5859,13 @@ export interface components {
             mode: string;
             /** Round Id */
             round_id?: string | null;
+            /** Guideline Version */
+            guideline_version?: number | null;
+            /**
+             * Guideline Withdrawn
+             * @default false
+             */
+            guideline_withdrawn: boolean;
         };
         /** SubmitRequest */
         SubmitRequest: {
@@ -6085,6 +6099,13 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Guideline Version */
+            guideline_version?: number | null;
+            /**
+             * Guideline Withdrawn
+             * @default false
+             */
+            guideline_withdrawn: boolean;
         };
         /** TranslationRunView */
         TranslationRunView: {

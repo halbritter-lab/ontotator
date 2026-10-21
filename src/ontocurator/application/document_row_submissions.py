@@ -15,6 +15,7 @@ from ontocurator.domain import document_rows as rules
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.submission_labels import round_ordinals, submission_kind
 from ontocurator.packages.models import PackageManifest
+from ontocurator.storage.guidelines import guideline_facts
 from ontocurator.storage.tables import (
     AssignmentRow,
     DocumentRow,
@@ -146,6 +147,7 @@ def _submissions(conn: Connection, pid: int, documents: list[str]) -> list[Any]:
                 SubmissionRow.annotator_id,
                 SubmissionRow.recorded_at,
                 SubmissionRow.mode,
+                SubmissionRow.guideline_version,
                 func.coalesce(
                     func.jsonb_array_length(SubmissionRow.payload["snapshots"]), 0
                 ).label("findings"),
@@ -265,6 +267,11 @@ def build_submissions(
     for rid, item in archived.items():
         held[rid] = max(held[rid], len(item.get("submission_ids", [])))
 
+    facts = (
+        guideline_facts(conn, pid)
+        if any(row.guideline_version is not None for row in rows)
+        else {}
+    )
     submissions = []
     for row in rows:
         owned = owner[row.submission_id]
@@ -290,6 +297,9 @@ def build_submissions(
                 ),
                 "finding_count": int(row.findings),
                 "author": people[row.annotator_id],
+                "guideline_version": row.guideline_version,
+                "guideline_withdrawn": row.guideline_version is not None
+                and facts[row.guideline_version].withdrawn,
             }
         )
 

@@ -16174,6 +16174,22 @@
                 "type": "null"
               }
             ]
+          },
+          "guideline_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guideline Version"
+          },
+          "guideline_withdrawn": {
+            "type": "boolean",
+            "title": "Guideline Withdrawn",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -17247,6 +17263,22 @@
               }
             ],
             "title": "Round Id"
+          },
+          "guideline_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guideline Version"
+          },
+          "guideline_withdrawn": {
+            "type": "boolean",
+            "title": "Guideline Withdrawn",
+            "default": false
           }
         },
         "type": "object",
@@ -17867,6 +17899,22 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "guideline_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guideline Version"
+          },
+          "guideline_withdrawn": {
+            "type": "boolean",
+            "title": "Guideline Withdrawn",
+            "default": false
           }
         },
         "type": "object",

@@ -74,6 +74,7 @@ from ontocurator.packages.models import (
     is_tree_walk,
 )
 from ontocurator.storage.database import Database, advisory_lock_id
+from ontocurator.storage.guidelines import current_guideline_version
 from ontocurator.storage.tables import (
     AnnotationSnapshotRow,
     DocumentRow,
@@ -2173,6 +2174,7 @@ class Repository:
         local_key: str,
         imported: bool,
         last_edit_event_id: int | None = None,
+        guideline_version: int | None = None,
     ) -> None:
         origin = submission.origin_key
         statement = pg_insert(SubmissionRow).values(
@@ -2187,6 +2189,7 @@ class Repository:
             payload=_submission_payload(submission),
             created_at=submission.created_at,
             last_edit_event_id=last_edit_event_id,
+            guideline_version=guideline_version,
         )
         # Imported submissions may already be known; a local one must be new.
         conn.execute(statement.on_conflict_do_nothing() if imported else statement)
@@ -3141,6 +3144,8 @@ class Repository:
                     local_key=key_string,
                     imported=False,
                     last_edit_event_id=event_id,
+                    # The version in force when this submit commits (G15).
+                    guideline_version=current_guideline_version(conn, project_id),
                 )
                 response = _submission_payload(result)
             else:

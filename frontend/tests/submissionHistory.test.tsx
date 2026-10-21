@@ -7,7 +7,7 @@ import { final, group, page, row, submission, submissions } from './documents/fi
 import { historical } from './variantFixtures';
 
 const summary = { submission_id: 'immutable/submission', document_id: 'target', author_label: 'Reader A',
-  created_at: '2026-10-18T12:00:00Z', mode: 'independent' as const, round_id: null };
+  created_at: '2026-10-18T12:00:00Z', mode: 'independent' as const, round_id: null, guideline_withdrawn: false };
 const detail = { summary, annotations: historical.annotations, evidence: [], decisions: [], checked_layer_ids: [], document_checked: false,
   reanchor_inputs: [], reanchor_resolutions: [], round_inputs: [], round_input_resolutions: [] };
 const leadRows = submissions('case 1', 'de', { submissions: [

@@ -7,7 +7,7 @@ export function reviewRecord(changes: Partial<TranslationReviewRecord> = {}): Tr
     decision: "accepted_corrected", clinical_change: false, categories: [], rationale: null,
     machine_text_sha256: "old", proposed_text: "Submitted correction", proposed_text_sha256: "new",
     status_before: "reviewed", status_after: "accepted", created_variant_id: "created-v7",
-    review_policy: "translation-review/v1", created_at: at, ...changes };
+    review_policy: "translation-review/v1", created_at: at, guideline_withdrawn: false, ...changes };
 }
 export function reviewWorkspace(changes: Partial<ReviewWorkspace> = {}): ReviewWorkspace {
   const variant = { document_id: "target", case_id: "case", external_id: "EN 1/7", language: "de", version: 3,

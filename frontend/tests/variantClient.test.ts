@@ -36,7 +36,7 @@ const record: Schemas["TranslationReviewRecord"] = {
   decision: "accepted_corrected", clinical_change: false, categories: [], rationale: null,
   machine_text_sha256: "b".repeat(64), proposed_text: text.text, proposed_text_sha256: text.text_sha256,
   status_before: "reviewed", status_after: "accepted", created_variant_id: documentId,
-  review_policy: "translation-review/v1", created_at: time,
+  review_policy: "translation-review/v1", created_at: time, guideline_withdrawn: false,
 };
 const workspace: Schemas["ReviewWorkspace"] = {
   assignment: { ...assignment }, variant, translation_ancestor: variant, text: text.text,

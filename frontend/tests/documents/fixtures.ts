@@ -188,6 +188,8 @@ export function submission(overrides: Partial<RowSubmissionView> & Pick<RowSubmi
     round_state: null,
     is_latest_in_round: null,
     finding_count: 3,
+    guideline_version: null,
+    guideline_withdrawn: false,
     ...overrides,
   };
 }

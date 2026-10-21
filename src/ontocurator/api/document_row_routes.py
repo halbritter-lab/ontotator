@@ -319,6 +319,8 @@ class RowSubmissionView(_View):
     is_latest_in_round: bool | None
     finding_count: int
     author: PersonRefView | None = None
+    guideline_version: int | None = None
+    guideline_withdrawn: bool = False
 
 
 class RowRoundView(_View):
