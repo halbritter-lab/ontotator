@@ -5,7 +5,7 @@ import hashlib
 import logging
 import threading
 from collections import OrderedDict
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from concurrent.futures import Future
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +23,7 @@ from ontocurator.domain.profiles import (
 from ontocurator.ontology.conditions import SearchCondition, validate_resources
 from ontocurator.ontology.service import OntologyService
 from ontocurator.ontology.translations import (
+    LanguageLexicalIndex,
     discover_translation_files,
     parse_translation_name,
 )
@@ -350,10 +351,72 @@ class OntologyRegistry:
         definition = resolve_ontology(repo.get_task_profile(project_key), ontology_id)
         return self._package_ontology(repo, project_key, definition)
 
+    def warm(
+        self,
+        repo: Repository,
+        project_key: str,
+        definitions: Iterable[OntologyDefinition],
+        languages: Sequence[str],
+    ) -> threading.Thread | None:
+        """Build a project's pinned search views in the background (U15).
+
+        Only when the project's search conditions already exist: warming never
+        captures them, so the translations are not frozen before the first real
+        search. The build joins the single-flight ``_package_builds``; a search
+        arriving meanwhile waits for the same build instead of starting another.
+        The language subset lands in the existing per-view LRU.
+        """
+        conditions = repo.get_search_conditions(project_key)
+        if conditions is None:
+            return None
+        thread = threading.Thread(
+            target=self._warm,
+            args=(repo, project_key, list(definitions), conditions, list(languages)),
+            name=f"search-warm-up-{project_key}",
+            daemon=True,
+        )
+        thread.start()
+        return thread
+
+    def _warm(
+        self,
+        repo: Repository,
+        project_key: str,
+        definitions: list[OntologyDefinition],
+        conditions: list[SearchCondition],
+        languages: list[str],
+    ) -> None:
+        captured = {condition.ontology_sha256 for condition in conditions}
+        seen: set[str] = set()
+        for definition in definitions:
+            sha = definition.sha256.lower()
+            if sha in seen or sha not in captured:
+                continue
+            seen.add(sha)
+            try:
+                service = self._package_ontology(
+                    repo, project_key, definition, conditions
+                )
+                self.warm_languages(service, languages)
+            except Exception as exc:  # a warm-up must never surface
+                logger.info("Search warm-up of %s skipped: %s", project_key, exc)
+
+    @staticmethod
+    def warm_languages(service: OntologyService, languages: Sequence[str]) -> None:
+        """Fit the language subset a search with ``languages`` would use."""
+        lexical = service.engine.lexical
+        if isinstance(lexical, LanguageLexicalIndex) and lexical.ready:
+            lexical.search("warm-up", 1, languages=service.active_languages(languages))
+
     def _package_ontology(
-        self, repo: Repository, project_key: str, definition: OntologyDefinition
+        self,
+        repo: Repository,
+        project_key: str,
+        definition: OntologyDefinition,
+        conditions: list[SearchCondition] | None = None,
     ) -> OntologyService:
-        conditions = self.ensure_package_conditions(repo, project_key)
+        if conditions is None:
+            conditions = self.ensure_package_conditions(repo, project_key)
         condition = next(
             c for c in conditions if c.ontology_sha256 == definition.sha256.lower()
         )

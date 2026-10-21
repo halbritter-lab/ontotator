@@ -1,5 +1,6 @@
 """Public assignment-aware opening without changing legacy workspace identity."""
 
+import logging
 from dataclasses import dataclass
 
 from ontocurator.application.work_rounds import WorkRoundService
@@ -11,6 +12,8 @@ from ontocurator.domain.errors import DomainError
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.storage.repository import _key_str, _workspace_aliases
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -59,7 +62,7 @@ class WorkspaceOpeningService:
             and active.workspace_key.round_id is not None
         ):
             view = self.workspaces.open(active.workspace_key)
-            return OpenedWorkspace(view, self._read_only(view.key))
+            return self._opened(view)
         if targets is not None and not targets.target_set_id:
             targets = ReviewTargetSet.create(targets.targets)
         requested = key.model_copy(
@@ -70,7 +73,37 @@ class WorkspaceOpeningService:
             }
         )
         view = self.workspaces.open(requested, targets, pending_proposal_set_ids)
-        return OpenedWorkspace(view, self._read_only(view.key))
+        return self._opened(view)
+
+    def _opened(self, view: WorkspaceView) -> OpenedWorkspace:
+        opened = OpenedWorkspace(view, self._read_only(view.key))
+        if not opened.read_only:
+            self._warm_search(view)
+        return opened
+
+    def _warm_search(self, view: WorkspaceView) -> None:
+        """Start the background search warm-up of an editable task (U15)."""
+        registry = getattr(self.workspaces, "registry", None)
+        if registry is None:
+            return
+        layers = {layer.layer_id: layer for layer in view.layers}
+        ontologies = {item.ontology_id: item for item in view.ontologies}
+        definitions = [
+            ontologies[layers[layer_id].ontology_id]
+            for layer_id in view.scope.editable_layer_ids
+            if layer_id in layers and layers[layer_id].ontology_id in ontologies
+        ]
+        if not definitions:
+            return
+        try:
+            registry.warm(
+                self.repo,
+                view.key.project_key,
+                definitions,
+                [view.document.language.lower()],
+            )
+        except Exception as exc:  # warming is an optimisation, never a failure
+            logger.info("Search warm-up not started: %s", exc)
 
     def _read_only(self, key: WorkspaceKey) -> bool:
         # Opening can change the current assignment binding. Project the latest
