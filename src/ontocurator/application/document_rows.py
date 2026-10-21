@@ -6,7 +6,7 @@ shared project lock. ``document_row_page`` and ``document_row_submissions``
 build the responses from these facts.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -866,10 +866,10 @@ def _last_submissions(conn: Connection, pid: int) -> dict[int, str]:
 
 
 def _source_obligations(
-    conn: Connection, repo: Repository, key: str, pid: int
+    causes: Iterable[Mapping[str, Any]],
 ) -> dict[str, tuple[SourceObligationFact, ...]]:
     result: dict[str, list[SourceObligationFact]] = {}
-    for cause in repo.workflow_causes_in(conn, key, pid):
+    for cause in causes:
         if cause["code"] != "SOURCE_UPDATE_UNREVIEWED":
             continue
         result.setdefault(cause["document_id"], []).append(
@@ -938,6 +938,8 @@ def load_facts(
         viewer_is_lead=True,  # Documents is lead-only
     )
     people_fields = {uid: ref.model_dump() for uid, ref in people.items()}
+    # Read once: the final state and the source obligations share them.
+    causes = repo.workflow_causes_in(conn, key, pid)
     return RowFacts(
         project_key=key,
         viewer_user_id=viewer_user_id,
@@ -952,7 +954,13 @@ def load_facts(
         open_translation_reviews=_open_translation_reviews(conn, pid),
         reports=reports,
         final_state=derive_final_state(
-            conn, repo, key, pid, plan=plan, discarded=frozenset(discarded)
+            conn,
+            repo,
+            key,
+            pid,
+            plan=plan,
+            discarded=frozenset(discarded),
+            causes=causes,
         ),
         selections=_selections(conn, pid),
         last_activity=last_activity,
@@ -981,7 +989,7 @@ def load_facts(
         baseline_at=documents_visits.baseline(conn, viewer_user_id, pid),
         resolutions=_resolutions(conn, pid),
         last_submissions=_last_submissions(conn, pid),
-        source_obligations=_source_obligations(conn, repo, key, pid),
+        source_obligations=_source_obligations(causes),
     )
 
 

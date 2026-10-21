@@ -131,6 +131,7 @@ def derive_final_state(
     *,
     plan: Mapping[RowKey, PlanFlags] | None = None,
     discarded: Collection[str] | None = None,
+    causes: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Selections, omissions and warnings of project ``key`` on ``conn``.
 
@@ -139,7 +140,8 @@ def derive_final_state(
     stay in history and are listed in ``not_in_plan`` (information only). A
     selection on a discarded version leaves the export (the row counts as
     without a final result). ``plan`` and ``discarded`` are the caller's
-    ``effective_plan`` and discarded document IDs, read here when omitted.
+    ``effective_plan`` and discarded document IDs, read here when omitted;
+    ``causes`` is the caller's ``repo.workflow_causes_in`` result, likewise.
     """
 
     def destination(case_id: str, document_id: str) -> str:
@@ -244,7 +246,9 @@ def derive_final_state(
     # acknowledgeable TASK_PAUSED_WITHOUT_REPORT; they pass through unchanged.
     causes = [
         cause
-        for cause in repo.workflow_causes_in(conn, key, pid)
+        for cause in (
+            repo.workflow_causes_in(conn, key, pid) if causes is None else causes
+        )
         if cause["code"] != "SOURCE_UPDATE_UNREVIEWED"
         or roots[cause["document_id"]] in selected_chains | active_chains
     ]

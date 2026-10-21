@@ -278,7 +278,7 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
     if facts.annotate and _final_ready(facts):
         steps.append(_decision("choose_final", "final", "choose_final"))
     # 6: translation needs a reviewer (D4: a failed check carries a badge).
-    if (
+    reviewer_needed = (
         facts.review
         and translation
         and not open_review
@@ -286,7 +286,8 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
             status in REVIEWER_NEEDED_STATUSES or status is None
             for status in facts.translation_statuses
         )
-    ):
+    )
+    if reviewer_needed:
         steps.append(
             Step(
                 "assign_translation_review",
@@ -298,7 +299,8 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
         )
     # 6a (VD14): the source changed under an accepted translation; an assign
     # step with a warning badge, whatever the Review flag (D26 turns it on).
-    if translation and facts.source_changed and not open_review:
+    # Rule 6 already assigns the review of a not-yet-reviewed translation.
+    if translation and facts.source_changed and not open_review and not reviewer_needed:
         steps.append(
             Step(
                 "review_source_change",
@@ -340,7 +342,9 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
             )
         )
     # 9: annotation or optional annotation review open (a finish_then_carry
-    # assignment on the old version included).
+    # assignment on the old version included). ``open_annotations`` already
+    # counts that open assignment; ``finishing`` keeps the rule self-contained
+    # for facts built without it.
     if facts.open_annotations or facts.finishing:
         steps.append(
             Step("annotation_in_progress", "in_progress", "annotation", None, ())

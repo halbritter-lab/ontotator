@@ -404,6 +404,7 @@ SCENARIOS: list[tuple[str, StageFacts, tuple[str, ...], dict[str, dict[str, Any]
     (
         "15-de-source-changed",
         facts(
+            source_changed=True,
             source_changed_from=1,
             annotation_assignments=1,
             annotators_submitted=(TOM,),

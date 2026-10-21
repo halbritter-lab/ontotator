@@ -95,7 +95,16 @@ class _Context:
         self.resolution_of: dict[int, str] = {}
         self.moved_to: dict[int, str] = {}
         self.submission_resolutions: dict[str, set[str]] = {}
+        # Submission -> target versions it was dismissed for (rule 3b).
+        self.dismissed_to: dict[str, set[str]] = {}
         for resolution in facts.resolutions:
+            if (
+                resolution.submission_id is not None
+                and resolution.resolution == "dismissed"
+            ):
+                self.dismissed_to.setdefault(resolution.submission_id, set()).add(
+                    resolution.to_document_id
+                )
             if resolution.assignment_id is not None:
                 self.resolution_of[resolution.assignment_id] = resolution.resolution
                 if resolution.resolution == "moved":
@@ -394,7 +403,8 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
         # Review applicable (V5), also without a final or work on the chain.
         listed = {item["cause_id"] for item in issues_and_notes}
         for item in issues_and_notes:
-            if item["code"] == _SOURCE_CHANGED:
+            # A discarded root's obligation stays a note.
+            if item["code"] == _SOURCE_CHANGED and item["document_id"] in live_ids:
                 item["category"] = "translation"
                 translation_failed = True
         for chain in live:
@@ -663,9 +673,10 @@ def _step_work(
     return ()
 
 
-# Resolutions that settle a submission on an old version (rule 3b; the spec
-# names carried and dismissed, a handover settles it as well).
-_SETTLED = frozenset({"carried", "dismissed", "handed_over"})
+# Resolutions that settle a submission on an old version for any target
+# (rule 3b; the spec names carried, a handover settles it as well). A
+# dismissal settles it only for the version it was dismissed on.
+_SETTLED = frozenset({"carried", "handed_over"})
 
 
 def _ancestors(
@@ -755,6 +766,7 @@ def _old_work(
                 submission is None
                 or item.user_id in holders
                 or ctx.submission_resolutions.get(submission, set()) & _SETTLED
+                or target.document_id in ctx.dismissed_to.get(submission, set())
             ):
                 continue
             old_submitted.append(replace(entry, submission_id=submission))

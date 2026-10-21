@@ -559,9 +559,16 @@ def test_rule_6a_source_change_is_assign_with_badge():
     assert "review_source_change" not in codes(
         annotate=True, is_source=True, source_changed=True, translation_statuses=(None,)
     )
-    # 6a follows rule 6.
+    # Rule 6 already assigns the review of a not-yet-reviewed translation.
     both = codes(review=True, source_changed=True, translation_statuses=("translated",))
-    assert both == ["assign_translation_review", "review_source_change"]
+    assert both == ["assign_translation_review"]
+    # Review off: rule 6 does not apply, 6a does.
+    assert "review_source_change" in codes(
+        annotate=True,
+        rule_on=False,
+        source_changed=True,
+        translation_statuses=("translated",),
+    )
 
 
 def test_precedence_3_3a_3b_4():

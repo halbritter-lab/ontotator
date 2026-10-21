@@ -21,6 +21,7 @@ from browser_documents_scenarios import (
     Scenario,
     accept_translation,
     add_user,
+    assign,
     identity,
     import_texts,
     in_progress,
@@ -28,7 +29,7 @@ from browser_documents_scenarios import (
     select,
     submit,
 )
-from browser_documents_scenarios_rows import review_translation
+from browser_documents_scenarios_rows import report, review_translation
 from browser_server import ONTOLOGY
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
@@ -49,6 +50,7 @@ from test_text_change_service import (
 from ontocurator.api.app import create_app
 from ontocurator.application.document_rows import DocumentRowsService, RowQuery
 from ontocurator.config import AppConfig
+from ontocurator.storage.overview_tables import TextChangeResolutionRow
 from ontocurator.storage.plan_tables import DiscardedVariantRow
 from ontocurator.storage.tables import ProjectRow
 
@@ -224,6 +226,63 @@ def test_finish_then_carry_shows_finishing_on_old(env):
     assert "handle_text_change" not in _codes(_row(env))
 
 
+def test_held_old_open_task_is_paused_not_a_text_change(env):
+    # A held old task is decided through its report first (I5); its person
+    # still waits, so "Assign annotation" stays away too.
+    work = _started(env)
+    report(env.scenario, "tom", work["assignment_id"], work["round"].round_id, "?")
+    row = _row(env)
+    assert "handle_text_change" not in _codes(row)
+    assert "assign_annotation" not in _codes(row)
+    assert row["stages"]["annotation"]["state"] == "paused"
+
+
+def test_handover_settles_the_submission(env):
+    work = _submitted(env, "tom")
+    _carry(env, work["submission_id"], mode="other", username=env.user("ana"))
+    row = _row(env)
+    assert "carry_text_change" not in _codes(row)
+    assert "assign_annotation" not in _codes(row)
+
+
+def test_author_holding_the_target_gets_no_carry_step(env):
+    work = _submitted(env, "tom")
+    assign(env.scenario, env.docs[1], "tom", "annotate")
+    row = _row(env)
+    assert "carry_text_change" not in _codes(row)
+    assert all(s["submission_id"] != work["submission_id"] for s in row["steps"])
+
+
+def test_dismissal_settles_only_its_own_target(app):
+    env = _env(app, [TEXT_DE, CORRECTED_DE, THIRD_DE])
+    work = _submitted(env)
+    # Dismissed for v2 only: the submission still waits for v3.
+    with env.db.transaction() as conn:
+        pid = conn.execute(
+            sa_select(ProjectRow.id).where(ProjectRow.project_key == env.key)
+        ).scalar_one()
+        conn.execute(
+            insert(TextChangeResolutionRow).values(
+                project_id=pid,
+                case_id=CASE,
+                language="de",
+                from_document_id=env.docs[0],
+                to_document_id=env.docs[1],
+                submission_id=work["submission_id"],
+                resolution="dismissed",
+            )
+        )
+    row = _row(env)
+    (step,) = [s for s in row["steps"] if s["code"] == "carry_text_change"]
+    assert (step["submission_id"], step["document_id"]) == (
+        work["submission_id"],
+        env.docs[2],
+    )
+    # Dismissed for v3, the current target: settled.
+    _carry(env, work["submission_id"], mode="dismiss")
+    assert "carry_text_change" not in _codes(_row(env))
+
+
 # --- Translations: rejected / waiting corrections, discarded roots ---------- #
 
 
@@ -319,6 +378,40 @@ def test_discarded_root_work_is_ignored(app):
     assert row["stages"]["annotation"]["state"] != "old_text_open"
 
 
+def test_parallel_roots_count_waiting_people_per_root(app):
+    # Root b waits on Tom's v1 work, root a has n assignments: rule 8 adds
+    # min(n + waiting) - min(n) over the targets (VD22).
+    from t1_builders import correction_unit, native_unit, translation_unit
+
+    scenario = new_project(app, "parallel")
+    source = native_unit(CASE, "en", SYNTHETIC, case_id=CASE)
+    root_a = translation_unit(
+        f"{CASE}-a", "de", SYNTHETIC_DE, source=source, provider="A", run_id="a"
+    )
+    root_b = translation_unit(
+        f"{CASE}-b",
+        "de",
+        f"{SYNTHETIC_DE} (b)",
+        source=source,
+        provider="B",
+        run_id="b",
+    )
+    root_b2 = correction_unit(root_b, f"{SYNTHETIC_DE} (b) Korrektur.")
+    docs = import_texts(scenario, [source, root_a, root_b, root_b2])
+    add_user(scenario, "lead", ["lead"])
+    add_user(scenario, "tom", ["annotator"])
+    add_user(scenario, "ana", ["annotator"])
+    in_progress(scenario, docs[(f"{CASE}-b", "de", 1)], "tom")
+    row = _rows(scenario)[(CASE, "de")]
+    assert "handle_text_change" in _codes(row)
+    # Root a has nobody: min(0 + 0) - min(0, 0) = 0, one more is needed.
+    assert "assign_annotation" in _codes(row)
+    assign(scenario, docs[(f"{CASE}-a", "de", 1)], "ana", "annotate")
+    row = _rows(scenario)[(CASE, "de")]
+    # n = (1, 0), waiting = (0, 1): min(n + w) - min(n) = 1 - 0 = 1, enough.
+    assert "assign_annotation" not in _codes(row)
+
+
 # --- Rule 6a: source changed ------------------------------------------------- #
 
 
@@ -356,6 +449,11 @@ def test_source_change_gives_review_source_change_on_translations(app):
     assert step["document_id"] == docs["de"]
     assert _cell(row, "review") == ("source_changed", "decision")
     assert row["stages"]["review"]["detail"]["from_version"] == 1
+    # The final's cause and the unfiltered obligation are one issue.
+    issues = [i for i in row["issues"] if i["code"] == "SOURCE_UPDATE_UNREVIEWED"]
+    assert [(i["category"], i["document_id"]) for i in issues] == [
+        ("translation", docs["de"])
+    ]
     # Scenario 15: a final may be outdated; its action sits in Review.
     assert _cell(row, "final") == ("may_be_outdated", "waiting")
     # The source row itself has no translation review.
@@ -373,10 +471,69 @@ def test_source_change_issue_only_with_review_applicable(app):
     ]
     assert not [n for n in row["notes"] if n["code"] == "SOURCE_UPDATE_UNREVIEWED"]
     assert "translation" in row["categories"]
-    assert "review_source_change" in _codes(row)
+    # Not yet reviewed: rule 6 assigns the review, 6a adds no second step.
+    assert "assign_translation_review" in _codes(row)
+    assert "review_source_change" not in _codes(row)
     source = rows[(CASE, "en")]
     assert not [
         i
         for i in source["issues"] + source["notes"]
         if i["code"] == "SOURCE_UPDATE_UNREVIEWED"
+    ]
+
+
+def test_open_translation_review_suppresses_source_change_step(app):
+    # The review runs on the version whose source changed: no 6a step, the
+    # Review cell names the source change as the reason.
+    scenario, docs = _source_changed(app, "reviewing")
+    assign(scenario, docs["de"], "translator", "translation_review")
+    row = _rows(scenario)[(CASE, "de")]
+    assert "review_source_change" not in _codes(row)
+    assert "translation_review_in_progress" in _codes(row)
+    assert _cell(row, "review")[0] == "re_review"
+    assert row["stages"]["review"]["detail"]["note"] == "source_changed"
+
+
+def test_discarded_root_source_change_stays_a_note(app):
+    from t1_builders import correction_unit, native_unit, translation_unit
+
+    scenario = new_project(app, "discarded-source")
+    source = native_unit(CASE, "en", SYNTHETIC, case_id=CASE)
+    kept = translation_unit(
+        f"{CASE}-a", "de", SYNTHETIC_DE, source=source, provider="A", run_id="a"
+    )
+    dropped = translation_unit(
+        f"{CASE}-b",
+        "de",
+        f"{SYNTHETIC_DE} (b)",
+        source=source,
+        provider="B",
+        run_id="b",
+    )
+    changed = correction_unit(source, f"{SYNTHETIC} She also has a rash.")
+    docs = import_texts(scenario, [source, kept, dropped, changed])
+    add_user(scenario, "lead", ["lead"])
+    add_user(scenario, "tom", ["annotator"])
+    # Work on root b keeps its source-change cause in the final state.
+    in_progress(scenario, docs[(f"{CASE}-b", "de", 1)], "tom")
+    lead, _actor = identity(scenario, "lead")
+    with scenario.db.transaction() as conn:
+        pid = conn.execute(
+            sa_select(ProjectRow.id).where(ProjectRow.project_key == scenario.key)
+        ).scalar_one()
+        conn.execute(
+            insert(DiscardedVariantRow).values(
+                project_id=pid,
+                document_id=docs[(f"{CASE}-b", "de", 1)],
+                reason="test",
+                discarded_by=lead.user_id,
+            )
+        )
+    row = _rows(scenario)[(CASE, "de")]
+    # Only the live root's obligation is an issue; root b's stays a note.
+    issues = [i for i in row["issues"] if i["code"] == "SOURCE_UPDATE_UNREVIEWED"]
+    notes = [n for n in row["notes"] if n["code"] == "SOURCE_UPDATE_UNREVIEWED"]
+    assert [i["document_id"] for i in issues] == [docs[(f"{CASE}-a", "de", 1)]]
+    assert [(n["category"], n["document_id"]) for n in notes] == [
+        (None, docs[(f"{CASE}-b", "de", 1)])
     ]
