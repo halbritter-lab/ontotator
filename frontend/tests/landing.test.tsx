@@ -147,6 +147,43 @@ describe("last-used landing (F8, D4)", () => {
     expect(screen.queryByRole("heading", { name: "Documents of p1" })).toBeNull();
   });
 
+  it.each(["#/?foo=1", "#/?status=bogus"])("does not redirect the explicit visit %s", async (hash) => {
+    remember("p1");
+    window.history.replaceState(null, "", hash);
+    vi.spyOn(api, "listProjects").mockResolvedValue([project("p1", ["lead"])]);
+    render(<App user={lead} />);
+    expect(await screen.findByRole("heading", { name: "My tasks" })).toBeDefined();
+    await act(async () => { await Promise.resolve(); });
+    expect(window.location.hash).toBe(hash);
+  });
+
+  it.each([["lead", "p1"], ["annotator", "p1"], ["lead", "gone"]] as const)(
+    "keeps a native Back started while the projects load (%s, remembered %s)", async (role, remembered) => {
+      remember(remembered);
+      window.history.replaceState({ ontocuratorRouteIndex: 0 }, "", "#/me");
+      window.history.pushState({ ontocuratorRouteIndex: 1 }, "", "#/");
+      let resolveProjects: (projects: ProjectSummary[]) => void = () => {};
+      vi.spyOn(api, "listProjects").mockReturnValue(new Promise(resolve => { resolveProjects = resolve; }));
+      render(<App user={lead} />);
+      await waitFor(() => expect(api.listProjects).toHaveBeenCalled());
+      await act(async () => {
+        window.history.back();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        resolveProjects([project("p1", [role])]);
+      });
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+      expect(window.location.hash).toBe("#/me");
+      expect(screen.getByRole("heading", { level: 1, name: /profile/i })).toBeDefined();
+    });
+
+  it("shows only the error on the Projects page when the projects fail to load", async () => {
+    window.history.replaceState(null, "", "#/projects");
+    vi.spyOn(api, "listProjects").mockRejectedValue(new Error("offline"));
+    render(<App user={lead} />);
+    expect(await screen.findByRole("button", { name: "Retry projects" })).toBeDefined();
+    expect(screen.queryByText("Loading your projects…")).toBeNull();
+  });
+
   it("remembers a filtered My tasks visit without redirecting it", async () => {
     window.history.replaceState(null, "", "#/?project=p3");
     vi.spyOn(api, "listProjects").mockResolvedValue([project("p3", ["annotator"])]);

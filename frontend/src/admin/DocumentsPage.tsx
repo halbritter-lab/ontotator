@@ -17,7 +17,7 @@ import {
   type VariantSummary,
 } from "../api/client";
 import { formatDateTime, labelFor, plural } from "../app/labels";
-import { DOCUMENT_FIELDS, PANEL_STAGES, PANEL_TABS, routeHref, type NavigateOptions, type PanelTab, type ProjectDocumentsQuery, type Route } from "../app/router";
+import { DOCUMENT_FIELDS, MY_TASKS, PANEL_STAGES, PANEL_TABS, routeHref, type NavigateOptions, type PanelTab, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, Checkbox, Dialog, EmptyState, FilterChip, InlineMessage, StatusBadge, tabId, Toast, Toolbar, useMediaQuery, useToast, type GroupSelectMode } from "../ui";
@@ -138,7 +138,7 @@ export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
     return <section className="documents-page">
       <h1>Documents</h1>
       <EmptyState title="Documents is for project leads"
-        action={<RouteLink route={{ name: "tasks" }} onNavigate={route => props.onNavigate(route)}>Go to My tasks</RouteLink>}>
+        action={<RouteLink route={MY_TASKS} onNavigate={route => props.onNavigate(route)}>Go to My tasks</RouteLink>}>
         Your tasks for this project are under My tasks.
       </EmptyState>
     </section>;

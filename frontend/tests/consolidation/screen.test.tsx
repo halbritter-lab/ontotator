@@ -224,7 +224,7 @@ describe("ConsolidationScreen", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Next task: case-108 (de)" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 43 });
     fireEvent.click(screen.getByRole("button", { name: "Back to my tasks" }));
-    expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks" });
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks", status: "all" });
   });
 
   it("is read-only for the lead and opens the group from the route", async () => {

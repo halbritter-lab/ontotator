@@ -5,7 +5,7 @@ import { CaseViewer } from "./variants/CaseViewer";
 import { Shell } from "./app/Shell";
 import { NotFound } from "./app/NotFound";
 import { TaskEditor } from "./tasks/TaskEditor";
-import { parseRoute, routeHref, type NavigateOptions, type Route, type RouteLeaveGuard } from "./app/router";
+import { MY_TASKS, parseRoute, routeHref, type NavigateOptions, type Route, type RouteLeaveGuard } from "./app/router";
 import { MyTasks } from "./tasks/MyTasks";
 import { landingProject, rememberProject } from "./app/lastProject";
 import { ProfilePage } from "./me/ProfilePage";
@@ -49,7 +49,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
   // Landing (D7): only the first view of plain `#/` after login redirects a lead;
   // a later visit to My tasks stays there.
-  const [landing, setLanding] = useState(() => route.name === "tasks" && route.project === undefined && route.status === undefined);
+  // Decided on the raw hash: `#/?status=bogus` or `#/?foo=1` are explicit visits, not the landing.
+  const [landing, setLanding] = useState(() => ["", "#", "#/"].includes(window.location.hash));
   // The landing redirect waits for the Documents summary; My tasks keeps its loading line meanwhile.
   const [landingSummary, setLandingSummary] = useState(false);
   const [taskProject, setTaskProject] = useState<{ identity: string; key: string } | null>(null);
@@ -177,8 +178,12 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     // Last-used project (D4): Documents for leads, My tasks filtered to it for others; else the Projects page.
     const key = landingProject(baseUser.username, projects);
     const project = projects.find(item => item.project_key === key);
+    // The landing never takes over a navigation the user already started (link, Back/Forward).
+    const from = acceptedHash.current;
+    const superseded = () => leaving.current || acceptedHash.current !== from;
     // My tasks keeps its loading line until the redirect is accepted, so it never flashes.
     const redirect = (next: Route) => {
+      if (superseded()) { setLandingSummary(false); return; }
       setLandingSummary(true);
       void Promise.resolve(requestRef.current(next, undefined, { replace: true })).finally(() => setLandingSummary(false));
     };
@@ -186,10 +191,10 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     if (!(project.can_manage && project.roles.includes("lead"))) { redirect(projectDestination(project)); return; }
     // Needs your decision when the counter is > 0 (VD7), otherwise All; a failed summary lands on All.
     // The redirect is dropped if the user navigated while the summary loaded.
-    const from = acceptedHash.current;
+    if (superseded()) return;
     setLandingSummary(true);
     const land = (segment?: "decision") => {
-      if (acceptedHash.current !== from) { setLandingSummary(false); return; }
+      if (superseded()) { setLandingSummary(false); return; }
       void Promise.resolve(requestRef.current({ name: "projectDocuments", key, ...(segment ? { segment } : {}) }, undefined, { replace: true }))
         .finally(() => setLandingSummary(false));
     };
@@ -248,7 +253,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId, route.view ?? null])} assignmentId={route.assignmentId} view={route.view}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef}
       onProjectContext={key => setTaskProject({ identity: taskIdentity, key })} />; break;
-    case "projects": content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
+    case "projects": content = projectError ? <></> : projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
       : <ProjectsPage projects={projects} currentKey={landingProject(user.username, projects)} onNavigate={go} />; break;
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
     case "adminOntologies": content = <OntologiesPage onNavigate={go} />; break;
@@ -273,7 +278,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       const canManage = !!projects.find(project => project.project_key === route.key)?.can_manage;
       content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
         : canManage ? <ProblemReportDetail key={JSON.stringify([user.username, route.key, route.reportId])} projectKey={route.key} reportId={route.reportId} canManage={canManage} action={route.action} section={route.section} documents={route.documents} onNavigate={go} />
-        : <EmptyState title="Problem report not found" action={<Button onClick={() => go({ name: "tasks" })}>My tasks</Button>} />;
+        : <EmptyState title="Problem report not found" action={<Button onClick={() => go(MY_TASKS)}>My tasks</Button>} />;
       break;
     }
     case "projectConsolidation": content = <ConsolidationScreen key={JSON.stringify([user.username, route.key, route.roundId])} projectKey={route.key}
@@ -286,7 +291,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   return <Shell user={user} projects={projects} route={route} onNavigate={go} onLogout={logout}
     taskProject={taskProject?.identity === taskIdentity ? taskProject.key : undefined}
     breadcrumb={route.name === "task" ? [
-      { label: "My tasks", onClick: () => go({ name: "tasks" }) },
+      { label: "My tasks", onClick: () => go(MY_TASKS) },
       { label: crumbTask?.identity === taskIdentity && crumbTask.task ? taskCrumbLabel(crumbTask.task) : "Task", title: `Assignment ${route.assignmentId}` },
     ] : undefined}>
     {!!projectError && <><ErrorNotice error={projectError} /><Button onClick={() => setRetry(value => value + 1)}>Retry projects</Button></>}

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEve
 import { api, ApiError, type ReviewWorkspace, type TaskSummary, type TranslationReviewRecord, type SourceObligationView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { nextOpenTask } from "../app/caseOrder";
-import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
+import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/router";
 import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconRetry, InlineMessage, Kbd, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
 import { caretInParagraph, paragraphStarts } from "../variants/paragraphs";
@@ -89,7 +89,7 @@ export function TranslationReviewScreen(props: TranslationReviewScreenProps): JS
   if (readyIdentity !== identity) return <InlineMessage tone="info">Opening translation review...</InlineMessage>;
   if (error || !loaded) return <section><h1>Translation review</h1>
     {error instanceof ApiError && error.code === "ASSIGNMENT_NOT_FOUND" ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={error} />}
-    <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate({ name: "tasks" })}>Back to my tasks</Button></section>;
+    <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button></section>;
   return <ReviewEditor key={identity} {...props} workspace={loaded.workspace} onReload={() => setRetry(n => n + 1)} />;
 }
 
@@ -613,8 +613,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
             {nextTask.kind === "ready" && nextTask.next && <Button ref={nextTaskButton} variant="primary"
               onClick={() => props.onNavigate({ name: "task", assignmentId: nextTask.next!.assignment_id })}>{nextTaskLabel(nextTask.next)}</Button>}
             {nextTask.kind === "ready" && !nextTask.next
-              ? <Button variant="primary" onClick={() => props.onNavigate({ name: "tasks" })}>Back to my tasks</Button>
-              : navigateLink({ name: "tasks" }, "Back to my tasks")}
+              ? <Button variant="primary" onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button>
+              : navigateLink(MY_TASKS, "Back to my tasks")}
             {nextTask.kind === "ready" && <p role="status" className="translation-submit-note">{remainingTasksText(nextTask.remaining)}</p>}
             {nextTask.kind === "error" && <><ErrorNotice error={nextTask.error} /><Button onClick={() => setNextTaskLoad(n => n + 1)}>Retry</Button></>}
           </div>}

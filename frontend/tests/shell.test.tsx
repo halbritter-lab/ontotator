@@ -330,10 +330,10 @@ describe("NotFound page", () => {
     render(<NotFound noAccess={noAccess} onNavigate={onNavigate} />);
     expect(screen.getByText(noAccess ? "You do not have access to this page." : "This page does not exist.")).toBeDefined();
     const link = screen.getByRole("link", { name: "My tasks" });
-    expect(link.getAttribute("href")).toBe("#/");
+    expect(link.getAttribute("href")).toBe("#/?status=all");
     fireEvent.click(link);
     expect(onNavigate).toHaveBeenCalledOnce();
-    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks" });
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", status: "all" });
     expect(window.location.hash).toBe("#/tasks/42");
   });
 });

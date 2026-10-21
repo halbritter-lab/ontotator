@@ -96,7 +96,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); sessio
 it("tells non-leads that Documents is for project leads without loading anything", () => {
   renderPage({ canManage: false });
   expect(screen.getByRole("heading", { name: "Documents is for project leads" })).toBeTruthy();
-  expect(screen.getByRole("link", { name: "Go to My tasks" }).getAttribute("href")).toBe("#/");
+  expect(screen.getByRole("link", { name: "Go to My tasks" }).getAttribute("href")).toBe("#/?status=all");
   expect(screen.queryByRole("table")).toBeNull();
   expect(api.listDocumentRows).not.toHaveBeenCalled();
   expect(api.listProjectDocuments).not.toHaveBeenCalled();

@@ -71,7 +71,7 @@ describe("My tasks component", () => {
     expect(screen.getAllByTestId("task-row")).toHaveLength(1);
     expect(tabNames()).toEqual(["To do, 1", "Submitted, 0", "All, 1"]);
     fireEvent.change(select, { target: { value: "" } });
-    expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks" });
+    expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks", status: "all" });
     expect(api.listMyTasks).toHaveBeenCalledTimes(1);
   });
 
@@ -175,7 +175,7 @@ describe("My tasks component", () => {
     expect(select.selectedOptions[0].textContent).toBe("Empty project filter");
     const all = within(select).getByRole("option", { name: "All my tasks" }) as HTMLOptionElement;
     fireEvent.change(select, { target: { value: all.value } });
-    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks" });
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", status: "all" });
   });
 
   it("offers every managed empty project with real links and callback navigation", async () => {

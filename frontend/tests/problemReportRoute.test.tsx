@@ -32,7 +32,7 @@ it('answers a project member without management authority with "Problem report n
   expect(screen.queryByRole('heading', { name: 'You do not have access to this page.' })).toBeNull();
   expect(screen.queryByRole('region', { name: 'Authorized report detail' })).toBeNull();
   fireEvent.click(within(heading.parentElement!).getByRole('button', { name: 'My tasks' }));
-  await waitFor(() => expect(window.location.hash).toBe(routeHref({ name: 'tasks' })));
+  await waitFor(() => expect(window.location.hash).toBe(routeHref({ name: 'tasks', status: 'all' })));
   expect(screen.queryByRole('heading', { name: 'Problem report not found' })).toBeNull();
 });
 

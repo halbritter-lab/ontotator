@@ -123,6 +123,9 @@ export type Route =
   | { name: "projectConsolidation"; key: string; roundId: string; group?: string; documents?: ProjectDocumentsQuery }
   | { name: "notFound"; hash: string };
 
+/** Every "My tasks" link: an explicit All, so a reload or a new tab never runs the last-used landing. */
+export const MY_TASKS: Route = { name: "tasks", status: "all" };
+
 export function parseRoute(hash: string): Route {
   const notFound: Route = { name: "notFound", hash };
   if (hash === "") return { name: "tasks" };

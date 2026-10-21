@@ -1114,7 +1114,7 @@ it("makes Back to my tasks primary when nothing is left", async () => {
   const back = screen.getByRole("button", { name: "Back to my tasks" });
   expect(back.className).toContain("primary");
   fireEvent.click(back);
-  expect(navigate).toHaveBeenCalledWith({ name: "tasks" });
+  expect(navigate).toHaveBeenCalledWith({ name: "tasks", status: "all" });
 });
 it("shows loading and an error with Retry for the task list", async () => {
   setup();

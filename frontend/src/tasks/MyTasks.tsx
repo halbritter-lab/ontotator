@@ -114,8 +114,9 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
   const tabs = statusTabs
     .map(tab => ({ id: tab.id, label: tab.label, count: filtered.filter(tab.matches).length, href: routeHref(tabRoute(tab.id)) }))
     .filter(tab => tab.id !== "paused" || tab.count > 0 || active === "paused");
-  const selectProject = (value: string) => onNavigate({ name: "tasks",
-    ...(value === allProjectsValue ? {} : { project: value }), ...(status === undefined ? {} : { status }) });
+  // All projects without a tab keeps an explicit All, so a reload never runs the landing.
+  const selectProject = (value: string) => onNavigate(value === allProjectsValue ? { name: "tasks", status: status ?? "all" }
+    : { name: "tasks", project: value, ...(status === undefined ? {} : { status }) });
   const managed = projects.filter(item => item.can_manage && (project === undefined || item.project_key === project));
   const guidelineVersions = guidelines?.identity === projectIdentity ? guidelines.versions : new Map<string, number>();
   const listedProjects = new Set(filtered.map(task => task.project_key));

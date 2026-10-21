@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api, onSessionRestored, type CurrentUser, type ProjectSummary } from "../api/client";
 import { roleLabels } from "./labels";
 import { AppShell, type Crumb } from "../ui/AppShell";
-import { routeHref, type Route } from "./router";
+import { MY_TASKS, routeHref, type Route } from "./router";
 import { ProjectSwitcher } from "./ProjectPicker";
 import { rememberedProject } from "./lastProject";
 import { useDocumentsSummary } from "../documents/useDocumentsSummary";
@@ -94,7 +94,7 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
     {switcher}
     <ul className="shell-nav-list">
       {/* "All" explicitly, so a reload of My tasks never triggers the last-used landing. */}
-      {link({ name: "tasks", status: "all" }, openTasks === null ? "My tasks" : `My tasks (${openTasks})`)}
+      {link(MY_TASKS, openTasks === null ? "My tasks" : `My tasks (${openTasks})`)}
       {projects.length > 0 && link({ name: "projects" }, "Projects")}
       {link({ name: "me" }, "Profile")}
     </ul>

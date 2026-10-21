@@ -9,7 +9,7 @@ import { api, ApiError, type ConsolidationAnnotatePayload, type ConsolidationGro
 import { ErrorNotice } from "../admin/ErrorNotice";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { nextOpenTask } from "../app/caseOrder";
-import { routeHref, type Route } from "../app/router";
+import { MY_TASKS, routeHref, type Route } from "../app/router";
 import { prefillQuery } from "../editor/termSearch";
 import { nextTaskLabel, remainingTasksText } from "../translation/labels";
 import { Button, EmptyState, InlineMessage, Popover, Select, TextInput, Toast, useMediaQuery, useToast } from "../ui";
@@ -272,7 +272,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       <div className="cons-actions">
         {nextTask?.kind === "loading" && <Button variant="primary" loading>Next task</Button>}
         {nextTask?.kind === "ready" && nextTask.next && <Button variant="primary" onClick={() => navigate({ name: "task", assignmentId: nextTask.next!.assignment_id })}>{nextTaskLabel(nextTask.next)}</Button>}
-        <Button variant={nextTask?.kind === "ready" && nextTask.next ? "secondary" : "primary"} onClick={() => navigate({ name: "tasks" })}>Back to my tasks</Button>
+        <Button variant={nextTask?.kind === "ready" && nextTask.next ? "secondary" : "primary"} onClick={() => navigate(MY_TASKS)}>Back to my tasks</Button>
       </div>
       {nextTask?.kind === "ready" && <p className="cons-muted">{remainingTasksText(nextTask.remaining)}</p>}
       {nextTask?.kind === "error" && <><ErrorNotice error={nextTask.error} /><Button onClick={loadNextTask}>Retry</Button></>}

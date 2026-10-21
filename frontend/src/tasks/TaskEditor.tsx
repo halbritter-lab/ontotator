@@ -4,7 +4,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Dialog, EmptyState, InlineMessage, Select } from "../ui";
 import { CaseScreen } from "../app/CaseScreen";
 import { CaseErrorBoundary } from "../app/ErrorBoundary";
-import { routeHref, type Route, type RouteLeaveGuard } from "../app/router";
+import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/router";
 import { NotFound } from "../app/NotFound";
 import { useVersionAccess } from "../variants/useVersionAccess";
 import { TranslationReviewScreen } from "../translation/TranslationReviewScreen";
@@ -40,7 +40,7 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
   if (!state || state.identity !== identity) return <InlineMessage tone="info">Opening task...</InlineMessage>;
   if (state.error) return <section>{state.error instanceof ApiError && state.error.code === "ASSIGNMENT_NOT_FOUND"
     ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={state.error} />}
-    <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate({ name: "tasks" })}>Back to my tasks</Button></section>;
+    <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button></section>;
   if (state.assignment?.task === "translation_review") {
     const assignment = state.assignment;
     // Lead correction shows no problem reporter, whose focus reload otherwise refreshes the task metadata.
@@ -115,8 +115,8 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     void loadTasks();
     return () => { active.current = false; generation.current++; taskGeneration.current++; };
   }, [assignmentId]);
-  const back = () => onNavigate({ name: "tasks" });
-  const backLink = <a href={routeHref({ name: "tasks" })} className="btn btn-secondary" onClick={event => {
+  const back = () => onNavigate(MY_TASKS);
+  const backLink = <a href={routeHref(MY_TASKS)} className="btn btn-secondary" onClick={event => {
     if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); back();
   }}>Back to my tasks</a>;

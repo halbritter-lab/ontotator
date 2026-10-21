@@ -1,6 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { navigate, parseRoute, routeHref, SETTINGS_SECTIONS, useRoute, type Route } from "../src/app/router";
+import { MY_TASKS, navigate, parseRoute, routeHref, SETTINGS_SECTIONS, useRoute, type Route } from "../src/app/router";
 
 beforeEach(() => { window.history.replaceState(null, "", "/"); });
 afterEach(() => {
@@ -57,6 +57,11 @@ describe("hash route parsing and links", () => {
 
   it.each(["", "#/"])("opens My tasks for the root hash %j", (hash) => {
     expect(parseRoute(hash)).toEqual({ name: "tasks" });
+  });
+
+  it("links My tasks to an explicit All, never the bare landing hash", () => {
+    expect(routeHref(MY_TASKS)).toBe("#/?status=all");
+    expect(parseRoute(routeHref(MY_TASKS))).toEqual(MY_TASKS);
   });
 
   it("uses the documented fixed paths", () => {
