@@ -151,6 +151,7 @@ export function DocumentsTable({
     };
   });
 
+  // The case checkbox selects the case's rows in the current view (filters respected), not every text of the case.
   const caseKeys = (caseId: string) => (groupOf.get(caseId)?.rows ?? []).map(rowKeyOf);
 
   const below = (row: DocumentRowView): ReactNode | null => {

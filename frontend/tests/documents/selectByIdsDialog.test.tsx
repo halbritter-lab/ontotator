@@ -106,4 +106,9 @@ it("shows an error when the texts of the found cases cannot be loaded", async ()
   fireEvent.click(within(dialog).getByRole("button", { name: "Select 1" }));
   expect(await within(dialog).findByText(/offline/)).toBeTruthy();
   expect(onSelect).not.toHaveBeenCalled();
+  expect(api.documentRowKeys).toHaveBeenCalledWith("p", { case_ids: ["case-0001"] });
+  // The dialog stays open with the found IDs; a second try clears the error and selects.
+  fireEvent.click(within(dialog).getByRole("button", { name: "Select 1" }));
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith(keysOf(["case-0001"]), "replace"));
+  expect(within(dialog).queryByText(/offline/)).toBeNull();
 });

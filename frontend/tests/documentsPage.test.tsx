@@ -403,6 +403,27 @@ describe("case selection", () => {
     expect(within(selectionRegion()).getByText("Selection is limited to 2000 cases. Selected the first 2000.")).toBeTruthy();
   });
 
+  it("header checkbox clicked twice clears what it selected when the 2000-case cap truncated it", async () => {
+    mockRows(casesPage(3, { group_count: 2500, page_count: 50 }));
+    const first = Array.from({ length: 2000 }, (_, index) => `c-${index}`);
+    vi.spyOn(api, "documentRowKeys").mockResolvedValueOnce(deKeys(first, true));
+    renderPage();
+    await loaded();
+    // One case selected before: the header adds only 1999 more cases.
+    fireEvent.click(rowBox("case-0101", "de"));
+    const header = screen.getByRole("checkbox", { name: "Select the first 2000 of 2500 filtered cases" }) as HTMLInputElement;
+    fireEvent.click(header);
+    await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(2000))).toBeTruthy());
+    expect(within(selectionRegion()).getByText("Selection is limited to 2000 cases. Selected the first 2000.")).toBeTruthy();
+    expect(header.checked).toBe(true);
+    // The second click clears the header's texts (no second request) and keeps the earlier selection.
+    fireEvent.click(header);
+    await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(1))).toBeTruthy());
+    expect(api.documentRowKeys).toHaveBeenCalledTimes(1);
+    expect(header.checked).toBe(false);
+    expect((rowBox("case-0101", "de") as HTMLInputElement).checked).toBe(true);
+  });
+
   it("Select by case IDs… replaces the selection and the selection survives paging and filters", async () => {
     mockRows(casesPage(3, { page_count: 2 }));
     vi.spyOn(api, "lookupCaseIds").mockResolvedValue({ found: ["case-0102", "case-0999"], unknown: [] });
@@ -514,6 +535,17 @@ it("renders the new table with stage columns", async () => {
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", sort: "-case" });
 });
 
+it("shows the descending header sorts by their base option in the Sort select", async () => {
+  mockRows(page([scenarioS1().group]));
+  const view = renderPage({ query: { sort: "-activity" } });
+  await loaded();
+  expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("activity");
+  view.unmount();
+  renderPage({ query: { sort: "-case" } });
+  await loaded();
+  expect((screen.getByLabelText("Sort") as HTMLSelectElement).value).toBe("case");
+});
+
 it("pages with Previous and Next links", async () => {
   mockRows(page([scenarioS1().group], { page: 2, page_count: 3 }));
   const { onNavigate } = renderPage({ query: { page: "2", language: "en" } });
@@ -568,7 +600,11 @@ it("expands and focuses a deep-linked row that no longer needs a decision", asyn
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { case: "synthetic-accepted", language: "de", decision: "all" });
   const disclosure = screen.getByRole("button", { name: "Show history, synthetic-accepted · de" });
   expect(disclosure.getAttribute("aria-expanded")).toBe("true");
-  await waitFor(() => expect(document.activeElement).toBe(disclosure));
+  // Focus goes to the row header's name (spec "Edge cases › Deep links"), not the ▸ disclosure.
+  const name = document.getElementById(documentsRowId("synthetic-accepted", "de", "header"))!;
+  expect(rowHeader("synthetic-accepted · de").contains(name)).toBe(true);
+  expect(name.tabIndex).toBe(-1);
+  await waitFor(() => expect(document.activeElement).toBe(name));
 });
 
 it("shows an unknown text and an empty decision filter with Show all texts", async () => {
@@ -892,6 +928,9 @@ describe("row actions", () => {
     fireEvent.click(within(confirm).getByRole("button", { name: "Use as final" }));
     await waitFor(() => expect(live().textContent).toContain("Next: case-0099 · de."));
     expect(screen.getByRole("link", { name: "Next: case-0099 · de" })).toBeTruthy();
+    // "Next: case-0099 · de" opens that row and focuses its row header name.
+    fireEvent.click(screen.getByRole("link", { name: "Next: case-0099 · de" }));
+    await waitFor(() => expect(document.activeElement?.id).toBe(documentsRowId("case-0099", "de", "header")));
     // Updated in place: the row stays (retained) without the action.
     await waitFor(() => expect(within(screen.getByRole("button", { name: "Show history, case-0042 · en" }).closest("tr")!).queryByRole("button", { name: /Compare results…/ })).toBeNull());
   });

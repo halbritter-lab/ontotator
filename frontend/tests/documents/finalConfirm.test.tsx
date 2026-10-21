@@ -259,7 +259,8 @@ it("links the next decision while a decision filter is active", async () => {
   expect(liveRegion().textContent).toContain("Next decision: case-0099 · de.");
   fireEvent.click(next);
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", decision: "all", open: ["case-0042:en", "case-0099:de"] }, { replace: true });
-  await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Show history, case-0099 · de"));
+  // "Next decision" focuses the row header name (the ▸ disclosure is only the fallback).
+  await waitFor(() => expect(document.activeElement?.id).toBe("documents-row-case-0099-de-header"));
 });
 
 it("maps errors, success messages and bar changes", () => {

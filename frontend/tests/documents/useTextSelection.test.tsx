@@ -68,3 +68,24 @@ it("caps at 2000 cases", () => {
   act(() => { expect(result.current.select("extra:de", "toggle", ["extra:de"])).toEqual({ truncated: true }); });
   expect(result.current.keys.has("extra:de")).toBe(false);
 });
+
+it("Shift-click on a case checkbox selects from the anchor to the far end of the case", () => {
+  const { result } = renderHook(() => useTextSelection());
+  // Without an anchor a range click selects the case's texts and anchors at its first text.
+  act(() => { result.current.selectCase(["c3:de"], "range", order); });
+  expect(keys(result)).toEqual(["c3:de"]);
+  expect(result.current.anchor).toBe("c3:de");
+  act(() => { result.current.clear(); });
+  act(() => { result.current.select("c1:de", "toggle", order); });
+  // Forward: anchor c1:de through the last text of c2.
+  act(() => { expect(result.current.selectCase(["c2:en", "c2:de", "c2:fr"], "range", order)).toEqual({ truncated: false }); });
+  expect(keys(result)).toEqual(["c1:de", "c2:en", "c2:de", "c2:fr"]);
+  expect(result.current.anchor).toBe("c1:de");
+  // A range click never clears, even on a fully selected case.
+  act(() => { result.current.selectCase(["c2:en", "c2:de", "c2:fr"], "range", order); });
+  expect(keys(result)).toEqual(["c1:de", "c2:en", "c2:de", "c2:fr"]);
+  // Backward: from the anchor up to the first text of c1.
+  act(() => { result.current.selectCase(["c1:en", "c1:de"], "range", order); });
+  expect(keys(result).sort()).toEqual(["c1:de", "c1:en", "c2:de", "c2:en", "c2:fr"]);
+  expect(result.current.anchor).toBe("c1:de");
+});

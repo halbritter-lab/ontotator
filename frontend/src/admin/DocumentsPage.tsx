@@ -38,7 +38,7 @@ import { ResolveTranslation } from "../documents/ResolveTranslation";
 import { SelectByIdsDialog } from "../documents/SelectByIdsDialog";
 import { SelectionBar } from "../documents/SelectionBar";
 import { acknowledgeableItems, type KeepRequest } from "../documents/SelectionNotice";
-import { documentsGroupId, documentsRowId, isPlainClick, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
+import { documentsGroupId, documentsRowId, isPlainClick, type DocumentsRowPart, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
 import { plannedStages, stageBlockHeadingId } from "../documents/StageBlocks";
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
@@ -169,7 +169,7 @@ export const SELECTION_LIMITED = `Selection is limited to ${MAX_SELECTION} cases
 const caseOfKey = (key: string): string => key.slice(0, Math.max(0, key.lastIndexOf(":")));
 const languageOfKey = (key: string): string => key.slice(key.lastIndexOf(":") + 1);
 const nameOfKey = (key: string): string => `${caseOfKey(key)} · ${languageOfKey(key)}`;
-const rowElement = (key: string, part: "disclosure" | "final-view" | "action"): HTMLElement | null =>
+const rowElement = (key: string, part: DocumentsRowPart): HTMLElement | null =>
   document.getElementById(documentsRowId(caseOfKey(key), languageOfKey(key), part));
 
 /** A row action that needs the row's submissions; it runs once they are loaded (Choose final…, Review changes…). */
@@ -416,9 +416,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     const caseId = query.case;
     const group = page.groups.find(item => item.case_id === caseId);
     const candidates = [
-      ...(query.language ? [documentsRowId(caseId, query.language, "disclosure")] : []),
+      ...(query.language ? [documentsRowId(caseId, query.language, "header"), documentsRowId(caseId, query.language, "disclosure")] : []),
       documentsGroupId(caseId),
-      ...(group?.rows.map(item => documentsRowId(item.case_id, item.language, "disclosure")) ?? []),
+      ...(group?.rows.flatMap(item => [documentsRowId(item.case_id, item.language, "header"), documentsRowId(item.case_id, item.language, "disclosure")]) ?? []),
     ];
     const target = candidates.map(id => document.getElementById(id)).find(Boolean);
     if (!target) return;
@@ -543,7 +543,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     if (!focusTarget) return;
     setFocusTarget(null);
     if (focusTarget.kind === "notice") { successRef.current?.focus(); return; }
-    if (focusTarget.kind === "row") { rowElement(focusTarget.rowKey, "disclosure")?.focus(); return; }
+    if (focusTarget.kind === "row") { (rowElement(focusTarget.rowKey, "header") ?? rowElement(focusTarget.rowKey, "disclosure"))?.focus(); return; }
     const target = focusTarget.kind === "kept"
       ? document.getElementById(submissionsHeadingId(caseOfKey(focusTarget.rowKey), languageOfKey(focusTarget.rowKey)))
       : rowElement(focusTarget.rowKey, "final-view");
@@ -632,8 +632,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       const result = await api.documentRowKeys(projectKey, { filters: rowFilters, sort: sort ?? "case" });
       const keys = result.keys.map(textKeyOf);
       announceSelection.current = true;
-      applyLimit(selection.add(keys).truncated || result.truncated);
-      setAllFiltered({ identity, keys });
+      const added = selection.add(keys);
+      applyLimit(added.truncated || result.truncated);
+      // Only the texts that fit under the case cap: the header shows checked and its next click clears them.
+      setAllFiltered({ identity, keys: keys.filter(key => added.selected.has(key)) });
     } catch (failure: unknown) {
       setSelectionError(failure);
     } finally {
@@ -918,7 +920,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
           <Select id="documents-status" label="Status" value={status} onChange={event => changeFilter({ status: event.target.value || undefined })}>
             <option value="">All statuses</option>{STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
-          <Select id="documents-sort" label="Sort" value={sort} onChange={event => changeFilter({ sort: event.target.value === "case" ? undefined : event.target.value })}>
+          <Select id="documents-sort" label="Sort" value={sort.replace(/^-/, "")} onChange={event => changeFilter({ sort: event.target.value === "case" ? undefined : event.target.value })}>
             {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
         </div>

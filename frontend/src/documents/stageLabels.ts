@@ -172,9 +172,9 @@ function finalText(cell: StageCellView): StageText {
   }
 }
 
-/** An unknown state (a newer server): the tone's glyph and the state name in words. */
+/** An unknown state (a newer server): the tone's glyph and "—" (no state codes in visible copy). */
 function fallback(cell: StageCellView): StageText {
-  return { symbol: TONE_SYMBOLS[cell.tone] ?? "", word: cell.state.replace(/_/g, " "), detail: "" };
+  return { symbol: TONE_SYMBOLS[cell.tone] ?? "", word: "—", detail: "" };
 }
 
 /** Line 1 (symbol + word) and line 2 of one stage cell. */

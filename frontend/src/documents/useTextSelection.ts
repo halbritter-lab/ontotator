@@ -31,7 +31,8 @@ export interface TextSelection {
   /** "all", "some" or "none" of the given texts are selected (the case checkbox's mixed state). */
   caseState: (caseKeys: readonly string[]) => "all" | "some" | "none";
   replace: (keys: Iterable<string>) => { truncated: boolean };
-  add: (keys: Iterable<string>) => { truncated: boolean };
+  /** Adds texts (capped); `selected` is the selection afterwards. */
+  add: (keys: Iterable<string>) => { truncated: boolean; selected: ReadonlySet<string> };
   remove: (keys: Iterable<string>) => void;
   clear: () => void;
 }
@@ -123,7 +124,7 @@ export function useTextSelection(): TextSelection {
   const add = useCallback((keys: Iterable<string>) => {
     const result = capped(current.current.keys, keys);
     commit({ keys: result.keys, anchor: current.current.anchor });
-    return { truncated: result.truncated };
+    return { truncated: result.truncated, selected: result.keys };
   }, [commit]);
 
   const remove = useCallback((keys: Iterable<string>) => {

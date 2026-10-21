@@ -93,10 +93,40 @@ it("plan popover saves on chip click with Undo toast", async () => {
   expect(document.activeElement).toBe(button);
 });
 
-it("Accept result… for label_rule accept, Compare results… otherwise", () => {
+it("Accept result… when the final has one submission to choose (final.state choose, submitted 1), Compare results… otherwise", () => {
   render(<Harness row={scenario7a()} />);
   expect(screen.getByRole("button", { name: "Accept result…, case-107 · de" })).toBeTruthy();
   cleanup();
   render(<Harness row={scenario7b()} />);
   expect(screen.getByRole("button", { name: "Compare results…, case-107 · en" })).toBeTruthy();
+});
+
+it("plan popover stays open when a save moves the row into the plan; closing focuses the row's action", async () => {
+  vi.mocked(api.patchWorkPlan).mockResolvedValue({
+    case_id: "case-101", language: "de",
+    flags: { review: true, annotate: false, review_applicable: true, discarded: false },
+    revision: 4,
+    undo: { rows: [{ case_id: "case-101", language: "de", review: false, annotate: false, restored_revision: null }], revisions: { "case-101": 4 } },
+    withdrawn: [], accepted_document_ids: [],
+  });
+  const { rerender } = render(<Harness row={undecided()} />);
+  const button = screen.getByRole("button", { name: "Plan…, case-101 · de" });
+  fireEvent.click(button);
+  const popover = screen.getByRole("dialog", { name: "Plan, case-101 · de" });
+  expect(button.getAttribute("aria-controls")).toBe("documents-row-case-101-de-plan");
+  expect(document.getElementById("documents-row-case-101-de-plan")).not.toBeNull();
+  expect(popover.contains(document.getElementById("documents-row-case-101-de-plan"))).toBe(true);
+  fireEvent.click(within(popover).getByRole("button", { name: "Review, case-101 · de" }));
+  expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
+  // The reload: the row is in the plan now, its first lead step is no longer "Plan…".
+  rerender(<Harness row={stagedRow("case-101", "de", { steps: [stepOf("assign_translation_review")] })} />);
+  const still = screen.getByRole("dialog", { name: "Plan, case-101 · de" });
+  expect(still).toBe(popover);
+  expect(still.contains(document.activeElement)).toBe(true);
+  // Escape closes it; the Plan… button is gone, so focus goes to the row's action button.
+  fireEvent.keyDown(still, { key: "Escape" });
+  expect(screen.queryByRole("dialog", { name: "Plan, case-101 · de" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Plan…, case-101 · de" })).toBeNull();
+  expect(document.activeElement?.id).toBe("documents-row-case-101-de-action");
+  expect(document.activeElement?.textContent).toBe("Assign review…");
 });

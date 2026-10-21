@@ -77,7 +77,7 @@ export function isPlainClick(event: MouseEvent<HTMLAnchorElement>): boolean {
 }
 
 /** Parts of a Documents row with a stable DOM id (focus targets). */
-export type DocumentsRowPart = "disclosure" | "final-view" | "action";
+export type DocumentsRowPart = "header" | "disclosure" | "final-view" | "action" | "plan";
 
 /** Stable id of a part of the row `{case}:{language}`, e.g. its disclosure or the Final row's View link. */
 export function documentsRowId(caseId: string, language: string, part: DocumentsRowPart): string {
@@ -314,7 +314,7 @@ export function RowHeaderCell({ row, projectKey, query, onNavigate, badge }: Row
   const active = isActiveRow(row);
   return (
     <span className="documents-row-header documents-text-cell">
-      <span className="documents-text-name"><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language">{row.language}</span></span>
+      <span id={documentsRowId(row.case_id, row.language, "header")} tabIndex={-1} className="documents-text-name"><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language">{row.language}</span></span>
       {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
       {row.is_source && <span className="documents-source">source</span>}
       <VersionMarker row={row} />

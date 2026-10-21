@@ -134,3 +134,10 @@ describe("version marker", () => {
     expect(versionMarkerText(row({ case_id: "c", language: "de" }))).toBeNull();
   });
 });
+
+describe("unknown states (a newer server)", () => {
+  it("show the tone glyph and a dash, never the state code", () => {
+    const unknown = cell("brand_new_state" as StageCellView["state"], "running");
+    for (const stage of ["review", "annotation", "final"] as const) expect(text(stage, unknown)).toEqual(["◐ —", ""]);
+  });
+});
