@@ -11,6 +11,13 @@ export interface DialogProps {
   closeOnBackdrop?: boolean;
   initialFocus?: RefObject<HTMLElement>;
   size?: "sm" | "md" | "lg";
+  /**
+   * `side`: a right panel (480 px, full height, 150 ms slide, a full-screen sheet below 700 px) that ignores `size`,
+   * focuses its heading on open (unless `initialFocus`) and makes the rest of the page `inert` while open.
+   */
+  variant?: "center" | "side";
+  /** Extra class on the dialog element (e.g. `ui-popover-sheet`). */
+  className?: string;
   footer?: ReactNode;
   children: ReactNode;
 }
@@ -32,8 +39,23 @@ function focusableElements(element: HTMLElement): HTMLElement[] {
     .filter((item) => item.tabIndex >= 0 && !item.matches(":disabled") && !item.closest('[hidden],[inert],[aria-hidden="true"]') && isRendered(item));
 }
 
-export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false, initialFocus, size = "md", footer, children }: DialogProps): JSX.Element | null {
+/** Makes every sibling of `element` and of each of its ancestors `inert`; returns the elements it changed. */
+function inertOutside(element: HTMLElement): Element[] {
+  const changed: Element[] = [];
+  for (let node: Element = element; node.parentElement && node !== document.body; node = node.parentElement) {
+    for (const sibling of Array.from(node.parentElement.children)) {
+      if (sibling === node || sibling.hasAttribute("inert") || ["SCRIPT", "STYLE", "TEMPLATE"].includes(sibling.tagName)) continue;
+      sibling.setAttribute("inert", "");
+      changed.push(sibling);
+    }
+  }
+  return changed;
+}
+
+export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false, initialFocus, size = "md", variant = "center", className, footer, children }: DialogProps): JSX.Element | null {
   const content = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const side = variant === "side";
   const requestedFocus = useRef(initialFocus);
   requestedFocus.current = initialFocus;
   useShortcut("Escape", () => {
@@ -50,12 +72,13 @@ export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false,
       document.body.style.overflow = "hidden";
     }
     activeDialogs.push(element);
+    const inerted = side && element.parentElement ? inertOutside(element.parentElement) : [];
     const focusInside = () => {
       if (!isActive(element)) return;
       const requested = requestedFocus.current?.current;
       // The header close button is reachable by Tab but never receives initial focus.
       const candidates = focusableElements(element).filter((item) => !item.hasAttribute("data-dialog-close"));
-      (requested && element.contains(requested) ? requested : candidates[0] ?? element).focus();
+      (requested && element.contains(requested) ? requested : (side ? headingRef.current : candidates[0]) ?? element).focus();
     };
     focusInside();
     const containFocus = (event: FocusEvent) => {
@@ -64,6 +87,7 @@ export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false,
     document.addEventListener("focusin", containFocus);
     return () => {
       document.removeEventListener("focusin", containFocus);
+      for (const item of inerted) item.removeAttribute("inert");
       const wasTop = activeDialogs.at(-1) === element;
       activeDialogs.splice(activeDialogs.indexOf(element), 1);
       if (!activeDialogs.length) document.body.style.overflow = originalOverflow;
@@ -73,20 +97,20 @@ export function Dialog({ open, title, heading, onClose, closeOnBackdrop = false,
 
   if (!open) return null;
   return (
-    <div className="modal-overlay" onClick={(event) => {
+    <div className={side ? "modal-overlay modal-overlay--side" : "modal-overlay"} onClick={(event) => {
       if (event.target === event.currentTarget && closeOnBackdrop && content.current && isActive(content.current)) onClose?.();
     }}>
-      <div ref={content} className={`modal-content ui-dialog ui-dialog--${size}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
+      <div ref={content} className={["modal-content", "ui-dialog", side ? "ui-dialog--side" : `ui-dialog--${size}`, className].filter(Boolean).join(" ")} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
         onKeyDown={(event) => {
           if (event.key !== "Tab" || !isActive(event.currentTarget)) return;
           const elements = focusableElements(event.currentTarget);
           const first = elements[0]; const last = elements.at(-1);
           if (!first) { event.preventDefault(); event.currentTarget.focus(); }
-          else if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last!.focus(); }
+          else if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget || (side && document.activeElement === headingRef.current))) { event.preventDefault(); last!.focus(); }
           else if (!event.shiftKey && (document.activeElement === last || document.activeElement === event.currentTarget)) { event.preventDefault(); first.focus(); }
         }}>
         <div className="ui-dialog-header">
-          <h2 className="ui-dialog-heading">{heading ?? title}</h2>
+          <h2 ref={headingRef} className="ui-dialog-heading" tabIndex={side ? -1 : undefined}>{heading ?? title}</h2>
           {onClose && <IconButton className="ui-dialog-close" label="Close" icon={<IconClose />} variant="quiet" size="sm" data-dialog-close onClick={onClose} />}
         </div>
         <div className="ui-dialog-body">{children}</div>

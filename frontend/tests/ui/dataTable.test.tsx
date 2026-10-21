@@ -123,3 +123,123 @@ describe("group_selection", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
+describe("row_selection_edges_and_server_sort", () => {
+  type Row = { id: string; group: string; name: string; n: number };
+  const rows: Row[] = [{ id: "a-de", group: "A", name: "de", n: 2 }, { id: "a-fr", group: "A", name: "fr", n: 1 }, { id: "b-de", group: "B", name: "de", n: 3 }];
+  const columns: Column<Row>[] = [{ id: "name", header: "Text", cell: r => `${r.group} · ${r.name}`, rowHeader: true }, { id: "n", header: "N", cell: r => r.n, sortValue: r => r.n }];
+  const groups = [{ key: "A", header: <span>Case A</span>, rows: rows.slice(0, 2), expanded: true }, { key: "B", header: <span>Case B</span>, rows: rows.slice(2), expanded: true }];
+  const rowSelection = (onSelect = vi.fn(), selected: (row: Row) => boolean = (row) => row.id === "a-de") =>
+    ({ selected, onSelect, label: (row: Row) => `Select ${row.group} · ${row.name}` });
+  const groupSelection = (state: (key: string) => "all" | "some" | "none" = () => "none") =>
+    ({ selected: (key: string) => state(key) === "all", onSelect: vi.fn(), checkboxLabel: (key: string) => `Select ${key}`, state });
+
+  it("renders a first checkbox cell per row with rowSelection", () => {
+    const { container } = render(<DataTable label="T" columns={columns} rows={rows} rowKey={r => r.id} rowSelection={rowSelection()} />);
+    const headers = container.querySelectorAll("thead th");
+    expect(headers).toHaveLength(3);
+    expect(headers[0].getAttribute("scope")).toBe("col");
+    expect(headers[0].querySelector(".visually-hidden")?.textContent).toBe("Select");
+    const bodyRows = container.querySelectorAll("tbody tr");
+    expect(bodyRows).toHaveLength(3);
+    for (const row of bodyRows) {
+      const first = row.firstElementChild!;
+      expect(first.tagName).toBe("TD");
+      expect(first.querySelector("input[type=checkbox].data-table-row-select.checkbox-target")).not.toBeNull();
+    }
+    const box = screen.getByRole("checkbox", { name: "Select A · de" }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: "Select A · fr" }) as HTMLInputElement).checked).toBe(false);
+  });
+  it("reports click modes for row checkboxes", () => {
+    const onSelect = vi.fn();
+    render(<DataTable label="T" columns={columns} rows={rows} rowKey={r => r.id} rowSelection={rowSelection(onSelect)} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select A · fr" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select B · de" }), { shiftKey: true });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select A · de" }), { ctrlKey: true });
+    expect(onSelect.mock.calls).toEqual([[rows[1], "toggle"], [rows[2], "range"], [rows[0], "toggle-keep-anchor"]]);
+  });
+  it("custom selectionHeader replaces the hidden Select header", () => {
+    const { container } = render(<DataTable label="T" columns={columns} rows={rows} rowKey={r => r.id} rowSelection={rowSelection()} selectionHeader={<span className="visually-hidden">Choose</span>} />);
+    expect(container.querySelector("thead th")?.textContent).toBe("Choose");
+  });
+  it("group row: checkbox td plus a left-aligned rowgroup th spanning the other columns", () => {
+    const { container } = render(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id} groups={groups} rowSelection={rowSelection()} groupSelection={groupSelection()} />);
+    const groupRow = container.querySelector("tbody tr.data-table-group")!;
+    expect(groupRow.children).toHaveLength(2);
+    const [cell, header] = [...groupRow.children] as HTMLElement[];
+    expect(cell.tagName).toBe("TD");
+    expect(cell.querySelector("input.data-table-group-select")).not.toBeNull();
+    expect(header.tagName).toBe("TH");
+    expect(header.getAttribute("scope")).toBe("rowgroup");
+    expect(header.getAttribute("colspan")).toBe("2");
+    expect(header.style.textAlign).toBe("start");
+    expect(header.querySelector("input")).toBeNull();
+    expect(header.textContent).toBe("Case A");
+  });
+  it("label layout without rowSelection still gives the group checkbox its own column", () => {
+    const { container } = render(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id} groups={groups} groupLayout="label" groupSelection={groupSelection()} />);
+    expect(container.querySelectorAll("thead th")).toHaveLength(3);
+    expect(container.querySelector("tbody tr.data-table-group > td input.data-table-group-select")).not.toBeNull();
+    expect(container.querySelector("tbody tr:not(.data-table-group) > td:first-child")?.textContent).toBe("");
+  });
+  it("group checkbox is indeterminate for state some", () => {
+    render(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id} groups={groups} rowSelection={rowSelection()}
+      groupSelection={groupSelection((key) => key === "A" ? "some" : "all")} />);
+    const a = screen.getByRole("checkbox", { name: "Select A" }) as HTMLInputElement;
+    const b = screen.getByRole("checkbox", { name: "Select B" }) as HTMLInputElement;
+    expect(a.indeterminate).toBe(true); expect(a.checked).toBe(false);
+    expect(b.indeterminate).toBe(false); expect(b.checked).toBe(true);
+  });
+  it("Shift+ArrowDown moves and selects over rows in order", () => {
+    const onSelect = vi.fn();
+    render(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id} groups={groups} rowSelection={rowSelection(onSelect)} groupSelection={groupSelection()} />);
+    const box = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
+    box("Select A · de").focus();
+    fireEvent.keyDown(box("Select A · de"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select A · fr"));
+    expect(onSelect).toHaveBeenLastCalledWith(rows[1], "select");
+    fireEvent.keyDown(box("Select A · fr"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select B · de"));
+    expect(onSelect).toHaveBeenLastCalledWith(rows[2], "select");
+    fireEvent.keyDown(box("Select B · de"), { key: "ArrowUp", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select A · fr"));
+    onSelect.mockClear();
+    fireEvent.keyDown(box("Select A · fr"), { key: "ArrowDown" });
+    box("Select B · de").focus();
+    fireEvent.keyDown(box("Select B · de"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select B · de"));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+  it("server-driven sort sets aria-sort and calls onSort without reordering", () => {
+    const onSort = vi.fn();
+    const serverColumns: Column<Row>[] = [{ ...columns[0], sortable: true }, columns[1]];
+    const { container } = render(<DataTable label="T" columns={serverColumns} rows={rows} rowKey={r => r.id} sort={{ column: "n", direction: "desc" }} onSort={onSort} />);
+    const text = screen.getByRole("button", { name: "Text" });
+    const n = screen.getByRole("button", { name: "N" });
+    expect(text.closest("th")?.getAttribute("aria-sort")).toBe("none");
+    expect(n.closest("th")?.getAttribute("aria-sort")).toBe("descending");
+    fireEvent.click(n);
+    fireEvent.click(text);
+    expect(onSort.mock.calls).toEqual([["n"], ["name"]]);
+    expect([...container.querySelectorAll("th[scope=row]")].map((th) => th.textContent)).toEqual(["A · de", "A · fr", "B · de"]);
+    expect(n.closest("th")?.getAttribute("aria-sort")).toBe("descending");
+  });
+  it("rowEdge decision adds the class", () => {
+    const { container } = render(<DataTable label="T" columns={columns} rows={rows} rowKey={r => r.id} rowEdge={(row) => row.id === "a-fr" ? "decision" : null}
+      rowProps={(row) => ({ className: `row-${row.id}` })} />);
+    expect(container.querySelector(".row-a-fr")?.className).toContain("data-table-row--decision");
+    expect(container.querySelectorAll(".data-table-row--decision")).toHaveLength(1);
+  });
+  it("expanded rows and the empty state span the selection column", () => {
+    const { container, rerender } = render(<DataTable label="T" columns={columns} rows={rows} rowKey={r => r.id} rowSelection={rowSelection()} renderExpanded={(row) => row.id === "a-de" ? "more" : null} />);
+    expect(container.querySelector("tr.data-table-expanded > td")?.getAttribute("colspan")).toBe("3");
+    rerender(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id} rowSelection={rowSelection()} />);
+    expect(screen.getByRole("cell").getAttribute("colspan")).toBe("3");
+  });
+  it("existing callers render as before", () => {
+    const { container } = render(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id}
+      groups={[{ ...groups[0], headerProps: { className: "custom" } }, { ...groups[1], expanded: false }]}
+      groupSelection={{ selected: (key) => key === "A", onSelect: vi.fn(), checkboxLabel: (key) => `Select ${key}` }} />);
+    expect(container.innerHTML).toMatchInlineSnapshot(`"<div class="data-table-scroll"><table aria-label="T" class="data-table density-compact"><thead><tr><th scope="col" style="text-align: start;">Text</th><th scope="col" style="text-align: start;" aria-sort="none"><button class="data-table-sort" type="button">N<svg class="data-table-sort-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5"></path></svg></button></th></tr></thead><tbody><tr class="data-table-group custom"><th scope="rowgroup" colspan="2"><input type="checkbox" class="data-table-group-select checkbox-target" data-group-key="A" aria-label="Select A" checked=""><span>Case A</span></th></tr><tr class=""><th scope="row" style="text-align: start;">A · de</th><td style="text-align: start;">2</td></tr><tr class=""><th scope="row" style="text-align: start;">A · fr</th><td style="text-align: start;">1</td></tr></tbody><tbody><tr class="data-table-group"><th scope="rowgroup" colspan="2"><input type="checkbox" class="data-table-group-select checkbox-target" data-group-key="B" aria-label="Select B"><span>Case B</span></th></tr></tbody></table></div>"`);
+  });
+});

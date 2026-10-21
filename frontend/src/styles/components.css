@@ -860,3 +860,142 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
   .ui-toast { border: 1px solid CanvasText; }
   .checkbox-target { appearance: auto; }
 }
+
+/* Documents overview primitives (O4a): stage cell, row selection and decision edge, tabs, popover, filter chip, menu button, side panel. */
+.stage-cell { display: inline-flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stage-cell-status { font-weight: var(--weight-strong); white-space: nowrap; }
+.stage-cell-symbol { display: inline-block; min-width: 1em; text-align: center; }
+.stage-cell-detail { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
+.stage-cell--none .stage-cell-status,
+.stage-cell--undecided .stage-cell-status,
+.stage-cell--waiting .stage-cell-status { color: var(--text-muted); }
+.stage-cell--todo .stage-cell-status { color: var(--warning); }
+.stage-cell--running .stage-cell-status { color: var(--accent); }
+.stage-cell--decision .stage-cell-status { color: var(--warning); }
+.stage-cell--rejected .stage-cell-status { color: var(--danger); }
+.stage-cell--done .stage-cell-status { color: var(--success); }
+.stage-cell--muted .stage-cell-status { color: var(--text-muted); font-weight: var(--weight-regular); }
+.data-table .data-table-select-cell { width: 40px; padding-inline: var(--space-2); }
+.data-table-row-select { margin: 0; }
+.data-table-group--label .data-table-group-select { margin: 0; }
+.data-table .data-table-row--decision > :first-child { box-shadow: inset 3px 0 var(--warning); }
+.checkbox-target:indeterminate {
+  background:
+    linear-gradient(var(--on-accent), var(--on-accent)) center / 10px 2px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) center / 18px 18px no-repeat;
+}
+.ui-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); border-bottom: 1px solid var(--border); }
+.ui-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  margin-bottom: -1px;
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: var(--size-md);
+  line-height: var(--leading-md);
+  text-decoration: none;
+}
+.ui-tab:hover { color: var(--text); }
+.ui-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: var(--weight-strong); }
+.ui-tab:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }
+.ui-tab-count {
+  min-width: 24px;
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.ui-tab-count--emphasised { background: var(--warning); color: var(--on-accent); }
+.ui-popover {
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - var(--space-4));
+  max-height: min(70vh, calc(100dvh - var(--space-6)));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-2);
+  font-size: var(--size-md);
+  line-height: var(--leading-md);
+}
+.ui-popover-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--space-4); }
+.ui-popover-footer { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border); }
+.ui-popover:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
+.ui-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  padding: 1px var(--space-1) 1px var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  cursor: pointer;
+}
+.ui-filter-chip:hover { background: var(--surface-sunken); }
+.ui-filter-chip:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
+.ui-filter-chip-icon { flex: none; color: var(--text-muted); }
+.ui-menu-button { display: inline-block; }
+.ui-menu {
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  min-width: 12rem;
+  padding: var(--space-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-2);
+}
+.ui-menu-item {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--size-md);
+  line-height: var(--leading-md);
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ui-menu-item:hover,
+.ui-menu-item:focus-visible { background: var(--accent-light); }
+.ui-menu-item:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }
+/* Side panel: a modal right panel (Dialog variant "side"); the page behind it is inert. */
+.modal-overlay--side { justify-content: flex-end; align-items: stretch; }
+.ui-dialog--side { width: 480px; max-width: 100vw; height: 100dvh; max-height: none; border-radius: 0; animation: ui-side-in 150ms ease-out; }
+@keyframes ui-side-in { from { transform: translateX(100%); } to { transform: none; } }
+@media (max-width: 699px) {
+  .ui-dialog--side { width: 100vw; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-dialog--side { animation: none; }
+}
+@media (forced-colors: active) {
+  .stage-cell-symbol { color: CanvasText; }
+  .data-table .data-table-row--decision > :first-child { box-shadow: none; border-left: 3px solid CanvasText; }
+  .ui-tab[aria-selected="true"] { border-bottom-color: Highlight; }
+  .ui-tab-count { border: 1px solid CanvasText; }
+  .ui-tab-count--emphasised { forced-color-adjust: none; background: CanvasText; color: Canvas; }
+  .ui-popover,
+  .ui-menu { border: 1px solid CanvasText; }
+  .ui-tab:focus-visible,
+  .ui-filter-chip:focus-visible,
+  .ui-menu-item:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+}
