@@ -895,10 +895,28 @@ def _user_ids(conn: Connection, pseudonyms: Iterable[str]) -> dict[str, int]:
     }
 
 
+FactScope = Literal["page", "panel", "summary"]
+
+
 def load_facts(
-    conn: Connection, repo: Repository, key: str, pid: int, viewer_user_id: int
+    conn: Connection,
+    repo: Repository,
+    key: str,
+    pid: int,
+    viewer_user_id: int,
+    *,
+    scope: FactScope = "page",
 ) -> RowFacts:
-    """All facts of project ``key`` on ``conn``; the caller has authorized it."""
+    """All facts of project ``key`` on ``conn``; the caller has authorized it.
+
+    ``scope`` "panel" (the final panel: steps, issues, notes and the Final
+    cell) skips the facts only other cells and the NEW signal show: findings,
+    others' activity, latest reviews and correction reasons. "summary" (the
+    navigation counter: steps only) also skips people and problem-report
+    details.
+    """
+    lean = scope != "page"
+    summary = scope == "summary"
     project = conn.execute(
         select(
             ProjectRow.adjudicator_not_annotator,
@@ -917,25 +935,29 @@ def load_facts(
     assignments = _assignments(conn, pid)
     reports = _reports(conn, pid)
     selected = _selected_submissions(conn, pid)
-    latest_reviews = _latest_reviews(conn, pid)
+    latest_reviews = {} if lean else _latest_reviews(conn, pid)
     author_ids = _user_ids(conn, (item.annotator_id for item in selected.values()))
-    people = person_refs(
-        conn,
-        [
-            viewer_user_id,
-            *(item.user_id for item in assignments),
-            *(item.reporter_id for item in reports.values() if item.reporter_id),
-            *(
-                item["accepted_by"]
-                for item in acceptances.values()
-                if item["accepted_by"]
-            ),
-            *(item["discarded_by"] for item in discarded.values()),
-            *(item.reviewer_id for item in latest_reviews.values()),
-            *author_ids.values(),
-        ],
-        viewer_id=viewer_user_id,
-        viewer_is_lead=True,  # Documents is lead-only
+    people = (
+        {}
+        if summary
+        else person_refs(
+            conn,
+            [
+                viewer_user_id,
+                *(item.user_id for item in assignments),
+                *(item.reporter_id for item in reports.values() if item.reporter_id),
+                *(
+                    item["accepted_by"]
+                    for item in acceptances.values()
+                    if item["accepted_by"]
+                ),
+                *(item["discarded_by"] for item in discarded.values()),
+                *(item.reviewer_id for item in latest_reviews.values()),
+                *author_ids.values(),
+            ],
+            viewer_id=viewer_user_id,
+            viewer_is_lead=True,  # Documents is lead-only
+        )
     )
     people_fields = {uid: ref.model_dump() for uid, ref in people.items()}
     # Read once: the final state and the source obligations share them.
@@ -965,7 +987,9 @@ def load_facts(
         selections=_selections(conn, pid),
         last_activity=last_activity,
         selection_activity=selection_activity,
-        row_reports=load_row_reports(
+        row_reports={}
+        if summary
+        else load_row_reports(
             conn, pid, {(v.case_id, v.language) for v in versions}, people_fields
         ),
         plan=plan,
@@ -975,7 +999,9 @@ def load_facts(
         annotations_per_text=project.annotations_per_text,
         rule_on=project.annotate_accepted_translations_only,
         people=people_fields,
-        people_by_pseudonym=lead_pseudonym_refs(
+        people_by_pseudonym={}
+        if summary
+        else lead_pseudonym_refs(
             conn,
             (item.annotator_id for item in selected.values()),
             viewer_id=viewer_user_id,
@@ -983,10 +1009,12 @@ def load_facts(
         author_ids=author_ids,
         decided=_decided(conn, pid),
         latest_reviews=latest_reviews,
-        correction_reasons=_correction_reasons(conn, pid, assignments),
-        findings=_findings(conn, pid),
-        others_activity=load_others_activity(conn, pid, viewer_user_id),
-        baseline_at=documents_visits.baseline(conn, viewer_user_id, pid),
+        correction_reasons={} if lean else _correction_reasons(conn, pid, assignments),
+        findings={} if lean else _findings(conn, pid),
+        others_activity={} if lean else load_others_activity(conn, pid, viewer_user_id),
+        baseline_at=None
+        if lean
+        else documents_visits.baseline(conn, viewer_user_id, pid),
         resolutions=_resolutions(conn, pid),
         last_submissions=_last_submissions(conn, pid),
         source_obligations=_source_obligations(causes),
@@ -1036,7 +1064,9 @@ class DocumentRowsService:
         """Navigation counter: rows that need the lead's decision (V10)."""
         with self.db.transaction() as conn:
             pid = authorize_final_results(conn, self.actor, key, exclusive=False)
-            facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
+            facts = load_facts(
+                conn, self.repo, key, pid, self.access.user_id, scope="summary"
+            )
             return {"needs_decision": needs_decision(facts)}
 
     def submissions(self, key: str, case_id: str, language: str) -> dict[str, Any]:
@@ -1050,5 +1080,7 @@ class DocumentRowsService:
         """Final-result panel of one row (lead only, shared project lock)."""
         with self.db.transaction() as conn:
             pid = authorize_final_results(conn, self.actor, key, exclusive=False)
-            facts = load_facts(conn, self.repo, key, pid, self.access.user_id)
+            facts = load_facts(
+                conn, self.repo, key, pid, self.access.user_id, scope="panel"
+            )
             return document_row_panel.final_panel(conn, facts, key, case_id, language)
