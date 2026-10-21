@@ -74,7 +74,7 @@ export function TaskGuidelines({ assignment, readOnly, children }: TaskGuideline
     </>}>
     {/* Remounted when the version in force changes, so a withdrawal of the shown version replaces its text. */}
     <div className="task-guidelines-reader">
-      <GuidelineReader key={`${version}:${current ?? "none"}`} projectKey={projectKey} version={version} currentVersion={current} headingLevel={3} />
+      <GuidelineReader key={`${version}:${current ?? "none"}`} projectKey={projectKey} version={version} currentVersion={current} headingLevel={2} showHeading={false} />
     </div>
   </Drawer>;
 

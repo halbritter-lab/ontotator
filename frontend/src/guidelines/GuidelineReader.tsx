@@ -30,6 +30,8 @@ export interface GuidelineReaderProps {
   currentVersion: number | null;
   /** Level of the "Guidelines vN" heading (default 2); Markdown headings start one level below. */
   headingLevel?: 2 | 3;
+  /** False when the surrounding container already names the version at `headingLevel` (task drawer). */
+  showHeading?: boolean;
 }
 
 /**
@@ -37,7 +39,7 @@ export interface GuidelineReaderProps {
  * or the withdrawn line. Showing a version's text records `opened` for it (spec G16), so the
  * Settings reading view, the task drawer and the guidelines page need no call of their own.
  */
-export function GuidelineReader({ projectKey, version, currentVersion, headingLevel = 2 }: GuidelineReaderProps): JSX.Element {
+export function GuidelineReader({ projectKey, version, currentVersion, headingLevel = 2, showHeading = true }: GuidelineReaderProps): JSX.Element {
   const [loaded, setLoaded] = useState<{ key: string; version: number; document: GuidelineDocumentView } | null>(null);
   const [error, setError] = useState<unknown>();
   useEffect(() => {
@@ -55,7 +57,7 @@ export function GuidelineReader({ projectKey, version, currentVersion, headingLe
   const document = loaded?.key === projectKey && loaded.version === version ? loaded.document : null;
   const withdrawn = document !== null && (document.withdrawn != null || document.body === null);
   return <div className="guideline-reader">
-    <Heading className="guideline-reader-heading">Guidelines v{version}</Heading>
+    {showHeading && <Heading className="guideline-reader-heading">Guidelines v{version}</Heading>}
     {error !== undefined ? <ErrorNotice error={error} />
       : document === null ? <InlineMessage tone="info">Loading guidelines…</InlineMessage>
       : withdrawn ? <p className="guideline-reader-withdrawn">v{version} was withdrawn by the project lead.</p>
