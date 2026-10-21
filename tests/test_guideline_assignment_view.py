@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from auth_harness import logged_in
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
 from test_auth_api import _app
 from test_projects_api import create_project
 
@@ -107,6 +107,20 @@ def test_notice_only_on_editable_tasks_of_the_owner(team) -> None:
     rows = team.lead.get(f"/api/v1/projects/{KEY}/assignments").json()
     assert rows and all(row["guideline_notice"] is None for row in rows)
     assert all(row["guideline"]["version"] == 1 for row in rows)
+
+
+def test_no_notice_on_a_held_task(team) -> None:
+    publish(team.lead, b"# One")
+    with team.app.state.repo.db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.id == team.tasks["d3"])
+            .values(held=True)
+        )
+    held = metadata(team, "d3")
+    assert held["guideline_notice"] is None
+    assert held["guideline"]["version"] == 1
+    assert metadata(team, "d1")["guideline_notice"] is not None
 
 
 def test_no_version_in_force_gives_nulls(team) -> None:

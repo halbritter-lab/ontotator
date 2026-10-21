@@ -274,11 +274,7 @@ def _views(
         briefs = guideline_briefs(conn, set(project_ids.values()))
         notices: dict[str, GuidelineNoticeView | None] = {}
         for key in sorted(
-            {
-                row.project_key
-                for row in assignments
-                if row.id in owned and row.status != "submitted"
-            }
+            {row.project_key for row in assignments if _notice_applies(row, owned)}
         ):
             notice = (
                 guideline_notice(conn, project_id=project_ids[key], user_id=owner_id)
@@ -328,13 +324,16 @@ def _views(
             active_holds=holds.get(row.id, []),
             guideline=guideline(row.project_key),
             guideline_notice=(
-                notices.get(row.project_key)
-                if row.id in owned and row.status != "submitted"
-                else None
+                notices.get(row.project_key) if _notice_applies(row, owned) else None
             ),
         )
         for row in assignments
     ]
+
+
+def _notice_applies(row: Assignment, owned: set[int]) -> bool:
+    """The owner's editable task: not submitted and not held by a report."""
+    return row.id in owned and row.status != "submitted" and not row.held
 
 
 def _guard(request: Request, key: str) -> None:
