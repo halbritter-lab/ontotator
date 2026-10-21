@@ -331,7 +331,7 @@ test("step 11: the consolidation's row action reads \"Accept as final…\" (VD16
   await expect(action("Accept as final…")).toBeVisible();
 });
 
-test("step 12: Accept as final… → Accept the consolidation by Ana as final", async () => {
+test("step 12: Accept as final… → Consolidated by Ana, accept as final", async () => {
   // The lead works from Needs your decision (where the nav counter lands, VD7), so the row is retained with "Resolved".
   await openDocuments(page, s.project, "?segment=decision");
   await expect(documentsTab(page, "Needs your decision", 1)).toHaveAttribute("aria-selected", "true");
@@ -339,7 +339,8 @@ test("step 12: Accept as final… → Accept the consolidation by Ana as final",
   await clicks.count(accept);
   const panel = rowPanel(page, CASE, "de").getByRole("region", { name: "Final result", exact: true });
   await expect(panel).toBeVisible();
-  await expect(panel.getByText(`Accept the consolidation by ${ANA} as final?`, { exact: true })).toBeVisible();
+  await expect(panel.getByText(`Consolidated by ${ANA}`, { exact: true })).toBeVisible();
+  await expect(panel.getByText("Accept this consolidation as final?", { exact: true })).toBeVisible();
   await clicks.count(panel.getByRole("button", { name: "Accept as final", exact: true }));
   await expect(panel.getByText("No more final results to decide.", { exact: true })).toBeVisible();
   await evidence(page, "walkthrough-12-panel");
@@ -361,7 +362,7 @@ test("step 13: Export preflight: 1 final, no omission for de, en not in plan", a
   const preflight = page.locator(".final-export-preflight");
   await expect(preflight).toContainText("1 selected results · 0 warnings · 0 omitted");
   await expect(preflight.getByRole("list", { name: "Omitted without a final selection" })).toHaveCount(0);
-  await expect(preflight.getByRole("list", { name: "Not in plan, not exported" })).toHaveCount(0);
+  await expect(preflight.getByRole("list", { name: "Not planned, not exported" })).toHaveCount(0);
   await evidence(page, "walkthrough-13");
 });
 

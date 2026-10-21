@@ -19,6 +19,7 @@ import { ProgressPage } from "./admin/ProgressPage";
 import { ExportPage } from "./admin/ExportPage";
 import { ProblemReportDetail } from './tasks/ProblemReportDetail';
 import { GuidelinesPage } from "./guidelines/GuidelinesPage";
+import { ConsolidationScreen } from "./consolidation/ConsolidationScreen";
 import { Button, EmptyState, InlineMessage } from "./ui";
 
 export interface AppProps { user?: CurrentUser | null; onLogout?: () => void }
@@ -257,6 +258,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
         : <EmptyState title="Problem report not found" action={<Button onClick={() => go({ name: "tasks" })}>My tasks</Button>} />;
       break;
     }
+    case "projectConsolidation": content = <ConsolidationScreen key={JSON.stringify([user.username, route.key, route.roundId])} projectKey={route.key}
+      roundId={route.roundId} group={route.group} />; break;
     case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
     case "notFound": content = <NotFound onNavigate={go} />; break;
     default: content = <EmptyState title="This page is not available yet.">This section is planned for a later step.</EmptyState>;

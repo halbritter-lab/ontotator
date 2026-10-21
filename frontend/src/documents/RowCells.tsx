@@ -349,14 +349,21 @@ export function RowStageCell({ row, stage, sourceLanguage, onOpenPanel }: {
   row: DocumentRowView; stage: StageName; sourceLanguage?: string | null; onOpenPanel?: OpenRowPanel;
 }): JSX.Element {
   const detailId = useId();
+  const flagId = useId();
   const cell = row.stages?.[stage];
   if (!cell) return <StageCell symbol="" word="—" tone="none" muted={!isActiveRow(row)} />;
   const text = stageText(stage, cell, row, { sourceLanguage });
-  const content = <StageCell symbol={text.symbol} word={text.word} detail={text.detail ? <span id={detailId}>{text.detail}</span> : undefined}
-    tone={cell.tone} muted={!isActiveRow(row)} />;
+  // X5: the Final cell's second line "1 flagged" (findings flagged "guidelines unclear" in the submitted consolidation).
+  const flagged = stage === "final" ? row.flagged_unclear ?? 0 : 0;
+  const detail = text.detail || flagged > 0 ? <>
+    {text.detail && <span id={detailId}>{text.detail}</span>}
+    {flagged > 0 && <span id={flagId} className="documents-stage-flagged">{`${flagged} flagged`}</span>}
+  </> : undefined;
+  const content = <StageCell symbol={text.symbol} word={text.word} detail={detail} tone={cell.tone} muted={!isActiveRow(row)} />;
   if (!onOpenPanel) return content;
+  const describedBy = [text.detail && detailId, flagged > 0 && flagId].filter(Boolean).join(" ");
   return <button type="button" className="documents-stage-button" aria-label={`${STAGE_CELL_TITLES[stage]}: ${text.word}. Show history, ${rowName(row)}`}
-    aria-describedby={text.detail ? detailId : undefined} onClick={event => onOpenPanel(row, { stage, opener: event.currentTarget })}>{content}</button>;
+    aria-describedby={describedBy || undefined} onClick={event => onOpenPanel(row, { stage, opener: event.currentTarget })}>{content}</button>;
 }
 
 /** Waiting on: "You" (strong), a person, up to two names and "+n" with the full list (VD8), or "—". */

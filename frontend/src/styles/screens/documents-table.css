@@ -81,10 +81,15 @@
 .documents-stage-button:focus-visible .stage-cell-status { text-decoration: underline solid var(--accent); text-decoration-thickness: 2px; }
 .documents-stage-button:focus { outline: none; }
 .documents-stage-button:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); border-radius: var(--radius-sm); }
-/* The row the row panel shows: a light accent background and an accent edge on its last cell
-   (the first cell's edge belongs to decision rows); `aria-current` names it. */
-.documents-table .documents-row--active > * { background: var(--accent-light); }
-.documents-table .documents-row--active > :last-child { box-shadow: inset -3px 0 var(--accent); }
+/* The row the row panel shows: a light accent background, a 2 px accent edge above and below every cell
+   (visible beside the panel, never colour alone) and its text name in strong weight; the first cell keeps
+   the decision edge of decision rows; `aria-current` names it. Box shadows only: no layout shift. */
+.documents-table .documents-row--active > * { background: var(--accent-light); box-shadow: inset 0 2px var(--accent), inset 0 -2px var(--accent); }
+.documents-table .documents-row--active > th[scope="row"] { box-shadow: inset 1px 0 var(--border), inset 0 2px var(--accent), inset 0 -2px var(--accent); }
+.documents-table .documents-row--active.data-table-row--decision > :first-child { box-shadow: inset 3px 0 var(--warning), inset 0 2px var(--accent), inset 0 -2px var(--accent); }
+.documents-table .documents-row--active .documents-text-name { font-weight: var(--weight-strong); }
+/* The Final cell's second line "1 flagged" (X5). */
+.documents-stage-flagged { display: block; }
 /* Rows outside the plan (VD1): muted, the same structure */
 .documents-table .documents-row--not-in-plan > * { color: var(--text-muted); }
 
@@ -125,7 +130,9 @@
   .documents-skeleton-bar { background: GrayText; }
   .documents-paging a[aria-disabled="true"] { color: GrayText; }
   .documents-text-button { color: LinkText; }
-  .documents-table .documents-row--active > :last-child { box-shadow: none; border-right: 3px solid Highlight; }
+  /* An outline inside the row: forced colours drop box shadows, and a border would shift the cells. */
+  .documents-table .documents-row--active > * { box-shadow: none; }
+  .documents-table .documents-row--active { outline: 2px solid Highlight; outline-offset: -2px; }
 }
 
 /* Case selection tools above the table (L3b) */

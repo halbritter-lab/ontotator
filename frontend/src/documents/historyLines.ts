@@ -2,7 +2,8 @@
  * Activity lines of the row panel (acceptance fixes WP-A): one line per review, submission or open
  * task, then pauses and the final choice, oldest first, each with its stage, e.g.
  * "Review: Ana Weber (ann-0003) · Accepted unchanged · 20 Oct, 22:09",
- * "Annotation: Tom Reis (ann-0004) · Round 1 · 1 finding · 22:15", "Final: chosen by you · 20 Oct, 22:20".
+ * "Annotation: Tom Reis (ann-0004) · Round 1 · 1 finding · 22:15", "Final: chosen by you · 20 Oct, 22:20"; a consolidation
+ * adds "4 kept automatically (all matched)" (U14).
  */
 import type { DocumentRowView, RowSubmissionView } from "../api/client";
 import { assignmentStatusLabels, labelFor, plural } from "../app/labels";
@@ -46,6 +47,12 @@ const SUBMISSION_PREFIX: Readonly<Record<RowSubmissionView["kind"], string>> = {
 const workPrefix = (item: WorkItem) => (item.task === "review" ? "Annotation review" : "Annotation");
 const who = (item: WorkItem) => personLabel(item.author_label, item.is_me, item.person);
 
+/** U14: "4 kept automatically (all matched)" on a consolidation that took matching findings over; else nothing. */
+function keptText(item: RowSubmissionView): string | null {
+  const kept = item.kind === "consolidation" ? item.kept_automatically ?? 0 : 0;
+  return kept > 0 ? `${kept} kept automatically (all matched)` : null;
+}
+
 export function historyLines(row: DocumentRowView, submissions: readonly RowSubmissionView[] | null, options: HistoryOptions = {}): HistoryLine[] {
   const now = options.now ?? new Date();
   const lines: HistoryLine[] = [];
@@ -82,7 +89,7 @@ export function historyLines(row: DocumentRowView, submissions: readonly RowSubm
         key: `submission-${item.submission_id}`,
         stage: "annotation",
         text: `${SUBMISSION_PREFIX[item.kind] ?? "Annotation"}: ${join(personLabel(item.author_label, item.is_me, item.author), round,
-          plural(item.finding_count, "finding"), several && `v${item.version}`, timeText(item.recorded_at, now))}`,
+          plural(item.finding_count, "finding"), keptText(item), several && `v${item.version}`, timeText(item.recorded_at, now))}`,
       });
     }
   }

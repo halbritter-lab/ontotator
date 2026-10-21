@@ -31,7 +31,7 @@ import { panelStep } from "../documents/finalPanelText";
 import type { MenuItem } from "../ui/MenuButton";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { DecisionBlock } from "../documents/FinalPanel";
-import { RowPanel, type RowPanelTarget } from "../documents/RowPanel";
+import { RowPanel, StageActions, type RowPanelTarget, type StageActionsProps } from "../documents/RowPanel";
 import { HandleTextChangeDialog } from "../documents/HandleTextChangeDialog";
 import { CarryDialog, carrySourceOfFinal, carrySourceOfStep, type CarrySource } from "../documents/CarryDialog";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
@@ -540,6 +540,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const panelRow = panelKey ? pageRows.find(entry => rowKeyOf(entry) === panelKey) ?? null : null;
   /** The control that opened the panel; Close and Escape return focus to it. */
   const panelOpener = useRef<HTMLElement | null>(null);
+  /** The row `panelOpener` opened; once the panel shows another row (J / K, advance) focus returns to that row's name. */
+  const panelOpenedKey = useRef<string | null>(null);
   /** Each explicit open moves focus to the panel heading. */
   const [panelFocus, setPanelFocus] = useState(0);
   /** "Change final…": the decision block opens on its compare content (until the panel shows another row). */
@@ -556,7 +558,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const showPanel = (target: RowPanelTarget, options: PanelOpenOptions) => {
     if (options.changeFinal) setChangeFinalKey(target.key);
     else if (target.key !== panelKey) setChangeFinalKey(null);
-    if (options.opener) panelOpener.current = options.opener;
+    if (options.opener) { panelOpener.current = options.opener; panelOpenedKey.current = target.key; }
     if (options.focus) setPanelFocus(value => value + 1);
     setPendingPanel(null);
     navigateDocuments({ panel: target.key, panel_stage: target.stage, panel_tab: target.tab && target.tab !== "activity" ? target.tab : undefined }, { replace: true });
@@ -574,6 +576,14 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     decisionKey.current = null;
     navigateDocuments({ panel: undefined, panel_stage: undefined, panel_tab: undefined }, { replace: true });
   };
+  /** "Close" in the decision block: closes the panel and returns focus as the panel's own Close does. */
+  const closeRowPanelFromBlock = () => {
+    const key = panelKey;
+    const opener = key && panelOpenedKey.current === key ? panelOpener.current : null;
+    closeRowPanel();
+    if (!key) return;
+    window.setTimeout(() => (opener?.isConnected ? opener : rowElement(key, "header"))?.focus(), 0);
+  };
   /** Text name and stage cells: the panel unfiltered or filtered to the stage, on Activity. */
   const onOpenPanel: OpenRowPanel = (row, { stage, opener }) => openRowPanel({ key: rowKeyOf(row), stage }, { opener, focus: true });
   const panelSource = panelRow ? groupOf(panelRow.case_id)?.rows.find(entry => entry.is_source)?.language ?? null : null;
@@ -581,7 +591,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const decisionOptional = !(panelKey && decisionKey.current === panelKey) && panelRow != null && !panelRow.final && isActiveRow(panelRow);
   const decision = panelKey && releasedKey !== panelKey && (decisionKey.current === panelKey || decisionOptional) ? <DecisionBlock optional={decisionOptional} projectKey={projectKey} rowKey={panelKey} page={page} query={query} refreshError={rows.error}
     username={currentUser?.username ?? ""} changeFinal={changeFinalKey === panelKey}
-    onClose={closeRowPanel}
+    onClose={closeRowPanelFromBlock}
     onDecided={key => { notifyFinalSelectionChanged(projectKey); recordDecision(projectKey, key); reloadAfterAction(); }}
     onAdvance={key => showPanel({ key, stage: panelStage, tab: panelTab }, {})}
     onReload={() => rows.reload()}
@@ -601,16 +611,22 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       const message = `Consolidation started for ${rowName(row)}.`;
       showToast({ message }); announce(message); refreshAll();
     }} /> : null;
+  /** Admin actions per stage: the row panel's Activity and the cards' stage popover (A3). */
+  const stageActionProps: Omit<StageActionsProps, "row" | "stage"> = {
+    textVersionTools,
+    onAssign,
+    onRequestCorrection: row => { const variant = correctionVariant(row); if (variant) setCorrectionFor({ row, variant }); },
+    canRequestCorrection: row => correctionVariant(row) != null,
+    onChangeFinal: row => openRowPanel({ key: rowKeyOf(row), stage: panelStage, tab: panelTab }, { changeFinal: true, focus: true }),
+    canChangeFinal: row => row.final != null && !panelStep(row) && decisionKey.current !== rowKeyOf(row),
+  };
   const rowPanel = panelKey ? <RowPanel projectKey={projectKey} rowKey={panelKey} row={panelRow} rows={pageRows} stage={panelStage} tab={panelTab}
     query={query} narrow={narrow} focusRequest={panelFocus} returnFocusRef={panelOpener}
     onNavigate={target => openRowPanel(target)} onRoute={route => onNavigate(route)} onClose={closeRowPanel}
-    decision={decision} sourceLanguage={panelSource} textVersionTools={textVersionTools} me={currentUser?.pseudonym ?? null}
+    decision={decision} sourceLanguage={panelSource} me={currentUser?.pseudonym ?? null}
     plan={panelRow ? <PlanChips row={panelRow} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} /> : null}
     planRevision={panelRow ? planSaves.revisionOf(panelRow.case_id, groupOf(panelRow.case_id)?.plan_revision ?? 1) : undefined}
-    onAssign={onAssign} onRequestCorrection={row => { const variant = correctionVariant(row); if (variant) setCorrectionFor({ row, variant }); }}
-    canRequestCorrection={row => correctionVariant(row) != null}
-    onChangeFinal={row => openRowPanel({ key: rowKeyOf(row), stage: panelStage, tab: panelTab }, { changeFinal: true, focus: true })}
-    canChangeFinal={row => row.final != null && !panelStep(row) && decisionKey.current !== rowKeyOf(row)}
+    {...stageActionProps}
     reportRoute={reportId => ({ name: "projectProblemReport", key: projectKey, reportId, documents: query })}
     pendingSwitch={pendingPanel ? {
       name: `${caseOfTextKey(pendingPanel.target.key)} · ${languageOfTextKey(pendingPanel.target.key)}`,
@@ -704,7 +720,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       body = emptyState(page.bar);
     } else if (narrow) {
       body = <DocumentCards page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} onOpenPanel={onOpenPanel} activeKey={panelKey} planSaves={planSaves}
-        renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras} />;
+        renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras}
+        stageActions={(row, stage) => <StageActions {...stageActionProps} row={row} stage={stage} />} me={currentUser?.pseudonym ?? null} />;
     } else {
       body = <DocumentsTable page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} planSaves={planSaves}
         onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras}

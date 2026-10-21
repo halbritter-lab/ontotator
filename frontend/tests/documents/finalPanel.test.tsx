@@ -97,18 +97,29 @@ describe("choose", () => {
     expect(screen.queryByRole("button", { name: "Consolidate…" })).toBeNull();
   });
 
-  it("consolidation of all others: Accept the consolidation by … plus Compare all 3…", async () => {
+  it("after consolidation: Consolidated by Luc Martin, preselected, Open consolidation, no W1, plus Compare all 3…", async () => {
     const consolidation = panelSubmission({ submission_id: "c-s3", document_id: "case-108-de", author_label: "rev-0005", author: luc, kind: "consolidation", round_id: "c-r3", round_ordinal: null, finding_count: 6, recorded_at: "2026-10-21T09:00:00Z" });
     panels[rowKey("case-108", "de")] = finalPanel({
       submissions: [anaSubmission("case-108", "de", { only_here: 1 }), tomSubmission("case-108", "de", { only_here: 0 }), { ...consolidation, only_here: 0 }],
       agreement: agreement({ total: 6, matching: 5 }), label_rule: "accept", accept_submission_id: "c-s3",
+      // A stale full-agreement flag never shows W1 once a consolidation exists (X4).
+      all_match: true, all_match_submission_id: "case-108-s1",
     });
-    renderPanel("case-108:de", page([group("case-108", [chooseRow("case-108", "de")])]));
-    expect(await screen.findByText("Accept the consolidation by Luc Martin as final?")).toBeTruthy();
+    const onNavigate = vi.fn();
+    renderPanel("case-108:de", page([group("case-108", [chooseRow("case-108", "de")])]), { onNavigate });
+    expect(await screen.findByText("Consolidated by Luc Martin")).toBeTruthy();
+    expect(screen.getByText("Accept this consolidation as final?")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Accept as final" }).classList.contains("btn-primary")).toBe(true);
+    expect(screen.queryByText(/All findings match/)).toBeNull();
+    const open = screen.getByRole("link", { name: "Open consolidation" });
+    expect(open.getAttribute("href")).toBe("#/projects/p/consolidations/c-r3");
+    fireEvent.click(open);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projectConsolidation", key: "p", roundId: "c-r3" });
     fireEvent.click(screen.getByRole("button", { name: "Compare all 3…" }));
-    expect(screen.queryByText("Accept the consolidation by Luc Martin as final?")).toBeNull();
+    expect(screen.queryByText("Accept this consolidation as final?")).toBeNull();
     const table = screen.getByRole("table", { name: "Submissions, case-108 · de" });
     expect(within(table).getAllByRole("row")).toHaveLength(4);
+    expect(within(table).getByRole("rowheader", { name: /Consolidated by Luc Martin/ })).toBeTruthy();
   });
 
   it("compare: summary, Agreement: 4 of 6 findings match · 1 differs in context only, How is this counted?", async () => {
@@ -123,8 +134,10 @@ describe("choose", () => {
     fireEvent.click(how);
     expect(how.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(how.getAttribute("aria-controls")!)!.textContent).toMatch(/^Two findings match when they are in the same layer/);
-    // Consolidate… with its hint.
-    expect(screen.getByText("merge both into a new final (you or someone else)", { exact: false })).toBeTruthy();
+    // Consolidate…: primary (no full agreement, nothing preselected) with its hint.
+    const consolidate = screen.getByRole("button", { name: "Consolidate…" });
+    expect(consolidate.classList.contains("btn-primary")).toBe(true);
+    expect(document.getElementById(consolidate.getAttribute("aria-describedby")!)!.textContent).toBe("Resolve the 2 differences together");
   });
 
   it("table Submission · Findings · Only here; other version shows on v1 · not compared and stays selectable", async () => {
@@ -178,7 +191,7 @@ describe("choose", () => {
     panels[rowKey("case-112", "de")] = comparePanel("case-112", "de");
     vi.spyOn(api, "listMembers").mockResolvedValue([{ username: "rev", display_name: "Rita Rev", pseudonym: "rev-0009", roles: ["adjudicator"], languages: ["de"] }]);
     vi.spyOn(api, "listAssignments").mockResolvedValue([{ ...assignment, id: 9, project_key: "p", document_id: "case-112-de", username: "rev", task: "review", workflow_revision: 1 }]);
-    vi.spyOn(api, "startWorkRound").mockResolvedValue({ round_id: "r-9", assignment_id: 9 } as WorkRoundView);
+    vi.spyOn(api, "startConsolidation").mockResolvedValue({ round: { round_id: "r-9", assignment_id: 9 } as WorkRoundView, role_granted: false });
     const onConsolidationStarted = vi.fn();
     const onDirtyChange = vi.fn();
     renderPanel("case-112:de", page([group("case-112", [chooseRow("case-112", "de")])]), { onConsolidationStarted, onDirtyChange, username: "lead" });
@@ -198,7 +211,7 @@ describe("choose", () => {
     fireEvent.change(screen.getByLabelText("Consolidation reviewer"), { target: { value: "rev" } });
     fireEvent.click(screen.getByRole("button", { name: "Start consolidation" }));
     await waitFor(() => expect(onConsolidationStarted).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-112" })));
-    expect(api.startWorkRound).toHaveBeenCalledWith(9, expect.objectContaining({ source_submission_ids: ["case-112-s1", "case-112-s2"] }));
+    expect(api.startConsolidation).toHaveBeenCalledWith("p", expect.objectContaining({ reviewer: "rev", source_submission_ids: ["case-112-s1", "case-112-s2"], expected_workflow_revision: 1 }));
   });
 
   it("has no History · Text versions · Technical details links (the row panel's tabs show them)", async () => {
@@ -220,10 +233,23 @@ describe("optional (a row without a final decision step)", () => {
     expect(screen.queryByRole("region", { name: "Final result" })).toBeNull();
   });
 
-  it("offers Consolidate… once two submissions exist on one version", async () => {
+  it("offers only Consolidate… once two eligible submissions exist on one version (no choice of a final)", async () => {
     panels[rowKey("case-131", "de")] = comparePanel("case-131", "de");
     renderPanel("case-131:de", page([group("case-131", [progressRow("case-131")])]), { optional: true });
-    expect(await within(await screen.findByRole("region", { name: "Final result" })).findByRole("button", { name: "Consolidate…" })).toBeTruthy();
+    const region = await screen.findByRole("region", { name: "Final result" });
+    expect(await within(region).findByRole("button", { name: "Consolidate…" })).toBeTruthy();
+    expect(within(region).queryByRole("button", { name: "Use as final" })).toBeNull();
+    expect(within(region).queryByRole("table")).toBeNull();
+    expect(within(region).queryByText(/annotations submitted/)).toBeNull();
+  });
+
+  it("renders nothing when one of two submissions is not eligible (the en-source rule)", async () => {
+    const both = comparePanel("case-132", "de");
+    panels[rowKey("case-132", "de")] = { ...both, submissions: [{ ...both.submissions![0], eligible: false }, both.submissions![1]] };
+    renderPanel("case-132:de", page([group("case-132", [progressRow("case-132")])]), { optional: true });
+    await waitFor(() => expect(api.finalPanel).toHaveBeenCalled());
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByRole("region", { name: "Final result" })).toBeNull();
   });
 });
 
@@ -344,6 +370,90 @@ describe("review changes", () => {
     fireEvent.click(keep);
     expect(api.selectFinalResult).not.toHaveBeenCalled();
     await waitFor(() => expect(liveRegion().textContent).toBe(OWN_REASON));
+  });
+});
+
+describe("full agreement (W1)", () => {
+  const matchPanel = (caseId: string, count: number, findings: number, overrides: Partial<FinalPanelView> = {}): FinalPanelView => {
+    const people = [anaSubmission(caseId, "de", { finding_count: findings, only_here: 0 }), tomSubmission(caseId, "de", { finding_count: findings, only_here: 0 }),
+      tomSubmission(caseId, "de", { submission_id: `${caseId}-s3`, round_id: `${caseId}-r3`, author: luc, author_label: "rev-0005", finding_count: findings, only_here: 0, recorded_at: "2026-10-20T14:00:00Z" })];
+    return finalPanel({
+      submissions: people.slice(0, count), agreement: agreement({ total: findings, matching: findings }),
+      all_match: true, all_match_submission_id: `${caseId}-s1`, ...overrides,
+    });
+  };
+
+  it("All findings match (2 of 2): one primary Accept as final, a confirmation with Open result first, then the earliest eligible submission", async () => {
+    panels[rowKey("case-140", "de")] = matchPanel("case-140", 2, 2);
+    const onNavigate = vi.fn();
+    const onDirtyChange = vi.fn();
+    renderPanel("case-140:de", page([group("case-140", [chooseRow("case-140", "de")])]), { onNavigate, onDirtyChange });
+    expect(await screen.findByText("All findings match (2 of 2)")).toBeTruthy();
+    const accept = screen.getByRole("button", { name: "Accept as final" });
+    expect(accept.classList.contains("btn-primary")).toBe(true);
+    // The per-submission table waits under "Show submissions"; no Consolidate… with nothing to resolve.
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Consolidate…" })).toBeNull();
+    fireEvent.click(accept);
+    expect(api.selectFinalResult).not.toHaveBeenCalled();
+    const confirm = screen.getByRole("group", { name: "Accept as final?" });
+    expect(within(confirm).getByText("Both submissions contain the same findings. Accept them as the final result?")).toBeTruthy();
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    const controls = [...confirm.querySelectorAll("a, button")].map(element => element.textContent);
+    expect(controls.indexOf("Open result")).toBeLessThan(controls.indexOf("Accept as final"));
+    fireEvent.click(within(confirm).getByRole("link", { name: "Open result" }));
+    expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ name: "projectCase", annotations: refKey({ kind: "submission", id: "case-140-s1" }) }));
+    fireEvent.click(within(confirm).getByRole("button", { name: "Accept as final" }));
+    expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-140-de", submission_id: "case-140-s1", expected_revision: 0, acknowledged_cause_ids: [] });
+  });
+
+  it("Cancel closes the confirmation; Show submissions lists the table", async () => {
+    panels[rowKey("case-141", "de")] = matchPanel("case-141", 2, 2);
+    renderPanel("case-141:de", page([group("case-141", [chooseRow("case-141", "de")])]));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("group", { name: "Accept as final?" })).toBeNull();
+    const show = screen.getByRole("button", { name: "Show submissions" });
+    expect(show.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(show);
+    expect(show.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("table", { name: "Submissions, case-141 · de" })).toBeTruthy();
+  });
+
+  it("zero findings: Both submissions have no findings; three: All 3 submissions… and No submission has findings", async () => {
+    panels[rowKey("case-142", "de")] = matchPanel("case-142", 2, 0);
+    renderPanel("case-142:de", page([group("case-142", [chooseRow("case-142", "de")])]));
+    expect(await screen.findByText("Both submissions have no findings")).toBeTruthy();
+    expect(screen.queryByText(/All findings match/)).toBeNull();
+    cleanup();
+    panels[rowKey("case-143", "de")] = matchPanel("case-143", 3, 4);
+    renderPanel("case-143:de", page([group("case-143", [chooseRow("case-143", "de")])]));
+    expect(await screen.findByText("All findings match (4 of 4)")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Accept as final" }));
+    expect(screen.getByText("All 3 submissions contain the same findings. Accept them as the final result?")).toBeTruthy();
+    cleanup();
+    panels[rowKey("case-144", "de")] = matchPanel("case-144", 3, 0);
+    renderPanel("case-144:de", page([group("case-144", [chooseRow("case-144", "de")])]));
+    expect(await screen.findByText("No submission has findings")).toBeTruthy();
+  });
+});
+
+describe("Consolidate… (findings 7, 8)", () => {
+  it("is offered only with at least two eligible submissions on one text", async () => {
+    const both = comparePanel("case-150", "de");
+    panels[rowKey("case-150", "de")] = { ...both, submissions: [{ ...both.submissions![0], eligible: false }, both.submissions![1]] };
+    renderPanel("case-150:de", page([group("case-150", [chooseRow("case-150", "de")])]));
+    expect(await screen.findByRole("table", { name: "Submissions, case-150 · de" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Consolidate…" })).toBeNull();
+  });
+
+  it("is secondary when a submission is preselected", async () => {
+    panels[rowKey("case-151", "de")] = { ...comparePanel("case-151", "de"), label_rule: "accept", accept_submission_id: "case-151-s1" };
+    renderPanel("case-151:de", page([group("case-151", [chooseRow("case-151", "de")])]));
+    await screen.findByText("Accept Ana Weber’s annotation as final?");
+    const consolidate = screen.getByRole("button", { name: "Consolidate…" });
+    expect(consolidate.classList.contains("btn-primary")).toBe(false);
+    expect(consolidate.classList.contains("btn-quiet")).toBe(false);
   });
 });
 

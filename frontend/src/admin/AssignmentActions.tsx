@@ -4,10 +4,14 @@ import { Button, ConfirmDialog, Dialog, Select, Textarea } from "../ui";
 import { eligibleMembers, memberOptionLabel, useAlive } from "./assignmentUI";
 import { ErrorNotice } from "./ErrorNotice";
 import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
-export interface AssignmentActionsProps { assignment: AssignmentView; members: Member[]; onChanged: () => void }
+export interface AssignmentActionsProps {
+  assignment: AssignmentView; members: Member[]; onChanged: () => void;
+  /** A direct "Reassign…" button before the "Assignment actions" menu (the Documents row panel, S3). */
+  directReassign?: boolean;
+}
 export function AssignmentActions(props: AssignmentActionsProps): JSX.Element { return <Actions key={JSON.stringify([props.assignment.project_key, props.assignment.id, props.assignment.updated_at, props.assignment.status, props.assignment.revoked_at])} {...props} />; }
 const startedMessage = "Work has started. The previous draft stays with its author; the new person starts from the document's inputs.";
-function Actions({ assignment, members, onChanged }: AssignmentActionsProps): JSX.Element {
+function Actions({ assignment, members, onChanged, directReassign = false }: AssignmentActionsProps): JSX.Element {
   const [action, setAction] = useState<"reassign" | "reopen" | "revoke" | null>(null);
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
@@ -35,8 +39,9 @@ function Actions({ assignment, members, onChanged }: AssignmentActionsProps): JS
   };
   if (assignment.revoked_at) return <span>Removed</span>;
   return <>
+    {directReassign && <Button size="sm" variant="quiet" onClick={() => setAction("reassign")}>Reassign…</Button>}
     <details><summary aria-label={`Actions for ${assignment.pseudonym}: ${labelFor(taskLabels, assignment.task)}, ${assignment.document_id}`}>Assignment actions</summary>
-    <Button variant="quiet" onClick={() => setAction("reassign")}>Reassign …</Button>
+    {!directReassign && <Button variant="quiet" onClick={() => setAction("reassign")}>Reassign …</Button>}
     {assignment.status === "submitted" && <Button variant="quiet" onClick={() => setAction("reopen")}>Reopen</Button>}
     <Button variant="quiet" onClick={() => setAction("revoke")}>Remove assignment</Button>
     </details>

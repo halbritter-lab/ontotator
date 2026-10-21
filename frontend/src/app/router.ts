@@ -41,6 +41,8 @@ export interface ProjectDocumentsQuery {
   final_state?: string;
   /** Waiting-on facet: `me` or pseudonyms, comma-joined (OR). */
   waiting_on?: string;
+  /** Flag facet (`guidelines_unclear`: a finding flagged "guidelines unclear" in the submitted consolidation). */
+  flags?: string;
   /** Row of the open row panel as `<case>:<language>`; the legacy `open=` parameter maps to it. */
   panel?: string;
   /** Activity filter of the row panel (`review` | `annotation` | `final`); `stage` is the table's stage filter. */
@@ -63,7 +65,7 @@ export interface NavigateOptions { replace?: boolean }
 export const DOCUMENT_FIELDS = [
   "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
   "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
-  "review_state", "annotation_state", "final_state", "waiting_on", "panel", "panel_stage", "panel_tab",
+  "review_state", "annotation_state", "final_state", "waiting_on", "flags", "panel", "panel_stage", "panel_tab",
 ] as const;
 
 function readDocumentsQuery(params: URLSearchParams, prefix = ""): ProjectDocumentsQuery {
@@ -108,6 +110,8 @@ export type Route =
   /** Read-only guidelines page; without `version` the version in force. */
   | { name: "projectGuidelines"; key: string; version?: number }
   | { name: "projectProblemReport"; key: string; reportId: string; action?: "resume"; section?: "decide"; documents?: ProjectDocumentsQuery }
+  /** Consolidation view of one round (acceptance fixes WP-E); `group` scrolls to a finding group. */
+  | { name: "projectConsolidation"; key: string; roundId: string; group?: string }
   | { name: "notFound"; hash: string };
 
 export function parseRoute(hash: string): Route {
@@ -145,6 +149,12 @@ export function parseRoute(hash: string): Route {
         ...(params.get("action") === "resume" ? { action: "resume" as const } : {}),
         ...(params.get("section") === "decide" ? { section: "decide" as const } : {}),
         ...(Object.keys(documents).length ? { documents } : {}) };
+    }
+    const consolidation = /^#\/projects\/([^/]+)\/consolidations\/([^/]+)$/.exec(path);
+    if (consolidation) {
+      const group = params.get("group");
+      return { name: "projectConsolidation", key: decodeURIComponent(consolidation[1]), roundId: decodeURIComponent(consolidation[2]),
+        ...(group ? { group } : {}) };
     }
     const caseRoute = /^#\/projects\/([^/]+)\/cases\/([^/]+)$/.exec(path);
     if (caseRoute) {
@@ -219,6 +229,7 @@ export function routeHref(route: Route): string {
     case "projectProblemReport": return `#/projects/${encodeURIComponent(route.key)}/problem-reports/${encodeURIComponent(route.reportId)}${querySuffix([
       ["action", route.action], ["section", route.section], ...documentsEntries(route.documents, "documents_"),
     ])}`;
+    case "projectConsolidation": return `#/projects/${encodeURIComponent(route.key)}/consolidations/${encodeURIComponent(route.roundId)}${querySuffix([["group", route.group]])}`;
     case "notFound": return route.hash;
   }
 }

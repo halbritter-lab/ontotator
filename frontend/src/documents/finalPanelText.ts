@@ -11,7 +11,7 @@ import { rowKeyOf } from "./RowCells";
 import { roundName, submissionVersion } from "./SubmissionsTable";
 import type { ConsolidationInput } from "../variants/ConsolidationLauncher";
 
-/** Panel actions of a row: "Accept result…" / "Compare results…" and "Review changes…". */
+/** Panel actions of a row: "Accept as final…" / "Compare results…" and "Review changes…". */
 export const PANEL_ACTIONS: ReadonlySet<string> = new Set(["choose_final", "review_changes"]);
 
 /** "Final result · case-107 · de" (the panel's `h2`). */
@@ -43,14 +43,39 @@ export function consolidationInputs(submissions: readonly (Pick<FinalPanelSubmis
   }));
 }
 
+/** A submission's name in the block: the person, or "Consolidated by Ana Weber" for a consolidation (X4). */
+export function submissionName(submission: Pick<FinalPanelSubmissionView, "kind" | "author" | "author_label" | "is_me">): string {
+  if (submission.kind === "consolidation") return `Consolidated by ${submission.is_me ? "you" : personName(submission)}`;
+  return personName(submission);
+}
+
+/** Full agreement (W1): "All findings match (4 of 4)"; no findings: "Both submissions have no findings" / "No submission has findings". */
+export function allMatchText(submissions: number, findings: number): string {
+  if (findings > 0) return `All findings match (${findings} of ${findings})`;
+  return submissions === 2 ? "Both submissions have no findings" : "No submission has findings";
+}
+
+/** The W1 confirmation: "Both submissions contain the same findings. Accept them as the final result?" ("All 3 submissions…"). */
+export function allMatchQuestion(submissions: number): string {
+  return `${submissions === 2 ? "Both submissions" : `All ${submissions} submissions`} contain the same findings. Accept them as the final result?`;
+}
+
+/** Hint of "Consolidate…": "Resolve the 2 differences together" ("the 1 difference"); without a count none. */
+export function consolidateHint(agreement: AgreementView | null): string | null {
+  if (!agreement) return null;
+  const differences = agreement.total - agreement.matching;
+  if (differences <= 0) return null;
+  return `Resolve the ${differences} ${differences === 1 ? "difference" : "differences"} together`;
+}
+
 /** "Final · Consolidation · Ana Weber" (the decided panel's line). */
 export function decidedLine(submission: Pick<FinalPanelSubmissionView, "kind" | "author" | "author_label" | "is_me">): string {
   return `Final · ${submission.kind === "consolidation" ? "Consolidation" : "Annotation"} · ${submission.is_me ? "You" : personName(submission)}`;
 }
 
-/** "Accept Ana Weber’s annotation as final?" / "Accept the consolidation by Luc Martin as final?" */
+/** "Accept Ana Weber’s annotation as final?" / "Accept this consolidation as final?" (under "Consolidated by …"). */
 export function acceptQuestion(submission: FinalPanelSubmissionView): string {
-  if (submission.kind === "consolidation") return submission.is_me ? "Accept your consolidation as final?" : `Accept the consolidation by ${personName(submission)} as final?`;
+  if (submission.kind === "consolidation") return submission.is_me ? "Accept your consolidation as final?" : "Accept this consolidation as final?";
   return submission.is_me ? "Accept your annotation as final?" : `Accept ${personName(submission)}’s annotation as final?`;
 }
 

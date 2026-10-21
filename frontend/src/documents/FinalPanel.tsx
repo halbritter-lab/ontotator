@@ -1,8 +1,9 @@
 /**
- * Decision block of the row panel (acceptance fixes WP-A; documents overview spec "Final-result panel",
+ * Decision block of the row panel (acceptance fixes WP-A, WP-B; documents overview spec "Final-result panel",
  * V6, V9 display, VD16, VD17): "Accept as final…", "Compare results…" and "Review changes…" open the
  * panel with this block on top; it decides (Use as final, Accept as final, Keep, Use the newer result)
- * and then moves the panel to the next final decision of the list.
+ * and then moves the panel to the next final decision of the list. Full agreement (W1) is one "Accept as
+ * final"; "Consolidate…" exists only with at least two eligible submissions on one text.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { api, type DocumentRowView, type DocumentRowsPage, type FinalPanelSubmissionView, type NextStepView, type RowItemView } from "../api/client";
@@ -10,13 +11,14 @@ import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router
 import { Time } from "../app/Time";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, InlineMessage, type ButtonVariant } from "../ui";
+import { InlineConfirm } from "../ui/InlineConfirm";
 import { ConsolidationLauncher } from "../variants/ConsolidationLauncher";
 import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
 import {
-  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, barArrows, changedPassagesText, compareSummary, consolidationInputs, decidedLine, decisionKind,
-  keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep, personName, savedText,
-  submissionLine, submissionWhen, textChangedLine, type NextRow,
+  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchQuestion, allMatchText, barArrows, changedPassagesText, compareSummary, consolidateHint,
+  consolidationInputs, decidedLine, decisionKind, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
+  personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
 } from "./finalPanelText";
 import { versionName } from "./labels";
 import { submissionVersion } from "./SubmissionsTable";
@@ -57,8 +59,8 @@ export interface DecisionBlockProps {
   /** Moves focus to the row panel's heading (after a save or "Review again"). */
   onFocusHeading?: () => void;
   /**
-   * A row without a final decision step: the block shows only once its data lists at least two submissions on
-   * one text version (so "Consolidate…" is possible), else nothing.
+   * A row without a final decision step: the block shows only "Consolidate…", and only once its data lists at
+   * least two eligible submissions on one text version, else nothing (no choice of a final here).
    */
   optional?: boolean;
   /** The block holds input that a row switch would discard (the consolidation launcher is open). */
@@ -173,6 +175,7 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
   const close = () => { if (!busy) onClose(); };
   const headingId = useId();
   const consolidable = state.data ? consolidationDocuments(listedSubmissions(state.data.panel.submissions ?? [])).length > 0 : false;
+  const optionalOnly = props.optional && !noneLeft && !success && !failure;
   if (props.optional && !consolidable && !noneLeft && !success && !failure) return null;
 
   let content: ReactNode;
@@ -184,6 +187,9 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
     content = <p>{`${caseId} · ${language} is not in this list.`}</p>;
   } else if (!state.data) {
     content = <InlineMessage tone="error">Could not load submissions. <Button size="sm" onClick={reviewAgain}>Review again</Button></InlineMessage>;
+  } else if (optionalOnly) {
+    const contentProps: ContentProps = { ...props, row, data: state.data, guidelineCurrent: state.guidelineCurrent, page, busy, onSave: save, onAnnounce: announce };
+    content = <Consolidate {...contentProps} listed={listedSubmissions(state.data.panel.submissions ?? [])} primary={false} />;
   } else {
     content = <PanelContent {...props} row={row} data={state.data} guidelineCurrent={state.guidelineCurrent} page={page}
       busy={busy} onSave={save} onAnnounce={announce} />;
@@ -264,7 +270,47 @@ function PanelContent(props: ContentProps): JSX.Element {
   const accept = data.panel.label_rule === "accept" && !compareAll
     ? data.panel.submissions?.find(item => item.submission_id === data.panel.accept_submission_id) ?? null : null;
   if (accept) return <AcceptContent {...props} submission={accept} onCompareAll={() => setCompareAll(true)} />;
+  // W1 (U7): full agreement of the compared eligible submissions, no consolidation among them (X4).
+  const listed = listedSubmissions(data.panel.submissions ?? []);
+  const allMatch = data.panel.all_match && !compareAll && !row.final && !listed.some(item => item.kind === "consolidation")
+    ? listed.find(item => item.submission_id === data.panel.all_match_submission_id) ?? null : null;
+  if (allMatch) return <AllMatchContent {...props} submission={allMatch} />;
   return <CompareContent {...props} />;
+}
+
+/** W1: "All findings match (2 of 2)", one primary "Accept as final" with a confirmation; the table under "Show submissions". */
+function AllMatchContent(props: ContentProps & { submission: FinalPanelSubmissionView }): JSX.Element {
+  const { row, data, submission, busy, onSave, onAnnounce, onDirtyChange } = props;
+  const id = useId();
+  const [confirming, setConfirming] = useState(false);
+  const [show, setShow] = useState(false);
+  const { route, link } = useEditorRoute(props);
+  useEffect(() => {
+    if (!confirming) return;
+    onDirtyChange?.(true);
+    return () => onDirtyChange?.(false);
+    // Only the confirmation's open state counts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirming]);
+  const listed = listedSubmissions(data.panel.submissions ?? []);
+  const compared = listed.filter(item => item.comparable).length || listed.length;
+  const findings = data.panel.agreement?.total ?? submission.finding_count;
+  const triggerId = `${id}-accept`;
+  const tableId = `${id}-submissions`;
+  return <div className="final-panel-match">
+    <p className="final-panel-question">{allMatchText(compared, findings)}</p>
+    {!confirming && <div className="final-panel-actions">
+      <ChoiceButton id={triggerId} label="Accept as final" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
+        onChoose={() => setConfirming(true)} />
+    </div>}
+    {confirming && <InlineConfirm title="Accept as final?" headingLevel={4} message={allMatchQuestion(compared)} confirmLabel="Accept as final"
+      busy={busy !== null} onCancel={() => setConfirming(false)}
+      onConfirm={() => { if (busy === null) onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId); }}>
+      <p>{link(route(submission.document_id, submission.submission_id), "Open result")}</p>
+    </InlineConfirm>}
+    <p><Button size="sm" variant="quiet" aria-expanded={show} aria-controls={tableId} onClick={() => setShow(value => !value)}>Show submissions</Button></p>
+    {show && <div id={tableId}><SubmissionTable {...props} listed={listed} /></div>}
+  </div>;
 }
 
 function useEditorRoute(props: ContentProps) {
@@ -281,9 +327,18 @@ function useEditorRoute(props: ContentProps) {
   return { route, link };
 }
 
-/** Documents with at least two listed submissions (consolidation inputs). */
+/**
+ * Documents with at least two listed **eligible** submissions (consolidation inputs; acceptance fixes WP-B):
+ * a submission the lead may not use (own result, the en-source case) does not make a text consolidable.
+ */
 function consolidationDocuments(submissions: readonly FinalPanelSubmissionView[]): string[] {
-  return [...new Set(submissions.map(item => item.document_id))].filter(documentId => submissions.filter(item => item.document_id === documentId).length >= 2);
+  const eligible = submissions.filter(item => item.eligible);
+  return [...new Set(eligible.map(item => item.document_id))].filter(documentId => eligible.filter(item => item.document_id === documentId).length >= 2);
+}
+
+/** Does the row hold a preselected or chosen result (then "Consolidate…" is secondary)? */
+function preselectedOf(row: DocumentRowView, data: FinalPanelData): boolean {
+  return row.final != null || (data.panel.label_rule === "accept" && data.panel.accept_submission_id != null);
 }
 
 function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionView; onCompareAll: () => void }): JSX.Element {
@@ -294,11 +349,15 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
   const triggerId = `${id}-accept`;
   const isFinal = row.final?.submission_id === submission.submission_id;
   const compared = listed.filter(item => item.comparable).length || listed.length;
+  const consolidation = submission.kind === "consolidation" && submission.round_id
+    ? { name: "projectConsolidation" as const, key: props.projectKey, roundId: submission.round_id } : null;
   return <div className="final-panel-choose">
+    {submission.kind === "consolidation" && <p className="final-panel-consolidated"><strong>{submissionName(submission)}</strong></p>}
     <p className="final-panel-question">{acceptQuestion(submission)}</p>
     <p className="cell-secondary">
       {submissionLine(submission, row.language, row.parallel_roots, now)}{" · "}
       {link(route(submission.document_id, submission.submission_id), "Open in editor")}
+      {consolidation && <>{" · "}{link(consolidation, "Open consolidation")}</>}
     </p>
     <p className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</p>
     {!isFinal && <div className="final-panel-actions">
@@ -309,7 +368,7 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
       {onAssign && <Button size="sm" variant="quiet" onClick={() => onAssign(row)}>Assign annotation review…</Button>}
       {submission.kind === "consolidation" && compared > 1 && <Button size="sm" variant="quiet" onClick={props.onCompareAll}>{`Compare all ${compared}…`}</Button>}
     </div>
-    <Consolidate {...props} listed={listed} withHint={false} />
+    <Consolidate {...props} listed={listed} primary={false} />
   </div>;
 }
 
@@ -352,10 +411,9 @@ function compareGroups(listed: readonly FinalPanelSubmissionView[], parallel: bo
 }
 
 function CompareContent(props: ContentProps): JSX.Element {
-  const { row, data, busy, onSave, onAnnounce, guidelineCurrent, now } = props;
+  const { row, data } = props;
   const id = useId();
   const [explain, setExplain] = useState(false);
-  const { route, link } = useEditorRoute(props);
   const listed = listedSubmissions(data.panel.submissions ?? []);
   const agreement = data.panel.agreement ?? null;
   const explanationId = `${id}-explanation`;
@@ -367,7 +425,17 @@ function CompareContent(props: ContentProps): JSX.Element {
       <Button size="sm" variant="quiet" aria-expanded={explain} aria-controls={explanationId} onClick={() => setExplain(value => !value)}>How is this counted?</Button>
       {explain && <p id={explanationId} className="cell-secondary">{AGREEMENT_EXPLANATION}</p>}
     </div>}
-    <table className="data-table density-compact final-panel-table">
+    <SubmissionTable {...props} listed={listed} />
+    <Consolidate {...props} listed={listed} primary={!preselectedOf(row, data) && !data.panel.all_match} />
+  </div>;
+}
+
+/** Submission · Findings · Only here, with "Open in editor" and "Use as final" per submission. */
+function SubmissionTable(props: ContentProps & { listed: FinalPanelSubmissionView[] }): JSX.Element {
+  const { row, data, listed, busy, onSave, onAnnounce, guidelineCurrent, now } = props;
+  const id = useId();
+  const { route, link } = useEditorRoute(props);
+  return <table className="data-table density-compact final-panel-table">
       <caption className="visually-hidden">{`Submissions, ${rowName(row)}`}</caption>
       <thead><tr>
         <th scope="col">Submission</th><th scope="col">Findings</th><th scope="col">Only here</th>
@@ -381,7 +449,7 @@ function CompareContent(props: ContentProps): JSX.Element {
         const isFinal = row.final?.submission_id === submission.submission_id;
         return <tr key={submission.submission_id} className={isFinal ? "final-row" : undefined}>
           <th scope="row" id={nameId}>
-            {personName(submission)}
+            {submissionName(submission)}
             <div className="cell-secondary">{submissionWhen(submission, now)}</div>
             <div className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</div>
           </th>
@@ -395,15 +463,17 @@ function CompareContent(props: ContentProps): JSX.Element {
           </td>
         </tr>;
       })}</tbody>)}
-    </table>
-    <Consolidate {...props} listed={listed} withHint />
-  </div>;
+    </table>;
 }
 
-/** "Consolidate…": the existing launcher inside the block; while it is open the block holds unsaved input. */
-function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[]; withHint: boolean }): JSX.Element | null {
-  const { row, projectKey, listed, withHint, username = "", data, onConsolidationStarted, onDirtyChange, now } = props;
+/**
+ * "Consolidate…": a secondary button (primary when agreement is not full and nothing is preselected) with the
+ * hint "Resolve the n differences together"; it opens the launcher inside the block, which then holds unsaved input.
+ */
+function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[]; primary: boolean }): JSX.Element | null {
+  const { row, projectKey, page, listed, primary, username = "", data, onConsolidationStarted, onDirtyChange, now } = props;
   const [open, setOpen] = useState(false);
+  const hintId = useId();
   useEffect(() => {
     if (!open) return;
     onDirtyChange?.(true);
@@ -419,13 +489,14 @@ function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[];
   // Preselected: the submissions the panel compares on that text (latest of a live round), never a superseded input.
   const preselected = listed.filter(item => item.document_id === documentId && item.comparable
     && item.round_state !== "abandoned" && item.round_state !== "superseded").map(item => item.submission_id);
+  const hint = consolidateHint(data.panel.agreement ?? null);
   return <div className="final-panel-consolidate">
     {!open && <p>
-      <Button size="sm" variant="quiet" onClick={() => setOpen(true)}>Consolidate…</Button>
-      {withHint && <span className="cell-secondary"> merge both into a new final (you or someone else)</span>}
+      <Button size="sm" variant={primary ? "primary" : "secondary"} aria-describedby={hint ? hintId : undefined} onClick={() => setOpen(true)}>Consolidate…</Button>
+      {hint && <>{" "}<span id={hintId} className="cell-secondary">{hint}</span></>}
     </p>}
     {open && <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={username} rows={rows} defaultOpen
-      defaultSelected={preselected} onStarted={() => onConsolidationStarted?.(row)} />}
+      defaultSelected={preselected} adjudicatorNotAnnotator={page.adjudicator_not_annotator} onStarted={() => onConsolidationStarted?.(row)} />}
   </div>;
 }
 

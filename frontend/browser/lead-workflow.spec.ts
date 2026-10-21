@@ -393,11 +393,11 @@ test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }
     await expect(rowCell(row(page, caseId, "fr"), "review")).toHaveText(/not planned/);
   }
 
-  // Export lists the final as "Not in plan, not exported" (information).
+  // Export lists the final as "Not planned, not exported" (information).
   await page.getByRole("link", { name: "Export", exact: true }).click();
-  await expect(page.getByText(/^Not in plan, not exported/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/^Not planned, not exported/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(`${s.final_case} · fr`, { exact: false }).first()).toBeVisible();
-  await expect(page.getByText(/1 not in plan/)).toBeVisible();
+  await expect(page.getByText(/1 not planned/)).toBeVisible();
 });
 
 test("ACCEPTANCE: annotate without review", async ({ page }) => {

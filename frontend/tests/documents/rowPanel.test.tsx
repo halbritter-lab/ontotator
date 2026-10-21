@@ -9,10 +9,12 @@ import { formatTime } from "../../src/app/submissionLabels";
 import { RowPanel, type RowPanelProps, type RowPanelTarget } from "../../src/documents/RowPanel";
 import { TextVersions, type TextVersionsTools } from "../../src/documents/TextVersions";
 import { useRegisteredShortcuts } from "../../src/ui/shortcuts";
+import { RowStageCell } from "../../src/documents/RowCells";
+import { assignment } from "../assignmentFixtures";
 import {
   final, finalPanel, group, item, notInPlanRow, page, planRow, recordedVersion, row, rowKey, scenarioS4, stepOf, submission, submissions, version, work,
 } from "./fixtures";
-import { comparePanel, chooseRow } from "./panelFixtures";
+import { acceptPanel, comparePanel, chooseRow } from "./panelFixtures";
 import { ana, cell, stagedRow, tom } from "./tableFixtures";
 
 const now = new Date("2026-10-19T12:00:00Z");
@@ -402,6 +404,63 @@ describe("tabs Activity · Versions (n) · Details", () => {
   });
 });
 
+// ---- WP-B: flags banner, Final cell flag line, direct Reassign… ----
+
+const tools = (assignments: TextVersionsTools["assignments"]): TextVersionsTools => ({
+  username: "lead", assignments, members: [{ username: "luc", display_name: "Luc Martin", pseudonym: "ann-0005", roles: ["annotator"], languages: ["de"] }],
+  variants: new Map(), requiredLanguages: () => null, onAssignmentsChanged: vi.fn(), onShowTranslationReviews: vi.fn(),
+});
+const annotating = (overrides: Partial<DocumentRowView> = {}) => row({
+  case_id: "c", language: "de", versions: [version({ document_id: "c-de" })],
+  work: [work({ assignment_id: 7, document_id: "c-de", status: "in_progress", author_label: "ann-0004" })], ...overrides,
+});
+const annotateTask = { ...assignment, id: 7, project_key: "p", document_id: "c-de", username: "tom", pseudonym: "ann-0004", status: "in_progress" as const };
+
+describe("flags banner (X5)", () => {
+  it("banners 1 finding flagged: guidelines unclear · Open, linked to the consolidation at the flagged group", async () => {
+    const { onRoute } = renderPanel([row({ case_id: "c", language: "de", flagged_unclear: 1, flagged_group_id: "g-1", flagged_round_id: "r-9" })], "c:de");
+    const banner = [...panel().querySelectorAll(".row-panel-banner")].find(entry => entry.textContent?.includes("flagged")) as HTMLElement;
+    expect(banner.textContent).toBe("1 finding flagged: guidelines unclear · Open");
+    const link = within(banner).getByRole("link", { name: "Open flagged finding, c · de" });
+    expect(link.getAttribute("href")).toBe("#/projects/p/consolidations/r-9?group=g-1");
+    fireEvent.click(link);
+    expect(onRoute).toHaveBeenCalledWith({ name: "projectConsolidation", key: "p", roundId: "r-9", group: "g-1" });
+  });
+
+  it("links without group when the row names none, counts several, and shows no banner without flags", () => {
+    renderPanel([row({ case_id: "c", language: "de", flagged_unclear: 2, flagged_group_id: null, flagged_round_id: "r-9" })], "c:de");
+    const banner = within(panel()).getByText(/2 findings flagged: guidelines unclear/).closest(".row-panel-banner") as HTMLElement;
+    expect(within(banner).getByRole("link").getAttribute("href")).toBe("#/projects/p/consolidations/r-9");
+    cleanup();
+    renderPanel([row({ case_id: "c", language: "de", flagged_unclear: 0 })], "c:de");
+    expect(within(panel()).queryByText(/flagged/)).toBeNull();
+    expect(panel().querySelector(".row-panel-banners")).toBeNull();
+  });
+
+  it("Final cell shows a second line 1 flagged, part of the button's description", () => {
+    const target = stagedRow("c", "de", { stages: { final: cell("none", "none") }, overrides: { flagged_unclear: 1 } });
+    render(<RowStageCell row={target} stage="final" onOpenPanel={vi.fn()} />);
+    const button = screen.getByRole("button");
+    expect(screen.getByText("1 flagged")).toBeTruthy();
+    const described = (button.getAttribute("aria-describedby") ?? "").split(" ").map(id => document.getElementById(id)?.textContent).join(" ");
+    expect(described).toContain("1 flagged");
+    cleanup();
+    render(<RowStageCell row={{ ...target, flagged_unclear: 0 }} stage="final" onOpenPanel={vi.fn()} />);
+    expect(screen.queryByText(/flagged/)).toBeNull();
+    cleanup();
+    render(<RowStageCell row={target} stage="annotation" onOpenPanel={vi.fn()} />);
+    expect(screen.queryByText(/flagged/)).toBeNull();
+  });
+});
+
+describe("annotation stage actions (S3)", () => {
+  it("offers a direct Reassign… that opens the reassign dialog", async () => {
+    renderPanel([annotating()], "c:de", { textVersionTools: tools([annotateTask]), initial: { key: "c:de", stage: "annotation" } as RowPanelTarget });
+    fireEvent.click(await within(panel()).findByRole("button", { name: "Reassign…" }));
+    expect(await screen.findByRole("dialog", { name: "Reassign c-de" })).toBeTruthy();
+  });
+});
+
 // ---- Page: entries, route, keys and the decision block ----
 
 function mockPage(rows: DocumentRowView[][]) {
@@ -555,5 +614,61 @@ describe("page", () => {
     expect(within(aside).getByRole("button", { name: "Plan…" })).toBeTruthy();
     expect(within(aside).queryByRole("region", { name: "Final result" })).toBeNull();
   });
-});
+  it("Close after J returns focus to the row now shown", async () => {
+    mockPage([[progress("case-107")], [progress("case-108")]]);
+    renderDocuments({});
+    fireEvent.click(await screen.findByRole("button", { name: "Details, case-107 · de" }));
+    const aside = await screen.findByRole("complementary", { name: "Details, case-107 · de" });
+    fireEvent.keyDown(document.body, { key: "j" });
+    await waitFor(() => expect(aside.getAttribute("aria-label")).toBe("Details, case-108 · de"));
+    fireEvent.click(within(aside).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Details, case-108 · de" })));
+  });
 
+  it("Close in the decision block (none left) closes the panel and returns focus to the opener", async () => {
+    const first = chooseRow("case-107", "de");
+    let decided = false;
+    vi.mocked(api.listDocumentRows).mockImplementation(async () => structuredClone(page([group("case-107", [decided ? { ...first, next_step: null, steps: [], categories: [] } : first])])));
+    vi.mocked(api.finalPanel).mockImplementation(async () => acceptPanel("case-107", "de"));
+    vi.spyOn(api, "selectFinalResult").mockImplementation(async () => { decided = true; return { case_id: "case-107", language: "de", document_id: "case-107-de", submission_id: "case-107-s1", revision: 1 }; });
+    renderDocuments({});
+    fireEvent.click(await screen.findByRole("button", { name: "Details, case-107 · de" }));
+    const aside = await screen.findByRole("complementary", { name: "Details, case-107 · de" });
+    fireEvent.click(await within(aside).findByRole("button", { name: "Accept as final" }));
+    const none = await within(aside).findByText("No more final results to decide.");
+    fireEvent.click(within(none.parentElement as HTMLElement).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Details, case-107 · de" })));
+  });
+
+  it("a row without a final decision step offers only Consolidate…, and only with two eligible submissions", async () => {
+    const both = comparePanel("case-107", "de");
+    const ownFirst = { ...both, submissions: both.submissions!.map((entry, index) => (index === 0 ? { ...entry, eligible: false } : entry)) };
+    mockPage([[progress("case-107")], [progress("case-108")]]);
+    vi.mocked(api.finalPanel).mockImplementation(async (_key, caseId) => structuredClone(caseId === "case-107" ? both : ownFirst));
+    renderDocuments({ panel: "case-107:de" });
+    const aside = await screen.findByRole("complementary", { name: "Details, case-107 · de" });
+    const block = await within(aside).findByRole("region", { name: "Final result" });
+    expect(await within(block).findByRole("button", { name: "Consolidate…" })).toBeTruthy();
+    expect(within(block).queryByRole("button", { name: /as final/ })).toBeNull();
+    expect(within(block).queryByRole("table")).toBeNull();
+    fireEvent.keyDown(document.body, { key: "j" });
+    await waitFor(() => expect(aside.getAttribute("aria-label")).toBe("Details, case-108 · de"));
+    await waitFor(() => expect(api.finalPanel).toHaveBeenCalledWith("p", "case-108", "de"));
+    await act(async () => { await Promise.resolve(); });
+    expect(within(aside).queryByRole("region", { name: "Final result" })).toBeNull();
+  });
+
+  it("cards: the annotation stage popover offers Reassign…", async () => {
+    vi.stubGlobal("matchMedia", (media: string) => ({ matches: media === "(max-width: 699px)", media, addEventListener: () => {}, removeEventListener: () => {} }));
+    const target = stagedRow("c", "de", {
+      overrides: { versions: [version({ document_id: "c-de" })], work: [work({ assignment_id: 7, document_id: "c-de", status: "in_progress", author_label: "ann-0004" })] },
+      stages: { annotation: cell("in_progress", "running", { submitted: 0, total: 1, people: [tom] }) },
+    });
+    mockPage([[target]]);
+    vi.mocked(api.listAssignments).mockResolvedValue([annotateTask]);
+    renderDocuments({});
+    fireEvent.click(await screen.findByRole("button", { name: /^Annotation: .*Show history, c · de$/ }));
+    expect(await screen.findByRole("button", { name: "Reassign…" })).toBeTruthy();
+  });
+});

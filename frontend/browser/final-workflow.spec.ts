@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { activityLines, decisionBlock, documentsReady, rowPanel, textRow } from './documentsHelpers';
+import { activityLines, decisionBlock, documentsReady, documentsScenario, openRowPanel, rowPanel, textRow } from './documentsHelpers';
 import { authenticatedRequest, loginExisting, selectText, submitCase } from './helpers';
 
 type Assignment = components['schemas']['AssignmentView'];
@@ -113,10 +113,12 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await launcher.locator(`input[data-submission-id="${carriedId}"]`).check();
     await launcher.locator(`input[data-submission-id="${secondId}"]`).check();
     await launcher.getByLabel('Consolidation reviewer').selectOption(s.users.consolidator);
-    const launched = page.waitForResponse(r => r.request().method() === 'POST' && /\/assignments\/\d+\/rounds$/.test(r.url()));
+    // One request: POST /projects/{key}/consolidations (acceptance fixes WP-B, T3).
+    const launched = page.waitForResponse(r => r.request().method() === 'POST' && /\/projects\/[^/]+\/consolidations$/.test(r.url()));
     await launcher.getByRole('button', { name: 'Start consolidation', exact: true }).click();
-    const consolidation = await (await launched).json() as Round;
+    const consolidation = (await (await launched).json() as { round: Round }).round;
     expect(consolidation.kind).toBe('consolidation'); expect(new Set(consolidation.input_submission_ids)).toEqual(new Set([carriedId, secondId]));
+    // A started consolidation releases the decision block; the panel stays open.
     await area.getByRole('button', { name: 'Close', exact: true }).click();
     await reviewer.page.goto(`/#/tasks/${consolidation.assignment_id}`);
     await expect(reviewer.page.getByText('Consolidation review', { exact: true })).toBeVisible();
@@ -138,7 +140,8 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     const selecting = page.waitForResponse(r => r.request().method() !== 'GET' && /\/final/.test(new URL(r.url()).pathname));
     const accept = panel.getByRole('button', { name: 'Accept as final', exact: true });
     if (await accept.count()) {
-      await expect(panel.getByText(/^Accept the consolidation by .+ as final\?$/)).toBeVisible();
+      await expect(panel.getByText(/^Consolidated by .+$/)).toBeVisible();
+      await expect(panel.getByText('Accept this consolidation as final?', { exact: true })).toBeVisible();
       await accept.click();
     } else {
       await panel.getByRole('row').filter({ has: editorLink(panel, finalId) }).getByRole('button', { name: 'Use as final', exact: true }).click();
@@ -258,4 +261,59 @@ test('corrected-text private carry preserves submitted history through a reporte
     expect(oldHistory.map(row => row.submission_id)).toContain(originalId);
     await test.info().attach('corrected-carry-report-restart', { body: Buffer.from(JSON.stringify({ originalId, corrected: corrected.document_id, carriedId, report: report.report_id, newRound: fresh.assignment.active_round_id }, null, 2)), contentType: 'application/json' });
   } finally { await author.close(); }
+});
+
+
+test('a lead without the Adjudicator role consolidates as You, and full agreement is accepted in one click (W1)', async ({ page }) => {
+  const s = await documentsScenario(page, 'S16');
+  const matchCase = s.case_id!, openCase = s.open_case_id as string;
+  await loginExisting(page, s.users.lead);
+  await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
+  await documentsReady(page);
+
+  // Work still open on case-1602: the decision block offers only "Consolidate…" (two eligible submissions).
+  const area = await openRowPanel(page, openCase, 'en');
+  const block = decisionBlock(page, openCase, 'en');
+  await expect(block.getByRole('button', { name: /as final/ })).toHaveCount(0);
+  await block.getByRole('button', { name: 'Consolidate…', exact: true }).click();
+  const launcher = area.getByRole('region', { name: 'Consolidate submitted results', exact: true });
+  const reviewer = launcher.getByLabel('Consolidation reviewer', { exact: true });
+  await expect(reviewer.locator('option').nth(1)).toHaveText(/^You( \(.+\))?$/);
+  await expect(launcher.getByText('No member has the Adjudicator role yet. Give it in Settings → Members.', { exact: true })).toBeVisible();
+  await expect(launcher.getByRole('link', { name: 'Settings → Members', exact: true })).toHaveAttribute('href', `#/projects/${encodeURIComponent(s.project)}/settings/members`);
+  await reviewer.selectOption(s.users.lead);
+  await expect(launcher.getByText('You will get the Adjudicator role for this project.', { exact: true })).toBeVisible();
+  const started = page.waitForResponse(r => r.request().method() === 'POST' && /\/projects\/[^/]+\/consolidations$/.test(r.url()));
+  await launcher.getByRole('button', { name: 'Start consolidation', exact: true }).click();
+  const response = await started;
+  expect(response.ok(), await response.text()).toBeTruthy();
+  const body = await response.json() as { round: Round; role_granted: boolean };
+  expect(body.role_granted).toBe(true);
+  expect(body.round.kind).toBe('consolidation');
+  await expect(page.locator('.ui-toast-message')).toHaveText(`Consolidation started for ${openCase} · en.`);
+  // Still signed in: the session survives the self-grant, and the lead now holds the role.
+  const members = await value<components['schemas']['Member'][]>(page, `${root(s as unknown as Scenario)}/members`);
+  expect(members.find(member => member.username === s.users.lead)!.roles).toContain('adjudicator');
+  await page.goto(`/#/tasks/${body.round.assignment_id}`);
+  await expect(page.getByRole('textbox', { name: 'Username' })).toHaveCount(0);
+  await expect(page.getByText('Consolidation review', { exact: true })).toBeVisible({ timeout: 30_000 });
+
+  // Full agreement on case-1601: "Both submissions have no findings" and one "Accept as final" with a confirmation.
+  await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
+  await documentsReady(page);
+  await openRowPanel(page, matchCase, 'en');
+  const match = decisionBlock(page, matchCase, 'en');
+  await expect(match.getByText('Both submissions have no findings', { exact: true })).toBeVisible();
+  await expect(match.getByRole('table')).toHaveCount(0);
+  await match.getByRole('button', { name: 'Accept as final', exact: true }).click();
+  const confirm = match.getByRole('group', { name: 'Accept as final?', exact: true });
+  await expect(confirm.getByText('Both submissions contain the same findings. Accept them as the final result?', { exact: true })).toBeVisible();
+  await expect(confirm.getByRole('link', { name: 'Open result', exact: true })).toBeVisible();
+  const selecting = page.waitForResponse(r => r.request().method() === 'PUT' && /\/final-selections$/.test(new URL(r.url()).pathname));
+  await confirm.getByRole('button', { name: 'Accept as final', exact: true }).click();
+  const selected = await selecting;
+  expect(selected.ok(), await selected.text()).toBeTruthy();
+  const submissions = s.submissions as { match: string[] };
+  expect((selected.request().postDataJSON() as { submission_id: string }).submission_id).toBe(submissions.match[0]);
+  await expect(match.locator('.final-panel-success')).toContainText(`Final result saved for ${matchCase} · en.`);
 });

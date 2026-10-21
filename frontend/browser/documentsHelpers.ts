@@ -18,7 +18,7 @@ export interface DocumentsScenario {
 }
 
 /**
- * Build a fresh project for Documents scenario ``name`` ("S0" to "S15") through
+ * Build a fresh project for Documents scenario ``name`` ("S0" to "S16") through
  * the test-only route of the browser server and return its identities.
  */
 export async function documentsScenario(page: Page, name: string): Promise<DocumentsScenario> {

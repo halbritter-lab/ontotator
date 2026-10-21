@@ -1,5 +1,5 @@
-"""The Documents browser scenarios S11, S13, S14 and S15 build what the specs
-expect."""
+"""The Documents browser scenarios S11, S13, S14, S15 and S16 build what the
+specs expect."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -93,7 +93,7 @@ def codes(items: list[dict[str, Any]]) -> list[str]:
 
 
 def test_registry_has_this_wp_scenarios():
-    assert {"S11", "S13", "S14", "S15"} <= registry().keys()
+    assert {"S11", "S13", "S14", "S15", "S16"} <= registry().keys()
 
 
 def test_s11_revised_round_and_newer_result(client):
@@ -190,3 +190,30 @@ def test_s15_own_result_not_selectable_and_paging(client):
     assert mine == {subs["own"]: True, subs["other"]: False}
     assert own.status_code == 409, own.text
     assert own.json()["code"] == "OWN_RESULT_NOT_SELECTABLE"
+
+
+def test_s16_full_agreement_and_consolidation_without_adjudicator(client):
+    built = scenario(client, "S16")
+    with Lead(client, built) as lead:
+        page = rows_of(lead.page())
+        members = client.get(f"{lead.base}/members").json()
+        match = client.get(
+            f"{lead.base}/document-rows/{built['case_id']}/en/final-panel"
+        )
+        still_open = client.get(
+            f"{lead.base}/document-rows/{built['open_case_id']}/en/final-panel"
+        )
+    assert not any("adjudicator" in member["roles"] for member in members)
+    matched = page[(built["case_id"], "en")]
+    assert matched["next_step"]["action"] == "choose_final"
+    assert match.status_code == 200, match.text
+    panel = match.json()
+    assert panel["all_match"] is True
+    assert panel["all_match_submission_id"] == built["submissions"]["match"][0]
+    assert all(item["eligible"] for item in panel["submissions"])
+    open_row = page[(built["open_case_id"], "en")]
+    actions = [step["action"] for step in open_row["steps"]]
+    assert "choose_final" not in actions
+    assert still_open.status_code == 200, still_open.text
+    eligible = [item for item in still_open.json()["submissions"] if item["eligible"]]
+    assert len(eligible) == 2

@@ -236,3 +236,20 @@ describe("project guidelines addresses", () => {
     expect(parseRoute(hash)).toEqual({ name: "notFound", hash });
   });
 });
+
+describe("consolidation view addresses", () => {
+  it("parses and builds #/projects/{key}/consolidations/{roundId} with an optional group", () => {
+    expect(parseRoute("#/projects/study%2Fa/consolidations/r%201")).toEqual({ name: "projectConsolidation", key: "study/a", roundId: "r 1" });
+    expect(parseRoute("#/projects/a/consolidations/r-9?group=abc123")).toEqual({ name: "projectConsolidation", key: "a", roundId: "r-9", group: "abc123" });
+    expect(routeHref({ name: "projectConsolidation", key: "study/a", roundId: "r 1" })).toBe("#/projects/study%2Fa/consolidations/r%201");
+    expect(routeHref({ name: "projectConsolidation", key: "a", roundId: "r-9", group: "abc123" })).toBe("#/projects/a/consolidations/r-9?group=abc123");
+    for (const route of [{ name: "projectConsolidation" as const, key: "a", roundId: "r-9" }, { name: "projectConsolidation" as const, key: "a", roundId: "r-9", group: "g" }]) {
+      expect(parseRoute(routeHref(route))).toEqual(route);
+    }
+  });
+
+  it("keeps the flags facet in the Documents query", () => {
+    expect(parseRoute("#/projects/a/documents?flags=guidelines_unclear")).toEqual({ name: "projectDocuments", key: "a", flags: "guidelines_unclear" });
+    expect(routeHref({ name: "projectDocuments", key: "a", flags: "guidelines_unclear" })).toBe("#/projects/a/documents?flags=guidelines_unclear");
+  });
+});

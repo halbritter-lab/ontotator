@@ -1,4 +1,4 @@
-"""Documents browser scenarios S11, S13, S14 and S15 (WP P3).
+"""Documents browser scenarios S11, S13, S14, S15 (WP P3) and S16 (acceptance fixes WP-B).
 
 Builders use the helpers of ``browser_documents_scenarios``; the route there
 merges this registry. Helpers only these scenarios need live here.
@@ -213,9 +213,54 @@ def build_s15(app: FastAPI) -> dict[str, Any]:
     )
 
 
+S16_MATCH = "case-1601"
+S16_OPEN = "case-1602"
+
+
+def build_s16(app: FastAPI) -> dict[str, Any]:
+    """Acceptance fixes WP-B. ``case-1601`` en: ann-0001 and ann-0002 submitted
+    the same (empty) result, so the panel offers W1 "Accept as final".
+    ``case-1602`` en: the same two submissions while ann-0003 still works, so
+    the row has no final decision step and offers only "Consolidate…". The lead
+    has no Adjudicator role and no member has it."""
+    from t1_builders import native_unit
+
+    scenario = new_project(app, "S16")
+    docs = import_texts(
+        scenario,
+        [
+            native_unit(case, "en", SYNTHETIC, case_id=case)
+            for case in (S16_MATCH, S16_OPEN)
+        ],
+    )
+    match, still_open = docs[(S16_MATCH, "en", 1)], docs[(S16_OPEN, "en", 1)]
+    add_user(scenario, "lead", ["lead"])
+    for name in ("ann-0001", "ann-0002", "ann-0003"):
+        add_user(scenario, name, ["annotator"])
+    matched = [
+        submit(scenario, match, name)["submission_id"]
+        for name in ("ann-0001", "ann-0002")
+    ]
+    inputs = [
+        submit(scenario, still_open, name)["submission_id"]
+        for name in ("ann-0001", "ann-0002")
+    ]
+    open_work = in_progress(scenario, still_open, "ann-0003")
+    return result(
+        scenario,
+        [(S16_MATCH, "en"), (S16_OPEN, "en")],
+        case_id=S16_MATCH,
+        open_case_id=S16_OPEN,
+        documents={"match": match, "open": still_open},
+        submissions={"match": matched, "open": inputs},
+        open_assignment_id=open_work["assignment_id"],
+    )
+
+
 BUILDERS: dict[str, Builder] = {
     "S11": build_s11,
     "S13": build_s13,
     "S14": build_s14,
     "S15": build_s15,
+    "S16": build_s16,
 }

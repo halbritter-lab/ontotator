@@ -417,6 +417,7 @@ test("row panel: no layout shift, J / K walk the rows, Escape from the table kee
   await openScenario(page, "S7");
   const first = textRow(page, "case-0001", "en");
   const before = await first.boundingBox();
+  const tableBefore = await page.getByRole("table", { name: "Documents", exact: true }).boundingBox();
 
   // S1 (one click): the text name shows everything about a row.
   await detailsButton(page, "case-0001", "en").click();
@@ -451,10 +452,14 @@ test("row panel: no layout shift, J / K walk the rows, Escape from the table kee
   await page.keyboard.press("k");
   await expect(page.getByRole("complementary")).toHaveAttribute("aria-label", "Details, case-0008 · en");
 
-  // Escape inside closes and returns focus to the opener; the table has not moved.
+  // Escape inside closes; after J / K focus returns to the row now shown (not the first opener); the table has not moved.
   await page.getByRole("complementary").getByRole("heading", { level: 2 }).focus();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("complementary")).toHaveCount(0);
-  await expect(detailsButton(page, "case-0001", "en")).toBeFocused();
-  expect(await first.boundingBox()).toEqual(before);
+  await expect(detailsButton(page, "case-0008", "en")).toBeFocused();
+  // Focus may scroll the page to case-0008: the row keeps its place inside the table and its size.
+  const table = page.getByRole("table", { name: "Documents", exact: true });
+  const [rowNow, tableNow] = [await first.boundingBox(), await table.boundingBox()];
+  expect({ x: rowNow!.x - tableNow!.x, y: rowNow!.y - tableNow!.y, width: rowNow!.width, height: rowNow!.height })
+    .toEqual({ x: before!.x - tableBefore!.x, y: before!.y - tableBefore!.y, width: before!.width, height: before!.height });
 });

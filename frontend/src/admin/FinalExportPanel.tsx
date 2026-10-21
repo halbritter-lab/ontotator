@@ -18,8 +18,8 @@ function WorkflowWarnings({ projectKey, state }: { projectKey: string; state: Fi
       : <p>No open workflow warnings.</p>}
     {state.omissions.length > 0 && <><p>Omitted without a final selection:</p>
       <ul className="final-warning-list" aria-label="Omitted without a final selection">{state.omissions.map(item => <li key={JSON.stringify([item.case_id, item.language])}><RowLink projectKey={projectKey} caseId={item.case_id} language={item.language} /></li>)}</ul></>}
-    {notInPlan.length > 0 && <><p>Not in plan, not exported: these rows have a final result, but Annotate is off in the work plan. For information; nothing to confirm.</p>
-      <ul className="final-warning-list" aria-label="Not in plan, not exported">{notInPlan.map(item => <li key={JSON.stringify([item.case_id, item.language])}><RowLink projectKey={projectKey} caseId={item.case_id} language={item.language} /></li>)}</ul></>}
+    {notInPlan.length > 0 && <><p>Not planned, not exported: these rows have a final result, but Annotate is off in the work plan. For information; nothing to confirm.</p>
+      <ul className="final-warning-list" aria-label="Not planned, not exported">{notInPlan.map(item => <li key={JSON.stringify([item.case_id, item.language])}><RowLink projectKey={projectKey} caseId={item.case_id} language={item.language} /></li>)}</ul></>}
   </>;
 }
 
@@ -146,7 +146,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       {!checking && !state && <p id="final-export-recheck" className="field-hint">Check again to confirm the current selections and warnings.</p>}
       {state && <section className="final-export-preflight" aria-labelledby="final-export-preflight-heading">
         <h3 id="final-export-preflight-heading" tabIndex={-1}>Export preflight</h3>
-        <p>{state.selections.length} selected results · {state.warnings.length} warnings · {state.omissions.length} omitted{notInPlan.length > 0 && ` · ${notInPlan.length} not in plan`}</p>
+        <p>{state.selections.length} selected results · {state.warnings.length} warnings · {state.omissions.length} omitted{notInPlan.length > 0 && ` · ${notInPlan.length} not planned`}</p>
         <WorkflowWarnings projectKey={projectKey} state={state} />
         {state.warnings.length > 0 && <Checkbox ref={acknowledgement} id="final-export-ack" label="Export these selected results with the listed warnings and omissions" checked={accepted} disabled={creating} onChange={event => setAccepted(event.target.checked)} />}
         {!state.selections.length && <InlineMessage tone="warning"><span id="final-export-empty">Select at least one submitted result before exporting.</span></InlineMessage>}

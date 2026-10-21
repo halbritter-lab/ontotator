@@ -30,6 +30,8 @@ describe("filter model", () => {
     ["Annotation facet", { annotation_state: "old_text_open" }, { annotation_state: "old_text_open" }, ["Annotation: On old text"]],
     ["Final facet", { final_state: "none,after_annotation,after_review,choose" }, { final_state: ["none", "after_annotation", "after_review", "choose"] }, ["Final: No final yet"]],
     ["Waiting on facet", { waiting_on: "me,ann-0001" }, { waiting_on: ["me", "ann-0001"] }, ["Waiting on: You", "Waiting on: ann-0001"]],
+    ["Flags facet (X5)", { flags: "guidelines_unclear,nope" }, { flags: "guidelines_unclear" }, ["Flagged: guidelines unclear"]],
+    ["Plan not in plan reads Not planned", { plan: "not_in_plan" }, { plan: "not_in_plan" }, ["Plan: Not planned"]],
     ["Exact case (deep link)", { case: "case-104" }, { case: "case-104" }, ["Case ID: case-104"]],
   ])("maps every old filter per VD9: %s", (_name, query, request, chips) => {
     expect(rowsRequest(query)).toEqual(request);
@@ -79,6 +81,17 @@ describe("filter model", () => {
     expect(activeTab({ segment: "nope" })).toBe("all");
   });
 
+  it("offers Flagged: guidelines unclear with its count and Not planned as the plan option", () => {
+    const flagged = optionOf("Flagged: guidelines unclear");
+    expect(flagged).toMatchObject({ param: "flags", values: ["guidelines_unclear"] });
+    expect(optionCount({ flags: { guidelines_unclear: 2 } }, flagged)).toBe(2);
+    expect(toggleOption({}, flagged, true)).toEqual({ flags: "guidelines_unclear" });
+    expect(FACET_GROUPS.find(group => group.id === "plan")!.options.map(option => option.label)).toEqual(["Not planned", "Not decided"]);
+    expect(FACET_GROUPS.flatMap(group => group.options).some(option => option.label === "Not in plan")).toBe(false);
+    expect(clearAllPatch({ flags: "guidelines_unclear" })).toMatchObject({ flags: undefined });
+    expect(filtersActive({ flags: "guidelines_unclear" })).toBe(true);
+  });
+
   it("toggles grouped options and counts their values", () => {
     const inProgress = optionOf("In progress");
     expect(inProgress.values).toEqual(["in_progress", "re_review"]);
@@ -92,12 +105,12 @@ describe("filter model", () => {
 
   it("builds the Language and Waiting on groups from the facet counts and the route", () => {
     const groups = facetGroups({ language: { de: 8, en: 3 }, waiting_on: { "ann-0002": 1, me: 2 } }, { language: "fr", waiting_on: "ann-0009" }, new Set(["en"]));
-    expect(groups.map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan", "Waiting on"]);
+    expect(groups.map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan", "Flags", "Waiting on"]);
     expect(groups[0].options.map(option => option.label)).toEqual(["de", "en (source)", "fr"]);
-    expect(groups[6].options.map(option => option.label)).toEqual(["You", "ann-0002", "ann-0009"]);
+    expect(groups[7].options.map(option => option.label)).toEqual(["You", "ann-0002", "ann-0009"]);
     const named = facetGroups({ waiting_on: { "ann-0002": 1 } }, {}, new Set(), new Map([["ann-0002", "Ana Weber"]]));
     expect(named.at(-1)!.options.map(option => option.label)).toEqual(["Ana Weber"]);
     expect(chipsOf({ waiting_on: "ann-0002" }, new Map([["ann-0002", "Ana Weber"]])).map(chip => chip.label)).toEqual(["Waiting on: Ana Weber"]);
-    expect(facetGroups({}, {}, new Set()).map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan"]);
+    expect(facetGroups({}, {}, new Set()).map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan", "Flags"]);
   });
 });

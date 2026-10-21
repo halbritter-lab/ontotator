@@ -153,8 +153,10 @@ export function RowPanel(props: RowPanelProps): JSX.Element {
   const previous = index > 0 ? rows[index - 1] : null;
   const next = index >= 0 && index < rows.length - 1 ? rows[index + 1] : null;
 
+  /** The row an entry point opened; after J / K (another row shown) Close returns to the shown row's name instead. */
+  const openedFor = useRef(rowKey);
   const close = () => {
-    const target = returnFocusRef?.current;
+    const target = openedFor.current === rowKey ? returnFocusRef?.current : null;
     onClose();
     window.setTimeout(() => {
       const fallback = document.getElementById(documentsRowId(caseOfTextKey(rowKey), languageOfTextKey(rowKey), "header"));
@@ -185,8 +187,13 @@ export function RowPanel(props: RowPanelProps): JSX.Element {
     };
   }, [narrow]);
 
-  // Focus the heading on open and whenever another entry point opens the panel.
-  useLayoutEffect(() => { if (!narrow) heading.current?.focus(); }, [narrow, focusRequest]);
+  // Focus the heading on open and whenever another entry point opens the panel (not when the width crosses 700 px).
+  useLayoutEffect(() => {
+    openedFor.current = rowKey;
+    if (!narrow) heading.current?.focus();
+    // Only an open request moves focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest]);
 
   // A row switch is announced once the header shows the new row.
   const shown = useRef(rowKey);
@@ -268,6 +275,8 @@ function RowPanelBody(props: RowPanelProps & { name: string; tab: PanelTab }): J
     tabList.current?.querySelectorAll<HTMLButtonElement>("[role=tab]")[target]?.focus();
   };
   const openReports = (row.problem_reports ?? []).filter(report => report.state === "open");
+  const flags = <FlagsBanner row={row} projectKey={props.projectKey} name={name} onRoute={onRoute} />;
+  const flagged = (row.flagged_unclear ?? 0) > 0;
 
   return <div className="row-panel-body">
     {confirm}
@@ -276,11 +285,12 @@ function RowPanelBody(props: RowPanelProps & { name: string; tab: PanelTab }): J
       <p><strong>{NOT_PLANNED}</strong>{plan != null && <>{" "}<Button size="sm" onClick={() => { setFocusPlan(true); setTab("details"); }}>Plan…</Button></>}</p>
     </div>}
     {decision}
-    {(openReports.length > 0 || banner != null) && <div className="row-panel-banners">
+    {(openReports.length > 0 || flagged || banner != null) && <div className="row-panel-banners">
       {openReports.length > 0 && <p className="row-panel-banner">
         {plural(openReports.length, "open problem report")}{" · "}
         <RouteLink route={reportRoute(openReports[0].report_id)} onNavigate={onRoute} aria-label={`Open problem report, ${openReports[0].title}`}>Open</RouteLink>
       </p>}
+      {flags}
       {banner}
     </div>}
     <div ref={tabList} role="tablist" aria-label={`Details of ${name}`} className="row-panel-tabs">
@@ -294,6 +304,22 @@ function RowPanelBody(props: RowPanelProps & { name: string; tab: PanelTab }): J
       <RowTabContent key={rowKey} {...props} row={row} setStage={setStage} focusPlan={focusPlan} onPlanFocused={() => setFocusPlan(false)} />
     </div>
   </div>;
+}
+
+/**
+ * X5: "1 finding flagged: guidelines unclear · Open", linked to the (read-only) consolidation view at the
+ * flagged group (`?group=` only when the row names one); nothing without flags.
+ */
+function FlagsBanner({ row, projectKey, name, onRoute }: { row: DocumentRowView; projectKey: string; name: string; onRoute: (route: Route) => void }): JSX.Element | null {
+  const count = row.flagged_unclear ?? 0;
+  if (count <= 0) return null;
+  const text = `${count === 1 ? "1 finding" : `${count} findings`} flagged: guidelines unclear`;
+  const roundId = row.flagged_round_id;
+  return <p className="row-panel-banner">
+    {text}
+    {roundId && <>{" · "}<RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId, ...(row.flagged_group_id ? { group: row.flagged_group_id } : {}) }}
+      onNavigate={onRoute} aria-label={`Open flagged finding, ${name}`}>Open</RouteLink></>}
+  </p>;
 }
 
 /** The selected tab of one row; keyed by the row, so a switch starts with "Loading {row}…" until its submissions arrive. */
@@ -322,11 +348,17 @@ function RowTabContent(props: RowPanelProps & {
     reportRoute={reportRoute} onNavigate={onRoute} actions={<StageActions {...props} row={row} />} me={props.me} now={props.now} />;
 }
 
+/** What the stage actions need: the row panel's props, or the cards' stage popover. */
+export type StageActionsProps = Pick<RowPanelProps, "stage" | "onAssign" | "onRequestCorrection" | "canRequestCorrection" | "onChangeFinal" | "canChangeFinal" | "textVersionTools"> & {
+  row: DocumentRowView;
+};
+
 /**
- * Admin actions of the filtered stage, or of every stage: Annotation "Reassign…", "Assign annotation review…";
- * Review "Request correction…", "Assign a new review…"; Final "Change final…" of a decided row.
+ * Admin actions of the filtered stage, or of every stage: Annotation "Reassign…" (one direct button per open
+ * task, S3), "Assign annotation review…"; Review "Request correction…", "Assign a new review…"; Final
+ * "Change final…" of a decided row. Also the actions of the cards' stage popover.
  */
-function StageActions({ row, stage, onAssign, onRequestCorrection, canRequestCorrection, onChangeFinal, canChangeFinal, textVersionTools }: RowPanelProps & { row: DocumentRowView }): JSX.Element | null {
+export function StageActions({ row, stage, onAssign, onRequestCorrection, canRequestCorrection, onChangeFinal, canChangeFinal, textVersionTools }: StageActionsProps): JSX.Element | null {
   const show = (name: PanelStage) => !stage || stage === name;
   const documents = new Set(row.versions.map(version => version.document_id));
   const workIds = new Set(row.work.filter(item => item.task !== "translation_review" && item.status !== "submitted" && item.moved_to_version == null).map(item => item.assignment_id));
@@ -344,7 +376,7 @@ function StageActions({ row, stage, onAssign, onRequestCorrection, canRequestCor
   return <>
     {reassignable.map(assignment => <div key={assignment.id} className="row-panel-reassign">
       <span>{personOf(assignment.pseudonym)}</span>
-      {textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} onChanged={textVersionTools.onAssignmentsChanged} />}
+      {textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} onChanged={textVersionTools.onAssignmentsChanged} directReassign />}
     </div>)}
     {review && <Button size="sm" variant="quiet" onClick={() => onAssign(row, "review")}>Assign annotation review…</Button>}
     {correction && <Button size="sm" variant="quiet" onClick={() => onRequestCorrection(row)}>Request correction…</Button>}

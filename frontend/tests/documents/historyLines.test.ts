@@ -81,4 +81,13 @@ describe("historyLines", () => {
   it("is empty for a row without work, records or final", () => {
     expect(historyLines(row({ case_id: "c", language: "de" }), [], { now })).toEqual([]);
   });
+
+  it("says how many findings a consolidation kept automatically (all matched)", () => {
+    const consolidation = (kept: number) => submission({ submission_id: `c-${kept}`, document_id: "case-201-de", author_label: "rev-0005", author: luc,
+      kind: "consolidation", round_ordinal: null, finding_count: 6, recorded_at: "2026-10-21T22:30:00", kept_automatically: kept });
+    const four = historyLines(walkthroughRow(), [consolidation(4)], { now }).find(line => line.key === "submission-c-4")!;
+    expect(four.text).toBe("Consolidation: Luc Martin (ann-0005) · 6 findings · 4 kept automatically (all matched) · 22:30");
+    const none = historyLines(walkthroughRow(), [consolidation(0)], { now }).find(line => line.key === "submission-c-0")!;
+    expect(none.text).not.toContain("kept automatically");
+  });
 });

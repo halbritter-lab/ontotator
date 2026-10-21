@@ -202,12 +202,12 @@ it("Check again reruns it and final-selection changes rerun it while visible", a
   expect(preflight).toHaveBeenCalledTimes(4);
 });
 
-it("lists Not in plan, not exported as information", async () => {
+it("lists Not planned, not exported as information", async () => {
   vi.mocked(api.finalExportPreflight).mockResolvedValue({ ...emptyPreflight, project: "p", selections: [selection], not_in_plan: [{ case_id: "case-9", language: "fr" }] });
   render(<ExportPage projectKey="p" currentUser={user} />);
-  const list = await finals().findByRole("list", { name: "Not in plan, not exported" });
+  const list = await finals().findByRole("list", { name: "Not planned, not exported" });
   expect(within(list).getByRole("link", { name: "Show case-9 · fr" }).getAttribute("href")).toBe("#/projects/p/documents?language=fr&case=case-9");
-  expect(finals().getByText("1 selected results · 0 warnings · 0 omitted · 1 not in plan")).toBeTruthy();
+  expect(finals().getByText("1 selected results · 0 warnings · 0 omitted · 1 not planned")).toBeTruthy();
   expect(finals().getByText(/Annotate is off in the work plan/)).toBeTruthy();
   expect(finals().queryByRole("checkbox")).toBeNull();
   expect(finals().getByRole("button", { name: "Create final export" }).getAttribute("aria-disabled")).toBeNull();
