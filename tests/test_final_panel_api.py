@@ -7,6 +7,7 @@ directly; the HTTP tests at the end need the route (``final-panel``).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -753,7 +754,7 @@ def test_submission_rows_untouched(env):
 def test_label_rule_consolidation_needs_every_other_submission_as_input():
     """A consolidation input from a draft (no submission ID) does not cover
     an eligible submission, so the rule stays "compare"."""
-    from datetime import UTC, datetime, timedelta
+    from datetime import timedelta
 
     from ontocurator.application.document_row_panel import Candidate, label_rule
 
@@ -869,3 +870,40 @@ def test_all_match_in_http_answer(env):
     assert response.status_code == 200, response.text
     body = response.json()
     assert (body["all_match"], body["all_match_submission_id"]) == (True, "s1")
+
+
+def test_all_match_hidden_when_a_consolidation_is_compared(env):
+    """W1 is not offered after a consolidation (X4), also when it covers only
+    part of the compared submissions (label rule "compare")."""
+    from ontocurator.application.document_row_panel import Candidate, _all_match
+
+    target = doc("c1", "en")
+    seizure = span_of(env, target, "Neonatalzeit")
+    submit_findings(
+        env,
+        assign(env, target, "anno", "annotate"),
+        "s1",
+        [finding("x1", SEIZURE, seizure)],
+    )
+    submit_findings(
+        env,
+        assign(env, target, "anno2", "annotate"),
+        "s2",
+        [finding("y1", SEIZURE, seizure)],
+    )
+    repo = env.app.state.repo
+    payloads = {sid: repo.get_submission(sid, "proj") for sid in ("s1", "s2")}
+    times = {
+        sid: datetime(2026, 10, 21, index, tzinfo=UTC)
+        for index, sid in enumerate(["s1", "s2"])
+    }
+    submissions = [{"submission_id": sid, "eligible": True} for sid in times]
+    with env.db.transaction() as conn:
+        profile, defaults = document_row_panel.project_profile(conn, env.pid)
+    plain = [Candidate("s1", target), Candidate("s2", target)]
+    assert _all_match(plain, times, payloads, profile, defaults, submissions) == "s1"
+    consolidated = [Candidate("s1", target, consolidation_round="r"), plain[1]]
+    assert (
+        _all_match(consolidated, times, payloads, profile, defaults, submissions)
+        is None
+    )

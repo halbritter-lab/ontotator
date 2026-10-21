@@ -3,15 +3,19 @@
 
 A consolidation round's inputs are the frozen findings of its source
 submissions (``round_inputs``). ``consolidation_groups`` groups them with the
-pure ``domain.agreement.groups``: one "submission" per source submission, in
-inventory order, each input a finding keyed by its ``input_id`` (axis
-defaults filled exactly as the final panel's agreement, ``finding_of``).
+pure ``domain.agreement.groups``: one "submission" per source, in the round's
+``input_submission_ids`` order (frozen drafts after them, in inventory
+order), so a source without findings still makes every group ``partial``.
+Each input with a target snapshot is a finding keyed by its ``input_id``
+(axis defaults filled exactly as the final panel's agreement,
+``finding_of``).
 
 Group state lives in the consolidator's review decisions on the inputs'
-target snapshots: a group is *open* while a member has no decision;
-otherwise its state is the decisions' ``ConsolidationMark.action``. A group
-is *edited* when a resulting annotation's content hash differs from the
-mark's ``content_sha256`` (``consolidated_content_sha256``).
+target snapshots: a group is *open* while a member has no decision or only
+an ``uncertain`` one; otherwise its state is the decisions'
+``ConsolidationMark.action``. A group is *edited* when its resulting
+annotation's content hash differs from the mark's ``content_sha256``
+(``consolidated_content_sha256``) or the annotation was deleted.
 
 Visibility (U8, U9): the assignee reads the live draft; a lead who is not the
 assignee reads the submitted result once the round is submitted; every other
@@ -50,11 +54,12 @@ from ontocurator.domain.work_rounds import WorkRoundView
 from ontocurator.domain.workspace import Submission
 from ontocurator.storage.repository import Repository, _key_str
 from ontocurator.storage.tables import DocumentRow, SubmissionRow, UserRow
-from ontocurator.storage.workflow_tables import RoundInputRow
+from ontocurator.storage.workflow_tables import RoundInputRow, WorkRoundRow
 
 __all__ = [
     "ConsolidationReader",
     "RoundMember",
+    "RoundMembers",
     "consolidated_content_sha256",
     "consolidation_group_id",
     "consolidation_groups",
@@ -85,8 +90,17 @@ class RoundMember:
     input_id: str
     submission_id: str  # the source submission ("draft-<id>" for a frozen draft)
     person_id: str  # the source author's pseudonym
-    snapshot: AnnotationSnapshot  # the target snapshot (else the source one)
+    snapshot: AnnotationSnapshot  # the target snapshot
     finding: Finding
+
+
+@dataclass(frozen=True)
+class RoundMembers:
+    """A round's sources and its grouping members."""
+
+    order: list[str]  # source ids: submissions first, then "draft-<id>"
+    authors: dict[str, str]  # source id -> author pseudonym
+    members: dict[str, RoundMember]  # by input id
 
 
 def round_members(
@@ -95,17 +109,26 @@ def round_members(
     round_id: str,
     profile: TaskProfile,
     defaults: AxisDefaults,
-) -> tuple[list[str], dict[str, RoundMember]]:
-    """The round's submissions in inventory order and its members by input id
-    (inputs in editable layers, as ``findings_of``).
+) -> RoundMembers:
+    """The round's sources, their authors and its members by input id
+    (inputs with a target snapshot in editable layers, as ``findings_of``).
 
-    Reads ``RoundInputRow`` on the caller's connection, so it also sees the
-    inputs of a round created in the caller's open transaction. ``profile``
-    and ``defaults`` come from ``project_profile``.
+    Every source submission is in ``order``, also one without findings or
+    with findings only outside the editable layers. Consolidation requires
+    the exact target text, so every input has a target snapshot; one without
+    is skipped. Reads ``WorkRoundRow`` and ``RoundInputRow`` on the caller's
+    connection, so it also sees a round created in the caller's open
+    transaction. ``profile`` and ``defaults`` come from ``project_profile``.
     """
     editable = {
         layer.layer_id for layer in profile.layers if layer.access == "editable"
     }
+    sources = conn.execute(
+        select(WorkRoundRow.input_submission_ids).where(
+            WorkRoundRow.project_id == pid, WorkRoundRow.round_id == round_id
+        )
+    ).scalar_one_or_none()
+    order: list[str] = [str(sid) for sid in sources or []]
     rows = conn.execute(
         select(
             RoundInputRow.input_id,
@@ -116,8 +139,10 @@ def round_members(
         .where(RoundInputRow.project_id == pid, RoundInputRow.round_id == round_id)
         .order_by(RoundInputRow.position)
     ).all()
-    sids = sorted({r.source_submission_id for r in rows if r.source_submission_id})
-    authors = (
+    sids = sorted(
+        set(order) | {r.source_submission_id for r in rows if r.source_submission_id}
+    )
+    authors: dict[str, str] = (
         {
             row.submission_id: row.annotator_id
             for row in conn.execute(
@@ -130,9 +155,8 @@ def round_members(
         if sids
         else {}
     )
-    order: list[str] = []
     members: dict[str, RoundMember] = {}
-    position: dict[str, int] = {}
+    position = dict.fromkeys(order, 0)
     for row in rows:
         submission = (
             row.source_submission_id
@@ -142,11 +166,16 @@ def round_members(
         if submission not in position:
             position[submission] = 0
             order.append(submission)
-        raw = row.payload.get("target_snapshot") or row.payload["source_snapshot"]
+        if submission not in authors:  # a frozen draft: its snapshots' author
+            source = decode_snapshot(row.payload["source_snapshot"])
+            authors[submission] = source.annotation.provenance.actor.actor_id
+        raw = row.payload.get("target_snapshot")
+        if raw is None:
+            continue
         item = decode_snapshot(raw)
         if item.annotation.layer_id not in editable:
             continue
-        person = authors.get(submission) or item.annotation.provenance.actor.actor_id
+        person = authors[submission]
         members[row.input_id] = RoundMember(
             input_id=row.input_id,
             submission_id=submission,
@@ -157,7 +186,7 @@ def round_members(
             ),
         )
         position[submission] += 1
-    return order, members
+    return RoundMembers(order=order, authors=authors, members=members)
 
 
 def consolidation_groups(
@@ -169,8 +198,10 @@ def consolidation_groups(
 ) -> list[tuple[Group, dict[str, str]]]:
     """The round's groups in reading order, each with its members as
     ``{submission id: input id}`` (the finding keys are the input ids)."""
-    order, members = round_members(conn, pid, round_id, profile, defaults)
-    return [(group, dict(group.members)) for group in _groups(order, members)]
+    found = round_members(conn, pid, round_id, profile, defaults)
+    return [
+        (group, dict(group.members)) for group in _groups(found.order, found.members)
+    ]
 
 
 def _groups(order: list[str], members: Mapping[str, RoundMember]) -> tuple[Group, ...]:
@@ -214,7 +245,8 @@ class ConsolidationReader:
         with base.db.snapshot() as conn:
             pid = base._require_project(conn, item.project_key)
             profile, defaults = project_profile(conn, pid)
-            order, members = round_members(conn, pid, item.round_id, profile, defaults)
+            found = round_members(conn, pid, item.round_id, profile, defaults)
+            order, members = found.order, found.members
             reason: str | None = None
             if submitted:
                 reason = "submitted"
@@ -237,7 +269,7 @@ class ConsolidationReader:
                     DocumentRow.document_id == item.document_id,
                 )
             ).one()
-            people = _people(conn, access, order, members)
+            people = _people(conn, access, order, found.authors)
         return {
             "round_id": item.round_id,
             "workspace_id": None,  # filled by the route for the editable assignee
@@ -261,14 +293,14 @@ def _people(
     conn: Connection,
     access: Access,
     order: Sequence[str],
-    members: Mapping[str, RoundMember],
+    authors: Mapping[str, str],
 ) -> list[dict[str, Any]]:
-    """The input authors in submission order, with display names (U8)."""
-    by_submission = {m.submission_id: m.person_id for m in members.values()}
+    """The source authors in source order, with display names (U8); also
+    the author of a source without findings."""
     pseudonyms: list[str] = []
     for submission in order:
-        person = by_submission[submission]
-        if person not in pseudonyms:
+        person = authors.get(submission)
+        if person is not None and person not in pseudonyms:
             pseudonyms.append(person)
     ids = {
         row.pseudonym: row.id
@@ -302,11 +334,11 @@ def _group_view(
 ) -> dict[str, Any]:
     inputs = list(group.members.values())
     member_views = []
-    targets = []
+    targets: dict[tuple[str, str], Annotation] = {}
     for input_id in inputs:
         member = members[input_id]
         annotation = member.snapshot.annotation
-        targets.append((annotation.annotation_id, member.snapshot.version))
+        targets[(annotation.annotation_id, member.snapshot.version)] = annotation
         member_views.append(
             {
                 "input_id": input_id,
@@ -335,10 +367,25 @@ def _group_view(
     }
 
 
-def _state(targets: Sequence[tuple[str, str]], content: _Content) -> dict[str, Any]:
-    """State, note, flag, edit and resulting annotations of one group."""
+def _state(
+    targets: Mapping[tuple[str, str], Annotation], content: _Content
+) -> dict[str, Any]:
+    """State, note, flag, edit and resulting annotations of one group.
+
+    ``targets`` maps the members' target refs to their frozen annotations.
+    A group is open while a member target has no decision or only an
+    ``uncertain`` one (the rule submit gating uses). Each decision has at
+    most one resulting annotation: its ``replacement``, else the target
+    itself when ``confirmed``, else none (``rejected``). E1b stores
+    ``content_sha256`` on every decision with a resulting annotation (the
+    hash of that annotation); a hash on a decision without one is ignored.
+    The group is edited when a resulting annotation's hash differs from the
+    mark or a replacement no longer exists.
+    """
     by_target = {
-        (d.target.annotation_id, d.target.version): d for d in content.decisions
+        (d.target.annotation_id, d.target.version): d
+        for d in content.decisions
+        if d.outcome != "uncertain"
     }
     decisions = [by_target.get(target) for target in targets]
     if any(d is None for d in decisions):
@@ -357,12 +404,15 @@ def _state(targets: Sequence[tuple[str, str]], content: _Content) -> dict[str, A
         mark = decision.consolidation
         if mark is None or mark.content_sha256 is None:
             continue
-        replacement = decision.replacement
-        current = (
-            annotations.get(replacement.annotation_id)
-            if replacement is not None
-            else None
-        )
+        if decision.replacement is not None:
+            current = annotations.get(decision.replacement.annotation_id)
+        elif decision.outcome == "confirmed":
+            ref = decision.target
+            current = annotations.get(ref.annotation_id) or targets.get(
+                (ref.annotation_id, ref.version)
+            )
+        else:
+            continue
         if (
             current is None
             or consolidated_content_sha256(current) != mark.content_sha256

@@ -95,7 +95,7 @@ def cons(tmp_path):
         source_submission_ids=[FIRST, SECOND],
     )
     adj = logged_in(env.app, "adj", assignments=[])
-    return SimpleNamespace(env=env, round=created, adj=adj)
+    return SimpleNamespace(env=env, round=created, adj=adj, review=review)
 
 
 def url(round_id: str) -> str:
@@ -355,8 +355,140 @@ def test_edited_when_the_consolidated_annotation_changed(cons):
         )
 
     same = consolidated_content_sha256(snap.annotation)
-    kept = _state([("t", "v")], _Content([snap], [decision(same)]))
+    targets = {("t", "v"): snap.annotation}
+    kept = _state(targets, _Content([snap], [decision(same)]))
     assert (kept["state"], kept["edited"]) == ("keep", False)
     assert kept["annotation_ids"] == [snap.annotation.annotation_id]
-    changed = _state([("t", "v")], _Content([snap], [decision("other")]))
+    changed = _state(targets, _Content([snap], [decision("other")]))
     assert changed["edited"] is True
+    # The consolidated annotation was deleted in the editor.
+    deleted = _state(targets, _Content([], [decision(same)]))
+    assert deleted["edited"] is True
+
+
+def _snapshot(cons: Any) -> Any:
+    return cons.env.app.state.repo.get_submission(FIRST, "proj").snapshots[0]
+
+
+def test_confirmed_target_with_hash_is_not_edited(cons):
+    """A target kept as is carries the hash of the target itself; rejected
+    siblings carry no resulting annotation and never mark the group edited."""
+    snap = _snapshot(cons)
+    sibling = _snapshot(cons).annotation.model_copy(update={"annotation_id": "u"})
+    targets = {("t", "v"): snap.annotation, ("u", "w"): sibling}
+    same = consolidated_content_sha256(snap.annotation)
+
+    def decisions(sha: str) -> list[ReviewDecision]:
+        return [
+            ReviewDecision(
+                decision_id="keep",
+                target=AnnotationRef(annotation_id="t", version="v"),
+                outcome="confirmed",
+                reviewer_id="r",
+                consolidation=ConsolidationMark(action="choose", content_sha256=sha),
+            ),
+            ReviewDecision(
+                decision_id="drop",
+                target=AnnotationRef(annotation_id="u", version="w"),
+                outcome="rejected",
+                reviewer_id="r",
+                consolidation=ConsolidationMark(action="choose", content_sha256="x"),
+            ),
+        ]
+
+    kept = _state(targets, _Content([], decisions(same)))
+    assert (kept["state"], kept["edited"]) == ("choose", False)
+    assert kept["annotation_ids"] == ["t"]
+    assert _state(targets, _Content([], decisions("other")))["edited"] is True
+
+
+def test_uncertain_decision_leaves_the_group_open(cons):
+    snap = _snapshot(cons)
+    targets = {("t", "v"): snap.annotation}
+    uncertain = ReviewDecision(
+        decision_id="d",
+        target=AnnotationRef(annotation_id="t", version="v"),
+        outcome="uncertain",
+        reviewer_id="r",
+    )
+    assert _state(targets, _Content([], [uncertain])) == {"state": "open"}
+
+
+def test_empty_source_makes_every_group_partial(tmp_path):
+    """A source submission without findings still counts: every group is
+    partial and its author is listed."""
+    env = plan_env(tmp_path)
+    target = doc("c1", "en")
+    submit_findings(
+        env,
+        assign(env, target, "anno", "annotate"),
+        FIRST,
+        [
+            finding("a1", SEIZURE, span_of(env, target, "Neonatalzeit")),
+            finding("a2", HYPOTONIA, span_of(env, target, "schwere")),
+        ],
+    )
+    submit_findings(env, assign(env, target, "anno2", "annotate"), SECOND, [])
+    lead_access, lead_actor = _access(env, "leader", "lead")
+    created = WorkRoundService(env.db).create(
+        lead_access,
+        lead_actor,
+        assign(env, target, "adj", "review"),
+        request_id="consolidate-empty",
+        expected_workflow_revision=0,
+        kind="consolidation",
+        source_submission_ids=[FIRST, SECOND],
+    )
+    adj = logged_in(env.app, "adj", assignments=[])
+    response = adj.get(url(created.round_id))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [g["kinds"] for g in body["groups"]] == [["partial"], ["partial"]]
+    anno, anno2 = pseudonym(env, "anno"), pseudonym(env, "anno2")
+    assert [p["person_id"] for p in body["people"]] == [anno, anno2]
+    assert body["people"][1]["label"] == f"Arne Notator ({anno2})"
+
+
+def test_superseded_round_stays_readable_for_the_lead(cons):
+    env = cons.env
+    adj_access, adj_actor = _access(env, "adj", "adjudicator")
+    reviewer = ScopedRepository(env.db, adj_access, adj_actor)
+    _submit_consolidation(env.app.state.ontology_registry, reviewer, cons.round)
+    lead_access, lead_actor = _access(env, "leader", "lead")
+    current = env.app.state.repo.get_work_round("proj", cons.round.round_id)
+    WorkRoundService(env.db).create(
+        lead_access,
+        lead_actor,
+        cons.review,
+        request_id="consolidate-again",
+        expected_workflow_revision=current.workflow_revision,
+        kind="consolidation",
+        source_submission_ids=[FIRST, SECOND],
+    )
+    old = env.app.state.repo.get_work_round("proj", cons.round.round_id)
+    assert old.state == "superseded"
+    response = env.lead.get(url(cons.round.round_id))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["read_only"], body["read_only_reason"]) == (True, "submitted")
+    assert {g["state"] for g in body["groups"]} == {"keep"}
+
+
+def test_lead_cannot_read_a_reopened_round(cons):
+    """Reopened after submit: state editable with a latest submission; the
+    lead sees the draft only after the next submit."""
+    env = cons.env
+    adj_access, adj_actor = _access(env, "adj", "adjudicator")
+    reviewer = ScopedRepository(env.db, adj_access, adj_actor)
+    _submit_consolidation(env.app.state.ontology_registry, reviewer, cons.round)
+    reopened = env.lead.post(
+        f"/api/v1/assignments/{cons.review}/reopen", json={"reason": "again"}
+    )
+    assert reopened.status_code == 200, reopened.text
+    item = env.app.state.repo.get_work_round("proj", cons.round.round_id)
+    assert item.state == "editable"
+    assert item.latest_submission_id is not None
+    assert_hidden(env.lead.get(url(cons.round.round_id)))
+    own = cons.adj.get(url(cons.round.round_id))
+    assert own.status_code == 200, own.text
+    assert own.json()["read_only"] is False

@@ -299,11 +299,13 @@ def _all_match(
     at least two are compared and every consolidation group is ``match``
     (zero findings everywhere included); else None.
 
-    The caller only asks under the label rule "compare", so no consolidation
-    covers the compared submissions (VD16).
+    The caller only asks under the label rule "compare"; a consolidation that
+    covers only part of the compared submissions still hides W1 (X4).
     """
-    if len(comparable) < 2 or any(
-        item.submission_id not in payloads for item in comparable
+    if (
+        len(comparable) < 2
+        or any(item.consolidation_round is not None for item in comparable)
+        or any(item.submission_id not in payloads for item in comparable)
     ):
         return None
     order = sorted(

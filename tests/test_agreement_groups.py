@@ -364,6 +364,36 @@ def test_majority_label_three_people() -> None:
     assert two.majority == {}
 
 
+def test_majority_counts_only_members_of_the_same_term() -> None:
+    # HP:A has two members (no majority); HP:B's "absent" does not count.
+    mixed = one(
+        groups(
+            {
+                "s1": [f("a", 0, "HP:A", ((0, 5),), {"assertion": "absent"})],
+                "s2": [f("b", 0, "HP:A", ((0, 5),), {"assertion": "present"})],
+                "s3": [f("c", 0, "HP:B", ((0, 5),), {"assertion": "absent"})],
+            },
+            ABC,
+        )
+    )
+    assert mixed.kinds == frozenset({"term_differs", "values_differ"})
+    assert mixed.majority == {}
+    # Two of HP:A's three members agree; HP:B's member is not counted.
+    four = one(
+        groups(
+            {
+                "s1": [f("a", 0, "HP:A", ((0, 5),), {"assertion": "absent"})],
+                "s2": [f("b", 0, "HP:A", ((0, 5),), {"assertion": "present"})],
+                "s3": [f("c", 0, "HP:A", ((0, 5),), {"assertion": "absent"})],
+                "s4": [f("d", 0, "HP:B", ((0, 5),), {"assertion": "present"})],
+            },
+            ["s1", "s2", "s3", "s4"],
+        )
+    )
+    assert four.kinds == frozenset({"term_differs", "values_differ"})
+    assert four.majority == {"assertion": "absent"}
+
+
 def test_keep_is_earliest_in_order() -> None:
     g = one(
         groups(

@@ -86,7 +86,7 @@ class Group:
     terms: tuple[str, ...]  # distinct term ids, in order of first member
     keep: str  # submission id of the default member (earliest in order)
     start: int | None  # first span start; None = spanless
-    majority: Mapping[str, str]  # axis -> value of > half of >= 3 members
+    majority: Mapping[str, str]  # axis -> value of > half of >= 3 same-term members
 
 
 @dataclass(frozen=True)
@@ -247,11 +247,23 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
         by_term.setdefault(finding.term_id, []).append(finding)
     differing: set[str] = set()
     span_differs = notes_differ = False
+    # Majority (> half of >= 3 members) counts only members of the same term;
+    # an axis with different majorities in two terms gets no label.
+    winners: dict[str, set[str]] = {}
     for same in by_term.values():
         axes = {axis for finding in same for axis in finding.axes}
-        differing |= {
-            axis for axis in axes if len({x.axes.get(axis) for x in same}) > 1
-        }
+        own = {axis for axis in axes if len({x.axes.get(axis) for x in same}) > 1}
+        differing |= own
+        if len(same) >= 3:
+            for axis in own:
+                counts: dict[str, int] = {}
+                for finding in same:
+                    value = finding.axes.get(axis)
+                    if value is not None:
+                        counts[value] = counts.get(value, 0) + 1
+                for value, count in counts.items():
+                    if count * 2 > len(same):
+                        winners.setdefault(axis, set()).add(value)
         if (
             len({tuple(sorted(x.spans)) for x in same}) > 1
             or len({tuple(sorted(x.cues)) for x in same}) > 1
@@ -274,17 +286,11 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
     if not kinds:
         kinds.add("match")
 
-    majority: dict[str, str] = {}
-    if len(members) >= 3:
-        for axis in sorted(differing):
-            counts: dict[str, int] = {}
-            for _, finding in members:
-                value = finding.axes.get(axis)
-                if value is not None:
-                    counts[value] = counts.get(value, 0) + 1
-            for value, count in counts.items():
-                if count * 2 > len(members):
-                    majority[axis] = value
+    majority = {
+        axis: next(iter(values))
+        for axis, values in sorted(winners.items())
+        if len(values) == 1
+    }
     starts = [start for _, finding in members for start, _ in finding.spans]
     return Group(
         members={submission: finding.key for submission, finding in members},
