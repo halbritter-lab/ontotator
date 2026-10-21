@@ -559,9 +559,11 @@ test.describe("ontology tree", () => {
     await openWithSeizure(page, "tree-wide");
     await expect(page.getByTestId("annotator-name")).toHaveText("Maximiliane Schmidt-Rottluff");
     const sizes = [
-      // 1025 px is the narrowest window with three columns. The header already
-      // needs a second line there, which the 20 px of extra height make up for.
-      { width: 1025, height: 720 },
+      // 1060 px is the narrowest window with three columns: the text keeps its
+      // 420 px beside the findings column and the 380 px inspector (below that the
+      // inspector stacks under the text). The header already needs a second line
+      // there, which the 20 px of extra height make up for.
+      { width: 1060, height: 720 },
       { width: 1100, height: 700 },
       { width: 1280, height: 720 },
       { width: 1440, height: 900 },
@@ -684,6 +686,8 @@ test.describe("ontology tree", () => {
   });
 
   for (const size of [
+    // 1025-1059 px: the editor's own width (container query), not the viewport breakpoint, stacks it.
+    { width: 1059, height: 700 },
     { width: 1024, height: 700 },
     { width: 1000, height: 700 },
     { width: 800, height: 700 },

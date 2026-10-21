@@ -420,6 +420,9 @@ test("S15 the lead's own result is not selectable when adjudication is separate"
 
   await rowAction(page, "Compare results…", caseId, "en").click();
   const panel = decisionBlock(page, caseId, "en");
+  // Both submissions have no findings (W1, U7): the per-submission table is under "Show submissions".
+  await expect(panel.getByText("Both submissions have no findings", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "Show submissions", exact: true }).click();
   const lead = labels.lead.replace(/ \(.*\)$/, "");
   const own = panel.getByRole("row").filter({ has: page.getByRole("rowheader").filter({ hasText: new RegExp(`^${esc(lead)}`) }) });
   const blocked = own.getByRole("button", { name: "Use as final", exact: true });
