@@ -97,7 +97,8 @@ const isSettingsSection = (value: string): value is SettingsSection => (SETTINGS
 
 export type Route =
   | { name: "tasks"; project?: string }
-  | { name: "task"; assignmentId: number }
+  /** `view: "editor"` opens the editor of a consolidation task instead of the consolidation view (acceptance fixes WP-E). */
+  | { name: "task"; assignmentId: number; view?: "editor" }
   | { name: "me" }
   | { name: "adminUsers" }
   | { name: "adminOntologies" }
@@ -140,7 +141,8 @@ export function parseRoute(hash: string): Route {
     const task = /^#\/tasks\/([1-9]\d*)$/.exec(path);
     if (task) {
       const assignmentId = Number(task[1]);
-      return Number.isSafeInteger(assignmentId) ? { name: "task", assignmentId } : notFound;
+      if (!Number.isSafeInteger(assignmentId)) return notFound;
+      return params.get("view") === "editor" ? { name: "task", assignmentId, view: "editor" } : { name: "task", assignmentId };
     }
     const report = /^#\/projects\/([^/]+)\/problem-reports\/([^/]+)$/.exec(path);
     if (report) {
@@ -211,7 +213,7 @@ export function routeHref(route: Route): string {
       if (!Number.isSafeInteger(route.assignmentId) || route.assignmentId <= 0) {
         throw new RangeError("Assignment ID must be a positive safe integer");
       }
-      return `#/tasks/${route.assignmentId}`;
+      return `#/tasks/${route.assignmentId}${querySuffix([["view", route.view]])}`;
     case "me": return "#/me";
     case "adminUsers": return "#/admin/users";
     case "adminOntologies": return "#/admin/ontologies";

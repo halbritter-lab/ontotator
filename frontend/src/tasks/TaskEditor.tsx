@@ -12,6 +12,7 @@ import { WorkRoundsDialog } from "./WorkRoundsDialog";
 import { TaskProblemActions } from "./TaskProblemActions";
 import { TaskGuidelines } from "./TaskGuidelines";
 import { roundBadge as roundBadgeOf, roundIdentity } from "../editor/rounds/roundLabels";
+import { ConsolidationScreen } from "../consolidation/ConsolidationScreen";
 
 interface TaskEditorProps {
   assignmentId: number;
@@ -20,6 +21,8 @@ interface TaskEditorProps {
   routeLeaveRef: MutableRefObject<RouteLeaveGuard | null>;
   leaveGuardRef: MutableRefObject<((proceed: () => void) => void) | null>;
   onProjectContext?: (projectKey: string) => void;
+  /** `"editor"`: the editor even for an active consolidation round, which otherwise opens the consolidation view. */
+  view?: "editor";
 }
 
 export function TaskEditor(props: TaskEditorProps): JSX.Element {
@@ -54,7 +57,7 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
   return <AnnotationTaskEditor key={identity} {...props} />;
 }
 
-function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, leaveGuardRef }: TaskEditorProps): JSX.Element {
+function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, leaveGuardRef, view }: TaskEditorProps): JSX.Element {
   const [workspace, setWorkspace] = useState<AssignmentWorkspace | null>(null);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const versionAccess = useVersionAccess(workspace?.assignment.project_key ?? "", user.username);
@@ -138,6 +141,11 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   }
   if (!workspace) return <EmptyState title="This task is no longer assigned to you." action={backLink} />;
   const assignment = workspace.assignment;
+  // An active consolidation round opens the consolidation view (acceptance fixes WP-E); "Edit in editor…" adds view=editor.
+  if (roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor") {
+    return <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId}
+      onNavigate={onNavigate} workspaceView={workspace.read_only ? null : workspace.view} />;
+  }
   const openRound = async (roundId: string) => {
     if (routeLeaveRef.current && !await routeLeaveRef.current()) return;
     selectedWorkRound.current = roundId; setRoundDialogOpen(false);

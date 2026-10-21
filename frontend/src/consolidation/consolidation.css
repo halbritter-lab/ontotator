@@ -1,0 +1,434 @@
+/* Consolidation view (acceptance fixes WP-E, U12, U13): text with person lanes, finding groups, submit. Tokens only. */
+
+.cons-screen {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.cons-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.cons-title {
+  margin: 0;
+  font-size: var(--size-xl);
+  line-height: var(--leading-xl);
+}
+
+.cons-detail,
+.cons-muted {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+
+.cons-submit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.cons-submit .action-reason {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: end;
+}
+
+.cons-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Layout (U13): ≥ 1100 px text left, groups right; 700–1099 px text above; below 700 px groups only. */
+.cons-layout {
+  display: grid;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.cons-layout-wide {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 44%);
+}
+
+.cons-layout-wide .cons-text {
+  position: sticky;
+  top: var(--space-3);
+}
+
+.cons-layout-wide .cons-text-scroll {
+  max-height: calc(100vh - 12rem);
+  overflow: auto;
+}
+
+.cons-layout-medium .cons-text-scroll {
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.cons-side {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Text pane: serif reading text, room under each line for four lanes. */
+.cons-text {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.cons-text-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cons-text-body {
+  max-width: var(--measure-reading);
+  font-family: var(--font-serif);
+  font-size: var(--size-reading);
+  line-height: 2.2;
+  white-space: pre-wrap;
+}
+
+.cons-mark {
+  padding-bottom: 16px;
+  background-repeat: no-repeat;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  cursor: pointer;
+}
+
+/* Kept findings (automatic or decided): neutral background, lanes stay. */
+.cons-kept {
+  background-color: var(--surface-sunken);
+}
+
+.cons-added {
+  background-color: var(--surface-sunken);
+  text-decoration: underline dotted var(--text-muted);
+  text-underline-offset: 3px;
+}
+
+.cons-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
+.cons-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+
+.cons-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cons-legend-swatch {
+  display: inline-block;
+  width: 24px;
+  height: 16px;
+  background-repeat: no-repeat;
+}
+
+.cons-legend-swatch.cons-selected {
+  outline-offset: -2px;
+}
+
+/* Groups. */
+.cons-groups {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.cons-auto {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cons-auto-banner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--notice-success-border);
+  border-radius: var(--radius);
+  background: var(--success-light);
+}
+
+.cons-auto-banner p {
+  margin: 0;
+}
+
+.cons-group-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.cons-group {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.cons-group:last-child {
+  border-bottom: 0;
+}
+
+.cons-group-expanded {
+  background: var(--accent-light);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.cons-group-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.cons-group-heading {
+  margin: 0;
+  font-size: var(--size-base);
+  font-weight: var(--weight-regular);
+}
+
+.cons-group-toggle {
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.cons-group-toggle:focus-visible,
+.cons-chip:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.cons-group-title {
+  font-weight: var(--weight-strong);
+}
+
+.cons-group-resolved .cons-group-toggle,
+.cons-group-state,
+.cons-tag {
+  color: var(--text-muted);
+}
+
+.cons-group-kind {
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-strong);
+}
+
+.cons-group-body {
+  display: grid;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+}
+
+.cons-partial,
+.cons-result,
+.cons-note-text,
+.cons-summary {
+  margin: 0;
+}
+
+.cons-result {
+  font-weight: var(--weight-strong);
+}
+
+/* Comparison table: differences by weight and the word "differs", never colour alone. */
+.cons-compare {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface-raised);
+  font-size: var(--size-sm);
+}
+
+.cons-compare th,
+.cons-compare td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.cons-compare thead th {
+  border-bottom-color: var(--border-strong);
+  font-weight: var(--weight-strong);
+}
+
+.cons-compare tbody th {
+  color: var(--text-muted);
+  font-weight: var(--weight-regular);
+  white-space: nowrap;
+}
+
+.cons-differs td,
+.cons-differs-word {
+  font-weight: var(--weight-strong);
+}
+
+.cons-differs td {
+  background: var(--warning-light);
+}
+
+.cons-choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.cons-choice-label {
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+
+.cons-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 1px var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--size-sm);
+  cursor: pointer;
+}
+
+.cons-chip:hover {
+  background: var(--surface-sunken);
+}
+
+.cons-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  font-weight: var(--weight-strong);
+}
+
+.cons-chip[aria-pressed="true"]::before {
+  content: "✓ ";
+  white-space: pre;
+}
+
+.cons-chip[aria-disabled="true"] {
+  cursor: default;
+}
+
+.cons-note-flag {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.cons-note-flag .form-group {
+  margin-bottom: 0;
+}
+
+.cons-note {
+  flex-basis: 100%;
+}
+
+.cons-edit-values {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cons-snippet {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-serif);
+  font-size: var(--size-sm);
+}
+
+.cons-snippet-mark {
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-weight: var(--weight-strong);
+}
+
+.cons-failure {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cons-failure p {
+  margin: 0;
+}
+
+.cons-placeholder {
+  height: 44px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-sunken);
+}
+
+.cons-submitted {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--notice-success-border);
+  border-radius: var(--radius);
+  background: var(--success-light);
+}
+
+.cons-submitted p {
+  margin: 0;
+}
+
+.cons-subheading {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-base);
+}
+
+.cons-added-list ul {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+}
+
+@media (forced-colors: active) {
+  .cons-mark[data-lanes] {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+  }
+
+  .cons-chip[aria-pressed="true"],
+  .cons-selected {
+    outline: 2px solid CanvasText;
+  }
+}

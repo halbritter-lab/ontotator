@@ -1006,10 +1006,6 @@ export class ApiClient {
     return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/round-input-resolutions`, { method: "POST", body: JSON.stringify(envelope) });
   }
 
-  async mergeRoundInputs(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
-    return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/merge-inputs`, { method: "POST", body: JSON.stringify(envelope) });
-  }
-
   async searchOntology(req: SearchRequest, signal?: AbortSignal): Promise<SearchResult> {
     return this.request<SearchResult>("/api/v1/search", {
       method: "POST",

@@ -229,7 +229,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   switch (route.name) {
     case "tasks": content = landing || landingSummary ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
       : <MyTasks project={route.project} projects={projects} onNavigate={go} />; break;
-    case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId])} assignmentId={route.assignmentId}
+    // The view is part of the key: switching between the consolidation view and the editor reopens the task fresh.
+    case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId, route.view ?? null])} assignmentId={route.assignmentId} view={route.view}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef}
       onProjectContext={key => setTaskProject({ identity: taskIdentity, key })} />; break;
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
@@ -259,7 +260,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       break;
     }
     case "projectConsolidation": content = <ConsolidationScreen key={JSON.stringify([user.username, route.key, route.roundId])} projectKey={route.key}
-      roundId={route.roundId} group={route.group} />; break;
+      roundId={route.roundId} group={route.group} onNavigate={go} />; break;
     case "me": content = <ProfilePage onSaved={setSavedIdentity} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} />; break;
     case "notFound": content = <NotFound onNavigate={go} />; break;
     default: content = <EmptyState title="This page is not available yet.">This section is planned for a later step.</EmptyState>;
