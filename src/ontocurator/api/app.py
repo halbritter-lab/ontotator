@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 from ontocurator import settings
 from ontocurator.api.admin_routes import router as admin_router
 from ontocurator.api.auth_routes import router as auth_router
+from ontocurator.api.body_limits import BodyLimitMiddleware
 from ontocurator.api.document_row_routes import router as document_row_router
 from ontocurator.api.final_result_routes import router as final_result_router
 from ontocurator.api.health import ReadinessProbe
@@ -290,6 +291,8 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     else:
         # Schema export only: no sessions exist, so no API request is answered.
         install_security(app, None, None)
+    # Outermost: an oversized upload is refused before anything reads it.
+    app.add_middleware(BodyLimitMiddleware)
 
     # FastAPI's own answer without the rejected input, which may be a
     # password, encoded as ASCII JSON, so even a lone surrogate cannot make it

@@ -99,8 +99,9 @@ async def publish_guideline(
     _require_management(request, key)
     try:
         data = bytearray()
-        # Bounded reads: an oversized file is refused after at most
-        # MAX_GUIDELINE_BYTES + 4 bytes, never read whole.
+        # ``BodyLimitMiddleware`` bounds the request before FastAPI parses
+        # the multipart body; these bounded reads refuse the file itself after
+        # at most MAX_GUIDELINE_BYTES + 4 bytes of the parsed part.
         while chunk := await file.read(min(_CHUNK, _READ_LIMIT - len(data) + 1)):
             data += chunk
             if len(data) > _READ_LIMIT:
