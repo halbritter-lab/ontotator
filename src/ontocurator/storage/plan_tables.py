@@ -54,6 +54,8 @@ class WorkPlanFlagsRow(Base):
     language: Mapped[str]
     review: Mapped[bool]
     annotate: Mapped[bool]
+    # False only for system rows under "Nothing planned" (plan not decided yet).
+    decided: Mapped[bool]
     restored_revision: Mapped[int | None] = mapped_column(BigInteger)
     updated_by: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey(f"{SCHEMA}.users.id")

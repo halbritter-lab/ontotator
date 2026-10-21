@@ -56,6 +56,8 @@ APPEND_ONLY_TABLES = (
     "review_obligation_resolutions",
     "translation_acceptances",
     "discarded_variants",
+    "text_change_resolutions",
+    "draft_snapshots",
 )
 
 NAMING_CONVENTION = {
@@ -912,5 +914,6 @@ class UploadRow(Base):
 # Register workflow mappings after the shared Base and historical tables exist.
 # Register split final-result metadata with the shared schema.
 from ontocurator.storage import final_tables as _final_tables  # noqa: E402,F401
+from ontocurator.storage import overview_tables as _overview_tables  # noqa: E402,F401
 from ontocurator.storage import plan_tables as _plan_tables  # noqa: E402,F401
 from ontocurator.storage import workflow_tables as _workflow_tables  # noqa: E402, F401

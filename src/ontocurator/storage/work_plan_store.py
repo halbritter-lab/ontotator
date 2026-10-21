@@ -48,6 +48,7 @@ __all__ = [
     "add_acceptance",
     "bump_revisions",
     "clear_restored",
+    "decided_rows",
     "discarded",
     "effective_plan",
     "ensure_rows",
@@ -366,6 +367,7 @@ def write_rows(
     The revision is bumped even when no flag actually changes, so callers
     should skip no-op change sets. ``updated_by`` is ``actor_id`` (rows created
     by ``ensure_rows`` or the 0016 migration have NULL ``updated_by``).
+    Every written row counts as decided (spec VD3).
     """
     if not rows:
         return {}
@@ -379,6 +381,7 @@ def write_rows(
                 "annotate": flags.annotate,
                 "restored_revision": restored.get(key),
                 "updated_by": actor_id,
+                "decided": True,
             }
             for key, flags in rows.items()
             if (key in restored) is exact
@@ -397,6 +400,7 @@ def write_rows(
                 "review": excluded.review,
                 "annotate": excluded.annotate,
                 "updated_by": excluded.updated_by,
+                "decided": True,
                 "updated_at": func.now(),
                 "restored_revision": excluded.restored_revision
                 if exact
@@ -416,10 +420,15 @@ def ensure_rows(
     """Insert only missing rows (and missing ``work_plans`` rows at revision 1).
 
     Inserted rows have NULL ``updated_by`` (system defaults, like the 0016
-    migration rows); existing rows and revisions are left untouched.
+    migration rows); existing rows and revisions are left untouched. Under
+    "Nothing planned" they are undecided (spec VD3), otherwise decided.
     """
     if not defaults:
         return 0
+    import_plan = conn.execute(
+        select(ProjectRow.import_plan).where(ProjectRow.id == project_id)
+    ).scalar_one()
+    decided = import_plan != "nothing"
     conn.execute(
         insert(WorkPlanRow)
         .values(
@@ -442,6 +451,7 @@ def ensure_rows(
                     "language": key.language,
                     "review": flags.review,
                     "annotate": flags.annotate,
+                    "decided": decided,
                 }
                 for key, flags in defaults.items()
             ]
@@ -456,6 +466,18 @@ def ensure_rows(
         .returning(WorkPlanFlagsRow.id)
     ).all()
     return len(inserted)
+
+
+def decided_rows(conn: Connection, project_id: int) -> dict[RowKey, bool]:
+    """``decided`` of every stored row of the project."""
+    rows = conn.execute(
+        select(
+            WorkPlanFlagsRow.case_id,
+            WorkPlanFlagsRow.language,
+            WorkPlanFlagsRow.decided,
+        ).where(WorkPlanFlagsRow.project_id == project_id)
+    )
+    return {_key(row): row.decided for row in rows}
 
 
 def open_tasks(

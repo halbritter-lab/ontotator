@@ -100,11 +100,19 @@ class RoundInputRow(Base):
             ["project_id", "source_submission_id"],
             [f"{SCHEMA}.submissions.project_id", f"{SCHEMA}.submissions.submission_id"],
         ),
+        CheckConstraint(
+            "num_nonnulls(source_submission_id, source_draft_snapshot_id) = 1",
+            name="one_source",
+        ),
     )
     input_id: Mapped[str] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(BigInteger)
     round_id: Mapped[str]
-    source_submission_id: Mapped[str]
+    # Exactly one source: a submission or a frozen draft (text change).
+    source_submission_id: Mapped[str | None]
+    source_draft_snapshot_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(f"{SCHEMA}.draft_snapshots.id")
+    )
     position: Mapped[int]
     payload: Mapped[dict[str, Any]]
 
