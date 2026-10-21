@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { importPackage, mentionWithOffsets, openCase, selectText } from "./helpers";
 
-const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture", annotator);
+const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture-spans", annotator);
 
 /** The six mark fills of the design tokens, as computed `rgb(...)` strings. */
 const markFills = (page: Page) =>

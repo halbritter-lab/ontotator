@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { authenticatedRequest, importPackage, loginExisting, openCase, selectText, submitCase } from "./helpers";
 
 test("one confirmation submits a two-layer negative finding", async ({ page }) => {
-  await importPackage(page, "multi_editable", "pkg-scenario-c", "decision-completion");
+  await importPackage(page, "multi_editable", "pkg-scenario-c-decisions", "decision-completion");
   await openCase(page, { task: "annotate" });
   await expect(page.getByRole("button", { name: /verified/i })).toHaveCount(0);
   await submitCase(page);
@@ -37,7 +37,7 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
 });
 
 test("repeated outcome keys keep decisions and zero resets without losing the note", async ({ page }) => {
-  await importPackage(page, "single", "browser-fixture", "stable-key-reviewer");
+  await importPackage(page, "single", "browser-fixture-decision-semantics", "stable-key-reviewer");
   await openCase(page, { task: "review" });
   const proposal = page.locator('.sidebar [data-list-key^="target:"]').first();
   await proposal.click();
@@ -149,7 +149,7 @@ print(json.dumps(list(annotations(units))))`, (await download.path())!], { encod
 
 
 test("new-draft spanless findings require a reason, retain it through search and reload, and protect the last mention", async ({ page }) => {
-  await importPackage(page, "single", "browser-fixture", "spanless-reason-curator");
+  await importPackage(page, "single", "browser-fixture-decision-semantics", "spanless-reason-curator");
   const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
   await openCase(page);
   const opened = await (await openedResponse).json();
@@ -205,20 +205,20 @@ test("new-draft spanless findings require a reason, retain it through search and
 });
 
 test("a lead persists the project spanless rule and new drafts explain the prohibition", async ({ page }) => {
-  await importPackage(page, "single", "browser-fixture", "spanless-settings-lead");
-  await page.goto("/#/projects/browser-fixture/settings/rules");
+  await importPackage(page, "single", "browser-fixture-decision-semantics", "spanless-settings-lead");
+  await page.goto("/#/projects/browser-fixture-decision-semantics/settings/rules");
   const mode = page.getByRole("combobox", { name: "Findings without a text span" });
   await mode.selectOption("prohibited"); await page.getByRole("button", { name: "Save rules" }).click();
   await expect(page.getByText("Rules saved.")).toBeVisible(); await page.reload(); await expect(mode).toHaveValue("prohibited");
-  await page.goto("/#/?project=browser-fixture"); await openCase(page);
+  await page.goto("/#/?project=browser-fixture-decision-semantics"); await openCase(page);
   await expect(page.getByRole("button", { name: "Add finding without a text span" })).toBeDisabled();
   await expect(page.getByText("This project requires a text span for findings.")).toBeVisible();
-  const restored = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true });
+  const restored = await authenticatedRequest(page, "/api/v1/projects/browser-fixture-decision-semantics/settings", "PATCH", { allow_spanless_findings: true });
   expect(restored.ok()).toBeTruthy();
 });
 
 test("stale rules recover to an actionable evidence repair at desktop and narrow widths", async ({ page }) => {
-  await importPackage(page, "single", "browser-fixture", "stale-policy-repair");
+  await importPackage(page, "single", "browser-fixture-decision-semantics", "stale-policy-repair");
   const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
   await openCase(page);
   const opened = await (await openedResponse).json();
@@ -231,7 +231,7 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
   expect(created.ok()).toBeTruthy();
   await page.reload();
   await expect(page.getByRole("button", { name: "Add finding without a text span" })).toBeEnabled();
-  const changed = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: false });
+  const changed = await authenticatedRequest(page, "/api/v1/projects/browser-fixture-decision-semantics/settings", "PATCH", { allow_spanless_findings: false });
   expect(changed.ok()).toBeTruthy();
   try {
     await page.getByRole("button", { name: /^Finish & Submit/ }).click();
@@ -254,7 +254,7 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
       await page.screenshot({ path: test.info().outputPath(`policy-repair-${width}.png`), fullPage: true });
     }
   } finally {
-    expect((await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true })).ok()).toBeTruthy();
+    expect((await authenticatedRequest(page, "/api/v1/projects/browser-fixture-decision-semantics/settings", "PATCH", { allow_spanless_findings: true })).ok()).toBeTruthy();
   }
 });
 
@@ -346,22 +346,22 @@ test("a project prohibiting spanless findings repairs a source only after suppor
 
 
 test("a lead enables optional reasons and an annotator creates, clears and submits a note-less finding", async ({ page, browser }) => {
-  await importPackage(page, "single", "browser-fixture", "optional-spanless-lead");
-  await page.goto("/#/projects/browser-fixture/settings/rules");
+  await importPackage(page, "single", "browser-fixture-decision-semantics", "optional-spanless-lead");
+  await page.goto("/#/projects/browser-fixture-decision-semantics/settings/rules");
   const mode = page.getByRole("combobox", { name: "Findings without a text span" });
   await mode.selectOption("optional"); await page.getByRole("button", { name: "Save rules" }).click();
   await expect(page.getByText("Rules saved.")).toBeVisible(); await page.reload(); await expect(mode).toHaveValue("optional");
   await page.getByRole("form", { name: "Rules" }).screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/spanless-modes-project-rules.png" });
-  const provisioned = await page.request.post("/__test_user__?username=optional-spanless-annotator&pseudonym=optional-spanless-annotator&projects=browser-fixture");
+  const provisioned = await page.request.post("/__test_user__?username=optional-spanless-annotator&pseudonym=optional-spanless-annotator&projects=browser-fixture-decision-semantics");
   expect(provisioned.ok()).toBeTruthy();
-  const restricted = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/members/optional-spanless-annotator", "PUT", { roles: ["annotator"], revoke_assignments: true });
+  const restricted = await authenticatedRequest(page, "/api/v1/projects/browser-fixture-decision-semantics/members/optional-spanless-annotator", "PUT", { roles: ["annotator"], revoke_assignments: true });
   expect(restricted.ok()).toBeTruthy(); expect((await restricted.json()).roles).toEqual(["annotator"]);
   const annotatorContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const annotator = await annotatorContext.newPage();
     await loginExisting(annotator, "optional-spanless-annotator");
     const openedResponse = annotator.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
-    await openCase(annotator, { projectKey: "browser-fixture" });
+    await openCase(annotator, { projectKey: "browser-fixture-decision-semantics" });
     const opened = await (await openedResponse).json();
     expect(opened.view.enforce_spanless_rules).toBe(true); expect(opened.view.require_spanless_note).toBe(false);
     await annotator.getByRole("button", { name: "Add finding without a text span" }).click();
@@ -385,7 +385,7 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
     await expect(annotator.getByRole("button", { name: "Remove", exact: true })).toBeEnabled();
     await annotator.getByRole("button", { name: "Remove", exact: true }).click(); await annotator.getByRole("button", { name: "Yes, remove" }).click();
     await expect(annotator.getByRole("heading", { name: "Mentions (0)" })).toBeVisible();
-    const prohibited = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: false });
+    const prohibited = await authenticatedRequest(page, "/api/v1/projects/browser-fixture-decision-semantics/settings", "PATCH", { allow_spanless_findings: false });
     expect(prohibited.ok()).toBeTruthy();
     await annotator.reload();
     await annotator.getByRole("button", { name: /^Finish & Submit/ }).click();
@@ -395,7 +395,7 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
     await expect(readiness).toContainText("This project requires a text span for findings.");
     await readiness.getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
     await expect(annotator.getByRole("button", { name: "Add mention", exact: true })).toBeFocused();
-    const optionalAgain = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true, require_spanless_note: false });
+    const optionalAgain = await authenticatedRequest(page, "/api/v1/projects/browser-fixture-decision-semantics/settings", "PATCH", { allow_spanless_findings: true, require_spanless_note: false });
     expect(optionalAgain.ok()).toBeTruthy();
     await annotator.reload();
     const submittedResponse = annotator.waitForResponse(r => r.url().endsWith("/submit") && r.request().method() === "POST" && r.ok());
@@ -404,7 +404,7 @@ test("a lead enables optional reasons and an annotator creates, clears and submi
     expect(submitted.snapshots[0].annotation.note).toBeUndefined(); expect(submitted.snapshots[0].annotation.evidence_refs).toEqual([]);
   } finally {
     await annotatorContext.close();
-    const restored = await authenticatedRequest(page, "/api/v1/projects/browser-fixture/settings", "PATCH", { allow_spanless_findings: true, require_spanless_note: true });
+    const restored = await authenticatedRequest(page, "/api/v1/projects/browser-fixture-decision-semantics/settings", "PATCH", { allow_spanless_findings: true, require_spanless_note: true });
     expect(restored.ok()).toBeTruthy();
   }
 });

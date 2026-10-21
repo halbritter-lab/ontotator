@@ -41,7 +41,7 @@ async function annotate(page: Page, start: number, end: number, query: string, t
 /** An independent case with one annotation "Seizure" on 14..21, selected. */
 async function openWithSeizure(page: Page, annotator: string, size = { width: 1280, height: 720 }) {
   await page.setViewportSize(size);
-  await importPackage(page, "", "browser-fixture", annotator);
+  await importPackage(page, "", "browser-fixture-tree", annotator);
   await openCase(page, { task: "annotate" });
   await expect(revision(page)).toHaveAttribute("title", "Revision 0");
   await annotate(page, 14, 21, "Seizure", SEIZURE, 1);
@@ -655,12 +655,12 @@ test.describe("ontology tree", () => {
     await expect(treeItem(page, SEIZURE)).toBeFocused();
     expect(stored).toEqual([]);
 
-    // A reload ends the page session. Choose this test's package explicitly:
-    // other specs import newer packages into the shared synthetic server.
-    await page.goto("/#/?project=browser-fixture");
-    await expect(page.locator("#project-select")).toHaveValue("browser-fixture");
+    // A reload ends the page session. Choose this spec's project explicitly:
+    // the fixture user may belong to more than one project.
+    await page.goto("/#/?project=browser-fixture-tree");
+    await expect(page.locator("#project-select")).toHaveValue("browser-fixture-tree");
     await page.reload();
-    await expect(page.locator("#project-select")).toHaveValue("browser-fixture");
+    await expect(page.locator("#project-select")).toHaveValue("browser-fixture-tree");
     // The session cookie survives the reload: still logged in, no login form.
     await expect(page.getByTestId("current-user")).toBeVisible();
     await openCase(page, { task: "annotate" });
