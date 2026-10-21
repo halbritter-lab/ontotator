@@ -115,3 +115,7 @@
 /* Case selection tools above the table (L3b) */
 .documents-selection-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-bottom: var(--space-2); }
 .documents-selection-tools .form-group { margin: 0; }
+/* The reviewer's reason under Resolve… and the review's History line. */
+.documents-review-reason { display: grid; gap: var(--space-1); margin-top: var(--space-1); }
+.documents-review-reason p { margin: 0; }
+.documents-review-reason blockquote { margin: 0; padding-inline-start: var(--space-3); border-inline-start: 3px solid var(--border-strong); }

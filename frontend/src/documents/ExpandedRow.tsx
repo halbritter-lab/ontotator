@@ -6,6 +6,7 @@ import { Time } from "../app/Time";
 import { Button } from "../ui";
 import { ConsolidationLauncher } from "../variants/ConsolidationLauncher";
 import { historyLines } from "./historyLines";
+import { reasonDocumentId, ReviewReason, useReviewReason } from "./reviewReason";
 import { versionName } from "./labels";
 import { isPlainClick } from "./RowCells";
 import { acceptanceLabel, acceptanceOf, discardLabel, isDiscarded, TextVersions, type TextVersionsTools } from "./TextVersions";
@@ -93,6 +94,8 @@ export function ExpandedRow({
   }, [revealTextVersions]);
 
   const lines = historyLines(row, data ? rows : null, { me, now });
+  // The reason of a rejecting or querying review, quoted under that review's History line.
+  const reason = useReviewReason(projectKey, reasonDocumentId(row));
   /** A reporter's display name (members by pseudonym); the label itself without one. */
   const personOf = (label: string) => textVersionTools?.members.find(member => member.pseudonym === label)?.display_name?.trim() || label;
   const problemReports = row.problem_reports ?? [];
@@ -111,6 +114,7 @@ export function ExpandedRow({
       {lines.length > 0
         ? <ul className="expanded-row-issues" aria-labelledby={`${ownId}-history`}>{lines.map(line => <li key={line.key}>
           {line.text}{line.reportId && <>{" · "}{link(reportRoute(line.reportId), "Open report")}</>}
+          {reason && line.key === `work-${reason.assignment_id}` && <ReviewReason record={reason} />}
         </li>)}</ul>
         : <p className="cell-secondary">{submissions.loading && !data ? "Loading history…" : "No history yet."}</p>}
     </div>

@@ -14,6 +14,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Checkbox, InlineConfirm, InlineMessage, Textarea } from "../ui";
 import { correctionDocumentId, LeadCorrectionPanel, openLeadCorrection } from "./LeadCorrectionPanel";
 import { stepLabel } from "./nextStepLabels";
+import { reasonDocumentId, reasonLead, ReviewReason, useReviewReason } from "./reviewReason";
 import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, PLAN_CHANGED_MESSAGE, WITHDRAW_CHECKBOX } from "./PlanChips";
 
 export interface ResolveTranslationProps {
@@ -86,6 +87,7 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
   const discardLabel = `Discard the ${row.language} translation`;
 
   const own = openLeadCorrection(row);
+  const reviewReason = useReviewReason(projectKey, reasonDocumentId(row));
 
   // Cancel in the discard or correction step returns to the three options with focus on its option.
   useEffect(() => {
@@ -141,6 +143,7 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
   }
   return <div className="documents-resolve" role="group" aria-labelledby={`${id}-title`}>
     <Heading id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{title}</Heading>
+    {reviewReason && <ReviewReason record={reviewReason} lead={reasonLead(row, reviewReason)} />}
     <div className="documents-resolve-actions">
       <Button size="sm" onClick={onAssignReview}>Assign a new review…</Button>
       {own
