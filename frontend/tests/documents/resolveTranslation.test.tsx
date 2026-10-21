@@ -178,3 +178,29 @@ it("reports a plan changed elsewhere with the current revisions and the message"
   expect(props.onDone).not.toHaveBeenCalled();
   expect(screen.queryByRole("alert")).toBeNull();
 });
+
+// ---- Documents overview O4c: the Resolve panel is inline under the row (Change 13) ----
+
+it("Resolve… renders inline under the row with the lead-correction option", async () => {
+  vi.spyOn(api, "getVariantMetadata").mockResolvedValue({ document_id: "case-0101-de", text_sha256: "sha-v1" } as VariantSummary);
+  const { container } = render(<div className="documents-row-notice-slot"><ResolveTranslation mode="resolve" row={rejected()} projectKey="p" revision={3}
+    onAssignReview={vi.fn()} onNavigate={vi.fn()} onDone={vi.fn()} onChanged={vi.fn()} onAnnounce={vi.fn()} onCancel={vi.fn()} /></div>);
+  const slot = container.firstElementChild as HTMLElement;
+  const box = within(slot).getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  // No stage block or expansion around it: the options are the panel itself.
+  expect(box.closest(".stage-block, .expanded-row")).toBeNull();
+  fireEvent.click(within(box).getByRole("button", { name: "Correct the translation…" }));
+  // F1: the lead-correction panel replaces the options in the same inline place.
+  const panel = within(slot).getByRole("group", { name: "Correct the translation, case-0101 · de" });
+  await waitFor(() => expect(document.activeElement).toBe(within(panel).getByRole("heading", { name: "Correct the translation, case-0101 · de" })));
+});
+
+it("focus goes to the inline panel heading (F5)", async () => {
+  renderResolve();
+  const heading = screen.getByRole("heading", { name: "Resolve rejected translation, case-0101 · de" });
+  await waitFor(() => expect(document.activeElement).toBe(heading));
+  expect(heading.getAttribute("tabindex")).toBe("-1");
+  cleanup();
+  renderResolve({ mode: "not_accepted", row: notAccepted() });
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Translation not accepted, case-0101 · de" })));
+});

@@ -4,12 +4,12 @@ import { api, type DocumentRowView, type RowSubmissions } from "../../src/api/cl
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
 import type { ProjectDocumentsQuery } from "../../src/app/router";
 import { formatTime } from "../../src/app/submissionLabels";
-import { ExpandedRow, type ExpandedRowProps } from "../../src/documents/ExpandedRow";
+import { ExpandedRow, FinalChoice, type ExpandedRowProps, type FinalChoiceProps } from "../../src/documents/ExpandedRow";
 import { TextVersions, type TextVersionsTools } from "../../src/documents/TextVersions";
 import type { RowSubmissionsState } from "../../src/documents/useRowSubmissions";
 import { refKey } from "../../src/variants/versionState";
 import {
-  final, item, notInPlanRow, planRow, recordedVersion, round, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS6, stepOf, submission, submissions, translationReview, version, work, type DocumentsScenario,
+  final, item, notInPlanRow, planRow, recordedVersion, round, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, stepOf, submission, submissions, translationReview, version, work, type DocumentsScenario,
 } from "./fixtures";
 
 afterEach(cleanup);
@@ -24,7 +24,14 @@ function state(data: RowSubmissions | null, overrides: Partial<RowSubmissionsSta
 
 function renderRow(target: DocumentRowView, data: RowSubmissions | null, props: Partial<ExpandedRowProps> = {}) {
   const onNavigate = vi.fn();
-  const utils = render(<ExpandedRow row={target} projectKey="p" query={query} submissions={state(data)} onNavigate={onNavigate} now={now} onSelectFinal={vi.fn()} {...props} />);
+  const utils = render(<ExpandedRow row={target} projectKey="p" query={query} submissions={state(data)} onNavigate={onNavigate} now={now} {...props} />);
+  return { ...utils, onNavigate };
+}
+
+/** The interim final-result choice under the row (Choose final…, Review changes…; O6 replaces it). */
+function renderChoice(target: DocumentRowView, data: RowSubmissions | null, props: Partial<FinalChoiceProps> = {}) {
+  const onNavigate = vi.fn();
+  const utils = render(<FinalChoice row={target} projectKey="p" query={query} submissions={state(data)} onNavigate={onNavigate} now={now} onSelectFinal={vi.fn()} onClose={vi.fn()} {...props} />);
   return { ...utils, onNavigate };
 }
 
@@ -58,72 +65,155 @@ const chainData = (overrides: Partial<RowSubmissions> = {}) => submissions("c", 
 });
 
 const noticeLines = (container: HTMLElement) => [...container.querySelectorAll(".selection-notice-lines > li")].map(line => line.textContent);
+// ---- Slim expansion (documents overview, O4c) ----
 
-it("renders a region labelled by the row with stage blocks, Submissions and More but no Issues without issues", () => {
-  const { target, data } = scenarioRow(scenarioS1(), "en");
-  renderRow(target, data);
-  const region = screen.getByRole("region", { name: "case-0042 · en" });
-  expect(within(region).getAllByRole("heading", { level: 3 }).map(heading => heading.textContent)).toEqual(["Annotation", "Final result", "Submissions (2)", "More"]);
-  expect(screen.getByRole("heading", { name: "Submissions (2)" }).getAttribute("tabindex")).toBe("-1");
-});
+const ana = { pseudonym: "ann-0003", display_name: "Ana Weber", is_me: false };
 
-it("uses the caller's label and id when given", () => {
-  const { target, data } = scenarioRow(scenarioS1(), "en");
-  render(<><span id="row-header">case-0042 · en row</span><ExpandedRow row={target} projectKey="p" query={{}} submissions={state(data)} onNavigate={vi.fn()} id="region-1" labelledBy="row-header" /></>);
-  const region = screen.getByRole("region", { name: "case-0042 · en row" });
-  expect(region.id).toBe("region-1");
-});
-
-it("shows the problem report line with excerpt, reporter, time, task state and Open report", () => {
-  const scenario = scenarioS6();
-  const { target, data } = scenarioRow(scenario, "de");
-  const long = "x".repeat(130);
-  const withLong = { ...target, issues: target.issues.map(entry => ({ ...entry, report: { ...entry.report!, excerpt: long } })) };
-  const { onNavigate } = renderRow(withLong, data);
-  const issues = screen.getByRole("heading", { name: "Issues" }).parentElement!;
-  const line = within(issues).getByRole("listitem");
-  expect(line.textContent).toBe(`${"x".repeat(120)}… · ann-0005 · ${time("2026-10-19T07:40:00Z")} · task paused Open report`);
-  fireEvent.click(within(line).getByRole("link", { name: "Open report" }));
-  expect(onNavigate).toHaveBeenCalledWith({ name: "projectProblemReport", key: "p", reportId: "report-0390", documents: query });
-});
-
-it("shows the orphan pause with Resume task, translation and reviewer lines, and the source change note", async () => {
-  const target = chainRow({
-    final: null,
-    issues: [
-      item({ code: "TASK_PAUSED_WITHOUT_REPORT", cause_id: "TASK_PAUSED_WITHOUT_REPORT:7", category: "report-or-pause", report_id: "rep-1", assignment_id: 3, author_label: "ann-0004" }),
-      item({ code: "TRANSLATION_NOT_ACCEPTED", cause_id: "TRANSLATION_NOT_ACCEPTED:c-de-v2", category: "translation", document_id: "c-de-v2", version: 2, review_decision: "rejected" }),
+/** case-107 · de: Ana accepted v1, Tom submitted, a moved assignment, one report. */
+function historyRow(overrides: Partial<DocumentRowView> = {}): DocumentRowView {
+  const v1 = version({ document_id: "case-107-de", origin: "machine_translation", translation_status: "accepted", latest_review_decision: "accepted_corrected", is_newest_in_chain: false });
+  const v2 = version({ document_id: "case-107-de-v2", chain_id: "case-107-de", version: 2, origin: "correction", derived_from: "case-107-de", translation_status: "accepted" });
+  return row({
+    case_id: "case-107", language: "de", versions: [v1, v2],
+    work: [
+      work({ assignment_id: 1, document_id: "case-107-de", task: "translation_review", status: "submitted", author_label: "ann-0003", person: ana }),
+      work({ assignment_id: 2, document_id: "case-107-de-v2", status: "submitted", author_label: "ann-0004" }),
     ],
-    notes: [
-      item({ code: "SOURCE_UPDATE_UNREVIEWED", cause_id: "SOURCE_UPDATE_UNREVIEWED:c-de", document_id: "c-de", version: 1 }),
-      item({ code: "REVIEWER_NEEDED", cause_id: "REVIEWER_NEEDED:c-de-v2", document_id: "c-de-v2", version: 2 }),
-      item({ code: "ROUND_REVIEW_PENDING", cause_id: "ROUND_REVIEW_PENDING:r", author_label: "ann-0004" }),
-    ],
+    moved_work: [work({ assignment_id: 3, document_id: "case-107-de", status: "in_progress", author_label: "ann-0005", moved_to_version: 2 })],
+    problem_reports: [{ report_id: "r-1", title: "Cut off", reporter_label: "ann-0004", created_at: "2026-10-19T08:00:00Z", state: "open", active_hold_count: 0 }],
+    ...overrides,
   });
-  const { onNavigate, container } = renderRow(target, chainData());
-  const lines = [...container.querySelectorAll(".expanded-row-issues > li")].map(line => line.textContent);
-  expect(lines).toEqual([
-    "ann-0004's task is paused, but its report is resolved. Resume task",
-    "v2 was rejected in review. Text versions",
-    "The source text changed. Review source change",
-    "v2 needs a translation reviewer. Text versions",
-  ]);
-  fireEvent.click(screen.getByRole("link", { name: "Resume task" }));
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectProblemReport", key: "p", reportId: "rep-1", action: "resume", documents: query });
-  fireEvent.click(screen.getByRole("link", { name: "Review source change" }));
-  expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectCase", key: "p", caseId: "c", variant: "c-de", documents: query });
+}
+const historyData = () => submissions("case-107", "de", {
+  submissions: [
+    submission({ submission_id: "s-a", document_id: "case-107-de-v2", version: 2, author_label: "ann-0004", recorded_at: "2026-10-19T09:00:00Z" }),
+    submission({ submission_id: "s-b", document_id: "case-107-de-v2", version: 2, author_label: "ann-0006", recorded_at: "2026-10-19T10:00:00Z" }),
+  ],
+});
 
-  const details = screen.getByText("Text versions (2)").closest("details")!;
-  expect(details.open).toBe(false);
-  fireEvent.click(screen.getAllByRole("button", { name: "Text versions" })[0]);
+it("is one region 'History, case-107 · de'", () => {
+  renderRow(historyRow(), historyData(), { id: "region-1" });
+  const regions = screen.getAllByRole("region");
+  expect(regions).toHaveLength(1);
+  expect(regions[0].getAttribute("aria-label")).toBe("History, case-107 · de");
+  expect(regions[0].id).toBe("region-1");
+});
+
+it("shows History, Plan chips, Text versions (n), Assign annotation review…, Start consolidation…, Problem reports (n), Technical details", () => {
+  const onAssign = vi.fn();
+  const target = historyRow();
+  const { container } = renderRow(target, historyData(), { onAssign, plan: <button type="button">Review</button>, planRevision: 4 });
+  const region = screen.getByRole("region", { name: "History, case-107 · de" });
+  const history = within(region).getByRole("list", { name: "History" });
+  expect(within(history).getAllByRole("listitem").map(line => line.textContent)).toEqual([
+    "Review: Ana Weber (ann-0003) · Accepted with corrections · v1 → v2",
+    `Annotation: ann-0004 · Initial submission · 3 findings · v2 · ${time("2026-10-19T09:00:00Z").split(", ")[1]}`,
+    `Annotation: ann-0006 · Initial submission · 3 findings · v2 · ${time("2026-10-19T10:00:00Z").split(", ")[1]}`,
+    "Annotation: ann-0005 · moved to v2",
+  ]);
+  const plan = within(region).getByRole("group", { name: "Plan" });
+  expect(within(plan).getByRole("button", { name: "Review" })).toBeTruthy();
+  const summaries = [...container.querySelectorAll("details > summary")].map(summary => summary.textContent);
+  expect(summaries).toEqual(["Text versions (2)", "Start consolidation…", "Problem reports (1)", "Technical details"]);
+  fireEvent.click(within(region).getByRole("button", { name: "Assign annotation review…" }));
+  expect(onAssign).toHaveBeenCalledWith(target, "review");
+  const technical = screen.getByText("Technical details").closest("details")!;
+  expect(within(technical).getByText("Plan revision").nextElementSibling!.textContent).toBe("4");
+  for (const value of ["case-107-de", "case-107-de-v2", "s-a", "s-b"]) expect(technical.textContent).toContain(value);
+  // Consolidation finds the two submissions on v2.
+  expect(within(screen.getByText("Start consolidation…").closest("details")!).getByRole("button", { name: "Consolidate results" })).toBeTruthy();
+});
+
+it("has no stage blocks, issues list or submissions table", () => {
+  const target = historyRow({
+    issues: [item({ code: "TRANSLATION_NOT_ACCEPTED", cause_id: "TRANSLATION_NOT_ACCEPTED:x", category: "translation", document_id: "case-107-de-v2", version: 2, review_decision: "rejected" })],
+    final: final({ case_id: "case-107", language: "de", document_id: "case-107-de-v2", submission_id: "s-a" }),
+  });
+  const { container } = renderRow(target, historyData(), { onAssign: vi.fn() });
+  expect(container.querySelector(".stage-blocks, .stage-block")).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Issues" })).toBeNull();
+  expect(screen.queryByRole("heading", { name: /^Submissions/ })).toBeNull();
+  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByRole("button", { name: /Use as final|Replace…|Keep final result/ })).toBeNull();
+  expect(screen.getByRole("list", { name: "History" }).textContent).toContain("Final: chosen by lead-0002");
+});
+
+it("Text versions shows a revoked work item with moved_to_version as moved to v2", () => {
+  renderRow(historyRow(), historyData());
+  const versions = screen.getByText("Text versions (2)", { selector: "summary" }).closest("details")!;
+  const onV1 = within(versions).getByRole("list", { name: "Assignments on v1" });
+  expect(within(onV1).getByText("ann-0005 · Annotation · moved to v2")).toBeTruthy();
+  expect(within(onV1).queryByText(/In progress/)).toBeNull();
+});
+
+it("says No history yet. and links a paused task's report", () => {
+  const { onNavigate } = renderRow(row({ case_id: "c", language: "de" }), submissions("c", "de"));
+  expect(screen.getByText("No history yet.")).toBeTruthy();
+  cleanup();
+  const held = row({ case_id: "c", language: "de", notes: [item({ code: "TASK_ON_HOLD", cause_id: "hold-1", author_label: "ann-0004", report_id: "rep-1" })] });
+  const second = renderRow(held, submissions("c", "de"));
+  const line = within(screen.getByRole("list", { name: "History" })).getByRole("listitem");
+  expect(line.textContent).toBe("Task paused: ann-0004 · Open report");
+  fireEvent.click(within(line).getByRole("link", { name: "Open report" }));
+  expect(second.onNavigate).toHaveBeenCalledWith({ name: "projectProblemReport", key: "p", reportId: "rep-1", documents: query });
+  expect(onNavigate).not.toHaveBeenCalled();
+});
+
+it("opens and focuses Text versions on request (interim text-change actions)", async () => {
+  const onRevealed = vi.fn();
+  renderRow(historyRow(), historyData(), { revealTextVersions: true, onTextVersionsRevealed: onRevealed });
+  const details = screen.getByText("Text versions (2)", { selector: "summary" }).closest("details")!;
   expect(details.open).toBe(true);
-  await waitFor(() => expect(document.activeElement).toBe(screen.getByText("Text versions (2)")));
+  await waitFor(() => expect(document.activeElement).toBe(details.querySelector("summary")));
+  expect(onRevealed).toHaveBeenCalled();
+});
+
+it("offers Assign a new review… for lead and override acceptances only", () => {
+  const accepted = (source: "lead" | "override" | "package") => planRow("c", "de", stepOf("assign_annotation", { stage: "annotation" }), {
+    plan_row: { review: false, annotate: true, review_applicable: true, discarded: false },
+    versions: [recordedVersion({
+      document_id: "c-de", chain_name: "DeepL", origin: "machine_translation", translation_status: "accepted", accepted_without_review: source === "override",
+      acceptance: { source, reason: source === "package" ? null : "Reviewed by the partner site", accepted_at: "2026-10-20T11:40:00Z", accepted_by: null },
+    })],
+  });
+  for (const source of ["lead", "override"] as const) {
+    const onAssign = vi.fn();
+    const target = accepted(source);
+    renderRow(target, submissions("c", "de"), { onAssign });
+    fireEvent.click(screen.getByRole("button", { name: "Assign a new review…" }));
+    expect(onAssign).toHaveBeenCalledWith(target, "translation_review", { newReviewOfAccepted: true });
+    cleanup();
+  }
+  renderRow(accepted("package"), submissions("c", "de"), { onAssign: vi.fn() });
+  expect(screen.queryByRole("button", { name: "Assign a new review…" })).toBeNull();
+});
+
+it("keeps problem reports listed for rows not in plan", () => {
+  const target = notInPlanRow("c", "de", {
+    problem_reports: [{ report_id: "r-9", title: "Wrong text", reporter_label: "ann-0004", created_at: "2026-10-19T08:00:00Z", state: "open", active_hold_count: 1 }],
+  });
+  renderRow(target, submissions("c", "de"));
+  const reports = screen.getByText("Problem reports (1)").closest("details")!;
+  expect(within(reports).getByRole("listitem").textContent).toContain("Wrong text · ann-0004");
+  expect(within(reports).getByRole("link", { name: "Open report" })).toBeTruthy();
+});
+
+// ---- Interim final-result choice under the row (moved out of the expansion; O6 replaces it) ----
+
+it("is a region 'Final result · case · language' with Submissions (n) and Close", () => {
+  const { target, data } = scenarioRow(scenarioS1(), "en");
+  const onClose = vi.fn();
+  renderChoice(target, data, { onClose });
+  const region = screen.getByRole("region", { name: "Final result · case-0042 · en" });
+  expect(within(region).getByRole("heading", { name: "Submissions (2)" }).getAttribute("tabindex")).toBe("-1");
+  fireEvent.click(within(region).getByRole("button", { name: "Close" }));
+  expect(onClose).toHaveBeenCalled();
 });
 
 it("renders exactly the three lines of the S0 example", () => {
   const { target, data } = scenarioRow(scenarioS0(), "de");
   const onKeep = vi.fn();
-  const { container } = renderRow(target, data, { onKeep });
+  const { container } = renderChoice(target, data, { onKeep });
   expect(screen.queryByRole("heading", { name: "Issues" })).toBeNull();
   const notice = container.querySelector(".selection-notice")!;
   expect(noticeLines(container)).toEqual([
@@ -147,7 +237,7 @@ it("words every acknowledgeable cause as in the spec", () => {
     ],
   });
   const onKeep = vi.fn();
-  const { container } = renderRow(target, chainData(), { onKeep });
+  const { container } = renderChoice(target, chainData(), { onKeep });
   expect(noticeLines(container)).toEqual([
     "Round 1 (ann-0004) is abandoned.",
     "Round 1 (ann-0004) has been superseded by Round 2.",
@@ -165,7 +255,7 @@ it("adds non-actionable and waiting lines without a Keep action", () => {
   const v3 = version({ document_id: "c-de-v3", chain_id: "c-de", chain_name: "DeepL", version: 3, origin: "correction", derived_from: "c-de-v2", translation_status: "ready_for_review" });
   const target = chainRow({ versions: [v1, v2, v3] });
   const data = chainData({ open_translation_reviews: [translationReview({ assignment_id: 9, document_id: "c-de-v3", version: 3, reviewer_label: "ann-0009" })] });
-  const { container } = renderRow(target, data, { onKeep: vi.fn() });
+  const { container } = renderChoice(target, data, { onKeep: vi.fn() });
   expect(noticeLines(container)).toEqual([
     "v2 was queried in review. No action needed.",
     "Waiting: translation review of v3 by ann-0009 is open. You can choose again once it is submitted.",
@@ -175,7 +265,7 @@ it("adds non-actionable and waiting lines without a Keep action", () => {
 
 it("renders the S3 waiting line for the open translation review", () => {
   const { target, data } = scenarioRow(scenarioS3(), "de");
-  const { container } = renderRow(target, data, { onKeep: vi.fn() });
+  const { container } = renderChoice(target, data, { onKeep: vi.fn() });
   expect(noticeLines(container)).toContain("Waiting: translation review of v3 by rev-0007 is open. You can choose again once it is submitted.");
 });
 
@@ -183,7 +273,7 @@ it("offers Use as final without a final result and Compare… with a preselected
   const target = chainRow({ final: null });
   const onSelectFinal = vi.fn();
   const data = chainData({ submissions: chainData().submissions.slice(0, 2) });
-  const { onNavigate } = renderRow(target, data, { onSelectFinal });
+  const { onNavigate } = renderChoice(target, data, { onSelectFinal });
   const use = screen.getAllByRole("button", { name: "Use as final…" });
   expect(use).toHaveLength(2);
   expect(document.getElementById(use[0].getAttribute("aria-describedby")!)!.textContent).toMatch(/^Annotation · Round 1 · ann-0004 · de v1 · /);
@@ -204,7 +294,7 @@ it("offers Replace and Compare on non-final rows and nothing on the final row", 
   const base = chainData();
   const data = { ...base, submissions: [...base.submissions, submission({ submission_id: "s3", document_id: "c-de-v2", version: 2, author_label: "ann-0005", recorded_at: "2026-10-18T13:00:00Z" })] };
   const onSelectFinal = vi.fn();
-  const { onNavigate } = renderRow(target, data, { onSelectFinal });
+  const { onNavigate } = renderChoice(target, data, { onSelectFinal });
   const rows = screen.getAllByRole("row").slice(1);
   expect(within(rows[0]).queryByRole("button")).toBeNull();
   expect(within(rows[0]).queryByRole("link", { name: "Compare" })).toBeNull();
@@ -221,7 +311,7 @@ it("offers Replace and Compare on non-final rows and nothing on the final row", 
 
 it("links View to the case viewer with a submission ref and the Documents query", () => {
   const { target, data } = scenarioRow(scenarioS1(), "en");
-  const { onNavigate } = renderRow(target, data);
+  const { onNavigate } = renderChoice(target, data);
   fireEvent.click(screen.getByRole("link", { name: /^View Annotation · Initial submission · ann-0002 · en v1/ }));
   expect(onNavigate).toHaveBeenCalledWith({ name: "projectCase", key: "p", caseId: "case-0042", variant: "case-0042-en", annotations: refKey({ kind: "submission", id: "sub-0042-b" }), documents: query });
 });
@@ -229,7 +319,7 @@ it("links View to the case viewer with a submission ref and the Documents query"
 it("keeps actions unavailable while submissions load and offers Retry after an error", () => {
   const { target, data } = scenarioRow(scenarioS1(), "en");
   const onSelectFinal = vi.fn();
-  render(<ExpandedRow row={{ ...target, final: null }} projectKey="p" query={{}} submissions={state(data, { loading: true })} onNavigate={vi.fn()} onSelectFinal={onSelectFinal} />);
+  render(<FinalChoice onClose={vi.fn()} row={{ ...target, final: null }} projectKey="p" query={{}} submissions={state(data, { loading: true })} onNavigate={vi.fn()} onSelectFinal={onSelectFinal} />);
   expect(screen.getByText("Loading submissions…")).toBeTruthy();
   const use = screen.getAllByRole("button", { name: "Use as final…" })[0];
   expect(use.getAttribute("aria-disabled")).toBe("true");
@@ -237,7 +327,7 @@ it("keeps actions unavailable while submissions load and offers Retry after an e
   expect(onSelectFinal).not.toHaveBeenCalled();
   cleanup();
   const retry = vi.fn();
-  render(<ExpandedRow row={target} projectKey="p" query={{}} submissions={state(null, { error: new Error("boom"), retry })} onNavigate={vi.fn()} />);
+  render(<FinalChoice onClose={vi.fn()} row={target} projectKey="p" query={{}} submissions={state(null, { error: new Error("boom"), retry })} onNavigate={vi.fn()} />);
   expect(screen.getByText(/Could not load submissions/)).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   expect(retry).toHaveBeenCalled();
@@ -248,7 +338,7 @@ it("blocks the lead's own result when the project keeps adjudication separate", 
   const data = chainData({ submissions: [submission({ submission_id: "mine", document_id: "c-de", author_label: "lead-0002", is_me: true })] });
   const onSelectFinal = vi.fn();
   const onAnnounce = vi.fn();
-  renderRow(target, data, { onSelectFinal, onAnnounce, adjudicatorNotAnnotator: true });
+  renderChoice(target, data, { onSelectFinal, onAnnounce, adjudicatorNotAnnotator: true });
   const use = screen.getByRole("button", { name: "Use as final…" });
   expect(use.getAttribute("aria-disabled")).toBe("true");
   const reasonId = use.getAttribute("aria-describedby")!.split(" ")[1];
@@ -260,22 +350,71 @@ it("blocks the lead's own result when the project keeps adjudication separate", 
 
 it("renders confirmations below their submission and the Keep confirmation below the notice", () => {
   const { target, data } = scenarioRow(scenarioS0(), "de");
-  const { container } = renderRow(target, data, { onKeep: vi.fn(), keepConfirm: <p>Keep confirm</p>, renderConfirm: entry => entry.submission_id === "sub-s0-review" ? <p>Replace confirm</p> : null });
+  const { container } = renderChoice(target, data, { onKeep: vi.fn(), keepConfirm: <p>Keep confirm</p>, renderConfirm: entry => entry.submission_id === "sub-s0-review" ? <p>Replace confirm</p> : null });
   expect(screen.getByText("Keep confirm").parentElement).toBe(container.querySelector(".selection-notice"));
   expect(screen.getByText("Replace confirm").closest("tr")!.className).toBe("data-table-expanded");
 });
-
-it("keeps More collapsed with consolidation, text versions and technical details", () => {
-  const { target, data } = scenarioRow(scenarioS1(), "en");
-  renderRow(target, data);
-  const more = screen.getByRole("heading", { name: "More" }).parentElement!;
-  const details = [...more.querySelectorAll("details")];
-  expect(details.map(entry => entry.querySelector("summary")!.textContent)).toEqual(["Start consolidation…", "Text versions (1)", "Technical details"]);
-  expect(details.every(entry => !entry.open)).toBe(true);
-  expect(within(details[0]).getByRole("button", { name: "Consolidate results" })).toBeTruthy();
-  const technical = details[2].textContent!;
-  for (const value of ["case-0042-en", "sub-0042-a", "sub-0042-b", "mode independent"]) expect(technical).toContain(value);
+it("names the Submissions heading without a count until the submissions are loaded", () => {
+  const { target } = scenarioRow(scenarioS1(), "en");
+  render(<FinalChoice onClose={vi.fn()} row={target} projectKey="p" query={query} submissions={state(null, { loading: true })} onNavigate={vi.fn()} now={now} />);
+  expect(screen.getByRole("heading", { level: 3, name: "Submissions" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: /^Submissions \(/ })).toBeNull();
 });
+
+it("renders Submissions as two-line list items with the confirmation below its item in the list layout", () => {
+  const { target, data } = scenarioRow(scenarioS1(), "en");
+  const chosen = data.submissions[1];
+  renderChoice(target, data, { layout: "list", renderConfirm: entry => (entry.submission_id === chosen.submission_id ? <p>Confirm here</p> : null) });
+  expect(screen.queryByRole("table")).toBeNull();
+  const list = screen.getByRole("list", { name: `Submissions, ${target.case_id} · en` });
+  const items = within(list).getAllByRole("listitem");
+  expect(items).toHaveLength(data.submissions.length);
+  expect(items[0].classList.contains("final-row")).toBe(true);
+  expect(within(items[0]).getByText("Final")).toBeTruthy();
+  expect(items[0].querySelector("a")!.id).toBe("documents-row-case-0042-en-final-view");
+  const lines = items[1].querySelectorAll(".submissions-list-line");
+  expect(lines).toHaveLength(2);
+  expect(within(lines[0] as HTMLElement).getByRole("link", { name: /^View / })).toBeTruthy();
+  expect(lines[1].textContent).toContain(`${chosen.finding_count} finding`);
+  expect(within(lines[1] as HTMLElement).getByRole("button", { name: "Replace…" })).toBeTruthy();
+  expect(items[1].querySelector(".submissions-list-confirm")!.textContent).toBe("Confirm here");
+  expect(items[0].querySelector(".submissions-list-confirm")).toBeNull();
+});
+
+it("shows Submissions only when there is one or a final", () => {
+  const target = planRow("case-0101", "de", stepOf("assign_translation_review"));
+  renderChoice(target, submissions("case-0101", "de"));
+  expect(screen.queryByRole("heading", { name: /^Submissions/ })).toBeNull();
+  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByText("No submissions yet.")).toBeNull();
+  cleanup();
+
+  // While loading without a final result nothing but a status is shown.
+  render(<FinalChoice onClose={vi.fn()} row={target} projectKey="p" query={query} submissions={state(null, { loading: true })} onNavigate={vi.fn()} now={now} />);
+  expect(screen.queryByRole("heading", { name: /^Submissions/ })).toBeNull();
+  expect(screen.getByText("Loading submissions…")).toBeTruthy();
+  cleanup();
+
+  const withFinal = { ...target, final: final({ case_id: "case-0101", language: "de", document_id: "case-0101-de", submission_id: "s1" }) };
+  renderChoice(withFinal, submissions("case-0101", "de"));
+  expect(screen.getByRole("heading", { name: "Submissions (0)" })).toBeTruthy();
+  cleanup();
+
+  const { target: s1, data } = scenarioRow(scenarioS1(), "en");
+  renderChoice({ ...s1, final: null }, data);
+  expect(screen.getByRole("heading", { name: "Submissions (2)" })).toBeTruthy();
+});
+it("shows Guidelines v2 (current: v3) in the submissions table", async () => {
+  const listing = vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineListing([guidelineSummary(3), guidelineSummary(2)]));
+  try {
+    const target = row({ case_id: "g", language: "de" });
+    renderChoice(target, submissions("g", "de", { submissions: [submission({ submission_id: "s-g", document_id: "g-de", guideline_version: 2 })] }));
+    expect(await screen.findByText("Guidelines v2 (current: v3)")).toBeTruthy();
+    expect(listing).toHaveBeenCalledWith("p");
+  } finally { listing.mockRestore(); }
+});
+
+// ---- Text versions ----
 
 it("lists text versions with origin, status, chain name, work and per-version checkboxes", () => {
   const { target, data } = scenarioRow(scenarioS4(), "fr");
@@ -318,33 +457,6 @@ it("shows a queried version as Queried (stored decision \"query\"), not Reviewed
   expect(within(list).getByText("Queried").closest(".status-pill")!.className).toContain("status-pill--warning");
 });
 
-it("names the Submissions heading without a count until the submissions are loaded", () => {
-  const { target } = scenarioRow(scenarioS1(), "en");
-  render(<ExpandedRow row={target} projectKey="p" query={query} submissions={state(null, { loading: true })} onNavigate={vi.fn()} now={now} />);
-  expect(screen.getByRole("heading", { level: 3, name: "Submissions" })).toBeTruthy();
-  expect(screen.queryByRole("heading", { name: /^Submissions \(/ })).toBeNull();
-});
-
-it("renders Submissions as two-line list items with the confirmation below its item in the list layout", () => {
-  const { target, data } = scenarioRow(scenarioS1(), "en");
-  const chosen = data.submissions[1];
-  renderRow(target, data, { layout: "list", renderConfirm: entry => (entry.submission_id === chosen.submission_id ? <p>Confirm here</p> : null) });
-  expect(screen.queryByRole("table")).toBeNull();
-  const list = screen.getByRole("list", { name: `Submissions, ${target.case_id} · en` });
-  const items = within(list).getAllByRole("listitem");
-  expect(items).toHaveLength(data.submissions.length);
-  expect(items[0].classList.contains("final-row")).toBe(true);
-  expect(within(items[0]).getByText("Final")).toBeTruthy();
-  expect(items[0].querySelector("a")!.id).toBe("documents-row-case-0042-en-final-view");
-  const lines = items[1].querySelectorAll(".submissions-list-line");
-  expect(lines).toHaveLength(2);
-  expect(within(lines[0] as HTMLElement).getByRole("link", { name: /^View / })).toBeTruthy();
-  expect(lines[1].textContent).toContain(`${chosen.finding_count} finding`);
-  expect(within(lines[1] as HTMLElement).getByRole("button", { name: "Replace…" })).toBeTruthy();
-  expect(items[1].querySelector(".submissions-list-confirm")!.textContent).toBe("Confirm here");
-  expect(items[0].querySelector(".submissions-list-confirm")).toBeNull();
-});
-
 it("names the people on text version work with display name and pseudonym", () => {
   const document = version({ document_id: "c-de" });
   const target = row({ case_id: "c", language: "de", versions: [document], work: [
@@ -358,42 +470,6 @@ it("names the people on text version work with display name and pseudonym", () =
 });
 
 // ---- Lead workflow (L4) ----
-
-it("shows Submissions only when there is one or a final", () => {
-  const target = planRow("case-0101", "de", stepOf("assign_translation_review"));
-  renderRow(target, submissions("case-0101", "de"));
-  expect(screen.queryByRole("heading", { name: /^Submissions/ })).toBeNull();
-  expect(screen.queryByRole("table")).toBeNull();
-  expect(screen.queryByText("No submissions yet.")).toBeNull();
-  cleanup();
-
-  // While loading without a final result nothing but a status is shown.
-  render(<ExpandedRow row={target} projectKey="p" query={query} submissions={state(null, { loading: true })} onNavigate={vi.fn()} now={now} />);
-  expect(screen.queryByRole("heading", { name: /^Submissions/ })).toBeNull();
-  expect(screen.getByText("Loading submissions…")).toBeTruthy();
-  cleanup();
-
-  const withFinal = { ...target, final: final({ case_id: "case-0101", language: "de", document_id: "case-0101-de", submission_id: "s1" }) };
-  renderRow(withFinal, submissions("case-0101", "de"));
-  expect(screen.getByRole("heading", { name: "Submissions (0)" })).toBeTruthy();
-  cleanup();
-
-  const { target: s1, data } = scenarioRow(scenarioS1(), "en");
-  renderRow({ ...s1, final: null }, data);
-  expect(screen.getByRole("heading", { name: "Submissions (2)" })).toBeTruthy();
-});
-
-it("More holds Start consolidation…, Text versions, Problem reports, Technical details with IDs and plan revision", () => {
-  const { target, data } = scenarioRow(scenarioS1(), "en");
-  const withReport = { ...target, problem_reports: [{ report_id: "r-1", title: "Cut off", reporter_label: "ann-0004", created_at: "2026-10-19T08:00:00Z", state: "open" as const, active_hold_count: 0 }] };
-  renderRow(withReport, data, { planRevision: 4 });
-  const more = screen.getByRole("heading", { name: "More" }).parentElement!;
-  const details = [...more.querySelectorAll("details")];
-  expect(details.map(entry => entry.querySelector("summary")!.textContent)).toEqual(["Start consolidation…", "Text versions (1)", "Problem reports (1)", "Technical details"]);
-  const technical = details[3];
-  expect(within(technical).getByText("Plan revision").nextElementSibling!.textContent).toBe("4");
-  expect(technical.textContent).toContain("case-0042-en");
-});
 
 it("labels acceptances and discarded versions in Text versions", () => {
   const lead = recordedVersion({
@@ -429,45 +505,3 @@ it("labels acceptances and discarded versions in Text versions", () => {
   expect(within(list).getByText("Discarded").closest(".status-pill")).toBeTruthy();
 });
 
-it("offers Assign a new review… for lead and override acceptances only", () => {
-  const accepted = (source: "lead" | "override" | "package") => planRow("c", "de", stepOf("assign_annotation", { stage: "annotation" }), {
-    plan_row: { review: false, annotate: true, review_applicable: true, discarded: false },
-    versions: [recordedVersion({
-      document_id: "c-de", chain_name: "DeepL", origin: "machine_translation", translation_status: "accepted", accepted_without_review: source === "override",
-      acceptance: { source, reason: source === "package" ? null : "Reviewed by the partner site", accepted_at: "2026-10-20T11:40:00Z", accepted_by: null },
-    })],
-  });
-  for (const source of ["lead", "override"] as const) {
-    const onAssign = vi.fn();
-    const target = accepted(source);
-    renderRow(target, submissions("c", "de"), { onAssign });
-    const block = screen.getByRole("group", { name: "Translation review" });
-    fireEvent.click(within(block).getByRole("button", { name: "Assign a new review…" }));
-    expect(onAssign).toHaveBeenCalledWith(target, "translation_review", { newReviewOfAccepted: true });
-    cleanup();
-  }
-  renderRow(accepted("package"), submissions("c", "de"), { onAssign: vi.fn() });
-  expect(screen.getByRole("group", { name: "Translation review" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Assign a new review…" })).toBeNull();
-});
-
-it("keeps open problem reports listed under More for rows not in plan", () => {
-  const target = notInPlanRow("c", "de", {
-    problem_reports: [{ report_id: "r-9", title: "Wrong text", reporter_label: "ann-0004", created_at: "2026-10-19T08:00:00Z", state: "open", active_hold_count: 1 }],
-  });
-  renderRow(target, submissions("c", "de"));
-  expect(screen.getByText("Not in plan")).toBeTruthy();
-  const reports = screen.getByText("Problem reports (1)").closest("details")!;
-  expect(within(reports).getByRole("listitem").textContent).toContain("Wrong text · ann-0004");
-  expect(within(reports).getByRole("link", { name: "Open report" })).toBeTruthy();
-});
-
-it("shows Guidelines v2 (current: v3) in the submissions table", async () => {
-  const listing = vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineListing([guidelineSummary(3), guidelineSummary(2)]));
-  try {
-    const target = row({ case_id: "g", language: "de" });
-    renderRow(target, submissions("g", "de", { submissions: [submission({ submission_id: "s-g", document_id: "g-de", guideline_version: 2 })] }));
-    expect(await screen.findByText("Guidelines v2 (current: v3)")).toBeTruthy();
-    expect(listing).toHaveBeenCalledWith("p");
-  } finally { listing.mockRestore(); }
-});

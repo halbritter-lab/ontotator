@@ -123,7 +123,8 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
       const name = versionName(version.version, version.chain_name, row.parallel_roots);
       const badge = statusBadgeText(version.translation_status, version.latest_review_decision, version.accepted_without_review);
       const view: Route = { name: "projectCase", key: projectKey, caseId: row.case_id, variant: version.document_id, ...documents };
-      const work = row.work.filter(item => item.document_id === version.document_id);
+      // Moved tasks (text change, "Move to v2") stay listed on their old version as history.
+      const work = [...row.work, ...(row.moved_work ?? [])].filter(item => item.document_id === version.document_id);
       const variant = tools?.variants.get(version.document_id);
       const fullName = `${name} of ${rowName(row)}`;
       const checkboxId = `text-version-select-${encodeURIComponent(version.document_id)}`;
@@ -151,9 +152,10 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
         {discarded && discardLabel(version, now) !== "Discarded" && <p className="text-version-record">{discardLabel(version, now)}</p>}
         {work.length > 0 && <ul className="text-version-work" aria-label={`Assignments on ${name}`}>
           {work.map(item => {
-            const assignment = tools?.assignments.find(entry => entry.id === item.assignment_id && entry.document_id === version.document_id && !entry.revoked_at);
+            const moved = item.moved_to_version ?? null;
+            const assignment = moved == null ? tools?.assignments.find(entry => entry.id === item.assignment_id && entry.document_id === version.document_id && !entry.revoked_at) : undefined;
             return <li key={item.assignment_id}>
-              <span>{personLabel(item.author_label, item.is_me, item.person)} · {labelFor(taskLabels, item.task)} · {labelFor(assignmentStatusLabels, item.status)}</span>
+              <span>{personLabel(item.author_label, item.is_me, item.person)} · {labelFor(taskLabels, item.task)} · {moved != null ? `moved to v${moved}` : labelFor(assignmentStatusLabels, item.status)}</span>
               {item.held && <> <StatusBadge tone="warning">Paused</StatusBadge></>}
               {assignment && tools && <AssignmentActions assignment={assignment} members={tools.members} onChanged={tools.onAssignmentsChanged} />}
             </li>;

@@ -1,35 +1,23 @@
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { api, type DocumentRowView, type RowItemView, type RowSubmissionView, type RowSubmissions, type SubmissionHistorySummary } from "../api/client";
+import { api, type DocumentRowView, type RowSubmissionView, type RowSubmissions, type SubmissionHistorySummary } from "../api/client";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { personLabel } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { Button, InlineMessage, Select } from "../ui";
 import { ConsolidationLauncher } from "../variants/ConsolidationLauncher";
 import { refKey } from "../variants/versionState";
+import { historyLines } from "./historyLines";
 import { versionName } from "./labels";
-import { ACKNOWLEDGEABLE_CODES, OWN_RESULT_REASON, SelectionNotice, type KeepRequest } from "./SelectionNotice";
+import { OWN_RESULT_REASON, SelectionNotice, type KeepRequest } from "./SelectionNotice";
 import { documentsRowId, isPlainClick } from "./RowCells";
-import { plannedStages, StageBlocks, type AssignTaskKind, type BlockStage, type StageLine } from "./StageBlocks";
 import { SubmissionsTable, type SubmissionActionContext } from "./SubmissionsTable";
 import { acceptanceLabel, acceptanceOf, discardLabel, isDiscarded, TextVersions, type TextVersionsTools } from "./TextVersions";
 import type { RowSubmissionsState } from "./useRowSubmissions";
 
-/** Report excerpts are cut to this many characters. */
-export const REPORT_EXCERPT_LENGTH = 120;
-
-/** Issue codes shown inside a stage block when that block is rendered (spec "Changes to approved decisions" 6). */
-const BLOCK_CODES: Readonly<Record<string, BlockStage>> = {
-  TRANSLATION_CHECK_FAILED: "translation_review",
-  TRANSLATION_NOT_ACCEPTED: "translation_review",
-  REVIEWER_NEEDED: "translation_review",
-  MISSING_FINAL: "final",
-};
-
-/** Codes that never appear in the Issues section (selection notice, waiting lines, preflight-only). */
-const NOT_IN_ISSUES = new Set([...ACKNOWLEDGEABLE_CODES, "ROUND_REVIEW_PENDING", "MISSING_FINAL_SELECTION"]);
-
 /** Report state words of the "Problem reports (n)" list (same words as `reportStateBadge`). */
 const REPORT_STATE_TEXT = { open: "Open", resolved: "Closed", withdrawn: "Withdrawn" } as const;
+
+export type AssignTaskKind = "translation_review" | "annotate" | "review";
 
 export interface SelectFinalRequest {
   kind: "use" | "replace";
@@ -42,13 +30,156 @@ export interface ExpandedRowProps {
   projectKey: string;
   /** Current Documents query; links keep it as `documents_*`. */
   query: ProjectDocumentsQuery;
+  /** Submissions of this row (`useRowSubmissions`): history times, consolidation and technical details. */
+  submissions: RowSubmissionsState;
+  onNavigate: (route: Route) => void;
+  /** Region id. */
+  id?: string;
+  /** Page data for the Text versions actions; without it Text versions is read-only. */
+  textVersionTools?: TextVersionsTools;
+  /** Current plan revision of the case (Technical details). */
+  planRevision?: number;
+  /** Assign dialog for this row ("Assign annotation review…", D25 "Assign a new review…"). */
+  onAssign?: (row: DocumentRowView, task: AssignTaskKind, options?: { newReviewOfAccepted?: boolean }) => void;
+  /** The row's Review / Annotate chips (`PlanChips`) for the "Plan" line (VD2 (2)). */
+  plan?: ReactNode;
+  /** Pseudonym of the signed-in lead ("Final: chosen by you"). */
+  me?: string | null;
+  /** Opens Text versions and focuses its summary (interim target of the text-change actions until O7). */
+  revealTextVersions?: boolean;
+  onTextVersionsRevealed?: () => void;
+  now?: Date;
+}
+
+/** Id of the "Submissions (n)" heading of a row (focus target after Keep). */
+export function submissionsHeadingId(caseId: string, language: string): string {
+  return `documents-submissions-${encodeURIComponent(caseId)}-${encodeURIComponent(language)}`;
+}
+
+function toHistorySummary(row: RowSubmissionView): SubmissionHistorySummary {
+  return { submission_id: row.submission_id, document_id: row.document_id, author_label: row.author_label, created_at: row.recorded_at, mode: row.mode, round_id: row.round_id, guideline_version: row.guideline_version ?? null, guideline_withdrawn: row.guideline_withdrawn };
+}
+
+function useLink(onNavigate: (route: Route) => void) {
+  return (route: Route, text: string, label?: string) => <a href={routeHref(route)} aria-label={label} onClick={event => {
+    if (!isPlainClick(event)) return;
+    event.preventDefault(); onNavigate(route);
+  }}>{text}</a>;
+}
+
+/**
+ * The slim expansion of one Documents row (documents overview spec "Expansion (▸)", V1): one region
+ * "History, {case} · {language}" with History lines, the Plan line, Text versions, the optional
+ * assignments, Start consolidation…, Problem reports and Technical details. No required action lives here.
+ */
+export function ExpandedRow({
+  row, projectKey, query, submissions, onNavigate, id, textVersionTools, planRevision, onAssign, plan, me, revealTextVersions = false, onTextVersionsRevealed, now,
+}: ExpandedRowProps): JSX.Element {
+  const ownId = useId();
+  const textVersionsRef = useRef<HTMLDetailsElement>(null);
+  const [textVersionsOpen, setTextVersionsOpen] = useState(revealTextVersions);
+  const data: RowSubmissions | null = submissions.data;
+  const rows = data?.submissions ?? [];
+  const documents = Object.keys(query).length ? { documents: query } : {};
+  const link = useLink(onNavigate);
+  const reportRoute = (reportId: string): Route => ({ name: "projectProblemReport", key: projectKey, reportId, ...documents });
+  const nameOf = (documentId: string) => {
+    const entry = row.versions.find(item => item.document_id === documentId);
+    return versionName(entry?.version ?? 0, entry?.chain_name ?? "", row.parallel_roots);
+  };
+
+  // A text-change action asked for Text versions: open it and move focus to its summary.
+  useEffect(() => {
+    if (!revealTextVersions) return;
+    setTextVersionsOpen(true);
+    requestAnimationFrame(() => {
+      textVersionsRef.current?.querySelector("summary")?.focus();
+      onTextVersionsRevealed?.();
+    });
+    // Only a new request opens it again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealTextVersions]);
+
+  const lines = historyLines(row, data ? rows : null, { me, now });
+  const problemReports = row.problem_reports ?? [];
+  const reviewable = onAssign && row.work.some(item => item.task === "annotate" && item.status === "submitted" && item.moved_to_version == null);
+  // D25: a new review of a translation the lead (or the import override) accepted without one.
+  const newReview = onAssign && !row.is_source
+    && !row.work.some(item => item.task === "translation_review" && item.status !== "submitted" && item.moved_to_version == null)
+    && row.versions.some(version => version.is_newest_in_chain && !isDiscarded(row, version) && version.translation_status === "accepted"
+      && (acceptanceOf(version)?.source === "lead" || acceptanceOf(version)?.source === "override"));
+  const consolidationDocuments = [...new Set(rows.map(item => item.document_id))]
+    .filter(documentId => rows.filter(item => item.document_id === documentId).length >= 2);
+
+  return <section role="region" id={id} aria-label={`History, ${row.case_id} · ${row.language}`} className="expanded-row">
+    <div className="expanded-row-section">
+      <h3 id={`${ownId}-history`}>History</h3>
+      {lines.length > 0
+        ? <ul className="expanded-row-issues" aria-labelledby={`${ownId}-history`}>{lines.map(line => <li key={line.key}>
+          {line.text}{line.reportId && <>{" · "}{link(reportRoute(line.reportId), "Open report")}</>}
+        </li>)}</ul>
+        : <p className="cell-secondary">{submissions.loading && !data ? "Loading history…" : "No history yet."}</p>}
+    </div>
+    {plan != null && <div className="documents-expanded-plan" role="group" aria-labelledby={`${ownId}-plan`}>
+      <span id={`${ownId}-plan`} className="documents-expanded-plan-label">Plan</span>{plan}
+    </div>}
+    <div className="expanded-row-section">
+      <details ref={textVersionsRef} className="expanded-row-more" open={textVersionsOpen} onToggle={event => setTextVersionsOpen(event.currentTarget.open)}>
+        <summary>Text versions ({row.versions.length})</summary>
+        <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} now={now} />
+      </details>
+      {(reviewable || newReview) && <div className="expanded-row-links">
+        {reviewable && <Button size="sm" variant="quiet" onClick={() => onAssign(row, "review")}>Assign annotation review…</Button>}
+        {newReview && <Button size="sm" variant="quiet" onClick={() => onAssign(row, "translation_review", { newReviewOfAccepted: true })}>Assign a new review…</Button>}
+      </div>}
+      <details className="expanded-row-more">
+        <summary>Start consolidation…</summary>
+        {!data ? <p className="cell-secondary">Submissions are not loaded.</p>
+          : consolidationDocuments.length === 0 ? <p className="cell-secondary">Consolidation needs at least two submissions on one text version.</p>
+            : consolidationDocuments.map(documentId => <div key={documentId} className="expanded-row-consolidation">
+              {consolidationDocuments.length > 1 && <h4>{nameOf(documentId)}</h4>}
+              <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={textVersionTools?.username ?? ""}
+                rows={rows.filter(item => item.document_id === documentId).map(toHistorySummary)} />
+            </div>)}
+      </details>
+      {problemReports.length > 0 && <details className="expanded-row-more">
+        <summary>Problem reports ({problemReports.length})</summary>
+        <ul className="expanded-row-issues">{problemReports.map(report => <li key={report.report_id}>
+          {report.title}{" · "}{report.reporter_label}{" · "}<Time iso={report.created_at} now={now} />
+          {" · "}Report: {REPORT_STATE_TEXT[report.state]}{" · "}Paused tasks: {report.active_hold_count}{" · "}{link(reportRoute(report.report_id), "Open report")}
+        </li>)}</ul>
+      </details>}
+      <details className="expanded-row-more">
+        <summary>Technical details</summary>
+        <dl className="technical-details">
+          <dt>Text ID</dt><dd>{row.case_id}</dd>
+          {planRevision != null && <><dt>Plan revision</dt><dd>{planRevision}</dd></>}
+          {row.versions.map(version => {
+            const name = versionName(version.version, version.chain_name, row.parallel_roots);
+            const acceptance = acceptanceOf(version);
+            return <Fragment key={version.document_id}>
+              <FragmentPair term={`Document ID, ${name}`} value={version.document_id} />
+              {acceptance && <FragmentPair term={`Acceptance, ${name}`} value={acceptanceLabel(acceptance, now)} />}
+              {isDiscarded(row, version) && <FragmentPair term={`Discard, ${name}`} value={discardLabel(version, now)} />}
+            </Fragment>;
+          })}
+          {rows.map(item => <FragmentPair key={item.submission_id} term={`Submission ID, ${item.author_label}`}
+            value={`${item.submission_id}${item.round_id ? ` · round ${item.round_id}` : ""} · mode ${item.mode}`} />)}
+          {(data?.rounds ?? []).filter(round => !round.submitted).map(round => <FragmentPair key={round.round_id} term={`Round ID, ${round.author_label}`}
+            value={`${round.round_id} · mode ${round.mode}`} />)}
+        </dl>
+      </details>
+    </div>
+  </section>;
+}
+
+export interface FinalChoiceProps {
+  row: DocumentRowView;
+  projectKey: string;
+  query: ProjectDocumentsQuery;
   /** Submissions of this row (`useRowSubmissions`). */
   submissions: RowSubmissionsState;
   onNavigate: (route: Route) => void;
-  /** Region id (target of the row disclosure's `aria-controls`). */
-  id?: string;
-  /** Id of the element naming the row (the row header); otherwise an own hidden "{text ID} · {language}" label. */
-  labelledBy?: string;
   /** Current project rule (`page.adjudicator_not_annotator`). */
   adjudicatorNotAnnotator?: boolean;
   /** Opens "Use as final" or "Replace" for a submission; without it no selection actions are offered. */
@@ -62,42 +193,24 @@ export interface ExpandedRowProps {
   confirmBusy?: boolean;
   /** Polite announcement (the page's live region). */
   onAnnounce?: (message: string) => void;
-  /** Page data for the Text versions actions; without it Text versions is read-only. */
-  textVersionTools?: TextVersionsTools;
   /** "list" in narrow cards: Submissions as two-line items instead of the table. */
   layout?: "table" | "list";
-  /** Current plan revision of the case (Technical details). */
-  planRevision?: number;
-  /** Assign dialog for this row (stage block links, D25 "Assign a new review…"). */
-  onAssign?: (row: DocumentRowView, task: AssignTaskKind, options?: { newReviewOfAccepted?: boolean }) => void;
-  /** Content inside the Translation review block (`StageBlocks` `translationSlot`). */
-  translationSlot?: ReactNode;
+  onClose: () => void;
   now?: Date;
 }
 
-/** Id of the "Submissions (n)" heading of a row (focus target after Keep). */
-export function submissionsHeadingId(caseId: string, language: string): string {
-  return `documents-submissions-${encodeURIComponent(caseId)}-${encodeURIComponent(language)}`;
-}
-
-function excerpt(text: string): string {
-  return text.length > REPORT_EXCERPT_LENGTH ? `${text.slice(0, REPORT_EXCERPT_LENGTH)}…` : text;
-}
-
-function toHistorySummary(row: RowSubmissionView): SubmissionHistorySummary {
-  return { submission_id: row.submission_id, document_id: row.document_id, author_label: row.author_label, created_at: row.recorded_at, mode: row.mode, round_id: row.round_id, guideline_version: row.guideline_version ?? null, guideline_withdrawn: row.guideline_withdrawn };
-}
-
-/** Expanded content of one Documents row: stage blocks, Issues, Submissions (n) and More. */
-export function ExpandedRow({
-  row, projectKey, query, submissions, onNavigate, id, labelledBy, adjudicatorNotAnnotator = false,
-  onSelectFinal, onKeep, renderConfirm, keepConfirm, confirmBusy = false, onAnnounce, textVersionTools, layout = "table", planRevision, onAssign, translationSlot, now,
-}: ExpandedRowProps): JSX.Element {
+/**
+ * Interim final-result choice under a row ("Compare results…", "Accept result…", "Review changes…"):
+ * the selection notice and Submissions (n) moved out of the expansion (spec Change 10). The
+ * final-result side panel (O6) replaces it.
+ */
+export function FinalChoice({
+  row, projectKey, query, submissions, onNavigate, adjudicatorNotAnnotator = false,
+  onSelectFinal, onKeep, renderConfirm, keepConfirm, confirmBusy = false, onAnnounce, layout = "table", onClose, now,
+}: FinalChoiceProps): JSX.Element {
   const ownId = useId();
-  const labelId = `${ownId}-label`;
-  const textVersionsRef = useRef<HTMLDetailsElement>(null);
-  const [textVersionsOpen, setTextVersionsOpen] = useState(false);
   const [compareFor, setCompareFor] = useState<string | null>(null);
+  const [compareWith, setCompareWith] = useState("");
   // Version in force, once per mount, for "Guidelines v2 (current: v3)"; a failed read only drops the comparison.
   const [guidelineCurrent, setGuidelineCurrent] = useState<number | null>(null);
   useEffect(() => {
@@ -105,85 +218,20 @@ export function ExpandedRow({
     void api.listGuidelines(projectKey).then(listing => listing.current?.version ?? null, () => null).then(version => { if (active) setGuidelineCurrent(version); });
     return () => { active = false; };
   }, [projectKey]);
-  const [compareWith, setCompareWith] = useState("");
   const headingId = submissionsHeadingId(row.case_id, row.language);
   const data: RowSubmissions | null = submissions.data;
   const unavailable = submissions.loading || confirmBusy;
   const documents = Object.keys(query).length ? { documents: query } : {};
-  const nameOf = (documentId: string | null, version: number | null) => {
-    const entry = row.versions.find(item => item.document_id === documentId);
-    return versionName(version ?? entry?.version ?? 0, entry?.chain_name ?? "", row.parallel_roots);
-  };
-
-  const link = (route: Route, text: string, label?: string) => <a href={routeHref(route)} aria-label={label} onClick={event => {
-    if (!isPlainClick(event)) return;
-    event.preventDefault(); onNavigate(route);
-  }}>{text}</a>;
-  const reportRoute = (reportId: string, resume = false): Route => ({ name: "projectProblemReport", key: projectKey, reportId, ...(resume ? { action: "resume" as const } : {}), ...documents });
+  const link = useLink(onNavigate);
   const caseRoute = (documentId: string, annotations?: string, compare?: string): Route => ({
     name: "projectCase", key: projectKey, caseId: row.case_id, variant: documentId,
     ...(annotations ? { annotations } : {}), ...(compare ? { compare } : {}), ...documents,
   });
   const submissionRef = (submissionId: string) => refKey({ kind: "submission", id: submissionId });
-  const openTextVersions = () => {
-    setTextVersionsOpen(true);
-    // The summary is the focusable control of the disclosure.
-    requestAnimationFrame(() => textVersionsRef.current?.querySelector("summary")?.focus());
-  };
-  const focusSubmissions = () => document.getElementById(headingId)?.focus();
-
-  /** One issue line; inside a stage block the block's own Text versions link replaces the line's. */
-  const issueLine = (item: RowItemView, inBlock = false): ReactNode => {
-    const textVersionsButton = inBlock ? null : <> <Button size="sm" variant="quiet" onClick={openTextVersions}>Text versions</Button></>;
-    const name = nameOf(item.document_id, item.version);
-    switch (item.code) {
-      case "OPEN_PROBLEM_REPORT": {
-        const report = item.report;
-        if (!report) return item.report_id ? <>Open problem report. {link(reportRoute(item.report_id), "Open report")}</> : "Open problem report.";
-        return <>
-          <q className="issue-excerpt">{excerpt(report.excerpt)}</q>{" · "}{report.reporter_label}{" · "}<Time iso={report.created_at} now={now} />
-          {" · "}{report.task_state === "paused" ? "task paused" : "task resumed"}{" "}{link(reportRoute(report.report_id), "Open report")}
-        </>;
-      }
-      case "TASK_PAUSED_WITHOUT_REPORT":
-        return <>{item.author_label ?? "A"}'s task is paused, but its report is resolved.{item.report_id && <> {link(reportRoute(item.report_id, true), "Resume task")}</>}</>;
-      case "TASK_ON_HOLD":
-        return <>Task paused{item.author_label ? ` (${item.author_label})` : ""}.{item.report_id && <> {link(reportRoute(item.report_id), "Open report")}</>}</>;
-      case "TRANSLATION_CHECK_FAILED":
-        return <>{name} failed the automatic translation check.{textVersionsButton}</>;
-      case "TRANSLATION_NOT_ACCEPTED":
-        return <>{name} was {item.review_decision === "query" ? "queried" : "rejected"} in review.{textVersionsButton}</>;
-      case "REVIEWER_NEEDED":
-        return <>{name} needs a translation reviewer.{textVersionsButton}</>;
-      case "SOURCE_UPDATE_UNREVIEWED":
-        return <>The source text changed.{item.document_id && <> {link(caseRoute(item.document_id), "Review source change")}</>}</>;
-      case "MISSING_FINAL":
-        return inBlock ? "No final result yet, and all work is submitted."
-          : <>No final result yet, and all work is submitted. <Button size="sm" variant="quiet" onClick={focusSubmissions}>Submissions</Button></>;
-      default:
-        return null;
-    }
-  };
   const rows = data?.submissions ?? [];
   const final = row.final;
-  const problemReports = row.problem_reports ?? [];
   // Submissions (n) only when n > 0 or a final result exists; a load error is shown with its heading.
   const showSubmissions = final != null || rows.length > 0 || (submissions.error != null && !data);
-
-  // Translation lines and the missing-final line go into their stage block when it is rendered;
-  // report, pause and source-change lines (and lines without a block) stay under Issues.
-  const stages = new Set(plannedStages(row));
-  const blockLines: Partial<Record<BlockStage, StageLine[]>> = {};
-  const issueLines: { item: RowItemView; content: ReactNode }[] = [];
-  for (const item of [...row.issues, ...row.notes]) {
-    if (NOT_IN_ISSUES.has(item.code)) continue;
-    const stage = BLOCK_CODES[item.code];
-    const inBlock = stage !== undefined && stages.has(stage);
-    const content = issueLine(item, inBlock);
-    if (content === null) continue;
-    if (inBlock) (blockLines[stage] ??= []).push({ key: item.cause_id, content });
-    else issueLines.push({ item, content });
-  }
 
   const selectionAction = (submission: RowSubmissionView, context: SubmissionActionContext): ReactNode => {
     if (!onSelectFinal || context.isFinal) return null;
@@ -236,18 +284,7 @@ export function ExpandedRow({
   };
   const actions = (submission: RowSubmissionView, context: SubmissionActionContext) => <>{selectionAction(submission, context)}{compareAction(submission, context)}</>;
 
-  const consolidationDocuments = [...new Set(rows.map(item => item.document_id))]
-    .filter(documentId => rows.filter(item => item.document_id === documentId).length >= 2);
-
-  return <section role="region" id={id} aria-labelledby={labelledBy ?? labelId} className="expanded-row">
-    {!labelledBy && <span id={labelId} hidden>{row.case_id} · {row.language}</span>}
-    <StageBlocks row={row} submissions={data?.submissions ?? null} lines={blockLines} now={now}
-      onOpenTextVersions={openTextVersions} onShowTranslationReviews={textVersionTools?.onShowTranslationReviews} onAssign={onAssign}
-      onFocusSubmissions={showSubmissions ? focusSubmissions : undefined} translationSlot={translationSlot} />
-    {issueLines.length > 0 && <div className="expanded-row-section">
-      <h3>Issues</h3>
-      <ul className="expanded-row-issues">{issueLines.map(({ item, content }) => <li key={item.cause_id}>{content}</li>)}</ul>
-    </div>}
+  return <section role="region" aria-label={`Final result · ${row.case_id} · ${row.language}`} className="expanded-row documents-final-choice">
     {!showSubmissions && submissions.loading && !data && <p role="status" className="cell-secondary">Loading submissions…</p>}
     {showSubmissions && <div className="expanded-row-section">
       <h3 id={headingId} tabIndex={-1}>{data ? `Submissions (${rows.length})` : "Submissions"}</h3>
@@ -266,50 +303,7 @@ export function ExpandedRow({
           </>}
         </>}
     </div>}
-    <div className="expanded-row-section">
-      <h3>More</h3>
-      <details className="expanded-row-more">
-        <summary>Start consolidation…</summary>
-        {!data ? <p className="cell-secondary">Submissions are not loaded.</p>
-          : consolidationDocuments.length === 0 ? <p className="cell-secondary">Consolidation needs at least two submissions on one text version.</p>
-            : consolidationDocuments.map(documentId => <div key={documentId} className="expanded-row-consolidation">
-              {consolidationDocuments.length > 1 && <h4>{nameOf(documentId, null)}</h4>}
-              <ConsolidationLauncher projectKey={projectKey} documentId={documentId} language={row.language} username={textVersionTools?.username ?? ""}
-                rows={rows.filter(item => item.document_id === documentId).map(toHistorySummary)} />
-            </div>)}
-      </details>
-      <details ref={textVersionsRef} className="expanded-row-more" open={textVersionsOpen} onToggle={event => setTextVersionsOpen(event.currentTarget.open)}>
-        <summary>Text versions ({row.versions.length})</summary>
-        <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} now={now} />
-      </details>
-      {problemReports.length > 0 && <details className="expanded-row-more">
-        <summary>Problem reports ({problemReports.length})</summary>
-        <ul className="expanded-row-issues">{problemReports.map(report => <li key={report.report_id}>
-          {report.title}{" · "}{report.reporter_label}{" · "}<Time iso={report.created_at} now={now} />
-          {" · "}Report: {REPORT_STATE_TEXT[report.state]}{" · "}Paused tasks: {report.active_hold_count}{" · "}{link(reportRoute(report.report_id), "Open report")}
-        </li>)}</ul>
-      </details>}
-      <details className="expanded-row-more">
-        <summary>Technical details</summary>
-        <dl className="technical-details">
-          <dt>Text ID</dt><dd>{row.case_id}</dd>
-          {planRevision != null && <><dt>Plan revision</dt><dd>{planRevision}</dd></>}
-          {row.versions.map(version => {
-            const name = versionName(version.version, version.chain_name, row.parallel_roots);
-            const acceptance = acceptanceOf(version);
-            return <Fragment key={version.document_id}>
-              <FragmentPair term={`Document ID, ${name}`} value={version.document_id} />
-              {acceptance && <FragmentPair term={`Acceptance, ${name}`} value={acceptanceLabel(acceptance, now)} />}
-              {isDiscarded(row, version) && <FragmentPair term={`Discard, ${name}`} value={discardLabel(version, now)} />}
-            </Fragment>;
-          })}
-          {rows.map(item => <FragmentPair key={item.submission_id} term={`Submission ID, ${item.author_label}`}
-            value={`${item.submission_id}${item.round_id ? ` · round ${item.round_id}` : ""} · mode ${item.mode}`} />)}
-          {(data?.rounds ?? []).filter(round => !round.submitted).map(round => <FragmentPair key={round.round_id} term={`Round ID, ${round.author_label}`}
-            value={`${round.round_id} · mode ${round.mode}`} />)}
-        </dl>
-      </details>
-    </div>
+    <div><Button size="sm" variant="quiet" onClick={onClose}>Close</Button></div>
   </section>;
 }
 

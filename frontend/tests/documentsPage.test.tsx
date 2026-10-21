@@ -6,14 +6,13 @@ import type { AssignWorkDialogProps } from "../src/admin/AssignWorkDialog";
 import { DocumentsPage, type DocumentsPageProps } from "../src/admin/DocumentsPage";
 import type { ProjectDocumentsQuery, Route } from "../src/app/router";
 import { documentsRowId } from "../src/documents/RowCells";
-import { stageBlockHeadingId } from "../src/documents/StageBlocks";
 import { recordDecision } from "../src/documents/visitState";
 import { useRegisteredShortcuts } from "../src/ui/shortcuts";
 import { final, group, item, notInPlanRow, page, planRow, rejectedRow, row, rowKey, scenarioS0, scenarioS1, scenarioS3, scenarioS4, scenarioS5, stepOf, submission, submissions, version, work } from "./documents/fixtures";
 import { ana, cell, scenario7a, stagedRow, tom } from "./documents/tableFixtures";
 import { reviewRecord } from "./translationFixtures";
 
-const { expandedProps, assignProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[], assignProps: [] as unknown[] }));
+const { expandedProps, choiceProps, assignProps } = vi.hoisted(() => ({ expandedProps: [] as Record<string, unknown>[], choiceProps: [] as Record<string, unknown>[], assignProps: [] as unknown[] }));
 // The assign dialog has its own tests; here only its wiring (props in, onAssigned / onClose out) matters.
 vi.mock("../src/admin/AssignWorkDialog", () => ({
   AssignWorkDialog: (props: AssignWorkDialogProps) => { assignProps.push(props); return <div role="dialog" aria-label="Assign stub" />; },
@@ -29,6 +28,7 @@ vi.mock("../src/documents/ExpandedRow", async importOriginal => {
   return {
     ...actual,
     ExpandedRow: (props: Parameters<typeof actual.ExpandedRow>[0]) => { expandedProps.push(props as unknown as Record<string, unknown>); return actual.ExpandedRow(props); },
+    FinalChoice: (props: Parameters<typeof actual.FinalChoice>[0]) => { choiceProps.push(props as unknown as Record<string, unknown>); return actual.FinalChoice(props); },
   };
 });
 
@@ -74,9 +74,12 @@ const selectedText = (count: number) => `${count} ${count === 1 ? "text" : "text
 /** Row keys of `document-rows/keys`: the de text of every given case. */
 const deKeys = (caseIds: readonly string[], truncated = false) => ({ keys: caseIds.map(caseId => ({ case_id: caseId, language: "de" })), cases: caseIds.length, total: caseIds.length, truncated });
 const selectionRegion = () => screen.getByRole("region", { name: "Selection" });
+/** A row waiting for a final result ("Compare results…") with one submitted annotation. */
+const chooseFinalStep = () => stepOf("choose_final", { detail: { kind: "annotations_submitted", submitted: 1, total: 1, task_paused: false } });
 
 beforeEach(() => {
   expandedProps.length = 0;
+  choiceProps.length = 0;
   vi.spyOn(api, "listDocumentRows").mockResolvedValue(page([]));
   vi.spyOn(api, "getRowSubmissions").mockImplementation(async (_key, caseId, language) => submissions(caseId, language));
   vi.spyOn(api, "getProjectSettings").mockResolvedValue({ languages: ["en", "de"] } as never);
@@ -581,14 +584,16 @@ it("keeps the page busy with focus on the paging link while the next page loads,
   expect(screen.getByRole("link", { name: "Previous" }).getAttribute("aria-disabled")).toBeNull();
 });
 
-it("renders Submissions of an open card as a list, not the table", async () => {
+it("renders the final choice of a card as a list under the card, not the table", async () => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(max-width: 700px)", media: query, addEventListener: () => {}, removeEventListener: () => {} }));
   const s1 = scenarioS1();
-  mockRows(s1.page, s1.submissions);
-  renderPage({ query: { open: [rowKey("case-0042", "en")] } });
+  const en = { ...s1.group.rows.find(entry => entry.language === "en")!, next_step: chooseFinalStep(), steps: [chooseFinalStep()] };
+  mockRows(page([{ ...s1.group, rows: [en] }]), s1.submissions);
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
   expect(await screen.findByRole("list", { name: "Submissions, case-0042 · en" })).toBeTruthy();
   expect(screen.queryByRole("table")).toBeNull();
-  expect(expandedProps.at(-1)?.layout).toBe("list");
+  expect(choiceProps.at(-1)?.layout).toBe("list");
 });
 
 it("expands and focuses a deep-linked row that no longer needs a decision", async () => {
@@ -658,33 +663,53 @@ it("expands a row with replace navigation", async () => {
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en", open: ["case-0042:en"] }, { replace: true });
 });
 
-it("passes the current project rule, not the final's snapshot, to the expanded row", async () => {
+it("passes the current project rule, not the final's snapshot, to the final choice", async () => {
   const s5 = scenarioS5();
-  mockRows(page([s5.group], { adjudicator_not_annotator: true }), s5.submissions);
-  renderPage({ query: { open: [rowKey("case-0377", "en")] } });
-  await screen.findByRole("heading", { name: /^Submissions \(/ });
+  const en = { ...s5.group.rows[0], next_step: chooseFinalStep(), steps: [chooseFinalStep()] };
+  mockRows(page([{ ...s5.group, rows: [en] }], { adjudicator_not_annotator: true }), s5.submissions);
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0377 · en" }));
+  await screen.findByRole("region", { name: "Final result · case-0377 · en" });
   expect(s5.group.rows[0].final?.adjudicator_not_annotator).toBeNull();
-  expect(expandedProps.at(-1)?.adjudicatorNotAnnotator).toBe(true);
+  expect(choiceProps.at(-1)?.adjudicatorNotAnnotator).toBe(true);
 });
 
-it("passes the case's plan revision and the row assign dialog to the expanded row", async () => {
+it("passes the case's plan revision, the row assign dialog, the plan chips and the lead to the expanded row", async () => {
   const s5 = scenarioS5();
   mockRows(page([{ ...s5.group, plan_revision: 7 }]), s5.submissions);
   renderPage({ query: { open: [rowKey("case-0377", "en")] } });
-  await screen.findByRole("heading", { name: /^Submissions \(/ });
+  const region = await screen.findByRole("region", { name: "History, case-0377 · en" });
   expect(expandedProps.at(-1)?.planRevision).toBe(7);
   expect(typeof expandedProps.at(-1)?.onAssign).toBe("function");
+  expect(expandedProps.at(-1)?.me).toBe("lead-0002");
+  // VD2 (2): the Plan line with the row's chips is part of the expansion (no separate plan line outside it).
+  const plan = within(region).getByRole("group", { name: "Plan" });
+  expect(within(plan).getAllByRole("button").length).toBeGreaterThan(0);
+  expect(document.querySelectorAll(".documents-expanded-plan")).toHaveLength(1);
+  // No submissions table or final-result decision in the expansion (V1).
+  expect(within(region).queryByRole("heading", { name: /^Submissions/ })).toBeNull();
 });
 
 it("reloads the submissions of open rows when the rows refresh", async () => {
   const s1 = scenarioS1();
   mockRows(s1.page, s1.submissions);
   renderPage({ query: { open: [rowKey("case-0042", "en")] } });
-  await screen.findByRole("heading", { name: "Submissions (2)" });
-  expect(api.getRowSubmissions).toHaveBeenCalledTimes(1);
+  await screen.findByRole("region", { name: "History, case-0042 · en" });
+  await waitFor(() => expect(api.getRowSubmissions).toHaveBeenCalledTimes(1));
   fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
   await waitFor(() => expect(api.getRowSubmissions).toHaveBeenCalledTimes(2));
   expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
+});
+
+it("Handle text change… opens the expansion's Text versions (interim until the text-change dialogs)", async () => {
+  const de = planRow("case-201", "de", stepOf("handle_text_change", { stage: "annotation" }));
+  mockRows(page([group("case-201", [de])]));
+  renderStateful({});
+  fireEvent.click(await screen.findByRole("button", { name: "Handle text change…, case-201 · de" }));
+  const region = await screen.findByRole("region", { name: "History, case-201 · de" });
+  const summary = within(region).getByText("Text versions (1)", { selector: "summary" });
+  expect((summary.closest("details") as HTMLDetailsElement).open).toBe(true);
+  await waitFor(() => expect(document.activeElement).toBe(summary));
 });
 
 it("opens the translation review history of a version from Text versions", async () => {
@@ -745,13 +770,15 @@ describe("Resolved and Changed badges", () => {
 
   it("shows Resolved after the lead's own Keep, retains the row and collapses it once", async () => {
     const s0 = scenarioS0();
-    const de = s0.group.rows[1];
+    const de = { ...s0.group.rows[1], next_step: stepOf("confirm_final"), steps: [stepOf("confirm_final")] };
     serve(page([group("synthetic-accepted", [de])]));
     vi.mocked(api.getRowSubmissions).mockImplementation(async (_key, caseId, language) => structuredClone(s0.submissions[rowKey(caseId, language)] ?? submissions(caseId, language)));
     const { onNavigate } = renderPage({ query: { decision: "confirm-final", open: [rowKey("synthetic-accepted", "de")] } });
     await waitFor(() => expect(lastRequest()).toEqual({ decision: "confirm-final", retain: ["synthetic-accepted:de"] }));
-    fireEvent.click(await screen.findByRole("button", { name: "Keep final result…" }));
-    const confirm = screen.getByRole("group", { name: "Keep final result" });
+    // Review changes… opens Keep in the final choice under the row (no longer inside the expansion).
+    fireEvent.click(await screen.findByRole("button", { name: "Review changes…, synthetic-accepted · de" }));
+    const confirm = await screen.findByRole("group", { name: "Keep final result" });
+    expect(confirm.closest("[aria-label^='History']")).toBeNull();
     fireEvent.click(within(confirm).getByRole("checkbox", { name: "I reviewed these changes and keep this exact result" }));
     serve(page([group("synthetic-accepted", [{ ...de, issues: [], categories: [], final: { ...de.final!, revision: 2 }, matches_decision: false, retained: true }])]));
     fireEvent.click(within(confirm).getByRole("button", { name: "Keep as final" }));
@@ -837,15 +864,21 @@ describe("row actions", () => {
   });
   const oneSubmission = (caseId = "case-0042", language = "en") => submissions(caseId, language, { submissions: [submission({ submission_id: `sub-${caseId}`, document_id: `${caseId}-${language}`, author_label: "ann-0001" })] });
 
-  it("Choose final… expands the row and opens Use as final for one eligible submission", async () => {
+  it("Choose final… opens the final choice under the row with Use as final for one eligible submission", async () => {
     mockRows(page([group("case-0042", [chooseFinal()])]), { [rowKey("case-0042", "en")]: oneSubmission() });
     const { onNavigate } = renderStateful({});
     fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
-    expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", open: ["case-0042:en"] }, { replace: true });
     const confirm = await screen.findByRole("group", { name: "Use as final result" });
-    expect(screen.getByRole("button", { name: "Show history, case-0042 · en" }).getAttribute("aria-expanded")).toBe("true");
+    const choice = screen.getByRole("region", { name: "Final result · case-0042 · en" });
+    expect(choice.contains(confirm)).toBe(true);
+    // The expansion stays closed: the decision is not in the expansion (V1).
+    expect(onNavigate).not.toHaveBeenCalledWith(expect.objectContaining({ open: ["case-0042:en"] }), expect.anything());
+    expect(screen.getByRole("button", { name: "Show history, case-0042 · en" }).getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
     expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action");
+    fireEvent.click(within(choice).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("region", { name: "Final result · case-0042 · en" })).toBeNull();
+    await waitFor(() => expect(document.activeElement?.id).toBe("documents-row-case-0042-en-action"));
   });
 
   it("Choose final… focuses Submissions when several submissions are eligible", async () => {
@@ -1084,50 +1117,50 @@ describe("lead review fixes", () => {
   });
 });
 
-describe("Resolve focuses the Translation review block", () => {
+describe("Resolve renders inline under the row (Change 13, F1, F5)", () => {
   const rejected = () => planRow("case-1", "de", stepOf("resolve_rejected", { document_id: "case-1-de" }));
-  const translationHeading = () => document.getElementById(stageBlockHeadingId("case-1", "de", "translation_review"));
   const actionButton = () => document.getElementById(documentsRowId("case-1", "de", "action"));
   const resolveBox = () => screen.queryByRole("group", { name: "Resolve rejected translation, case-1 · de" });
+  const resolveHeading = () => within(resolveBox()!).getByRole("heading", { name: "Resolve rejected translation, case-1 · de" });
 
-  it("Resolve… expands the row and focuses the Translation review heading", async () => {
+  it("Resolve… renders inline under the row with the lead-correction option and focuses its heading", async () => {
     mockRows(page([group("case-1", [rejected()])]));
     renderStateful({});
     fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Show history, case-1 · de" }).getAttribute("aria-expanded")).toBe("true"));
-    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
-    expect(translationHeading()).not.toBeNull();
+    const box = resolveBox()!;
+    expect(box.closest(".documents-row-notice-slot")).not.toBeNull();
+    expect(within(box).getByRole("button", { name: "Correct the translation…" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show history, case-1 · de" }).getAttribute("aria-expanded")).toBe("false");
+    await waitFor(() => expect(document.activeElement).toBe(resolveHeading()));
+    expect(screen.getAllByRole("group", { name: "Resolve rejected translation, case-1 · de" })).toHaveLength(1);
   });
 
-  it("renders the options inside the Translation review block", async () => {
+  it("stays outside an open expansion", async () => {
     mockRows(page([group("case-1", [rejected()])]));
-    renderStateful({});
-    fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
-    await waitFor(() => expect(translationHeading()).not.toBeNull());
-    const box = resolveBox()!;
-    expect(within(box).getByRole("button", { name: "Correct the translation…" })).toBeTruthy();
-    expect(translationHeading()!.closest(".stage-block")!.contains(box)).toBe(true);
-    // Only one copy of the options (not also below the row).
-    expect(screen.getAllByRole("group", { name: "Resolve rejected translation, case-1 · de" })).toHaveLength(1);
+    renderStateful({ open: [rowKey("case-1", "de")] });
+    const region = await screen.findByRole("region", { name: "History, case-1 · de" });
+    fireEvent.click(screen.getByRole("button", { name: "Resolve…, case-1 · de" }));
+    expect(region.contains(resolveBox())).toBe(false);
+    await waitFor(() => expect(document.activeElement).toBe(resolveHeading()));
   });
 
   it("Cancel and Escape return focus to the row's Resolve… button", async () => {
     mockRows(page([group("case-1", [rejected()])]));
     renderStateful({});
     fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
-    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
+    await waitFor(() => expect(document.activeElement).toBe(resolveHeading()));
     fireEvent.click(within(resolveBox()!).getByRole("button", { name: "Cancel" }));
     expect(resolveBox()).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(actionButton()));
 
     fireEvent.click(actionButton()!);
-    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
+    await waitFor(() => expect(document.activeElement).toBe(resolveHeading()));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(resolveBox()).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(actionButton()));
   });
 
-  it("falls back to options below the row when there is no Translation block", async () => {
+  it("Assign review or accept… renders the same way", async () => {
     const reviewOff = planRow("case-1", "de", stepOf("translation_not_accepted", { document_id: "case-1-de", stage: "annotation" }), {
       plan_row: { review: false, annotate: true, review_applicable: true, discarded: false },
     });
@@ -1135,38 +1168,34 @@ describe("Resolve focuses the Translation review block", () => {
     renderStateful({});
     fireEvent.click(await screen.findByRole("button", { name: "Assign review or accept…, case-1 · de" }));
     const box = await screen.findByRole("group", { name: "Translation not accepted, case-1 · de" });
-    expect(box.closest(".stage-block")).toBeNull();
+    expect(box.closest(".documents-row-notice-slot")).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(within(box).getByRole("heading", { name: "Translation not accepted, case-1 · de" })));
-    expect(translationHeading()).toBeNull();
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByRole("group", { name: "Translation not accepted, case-1 · de" })).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(actionButton()));
   });
 
-  it("no longer navigates to the case viewer for Correct the translation…", async () => {
+  it("Correct the translation… opens the lead correction inline and never the case viewer (F1)", async () => {
     vi.spyOn(api, "getVariantMetadata").mockResolvedValue({ document_id: "case-1-de", text_sha256: "sha-1" } as Awaited<ReturnType<typeof api.getVariantMetadata>>);
     vi.spyOn(api, "startLeadCorrection").mockResolvedValue({ id: 41 } as AssignmentView);
     mockRows(page([group("case-1", [rejectedRow("case-1", "de")])]));
     const { onNavigate } = renderStateful({});
     fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
-    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
-    // The block's own entry is not repeated next to the Resolve options.
-    expect(screen.queryByRole("button", { name: "Correct the translation yourself…" })).toBeNull();
     fireEvent.click(within(resolveBox()!).getByRole("button", { name: "Correct the translation…" }));
     const panel = screen.getByRole("group", { name: "Correct the translation, case-1 · de" });
-    expect(translationHeading()!.closest(".stage-block")!.contains(panel)).toBe(true);
+    expect(panel.closest(".documents-row-notice-slot")).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(panel).getByRole("heading", { name: "Correct the translation, case-1 · de" })));
     fireEvent.click(within(panel).getByRole("button", { name: "Open translation review" }));
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 41 }, undefined));
     expect(api.startLeadCorrection).toHaveBeenCalledWith("p", "case-1-de", { expected_text_sha256: "sha-1", confirm_language: false });
     expect(onNavigate.mock.calls.some(([route]) => (route as Route).name === "projectCase")).toBe(false);
 
-    // The expanded row alone offers the same panel from the Translation review block.
+    // The expansion no longer offers its own correction entry.
     cleanup();
     mockRows(page([group("case-1", [rejectedRow("case-1", "de")])]));
-    renderStateful({});
-    fireEvent.click(await screen.findByRole("button", { name: "Show history, case-1 · de" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Correct the translation yourself…" }));
-    expect(screen.getByRole("group", { name: "Correct the translation, case-1 · de" })).toBeTruthy();
+    renderStateful({ open: [rowKey("case-1", "de")] });
+    await screen.findByRole("region", { name: "History, case-1 · de" });
+    expect(screen.queryByRole("button", { name: /Correct the translation/ })).toBeNull();
   });
 
   it("cards behave the same", async () => {
@@ -1175,8 +1204,7 @@ describe("Resolve focuses the Translation review block", () => {
     renderStateful({});
     await screen.findByRole("list", { name: "Documents" });
     fireEvent.click(await screen.findByRole("button", { name: "Resolve…, case-1 · de" }));
-    await waitFor(() => expect(document.activeElement).toBe(translationHeading()));
-    expect(translationHeading()!.closest(".stage-block")!.contains(resolveBox()!)).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(resolveHeading()));
     fireEvent.click(within(resolveBox()!).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(document.activeElement).toBe(actionButton()));
   });

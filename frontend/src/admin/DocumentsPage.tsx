@@ -25,7 +25,7 @@ import { Button, Checkbox, Dialog, EmptyState, InlineMessage, Select, StatusBadg
 import { DecisionBar } from "../documents/DecisionBar";
 import { DocumentCards } from "../documents/DocumentCards";
 import { DocumentsTable, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
-import { ExpandedRow, submissionsHeadingId, type ExpandedRowProps, type SelectFinalRequest } from "../documents/ExpandedRow";
+import { ExpandedRow, FinalChoice, submissionsHeadingId, type ExpandedRowProps, type FinalChoiceProps, type SelectFinalRequest } from "../documents/ExpandedRow";
 import {
   barChanges, failureOf, FinalConfirm, keepRequest, selectionPayload, selectRequest, successMessage,
   type FinalConfirmFailure, type FinalConfirmRequest,
@@ -33,13 +33,11 @@ import {
 import { STEP_FILTER_GROUPS, STEP_LABELS, stepLabel } from "../documents/nextStepLabels";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
 import { useShortcut, useShortcutHint } from "../ui/shortcuts";
-import { LeadCorrectionContext, type LeadCorrectionHost } from "../documents/LeadCorrectionPanel";
 import { ResolveTranslation } from "../documents/ResolveTranslation";
 import { SelectByIdsDialog } from "../documents/SelectByIdsDialog";
 import { SelectionBar } from "../documents/SelectionBar";
 import { acknowledgeableItems, type KeepRequest } from "../documents/SelectionNotice";
 import { documentsGroupId, documentsRowId, isPlainClick, type DocumentsRowPart, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
-import { plannedStages, stageBlockHeadingId } from "../documents/StageBlocks";
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
 import { MAX_SELECTION_CASES as MAX_SELECTION, textKeyOf, useTextSelection } from "../documents/useTextSelection";
@@ -175,8 +173,8 @@ const rowElement = (key: string, part: DocumentsRowPart): HTMLElement | null =>
 /** A row action that needs the row's submissions; it runs once they are loaded (Choose final…, Review changes…). */
 export interface AutoAction { rowKey: string; kind: "choose_final" | "review_changes"; triggerId: string }
 /**
- * Resolve options of a row: rule 4 "Resolve…" or rule 4a "Assign review or accept…". They render inside
- * the expanded row's Translation review block, or under the row when it has no such block (F5).
+ * Resolve options of a row: rule 4 "Resolve…" or rule 4a "Assign review or accept…". They render inline
+ * under the row (documents overview Change 13); focus goes to their heading (F5).
  */
 interface RowPanel { rowKey: string; mode: "resolve" | "not_accepted" }
 export type AssignTask = "translation_review" | "annotate" | "review";
@@ -678,29 +676,16 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // Row actions.
   const [autoAction, setAutoAction] = useState<AutoAction | null>(null);
   const [rowPanel, setRowPanel] = useState<RowPanel | null>(null);
-  /** The rendered Resolve options (in the Translation review block or under the row). */
+  /** The rendered Resolve options under the row. */
   const panelBox = useRef<HTMLDivElement>(null);
-  /** Row whose Translation review heading takes focus once its Resolve options render in that block. */
-  const [slotFocus, setSlotFocus] = useState<string | null>(null);
-  const hasTranslationBlock = (row: DocumentRowView) => plannedStages(row).includes("translation_review");
-  const panelInBlock = (row: DocumentRowView) => openKeys.has(rowKeyOf(row)) && hasTranslationBlock(row);
   const openPanel = (row: DocumentRowView, mode: RowPanel["mode"]) => {
-    const key = rowKeyOf(row);
-    setRowPanel({ rowKey: key, mode });
-    if (!hasTranslationBlock(row)) { setSlotFocus(null); return; }
-    setSlotFocus(key);
-    expandRow(key);
+    setFinalChoice(null);
+    setRowPanel({ rowKey: rowKeyOf(row), mode });
   };
-  // Runs after the options' own heading focus (child effects first): the block heading wins.
-  useEffect(() => {
-    if (!slotFocus) return;
-    if (rowPanel?.rowKey !== slotFocus) { setSlotFocus(null); return; }
-    const heading = document.getElementById(stageBlockHeadingId(caseOfKey(slotFocus), languageOfKey(slotFocus), "translation_review"));
-    const box = panelBox.current;
-    if (!heading || !box || !heading.closest(".stage-block")?.contains(box)) return;
-    heading.focus();
-    setSlotFocus(null);
-  });
+  /** Row whose final-result choice is shown under it (interim until the final-result panel, O6). */
+  const [finalChoice, setFinalChoice] = useState<string | null>(null);
+  /** Row whose expansion opens Text versions (interim target of the text-change actions until O7). */
+  const [revealFor, setRevealFor] = useState<string | null>(null);
   const reportRoute = (reportId: string, extra: { section?: "decide"; action?: "resume" }): Route => ({
     name: "projectProblemReport", key: projectKey, reportId, ...extra, ...(Object.keys(viewQuery).length ? { documents: viewQuery } : {}),
   });
@@ -712,7 +697,15 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       case "assign_annotation": void onAssign(row, "annotate"); return;
       case "choose_final":
       case "review_changes":
+        setRowPanel(null);
+        setFinalChoice(key);
         setAutoAction({ rowKey: key, kind: step.action, triggerId });
+        return;
+      // Interim (O7 replaces it with its dialogs): the expansion opens Text versions, where the work is reassigned.
+      case "handle_text_change":
+      case "carry_text_change":
+      case "assign_source_review":
+        setRevealFor(key);
         expandRow(key);
         return;
       case "decide_report":
@@ -734,11 +727,15 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     setRowPanel(null);
     window.setTimeout(() => (rowElement(key, "action") ?? rowElement(key, "disclosure"))?.focus(), 0);
   };
-  // Escape inside the options (or their Translation review block) closes them; a discard confirmation
-  // inside handles its own Escape first (registered later).
+  const closeFinalChoice = (key: string) => {
+    if (confirmRef.current?.busy) return;
+    if (confirmRef.current?.request.rowKey === key) setConfirm(null);
+    setFinalChoice(null);
+    window.setTimeout(() => (rowElement(key, "action") ?? rowElement(key, "disclosure"))?.focus(), 0);
+  };
+  // Escape inside the options closes them; a discard confirmation inside handles its own Escape first (registered later).
   useShortcut("Escape", event => {
-    const box = panelBox.current;
-    const scope = box?.closest(".stage-block") ?? box;
+    const scope = panelBox.current;
     if (!rowPanel || !scope || !(event.target instanceof Node) || !scope.contains(event.target)) return false;
     closePanel(rowPanel.rowKey);
   }, { allowInInputs: true, enabled: rowPanel != null });
@@ -746,27 +743,31 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const confirmElement = (state: ConfirmState) => <FinalConfirm key={state.request.triggerId} ref={confirmBox} request={state.request} busy={state.busy}
     failure={state.failure} onConfirm={submitConfirm} onCancel={cancelConfirm} onReview={reviewAgain} />;
 
-  const renderExpanded = (row: DocumentRowView, options?: { layout: "table" | "list" }) => {
+  const renderExpanded = (row: DocumentRowView) => {
     const notice = rowNotice(row);
-    const own = confirm?.request.rowKey === rowKeyOf(row) ? confirm : null;
+    const key = rowKeyOf(row);
     return <>
       {notice && <p className="documents-row-notice">{notice}</p>}
-      <div className="documents-expanded-plan"><span className="documents-expanded-plan-label">Plan</span>
-        <PlanChips row={row} groupRevision={groupOf(row.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} /></div>
       <ExpandedRowLoader row={row} refresh={page} projectKey={projectKey} query={viewQuery} onNavigate={route => onNavigate(route)}
-        adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} onAnnounce={announce} textVersionTools={textVersionTools}
-        onOpenConfirm={request => openConfirm(request, row)}
-        renderConfirm={submission => (own && own.request.kind !== "keep" && own.request.submissionId === submission.submission_id ? confirmElement(own) : null)}
-        keepConfirm={own?.request.kind === "keep" ? confirmElement(own) : undefined}
-        confirmBusy={confirm?.busy ?? false} layout={options?.layout}
+        textVersionTools={textVersionTools} me={currentUser?.pseudonym ?? null}
+        plan={<PlanChips row={row} groupRevision={groupOf(row.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} />}
         planRevision={planSaves.revisionOf(row.case_id, groupOf(row.case_id)?.plan_revision ?? 1)} onAssign={onAssign}
-        autoAction={autoAction?.rowKey === rowKeyOf(row) ? autoAction : null} onAutoActionDone={() => setAutoAction(null)}
-        translationSlot={rowPanel?.rowKey === rowKeyOf(row) && panelInBlock(row) ? resolvePanel(row, rowPanel) : undefined} />
+        revealTextVersions={revealFor === key} onTextVersionsRevealed={() => setRevealFor(null)} />
     </>;
   };
 
-  // "Correct the translation yourself…" in the Translation review block (F1): the lead's own correction.
-  const correctionHost = useMemo<LeadCorrectionHost>(() => ({ projectKey, onNavigate: route => onNavigate(route) }), [projectKey, onNavigate]);
+  /** The interim final-result choice under a row (Compare results…, Accept result…, Review changes…). */
+  const finalChoicePanel = (row: DocumentRowView): JSX.Element => {
+    const own = confirm?.request.rowKey === rowKeyOf(row) ? confirm : null;
+    return <FinalChoiceLoader row={row} refresh={page} projectKey={projectKey} query={viewQuery} onNavigate={route => onNavigate(route)}
+      adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} onAnnounce={announce}
+      onOpenConfirm={request => openConfirm(request, row)}
+      renderConfirm={submission => (own && own.request.kind !== "keep" && own.request.submissionId === submission.submission_id ? confirmElement(own) : null)}
+      keepConfirm={own?.request.kind === "keep" ? confirmElement(own) : undefined}
+      confirmBusy={confirm?.busy ?? false} layout={narrow ? "list" : "table"}
+      autoAction={autoAction?.rowKey === rowKeyOf(row) ? autoAction : null} onAutoActionDone={() => setAutoAction(null)}
+      onClose={() => closeFinalChoice(rowKeyOf(row))} />;
+  };
 
   const resolvePanel = (row: DocumentRowView, panel: RowPanel): JSX.Element => {
     const key = rowKeyOf(row);
@@ -791,10 +792,12 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const renderRowNotice = (row: DocumentRowView): ReactNode | null => {
     const key = rowKeyOf(row);
     const panel = rowPanel?.rowKey === key ? rowPanel : null;
-    if (!panel && !planSaves.noticeOf(row)) return null;
+    const choosing = finalChoice === key;
+    if (!panel && !choosing && !planSaves.noticeOf(row)) return null;
     return <>
       <PlanRowNotice row={row} saves={planSaves} />
-      {panel && !panelInBlock(row) && resolvePanel(row, panel)}
+      {panel && resolvePanel(row, panel)}
+      {choosing && finalChoicePanel(row)}
     </>;
   };
 
@@ -937,7 +940,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         }}>{nextLabel}: {nameOfKey(success.next)}</a></>}
       </div>
     </div>}
-    <LeadCorrectionContext.Provider value={correctionHost}>{content}</LeadCorrectionContext.Provider>
+    {content}
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <Dialog open={uploadOpen} title="Upload texts" size="lg" onClose={() => setUploadOpen(false)}>
       {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus}
@@ -968,25 +971,17 @@ interface ExpandedRowLoaderProps {
   projectKey: string;
   query: ProjectDocumentsQuery;
   onNavigate: (route: Route) => void;
-  adjudicatorNotAnnotator: boolean;
-  onAnnounce: (message: string) => void;
   textVersionTools?: TextVersionsTools;
-  layout?: ExpandedRowProps["layout"];
+  me: ExpandedRowProps["me"];
+  plan: ExpandedRowProps["plan"];
   planRevision?: ExpandedRowProps["planRevision"];
   onAssign?: ExpandedRowProps["onAssign"];
-  translationSlot?: ExpandedRowProps["translationSlot"];
-  /** Opens a final-result confirmation built from this row and its loaded submissions. */
-  onOpenConfirm: (request: FinalConfirmRequest) => void;
-  renderConfirm: ExpandedRowProps["renderConfirm"];
-  keepConfirm?: ExpandedRowProps["keepConfirm"];
-  confirmBusy: boolean;
-  /** A row action to run once the submissions are loaded. */
-  autoAction: AutoAction | null;
-  onAutoActionDone: () => void;
+  revealTextVersions: boolean;
+  onTextVersionsRevealed: () => void;
 }
 
-/** Loads the submissions of an open row and reloads them whenever the rows refresh. */
-function ExpandedRowLoader({ row, refresh, projectKey, onOpenConfirm, autoAction, onAutoActionDone, ...props }: ExpandedRowLoaderProps): JSX.Element {
+/** Submissions of a row, reloaded whenever the rows refresh (a new page). */
+function useRefreshedSubmissions(projectKey: string, row: DocumentRowView, refresh: DocumentRowsPage | null) {
   const submissions = useRowSubmissions(projectKey, row.case_id, row.language, true);
   const mounted = useRef(false);
   const { reload } = submissions;
@@ -996,6 +991,38 @@ function ExpandedRowLoader({ row, refresh, projectKey, onOpenConfirm, autoAction
     // Only a new rows page triggers the reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refresh]);
+  return submissions;
+}
+
+/** The slim expansion of an open row with its submissions (history times, consolidation, technical details). */
+function ExpandedRowLoader({ row, refresh, projectKey, ...props }: ExpandedRowLoaderProps): JSX.Element {
+  const submissions = useRefreshedSubmissions(projectKey, row, refresh);
+  return <ExpandedRow row={row} projectKey={projectKey} submissions={submissions} {...props} />;
+}
+
+interface FinalChoiceLoaderProps {
+  row: DocumentRowView;
+  refresh: DocumentRowsPage | null;
+  projectKey: string;
+  query: ProjectDocumentsQuery;
+  onNavigate: (route: Route) => void;
+  adjudicatorNotAnnotator: boolean;
+  onAnnounce: (message: string) => void;
+  layout: FinalChoiceProps["layout"];
+  /** Opens a final-result confirmation built from this row and its loaded submissions. */
+  onOpenConfirm: (request: FinalConfirmRequest) => void;
+  renderConfirm: FinalChoiceProps["renderConfirm"];
+  keepConfirm?: FinalChoiceProps["keepConfirm"];
+  confirmBusy: boolean;
+  /** A row action to run once the submissions are loaded. */
+  autoAction: AutoAction | null;
+  onAutoActionDone: () => void;
+  onClose: () => void;
+}
+
+/** Loads the submissions for the final-result choice under a row and runs the row action once they are loaded. */
+function FinalChoiceLoader({ row, refresh, projectKey, onOpenConfirm, autoAction, onAutoActionDone, ...props }: FinalChoiceLoaderProps): JSX.Element {
+  const submissions = useRefreshedSubmissions(projectKey, row, refresh);
   const data: RowSubmissions | null = submissions.data;
   // "Choose final…": one eligible submission opens its "Use as final"; several focus Submissions.
   // "Review changes…": the Keep confirmation for every acknowledgeable cause.
@@ -1016,7 +1043,7 @@ function ExpandedRowLoader({ row, refresh, projectKey, onOpenConfirm, autoAction
   const onSelectFinal = (request: SelectFinalRequest) => onOpenConfirm(selectRequest(row, data, request.submission, request.triggerId));
   const onKeep = (request: KeepRequest) =>
     onOpenConfirm(keepRequest(row, data, request.causeIds, request.triggerId));
-  return <ExpandedRow row={row} projectKey={projectKey} submissions={submissions} onSelectFinal={onSelectFinal} onKeep={onKeep} {...props} />;
+  return <FinalChoice row={row} projectKey={projectKey} submissions={submissions} onSelectFinal={onSelectFinal} onKeep={onKeep} {...props} />;
 }
 
 function ReviewHistory({ projectKey, documentId, onClose }: { projectKey: string; documentId: string; onClose: () => void }): JSX.Element {

@@ -1,5 +1,6 @@
 /**
- * Lead options for a translation that blocks the plan, shown under the Documents row.
+ * Lead options for a translation that blocks the plan, shown inline under the Documents row; focus
+ * goes to their heading (F5; documents overview Change 13).
  * - `resolve` (rule 4, D5): exactly "Assign a new review…", "Correct the translation…" (the lead's own
  *   correction, F1; "Continue your correction" while the lead holds one) and
  *   "Discard the {language} translation…" (reason required, consequences confirmed inline).

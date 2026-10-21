@@ -1,27 +1,16 @@
 /**
  * The lead's own correction of a rejected or queried translation (spec F1, FD1 to FD9): an inline
  * panel that explains the outcome, starts the lead correction (`startLeadCorrection`) and opens the
- * ordinary translation review screen (`#/tasks/{assignment_id}`). Shown from the Resolve options
- * ("Correct the translation…") and from the Translation review block ("Correct the translation yourself…").
+ * ordinary translation review screen (`#/tasks/{assignment_id}`). Shown from the inline Resolve options
+ * under the Documents row ("Correct the translation…"; documents overview Change 13).
  */
-import { createContext, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type DocumentRowView } from "../api/client";
 import { textLabel } from "../app/identity";
 import type { Route } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Checkbox, InlineMessage } from "../ui";
 import { RouteLink } from "./RowCells";
-
-/** What the lead's Documents page lends the Translation review block for a lead correction. */
-export interface LeadCorrectionHost {
-  projectKey: string;
-  onNavigate: (route: Route) => void;
-}
-
-/** Provided by the lead's Documents page only; without it no lead-correction entry is shown. */
-export const LeadCorrectionContext = createContext<LeadCorrectionHost | null>(null);
-
-export const RESOLVE_CORRECTION_CODES: ReadonlySet<string> = new Set(["resolve_rejected", "resolve_queried"]);
 
 /** The version a correction acts on: the step's version, else the newest version of the row. */
 export function correctionDocumentId(row: DocumentRowView): string {
