@@ -2750,7 +2750,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <div className="app-title">
           {/* Assignment routes go back through the shell breadcrumb; only the legacy path keeps its own way back. */}
           {!assignmentNavigation && (
-            <Button type="button" variant="quiet" size="sm" onClick={() => { void leaveCase(onClose); }} title="Back to dashboard">
+            <Button type="button" size="sm" onClick={() => { void leaveCase(onClose); }} title="Back to dashboard">
               ← Dashboard
             </Button>
           )}
@@ -2786,7 +2786,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               ? "Assisted annotation"
               : "Independent annotation"}
           </span>
-          {consolidationAssignmentId ? <a className="btn btn-quiet btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })}>Back to consolidation</a> : null}
+          {consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })}>Back to consolidation</a> : null}
           {/* The display name has a bounded width (full text in the title), so the header
               does not need another line; the pseudonym is never shortened. */}
           <span
@@ -2984,7 +2984,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                 <div className="doc-meta__line">
                                   <Button
                                     type="button"
-                                    className="replaced-link"
+                                    size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (dec.replacement?.annotation_id) {
@@ -3044,7 +3044,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 <span>Findings ({visibleAnnotations.length})</span>
                 <Button
                   type="button"
-                  variant="quiet" size="sm"
+                  size="sm"
                   disabled={readOnly || !!spanlessBlockedReason} onClick={handleStartSpanless}
                   title="Create new annotation via ontology search"
                 >
@@ -3195,7 +3195,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       ? "New finding without a text span"
                       : "New finding"}
                   </h2>
-                  {pendingIsMarkedSpan && <Button type="button" variant="quiet" size="sm" aria-keyshortcuts="Escape" onClick={discardPending}>
+                  {pendingIsMarkedSpan && <Button type="button" size="sm" aria-keyshortcuts="Escape" onClick={discardPending}>
                     Discard<span aria-hidden="true"> <Kbd>Esc</Kbd></span>
                   </Button>}
                 </div>

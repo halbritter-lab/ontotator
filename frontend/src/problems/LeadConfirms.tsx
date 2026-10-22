@@ -194,7 +194,7 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
       };
       body = <>
         {lead.candidatesLoading && <InlineMessage tone="info">Loading tasks…</InlineMessage>}
-        {lead.candidatesError !== undefined && !lead.candidatesLoading && <InlineMessage tone="error">Could not load the tasks. <Button size="sm" variant="quiet" onClick={() => lead.loadCandidates(true)}>Retry</Button></InlineMessage>}
+        {lead.candidatesError !== undefined && !lead.candidatesLoading && <InlineMessage tone="error">Could not load the tasks. <Button size="sm" onClick={() => lead.loadCandidates(true)}>Retry</Button></InlineMessage>}
         {lead.candidates && <>
           <fieldset className="lead-task-picker">
             <legend>Same text: {report.case_id}</legend>

@@ -52,7 +52,7 @@ it("one button for the first lead-owned step and a +n menu for the others", () =
   expect(container.querySelector("button")).toBeNull();
 });
 
-it("Plan… is a secondary button on undecided rows and a quiet text button on not-in-plan rows; none on in-plan rows", () => {
+it("Plan… is a secondary button on undecided rows and on not-in-plan rows (never a text link); none on in-plan rows", () => {
   render(<Harness row={undecided()} />);
   const secondary = screen.getByRole("button", { name: "Plan…, case-101 · de" });
   expect(secondary.textContent).toBe("Plan…");
@@ -61,7 +61,7 @@ it("Plan… is a secondary button on undecided rows and a quiet text button on n
   expect(secondary.getAttribute("aria-expanded")).toBe("false");
   cleanup();
   render(<Harness row={notInPlanRow("case-101", "en", { is_source: true })} />);
-  expect(screen.getByRole("button", { name: "Plan…, case-101 · en" }).className).toContain("btn-quiet");
+  expect(screen.getByRole("button", { name: "Plan…, case-101 · en" }).className).toContain("btn-secondary");
   cleanup();
   const { container } = render(<Harness row={stagedRow("case-110", "de", { steps: [stepOf("done")] })} />);
   expect(container.querySelector("button")).toBeNull();

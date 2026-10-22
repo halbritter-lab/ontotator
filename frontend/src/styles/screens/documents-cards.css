@@ -48,7 +48,6 @@
 /* The row action spans the card (at least 32px high). */
 .document-card .documents-action--block { width: 100%; min-height: 32px; justify-content: center; white-space: normal; }
 .document-card-notice { min-width: 0; }
-.document-card-toggle { display: inline-flex; align-items: center; gap: var(--space-1); padding: 0; border: 0; color: var(--accent); background: transparent; font: inherit; cursor: pointer; }
 /* "Details": the only way into the row panel's sheet below 700 px (X19); the shown card is outlined. */
 .documents-details-button { padding: 0; border: 0; color: var(--accent); background: transparent; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; white-space: nowrap; }
 .documents-details-button:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
@@ -61,12 +60,10 @@
 /* Links wrap as a whole, never mid-link; long IDs may break anywhere. */
 .document-card a { white-space: nowrap; }
 .document-card .documents-id { overflow-wrap: anywhere; }
-.document-card-toggle { white-space: nowrap; }
 
 @media (forced-colors: active) {
   .document-card { border-color: CanvasText; }
   .document-card--decision { border-left-color: CanvasText; }
-  .document-card-toggle { color: LinkText; }
   .documents-details-button { color: LinkText; }
   .document-card--active { border-color: Highlight; }
 }

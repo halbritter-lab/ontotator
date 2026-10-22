@@ -118,7 +118,7 @@ export function ProblemReportForm({ assignment, onSaveBeforeReport, onReported, 
   const footer = <>
     <Button variant="primary" loading={busy} aria-disabled={gated || undefined} aria-describedby={gated ? gateId : undefined}
       onClick={() => { void submit(); }}>Report and pause my task</Button>
-    <Button variant="quiet" aria-disabled={busy || undefined} onClick={cancel}>Cancel</Button>
+    <Button aria-disabled={busy || undefined} onClick={cancel}>Cancel</Button>
   </>;
   return frame({ body, footer, initialFocus: textarea, onClose: busy ? undefined : close });
 }

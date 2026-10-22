@@ -105,7 +105,7 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
       <p>{openWorkLine(person, from, to)}</p>
       {held ? <p className="text-change-held">
         {heldLine(person)}{" "}
-        {props.onDecideReport && <Button variant="quiet" size="sm" onClick={props.onDecideReport}>Decide on report…</Button>}
+        {props.onDecideReport && <Button size="sm" onClick={props.onDecideReport}>Decide on report…</Button>}
       </p> : <fieldset className="text-change-options">
         <legend className="visually-hidden">How to continue</legend>
         {options.map(option => {

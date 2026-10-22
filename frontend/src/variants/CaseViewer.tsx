@@ -187,7 +187,7 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, compare, 
   const selectedFinal = finalResults.state?.selections.find(row => row.case_id === caseId && row.language === current.language);
   return <section className={`case-viewer${compareOpen ? " case-comparing" : ""}`} aria-label="Case viewer">
     <div className="case-toolbar" role="group" aria-label="Case">
-      <a href={routeHref({ name: 'projectDocuments', key: projectKey, ...documents })} onClick={event => {
+      <a className="btn btn-secondary btn-sm" href={routeHref({ name: 'projectDocuments', key: projectKey, ...documents })} onClick={event => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault(); onNavigate({ name: 'projectDocuments', key: projectKey, ...documents });
       }}>Back to Documents</a>

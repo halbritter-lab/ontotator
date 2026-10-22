@@ -129,7 +129,7 @@ export function CarryDialog(props: CarryDialogProps): JSX.Element {
   </>}>
     <div className="text-change-dialog">
       <p>{preview ? submittedLine(author, from, source.roundOrdinal, preview.findings) : previewError ? submittedLine(author, from, source.roundOrdinal, null) : CHECKING}</p>
-      {previewError !== null && <p className="text-change-error">{errorMessage(previewError)} <Button size="sm" variant="quiet" onClick={() => setReload(value => value + 1)}>Retry</Button></p>}
+      {previewError !== null && <p className="text-change-error">{errorMessage(previewError)} <Button size="sm" onClick={() => setReload(value => value + 1)}>Retry</Button></p>}
       <fieldset className="text-change-options">
         <legend className="visually-hidden">Who continues</legend>
         {options.map(option => {
@@ -161,7 +161,7 @@ export function CarryDialog(props: CarryDialogProps): JSX.Element {
       {confirming && <section className="assign-confirm" aria-label="Confirm languages">
         <p>{`${mode === "other" && chosen ? chosen.display_name : author} does not read every language this task needs. Assign anyway?`}</p>
         <span className="assign-confirm-actions">
-          <Button variant="quiet" disabled={busy} onClick={() => setConfirming(false)}>Back</Button>
+          <Button disabled={busy} onClick={() => setConfirming(false)}>Back</Button>
           <Button loading={busy} onClick={() => { void carry(true); }}>Assign anyway</Button>
         </span>
       </section>}

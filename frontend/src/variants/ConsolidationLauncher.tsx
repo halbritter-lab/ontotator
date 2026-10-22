@@ -148,7 +148,7 @@ function ConsolidationContent(props: Props): JSX.Element {
     {created && <InlineMessage tone="success">
       {created.self ? 'Consolidation assigned to you.' : `Consolidation assigned to ${created.name}.`}
       {created.roleGranted && ' You now have the Adjudicator role for this project.'}
-      {created.self && <> <a href={`#/tasks/${created.round.assignment_id}`}>Open my consolidation task</a></>}
+      {created.self && <> <a className="btn btn-secondary btn-sm" href={`#/tasks/${created.round.assignment_id}`}>Open my consolidation task</a></>}
     </InlineMessage>}
   </section>;
 }

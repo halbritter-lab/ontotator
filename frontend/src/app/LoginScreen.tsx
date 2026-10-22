@@ -137,7 +137,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
           <Button type="submit" variant="primary" disabled={busy}>
             Log in
           </Button>
-          <Button variant="quiet" className="login-link" onClick={() => switchTo("code")}>
+          <Button className="login-link" onClick={() => switchTo("code")}>
             I have a setup or reset code
           </Button>
         </form>
@@ -191,7 +191,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
           <Button type="submit" variant="primary" disabled={busy}>
             Set password and log in
           </Button>
-          <Button variant="quiet" className="login-link" onClick={() => switchTo("login")}>
+          <Button className="login-link" onClick={() => switchTo("login")}>
             Back to login
           </Button>
         </form>

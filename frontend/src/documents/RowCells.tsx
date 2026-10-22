@@ -265,10 +265,10 @@ export function RowOpenLinks({ row, projectKey, query, onNavigate }: {
   const descriptionId = useId();
   const { route, description } = openLink(row, projectKey, query);
   return <>
-    <RouteLink route={route} onNavigate={onNavigate} className="documents-open" aria-label={`Open in editor, ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
+    <RouteLink route={route} onNavigate={onNavigate} className="documents-open btn btn-secondary btn-sm" aria-label={`Open in editor, ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
     {description && <span id={descriptionId} className="visually-hidden">{description}</span>}
     {row.own_open_assignment_id != null && (
-      <RouteLink route={{ name: "task", assignmentId: row.own_open_assignment_id }} onNavigate={onNavigate} className="documents-open-task">Open my task</RouteLink>
+      <RouteLink route={{ name: "task", assignmentId: row.own_open_assignment_id }} onNavigate={onNavigate} className="documents-open-task btn btn-secondary btn-sm">Open my task</RouteLink>
     )}
   </>;
 }

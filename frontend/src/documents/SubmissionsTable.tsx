@@ -151,7 +151,7 @@ export function SubmissionsTable({
   const pendingList = pending.length > 0 && <ul className="submissions-pending">
     {pending.map(round => <li key={round.round_id}>{`${roundName({ round_ordinal: round.round_ordinal, round_id: round.round_id, kind: round.kind })} · ${personLabel(round.author_label, round.is_me, round.author)} · in progress, not submitted yet`}</li>)}
   </ul>;
-  const showAllButton = collapsed && <Button size="sm" variant="quiet" onClick={() => setShowAll(true)}>Show all ({sorted.length})</Button>;
+  const showAllButton = collapsed && <Button size="sm" onClick={() => setShowAll(true)}>Show all ({sorted.length})</Button>;
 
   if (layout === "list") {
     return <div className="submissions-table submissions-list-layout">

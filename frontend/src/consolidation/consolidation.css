@@ -27,9 +27,7 @@
 }
 
 .cons-back {
-  display: inline-block;
   margin-block-end: var(--space-1);
-  font-size: var(--size-sm);
 }
 
 .cons-header-actions {

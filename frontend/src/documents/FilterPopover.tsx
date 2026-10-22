@@ -62,7 +62,7 @@ export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAl
         {label}
       </label>)}
     </fieldset>
-    <Button size="sm" variant="quiet" onClick={onClearAll}>Clear all</Button>
+    <Button size="sm" onClick={onClearAll}>Clear all</Button>
     {narrow && <Button size="sm" variant="primary" onClick={() => setOpen(false)}>{`Show ${plural(shown, "text")}`}</Button>}
   </>;
 

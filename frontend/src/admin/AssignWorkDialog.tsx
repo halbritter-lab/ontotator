@@ -232,7 +232,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       {task && (props.mode === "row" ? <div className="assign-field">
         {changingTask
           ? <Select id={`${id}-task`} label="Task" value={current ?? ""} disabled={busy} onChange={event => changeStep(event.target.value)}>{stepOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
-          : <p><strong>Task</strong> <span>{props.newReviewOfAccepted && task === "translation_review" ? "New review of the accepted translation" : sourceChanged ? "Review after a source change" : stepName(task)}</span> <Button variant="quiet" size="sm" disabled={busy} onClick={() => setChangingTask(true)}>Change task</Button></p>}
+          : <p><strong>Task</strong> <span>{props.newReviewOfAccepted && task === "translation_review" ? "New review of the accepted translation" : sourceChanged ? "Review after a source change" : stepName(task)}</span> <Button size="sm" disabled={busy} onClick={() => setChangingTask(true)}>Change task</Button></p>}
       </div> : steps && steps.length > 1
         ? <div className="assign-field"><Select id={`${id}-task`} label="Task" hint="from the plan" value={current ?? ""} disabled={busy} onChange={event => changeStep(event.target.value)}>{stepOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></div>
         : <p className="assign-field"><strong>Task</strong> <span className="assign-step">{stepOptions[0]?.label}</span> <span className="assign-muted">from the plan</span></p>)}
@@ -280,7 +280,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
 
       <div className="assign-summary" role="status" aria-live="polite" aria-label="Summary">{summaryLines.map(line => <p key={line}>{line}</p>)}</div>
 
-      {fresh && fresh.targets.length > 0 && <p className="assign-random"><Button variant="quiet" size="sm" disabled={busy} onClick={() => { randomChanged.current = false; setRandomOpen(true); }}>Random distribution…</Button></p>}
+      {fresh && fresh.targets.length > 0 && <p className="assign-random"><Button size="sm" disabled={busy} onClick={() => { randomChanged.current = false; setRandomOpen(true); }}>Random distribution…</Button></p>}
 
       {notice && <p className="assign-notice" role="alert">{notice}</p>}
       {failure && <p className="assign-error" role="alert">{failure}</p>}
@@ -292,7 +292,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         {!mismatched.length && <p>Some chosen people do not read every language this task needs.</p>}
         {mismatched.map(person => <p key={person.username}>{personName(person.person)} {person.reads.includes(language) ? "does not read the source language" : `does not read ${language}`}.</p>)}
         <p>Assign anyway?</p>
-        <span className="assign-confirm-actions"><Button variant="quiet" disabled={busy} onClick={() => setConfirming(false)}>Back</Button><Button loading={busy} onClick={() => { void commit(true); }}>Assign anyway</Button></span>
+        <span className="assign-confirm-actions"><Button disabled={busy} onClick={() => setConfirming(false)}>Back</Button><Button loading={busy} onClick={() => { void commit(true); }}>Assign anyway</Button></span>
       </section>}
     </div>
     {randomOpen && fresh && task && <DistributionDialog projectKey={props.projectKey} task={task}

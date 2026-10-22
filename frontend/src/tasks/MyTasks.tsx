@@ -157,7 +157,7 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
     })}</Toolbar>
   }>{managed.length > 0 && "As a project lead, you assign documents to people, yourself included, on the Documents page."}</EmptyState>;
   const allRoute = tabRoute("all");
-  const tabEmpty = <EmptyState title={activeTab.empty} action={<a href={routeHref(allRoute)} onClick={event => {
+  const tabEmpty = <EmptyState title={activeTab.empty} action={<a className="btn btn-secondary" href={routeHref(allRoute)} onClick={event => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(allRoute);
   }}>Show all tasks</a>} />;

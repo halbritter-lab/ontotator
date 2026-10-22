@@ -216,7 +216,7 @@ export function RowPanel(props: RowPanelProps): JSX.Element {
   const navButton = (delta: 1 | -1) => {
     const target = delta > 0 ? next : previous;
     const label = delta > 0 ? "Next" : "Previous";
-    return <Button size="sm" variant="quiet" aria-disabled={target ? undefined : true} aria-keyshortcuts={delta > 0 ? "J" : "K"}
+    return <Button size="sm" aria-disabled={target ? undefined : true} aria-keyshortcuts={delta > 0 ? "J" : "K"}
       aria-label={target ? `${label}: ${rowName(target)}` : `${label} row`} onClick={() => go(delta)}>{label}</Button>;
   };
   const headingText = <>{name}{version && <>{" "}<span className="row-panel-version">{version}</span></>}</>;
@@ -229,7 +229,7 @@ export function RowPanel(props: RowPanelProps): JSX.Element {
       heading={<span ref={heading} id={headingId} tabIndex={-1} className="row-panel-heading-target">{headingText}</span>}>
       <div className="row-panel row-panel--sheet">
         <div className="row-panel-nav">
-          <Button size="sm" variant="quiet" onClick={() => (onBack ?? close)()}>Back</Button>
+          <Button size="sm" onClick={() => (onBack ?? close)()}>Back</Button>
           {navButton(-1)}{navButton(1)}
         </div>
         {status}
@@ -288,7 +288,7 @@ function RowPanelBody(props: RowPanelProps & { name: string; tab: PanelTab }): J
     {(openReports.length > 0 || flagged || banner != null) && <div className="row-panel-banners">
       {openReports.length > 0 && <p className="row-panel-banner">
         {plural(openReports.length, "open problem report")}{" · "}
-        <RouteLink route={reportRoute(openReports[0].report_id)} onNavigate={onRoute} aria-label={`Open problem report, ${openReports[0].title}`}>Open</RouteLink>
+        <RouteLink route={reportRoute(openReports[0].report_id)} className="btn btn-secondary btn-sm" onNavigate={onRoute} aria-label={`Open problem report, ${openReports[0].title}`}>Open</RouteLink>
       </p>}
       {flags}
       {banner}
@@ -319,7 +319,7 @@ function FlagsBanner({ row, projectKey, name, query, onRoute }: { row: DocumentR
     {text}
     {roundId && <>{" · "}<RouteLink route={{ name: "projectConsolidation", key: projectKey, roundId, ...(row.flagged_group_id ? { group: row.flagged_group_id } : {}),
       ...(query && Object.keys(query).length ? { documents: query } : {}) }}
-      onNavigate={onRoute} aria-label={`Open flagged finding, ${name}`}>Open</RouteLink></>}
+      className="btn btn-secondary btn-sm" onNavigate={onRoute} aria-label={`Open flagged finding, ${name}`}>Open</RouteLink></>}
   </p>;
 }
 
@@ -379,10 +379,10 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
       <span>{personOf(assignment.pseudonym)}</span>
       {textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} onChanged={textVersionTools.onAssignmentsChanged} directReassign />}
     </div>)}
-    {review && <Button size="sm" variant="quiet" onClick={() => onAssign(row, "review")}>Assign annotation review…</Button>}
-    {correction && <Button size="sm" variant="quiet" onClick={() => onRequestCorrection(row)}>Request correction…</Button>}
-    {newReview && <Button size="sm" variant="quiet" onClick={() => onAssign(row, "translation_review", { newReviewOfAccepted: true })}>Assign a new review…</Button>}
-    {changeFinal && <Button size="sm" variant="quiet" onClick={() => onChangeFinal(row)}>Change final…</Button>}
+    {review && <Button size="sm" onClick={() => onAssign(row, "review")}>Assign annotation review…</Button>}
+    {correction && <Button size="sm" onClick={() => onRequestCorrection(row)}>Request correction…</Button>}
+    {newReview && <Button size="sm" onClick={() => onAssign(row, "translation_review", { newReviewOfAccepted: true })}>Assign a new review…</Button>}
+    {changeFinal && <Button size="sm" onClick={() => onChangeFinal(row)}>Change final…</Button>}
   </>;
 }
 

@@ -840,7 +840,6 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .ui-toast .btn-quiet { color: var(--on-accent); }
 .ui-toast .btn:hover { background: var(--text-muted); color: var(--on-accent); }
 .ui-toast .btn:focus-visible { outline: var(--focus-width) solid var(--accent-light); outline-offset: var(--focus-offset); }
-.ui-toast-action { text-decoration: underline; }
 /* Selection checkbox: a 24 x 24 px target around an 18 px box (case checkboxes, "Select all"). */
 .checkbox-target {
   appearance: none;

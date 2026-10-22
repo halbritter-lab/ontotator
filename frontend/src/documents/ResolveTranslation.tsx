@@ -150,7 +150,7 @@ function ResolveOptions(props: ResolveTranslationProps): JSX.Element {
         ? <Button ref={correctButton} size="sm" onClick={() => onNavigate({ name: "task", assignmentId: own.assignment_id })}>Continue your correction</Button>
         : <Button ref={correctButton} size="sm" onClick={() => setCorrecting(true)}>Correct the translation…</Button>}
       <Button ref={discardButton} size="sm" onClick={() => setDiscarding(true)}>{discardLabel}…</Button>
-      <Button size="sm" variant="quiet" onClick={onCancel}>Cancel</Button>
+      <Button size="sm" onClick={onCancel}>Cancel</Button>
     </div>
   </div>;
 }
@@ -196,7 +196,7 @@ function NotAcceptedOptions(props: ResolveTranslationProps): JSX.Element {
     {changed && <ChangedMessage />}
     {error !== undefined && <ErrorNotice error={error} />}
     <div className="documents-resolve-actions">
-      <Button size="sm" variant="quiet" onClick={onCancel}>Cancel</Button>
+      <Button size="sm" onClick={onCancel}>Cancel</Button>
       <Button size="sm" aria-disabled={missing || busy ? true : undefined} aria-describedby={missing ? `${id}-missing` : undefined}
         onClick={() => { void save("accept"); }}>Accept and annotate</Button>
     </div>

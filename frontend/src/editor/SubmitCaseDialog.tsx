@@ -133,7 +133,7 @@ export function SubmitCaseDialog({
         <ul style={{ paddingLeft: 18 }}>
           {listed.map(item => <li key={item.key} data-open-item={item.kind}>
             <strong>{item.term}</strong> <span>{item.line}</span>{" "}
-            <Button variant="quiet" size="sm" onClick={() => onGoTo(item)}>Go to {item.term}</Button>
+            <Button size="sm" onClick={() => onGoTo(item)}>Go to {item.term}</Button>
           </li>)}
         </ul>
         {items.length > LISTED_ITEMS && <p>and {items.length - LISTED_ITEMS} more</p>}

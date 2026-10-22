@@ -108,7 +108,7 @@ export function Toast({ toast, onDismiss, durationMs = 10_000, undoDescription =
         >
           <span className="ui-toast-message">{toast.message}</span>
           {toast.note && <span className="ui-toast-note">{toast.note}</span>}
-          {toast.onAction && <Button size="sm" variant="quiet" className="ui-toast-action" icon={toast.undo ? <IconUndo className="ui-toast-undo-icon" /> : <IconCheck />} onClick={runAction}>{toast.actionLabel ?? "Undo"}</Button>}
+          {toast.onAction && <Button size="sm" className="ui-toast-action" icon={toast.undo ? <IconUndo className="ui-toast-undo-icon" /> : <IconCheck />} onClick={runAction}>{toast.actionLabel ?? "Undo"}</Button>}
           <IconButton size="sm" variant="quiet" className="ui-toast-close" label="Dismiss" icon={<IconClose />} onClick={onDismiss} />
         </div>
       )}

@@ -1226,14 +1226,14 @@ describe("lead review fixes", () => {
     expect(document.getElementById("documents-group-case-d-toggle")!.tagName).toBe("SPAN");
   });
 
-  it("shows not-in-plan rows as muted rows with a quiet Plan… (VD1, VD2)", async () => {
+  it("shows not-in-plan rows as muted rows with a secondary Plan… button (VD1, VD2)", async () => {
     mockRows(page([group("case-1", [notInPlanRow("case-1", "en", { is_source: true }), notInPlanRow("case-1", "fr")])]));
     renderPage();
     const fr = (await screen.findByRole("button", { name: "Details, case-1 · fr" })).closest("tr")!;
     expect(fr.className).toContain("documents-row--not-in-plan");
     expect(screen.queryByText(/not in plan ·/)).toBeNull();
     const plan = within(fr).getByRole("button", { name: "Plan…, case-1 · fr" });
-    expect(plan.className).toContain("btn-quiet");
+    expect(plan.className).toContain("btn-secondary");
     fireEvent.click(plan);
     expect(within(screen.getByRole("dialog", { name: "Plan, case-1 · fr" })).getByRole("button", { name: "Annotate, case-1 · fr" })).toBeTruthy();
   });

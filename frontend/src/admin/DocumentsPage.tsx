@@ -120,8 +120,8 @@ export type AssignTask = "translation_review" | "annotate" | "review";
 
 /** Previous / Next; at either end an `aria-disabled` link that stays focusable (focus survives the page change). */
 function PagingLink({ route, onNavigate, children }: { route: Route | null; onNavigate: (route: Route) => void; children: ReactNode }): JSX.Element {
-  if (!route) return <a role="link" aria-disabled="true" tabIndex={0}>{children}</a>;
-  return <a href={routeHref(route)} onClick={event => {
+  if (!route) return <a role="link" aria-disabled="true" tabIndex={0} className="btn btn-secondary btn-sm">{children}</a>;
+  return <a className="btn btn-secondary btn-sm" href={routeHref(route)} onClick={event => {
     if (!isPlainClick(event)) return;
     event.preventDefault(); onNavigate(route);
   }}>{children}</a>;
@@ -138,7 +138,7 @@ export function DocumentsPage(props: DocumentsPageProps): JSX.Element {
     return <section className="documents-page">
       <h1>Documents</h1>
       <EmptyState title="Documents is for project leads"
-        action={<RouteLink route={MY_TASKS} onNavigate={route => props.onNavigate(route)}>Go to My tasks</RouteLink>}>
+        action={<RouteLink route={MY_TASKS} className="btn btn-secondary" onNavigate={route => props.onNavigate(route)}>Go to My tasks</RouteLink>}>
         Your tasks for this project are under My tasks.
       </EmptyState>
     </section>;
@@ -717,7 +717,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   } else {
     let body: JSX.Element;
     if (query.case && !page.case_found) {
-      body = <EmptyState title={`Text ${query.case} not found`} action={<RouteLink route={showAll} onNavigate={navigateLink}>Show all texts</RouteLink>} />;
+      body = <EmptyState title={`Text ${query.case} not found`} action={<RouteLink route={showAll} className="btn btn-secondary" onNavigate={navigateLink}>Show all texts</RouteLink>} />;
     } else if (page.groups.length === 0) {
       body = emptyState(page.bar);
     } else if (narrow) {
@@ -739,7 +739,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       <div className="documents-selection-tools">
         {page.groups.length > 0 && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
           aria-busy={selectingAll || undefined} onChange={() => { void toggleAll(); }} />}
-        <Button variant="quiet" size="sm" onClick={() => setIdsDialogOpen(true)}>Select by case IDs…</Button>
+        <Button size="sm" onClick={() => setIdsDialogOpen(true)}>Select by case IDs…</Button>
       </div>
       {selectionError !== undefined && <ErrorNotice error={selectionError} />}
       {!narrow && selectionBar}
@@ -758,7 +758,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   return <section className="documents-page">
     <div className="documents-heading">
       <h1 ref={headingRef} tabIndex={-1}>Documents</h1>
-      <Button variant="quiet" aria-disabled={settings ? undefined : true} onClick={() => { if (settings) setUploadOpen(true); }}>Upload texts…</Button>
+      <Button aria-disabled={settings ? undefined : true} onClick={() => { if (settings) setUploadOpen(true); }}>Upload texts…</Button>
     </div>
     {page && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />}
     <Toolbar label="Document filters" className="documents-filters">
@@ -767,7 +767,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       {chips.length > 0 && <div ref={chipList} className="documents-filter-chips">
         {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} onRemove={() => removeChip(index)} />)}
       </div>}
-      {filtersActive(query) && <Button size="sm" variant="quiet" onClick={clearAll}>Clear all</Button>}
+      {filtersActive(query) && <Button size="sm" onClick={clearAll}>Clear all</Button>}
       {page && filtersActive(query) && <p className="documents-filter-count">{`${page.bar.shown} of ${tabCount(page.bar, tab)}`}</p>}
     </Toolbar>
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}

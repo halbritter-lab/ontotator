@@ -224,12 +224,12 @@ it("row mode shows context, Currently and Change task", async () => {
   await waitFor(() => expect(lastPreview().task).toBe("review"));
 });
 
-it("offers Random distribution… as a quiet link", async () => {
+it("offers Random distribution… as a secondary button", async () => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   render(<AssignWorkDialog {...casesProps()} />); await ready();
   const link = screen.getByRole("button", { name: "Random distribution…" });
-  expect(link.className).toContain("btn-quiet");
+  expect(link.className).toContain("btn-secondary");
   fireEvent.click(link);
   expect(await screen.findByRole("dialog", { name: "Propose distribution" })).toBeDefined();
 });

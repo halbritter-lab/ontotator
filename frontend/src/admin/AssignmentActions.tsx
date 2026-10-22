@@ -39,11 +39,11 @@ function Actions({ assignment, members, onChanged, directReassign = false }: Ass
   };
   if (assignment.revoked_at) return <span>Removed</span>;
   return <>
-    {directReassign && <Button size="sm" variant="quiet" onClick={() => setAction("reassign")}>Reassign…</Button>}
+    {directReassign && <Button size="sm" onClick={() => setAction("reassign")}>Reassign…</Button>}
     <details><summary aria-label={`Actions for ${assignment.pseudonym}: ${labelFor(taskLabels, assignment.task)}, ${assignment.document_id}`}>Assignment actions</summary>
-    {!directReassign && <Button variant="quiet" onClick={() => setAction("reassign")}>Reassign …</Button>}
-    {assignment.status === "submitted" && <Button variant="quiet" onClick={() => setAction("reopen")}>Reopen</Button>}
-    <Button variant="quiet" onClick={() => setAction("revoke")}>Remove assignment</Button>
+    {!directReassign && <Button onClick={() => setAction("reassign")}>Reassign …</Button>}
+    {assignment.status === "submitted" && <Button onClick={() => setAction("reopen")}>Reopen</Button>}
+    <Button onClick={() => setAction("revoke")}>Remove assignment</Button>
     </details>
     <Dialog open={action === "reassign"} title={`Reassign ${assignment.document_id}`} onClose={busy || confirmation ? undefined : close} footer={<><Button disabled={busy || confirmation !== null} onClick={close}>Cancel</Button><Button disabled={!target || confirmation !== null} loading={busy} onClick={() => { if (assignment.status !== "open" && !confirmedStarted) setConfirmation("started"); else void mutate(confirmedStarted, false); }}>Reassign</Button></>}>
       <p>{assignment.pseudonym}: {labelFor(taskLabels, assignment.task)}, {labelFor(assignmentStatusLabels, assignment.status).toLowerCase()}</p>

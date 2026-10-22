@@ -52,7 +52,7 @@ export function RowActivity({ row, projectKey, submissions, stage, onStage, repo
   return <div className="row-activity">
     {stage && <p className="row-activity-filter">
       <FilterChip label={STAGE_TITLES[stage]} onRemove={() => onStage(undefined)} />
-      <Button size="sm" variant="quiet" onClick={() => onStage(undefined)}>Show all stages</Button>
+      <Button size="sm" onClick={() => onStage(undefined)}>Show all stages</Button>
     </p>}
     {lines.length > 0
       ? <ul className="row-activity-lines" aria-label="Activity">{lines.map(line => <li key={line.key} className="row-activity-line">

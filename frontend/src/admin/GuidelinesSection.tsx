@@ -155,7 +155,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
     { id: "actions", header: "Actions", cell: item => item.withdrawn ? null : <div className="guidelines-row-actions">
       <Button size="sm" aria-label={`Read v${item.version}`} onClick={() => setReading(item.version)}>Read</Button>
       {item.version !== current?.version && <Button size="sm" onClick={() => { void republish(item.version); }}>Republish v{item.version}…</Button>}
-      <Button size="sm" variant="quiet" onClick={() => openWithdraw(item.version)}>Withdraw v{item.version}…</Button>
+      <Button size="sm" onClick={() => openWithdraw(item.version)}>Withdraw v{item.version}…</Button>
     </div> },
   ];
 
@@ -178,7 +178,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
         </div>}
         <div className="guidelines-current-actions">
           <Button onClick={() => setReading(current.version)}>Read v{current.version}</Button>
-          <Button variant="quiet" onClick={() => openWithdraw(current.version)}>Withdraw v{current.version}…</Button>
+          <Button onClick={() => openWithdraw(current.version)}>Withdraw v{current.version}…</Button>
         </div>
       </div>
       : latestWithdrawn ? <InlineMessage tone="warning">{`No guideline is in force. v${listing.latest_version} was withdrawn on ${formatGuidelineDay(latestWithdrawn.at)} by ${personLabel(latestWithdrawn.by)}. Publish a new version${versions.some(item => !item.withdrawn) ? ", or republish an earlier version from the list below" : ""}.`}</InlineMessage>
@@ -196,7 +196,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
           <div className="guidelines-publish-bar">
             <div className="guidelines-publish-actions">
               <Button type="submit" variant="primary" loading={publishing}>Publish as v{nextVersion}</Button>
-              <Button variant="quiet" aria-disabled={publishing || undefined} onClick={() => { if (!writing.current) discard(); }}>Discard</Button>
+              <Button aria-disabled={publishing || undefined} onClick={() => { if (!writing.current) discard(); }}>Discard</Button>
             </div>
             {publishError !== undefined && <ErrorNotice error={publishError} />}
           </div>
@@ -219,13 +219,13 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
 
       {reading !== null && <section ref={readerRef} tabIndex={-1} className="guidelines-reading" aria-label={`Reading v${reading}`}>
         <GuidelineReader key={`${reading}-${generation}`} projectKey={projectKey} version={reading} currentVersion={current?.version ?? null} />
-        <Button variant="quiet" onClick={() => setReading(null)}>Close the reading view</Button>
+        <Button onClick={() => setReading(null)}>Close the reading view</Button>
       </section>}
     </>}
 
     <Dialog open={target !== null} size="sm" title={`Withdraw v${withdrawTarget ?? ""}?`} onClose={closeWithdraw}
       footer={<>
-        <Button variant="quiet" onClick={closeWithdraw} aria-disabled={withdrawing || undefined}>Cancel</Button>
+        <Button onClick={closeWithdraw} aria-disabled={withdrawing || undefined}>Cancel</Button>
         <Button variant="danger" loading={withdrawing} onClick={() => { void withdraw(); }}>Withdraw v{withdrawTarget}</Button>
       </>}>
       {target && <>

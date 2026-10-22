@@ -81,7 +81,7 @@ export function OntologiesPage({ onNavigate }: OntologiesPageProps): JSX.Element
     { id: "prefix", header: "Prefix", cell: item => item.prefix },
     { id: "release", header: "Release", cell: item => item.release ?? "—" },
     { id: "language", header: "Language", cell: item => item.language ?? "—" },
-    { id: "sha", header: "SHA-256", cell: item => <><code title={item.sha256}>{item.sha256.slice(0, 12)}</code>{" "}<Button size="sm" variant="quiet" aria-label={`Copy SHA-256 for ${item.filename}`} disabled={copying !== null} onClick={() => { void copy(item); }}>Copy</Button></> },
+    { id: "sha", header: "SHA-256", cell: item => <><code title={item.sha256}>{item.sha256.slice(0, 12)}</code>{" "}<Button size="sm" aria-label={`Copy SHA-256 for ${item.filename}`} disabled={copying !== null} onClick={() => { void copy(item); }}>Copy</Button></> },
     { id: "uploaded", header: "Uploaded at", cell: item => <time dateTime={item.uploaded_at}>{formatDateTime(item.uploaded_at)}</time> },
     { id: "projects", header: "Pinned by", cell: item => item.projects.length ? <ul>{item.projects.map(key => {
       const route: Route = { name: "projectSettings", key };

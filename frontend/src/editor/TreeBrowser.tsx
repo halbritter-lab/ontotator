@@ -299,15 +299,14 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
                       <ul>
                         {otherParents.map((parent) => (
                           <li key={parent.term_id}>
-                            <button
-                              type="button"
-                              className="tree-link"
+                            <Button
+                              size="sm"
                               onClick={() => {
                                 void showUnder(parent.term_id);
                               }}
                             >
                               {parent.label}
-                            </button>
+                            </Button>
                           </li>
                         ))}
                       </ul>

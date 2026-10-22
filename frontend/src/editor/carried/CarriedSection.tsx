@@ -116,7 +116,6 @@ export function DismissControl({ label, blocked, onDismiss, onBusyChange, dataDi
     <>
       <Button
         ref={trigger}
-        variant="quiet"
         size="sm"
         aria-expanded={open}
         aria-disabled={blocked || undefined}
@@ -241,7 +240,7 @@ export function CarriedSection({
           <div className="carried-collapsed__actions">
             {showOriginal}
             {onNextUnchecked && (
-              <Button variant="quiet" size="sm" aria-keyshortcuts="N" onClick={onNextUnchecked}>
+              <Button size="sm" aria-keyshortcuts="N" onClick={onNextUnchecked}>
                 Next unchecked <Kbd>N</Kbd>
               </Button>
             )}

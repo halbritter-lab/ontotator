@@ -108,7 +108,7 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
   const drawerPart = version !== null && <Drawer open={drawer.open} title={`Guidelines v${version}`} onClose={closeDrawer} returnFocusRef={returnFocus}
     footer={<>
       <a className="btn btn-secondary" href={routeHref({ name: "projectGuidelines", key: projectKey })} target="_blank" rel="noopener noreferrer">All versions</a>
-      <Button variant="quiet" onClick={closeDrawer}>Close</Button>
+      <Button onClick={closeDrawer}>Close</Button>
     </>}>
     {/* Remounted when the version in force changes or a focus reload runs, so a withdrawal of the shown version replaces its text. */}
     <div className="task-guidelines-reader">

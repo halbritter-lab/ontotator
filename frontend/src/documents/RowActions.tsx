@@ -1,8 +1,8 @@
 /**
  * Action column of a Documents row (documents overview "Columns" item 7, VD2, VD18): the first
  * lead-owned step's button plus a "+{n}" menu with the other lead actions; "Plan…" opens a small
- * plan popover with the row's Review / Annotate chips (secondary on undecided rows, quiet on rows
- * outside the plan). In-plan rows without a lead step show nothing.
+ * plan popover with the row's Review / Annotate chips (a secondary button on undecided rows and on rows
+ * outside the plan: actions are never text links). In-plan rows without a lead step show nothing.
  */
 import { useEffect, useRef, useState } from "react";
 import type { DocumentRowView, NextStepView } from "../api/client";
@@ -19,7 +19,7 @@ export interface PlanPopoverProps {
   /** The case group's `plan_revision` from the rows page. */
   groupRevision: number;
   saves: PlanSaves;
-  /** `secondary` on undecided rows, `quiet` on rows outside the plan (VD2). */
+  /** Button variant of "Plan…"; secondary on every row (actions are never text links). */
   variant?: "secondary" | "quiet";
   block?: boolean;
   /** Controlled open state (RowActionCell keeps it across reloads); uncontrolled without it. */
@@ -113,23 +113,23 @@ export function RowActionCell({ row, onAction, plan, block = false, extraActions
 
   const name = rowName(row);
   const className = ["documents-actions", block && "documents-actions--block"].filter(Boolean).join(" ");
-  const popover = (variant: "secondary" | "quiet") => plan
-    ? <PlanPopover key="plan" row={row} variant={variant} block={block} open={planOpen} onOpenChange={setPlanOpen} {...plan} />
+  const popover = () => plan
+    ? <PlanPopover key="plan" row={row} block={block} open={planOpen} onOpenChange={setPlanOpen} {...plan} />
     : null;
   const active = row.in_plan || isUndecided(row);
   const steps = active ? leadSteps(row) : [];
   const [first, ...rest] = steps;
   // Open popover: keep it (and its button) in the first slot whatever the row's branch is now.
   if (planOpen && plan) {
-    return <span className={className}>{popover(active ? "secondary" : "quiet")}{menuOf(rest)}</span>;
+    return <span className={className}>{popover()}{menuOf(rest)}</span>;
   }
-  if (!active) return plan ? <span className={className}>{popover("quiet")}</span> : null;
+  if (!active) return plan ? <span className={className}>{popover()}</span> : null;
   // In-plan rows without a lead step show nothing; their other actions are in the row panel.
   if (!first) return null;
   const firstLabel = rowActionLabel(first, row);
   return <span className={className}>
     {first.action === "plan" && plan
-      ? popover("secondary")
+      ? popover()
       : onAction && <Button key="first" id={documentsRowId(row.case_id, row.language, "action")} size="sm"
         className={["documents-action", block && "documents-action--block"].filter(Boolean).join(" ")}
         aria-label={`${firstLabel}, ${name}`} onClick={() => onAction(row, first)}>{firstLabel}</Button>}
