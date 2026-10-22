@@ -168,6 +168,15 @@
         ],
         "createdAt": "2026-10-21T16:39:10.450Z",
         "reason": "agent: #f7f4ee is the deliberate DESIGN.md surface token; mockups reuse it"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/styles/screens/projects.css"
+        ],
+        "createdAt": "2026-10-21T21:00:37.758Z",
+        "reason": "assistant decided: current-row marker mirrors the established documents-cards.css card edge and the components.css forced-colors fallback (already sanctioned)"
       }
     ]
   }
