@@ -807,7 +807,7 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .ui-tristate[data-state="mixed"] { background: repeating-linear-gradient(45deg, var(--surface-raised), var(--surface-raised) 4px, var(--surface-sunken) 4px, var(--surface-sunken) 8px); }
 .ui-tristate[data-state="on"] { background: var(--success-light); border-color: var(--success); color: var(--success); }
 .ui-tristate[data-state="off"] { background: var(--danger-light); border-color: var(--danger); color: var(--danger); }
-/* --toast-offset: height of a bottom-sticky bar or dialog footer at the viewport bottom (measured by Toast). */
+/* --toast-offset: height of the floating selection bar or dialog footer at the viewport bottom (measured by Toast). */
 .ui-toast-region {
   --toast-offset: 0px;
   position: fixed;

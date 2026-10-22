@@ -416,10 +416,8 @@ test("row panel: no layout shift, J / K walk the rows, Escape from the table kee
   await page.setViewportSize({ width: 1280, height: 900 });
   await openScenario(page, "S7");
   const first = textRow(page, "case-0001", "en");
-  // Opening the panel also selects the row; select it first so the selection bar's arrival is not measured as a shift.
-  await first.getByRole("checkbox", { name: "Select case-0001 · en" }).click();
-  // The bar's summary loads the selection's common step afterwards (its line may wrap): measure once it is shown.
-  await expect(page.getByRole("region", { name: "Selection" }).locator(".selection-bar-step")).toHaveText("· next step: Assign annotation (en)");
+  // Nothing is selected: opening the panel selects the row and brings the floating selection bar, which must not move the table.
+  await expect(page.getByRole("region", { name: "Selection" })).toHaveCount(0);
   const before = await first.boundingBox();
   const tableBefore = await page.getByRole("table", { name: "Documents", exact: true }).boundingBox();
 
@@ -430,7 +428,17 @@ test("row panel: no layout shift, J / K walk the rows, Escape from the table kee
   await expect(panel.getByRole("heading", { level: 2 })).toBeFocused();
   await expect(page.locator("[inert]")).toHaveCount(0);
   await expect(first).toHaveAttribute("aria-current", "true");
+  // The selection bar floats at the viewport bottom over the content; its arrival (and its summary line) moves nothing.
+  const selectionBar = page.getByRole("region", { name: "Selection" });
+  await expect(selectionBar.locator(".selection-bar-step")).toHaveText("· next step: Assign annotation (en)");
+  expect(await selectionBar.evaluate(element => getComputedStyle(element).position)).toBe("fixed");
+  const barBox = (await selectionBar.boundingBox())!;
+  expect(barBox.y + barBox.height).toBeLessThanOrEqual(900);
+  expect(barBox.y + barBox.height).toBeGreaterThan(900 - 40);
   expect(await first.boundingBox()).toEqual(before);
+  expect(await page.getByRole("table", { name: "Documents", exact: true }).boundingBox()).toEqual(tableBefore);
+  // Its actions stay clear of the open row panel.
+  expect(barBox.x + barBox.width).toBeLessThanOrEqual((await panel.boundingBox())!.x);
   const panelBox = await panel.boundingBox();
   expect(panelBox!.width).toBeLessThanOrEqual(480);
   expect(Math.round(panelBox!.x + panelBox!.width)).toBe(1280);

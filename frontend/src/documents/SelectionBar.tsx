@@ -6,6 +6,8 @@
  * "Review + annotate translations", "Annotate only" (one click when no existing work is affected)
  * and "Plan…". Every plan save keeps the selection and shows an Undo toast (D22). The summary and
  * the quick plan actions send the selected texts (`rows`); the plan dialog still edits whole cases.
+ * The bar floats at the bottom of the viewport over the content (`useFloatingBar`): its arrival never moves the
+ * table; the page reserves its height as bottom padding. Its place in the DOM keeps the focus order.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type BulkResult, type ConsequencesView, type DocumentRowFilters, type RowRefView, type SelectionSummary, type UndoView } from "../api/client";
@@ -16,6 +18,7 @@ import { PLAN_CHANGED_MESSAGE, UNDO_WITHDRAWN_NOTE, WITHDRAW_CHECKBOX, withdrawn
 import { PlanDialog } from "./PlanDialog";
 import { savedSummary, SOURCE_KEY, type PlanChoices } from "./planSummary";
 import { runPlanUndo } from "./planUndo";
+import { useFloatingBar } from "./useFloatingBar";
 import { caseOfTextKey, rowRefOf } from "./useTextSelection";
 
 type Preset = "review_and_annotate_translations" | "annotate_only";
@@ -28,7 +31,7 @@ export interface SelectionBarProps {
   filters: DocumentRowFilters;
   /** Changes whenever the rows reload, so the summary follows plan and assignment changes. */
   refresh?: unknown;
-  /** Below 700 px the bar sticks to the bottom of the viewport. */
+  /** Below 700 px (cards layout): compact actions that start on their own line. */
   narrow?: boolean;
   /** "Selection is limited to 2000 cases. Selected the first 2000." after a capped selection. */
   limitNote?: string | null;
@@ -71,6 +74,7 @@ export function SelectionBar({
   const latest = useRef({ showToast, onAnnounce, onChanged, onRevisions });
   latest.current = { showToast, onAnnounce, onChanged, onRevisions };
   const alive = useRef(true);
+  const section = useRef<HTMLElement>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   const rows: RowRefView[] = [...keys].map(rowRefOf);
@@ -170,11 +174,12 @@ export function SelectionBar({
   };
 
   const visible = keys.size > 0 || undoState !== null;
+  useFloatingBar(section, visible);
   if (!visible && !plan) return null;
   const withdrawing = undoState?.kind === "conflict" && undoState.consequences.withdrawn.length > 0;
 
   return <>
-    {visible && <section className={["selection-bar", narrow && "selection-bar--bottom"].filter(Boolean).join(" ")} aria-label="Selection">
+    {visible && <section ref={section} className={["selection-bar", narrow && "selection-bar--narrow"].filter(Boolean).join(" ")} aria-label="Selection">
       {keys.size > 0 && <div className="selection-bar-line">
         <p className="selection-bar-summary">
           <strong>{`${plural(keys.size, "text")} in ${plural(caseIds.length, "case")} selected`}</strong>

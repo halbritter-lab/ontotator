@@ -153,11 +153,19 @@ it("opens the plan dialog for Plan… and keeps the selection after save", async
   expect(within(bar()).getByText("20 texts in 20 cases selected")).toBeTruthy();
 });
 
-it("is a labelled region Selection and bottom-sticky below 700 px", () => {
+it("is a labelled region Selection with compact actions below 700 px", () => {
   const view = render(<Harness />);
   expect(bar().tagName).toBe("SECTION");
-  expect(bar().classList.contains("selection-bar--bottom")).toBe(false);
+  expect(bar().classList.contains("selection-bar--narrow")).toBe(false);
   view.unmount();
   render(<Harness narrow />);
-  expect(bar().classList.contains("selection-bar--bottom")).toBe(true);
+  expect(bar().classList.contains("selection-bar--narrow")).toBe(true);
+});
+
+it("reserves its height at the page bottom while shown and releases it on clear", async () => {
+  render(<Harness />);
+  expect(document.documentElement.style.getPropertyValue("--selection-bar-space")).toMatch(/^\d+px$/);
+  fireEvent.click(within(bar()).getByRole("button", { name: "Clear selection" }));
+  await waitFor(() => expect(screen.queryByRole("region", { name: "Selection" })).toBeNull());
+  expect(document.documentElement.style.getPropertyValue("--selection-bar-space")).toBe("");
 });

@@ -169,7 +169,7 @@ test("axe has no violations on Documents with selection bar, plan dialog, assign
   expect(await axeViolations(page, "main"), "Progress").toEqual([]);
 });
 
-test("390 px cards and bottom-sticky selection bar", async ({ page }) => {
+test("390 px cards and floating selection bar", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openRows(page);
   // One article per text, inside case cards with the case checkbox in the card header.
@@ -186,8 +186,8 @@ test("390 px cards and bottom-sticky selection bar", async ({ page }) => {
   await caseBox(page, "case-0106").check();
   await expect(bar(page).getByText("3 texts in 1 case selected", { exact: true })).toBeVisible();
   const box = (await bar(page).boundingBox())!;
-  expect(await bar(page).evaluate(element => getComputedStyle(element).position)).toBe("sticky");
-  // Sticks to the bottom of the viewport.
+  expect(await bar(page).evaluate(element => getComputedStyle(element).position)).toBe("fixed");
+  // Floats at the bottom of the viewport.
   expect(box.y + box.height).toBeGreaterThan(844 - 40);
   expect(box.y + box.height).toBeLessThanOrEqual(844);
   for (const name of ["Assign…", "Review + annotate translations", "Annotate only", "Plan…", "Clear selection"]) {
@@ -196,7 +196,7 @@ test("390 px cards and bottom-sticky selection bar", async ({ page }) => {
   }
   await evidence(page, "390-selection-bar");
 
-  // The Undo toast and the bottom-sticky bar (reported, see evidence "390-toast-and-bar").
+  // The Undo toast and the floating bar (reported, see evidence "390-toast-and-bar").
   await chipToast(page);
   const toastBox = (await toast(page).boundingBox())!;
   const barBox = (await bar(page).boundingBox())!;
@@ -214,6 +214,16 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
   expect(await overflow(page), "Documents").toMatchObject({ scrollWidth: 320, bodyScrollWidth: 320, outside: [] });
 
   await caseBox(page, "case-0106").check();
+  // The floating bar fits the 320 px viewport; scrolled to the end, the last card ends above the bar (reserved space).
+  const barBox = (await bar(page).boundingBox())!;
+  expect(barBox.x).toBeGreaterThanOrEqual(0);
+  expect(barBox.x + barBox.width).toBeLessThanOrEqual(320);
+  expect(barBox.y + barBox.height).toBeLessThanOrEqual(800);
+  await page.evaluate(() => { for (const element of [document.scrollingElement, ...document.querySelectorAll(".shell, .shell-main")]) element?.scrollTo(0, 1e7); });
+  const lastCard = page.locator(".documents-page article").last();
+  const lastBox = (await lastCard.boundingBox())!;
+  expect(lastBox.y + lastBox.height, "last card above the selection bar").toBeLessThanOrEqual((await bar(page).boundingBox())!.y);
+  expect(await overflow(page), "selection bar").toMatchObject({ scrollWidth: 320, outside: [] });
   await chipToast(page);
   expect(await overflow(page), "selection bar and toast").toMatchObject({ scrollWidth: 320, outside: [] });
   await evidence(page, "320-documents-selection-toast");

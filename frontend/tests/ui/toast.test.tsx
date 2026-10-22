@@ -85,14 +85,14 @@ it("shows the undo icon on an Undo action", () => {
   fireEvent.click(screen.getByText("first"));
   expect(screen.getByRole("button", { name: "Undo" }).querySelector(".ui-toast-undo-icon")).not.toBeNull();
 });
-it("sits above a bottom-sticky selection bar and above a dialog footer at the bottom of the viewport", () => {
+it("sits above the floating selection bar and above a dialog footer at the bottom of the viewport", () => {
   const height = window.innerHeight;
   const rect = (top: number, bottom: number) => ({ top, bottom, left: 0, right: 390, width: 390, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
   function Page({ obstacle }: { obstacle: "bar" | "footer" | "middle" }) {
     const { toast, show, dismiss } = useToast();
     return <>
-      {obstacle === "bar" && <div className="selection-bar selection-bar--bottom" data-testid="obstacle" />}
-      {obstacle === "middle" && <div className="selection-bar selection-bar--bottom" data-testid="obstacle" />}
+      {obstacle === "bar" && <div className="selection-bar" data-testid="obstacle" />}
+      {obstacle === "middle" && <div className="selection-bar" data-testid="obstacle" />}
       {obstacle === "footer" && <div className="ui-dialog"><div className="modal-actions" data-testid="obstacle" /></div>}
       <button onClick={() => show({ message: "Saved" })}>show</button>
       <Toast toast={toast} onDismiss={dismiss} />

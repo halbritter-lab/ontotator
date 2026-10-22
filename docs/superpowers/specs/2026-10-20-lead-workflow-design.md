@@ -159,7 +159,7 @@ See `approved/work-plan-shift-select.html` and `approved/work-plan-flow.html` 3.
 
 ### Selection bar
 
-Shown while at least one case is selected, sticky above the table (bottom-sticky below 700 px):
+Shown while at least one case is selected, as a floating bar at the bottom of the viewport (2026-10-22, replaces "sticky above the table"): `position: fixed`, lined up with the main column, `shadow-2`, `z-index: 70` (above the table, below the row panel, popovers, dialogs and the toast); it overlays the content and never moves the table. While it is shown the page reserves its height as bottom padding and the scroll containers as `scroll-padding-bottom`, so the last rows and focused controls stay visible; from 700 px it ends left of an open row panel. Its DOM place keeps the focus order (above the table; below 700 px after the cards); it fades in over 150 ms (none under reduced motion).
 
 - "{n} cases selected" · the common next step when there is one ("next step: Assign translation review (de)") · "{k} not shown with these filters" · quiet "Clear selection".
 - **Primary "Assign…"** (bulk assign dialog, D21). It is the page's only primary button.
@@ -385,7 +385,7 @@ Preflight runs on opening Export ("Checking final results…"); "Check again" re
 | Filter empty | "To assign": "Nothing to assign"; "In progress": "Nothing in progress"; "Plan: not in plan": "Every language version is in the plan." | — | "0 found · 20 unknown" (Select unavailable with reason) | — | Zero counts muted |
 | Invalid | — | Acceptance offer with required reason | — | Reasons per member; "Choose at least 2 annotators…" | — |
 | Error | Error + Retry | Inline error under the row / above the footer, choices kept; stale revision reloads with a message | Error + Retry in the dialog | Errors above the footer; partial refusals listed | Error + Retry |
-| Narrow ≤ 700 px | Cards; case checkbox in the case card header; chips under the heading; selection bar bottom-sticky | Dialog full-height sheet; the table keeps three columns, language names wrap | Full-height sheet | Full-height sheet; members as list items with "Reads" and "Open" on a second line | Stacked cards |
+| Narrow ≤ 700 px | Cards; case checkbox in the case card header; chips under the heading; selection bar floating at the viewport bottom (compact actions) | Dialog full-height sheet; the table keeps three columns, language names wrap | Full-height sheet | Full-height sheet; members as list items with "Reads" and "Open" on a second line | Stacked cards |
 
 **Narrow (Documents):** one `<article>` per language row inside a case card: heading "{case · language}", the two chips, next step (`weight-strong`) with badges, secondary line and "Owner: …", the row action full width (≥ 32 px), "Open" and "Details". Shift/Ctrl range selection is a desktop affordance; on touch, "Select by case IDs…" and the header checkbox cover bulk selection. Reflow verified at 320 CSS px.
 

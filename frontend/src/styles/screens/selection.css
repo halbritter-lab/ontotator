@@ -1,33 +1,46 @@
 /* Case selection on Documents (spec D17): selection bar, Select by case IDs, case checkboxes in cards. Owned by L3b. */
 
-/* Selection bar: sticky above the table; bottom-sticky below 700 px. */
+/* Selection bar: floats at the bottom of the viewport over the content (like a bulk-action bar), lined up with
+   the main column (`useFloatingBar` measures --selection-bar-left / --selection-bar-right). It never moves the
+   table; while shown, the page reserves --selection-bar-space as bottom padding and the scroll containers as
+   scroll padding, so the last rows and focused controls stay visible. Above the table (sticky headers),
+   below the row panel (80), popovers (90), dialogs (100) and the toast (900). */
 .selection-bar {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  --selection-bar-inset: var(--space-4);
+  position: fixed;
+  left: calc(var(--selection-bar-left, 0px) + var(--selection-bar-inset));
+  right: calc(var(--selection-bar-right, 0px) + var(--selection-bar-inset));
+  bottom: var(--space-3);
+  z-index: 70;
   display: grid;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
+  max-height: calc(100dvh - 2 * var(--space-3));
+  overflow-y: auto;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   background: var(--accent-light);
-}
-.selection-bar--bottom {
-  top: auto;
-  bottom: 0;
-  margin-bottom: 0;
-  margin-top: var(--space-3);
   box-shadow: var(--shadow-2);
 }
+@media (prefers-reduced-motion: no-preference) {
+  .selection-bar { animation: selection-bar-in 150ms ease-out; }
+}
+@keyframes selection-bar-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* The open row panel (from 700 px, fixed on the right) keeps the bar's actions uncovered. */
+@media (min-width: 700px) {
+  .documents-page:has(.row-panel:not(.row-panel--sheet)) .selection-bar { right: calc(min(480px, 45vw) + var(--selection-bar-inset)); }
+}
+.documents-page { padding-bottom: var(--selection-bar-space, 0px); }
+.shell, .shell-main { scroll-padding-bottom: var(--selection-bar-space, 0px); }
 .selection-bar-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
 .selection-bar-summary { margin: 0; }
 .selection-bar-step, .selection-bar-hidden { color: var(--text-muted); }
 .selection-bar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-inline-start: auto; }
 .selection-bar-limit { margin: 0; color: var(--warning); font-weight: var(--weight-strong); }
 .selection-bar-undo { max-width: 48rem; }
-.selection-bar--bottom .selection-bar-actions { margin-inline-start: 0; }
-.selection-bar--bottom .selection-bar-actions .btn { min-height: 32px; }
+.selection-bar--narrow { --selection-bar-inset: var(--space-2); }
+.selection-bar--narrow .selection-bar-actions { margin-inline-start: 0; }
+.selection-bar--narrow .selection-bar-actions .btn { min-height: 32px; }
 
 /* Select by case IDs */
 .select-ids { display: grid; gap: var(--space-2); }

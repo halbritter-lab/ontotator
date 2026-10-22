@@ -14,8 +14,8 @@ export interface ToastMessage {
   note?: string;
 }
 
-/** Controls that sit at the viewport bottom and must stay visible: the bottom-sticky selection bar and dialog footers. */
-const BOTTOM_OBSTACLES = ".selection-bar--bottom, .ui-dialog > .modal-actions";
+/** Controls that sit at the viewport bottom and must stay visible: the floating selection bar and dialog footers. */
+const BOTTOM_OBSTACLES = ".selection-bar, .ui-dialog > .modal-actions";
 /** An obstacle counts when its bottom edge is this close to the viewport bottom. */
 const BOTTOM_ZONE = 48;
 
@@ -44,7 +44,7 @@ export function useToast(): { toast: ToastMessage | null; show: (t: Omit<ToastMe
 /**
  * Polite toast for reversible saved changes. The region is always rendered so screen readers pick up new
  * messages; the toast never takes focus, closes after `durationMs` (paused while hovered or focused) and its
- * Undo action also runs on Ctrl+Z / Meta+Z outside text fields. It sits above a bottom-sticky selection bar or a
+ * Undo action also runs on Ctrl+Z / Meta+Z outside text fields. It sits above the floating selection bar or a
  * dialog footer at the viewport bottom (`--toast-offset`).
  */
 export function Toast({ toast, onDismiss, durationMs = 10_000, undoDescription = "Undo the last plan change", undoGroup = "Selection" }: {
