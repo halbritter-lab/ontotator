@@ -223,6 +223,8 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
   expect(await overflow(page), "row panel sheet").toMatchObject({ scrollWidth: 320, outside: [] });
   await evidence(page, "320-row-panel-sheet", sheet);
   await sheet.getByRole("button", { name: "Back", exact: true }).click();
+  // Opening the panel added case-0101 · de to the selection; take it out so the plan covers case-0106 only.
+  await page.getByRole("checkbox", { name: "Select case-0101 · de", exact: true }).click();
 
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();
   const plan = page.getByRole("dialog", { name: "Work plan · 1 case" });
