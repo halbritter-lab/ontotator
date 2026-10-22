@@ -63,7 +63,7 @@ export function PendingMarkBar({ textElement, evidenceId, segmentsKey, onDiscard
       style={place ? { top: `${place.top}px`, left: `${place.left}px` } : undefined}
     >
       <span className="pending-mark-bar__hint">Drag the edges to adjust</span>
-      <Button type="button" variant="quiet" size="sm" aria-keyshortcuts="Escape" onClick={onDiscard}>
+      <Button type="button" size="sm" aria-keyshortcuts="Escape" onClick={onDiscard}>
         Discard
         <span aria-hidden="true">
           {" "}

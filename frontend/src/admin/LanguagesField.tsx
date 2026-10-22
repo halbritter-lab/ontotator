@@ -3,6 +3,7 @@ import { Button } from "../ui/Button";
 import { IconButton } from "../ui/IconButton";
 import { TextInput } from "../ui/TextInput";
 import { IconClose } from "../ui/icons";
+import { LanguageTag } from "../ui/LanguageTag";
 
 export interface LanguagesFieldProps {
   id: string;
@@ -69,7 +70,7 @@ export function LanguagesField({ id, label, value, onChange, disabled = false }:
       <Button type="button" size="sm" disabled={disabled || !draft.trim()} onClick={commit}>Add language</Button>
       {value.length > 0 && <ul className="language-tokens" aria-label={`${label}: selected languages`}>
         {value.map((code, index) => <li key={`${code}-${index}`} className="language-token">
-          <span>{code}</span>
+          <LanguageTag code={code} />
           <IconButton type="button" variant="quiet" size="sm" label={`Remove ${code}`} icon={<IconClose />} disabled={disabled}
             onClick={() => {
               onChange(value.filter((_, selected) => selected !== index));

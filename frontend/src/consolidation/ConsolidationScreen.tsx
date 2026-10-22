@@ -23,6 +23,7 @@ import { newFindingTarget, TermPicker } from "./TermPicker";
 import { TextPane, type AddedFinding, type TextRange } from "./TextPane";
 import { useConsolidation, type AxisWarning } from "./useConsolidation";
 import "./consolidation.css";
+import { LanguageText } from "../ui/LanguageTag";
 
 export interface ConsolidationScreenProps {
   projectKey: string;
@@ -82,7 +83,7 @@ function PassageForm({ text, anchorRef, onPick, onClose }: { text: string; ancho
       </Select>}
       <div className="cons-actions">
         <Button type="submit" variant="primary" aria-disabled={!matches.length || undefined}>Continue</Button>
-        <Button variant="quiet" onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>Cancel</Button>
       </div>
     </form>
   </Popover>;
@@ -249,17 +250,17 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       aria-describedby={!range ? "cons-add-hint" : undefined}
       onClick={() => { if (range) setAdding(true); else setTyping(true); }}>Add finding</Button>}
     {!readOnly && addTarget && !range && <span id="cons-add-hint" className="cons-muted">Select text, or type the passage, to add a finding everyone missed.</span>}
-    {!wide && <Button size="sm" variant="quiet" onClick={() => setTextHidden(true)}>Hide text</Button>}
+    {!wide && <Button size="sm" onClick={() => setTextHidden(true)}>Hide text</Button>}
   </>;
 
   return <section className="cons-screen" aria-labelledby="cons-title">
     <header className="cons-header">
       <div className="cons-heading">
-        {readOnly && props.back && <a className="cons-back" href={routeHref(props.back)} onClick={event => {
+        {readOnly && props.back && <a className="cons-back btn btn-secondary btn-sm" href={routeHref(props.back)} onClick={event => {
           if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); navigate(props.back!);
         }}>Back to documents</a>}
-        <h1 id="cons-title" className="cons-title">{headerTitle(view, readOnly && !submitted)}</h1>
+        <h1 id="cons-title" className="cons-title"><LanguageText text={headerTitle(view, readOnly && !submitted)} code={view.language} /></h1>
         <p className="cons-detail">{headerDetail(view, open)}</p>
       </div>
       {props.headerActions && <div className="cons-header-actions" role="group" aria-label="Task">{props.headerActions}</div>}
@@ -282,7 +283,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       {showText && <TextPane text={view.text} groups={groups} people={view.people} selectedGroupId={selected} reducedMotion={reducedMotion}
         onSelectGroup={groupId => select(groupId, true)} added={added} toolbar={textToolbar}
         onTextSelection={!readOnly && addTarget ? setRange : undefined} />}
-      {!narrow && !wide && textHidden && <div><Button size="sm" variant="quiet" onClick={() => setTextHidden(false)}>Show text</Button></div>}
+      {!narrow && !wide && textHidden && <div><Button size="sm" onClick={() => setTextHidden(false)}>Show text</Button></div>}
       <div className="cons-side">
         <GroupList groups={groups} people={view.people} text={view.text} selected={selected} readOnly={readOnly} busy={data.busy}
           outcomes={data.outcomes} narrow={narrow} workspace={data.workspace} summaries={summaries}

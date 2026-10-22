@@ -189,7 +189,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
       <fieldset disabled={busy !== null}><legend>Rules</legend>
         <div className="settings-section-actions" role="group" aria-label="Rules save state">
           <Button type="submit" loading={busy === "Rules"}>Save rules</Button>
-          <Button variant="quiet" onClick={() => { setRules(rulesOf(model)); setSaved(null); if (error?.section === "Rules") setError(null); }}>Discard rule changes</Button>
+          <Button onClick={() => { setRules(rulesOf(model)); setSaved(null); if (error?.section === "Rules") setError(null); }}>Discard rule changes</Button>
           {feedback("Rules")}
         </div>
         <Select id="project-rule-spanless" label="Findings without a text span" hint="Applies to every future submission; completed submissions are unchanged. Profile requirements for text evidence still apply."
@@ -236,7 +236,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
         })))}
         {!model.profile.layers.some(layer => layer.annotation_types.some(type => type.axes?.length)) && <p>This profile has no axes to prefill.</p>}
         <Button type="submit" loading={busy === "Creation defaults"}>Save creation defaults</Button>
-        <Button variant="quiet" onClick={() => { setCreationDefaults(model.creation_defaults ?? {}); setSaved(null); }}>Discard default changes</Button>
+        <Button onClick={() => { setCreationDefaults(model.creation_defaults ?? {}); setSaved(null); }}>Discard default changes</Button>
       </fieldset>{feedback("Creation defaults")}
     </form>; break;
     case "profile": content = <section ref={bindSection} tabIndex={-1} aria-label="Ontology and profile"><h2>Ontology and profile</h2>
@@ -275,7 +275,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
       footer={<>
         <Button variant="primary" loading={busy !== null} onClick={() => { void saveAndLeave(); }}>{`Save ${leaveParts.map(part => part.toLowerCase()).join(" and ")}`}</Button>
         <Button disabled={busy !== null} onClick={() => { discard(leaveParts); closeLeave(true); }}>Discard</Button>
-        <Button variant="quiet" disabled={busy !== null} onClick={() => closeLeave(false)}>Cancel</Button>
+        <Button disabled={busy !== null} onClick={() => closeLeave(false)}>Cancel</Button>
       </>}>
       <p>Save these changes before leaving, or discard them.</p>
       {leaveInvalid && <InlineMessage tone="error">Some fields need correcting. Choose Cancel to fix them.</InlineMessage>}

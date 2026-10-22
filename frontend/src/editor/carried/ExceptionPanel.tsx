@@ -187,7 +187,7 @@ export function ExceptionPanel({
         )}
         {original.note && <p className="carried-original__note">{original.note}</p>}
         <p className="carried-original__quote">{original.quote ? `“${original.quote}”` : "No text span"}</p>
-        <Button variant="quiet" size="sm" onClick={onShowOriginal}>Show original evidence</Button>
+        <Button size="sm" onClick={onShowOriginal}>Show original evidence</Button>
       </div>
       {readOnly === "paused" && <p className="carried-hint">{PAUSED_SENTENCE}</p>}
       {error && <CarriedErrorNotice error={error} onRetry={onRetry} noteAction={onSaveNote && !readOnly && (

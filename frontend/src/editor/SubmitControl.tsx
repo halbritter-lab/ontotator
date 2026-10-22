@@ -17,7 +17,7 @@ export function SubmitControl({ onSubmit, disabled, pending, openCount = null, o
   return (
     <>
       {open && onNextOpen && (
-        <Button type="button" variant="quiet" size="sm" onClick={onNextOpen}>
+        <Button type="button" size="sm" onClick={onNextOpen}>
           Next open item
         </Button>
       )}

@@ -36,8 +36,8 @@ export function DocumentsTabs({ bar, query, projectKey, panelId, onNavigate, upd
     <Tabs label="Documents views" tabs={tabs} active={active} panelId={panelId} onSelect={id => onNavigate(tabRoute(projectKey, query, id as TabId))} />
     <p className="documents-tabs-meta">
       {updatedAt && <span>{`Updated ${updatedFormat.format(updatedAt)}`}</span>}
-      {onRefresh && <Button size="sm" variant="quiet" onClick={onRefresh}>Refresh</Button>}
-      {(bar.finals ?? 0) > 0 && <a href={routeHref(exportRoute)} onClick={event => {
+      {onRefresh && <Button size="sm" onClick={onRefresh}>Refresh</Button>}
+      {(bar.finals ?? 0) > 0 && <a className="btn btn-secondary btn-sm" href={routeHref(exportRoute)} onClick={event => {
         if (!isPlainClick(event)) return;
         event.preventDefault(); onNavigate(exportRoute);
       }}>Export final results…</a>}
@@ -53,5 +53,5 @@ const EMPTY_TITLES: Readonly<Record<Exclude<TabId, "all">, string>> = {
 export function TabEmptyState({ tab, projectKey, onNavigate }: { tab: TabId; projectKey: string; onNavigate: (route: Route) => void }): JSX.Element {
   if (tab === "all") return <EmptyState title="No texts yet">Upload texts to start.</EmptyState>;
   return <EmptyState title={EMPTY_TITLES[tab]}
-    action={<RouteLink route={{ name: "projectDocuments", key: projectKey }} onNavigate={onNavigate}>Show all texts</RouteLink>} />;
+    action={<RouteLink route={{ name: "projectDocuments", key: projectKey }} className="btn btn-secondary" onNavigate={onNavigate}>Show all texts</RouteLink>} />;
 }

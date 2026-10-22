@@ -319,7 +319,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         <div className="review-actions__row">
           <Button
             type="button"
-            variant="quiet" size="sm"
+            size="sm"
             disabled={readOnly} onClick={handleClearDecision}
             title="Reset decision for this proposal (back to open)"
           >

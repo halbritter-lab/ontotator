@@ -124,7 +124,7 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
       {failed !== undefined && <div className="select-ids-error"><ErrorNotice error={failed} /><Button size="sm" onClick={() => setRetry(value => value + 1)}>Retry</Button></div>}
       {unknown.length > 0 && <div className="select-ids-unknown">
         <p>Unknown: {unknown.slice(0, UNKNOWN_SHOWN).join(", ")}{unknown.length > UNKNOWN_SHOWN ? ` and ${unknown.length - UNKNOWN_SHOWN} more` : ""}</p>
-        <Button size="sm" variant="quiet" onClick={copyUnknown}>Copy unknown IDs</Button>
+        <Button size="sm" onClick={copyUnknown}>Copy unknown IDs</Button>
         {copied && <span className="field-hint">{copied}</span>}
       </div>}
       {current.size > 0 && <>

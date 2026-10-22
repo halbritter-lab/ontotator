@@ -187,7 +187,7 @@ export function SelectionBar({
             onClick={() => { void quick("review_and_annotate_translations"); }}>Review + annotate translations</Button>
           <Button loading={busy === "annotate_only"} aria-disabled={busy ? true : undefined} onClick={() => { void quick("annotate_only"); }}>Annotate only</Button>
           <Button aria-disabled={busy ? true : undefined} onClick={() => { if (!busy) setPlan({ caseIds }); }}>Plan…</Button>
-          <Button variant="quiet" onClick={onClear}>Clear selection</Button>
+          <Button onClick={onClear}>Clear selection</Button>
         </div>
       </div>}
       {limitNote && keys.size > 0 && <p className="selection-bar-limit">{limitNote}</p>}

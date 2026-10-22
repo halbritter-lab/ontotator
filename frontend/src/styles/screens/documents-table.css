@@ -4,7 +4,7 @@
 .documents-tabs { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-2) var(--space-4); margin-block: var(--space-3) var(--space-2); border-bottom: 1px solid var(--border); }
 .documents-tabs .ui-tabs { border-bottom: 0; }
 .documents-tabs-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); margin: 0 0 var(--space-1) auto; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
-.documents-tabs-meta a { display: inline-block; min-height: 24px; white-space: nowrap; }
+.documents-tabs-meta a { white-space: nowrap; }
 @media (max-width: 699px) {
   .documents-tabs { flex-wrap: nowrap; flex-direction: column; align-items: stretch; }
   /* One scrolling row; the fading right edge shows that more tabs follow (the end padding lets the last one clear it).
@@ -62,7 +62,7 @@
 .documents-text-button .documents-language { color: inherit; }
 .documents-text-button:hover { color: var(--accent-hover); }
 .documents-version-marker { display: inline-block; padding: 0 var(--space-1); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: var(--size-sm); line-height: var(--leading-sm); white-space: nowrap; }
-.documents-open, .documents-open-task { display: inline-block; min-height: 24px; white-space: nowrap; }
+.documents-open, .documents-open-task { white-space: nowrap; }
 .documents-muted, .documents-notes, .documents-final--none, .documents-source { color: var(--text-muted); }
 .documents-source { font-size: var(--size-sm); }
 
@@ -81,6 +81,9 @@
 .documents-stage-button:focus-visible .stage-cell-status { text-decoration: underline solid var(--accent); text-decoration-thickness: 2px; }
 .documents-stage-button:focus { outline: none; }
 .documents-stage-button:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); border-radius: var(--radius-sm); }
+/* A click on a row's empty area opens its panel and selects it: pointer cursor; the checkbox cell keeps its own. */
+.documents-table .documents-row--clickable { cursor: pointer; }
+.documents-table .documents-row--clickable > .data-table-select-cell { cursor: auto; }
 /* The row the row panel shows: a light accent background, a 2 px accent edge above and below every cell
    (visible beside the panel, never colour alone) and its text name in strong weight; the first cell keeps
    the decision edge of decision rows; `aria-current` names it. Box shadows only: no layout shift. */
@@ -112,8 +115,7 @@
 .documents-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .documents-row-notice { margin: 0 0 var(--space-3); color: var(--text-muted); }
 .documents-paging { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-top: var(--space-4); }
-.documents-paging a { display: inline-block; min-height: 24px; white-space: nowrap; }
-.documents-paging a[aria-disabled="true"] { color: var(--text-muted); text-decoration: none; cursor: default; }
+.documents-paging a { white-space: nowrap; }
 .documents-paging[aria-busy="true"] > span { color: var(--text-muted); }
 
 /* Skeleton rows while the first page loads */
@@ -128,7 +130,6 @@
   .documents-version-marker { border-color: CanvasText; }
   .documents-filter-active { forced-color-adjust: none; background: CanvasText; color: Canvas; }
   .documents-skeleton-bar { background: GrayText; }
-  .documents-paging a[aria-disabled="true"] { color: GrayText; }
   .documents-text-button { color: LinkText; }
   /* An outline inside the row: forced colours drop box shadows, and a border would shift the cells. */
   .documents-table .documents-row--active > * { box-shadow: none; }

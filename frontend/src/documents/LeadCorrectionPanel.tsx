@@ -108,13 +108,13 @@ export function LeadCorrectionPanel({ row, projectKey, onNavigate, onCancel, hea
       checked={confirmLanguage} onChange={event => setConfirmLanguage(event.target.checked)} />}
     {failure?.kind === "qualification" && <InlineMessage tone="warning">
       A translation review records your qualification. Your profile has none yet.{" "}
-      <RouteLink route={{ name: "me" }} onNavigate={onNavigate}>Add your qualification in your profile</RouteLink>
+      <RouteLink route={{ name: "me" }} className="btn btn-secondary btn-sm" onNavigate={onNavigate}>Add your qualification in your profile</RouteLink>
     </InlineMessage>}
     {failure?.kind === "not_available" && <InlineMessage tone="warning">{failure.text}</InlineMessage>}
     {failure?.kind === "error" && <ErrorNotice error={failure.error} />}
     {unconfirmed && <p id={`${id}-unconfirmed`} className="action-reason">Confirm the missing languages.</p>}
     <div className="documents-resolve-actions">
-      <Button size="sm" variant="quiet" onClick={onCancel}>Cancel</Button>
+      <Button size="sm" onClick={onCancel}>Cancel</Button>
       <Button size="sm" variant="primary" loading={busy} aria-disabled={unconfirmed || busy ? true : undefined}
         aria-describedby={unconfirmed ? `${id}-unconfirmed` : undefined} onClick={() => { void start(); }}>Open translation review</Button>
     </div>

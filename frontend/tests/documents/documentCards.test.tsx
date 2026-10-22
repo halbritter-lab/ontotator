@@ -86,7 +86,7 @@ describe("cards", () => {
 
   it("stacks the row notice inside the article; Details opens the row panel's sheet (X19) and marks the card", () => {
     const onOpenPanel = vi.fn();
-    renderCards(page([case106()]), { onOpenPanel, activeKey: "case-106:de", renderRowNotice: entry => (entry.language === "de" ? <p>notice</p> : null) });
+    const { props } = renderCards(page([case106()]), { onOpenPanel, activeKey: "case-106:de", renderRowNotice: entry => (entry.language === "de" ? <p>notice</p> : null) });
     const card = cardOf("case-106 · de");
     expect(within(card).getByText("notice")).toBeTruthy();
     expect(within(card).queryByRole("button", { name: "History" })).toBeNull();
@@ -95,6 +95,8 @@ describe("cards", () => {
     expect(details.id).toBe("documents-row-case-106-de-details");
     fireEvent.click(details);
     expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-106", language: "de" }), { opener: details });
+    // Details also adds the text to the selection (as a row click in the table).
+    expect(props.selection!.select).toHaveBeenCalledWith("case-106:de", "select", expect.arrayContaining(["case-106:de"]));
     expect(card.getAttribute("aria-current")).toBe("true");
     expect(cardOf("case-106 · fr").getAttribute("aria-current")).toBeNull();
   });

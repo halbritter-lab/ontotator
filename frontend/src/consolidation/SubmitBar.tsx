@@ -14,7 +14,7 @@ export function SubmitBar({ open, onSubmit, onNextOpen }: SubmitBarProps): JSX.E
   if (open === 0) return <div className="cons-submit"><Button variant="primary" onClick={onSubmit}>{submitLabel(0)}</Button></div>;
   return <div className="cons-submit">
     <Button variant="primary" aria-disabled aria-describedby={reasonId} onClick={() => undefined}>{submitLabel(open)}</Button>
-    <Button variant="quiet" onClick={onNextOpen}>Next open group</Button>
+    <Button onClick={onNextOpen}>Next open group</Button>
     <p id={reasonId} className="action-reason">{submitReason(open)}</p>
   </div>;
 }

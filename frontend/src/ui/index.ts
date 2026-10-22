@@ -27,3 +27,4 @@ export * from "./FilterChip";
 export * from "./MenuButton";
 export * from "./GuidelineDocument";
 export * from "./Drawer";
+export * from "./LanguageTag";

@@ -243,7 +243,7 @@ describe("Unconfirmed values section", () => {
     expect(first.getByText("the quoted mark")).toBeDefined();
     expect(first.getByText("Assertion: Present · Experiencer: Patient")).toBeDefined();
     expect(first.getByRole("button", { name: "Confirm values of Hypotonia" }).className).toContain("btn-secondary");
-    expect(first.getByRole("button", { name: "Go to Hypotonia" }).className).toContain("btn-quiet");
+    expect(first.getByRole("button", { name: "Go to Hypotonia" }).className).toContain("btn-secondary");
   });
 
   it("names one finding in the singular and keeps defaulted items out of the generic list", () => {

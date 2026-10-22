@@ -129,7 +129,7 @@ export function ReporterReportCard({ report, assignment, confirm, onConfirmChang
     {message && <InlineMessage tone="success">{message}</InlineMessage>}
     {(paused || report.withdrawable) && !confirm && <div className="reporter-report-actions">
       {paused && <Button ref={triggers.resume} onClick={() => start("resume")}>Resume my task…</Button>}
-      {report.withdrawable && <Button ref={triggers.withdraw} variant="quiet" onClick={() => start("withdraw")}>Withdraw report…</Button>}
+      {report.withdrawable && <Button ref={triggers.withdraw} onClick={() => start("withdraw")}>Withdraw report…</Button>}
     </div>}
     {confirm?.kind === "resume" && <InlineConfirm title={`Resume Task ${assignment.id}`} confirmLabel="Resume my task" busy={busy}
       outcome={outcome} conflictMessage={conflictMessage} onConfirm={() => { void act(); }} onCancel={cancel}

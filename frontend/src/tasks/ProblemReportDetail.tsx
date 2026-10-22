@@ -98,7 +98,7 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(route);
   }}>{text}</a>;
-  const backLink = <a className="problem-report-back" href={routeHref(back)} onClick={event => {
+  const backLink = <a className="problem-report-back btn btn-secondary btn-sm" href={routeHref(back)} onClick={event => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(back);
   }}><IconChevronLeft aria-hidden /> Back to Documents</a>;
@@ -168,9 +168,9 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
       <h2 id={decideId} ref={decideHeading} tabIndex={-1}>Decide</h2>
       {success && <div ref={successRef} tabIndex={-1} className="lead-outcome">
         <InlineMessage tone="success">{success}</InlineMessage>
-        {link(back, "Back to Documents")}
+        {link(back, "Back to Documents", "btn btn-secondary btn-sm")}
         {next && documents && <> {link({ name: "projectDocuments", key: projectKey, ...documents,
-          panel: `${next.case_id}:${next.language}`, panel_stage: undefined, panel_tab: undefined }, `Next decision: ${textLabel(next)}`)}</>}
+          panel: `${next.case_id}:${next.language}`, panel_stage: undefined, panel_tab: undefined }, `Next decision: ${textLabel(next)}`, "btn btn-secondary btn-sm")}</>}
       </div>}
       <LeadDecide report={report} open={open} focusTrigger={focusTrigger}
         onOpen={openIntent}

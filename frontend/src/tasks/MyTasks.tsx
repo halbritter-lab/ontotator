@@ -7,6 +7,7 @@ import { textLabel } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
 import { IconWarning } from "../ui/icons";
 import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, tabId, Tabs, Toolbar, type Column } from "../ui";
+import { LanguageText } from "../ui/LanguageTag";
 
 export interface MyTasksProps {
   project?: string;
@@ -130,7 +131,7 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
     }}>{`Project guidelines v${guidelineVersions.get(key)}${guidelineLinks.length > 1 ? ` · ${name}` : ""}`}</a>;
   };
   const columns: Column<TaskSummary>[] = [
-    { id: "text", header: "Text", cell: task => taskText(task) },
+    { id: "text", header: "Text", cell: task => <LanguageText text={taskText(task)} code={task.language} /> },
     { id: "project", header: "Project", cell: task => projectLabel(task.project_name, task.project_key) },
     { id: "task", header: "Task", cell: task => <>
       {taskDescription(task)}
@@ -157,7 +158,7 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
     })}</Toolbar>
   }>{managed.length > 0 && "As a project lead, you assign documents to people, yourself included, on the Documents page."}</EmptyState>;
   const allRoute = tabRoute("all");
-  const tabEmpty = <EmptyState title={activeTab.empty} action={<a href={routeHref(allRoute)} onClick={event => {
+  const tabEmpty = <EmptyState title={activeTab.empty} action={<a className="btn btn-secondary" href={routeHref(allRoute)} onClick={event => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(allRoute);
   }}>Show all tasks</a>} />;

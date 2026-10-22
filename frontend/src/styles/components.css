@@ -840,7 +840,6 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .ui-toast .btn-quiet { color: var(--on-accent); }
 .ui-toast .btn:hover { background: var(--text-muted); color: var(--on-accent); }
 .ui-toast .btn:focus-visible { outline: var(--focus-width) solid var(--accent-light); outline-offset: var(--focus-offset); }
-.ui-toast-action { text-decoration: underline; }
 /* Selection checkbox: a 24 x 24 px target around an 18 px box (case checkboxes, "Select all"). */
 .checkbox-target {
   appearance: none;
@@ -1016,4 +1015,20 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
   .ui-tab:focus-visible,
   .ui-filter-chip:focus-visible,
   .ui-menu-item:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+}
+
+/* Language flag and tag ("[flag] de"): a small decorative flag before the language code. */
+.language-tag { white-space: nowrap; }
+.language-flag {
+  display: inline-block;
+  flex: none;
+  width: calc(0.8em * 4 / 3);
+  height: 0.8em;
+  margin-inline-end: 0.3em;
+  vertical-align: -0.05em;
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px var(--flag-shadow-colour);
+}
+@media (forced-colors: active) {
+  .language-flag { forced-color-adjust: none; box-shadow: none; outline: 1px solid CanvasText; }
 }

@@ -201,6 +201,48 @@ describe("row panel entries (acceptance fixes WP-A)", () => {
     expect(screen.getByRole("button", { name: /^Final: .*\. Show history, case-108 · de$/ })).toBeTruthy();
   });
 
+  it("opening the panel from the text name or a stage cell also adds the row to the selection", () => {
+    const { props } = renderTable(page([case107()]));
+    const order = ["case-107:en", "case-107:de"];
+    fireEvent.click(within(header("case-107 · de")).getByRole("button", { name: "Details, case-107 · de" }));
+    expect(props.selection!.select).toHaveBeenCalledWith("case-107:de", "select", order);
+    fireEvent.click(screen.getByRole("button", { name: /^Annotation: .*\. Show history, case-107 · en$/ }));
+    expect(props.selection!.select).toHaveBeenLastCalledWith("case-107:en", "select", order);
+    expect(props.onOpenPanel).toHaveBeenLastCalledWith(expect.objectContaining({ language: "en" }), expect.objectContaining({ stage: "annotation" }));
+  });
+
+  it("a click on the row's empty area opens the panel unfiltered and selects the row (never deselects)", () => {
+    const { props } = renderTable(page([case107()]), { selection: selection(["case-107:de"]) });
+    const waiting = cellsOf("case-107 · de")[5];
+    fireEvent.click(waiting);
+    const name = within(header("case-107 · de")).getByRole("button", { name: "Details, case-107 · de" });
+    expect(props.onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "de" }), { opener: name });
+    // "select" adds: an already-selected row stays selected, other selected rows are kept.
+    expect(props.selection!.select).toHaveBeenCalledWith("case-107:de", "select", ["case-107:en", "case-107:de"]);
+    expect(props.onOpenPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicks on the checkbox, links, buttons or with modifiers do not trigger the row click twice", () => {
+    const { props } = renderTable(page([case107()]));
+    fireEvent.click(within(rowOf("case-107 · de")).getByRole("checkbox", { name: "Select case-107 · de" }));
+    expect(props.selection!.select).toHaveBeenCalledTimes(1);
+    expect(props.selection!.select).toHaveBeenCalledWith("case-107:de", "toggle", ["case-107:en", "case-107:de"]);
+    expect(props.onOpenPanel).not.toHaveBeenCalled();
+    fireEvent.click(cellsOf("case-107 · de")[0]);
+    expect(props.onOpenPanel).not.toHaveBeenCalled();
+    fireEvent.click(cellsOf("case-107 · de")[5], { shiftKey: true });
+    expect(props.onOpenPanel).not.toHaveBeenCalled();
+    fireEvent.click(within(header("case-107 · de")).getByRole("button", { name: "Details, case-107 · de" }));
+    expect(props.onOpenPanel).toHaveBeenCalledTimes(1);
+    expect(props.selection!.select).toHaveBeenCalledTimes(2);
+  });
+
+  it("without selection rights a row click only opens the panel", () => {
+    const { props } = renderTable(page([case107()]), { selection: undefined });
+    fireEvent.click(cellsOf("case-107 · de")[4]);
+    expect(props.onOpenPanel).toHaveBeenCalledTimes(1);
+  });
+
   it("marks only the active row (aria-current, highlight class), never with opacity or inert", () => {
     const { container } = renderTable(page([case107()]), { activeKey: "case-107:de" });
     const active = rowOf("case-107 · de");

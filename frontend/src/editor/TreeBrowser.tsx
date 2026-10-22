@@ -17,6 +17,7 @@ import {
   withRoots,
   type TreeData,
 } from "./treeState";
+import { LanguageFlag } from "../ui/LanguageTag";
 
 export interface TreeBrowserProps {
   /** Out of sight and out of reach for now; the walk and its state are kept. */
@@ -286,7 +287,7 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
                           .sort(([a], [b]) => a.localeCompare(b))
                           .map(([language, names]) => (
                           <React.Fragment key={language}>
-                            <dt>{language}</dt>
+                            <dt><LanguageFlag code={language} />{language}</dt>
                             <dd>{names.join("; ")}</dd>
                           </React.Fragment>
                         ))}
@@ -299,15 +300,14 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
                       <ul>
                         {otherParents.map((parent) => (
                           <li key={parent.term_id}>
-                            <button
-                              type="button"
-                              className="tree-link"
+                            <Button
+                              size="sm"
                               onClick={() => {
                                 void showUnder(parent.term_id);
                               }}
                             >
                               {parent.label}
-                            </button>
+                            </Button>
                           </li>
                         ))}
                       </ul>

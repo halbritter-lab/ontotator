@@ -106,7 +106,7 @@ function EditValues({ group, workspace, busy, onKeep, onCancel }: { group: Conso
     </Select>)}
     <div className="cons-actions">
       <Button variant="primary" loading={busy} onClick={() => onKeep(Object.fromEntries(Object.entries(values).filter(([, value]) => !!value)))}>Keep with these values</Button>
-      <Button variant="quiet" onClick={onCancel}>Cancel</Button>
+      <Button onClick={onCancel}>Cancel</Button>
     </div>
   </div>;
 }
@@ -188,9 +188,9 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       <Textarea id={noteId} label="Note for the lead" value={note} onChange={event => setNote(event.target.value)} rows={2} />
       {resolved && <div className="cons-actions">
         <Button size="sm" loading={busy} onClick={() => { void props.onAnnotate({ input_ids: inputIds, note: note.trim() || null, guidelines_unclear: group.guidelines_unclear }).then(ok => { if (ok) setNoteOpen(false); }); }}>Save note</Button>
-        <Button size="sm" variant="quiet" onClick={() => { setNote(group.note ?? ""); setNoteOpen(false); }}>Cancel</Button>
+        <Button size="sm" onClick={() => { setNote(group.note ?? ""); setNoteOpen(false); }}>Cancel</Button>
       </div>}
-    </div> : <Button size="sm" variant="quiet" onClick={() => setNoteOpen(true)}>{resolved && group.note ? "Edit note" : "+ note"}</Button>}
+    </div> : <Button size="sm" onClick={() => setNoteOpen(true)}>{resolved && group.note ? "Edit note" : "+ note"}</Button>}
     <Checkbox id={`${noteId}-flag`} label="Guidelines unclear here" checked={resolved ? group.guidelines_unclear : flag}
       onChange={event => {
         if (!resolved) { setFlag(event.target.checked); return; }
@@ -217,10 +217,10 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
           {(partial || matchOnly) && <Button variant={partial ? "primary" : "secondary"} loading={busy}
             aria-disabled={!keepReady || undefined} aria-describedby={!keepReady ? `${noteId}-keep-reason` : undefined}
             onClick={() => { if (keepReady) keep(); }}>{partial ? keepLabel(present) : "Keep"}</Button>}
-          <Button variant="quiet" aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, "left out"); }}>Leave out</Button>
-          {(partial || matchOnly) && workspace && <Button variant="quiet" onClick={() => setEditing(true)}>Edit values…</Button>}
-          {(matchOnly || needsTerm(group)) && workspace && <Button ref={otherTermRef} variant="quiet" aria-expanded={picking} onClick={() => setPicking(true)}>Other term…</Button>}
-          {props.onEditInEditor && <Button variant="quiet" onClick={props.onEditInEditor}>Edit in editor…</Button>}
+          <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, "left out"); }}>Leave out</Button>
+          {(partial || matchOnly) && workspace && <Button onClick={() => setEditing(true)}>Edit values…</Button>}
+          {(matchOnly || needsTerm(group)) && workspace && <Button ref={otherTermRef} aria-expanded={picking} onClick={() => setPicking(true)}>Other term…</Button>}
+          {props.onEditInEditor && <Button onClick={props.onEditInEditor}>Edit in editor…</Button>}
         </div>}
       {!keepReady && (partial || matchOnly) && <p id={`${noteId}-keep-reason`} className="action-reason">Choose one option in each row first.</p>}
       {workspace && <TermPicker open={picking} anchorRef={otherTermRef} label="Other term" workspace={workspace} layerId={group.members[0].layer_id}
@@ -242,7 +242,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
         onCancel={() => setConfirmReopen(false)} onConfirm={() => { void props.onReopen().then(() => setConfirmReopen(false)); }} />
         : <div className="cons-actions">
           <Button size="sm" loading={busy} onClick={reopen}>Change</Button>
-          {props.onEditInEditor && <Button size="sm" variant="quiet" onClick={props.onEditInEditor}>Edit in editor…</Button>}
+          {props.onEditInEditor && <Button size="sm" onClick={props.onEditInEditor}>Edit in editor…</Button>}
         </div>}
       {noteAndFlag(true)}
     </>}
@@ -251,7 +251,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   return <li className={["cons-group", expanded && "cons-group-expanded", !open && "cons-group-resolved"].filter(Boolean).join(" ")} data-group={group.group_id}>
     <div className="cons-group-line">
       {header}
-      {!expanded && !open && !readOnly && <Button size="sm" variant="quiet" className="cons-change" loading={busy}
+      {!expanded && !open && !readOnly && <Button size="sm" className="cons-change" loading={busy}
         aria-label={`Change, ${title}`} onClick={reopen}>Change</Button>}
     </div>
     {!expanded && confirmReopen && <InlineConfirm title="Reopen this group?" message={REOPEN_EDITED_WARNING} confirmLabel="Reopen" busy={busy}

@@ -72,7 +72,7 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
           </li>)}
         </ul>
         {card.footer && <p className="progress-stage-foot">
-          <RouteLink route={{ name: "projectExport", key: projectKey }} onNavigate={onNavigate}>Export final results…</RouteLink> <span className="muted">{card.footer}</span>
+          <RouteLink route={{ name: "projectExport", key: projectKey }} className="btn btn-secondary btn-sm" onNavigate={onNavigate}>Export final results…</RouteLink> <span className="muted">{card.footer}</span>
         </p>}
       </section>
       {!last && <span className="progress-arrow" aria-hidden="true"><IconChevronRight /></span>}

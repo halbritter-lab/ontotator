@@ -159,7 +159,7 @@ export function UnconfirmedValuesSection({
                     {isFailed ? "Retry" : "Confirm"}
                   </Button>
                 )}
-                <Button type="button" variant="quiet" size="sm" aria-label={`Go to ${row.term}`}
+                <Button type="button" size="sm" aria-label={`Go to ${row.term}`}
                   aria-disabled={isBusy ? true : undefined}
                   onClick={() => { if (!isBusy) onGoTo(row); }}>
                   Go to

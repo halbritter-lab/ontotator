@@ -83,7 +83,7 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }
         if (confirm?.reason.trim()) { setConfirm({ ...confirm, askDiscard: true }); return; }
         setConfirm(null); setNotice(null); setView("form");
       }}>New report</Button>
-      <Button variant="quiet" aria-disabled={busy || undefined} onClick={() => onListClose?.()}>Close</Button>
+      <Button aria-disabled={busy || undefined} onClick={() => onListClose?.()}>Close</Button>
     </>}>
       <div className="problem-task-status">
         <p>{`Your task: ${assignment.held ? "Paused" : "Active"}`}</p>

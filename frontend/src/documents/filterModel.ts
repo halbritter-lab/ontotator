@@ -220,7 +220,7 @@ export function toggleOption(query: ProjectDocumentsQuery, item: FacetOption, on
 }
 
 /** An active filter as a removable chip; `patch` removes it. */
-export interface Chip { id: string; label: string; patch: ProjectDocumentsQuery }
+export interface Chip { id: string; label: string; patch: ProjectDocumentsQuery; /** Language code a language chip names (shown with its flag). */ language?: string }
 
 function facetChips(query: ProjectDocumentsQuery, param: FacetParam, people: PeopleNames): Chip[] {
   const values = known(param, query[param]);
@@ -237,7 +237,7 @@ function facetChips(query: ProjectDocumentsQuery, param: FacetParam, people: Peo
         : param === "plan" ? PLAN_LABELS[value]
           : param === "origin" ? ORIGIN_LABELS[value]
             : param in STATE_VALUES ? STATE_VALUES[param as keyof typeof STATE_VALUES][value] : value);
-    chips.push({ id: `${param}:${value}`, label: PARAM_PREFIX[param] ? `${PARAM_PREFIX[param]}: ${label}` : label, patch: { [param]: join(values.filter(entry => !covered.includes(entry))) } });
+    chips.push({ id: `${param}:${value}`, label: PARAM_PREFIX[param] ? `${PARAM_PREFIX[param]}: ${label}` : label, patch: { [param]: join(values.filter(entry => !covered.includes(entry))) }, ...(param === "language" ? { language: value } : {}) });
   }
   return chips;
 }

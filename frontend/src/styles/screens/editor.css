@@ -765,14 +765,6 @@
   border-color: var(--accent);
 }
 
-.lang-flag {
-  display: block;
-  width: 16px;
-  height: 12px;
-  border-radius: 1px;
-  box-shadow: 0 0 0 1px var(--flag-shadow-colour);
-}
-
 .lang-code {
   font-size: var(--size-xs);
   font-weight: 600;
@@ -1557,20 +1549,6 @@
   color: var(--text-muted);
 }
 
-.replaced-link {
-  display: inline;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  font-size: var(--size-xs);
-  text-align: left;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
 .badge.badge-ai,
 .doc-item--resolved:not(.selected) .badge-ai {
   padding: 0 4px;
@@ -1780,22 +1758,6 @@
   margin-bottom: var(--space-2);
 }
 
-.link-button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: var(--size-sm);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-.link-button:hover {
-  color: var(--text);
-}
-
 .review-actions__note {
   margin-bottom: 0;
 }
@@ -1806,8 +1768,6 @@
   font-size: var(--size-xs);
 }
 
-.link-button:focus-visible,
-.replaced-link:focus-visible,
 .layer-controls input:focus-visible {
   outline: var(--focus-width) solid var(--focus-ring);
   outline-offset: var(--focus-offset);

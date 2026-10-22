@@ -25,6 +25,7 @@ import {
   type DecisionCategory,
 } from "./labels";
 import { isActiveRow, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
+import { LanguageFlag } from "../ui/LanguageTag";
 
 /** Longest ID shown in full in a cell; longer IDs get a middle ellipsis with the full value in `title`. */
 export const ID_DISPLAY_MAX = 24;
@@ -265,10 +266,10 @@ export function RowOpenLinks({ row, projectKey, query, onNavigate }: {
   const descriptionId = useId();
   const { route, description } = openLink(row, projectKey, query);
   return <>
-    <RouteLink route={route} onNavigate={onNavigate} className="documents-open" aria-label={`Open in editor, ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
+    <RouteLink route={route} onNavigate={onNavigate} className="documents-open btn btn-secondary btn-sm" aria-label={`Open in editor, ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
     {description && <span id={descriptionId} className="visually-hidden">{description}</span>}
     {row.own_open_assignment_id != null && (
-      <RouteLink route={{ name: "task", assignmentId: row.own_open_assignment_id }} onNavigate={onNavigate} className="documents-open-task">Open my task</RouteLink>
+      <RouteLink route={{ name: "task", assignmentId: row.own_open_assignment_id }} onNavigate={onNavigate} className="documents-open-task btn btn-secondary btn-sm">Open my task</RouteLink>
     )}
   </>;
 }
@@ -320,7 +321,7 @@ export interface RowHeaderCellProps {
 export function RowHeaderCell({ row, projectKey, query, onNavigate, badge, onOpenPanel }: RowHeaderCellProps): JSX.Element {
   const active = isActiveRow(row);
   const nameId = documentsRowId(row.case_id, row.language, "header");
-  const nameContent = <><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language">{row.language}</span></>;
+  const nameContent = <><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language"><LanguageFlag code={row.language} />{row.language}</span></>;
   return (
     <span className="documents-row-header documents-text-cell">
       {onOpenPanel

@@ -416,6 +416,10 @@ test("row panel: no layout shift, J / K walk the rows, Escape from the table kee
   await page.setViewportSize({ width: 1280, height: 900 });
   await openScenario(page, "S7");
   const first = textRow(page, "case-0001", "en");
+  // Opening the panel also selects the row; select it first so the selection bar's arrival is not measured as a shift.
+  await first.getByRole("checkbox", { name: "Select case-0001 · en" }).click();
+  // The bar's summary loads the selection's common step afterwards (its line may wrap): measure once it is shown.
+  await expect(page.getByRole("region", { name: "Selection" }).locator(".selection-bar-step")).toHaveText("· next step: Assign annotation (en)");
   const before = await first.boundingBox();
   const tableBefore = await page.getByRole("table", { name: "Documents", exact: true }).boundingBox();
 
@@ -436,6 +440,9 @@ test("row panel: no layout shift, J / K walk the rows, Escape from the table kee
   const filtered = rowPanel(page, "case-0002", "en");
   await expect(filtered.getByRole("button", { name: "Remove filter Annotation", exact: true })).toBeVisible();
   await expect(page.getByRole("complementary")).toHaveCount(1);
+  // Opening the panel also added the row to the selection, next to the one selected before.
+  await expect(textRow(page, "case-0002", "en").getByRole("checkbox", { name: "Select case-0002 · en" })).toBeChecked();
+  await expect(first.getByRole("checkbox", { name: "Select case-0001 · en" })).toBeChecked();
 
   // Escape with focus in the table does nothing.
   await rowBox(page, "case-0003", "en").focus();

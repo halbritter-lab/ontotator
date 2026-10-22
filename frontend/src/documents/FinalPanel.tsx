@@ -223,7 +223,7 @@ function FailureNotice({ failure: shown, onReview, onRetry, busy: saving }: { fa
 function NoneLeft({ other, onRowAction, onClose }: { other: NextRow | null; onRowAction?: DecisionBlockProps["onRowAction"]; onClose: () => void }): JSX.Element {
   return <div className="final-panel-none">
     <p>No more final results to decide.</p>
-    {other && onRowAction && <p><Button variant="quiet" onClick={() => onRowAction(other.row, other.step)}>
+    {other && onRowAction && <p><Button onClick={() => onRowAction(other.row, other.step)}>
       {`Next decision: ${rowName(other.row)} (${decisionKind(other.step)})`}
     </Button></p>}
     <Button onClick={onClose}>Close</Button>
@@ -320,7 +320,8 @@ function useEditorRoute(props: ContentProps) {
     ...(submissionId ? { annotations: refKey({ kind: "submission", id: submissionId }) } : {}),
     ...(Object.keys(query).length ? { documents: query } : {}),
   });
-  const link = (target: Route, text: string, label?: string) => <a href={routeHref(target)} aria-label={label} onClick={event => {
+  // Commands ("Open in editor", "Open result") look like buttons; `info` keeps a text link for views that only show information.
+  const link = (target: Route, text: string, label?: string, info = false) => <a className={info ? undefined : "btn btn-secondary btn-sm"} href={routeHref(target)} aria-label={label} onClick={event => {
     if (!isPlainClick(event)) return;
     event.preventDefault(); onNavigate(target);
   }}>{text}</a>;
@@ -366,8 +367,8 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
         onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />
     </div>}
     <div className="final-panel-links">
-      {onAssign && <Button size="sm" variant="quiet" onClick={() => onAssign(row)}>Assign annotation review…</Button>}
-      {submission.kind === "consolidation" && compared > 1 && <Button size="sm" variant="quiet" onClick={props.onCompareAll}>{`Compare all ${compared}…`}</Button>}
+      {onAssign && <Button size="sm" onClick={() => onAssign(row)}>Assign annotation review…</Button>}
+      {submission.kind === "consolidation" && compared > 1 && <Button size="sm" onClick={props.onCompareAll}>{`Compare all ${compared}…`}</Button>}
     </div>
     <Consolidate {...props} listed={listed} primary={false} />
   </div>;
@@ -391,7 +392,7 @@ function DecidedContent(props: ContentProps & { onChange: () => void }): JSX.Ele
       <Button size="sm" onClick={props.onChange}>Change final…</Button>
     </div>}
     {onAssign && <div className="final-panel-links">
-      <Button size="sm" variant="quiet" onClick={() => onAssign(row)}>Assign annotation review…</Button>
+      <Button size="sm" onClick={() => onAssign(row)}>Assign annotation review…</Button>
     </div>}
   </div>;
 }
@@ -533,7 +534,7 @@ function ReviewContent(props: ContentProps): JSX.Element {
     {corrected && <div className="final-panel-text-change">
       <p>{textChangedLine(finalName, correctedName)}</p>
       <p className="cell-secondary">
-        {corrected.document_id && link(route(corrected.document_id), "Show changes")}
+        {corrected.document_id && link(route(corrected.document_id), "Show changes", undefined, true)}
         {data.panel.changed_passages != null && <>{" · "}{changedPassagesText(data.panel.changed_passages)}</>}
       </p>
     </div>}

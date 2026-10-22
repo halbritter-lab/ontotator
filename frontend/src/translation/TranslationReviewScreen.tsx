@@ -17,6 +17,7 @@ import { ReviewForm } from "./ReviewForm";
 import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type DecisionState } from "./decisionOrigin";
 import { categoryLabels, comparisonCountsDiffer, couplingEditingNote, couplingNote, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, matchingParagraphStatus, nextTaskLabel, paragraphCountChanged, paragraphCountsDiffer, remainingTasksText, reviewIssueMessage, showMatchingLabel, showMatchingShortcut, showMatchingTitle } from "./labels";
 import { checkReview, type ClinicalCategory, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
+import { LanguageTag } from "../ui/LanguageTag";
 
 export interface TranslationReviewScreenProps {
   assignmentId: number; username: string; onNavigate: (route: Route) => void;
@@ -511,7 +512,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
         ? <><p>Before submitting:</p><ol className="review-issues" aria-label="Review issues">{issues.map((issue, index) => <li key={`${issue}-${index}`}>{issueMessages[issue]}</li>)}</ol></>
         : <p>{submitBlocker}</p>}
   </div>;
-  const qualificationNote = !nonblank(qualification) && <p className="translation-submit-note">{navigateLink({ name: "me" }, "Add your qualification in your profile")}</p>;
+  const qualificationNote = !nonblank(qualification) && <p className="translation-submit-note">{navigateLink({ name: "me" }, "Add your qualification in your profile", "btn btn-secondary btn-sm")}</p>;
   const submitButton = <Button ref={submitControl} variant="primary" aria-describedby={reasonShown ? "review-submit-reason" : undefined}
     aria-disabled={canSubmit ? undefined : true} loading={busy} onClick={requestSubmit}>Submit review…</Button>;
 
@@ -523,7 +524,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     <div className="translation-review-bar density-compact">
       <h1>{workspace.variant.external_id}</h1>
       <div className="translation-review-meta">
-        <p>{languageName(sourceLanguage)} <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> {languageName(targetLanguage)}</p>
+        <p><LanguageTag code={sourceLanguage}>{languageName(sourceLanguage)}</LanguageTag> <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> <LanguageTag code={targetLanguage}>{languageName(targetLanguage)}</LanguageTag></p>
         <details className="translation-details" ref={detailsRef} onKeyDown={closeDetails}>
           <summary ref={detailsSummary}>Translation details</summary>
           <dl>
@@ -539,7 +540,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
         {props.guidelineActions}
         {!leadCorrection && props.reportActions}
         <span role="status" className="translation-save-status"><StatusBadge tone={statusTone}>{status}</StatusBadge></span>
-        <Button variant="quiet" size="sm" icon={<IconRetry />} onClick={() => { void reload(); }}
+        <Button size="sm" icon={<IconRetry />} onClick={() => { void reload(); }}
           title="Load the latest saved state of this review. Unsaved edits are saved first; if that fails, you choose whether to discard them.">Reload from server</Button>
       </div>
     </div>
@@ -606,7 +607,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
             {createdVersion !== null && <p>A corrected version v{createdVersion} was created.</p>}
             {submitted.created_variant_id && createdVersion === null && <Button size="sm" onClick={() => { void loadCreated(submitted); }}>Retry corrected version metadata</Button>}</InlineMessage>}
           {submitted && leadCorrection && <div className="translation-next-task">
-            {navigateLink({ name: "projectDocuments", key: projectKey, case: workspace.variant.case_id, language: workspace.variant.language }, "Back to Documents")}
+            {navigateLink({ name: "projectDocuments", key: projectKey, case: workspace.variant.case_id, language: workspace.variant.language }, "Back to Documents", "btn btn-secondary")}
           </div>}
           {submitted && !leadCorrection && nextTask && <div className="translation-next-task">
             {nextTask.kind === "loading" && <Button variant="primary" loading>Next task</Button>}
@@ -614,7 +615,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
               onClick={() => props.onNavigate({ name: "task", assignmentId: nextTask.next!.assignment_id })}>{nextTaskLabel(nextTask.next)}</Button>}
             {nextTask.kind === "ready" && !nextTask.next
               ? <Button variant="primary" onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button>
-              : navigateLink(MY_TASKS, "Back to my tasks")}
+              : navigateLink(MY_TASKS, "Back to my tasks", "btn btn-secondary")}
             {nextTask.kind === "ready" && <p role="status" className="translation-submit-note">{remainingTasksText(nextTask.remaining)}</p>}
             {nextTask.kind === "error" && <><ErrorNotice error={nextTask.error} /><Button onClick={() => setNextTaskLoad(n => n + 1)}>Retry</Button></>}
           </div>}
@@ -654,7 +655,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     </div>
     {!readOnly && !wide && <div className="translation-pinned-bar density-compact" role="region" aria-label="Decision and submit">
       <p className="translation-pinned-decision"><strong>Decision:</strong> {decision(rawForm.decision) ? decisionLabels[rawForm.decision] : "Not chosen"}</p>
-      <Button variant="quiet" size="sm" onClick={focusDecisionLegend}>Change ↓</Button>
+      <Button size="sm" onClick={focusDecisionLegend}>Change ↓</Button>
       {qualificationNote}
       {submitReasonElement}
       {submitButton}

@@ -404,12 +404,12 @@ function PlanNoticeContent({ row, saves, notice }: { row: DocumentRowView; saves
     focusChip(row, flag);
   };
   if (notice.kind === "changed") {
-    return <div className="documents-plan-notice"><InlineMessage tone="info">{PLAN_CHANGED_MESSAGE} <Button size="sm" variant="quiet" onClick={() => saves.dismiss(row)}>Dismiss</Button></InlineMessage></div>;
+    return <div className="documents-plan-notice"><InlineMessage tone="info">{PLAN_CHANGED_MESSAGE} <Button size="sm" onClick={() => saves.dismiss(row)}>Dismiss</Button></InlineMessage></div>;
   }
   if (notice.kind === "error") {
     return <div className="documents-plan-notice"><InlineMessage tone="error">Could not save the plan of {name}: {errorMessage(notice.error)}{" "}
       <Button size="sm" aria-disabled={busy || undefined} onClick={() => { if (!busy) notice.retry(); }}>Retry</Button>
-      <Button size="sm" variant="quiet" onClick={cancel}>Dismiss</Button>
+      <Button size="sm" onClick={cancel}>Dismiss</Button>
     </InlineMessage></div>;
   }
   if (notice.kind === "accept") {

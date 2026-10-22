@@ -16,7 +16,7 @@ export function CarriedProgress({ text, showNext, onNext }: {
         {text}
       </p>
       {showNext && (
-        <Button variant="quiet" size="sm" aria-keyshortcuts="N" onClick={onNext}>
+        <Button size="sm" aria-keyshortcuts="N" onClick={onNext}>
           Next unchecked <Kbd>N</Kbd>
         </Button>
       )}

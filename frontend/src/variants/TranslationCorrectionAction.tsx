@@ -64,7 +64,7 @@ function CorrectionContent({ projectKey, variant, username, requiredLanguages, d
     </>}
     {error != null && <><ErrorNotice error={error} />{!members && <Button onClick={() => setAttempt(value => value + 1)}>Reload translation reviewers</Button>}</>}
     {assigned && <InlineMessage tone="success">Translation correction assigned to {personLabel(member, { fallback: 'the reviewer' })}.
-      {assigned.username === username && <> <a href={`#/tasks/${assigned.id}`}>Open my translation review</a></>}
+      {assigned.username === username && <> <a className="btn btn-secondary btn-sm" href={`#/tasks/${assigned.id}`}>Open my translation review</a></>}
     </InlineMessage>}
   </section>;
 }
