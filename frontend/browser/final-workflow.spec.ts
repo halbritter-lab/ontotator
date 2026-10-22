@@ -124,11 +124,15 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     // The task opens the consolidation view (acceptance fixes WP-E): every open group takes its first choice per row, then submit.
     const view = reviewer.page;
     await expect(view.getByRole('heading', { level: 1, name: /^Consolidate / })).toBeVisible({ timeout: 30_000 });
-    for (let guard = 0; guard < 10 && await view.locator('.cons-group-expanded .cons-choice-row').count(); guard++) {
+    // A group without rows (e.g. only overlapping text spans differ) is kept.
+    const open = view.locator('.cons-group-expanded:not(.cons-group-resolved)');
+    for (let guard = 0; guard < 10 && await open.count(); guard++) {
       const resolved = view.waitForResponse(r => r.request().method() === 'POST' && r.url().includes('/consolidation-groups/resolve'));
       const before = await view.locator('.cons-detail').innerText();
-      const rows = view.locator('.cons-group-expanded .cons-choice-row');
-      for (let index = 0, count = await rows.count(); index < count; index++) await rows.nth(index).locator('.cons-chip').first().click();
+      const rows = open.locator('.cons-choice-row');
+      const count = await rows.count();
+      for (let index = 0; index < count; index++) await rows.nth(index).locator('.cons-chip').first().click();
+      if (!count) await open.getByRole('button', { name: /^Keep/ }).first().click();
       expect((await resolved).ok()).toBeTruthy();
       await expect(view.locator('.cons-detail')).not.toHaveText(before);
     }
