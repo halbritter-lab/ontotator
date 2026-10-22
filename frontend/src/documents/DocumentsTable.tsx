@@ -3,10 +3,11 @@
  * case with a slim group label row (case checkbox, case name, "· en source + 1 translation"),
  * then one flat row per text with eight columns: [checkbox] · Text · Review · Annotation · Final ·
  * Waiting on · Action · Last activity. Rows outside the plan are muted rows; nothing collapses.
- * Decision rows get the left edge. The text name and the stage cells open the row panel (acceptance
- * fixes WP-A); the row the panel shows is the active row. Selection and the panel are owned by the page.
+ * Decision rows get the left edge. The text name, the stage cells and a click on the row's empty area open
+ * the row panel (acceptance fixes WP-A) and select the row; the row the panel shows is the active row.
+ * Selection and the panel are owned by the page.
  */
-import { useMemo, type ReactNode } from "react";
+import { useMemo, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, DocumentRowsRequest, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import { plural } from "../app/labels";
@@ -16,6 +17,7 @@ import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
 import {
   documentsGroupId,
+  documentsRowId,
   LastActivityCell,
   type OpenRowPanel,
   RowHeaderCell,
@@ -42,6 +44,39 @@ export interface TableSelection {
   caseState: (caseKeys: readonly string[]) => "all" | "some" | "none";
   select: (key: string, mode: GroupSelectMode, order: readonly string[]) => void;
   selectCase: (caseKeys: readonly string[], mode: GroupSelectMode, order: readonly string[]) => void;
+}
+
+/**
+ * Elements inside a row that handle their own clicks; a click on them never counts as a click on the row's empty area.
+ * The text name and the stage cells are buttons too: they open the panel (and select the row) themselves.
+ */
+const ROW_INTERACTIVE = "a, button, input, select, textarea, label, summary, [role='button'], [role='menuitem'], [role='checkbox'], [tabindex]:not([tabindex='-1']), .data-table-select-cell";
+
+/**
+ * True for a plain click on a row's empty area: not on an interactive element, not from a portal (popover/menu
+ * content bubbles through React), no modifier and no text being selected (dragging over a name copies it).
+ */
+export function isRowAreaClick(event: MouseEvent<HTMLElement>): boolean {
+  const target = event.target as Element | null;
+  if (!target || !event.currentTarget.contains(target)) return false;
+  if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+  if (target.closest(ROW_INTERACTIVE)) return false;
+  const selected = typeof window.getSelection === "function" ? window.getSelection()?.toString() ?? "" : "";
+  return selected.length === 0;
+}
+
+/**
+ * Opening the row panel also selects the row so it is ready for bulk actions (assign, …). Choice: the row is
+ * ADDED to the selection (mode "select": adds it and moves the range anchor), it never deselects the row itself
+ * (an already-selected row stays selected) nor other selected rows; only the checkbox toggles. Without a selection
+ * (no selection rights) the panel just opens.
+ */
+export function openAndSelect(onOpenPanel: OpenRowPanel | undefined, selection: TableSelection | undefined, order: readonly string[]): OpenRowPanel | undefined {
+  if (!onOpenPanel) return undefined;
+  return (row, options) => {
+    selection?.select(rowKeyOf(row), "select", order);
+    onOpenPanel(row, options);
+  };
 }
 
 /** Server sorts the headers can set (VD10). */
@@ -100,6 +135,13 @@ export function DocumentsTable({
   const groupOf = useMemo(() => new Map(page.groups.map(group => [group.case_id, group])), [page.groups]);
 
   const sourceOf = (row: DocumentRowView) => groupOf.get(row.case_id)?.rows.find(entry => entry.is_source)?.language ?? null;
+  const openPanel = openAndSelect(onOpenPanel, selection, order);
+  // A click on the row's empty area opens the panel unfiltered, like the text name (which gets focus back on close).
+  const onRowClick = (row: DocumentRowView) => openPanel ? (event: MouseEvent<HTMLTableRowElement>) => {
+    if (!isRowAreaClick(event)) return;
+    const opener = document.getElementById(documentsRowId(row.case_id, row.language, "header")) ?? event.currentTarget;
+    openPanel(row, { opener });
+  } : undefined;
 
   const columns: Column<DocumentRowView>[] = [
     {
@@ -107,11 +149,11 @@ export function DocumentsTable({
       header: "Text",
       rowHeader: true,
       sortable: true,
-      cell: row => <RowHeaderCell row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} badge={rowBadge?.(row)} onOpenPanel={onOpenPanel} />,
+      cell: row => <RowHeaderCell row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} badge={rowBadge?.(row)} onOpenPanel={openPanel} />,
     },
-    { id: "review", header: "Review", cell: row => <RowStageCell row={row} stage="review" sourceLanguage={sourceOf(row)} onOpenPanel={onOpenPanel} /> },
-    { id: "annotation", header: "Annotation", cell: row => <RowStageCell row={row} stage="annotation" onOpenPanel={onOpenPanel} /> },
-    { id: "final", header: "Final", cell: row => <RowStageCell row={row} stage="final" onOpenPanel={onOpenPanel} /> },
+    { id: "review", header: "Review", cell: row => <RowStageCell row={row} stage="review" sourceLanguage={sourceOf(row)} onOpenPanel={openPanel} /> },
+    { id: "annotation", header: "Annotation", cell: row => <RowStageCell row={row} stage="annotation" onOpenPanel={openPanel} /> },
+    { id: "final", header: "Final", cell: row => <RowStageCell row={row} stage="final" onOpenPanel={openPanel} /> },
     { id: "waiting", header: "Waiting on", cell: row => <WaitingOnCell row={row} /> },
     {
       id: "action",
@@ -150,7 +192,7 @@ export function DocumentsTable({
     const notice = renderRowNotice?.(row) ?? null;
     return notice == null ? null : <div className="documents-row-notice-slot">{notice}</div>;
   };
-  const rowClass = (row: DocumentRowView) => ["documents-row", !isActiveRow(row) && "documents-row--not-in-plan", rowKeyOf(row) === activeKey && "documents-row--active"]
+  const rowClass = (row: DocumentRowView) => ["documents-row", !isActiveRow(row) && "documents-row--not-in-plan", rowKeyOf(row) === activeKey && "documents-row--active", openPanel && "documents-row--clickable"]
     .filter(Boolean).join(" ");
 
   return (
@@ -161,7 +203,7 @@ export function DocumentsTable({
       rows={[]}
       groups={groups}
       rowKey={rowKeyOf}
-      rowProps={row => ({ className: rowClass(row), ...(rowKeyOf(row) === activeKey ? { "aria-current": true } : {}) })}
+      rowProps={row => ({ className: rowClass(row), onClick: onRowClick(row), ...(rowKeyOf(row) === activeKey ? { "aria-current": true } : {}) })}
       rowEdge={row => (rowNeedsDecision(row) ? "decision" : null)}
       renderExpanded={below}
       busy={busy}

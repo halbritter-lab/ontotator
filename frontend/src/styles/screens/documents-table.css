@@ -81,6 +81,9 @@
 .documents-stage-button:focus-visible .stage-cell-status { text-decoration: underline solid var(--accent); text-decoration-thickness: 2px; }
 .documents-stage-button:focus { outline: none; }
 .documents-stage-button:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); border-radius: var(--radius-sm); }
+/* A click on a row's empty area opens its panel and selects it: pointer cursor; the checkbox cell keeps its own. */
+.documents-table .documents-row--clickable { cursor: pointer; }
+.documents-table .documents-row--clickable > .data-table-select-cell { cursor: auto; }
 /* The row the row panel shows: a light accent background, a 2 px accent edge above and below every cell
    (visible beside the panel, never colour alone) and its text name in strong weight; the first cell keeps
    the decision edge of decision rows; `aria-current` names it. Box shadows only: no layout shift. */

@@ -3,7 +3,8 @@
  * checkbox + "case-107 · en source + 1 translation"), one `<article>` per text with its checkbox,
  * heading "{case · language}" with version marker and NEW, the three stage lines, "Waiting on: …",
  * the row action full width with the "+n" menu, "Open" and "Details" (the only way into the row panel's
- * sheet, acceptance fixes X19). Rows outside the plan are muted articles; nothing collapses (VD1). Card and
+ * sheet, acceptance fixes X19). As in the table, opening the panel ("Details" or a stage popover's details)
+ * also adds the text to the selection. Rows outside the plan are muted articles; nothing collapses (VD1). Card and
  * case headings carry the table's row-header and group-label ids, so deep links, plan saves and the panel
  * find the same focus targets in both layouts.
  */
@@ -12,7 +13,7 @@ import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import type { GroupSelectMode } from "../ui/DataTable";
 import type { MenuItem } from "../ui/MenuButton";
-import { caseHeaderText, type TableSelection } from "./DocumentsTable";
+import { caseHeaderText, openAndSelect, type TableSelection } from "./DocumentsTable";
 import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
 import { documentsGroupId, documentsRowId, LastActivityCell, NewBadge, RowOpenLinks, rowIsNew, rowKeyOf, rowName, rowNeedsDecision, ShortId, VersionMarker, type OpenRowPanel } from "./RowCells";
@@ -158,8 +159,9 @@ function DocumentCard({ row, group, projectKey, query, active: current, onOpenPa
   );
 }
 
-export function DocumentCards({ page, busy, empty, query, selection, activeKey = null, ...rest }: DocumentCardsProps): JSX.Element {
+export function DocumentCards({ page, busy, empty, query, selection, activeKey = null, onOpenPanel, ...rest }: DocumentCardsProps): JSX.Element {
   const order = useMemo(() => page.groups.flatMap(group => group.rows.map(rowKeyOf)), [page.groups]);
+  const openPanel = openAndSelect(onOpenPanel, selection, order);
   if (page.groups.length === 0) return <div className="document-cards-empty">{empty}</div>;
   return (
     <ul className="document-cards" aria-label="Documents" aria-busy={busy || undefined}>
@@ -176,7 +178,7 @@ export function DocumentCards({ page, busy, empty, query, selection, activeKey =
               <h3 id={documentsGroupId(group.case_id)} tabIndex={-1} className="document-case-card-title">{caseHeaderText(group)}</h3>
             </div>
             {group.rows.map(row => (
-              <DocumentCard key={rowKeyOf(row)} {...rest} row={row} group={group} query={query} active={rowKeyOf(row) === activeKey}
+              <DocumentCard key={rowKeyOf(row)} {...rest} onOpenPanel={openPanel} row={row} group={group} query={query} active={rowKeyOf(row) === activeKey}
                 select={selection ? { checked: selection.keys.has(rowKeyOf(row)), onSelect: mode => selection.select(rowKeyOf(row), mode, order) } : undefined} />
             ))}
           </li>
