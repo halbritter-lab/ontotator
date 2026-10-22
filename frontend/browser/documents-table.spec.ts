@@ -418,7 +418,8 @@ test("row panel: no layout shift, J / K walk the rows, Escape from the table kee
   const first = textRow(page, "case-0001", "en");
   // Opening the panel also selects the row; select it first so the selection bar's arrival is not measured as a shift.
   await first.getByRole("checkbox", { name: "Select case-0001 · en" }).click();
-  await expect(page.getByRole("region", { name: "Selection" }).locator(".selection-bar-summary")).toBeVisible();
+  // The bar's summary loads the selection's common step afterwards (its line may wrap): measure once it is shown.
+  await expect(page.getByRole("region", { name: "Selection" }).locator(".selection-bar-step")).toHaveText("· next step: Assign annotation (en)");
   const before = await first.boundingBox();
   const tableBefore = await page.getByRole("table", { name: "Documents", exact: true }).boundingBox();
 
