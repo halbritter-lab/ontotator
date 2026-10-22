@@ -63,7 +63,10 @@ def test_started_scenario_has_the_eight_designed_groups(client: TestClient) -> N
     assert sorted(g["state"] for g in groups).count("auto") == 4
     open_kinds = sorted(g["kinds"][0] for g in groups if g["state"] == "open")
     assert open_kinds == ["partial", "span_differs", "term_differs", "values_differ"]
-    assert all(len(g["kinds"]) == 1 for g in groups if g["state"] == "open")
+    open_groups = [g for g in groups if g["state"] == "open"]
+    assert [g["kinds"] for g in open_groups if len(g["kinds"]) > 1] == [
+        ["term_differs", "values_differ"]
+    ]
     labels = [person["label"] for person in view["people"]]
     assert [person["lane"] for person in view["people"]] == [1, 2]
     assert all("(" in label for label in labels)

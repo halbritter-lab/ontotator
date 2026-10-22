@@ -1,6 +1,6 @@
 /**
  * Read-only clinical text of the consolidation view (acceptance fixes U12, U13, X18): one underline lane per
- * person in a fixed order (lane 1 closest to the text, same stroke, distinct offset), a neutral background on
+ * person in a fixed order (lane 1 closest to the text, distinct offset, hue and line style), a neutral background on
  * kept findings, a frame on the selected group. Selecting text offers "Add finding".
  */
 import { useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
@@ -29,14 +29,37 @@ export interface TextPaneProps {
   reducedMotion?: boolean;
 }
 
+/**
+ * One person lane's underline: its own hue (`--lane-N-line`) and its own line style, so lanes stay apart without
+ * colour (lane 1 solid, 2 dashed, 3 dotted, 4 double).
+ */
+const LANE_LINES: Record<number, { image: (colour: string) => string; height: number }> = {
+  1: { image: colour => `linear-gradient(${colour}, ${colour})`, height: 2 },
+  2: { image: colour => `repeating-linear-gradient(90deg, ${colour} 0 6px, transparent 6px 9px)`, height: 2 },
+  3: { image: colour => `repeating-linear-gradient(90deg, ${colour} 0 2px, transparent 2px 4px)`, height: 2 },
+  4: { image: colour => `linear-gradient(${colour} 0 1px, transparent 1px 2px, ${colour} 2px 3px)`, height: 3 },
+};
+
+const laneLine = (lane: number) => LANE_LINES[lane] ?? LANE_LINES[MAX_LANES];
+
+/** The line style of a lane in words, for the legend (meaning never depends on colour alone). */
+export const LANE_STYLE_WORDS: Record<number, string> = { 1: "solid", 2: "dashed", 3: "dotted", 4: "double" };
+
 /** Underline lanes as stacked background lines: lane 1 sits closest to the text. */
 export function laneStyle(lanes: readonly number[]): CSSProperties {
   if (!lanes.length) return {};
   return {
-    backgroundImage: lanes.map(() => "linear-gradient(var(--mark-line), var(--mark-line))").join(", "),
-    backgroundSize: lanes.map(() => "100% 2px").join(", "),
+    backgroundImage: lanes.map(lane => laneLine(lane).image(`var(--lane-${lane}-line)`)).join(", "),
+    backgroundSize: lanes.map(lane => `100% ${laneLine(lane).height}px`).join(", "),
     backgroundPosition: lanes.map(lane => `0 calc(100% - ${(MAX_LANES - lane) * 4}px)`).join(", "),
   };
+}
+
+/** The colour key of a person: a short sample of their lane's underline, next to their name. */
+export function LaneKey({ people, personId }: { people: readonly ConsolidationPersonView[]; personId: string }): JSX.Element {
+  const lane = laneOf(people, personId);
+  return <span className="cons-lane-key" data-lane={lane} aria-hidden="true"
+    style={{ backgroundImage: laneLine(lane).image(`var(--lane-${lane}-line)`), backgroundSize: `100% ${laneLine(lane).height}px` }} />;
 }
 
 interface Piece {
@@ -136,7 +159,7 @@ export function TextPane({ text, groups, people, selectedGroupId, onSelectGroup,
     </div>
     <ul className="cons-legend" aria-label="Legend">
       {lanes.map(lane => <li key={lane.lane}><span className="cons-legend-swatch" style={laneStyle([lane.lane])} aria-hidden="true" />
-        <span>Line {lane.lane}: {laneLegend(lane)}</span></li>)}
+        <span>Line {lane.lane} ({LANE_STYLE_WORDS[lane.lane]}): {laneLegend(lane)}</span></li>)}
       <li><span className="cons-legend-swatch cons-kept" aria-hidden="true" /><span>Shaded: kept</span></li>
       <li><span className="cons-legend-swatch cons-selected" aria-hidden="true" /><span>Framed: selected group</span></li>
     </ul>

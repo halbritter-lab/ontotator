@@ -4,13 +4,15 @@
  * people, differences marked by weight and the word "differs"), one row of choice chips per difference naming
  * the person, "+ note" and "Guidelines unclear here". A group resolves when every row has a choice.
  */
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { Button, Checkbox, InlineConfirm, Select, Textarea } from "../ui";
 import { axisLabel, KIND_LABELS, keepLabel, namesOf, partialText, quoted, REOPEN_EDITED_WARNING, valueWords } from "./consolidationText";
-import { absentPeople, activeMembers, allChosen, choosePayload, choiceSummary, groupTitle, hasKind, needsTerm, passage, peopleOf, presentPeople, rowsOf, stateSummary, termLabel, termOptions, type ChoiceRow, type Choices } from "./groupModel";
+import { absentPeople, allChosen, choosePayload, choiceSummary, groupTitle, hasKind, needsTerm, passage, peopleOf, presentPeople, rowsOf, stateSummary, takeOverChoices, takeOverWords, termLabel, type ChoiceRow, type Choices, type OtherTerm } from "./groupModel";
+import { personName } from "./lanes";
 import { TermPicker } from "./TermPicker";
+import { LaneKey } from "./TextPane";
 import type { GroupOutcome } from "./useConsolidation";
 
 export interface GroupCardProps {
@@ -49,17 +51,25 @@ function Snippet({ group, text }: { group: ConsolidationGroupView; text: string 
     <mark className="cons-snippet-mark">{chars.slice(start, end).join("")}</mark>{chars.slice(end, to).join("")}{to < chars.length && "…"}</p>;
 }
 
-function Chip({ selected, label, onClick, disabled }: { selected: boolean; label: string; onClick: () => void; disabled?: boolean }): JSX.Element {
-  return <button type="button" className="cons-chip" aria-pressed={selected} aria-disabled={disabled || undefined}
-    onClick={() => { if (!disabled) onClick(); }}>{label}</button>;
+/** Colour keys of the people holding a value (decorative; the chip names them). */
+function Keys({ people, holders }: { people: readonly ConsolidationPersonView[]; holders: readonly ConsolidationPersonView[] }): JSX.Element | null {
+  if (!holders.length) return null;
+  return <>{holders.map((person, index) => <LaneKey key={`${person.person_id}-${index}`} people={people} personId={person.person_id} />)}</>;
 }
 
-function ChipRow({ row, choices, onChoose, disabled }: { row: ChoiceRow; choices: Choices; onChoose: (row: ChoiceRow, key: string) => void; disabled: boolean }): JSX.Element {
+function Chip({ selected, label, onClick, disabled, keys }: { selected: boolean; label: string; onClick: () => void; disabled?: boolean; keys?: ReactNode }): JSX.Element {
+  return <button type="button" className="cons-chip" aria-pressed={selected} aria-disabled={disabled || undefined}
+    onClick={() => { if (!disabled) onClick(); }}>{keys}{label}</button>;
+}
+
+function ChipRow({ row, people, choices, onChoose, disabled, children }: { row: ChoiceRow; people: readonly ConsolidationPersonView[]; choices: Choices;
+  onChoose: (row: ChoiceRow, key: string) => void; disabled: boolean; children?: ReactNode }): JSX.Element {
   const id = useId();
   return <div className="cons-choice-row" role="group" aria-labelledby={id}>
-    <span id={id} className="cons-choice-label">{row.label}:</span>
+    <span id={id} className="cons-choice-label">{row.label}<span className="cons-differs-word"> · differs</span>:</span>
     {row.options.map(option => <Chip key={option.key} selected={choices[row.id] === option.key} label={option.label}
-      disabled={disabled} onClick={() => onChoose(row, option.key)} />)}
+      keys={<Keys people={people} holders={option.people} />} disabled={disabled} onClick={() => onChoose(row, option.key)} />)}
+    {children}
   </div>;
 }
 
@@ -81,7 +91,8 @@ function Comparison({ group, people, text }: { group: ConsolidationGroupView; pe
   return <>
     <table className="cons-compare">
       <caption className="visually-hidden">Comparison of {groupTitle(group)}</caption>
-      <thead><tr><td />{holders.map((person, index) => <th key={`${person.person_id}-${index}`} scope="col">{person.label}</th>)}</tr></thead>
+      <thead><tr><td />{holders.map((person, index) => <th key={`${person.person_id}-${index}`} scope="col">
+        <LaneKey people={people} personId={person.person_id} />{person.label}</th>)}</tr></thead>
       <tbody>{rows.map(row => <tr key={row.label} className={row.differs ? "cons-differs" : undefined}>
         <th scope="row">{row.label}{row.differs && <span className="cons-differs-word"> · differs</span>}</th>
         {row.cells.map((cell, index) => <td key={index}>{cell}</td>)}
@@ -113,7 +124,7 @@ function EditValues({ group, workspace, busy, onKeep, onCancel }: { group: Conso
 
 export function GroupCard(props: GroupCardProps): JSX.Element {
   const { group, people, text, expanded, readOnly, busy, outcome, narrow, workspace } = props;
-  const [term, setTerm] = useState<string | null>(null);
+  const [otherTerm, setOtherTerm] = useState<OtherTerm | null>(null);
   const [choices, setChoices] = useState<Choices>({});
   const [note, setNote] = useState(group.note ?? "");
   const [noteOpen, setNoteOpen] = useState(false);
@@ -128,8 +139,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const present = presentPeople(group, people), absent = absentPeople(group, people);
   const partial = hasKind(group, "partial");
   const matchOnly = group.kinds.length === 1 && group.kinds[0] === "match";
-  const rows = useMemo(() => rowsOf(group, people, text, term), [group, people, text, term]);
-  const terms = useMemo(() => termOptions(group, people), [group, people]);
+  const rows = useMemo(() => rowsOf(group, people, text, otherTerm), [group, people, text, otherTerm]);
   const inputIds = group.members.map(member => member.input_id);
   const kindWords = partial ? `only ${namesOf(present)}` : group.kinds.filter(kind => kind !== "partial").map(kind => KIND_LABELS[kind] ?? kind).join(", ");
   const summary = props.summary ?? stateSummary(group, people);
@@ -137,32 +147,28 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
 
   const resolve = (payload: Omit<ConsolidationResolvePayload, "input_ids">, line: string) =>
     void props.onResolve({ input_ids: inputIds, ...payload, ...extras() }, line);
-  const choose = (next: Choices, chosenTerm: string | null = term) => {
-    const nextRows = rowsOf(group, people, text, chosenTerm);
-    const option = terms.find(value => value.termId === chosenTerm) ?? null;
-    resolve({ action: "choose", choice: choosePayload(group, nextRows, next, chosenTerm) }, choiceSummary(nextRows, next, option));
-  };
-  const onChoose = (row: ChoiceRow, key: string) => {
-    const next = { ...choices, [row.id]: key };
+  const choose = (next: Choices, nextRows: readonly ChoiceRow[] = rows) =>
+    resolve({ action: "choose", choice: choosePayload(group, nextRows, next) }, choiceSummary(nextRows, next));
+  // The last open row resolves the group (except "partial", which keeps with its button).
+  const settle = (next: Choices, nextRows: readonly ChoiceRow[] = rows) => {
     setChoices(next);
-    if (!partial && allChosen(rows, next)) choose(next);
+    if (!partial && allChosen(nextRows, next)) choose(next, nextRows);
   };
-  const onTerm = (termId: string) => {
-    setTerm(termId); setChoices({});
-    if (!partial && rowsOf(group, people, text, termId).length === 0) choose({}, termId);
-  };
+  const onChoose = (row: ChoiceRow, key: string) => settle({ ...choices, [row.id]: key });
   const keep = () => {
-    if (rows.length || term) { choose(choices); return; }
+    if (rows.length) { choose(choices); return; }
     resolve({ action: "keep" }, partial ? `kept from ${namesOf(present)}` : "kept");
   };
-  const keepReady = allChosen(rows, choices) && (!needsTerm(group) || !!term || !partial);
+  const keepReady = allChosen(rows, choices);
   const editValues = (axes: Record<string, string>) => {
-    const base = activeMembers(group, term)[0];
-    const span = term ? base.input_id : group.keep_input_id;
-    resolve({ action: "choose", choice: { term_id: term ?? base.term_id, span_from_input_id: span, axes } },
+    const payload = choosePayload(group, rows, choices);
+    resolve({ action: "choose", choice: { term_id: payload.term_id, span_from_input_id: payload.span_from_input_id, axes } },
       Object.values(axes).map(valueWords).join(" · ") || "decided");
     setEditing(false);
   };
+  // "Take …'s finding" (2+ differing fields): fills every row from that member, naming everything it adopts.
+  const takeOvers = rows.length > 1 ? group.members : [];
+  const missing = rows.filter(row => !row.options.some(option => option.key === choices[row.id]));
   const reopen = () => { if (group.edited) setConfirmReopen(true); else void props.onReopen(); };
 
   const header = <h2 className="cons-group-heading">
@@ -205,13 +211,22 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     {!readOnly && <>
       {/* Note and flag go with the decision, so they come before the chips (the last chip resolves). */}
       {noteAndFlag(false)}
-      {needsTerm(group) && <div className="cons-choice-row" role="group" aria-label="Term">
-        <span className="cons-choice-label">Term:</span>
-        {terms.map(option => <Chip key={option.termId} selected={term === option.termId} disabled={busy}
-          label={`${option.label} · ${namesOf(option.people)}`} onClick={() => onTerm(option.termId)} />)}
-        {!partial && <Chip selected={false} disabled={busy} label="Keep both" onClick={() => resolve({ action: "keep_both" }, "kept both")} />}
+      {takeOvers.length > 0 && <div className="cons-take-over" role="group" aria-labelledby={`${noteId}-take`}>
+        <span id={`${noteId}-take`} className="cons-choice-label">Whole finding:</span>
+        {takeOvers.map(member => {
+          const person = peopleOf(people, [member])[0];
+          const next = takeOverChoices(rows, member);
+          const selected = rows.every(row => choices[row.id] === next[row.id]);
+          return <Chip key={member.input_id} selected={selected} disabled={busy} keys={<LaneKey people={people} personId={member.person_id} />}
+            label={`Take ${personName(person.label)}'s finding: ${takeOverWords(member, rows, text)}`} onClick={() => settle(next)} />;
+        })}
       </div>}
-      {rows.map(row => <ChipRow key={row.id} row={row} choices={choices} onChoose={onChoose} disabled={busy} />)}
+      {takeOvers.length > 0 && <p className="cons-muted">Or choose each differing field:</p>}
+      {rows.map(row => <ChipRow key={row.id} row={row} people={people} choices={choices} onChoose={onChoose} disabled={busy}>
+        {row.kind === "term" && !partial && <Chip selected={false} disabled={busy} label="Keep both" onClick={() => resolve({ action: "keep_both" }, "kept both")} />}
+      </ChipRow>)}
+      {!partial && missing.length > 0 && missing.length < rows.length && <p className="action-reason" role="status">
+        Still to choose: {missing.map(row => row.label).join(", ")}.</p>}
       {editing && workspace ? <EditValues group={group} workspace={workspace} busy={busy} onKeep={editValues} onCancel={() => setEditing(false)} />
         : <div className="cons-actions">
           {(partial || matchOnly) && <Button variant={partial ? "primary" : "secondary"} loading={busy}
@@ -226,9 +241,15 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       {workspace && <TermPicker open={picking} anchorRef={otherTermRef} label="Other term" workspace={workspace} layerId={group.members[0].layer_id}
         onClose={() => setPicking(false)} onPick={candidate => {
           setPicking(false);
-          const base = activeMembers(group, term)[0];
-          resolve({ action: "choose", choice: { term_id: candidate.term_id, span_from_input_id: term ? base.input_id : group.keep_input_id, axes: {} } },
-            `${candidate.label} (${candidate.term_id})`);
+          if (!needsTerm(group)) {
+            resolve({ action: "choose", choice: { term_id: candidate.term_id, span_from_input_id: group.keep_input_id, axes: {} } },
+              `${candidate.label} (${candidate.term_id})`);
+            return;
+          }
+          // Another term is one option of the term row; the other differing fields still need their choice.
+          const other = { termId: candidate.term_id, label: candidate.label };
+          setOtherTerm(other);
+          settle({ ...choices, term: candidate.term_id }, rowsOf(group, people, text, other));
         }} />}
     </>}
   </>;

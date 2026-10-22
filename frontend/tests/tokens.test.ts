@@ -168,4 +168,23 @@ describe("design tokens", () => {
       expect(below(pairs(FILLS), simulated, 4), d).toEqual([]);
     }
   });
+  /*
+   * Consolidation person lanes (frontend/src/consolidation/TextPane.tsx): each lane
+   * aliases an existing token. The underline is a non-text graphic (>= 3:1 on the
+   * sheet and on the shaded "kept" background). Lanes 1 and 2 (the usual two
+   * people) must stay apart under every dichromacy; every lane also has its own
+   * line style, which is the guarantee for lanes 3 and 4.
+   */
+  it("consolidation_lane_lines", () => {
+    const css = readFileSync(resolve(here, "../src/styles/tokens.css"), "utf8");
+    const LANES = ["--accent", "--warning", "--success", "--mark-line"];
+    LANES.forEach((alias, index) => {
+      expect(css).toContain(`--lane-${index + 1}-line: var(${alias});`);
+    });
+    expect(below(cross(LANES, ["--surface-raised", "--surface-sunken"]), contrast, 3)).toEqual([]);
+    expect(deltaE2000(token(LANES[0]), token(LANES[1]))).toBeGreaterThan(20);
+    for (const d of DEFICIENCIES) {
+      expect(deltaE2000(simulate(token(LANES[0]), d), simulate(token(LANES[1]), d)), d).toBeGreaterThan(10);
+    }
+  });
 });

@@ -12,7 +12,10 @@ event). ``input_ids`` must name exactly one group of the round
   provenance ``merged`` with the contributing ``round-input:…`` refs and the
   consolidator as actor; every member target gets a ``changed`` decision
   with ``ConsolidationMark(action, guidelines_unclear, content_sha256)``.
-  ``leave_out`` records ``rejected`` decisions only. The group note is the
+  ``leave_out`` records ``rejected`` decisions only. ``keep`` is refused
+  when the members differ in term or values, and ``choose`` must name
+  every differing axis (``Group.differing_axes``, measured across terms),
+  so no differing field is settled by default. The group note is the
   decisions' ``note``. Like ``merge-inputs`` it unchecks the group's layer.
 * **Annotate** changes note and flag on the decisions of a resolved group;
   annotations stay untouched, so every ``content_sha256`` stays valid.
@@ -225,6 +228,11 @@ class _Group:
             consolidated_annotation_id(self.round_id, self.input_ids, n)
             for n in range(count)
         }
+
+
+# "Keep" takes the default member as it is; a group whose members differ in
+# term or values needs a decision per differing field ("choose").
+_UNSETTLED_BY_KEEP = frozenset({"term_differs", "values_differ"})
 
 
 def _invalid(message: str) -> DomainError:
@@ -504,6 +512,8 @@ class ConsolidationGroupService:
         if cmd.action == "leave_out":
             return []
         if cmd.action == "keep":
+            if group.kinds & _UNSETTLED_BY_KEEP:
+                raise _invalid("Choose the term and every differing value")
             keep = members[group.members[group.keep]]
             return [(keep, keep.snapshot.annotation, item.input_ids)]
         if cmd.action == "keep_both":
@@ -528,6 +538,9 @@ class ConsolidationGroupService:
             and choice.note_from_input_id not in members
         ):
             raise _invalid("The note comes from a member of the group")
+        unchosen = [axis for axis in group.differing_axes if axis not in choice.axes]
+        if unchosen:
+            raise _invalid("Choose every differing value: " + ", ".join(unchosen))
         base = members[choice.span_from_input_id]
         source = base.snapshot.annotation
         term_id = choice.term_id if choice.term_id in group.terms else other_term

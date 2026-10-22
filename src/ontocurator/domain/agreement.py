@@ -82,7 +82,7 @@ class Group:
 
     members: Mapping[str, str]  # submission id -> finding key, in ``order``
     kinds: frozenset[GroupKind]  # {"match"} alone, or a set of the others
-    differing_axes: tuple[str, ...]  # sorted axes differing within one term
+    differing_axes: tuple[str, ...]  # sorted axes differing among the members
     terms: tuple[str, ...]  # distinct term ids, in order of first member
     keep: str  # submission id of the default member (earliest in order)
     start: int | None  # first span start; None = spanless
@@ -245,32 +245,33 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
         if finding.term_id not in by_term:
             terms.append(finding.term_id)
         by_term.setdefault(finding.term_id, []).append(finding)
-    differing: set[str] = set()
-    span_differs = notes_differ = False
+    # Differences are measured across every member of the group, also across
+    # terms: a "term differs" group whose members also differ in an axis,
+    # span or note shows that row too, so taking one person's term never
+    # settles another field silently.
+    findings = [finding for _, finding in members]
+    axes = {axis for finding in findings for axis in finding.axes}
+    differing = {axis for axis in axes if len({x.axes.get(axis) for x in findings}) > 1}
+    span_differs = (
+        len({tuple(sorted(x.spans)) for x in findings}) > 1
+        or len({tuple(sorted(x.cues)) for x in findings}) > 1
+    )
+    notes_differ = len({x.note or None for x in findings}) > 1
     # Majority (> half of >= 3 members) counts only members of the same term;
     # an axis with different majorities in two terms gets no label.
     winners: dict[str, set[str]] = {}
     for same in by_term.values():
-        axes = {axis for finding in same for axis in finding.axes}
-        own = {axis for axis in axes if len({x.axes.get(axis) for x in same}) > 1}
-        differing |= own
-        if len(same) >= 3:
-            for axis in own:
-                counts: dict[str, int] = {}
-                for finding in same:
-                    value = finding.axes.get(axis)
-                    if value is not None:
-                        counts[value] = counts.get(value, 0) + 1
-                for value, count in counts.items():
-                    if count * 2 > len(same):
-                        winners.setdefault(axis, set()).add(value)
-        if (
-            len({tuple(sorted(x.spans)) for x in same}) > 1
-            or len({tuple(sorted(x.cues)) for x in same}) > 1
-        ):
-            span_differs = True
-        if len({x.note or None for x in same}) > 1:
-            notes_differ = True
+        if len(same) < 3:
+            continue
+        for axis in differing:
+            counts: dict[str, int] = {}
+            for finding in same:
+                value = finding.axes.get(axis)
+                if value is not None:
+                    counts[value] = counts.get(value, 0) + 1
+            for value, count in counts.items():
+                if count * 2 > len(same):
+                    winners.setdefault(axis, set()).add(value)
 
     kinds: set[GroupKind] = set()
     if len(members) < submissions:

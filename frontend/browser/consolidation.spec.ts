@@ -95,8 +95,12 @@ test("a lead without the Adjudicator role consolidates the 8-group example in 6 
   await expect(expandedGroup(page)).toHaveText("Hearing impairment");
   await page.getByRole("button", { name: /^Keep .+'s finding$/ }).click();
   await expect(expandedGroup(page)).toHaveText("Status epilepticus / Seizure");
-  await page.getByRole("button", { name: /^Status epilepticus \(HP:0002133\) · / }).click();
+  // The term group also differs in the assertion: one click takes a whole finding, naming everything it adopts.
+  await expect(page.locator(".cons-group-expanded").getByRole("rowheader", { name: "Assertion · differs" })).toBeVisible();
+  await evidence(page, "consolidation-term-and-assertion-1280");
+  await page.getByRole("button", { name: /^Take .+'s finding: Status epilepticus \(HP:0002133\) · present · patient · current$/ }).click();
   await expect(expandedGroup(page)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Status epilepticus \/ Seizure ✓ Status epilepticus \(HP:0002133\) \(.+\), present \(/ })).toBeVisible();
   await page.getByRole("button", { name: "Submit consolidation", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Submit consolidation?" });
   await expect(dialog.getByText(/^8 decisions → 8 findings: 4 kept automatically \(all matched\) · 3 decided · 1 kept from .+$/)).toBeVisible();

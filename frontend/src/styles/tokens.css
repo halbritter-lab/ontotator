@@ -53,6 +53,14 @@
   --mark-selected: #1d4e89;
   --mark-negated-hatch: #8c8170;
 
+  /* Consolidation person lanes: one underline per person, told apart by line
+     style (lane 1 solid, 2 dashed, 3 dotted, 4 double) and by hue. Aliases of
+     existing tokens, no new colours; frontend/tests/tokens.test.ts checks them. */
+  --lane-1-line: var(--accent);
+  --lane-2-line: var(--warning);
+  --lane-3-line: var(--success);
+  --lane-4-line: var(--mark-line);
+
   /* Type */
   --font-serif: "Source Serif 4 Variable", Georgia, "Times New Roman", serif;
   --font-sans: "Source Sans 3 Variable", system-ui, -apple-system, "Segoe UI", sans-serif;

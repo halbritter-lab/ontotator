@@ -4,7 +4,7 @@ only, never shipped.
 ``POST /__test_consolidation__?started=false`` builds a fresh project whose
 ``case-0107`` en text has two submissions (ann-0001, ann-0002) forming the
 spec's 8 groups: 4 match (kept automatically), 1 value, 1 span, 1 partial,
-1 term. The lead has no Adjudicator role. With ``started=true`` the lead has
+1 term (whose assertion differs too). The lead has no Adjudicator role. With ``started=true`` the lead has
 already started the consolidation as consolidator (self-grant, start command).
 """
 
@@ -36,7 +36,8 @@ TEXT = (
 AXES = {"assertion": "present", "experiencer": "patient", "temporality": "current"}
 # (term, passage, axis changes) per annotator. Matches: seizures, hearing loss,
 # absence episodes, muscle tone. Value: hypotonia (absent). Span: reflexes.
-# Partial: reduced hearing (ann-0001 only). Term: prolonged seizure activity.
+# Partial: reduced hearing (ann-0001 only). Term: prolonged seizure activity
+# (the terms and the assertion differ).
 FINDINGS: dict[str, list[tuple[str, str, dict[str, str]]]] = {
     "ann-0001": [
         ("HP:0001250", "seizures", {}),
@@ -52,7 +53,7 @@ FINDINGS: dict[str, list[tuple[str, str, dict[str, str]]]] = {
         ("HP:0001250", "seizures", {}),
         ("HP:0001252", "muscular hypotonia", {"assertion": "absent"}),
         ("HP:0001284", "Absent reflexes in both legs", {}),
-        ("HP:0001250", "Prolonged seizure activity", {}),
+        ("HP:0001250", "Prolonged seizure activity", {"assertion": "absent"}),
         ("HP:0000407", "Hearing loss", {}),
         ("HP:0011146", "Brief absence episodes", {}),
         ("HP:0001252", "Weak muscle tone", {}),
