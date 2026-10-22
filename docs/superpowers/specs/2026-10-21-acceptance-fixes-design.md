@@ -97,10 +97,12 @@ The publish form gets an action bar above the preview: file + note inputs, then 
 | `values_differ`         | per axis: one person's value ("absent · Tom Reis")                                        |
 | `span_differs`          | one person's span                                                                         |
 | `notes_differ`          | one person's note, or none (always offered); not both, see below                          |
-| `term_differs`          | one term (with that term's rows), keep both, or "Other term…" (search, same layer + type) |
+| `term_differs`          | one term plus every other differing field, a whole finding, keep both, or "Other term…"   |
 | `partial` (+ any above) | "Keep Luc Martin's finding" (optionally "Edit values…") or "Leave out", plus the rows     |
 
 A group resolves when every row has a choice (X6).
+
+**Every differing field, deviation (acceptance 2026-10-22):** differences are measured across **all** members of a group, also across terms (`Group.differing_axes`, `span_differs`, `notes_differ`; the majority label still counts members of one term only). A `term_differs` group therefore shows a term row **and** a row per other differing field (axis, text, note); choosing a term no longer settles them. With two or more rows the card also offers "Take Luc Martin's finding: Ataxia (HP:0001251) · absent · patient · current", which fills every row from that person and names everything it adopts; "Other term…" adds the found term to the term row and leaves the other rows to choose. The backend refuses `keep` on a group whose members differ in term or values and a `choose` that does not name every differing axis (`ROUND_INPUT_INVALID`), so an unresolved field always leaves the group open and blocks submit.
 
 **Notes, deviation (final review 2026-10-21):** the note row offers each person's note and always "No note". "Both notes" is not offered: the resolve command takes one person's note (`note_from_input_id`); joining notes needs backend support and is deferred.
 
@@ -122,7 +124,7 @@ A group resolves when every row has a choice (X6).
 - **Route** `#/projects/{key}/consolidations/{round_id}` with optional `group`; opened from the task list (as today's consolidation editor) and, read-only, from the row panel ("Open consolidation", flag links).
 - **Header:** "Consolidate case-107 · de v2 · Luc Martin, Tom Reis · 4 open" and Submit.
 - **Layout (U13):** ≥ 1100 px text left, groups right; 700–1099 px text on top ("Hide text"), groups below with the selected group in view; below 700 px groups only, each with a text snippet of its passage.
-- **Text:** read-only; one underline lane per person in fixed order (lane 1 closest to the text), same stroke, distinct offset; with more than 4 people lane 4 combines the rest ("+n"). Legend names every lane. Kept findings (automatic or decided) get a neutral background and keep their lanes. The selected group is framed and scrolled into view only when off-screen, instantly under reduced motion (X18).
+- **Text:** read-only; one underline lane per person in fixed order (lane 1 closest to the text), distinct offset, and (acceptance 2026-10-22) a distinct hue and line style per lane (`--lane-N-line`: 1 solid accent, 2 dashed warning, 3 dotted success, 4 double mark line; aliases of existing tokens) with the same key next to each person's column, take-over and value chip; with more than 4 people lane 4 combines the rest ("+n"). Legend names every lane. Kept findings (automatic or decided) get a neutral background and keep their lanes. The selected group is framed and scrolled into view only when off-screen, instantly under reduced motion (X18).
 - **Groups:** banner "4 findings matched and were kept automatically. Check them in the text." with the list (expanded by default when ≤ 3, else "Show"); then groups in reading order. Exactly one is expanded: comparison table (rows = term, text, differing axes, note; columns = people; differences marked by weight and the word "differs", not colour only), choice chips naming the person, "+ note", "Guidelines unclear here". A resolved group collapses to "Hypotonia ✓ absent (Tom Reis) · Change" and the next open group opens; an Undo toast (Ctrl+Z) reopens it.
 - **Keys (U11):** J / K next / previous group via `useShortcut`, never while typing, listed in "?" help.
 - **Add finding:** selecting text offers "Add finding" (term search popover, standard axes with creation defaults) for something everyone missed; saved through the existing draft save.

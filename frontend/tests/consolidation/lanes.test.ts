@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { laneLegend, laneOf, lanesOf, personName } from "../../src/consolidation/lanes";
+import { laneStyle } from "../../src/consolidation/TextPane";
 
 const person = (n: number) => ({ person_id: `ann-000${n}`, label: `Person ${n} (ann-000${n})`, lane: Math.min(n, 4) });
 
@@ -24,5 +25,12 @@ describe("person lanes", () => {
   it("names a person by the display name, a pseudonym stays", () => {
     expect(personName("Luc Martin (ann-0004)")).toBe("Luc Martin");
     expect(personName("ann-0004")).toBe("ann-0004");
+  });
+  it("draws every lane in its own colour and line style", () => {
+    const style = laneStyle([1, 2, 3, 4]);
+    const images = String(style.backgroundImage).split(/, (?=(?:repeating-)?linear-gradient)/);
+    expect(images).toHaveLength(4);
+    images.forEach((image, index) => expect(image).toContain(`var(--lane-${index + 1}-line)`));
+    expect(new Set(images.map(image => image.replace(/--lane-\d-line/g, ""))).size).toBe(4);
   });
 });

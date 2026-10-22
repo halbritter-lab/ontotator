@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { autoBanner, headerDetail, headerTitle, partialText, summaryText } from "../../src/consolidation/consolidationText";
-import { choiceSummary, choosePayload, rowsOf } from "../../src/consolidation/groupModel";
+import { allChosen, choiceSummary, choosePayload, rowsOf, takeOverChoices, takeOverWords } from "../../src/consolidation/groupModel";
 import { ANA, AXIS_DEFS, decidedView, exampleView, group, LUC, member, span, TEXT, TOM } from "./fixtures";
 
 describe("consolidation copy", () => {
@@ -74,5 +74,40 @@ describe("decision rows", () => {
     const choices = { "axis:assertion": "absent", span: rows[1].options[1].key };
     expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001263", span_from_input_id: "i2", axes: { assertion: "absent" } });
     expect(AXIS_DEFS).toHaveLength(3);
+  });
+  it("asks for every field that differs across terms, not only the term", () => {
+    const value = group("g", ["term_differs", "values_differ"], [
+      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
+      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
+    ], { differing_axes: ["assertion"] });
+    const rows = rowsOf(value, [LUC, TOM], TEXT);
+    expect(rows.map(row => row.id)).toEqual(["term", "axis:assertion"]);
+    expect(allChosen(rows, { term: "HP:0001251" })).toBe(false);
+    const choices = { term: "HP:0001251", "axis:assertion": "absent" };
+    expect(allChosen(rows, choices)).toBe(true);
+    expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001251", span_from_input_id: "i1", axes: { assertion: "absent" } });
+    expect(choiceSummary(rows, choices)).toBe("Ataxia (HP:0001251) (Luc Martin), absent (Tom Reis)");
+  });
+
+  it("takes a whole finding from one member and names what it adopts", () => {
+    const value = group("g", ["term_differs", "values_differ", "notes_differ"], [
+      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")], { note: "Mild." }),
+      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
+    ]);
+    const rows = rowsOf(value, [LUC, TOM], TEXT);
+    const choices = takeOverChoices(rows, value.members[1]);
+    expect(choices).toEqual({ term: "HP:0001288", "axis:assertion": "absent", note: "" });
+    expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001288", span_from_input_id: "i2", axes: { assertion: "absent" }, note_from_input_id: null });
+    expect(takeOverWords(value.members[1], rows, TEXT)).toBe("Gait disturbance (HP:0001288) · absent · patient · current · no note");
+  });
+
+  it("offers a term found with Other term as one more term option", () => {
+    const value = group("g", ["term_differs"], [
+      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
+      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")]),
+    ]);
+    const rows = rowsOf(value, [LUC, TOM], TEXT, { termId: "HP:0002066", label: "Gait ataxia" });
+    expect(rows[0].options.map(option => option.label)).toEqual(["Ataxia (HP:0001251) · Luc Martin", "Gait disturbance (HP:0001288) · Tom Reis", "Gait ataxia (HP:0002066) · other term"]);
+    expect(choosePayload(value, rows, { term: "HP:0002066" })).toEqual({ term_id: "HP:0002066", span_from_input_id: "i1", axes: {} });
   });
 });

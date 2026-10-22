@@ -167,7 +167,7 @@ def test_term_merge_overlapping_incomplete_clusters() -> None:
             AB,
         )
     )
-    assert g.kinds == frozenset({"term_differs"})
+    assert g.kinds == frozenset({"term_differs", "span_differs"})
     assert g.terms == ("HP:A", "HP:B")
     assert dict(g.members) == {"s1": "a", "s2": "b"}
     assert g.start == 0
@@ -233,7 +233,7 @@ def test_term_merge_chain_picks_largest_overlap() -> None:
     assert set(by_members) == {frozenset({"x"}), frozenset({"z", "y"})}
     assert by_members[frozenset({"x"})].kinds == frozenset({"partial"})
     merged = by_members[frozenset({"z", "y"})]
-    assert merged.kinds == frozenset({"term_differs"})
+    assert merged.kinds == frozenset({"term_differs", "span_differs"})
     assert merged.terms == ("HP:Z", "HP:Y")
 
 
@@ -261,10 +261,28 @@ def test_term_merge_two_of_three_with_one_of_three() -> None:
             ABC,
         )
     )
-    assert g.kinds == frozenset({"term_differs", "values_differ"})
+    assert g.kinds == frozenset({"term_differs", "values_differ", "span_differs"})
     assert g.terms == ("HP:A", "HP:B")
     assert dict(g.members) == {"s1": "a", "s2": "b", "s3": "c"}
     assert g.differing_axes == ("assertion",)
+
+
+def test_term_differs_also_names_values_differing_across_terms() -> None:
+    # One person each: Hypotonia present vs. Ataxia absent on the same text.
+    # The assertion differs although no term has two members (the row must
+    # not be settled by choosing a term).
+    g = one(
+        groups(
+            {
+                "s1": [f("a", 0, "HP:A", ((0, 8),), {"assertion": "present"})],
+                "s2": [f("b", 0, "HP:B", ((0, 8),), {"assertion": "absent"}, note="n")],
+            },
+            AB,
+        )
+    )
+    assert g.kinds == frozenset({"term_differs", "values_differ", "notes_differ"})
+    assert g.differing_axes == ("assertion",)
+    assert g.majority == {}
 
 
 def test_term_merge_three_terms_join_one_group() -> None:
@@ -278,7 +296,7 @@ def test_term_merge_three_terms_join_one_group() -> None:
             ABC,
         )
     )
-    assert g.kinds == frozenset({"term_differs"})
+    assert g.kinds == frozenset({"term_differs", "span_differs"})
     assert g.terms == ("HP:A", "HP:B", "HP:C")
 
 

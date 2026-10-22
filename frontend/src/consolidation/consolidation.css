@@ -169,6 +169,18 @@
   background-repeat: no-repeat;
 }
 
+/* A person's colour key next to their name: a sample of their lane's underline. */
+.cons-lane-key {
+  display: inline-block;
+  flex: none;
+  width: 20px;
+  height: 3px;
+  margin-inline-end: var(--space-1);
+  vertical-align: middle;
+  background-repeat: no-repeat;
+  background-position: 0 50%;
+}
+
 .cons-legend-swatch.cons-selected {
   outline-offset: -2px;
 }
@@ -325,7 +337,8 @@
   background: var(--warning-light);
 }
 
-.cons-choice-row {
+.cons-choice-row,
+.cons-take-over {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

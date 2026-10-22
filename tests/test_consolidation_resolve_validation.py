@@ -134,6 +134,27 @@ def test_a_choice_on_keep_is_refused(cons):
     )
 
 
+def test_keep_on_differing_terms_or_values_is_refused(cons):
+    """ "Keep" would take the default member's term and values as they are;
+    a group whose members differ there needs a choice per field."""
+    for kind in ("values_differ", "term_differs"):
+        refused(cons, {"input_ids": inputs(group(cons, kind)), "action": "keep"})
+
+
+def test_a_choice_missing_a_differing_axis_is_refused(cons):
+    values = group(cons, "values_differ")
+    assert values["differing_axes"] == ["assertion", "temporality"]
+    first = values["members"][0]
+    refused(
+        cons,
+        {
+            "input_ids": inputs(values),
+            "action": "choose",
+            "choice": choice(values, axes={"assertion": first["axes"]["assertion"]}),
+        },
+    )
+
+
 def test_annotate_and_reopen_need_one_exact_group(cons):
     ids = inputs(group(cons, "match")) + inputs(group(cons, "partial"))
     refused(cons, {"input_ids": ids, "guidelines_unclear": True}, "annotate")

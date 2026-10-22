@@ -81,6 +81,40 @@ describe("GroupCard", () => {
     }, "Ataxia (HP:0001251) (Luc Martin)");
   });
 
+  it("keeps a group with different terms and assertions open until both are chosen", () => {
+    const value = group("g-both", ["term_differs", "values_differ"], [
+      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
+      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
+    ], { differing_axes: ["assertion"] });
+    const props = renderCard(value);
+    expect(within(screen.getByRole("table")).getByRole("rowheader", { name: "Assertion · differs" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Ataxia (HP:0001251) · Luc Martin" }));
+    expect(props.onResolve).not.toHaveBeenCalled();
+    expect(screen.getByText("Still to choose: Assertion.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
+    expect(props.onResolve).toHaveBeenCalledWith({
+      input_ids: ["i1", "i2"], action: "choose", choice: { term_id: "HP:0001251", span_from_input_id: "i1", axes: { assertion: "absent" } },
+    }, "Ataxia (HP:0001251) (Luc Martin), absent (Tom Reis)");
+  });
+
+  it("takes one person's whole finding, naming term and every value", () => {
+    const value = group("g-both", ["term_differs", "values_differ"], [
+      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
+      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
+    ], { differing_axes: ["assertion"] });
+    const props = renderCard(value);
+    fireEvent.click(screen.getByRole("button", { name: "Take Tom Reis's finding: Gait disturbance (HP:0001288) · absent · patient · current" }));
+    expect(props.onResolve).toHaveBeenCalledWith({
+      input_ids: ["i1", "i2"], action: "choose", choice: { term_id: "HP:0001288", span_from_input_id: "i2", axes: { assertion: "absent" } },
+    }, "Gait disturbance (HP:0001288) (Tom Reis), absent (Tom Reis)");
+  });
+
+  it("shows each person's colour key next to their column", () => {
+    renderCard(byId("g-hypo"));
+    const headers = within(screen.getByRole("table")).getAllByRole("columnheader");
+    expect(headers.map(header => header.querySelector(".cons-lane-key")?.getAttribute("data-lane"))).toEqual(["1", "2"]);
+  });
+
   it("offers Keep, Leave out, Edit values… and Other term… on a reopened match", () => {
     const reopened = { ...byId("g-seiz"), state: "open" as const, annotation_ids: [] };
     const props = renderCard(reopened, { workspace: workspaceView() });

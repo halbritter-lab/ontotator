@@ -272,8 +272,8 @@ describe("ConsolidationScreen", () => {
     load(exampleView());
     await renderScreen();
     const legend = screen.getByRole("list", { name: "Legend" });
-    expect(within(legend).getByText("Line 1: Luc Martin (ann-0004)")).toBeTruthy();
-    expect(within(legend).getByText("Line 2: Tom Reis (ann-0007)")).toBeTruthy();
+    expect(within(legend).getByText("Line 1 (solid): Luc Martin (ann-0004)")).toBeTruthy();
+    expect(within(legend).getByText("Line 2 (dashed): Tom Reis (ann-0007)")).toBeTruthy();
     const delayed = [...document.querySelectorAll<HTMLElement>(".cons-mark")].find(element => element.textContent === "Delayed ");
     expect(delayed?.dataset.lanes).toBe("1");
     const development = [...document.querySelectorAll<HTMLElement>(".cons-mark")].find(element => element.textContent === "development");
