@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Button } from "../ui";
+import { Button, LanguageFlag } from "../ui";
 import type { SearchLanguageControl } from "./searchLanguages";
 
 const MAX_CODES = 3;
 
 const LanguageCode: React.FC<{ language: string }> = ({ language }) => (
-  <span className="lang-code" data-language={language}>{language.toUpperCase()}</span>
+  <span className="lang-code language-tag" data-language={language}><LanguageFlag code={language} />{language.toUpperCase()}</span>
 );
 
 /** The language button at the right edge of the search box, and its checkbox list. */

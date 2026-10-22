@@ -4,6 +4,7 @@ import { plural } from "../app/labels";
 import type { ProjectDocumentsQuery } from "../app/router";
 import { Button, IconSortDown, Popover, useMediaQuery } from "../ui";
 import { chipsOf, facetGroups, ORDER_OPTIONS, optionChecked, optionCount, toggleOption, type FacetOption, type PeopleNames } from "./filterModel";
+import { LanguageFlag } from "../ui/LanguageTag";
 
 export interface FilterPopoverProps {
   query: ProjectDocumentsQuery;
@@ -48,7 +49,7 @@ export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAl
       <input id={inputId} type="checkbox" className="form-checkbox" checked={checked}
         aria-label={`${item.label}, ${count === null ? "counting" : plural(count, "text")}`} aria-disabled={unavailable || undefined}
         onChange={() => { if (!unavailable) onChange(toggleOption(query, item, !checked)); }} />
-      <span className="documents-facet-label">{item.label}</span>
+      <span className="documents-facet-label">{item.param === "language" && <LanguageFlag code={item.values[0]} />}{item.label}</span>
       <span className="documents-facet-count" aria-hidden="true">{count ?? "…"}</span>
     </label>;
   };

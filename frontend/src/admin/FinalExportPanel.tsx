@@ -6,6 +6,7 @@ import { ErrorNotice } from "./ErrorNotice";
 import { routeHref } from "../app/router";
 import { FINAL_SELECTION_CHANGED } from "../variants/finalSelectionState";
 import { useJob } from "./useJob";
+import { LanguageFlag } from "../ui/LanguageTag";
 
 function RowLink({ projectKey, caseId, language }: { projectKey: string; caseId: string; language: string }): JSX.Element {
   return <a href={routeHref({ name: "projectDocuments", key: projectKey, case: caseId, language })}>Show {caseId} · {language}</a>;
@@ -14,7 +15,7 @@ function WorkflowWarnings({ projectKey, state }: { projectKey: string; state: Fi
   const notInPlan = state.not_in_plan ?? [];
   return <>
     {state.warnings.length > 0
-      ? <ul className="final-warning-list">{state.warnings.map(warning => <li key={warning.id}><strong>{warning.case_id} · {warning.language}</strong><p>{warning.reason}</p><RowLink projectKey={projectKey} caseId={warning.case_id} language={warning.language} /></li>)}</ul>
+      ? <ul className="final-warning-list">{state.warnings.map(warning => <li key={warning.id}><strong>{warning.case_id} · <LanguageFlag code={warning.language} />{warning.language}</strong><p>{warning.reason}</p><RowLink projectKey={projectKey} caseId={warning.case_id} language={warning.language} /></li>)}</ul>
       : <p>No open workflow warnings.</p>}
     {state.omissions.length > 0 && <><p>Omitted without a final selection:</p>
       <ul className="final-warning-list" aria-label="Omitted without a final selection">{state.omissions.map(item => <li key={JSON.stringify([item.case_id, item.language])}><RowLink projectKey={projectKey} caseId={item.case_id} language={item.language} /></li>)}</ul></>}

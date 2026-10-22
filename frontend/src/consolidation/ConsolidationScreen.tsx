@@ -23,6 +23,7 @@ import { newFindingTarget, TermPicker } from "./TermPicker";
 import { TextPane, type AddedFinding, type TextRange } from "./TextPane";
 import { useConsolidation, type AxisWarning } from "./useConsolidation";
 import "./consolidation.css";
+import { LanguageText } from "../ui/LanguageTag";
 
 export interface ConsolidationScreenProps {
   projectKey: string;
@@ -259,7 +260,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
           if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); navigate(props.back!);
         }}>Back to documents</a>}
-        <h1 id="cons-title" className="cons-title">{headerTitle(view, readOnly && !submitted)}</h1>
+        <h1 id="cons-title" className="cons-title"><LanguageText text={headerTitle(view, readOnly && !submitted)} code={view.language} /></h1>
         <p className="cons-detail">{headerDetail(view, open)}</p>
       </div>
       {props.headerActions && <div className="cons-header-actions" role="group" aria-label="Task">{props.headerActions}</div>}

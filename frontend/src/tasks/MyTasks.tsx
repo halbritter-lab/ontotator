@@ -7,6 +7,7 @@ import { textLabel } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
 import { IconWarning } from "../ui/icons";
 import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, tabId, Tabs, Toolbar, type Column } from "../ui";
+import { LanguageText } from "../ui/LanguageTag";
 
 export interface MyTasksProps {
   project?: string;
@@ -130,7 +131,7 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
     }}>{`Project guidelines v${guidelineVersions.get(key)}${guidelineLinks.length > 1 ? ` · ${name}` : ""}`}</a>;
   };
   const columns: Column<TaskSummary>[] = [
-    { id: "text", header: "Text", cell: task => taskText(task) },
+    { id: "text", header: "Text", cell: task => <LanguageText text={taskText(task)} code={task.language} /> },
     { id: "project", header: "Project", cell: task => projectLabel(task.project_name, task.project_key) },
     { id: "task", header: "Task", cell: task => <>
       {taskDescription(task)}

@@ -765,7 +765,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       <DocumentsSearch ref={search} q={query.q} onApply={q => changeFilter({ q })} />
       <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} onChange={changeFilter} onClearAll={clearAll} people={people} />
       {chips.length > 0 && <div ref={chipList} className="documents-filter-chips">
-        {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} onRemove={() => removeChip(index)} />)}
+        {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} language={chip.language} onRemove={() => removeChip(index)} />)}
       </div>}
       {filtersActive(query) && <Button size="sm" onClick={clearAll}>Clear all</Button>}
       {page && filtersActive(query) && <p className="documents-filter-count">{`${page.bar.shown} of ${tabCount(page.bar, tab)}`}</p>}

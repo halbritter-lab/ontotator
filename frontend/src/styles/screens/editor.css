@@ -765,14 +765,6 @@
   border-color: var(--accent);
 }
 
-.lang-flag {
-  display: block;
-  width: 16px;
-  height: 12px;
-  border-radius: 1px;
-  box-shadow: 0 0 0 1px var(--flag-shadow-colour);
-}
-
 .lang-code {
   font-size: var(--size-xs);
   font-weight: 600;

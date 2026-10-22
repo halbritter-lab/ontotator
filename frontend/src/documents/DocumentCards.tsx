@@ -19,6 +19,7 @@ import { RowActionCell } from "./RowActions";
 import { documentsGroupId, documentsRowId, LastActivityCell, NewBadge, RowOpenLinks, rowIsNew, rowKeyOf, rowName, rowNeedsDecision, ShortId, VersionMarker, type OpenRowPanel } from "./RowCells";
 import { StagePopover } from "./StagePopover";
 import { isActiveRow, stageText, waitingOnText, type StageName } from "./stageLabels";
+import { LanguageFlag } from "../ui/LanguageTag";
 
 export interface DocumentCardsProps {
   page: DocumentRowsPage;
@@ -133,7 +134,7 @@ function DocumentCard({ row, group, projectKey, query, active: current, onOpenPa
         {select && <input type="checkbox" className="document-card-select checkbox-target" aria-label={`Select ${name}`} checked={select.checked}
           onChange={() => undefined} onClick={event => select.onSelect(selectModeOf(event))} />}
         <h4 id={headingId} tabIndex={-1} className="document-card-title">
-          <span aria-hidden="true"><ShortId value={row.case_id} />{` · ${row.language}`}</span>
+          <span aria-hidden="true"><ShortId value={row.case_id} />{" · "}<LanguageFlag code={row.language} />{row.language}</span>
           <span className="visually-hidden">{name}</span>
         </h4>
         {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}

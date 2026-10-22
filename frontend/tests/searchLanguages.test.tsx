@@ -1,6 +1,5 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { flagFor } from "../src/editor/flags";
 import { SearchLanguageButton } from "../src/editor/SearchLanguageButton";
 import {
   activeLanguages,
@@ -131,12 +130,12 @@ describe("SearchLanguageButton", () => {
   const codesIn = (element: Element) =>
     Array.from(element.querySelectorAll("[data-language]")).map((node) => node.getAttribute("data-language"));
 
-  it("bundles a flag image for the five languages and none for others", () => {
-    for (const language of ["en", "de", "es", "fr", "nl", "DE"]) {
-      expect(flagFor(language), language).toMatch(/\.svg|^data:image\/svg/);
-    }
-    expect(new Set(["en", "de", "es", "fr", "nl"].map(flagFor)).size).toBe(5);
-    expect(flagFor("pt")).toBeUndefined();
+  it("shows a decorative flag before each code", () => {
+    render(<SearchLanguageButton control={control(["de"])} />);
+    const button = screen.getByRole("button", { name: "Search languages: EN, DE" });
+    const flags = Array.from(button.querySelectorAll("svg.language-flag"));
+    expect(flags.map((flag) => flag.getAttribute("data-flag"))).toEqual(["GB", "DE"]);
+    for (const flag of flags) expect(flag.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("shows codes for the active languages, English first, and names them for screen readers", () => {

@@ -17,6 +17,7 @@ import { ReviewForm } from "./ReviewForm";
 import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type DecisionState } from "./decisionOrigin";
 import { categoryLabels, comparisonCountsDiffer, couplingEditingNote, couplingNote, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, matchingParagraphStatus, nextTaskLabel, paragraphCountChanged, paragraphCountsDiffer, remainingTasksText, reviewIssueMessage, showMatchingLabel, showMatchingShortcut, showMatchingTitle } from "./labels";
 import { checkReview, type ClinicalCategory, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
+import { LanguageTag } from "../ui/LanguageTag";
 
 export interface TranslationReviewScreenProps {
   assignmentId: number; username: string; onNavigate: (route: Route) => void;
@@ -523,7 +524,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     <div className="translation-review-bar density-compact">
       <h1>{workspace.variant.external_id}</h1>
       <div className="translation-review-meta">
-        <p>{languageName(sourceLanguage)} <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> {languageName(targetLanguage)}</p>
+        <p><LanguageTag code={sourceLanguage}>{languageName(sourceLanguage)}</LanguageTag> <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> <LanguageTag code={targetLanguage}>{languageName(targetLanguage)}</LanguageTag></p>
         <details className="translation-details" ref={detailsRef} onKeyDown={closeDetails}>
           <summary ref={detailsSummary}>Translation details</summary>
           <dl>

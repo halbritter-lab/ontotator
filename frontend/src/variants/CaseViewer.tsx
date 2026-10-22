@@ -17,6 +17,7 @@ import { CarriedChecksReadOnly } from '../editor/carried/CarriedChecksReadOnly';
 import type { CarriedInputLike } from '../editor/carried/checkState';
 import { carriedCheckItems } from '../editor/historicalSubmission';
 import { TermName } from '../editor/TermName';
+import { LanguageFlag } from '../ui/LanguageTag';
 
 export interface CaseViewerProps {
   projectKey: string; caseId: string; variant?: string; annotations?: string;
@@ -48,10 +49,10 @@ export function VariantDetails({ detail, documentId }: { detail: CaseDetail; doc
   const source = detail.variants.find(row => row.document_id === ancestor.derived_from && row.case_id === current.case_id);
   return <details className="variant-details"><summary>Translation details</summary>
     <div className="variant-metadata-groups">
-      <section><h2>Source</h2>{source ? <dl><dt>Source variant</dt><dd>{source.external_id} · {source.language} · v{source.version}</dd></dl> : <p>Source text unavailable.</p>}</section>
+      <section><h2>Source</h2>{source ? <dl><dt>Source variant</dt><dd>{source.external_id} · <LanguageFlag code={source.language} />{source.language} · v{source.version}</dd></dl> : <p>Source text unavailable.</p>}</section>
       <section><h2>Translation</h2><dl><dt>Provider</dt><dd>{run.provider}</dd>
         {run.model && <><dt>Model</dt><dd>{run.model}</dd></>}
-        <dt>Text</dt><dd>{current.language} · v{current.version}</dd></dl>
+        <dt>Text</dt><dd><LanguageFlag code={current.language} />{current.language} · v{current.version}</dd></dl>
       </section>
       <section><h2>Review</h2><dl><dt>Translation status</dt><dd>{current.translation_status?.replaceAll('_', ' ') ?? 'Not recorded'}</dd>
         {current.status_reason && <><dt>Reason</dt><dd>{current.status_reason}</dd></>}
@@ -191,7 +192,7 @@ export function CaseViewer({ projectKey, caseId, variant, annotations, compare, 
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault(); onNavigate({ name: 'projectDocuments', key: projectKey, ...documents });
       }}>Back to Documents</a>
-      <h1>Text: {detail.case_id}</h1><span>{current.language} · v{current.version}</span><span className="badge">{variantDescription(current)}</span>
+      <h1>Text: {detail.case_id}</h1><span><LanguageFlag code={current.language} />{current.language} · v{current.version}</span><span className="badge">{variantDescription(current)}</span>
       <SubmissionHistory projectKey={projectKey} caseId={caseId} documentId={current.document_id} language={current.language} version={current.version}
         username={username} canManage={access.canManage} onNavigate={onNavigate} documents={documents} />
       {supported.map((task, index) => <a key={task.assignment_id} href={routeHref({ name: 'task', assignmentId: task.assignment_id })} className="btn btn-secondary"

@@ -25,6 +25,7 @@ import {
   type DecisionCategory,
 } from "./labels";
 import { isActiveRow, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
+import { LanguageFlag } from "../ui/LanguageTag";
 
 /** Longest ID shown in full in a cell; longer IDs get a middle ellipsis with the full value in `title`. */
 export const ID_DISPLAY_MAX = 24;
@@ -320,7 +321,7 @@ export interface RowHeaderCellProps {
 export function RowHeaderCell({ row, projectKey, query, onNavigate, badge, onOpenPanel }: RowHeaderCellProps): JSX.Element {
   const active = isActiveRow(row);
   const nameId = documentsRowId(row.case_id, row.language, "header");
-  const nameContent = <><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language">{row.language}</span></>;
+  const nameContent = <><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language"><LanguageFlag code={row.language} />{row.language}</span></>;
   return (
     <span className="documents-row-header documents-text-cell">
       {onOpenPanel

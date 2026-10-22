@@ -27,6 +27,7 @@ import { isActiveRow } from "./stageLabels";
 import { acceptanceLabel, acceptanceOf, discardLabel, isDiscarded, TextVersions, type TextVersionsTools } from "./TextVersions";
 import { useRowSubmissions } from "./useRowSubmissions";
 import { caseOfTextKey, languageOfTextKey } from "./useTextSelection";
+import { LanguageText } from "../ui/LanguageTag";
 
 /** Report state words of the Details list (same words as `reportStateBadge`). */
 const REPORT_STATE_TEXT = { open: "Open", resolved: "Closed", withdrawn: "Withdrawn" } as const;
@@ -219,7 +220,7 @@ export function RowPanel(props: RowPanelProps): JSX.Element {
     return <Button size="sm" aria-disabled={target ? undefined : true} aria-keyshortcuts={delta > 0 ? "J" : "K"}
       aria-label={target ? `${label}: ${rowName(target)}` : `${label} row`} onClick={() => go(delta)}>{label}</Button>;
   };
-  const headingText = <>{name}{version && <>{" "}<span className="row-panel-version">{version}</span></>}</>;
+  const headingText = <><LanguageText text={name} code={languageOfTextKey(rowKey)} />{version && <>{" "}<span className="row-panel-version">{version}</span></>}</>;
   const body = <RowPanelBody {...props} name={name} tab={tab} />;
   const status = <p className="visually-hidden" role="status" aria-live="polite">{message}</p>;
 
