@@ -473,6 +473,14 @@ def _group_view(
         "kinds": sorted(group.kinds),
         "differing_axes": list(group.differing_axes),
         "majority": dict(group.majority),
+        "span_conflict": group.span_conflict,
+        "term_parts": {
+            term: {
+                "differing_axes": list(part.differing_axes),
+                "span_conflict": part.span_conflict,
+            }
+            for term, part in group.term_parts.items()
+        },
         "keep_input_id": group.members[group.keep],
         "start": group.start,
         "members": member_views,

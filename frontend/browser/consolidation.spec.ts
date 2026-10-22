@@ -91,7 +91,9 @@ test("a lead without the Adjudicator role consolidates the 8-group example in 6 
   await page.getByRole("button", { name: /^absent · / }).click();
   await expect(expandedGroup(page)).toHaveText("Areflexia");
   await expect(page.getByRole("button", { name: /^Hypotonia ✓ absent \(/ })).toBeVisible();
-  await page.getByRole("button", { name: /^“Absent reflexes in both legs” · / }).click();
+  // The reflex spans overlap ("Absent reflexes" / "… in both legs"): no text decision, Keep takes the first finding.
+  await expect(page.locator(".cons-group-expanded").getByText(/^The text spans overlap: the kept finding keeps its own text span\.$/)).toBeVisible();
+  await page.locator(".cons-group-expanded").getByRole("button", { name: "Keep", exact: true }).click();
   await expect(expandedGroup(page)).toHaveText("Hearing impairment");
   await page.getByRole("button", { name: /^Keep .+'s finding$/ }).click();
   await expect(expandedGroup(page)).toHaveText("Status epilepticus / Seizure");
@@ -139,7 +141,7 @@ test("keyboard only: J/K, choice chips, Submit and the summary", async ({ page }
   await tabTo(page, page.getByRole("button", { name: /^absent · / }));
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: /^Areflexia/, expanded: true })).toBeFocused();
-  await tabTo(page, page.getByRole("button", { name: /^“Absent reflexes” · / }));
+  await tabTo(page, page.getByRole("button", { name: "Keep", exact: true }));
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: /^Hearing impairment/, expanded: true })).toBeFocused();
   await tabTo(page, page.getByRole("button", { name: /^Leave out$/ }));

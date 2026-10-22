@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { autoBanner, headerDetail, headerTitle, partialText, summaryText } from "../../src/consolidation/consolidationText";
-import { allChosen, choiceSummary, choosePayload, rowsOf, takeOverChoices, takeOverWords } from "../../src/consolidation/groupModel";
+import { allChosen, choiceSummary, choosePayload, KEEP_BOTH, resolvePayload, rowsOf, takeOverChoices, takeOverWords } from "../../src/consolidation/groupModel";
 import { ANA, AXIS_DEFS, decidedView, exampleView, group, LUC, member, span, TEXT, TOM } from "./fixtures";
 
 describe("consolidation copy", () => {
@@ -33,25 +33,25 @@ describe("consolidation copy", () => {
 });
 
 describe("decision rows", () => {
-  it("always offers No note, also when everyone wrote one", () => {
+  it("never asks about notes: the note comes with the kept finding", () => {
     const value = group("g", ["notes_differ"], [
       member("i1", LUC, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { note: "Mild." }),
       member("i2", TOM, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { note: "Severe." }),
     ]);
     const rows = rowsOf(value, [LUC, TOM], TEXT);
-    const note = rows.find(row => row.id === "note")!;
-    expect(note.options.map(option => option.label)).toEqual(["“Mild.” · Luc Martin", "“Severe.” · Tom Reis", "No note"]);
-    expect(choosePayload(value, rows, { note: "" })).toEqual({ term_id: "HP:0001252", span_from_input_id: "i1", axes: {}, note_from_input_id: null });
-    expect(choiceSummary(rows, { note: "" })).toBe("no note");
+    expect(rows).toEqual([]);
+    expect(choosePayload(value, rows, {})).toEqual({ term_id: "HP:0001252", span_from_input_id: "i1", axes: {} });
   });
 
-  it("offers one No note option when a person wrote none", () => {
-    const value = group("g", ["notes_differ"], [
-      member("i1", LUC, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { note: "Mild." }),
-      member("i2", TOM, "HP:0001252", "Hypotonia", [span("muscular hypotonia")]),
-    ]);
-    const note = rowsOf(value, [LUC, TOM], TEXT).find(row => row.id === "note")!;
-    expect(note.options.map(option => option.label)).toEqual(["“Mild.” · Luc Martin", "No note · Tom Reis"]);
+  it("asks about the text only when the spans conflict", () => {
+    const members = [
+      member("i1", LUC, "HP:0001263", "Global developmental delay", [span("Delayed development")]),
+      member("i2", TOM, "HP:0001263", "Global developmental delay", [span("development")]),
+    ];
+    expect(rowsOf(group("g", ["span_differs"], members), [LUC, TOM], TEXT)).toEqual([]);
+    const conflict = rowsOf(group("g", ["span_differs"], members, { span_conflict: true }), [LUC, TOM], TEXT);
+    expect(conflict.map(row => row.id)).toEqual(["span"]);
+    expect(conflict[0].options.map(option => option.label)).toEqual(["“Delayed development” · Luc Martin", "“development” · Tom Reis"]);
   });
 
   it("labels a majority value with 2 of 3", () => {
@@ -68,7 +68,7 @@ describe("decision rows", () => {
     const value = group("g", ["values_differ", "span_differs"], [
       member("i1", LUC, "HP:0001263", "Global developmental delay", [span("Delayed development")]),
       member("i2", TOM, "HP:0001263", "Global developmental delay", [span("development")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
-    ]);
+    ], { span_conflict: true });
     const rows = rowsOf(value, [LUC, TOM], TEXT);
     expect(rows.map(row => row.id)).toEqual(["axis:assertion", "span"]);
     const choices = { "axis:assertion": "absent", span: rows[1].options[1].key };
@@ -96,9 +96,46 @@ describe("decision rows", () => {
     ]);
     const rows = rowsOf(value, [LUC, TOM], TEXT);
     const choices = takeOverChoices(rows, value.members[1]);
-    expect(choices).toEqual({ term: "HP:0001288", "axis:assertion": "absent", note: "" });
-    expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001288", span_from_input_id: "i2", axes: { assertion: "absent" }, note_from_input_id: null });
-    expect(takeOverWords(value.members[1], rows, TEXT)).toBe("Gait disturbance (HP:0001288) · absent · patient · current · no note");
+    expect(choices).toEqual({ __from: "i2", term: "HP:0001288", "axis:assertion": "absent" });
+    expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001288", span_from_input_id: "i2", axes: { assertion: "absent" } });
+    expect(takeOverWords(value.members[1], rows, TEXT)).toBe("Gait disturbance (HP:0001288) · absent · patient · current");
+    expect(takeOverWords(value.members[0], rows, TEXT)).toBe("Ataxia (HP:0001251) · present · patient · current · note “Mild.”");
+  });
+
+  it("takes span and note from the member taken with Take … finding, also within one term", () => {
+    const absent = { assertion: "absent", experiencer: "patient", temporality: "current" };
+    const value = group("g", ["term_differs", "values_differ", "span_differs"], [
+      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
+      member("i2", TOM, "HP:0001251", "Ataxia", [span("Unsteady")], { axes: absent }),
+      member("i3", ANA, "HP:0001288", "Gait disturbance", [span("gait")]),
+    ]);
+    const rows = rowsOf(value, [LUC, TOM, ANA], TEXT);
+    const choices = takeOverChoices(rows, value.members[1]);
+    expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001251", span_from_input_id: "i2", axes: { assertion: "absent" } });
+    // Choosing the other term by hand: the span comes with that term's first member.
+    expect(choosePayload(value, rows, { ...choices, term: "HP:0001288" }).span_from_input_id).toBe("i3");
+  });
+
+  it("asks the values within one term when both terms are kept (three people)", () => {
+    const absent = { assertion: "absent", experiencer: "patient", temporality: "current" };
+    const value = group("g", ["term_differs", "values_differ"], [
+      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
+      member("i2", TOM, "HP:0001251", "Ataxia", [span("Unsteady gait")], { axes: absent }),
+      member("i3", ANA, "HP:0001288", "Gait disturbance", [span("Unsteady gait")]),
+    ], { differing_axes: ["assertion"], term_parts: { "HP:0001251": { differing_axes: ["assertion"], span_conflict: false } } });
+    const rows = rowsOf(value, [LUC, TOM, ANA], TEXT);
+    expect(rows[0].options.map(option => option.key)).toEqual(["HP:0001251", "HP:0001288", KEEP_BOTH]);
+    const both = rowsOf(value, [LUC, TOM, ANA], TEXT, null, true);
+    expect(both.map(row => [row.id, row.label])).toEqual([["term", "Term"], ["both:HP:0001251:axis:assertion", "Ataxia · Assertion"]]);
+    expect(allChosen(both, { term: KEEP_BOTH })).toBe(false);
+    const choices = { term: KEEP_BOTH, "both:HP:0001251:axis:assertion": "absent" };
+    expect(allChosen(both, choices)).toBe(true);
+    expect(resolvePayload(value, both, choices)).toEqual({ action: "keep_both",
+      term_choices: [{ term_id: "HP:0001251", span_from_input_id: "i1", axes: { assertion: "absent" } }] });
+    expect(choiceSummary(both, choices)).toBe("kept both, absent (Tom Reis)");
+    // Without differences inside a term "Keep both" needs nothing more.
+    const plain = { ...value, term_parts: {} };
+    expect(resolvePayload(plain, rowsOf(plain, [LUC, TOM, ANA], TEXT, null, true), { term: KEEP_BOTH })).toEqual({ action: "keep_both" });
   });
 
   it("offers a term found with Other term as one more term option", () => {
@@ -107,7 +144,7 @@ describe("decision rows", () => {
       member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")]),
     ]);
     const rows = rowsOf(value, [LUC, TOM], TEXT, { termId: "HP:0002066", label: "Gait ataxia" });
-    expect(rows[0].options.map(option => option.label)).toEqual(["Ataxia (HP:0001251) · Luc Martin", "Gait disturbance (HP:0001288) · Tom Reis", "Gait ataxia (HP:0002066) · other term"]);
+    expect(rows[0].options.map(option => option.label)).toEqual(["Ataxia (HP:0001251) · Luc Martin", "Gait disturbance (HP:0001288) · Tom Reis", "Gait ataxia (HP:0002066) · other term", "Keep both"]);
     expect(choosePayload(value, rows, { term: "HP:0002066" })).toEqual({ term_id: "HP:0002066", span_from_input_id: "i1", axes: {} });
   });
 });

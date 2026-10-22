@@ -50,11 +50,24 @@ class ConsolidationMemberView(_View):
     note: str | None = None
 
 
+class ConsolidationTermPartView(_View):
+    """The decisions among one term's members ("Keep both" asks them)."""
+
+    differing_axes: list[str]
+    span_conflict: bool
+
+
 class ConsolidationGroupView(_View):
     group_id: str  # sha256 of the sorted input ids, first 16 hex
     kinds: list[str]
     differing_axes: list[str]
     majority: dict[str, str]
+    # The members' spans genuinely conflict (``agreement.spans_conflict``):
+    # the text is a decision. ``span_differs`` alone (overlapping spans with
+    # small shifts) is not.
+    span_conflict: bool = False
+    # Term id -> its members' own decisions, for "Keep both" (terms with any).
+    term_parts: dict[str, ConsolidationTermPartView] = {}
     keep_input_id: str
     start: int | None
     members: list[ConsolidationMemberView]

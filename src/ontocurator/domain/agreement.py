@@ -25,6 +25,11 @@ view and the final panel's full agreement: clusters bucketed by
 ``(layer_id, type_id, term_id)``, then incomplete clusters of other terms on
 overlapping text of the same layer and type merge into one group, then each
 group gets a set of kinds.
+
+Which differences are a consolidation *decision* (acceptance 2026-10-22):
+the term and every differing axis always are; the text only when the
+members' spans genuinely conflict (``spans_conflict``); notes never (they
+come with the finding they belong to and are shown as information).
 """
 
 from __future__ import annotations
@@ -39,9 +44,11 @@ __all__ = [
     "Group",
     "GroupKind",
     "Pair",
+    "TermPart",
     "compare",
     "groups",
     "match",
+    "spans_conflict",
     "with_defaults",
 ]
 
@@ -76,6 +83,15 @@ class Agreement:
 
 
 @dataclass(frozen=True)
+class TermPart:
+    """The decisions among the members of one term of a ``term_differs``
+    group, asked when both terms are kept ("Keep both")."""
+
+    differing_axes: tuple[str, ...]  # sorted axes differing among the term's members
+    span_conflict: bool  # ``spans_conflict`` among the term's members
+
+
+@dataclass(frozen=True)
 class Group:
     """One consolidation group: the findings of several submissions that
     describe the same thing (``groups``)."""
@@ -87,6 +103,11 @@ class Group:
     keep: str  # submission id of the default member (earliest in order)
     start: int | None  # first span start; None = spanless
     majority: Mapping[str, str]  # axis -> value of > half of >= 3 same-term members
+    # ``spans_conflict`` among all members: the text is a decision ("Text" row).
+    span_conflict: bool = False
+    # Term id -> its members' own decisions, only for terms with any (and only
+    # when terms differ); "Keep both" asks them per term.
+    term_parts: Mapping[str, TermPart] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -237,6 +258,36 @@ def groups(
     return tuple(group for _, group in sorted(ordered, key=lambda item: item[0]))
 
 
+def spans_conflict(findings: Sequence[Finding]) -> bool:
+    """Whether the findings' text spans genuinely conflict, so the text is a
+    decision of its own.
+
+    Two findings agree on their text when both are spanless, or when the
+    characters their evidence shares (each evidence set merged, cue segments
+    ignored) are at least half of the shorter evidence. The spans conflict
+    when any two findings do not agree (also one spanless and one not):
+    they mark mostly different text. Overlapping spans with small shifts
+    ("ataxia" / "severe ataxia") agree; the text then comes with the chosen
+    finding (its term, "Take … finding" or the default member).
+    """
+    for index, a in enumerate(findings):
+        for b in findings[index + 1 :]:
+            if not a.spans and not b.spans:
+                continue
+            if not a.spans or not b.spans:
+                return True
+            shorter = min(_length(a.spans), _length(b.spans))
+            if 2 * _overlap(a.spans, b.spans) < shorter:
+                return True
+    return False
+
+
+def _differing(findings: Sequence[Finding]) -> set[str]:
+    """Axes whose values differ among ``findings``."""
+    axes = {axis for finding in findings for axis in finding.axes}
+    return {axis for axis in axes if len({x.axes.get(axis) for x in findings}) > 1}
+
+
 def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
     """Kinds and labels of one group; ``members`` in submission order."""
     terms: list[str] = []
@@ -246,12 +297,13 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
             terms.append(finding.term_id)
         by_term.setdefault(finding.term_id, []).append(finding)
     # Differences are measured across every member of the group, also across
-    # terms: a "term differs" group whose members also differ in an axis,
-    # span or note shows that row too, so taking one person's term never
-    # settles another field silently.
+    # terms: a "term differs" group whose members also differ in an axis
+    # shows that row too, so taking one person's term never settles another
+    # value silently. ``span_differs`` / ``notes_differ`` describe any
+    # difference (they keep a group from ``match``); only ``span_conflict``
+    # makes the text a decision.
     findings = [finding for _, finding in members]
-    axes = {axis for finding in findings for axis in finding.axes}
-    differing = {axis for axis in axes if len({x.axes.get(axis) for x in findings}) > 1}
+    differing = _differing(findings)
     span_differs = (
         len({tuple(sorted(x.spans)) for x in findings}) > 1
         or len({tuple(sorted(x.cues)) for x in findings}) > 1
@@ -287,6 +339,15 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
     if not kinds:
         kinds.add("match")
 
+    term_parts: dict[str, TermPart] = {}
+    if len(terms) > 1:
+        for term in terms:
+            same = by_term[term]
+            own = _differing(same)
+            conflict = spans_conflict(same)
+            if own or conflict:
+                term_parts[term] = TermPart(tuple(sorted(own)), conflict)
+
     majority = {
         axis: next(iter(values))
         for axis, values in sorted(winners.items())
@@ -301,6 +362,8 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
         keep=members[0][0],
         start=min(starts) if starts else None,
         majority=majority,
+        span_conflict=spans_conflict(findings),
+        term_parts=term_parts,
     )
 
 
@@ -396,6 +459,11 @@ def _merged(spans: Sequence[Span]) -> list[Span]:
         else:
             result.append((start, end))
     return result
+
+
+def _length(spans: Sequence[Span]) -> int:
+    """Characters covered by an evidence set (merged first)."""
+    return sum(end - start for start, end in _merged(spans))
 
 
 def _overlap(a: Sequence[Span], b: Sequence[Span]) -> int:

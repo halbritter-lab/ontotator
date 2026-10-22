@@ -12,11 +12,17 @@ event). ``input_ids`` must name exactly one group of the round
   provenance ``merged`` with the contributing ``round-input:…`` refs and the
   consolidator as actor; every member target gets a ``changed`` decision
   with ``ConsolidationMark(action, guidelines_unclear, content_sha256)``.
-  ``leave_out`` records ``rejected`` decisions only. ``keep`` is refused
-  when the members differ in term or values, and ``choose`` must name
-  every differing axis (``Group.differing_axes``, measured across terms),
-  so no differing field is settled by default. The group note is the
-  decisions' ``note``. Like ``merge-inputs`` it unchecks the group's layer.
+  ``leave_out`` records ``rejected`` decisions only. Only *relevant*
+  differences are decisions (acceptance 2026-10-22): ``keep`` is refused
+  when the members differ in term or values or their spans genuinely
+  conflict (``Group.span_conflict``); ``choose`` must name every differing
+  axis (``Group.differing_axes``, measured across terms). Overlapping spans
+  with small shifts and differing notes are no decision: span, evidence
+  and note come with the member the result is based on
+  (``span_from_input_id``). ``keep_both`` keeps one finding per term; a
+  term whose own members differ (``Group.term_parts``) needs a
+  ``term_choices`` entry naming its differing axes, its span from one of
+  its members. The group note is the decisions' ``note``. Like ``merge-inputs`` it unchecks the group's layer.
 * **Annotate** changes note and flag on the decisions of a resolved group;
   annotations stay untouched, so every ``content_sha256`` stays valid.
 * **Reopen** deletes the group's decisions and resulting annotations.
@@ -178,6 +184,9 @@ class ResolveCommand(BaseModel):
     input_ids: list[str] = Field(min_length=1)
     action: Literal["keep", "choose", "keep_both", "leave_out"]
     choice: ResolveChoice | None = None
+    # Only with ``keep_both``: one choice per term whose members differ
+    # (``Group.term_parts``); other terms keep their first member.
+    term_choices: list[ResolveChoice] | None = None
     note: str | None = None
     guidelines_unclear: bool = False
 
@@ -231,7 +240,8 @@ class _Group:
 
 
 # "Keep" takes the default member as it is; a group whose members differ in
-# term or values needs a decision per differing field ("choose").
+# term or values (or whose spans conflict) needs a decision per differing
+# field ("choose").
 _UNSETTLED_BY_KEEP = frozenset({"term_differs", "values_differ"})
 
 
@@ -508,17 +518,24 @@ class ConsolidationGroupService:
         is the canonical id of a chosen term outside the group's terms."""
         if (cmd.choice is not None) != (cmd.action == "choose"):
             raise _invalid("A choice goes with the action 'choose' only")
+        if cmd.term_choices is not None and cmd.action != "keep_both":
+            raise _invalid("Term choices go with the action 'keep_both' only")
         group, members = item.group, item.members
         if cmd.action == "leave_out":
             return []
         if cmd.action == "keep":
-            if group.kinds & _UNSETTLED_BY_KEEP:
-                raise _invalid("Choose the term and every differing value")
+            if group.kinds & _UNSETTLED_BY_KEEP or group.span_conflict:
+                raise _invalid("Choose the term, every differing value and the text")
             keep = members[group.members[group.keep]]
             return [(keep, keep.snapshot.annotation, item.input_ids)]
         if cmd.action == "keep_both":
             if "term_differs" not in group.kinds:
                 raise _invalid("Keep both needs different terms")
+            by_term: dict[str, ResolveChoice] = {}
+            for given in cmd.term_choices or []:
+                if given.term_id not in group.terms or given.term_id in by_term:
+                    raise _invalid("One choice per term of the group")
+                by_term[given.term_id] = given
             plans = []
             for term in group.terms:
                 same = [
@@ -526,26 +543,56 @@ class ConsolidationGroupService:
                     for iid, m in members.items()
                     if m.snapshot.annotation.term_id == term
                 ]
-                base = members[same[0]]
-                plans.append((base, base.snapshot.annotation, same))
+                part = group.term_parts.get(term)
+                term_choice = by_term.get(term)
+                if term_choice is None:
+                    if part is not None:
+                        raise _invalid(
+                            f"Choose every differing value of {term}: "
+                            + ", ".join(part.differing_axes or ("text",))
+                        )
+                    base = members[same[0]]
+                    plans.append((base, base.snapshot.annotation, same))
+                    continue
+                axes = part.differing_axes if part is not None else ()
+                base, chosen = self._chosen(item, term_choice, same, axes, term)
+                plans.append((base, chosen, same))
             return plans
         choice = cmd.choice
         assert choice is not None
-        if choice.span_from_input_id not in members:
+        term_id = choice.term_id if choice.term_id in group.terms else other_term
+        if term_id is None:
+            raise _invalid("The term is not valid in this layer")
+        base, chosen = self._chosen(
+            item, choice, item.input_ids, group.differing_axes, term_id
+        )
+        return [(base, chosen, item.input_ids)]
+
+    @staticmethod
+    def _chosen(
+        item: _Group,
+        choice: ResolveChoice,
+        allowed: Sequence[str],
+        differing_axes: Sequence[str],
+        term_id: str,
+    ) -> tuple[RoundMember, Annotation]:
+        """The member giving span, evidence and (by default) note, and the
+        chosen annotation: ``term_id``, the member's axes overlaid with the
+        chosen ones. ``allowed`` are the input ids span and note may come
+        from; ``choice.axes`` must name every axis of ``differing_axes``."""
+        members = item.members
+        if choice.span_from_input_id not in allowed:
             raise _invalid("The span comes from a member of the group")
         if (
             choice.note_from_input_id is not None
-            and choice.note_from_input_id not in members
+            and choice.note_from_input_id not in allowed
         ):
             raise _invalid("The note comes from a member of the group")
-        unchosen = [axis for axis in group.differing_axes if axis not in choice.axes]
+        unchosen = [axis for axis in differing_axes if axis not in choice.axes]
         if unchosen:
             raise _invalid("Choose every differing value: " + ", ".join(unchosen))
         base = members[choice.span_from_input_id]
         source = base.snapshot.annotation
-        term_id = choice.term_id if choice.term_id in group.terms else other_term
-        if term_id is None:
-            raise _invalid("The term is not valid in this layer")
         type_def = resolve_type(item.profile, source.layer_id, source.type_id)
         axes: dict[str, str | None] = {**source.axes_values, **choice.axes}
         try:
@@ -566,7 +613,7 @@ class ConsolidationGroupService:
             )
         except (InvalidAnnotation, ValueError) as exc:
             raise _invalid(str(exc)) from exc
-        return [(base, chosen, item.input_ids)]
+        return base, chosen
 
     def annotate(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
         cmd = AnnotateCommand.model_validate(envelope.payload)

@@ -67,6 +67,9 @@ def test_started_scenario_has_the_eight_designed_groups(client: TestClient) -> N
     assert [g["kinds"] for g in open_groups if len(g["kinds"]) > 1] == [
         ["term_differs", "values_differ"]
     ]
+    # Overlapping reflex spans and one shared span in the term group: no text decision.
+    assert [g["span_conflict"] for g in open_groups] == [False] * 4
+    assert all(g["term_parts"] == {} for g in open_groups)
     labels = [person["label"] for person in view["people"]]
     assert [person["lane"] for person in view["people"]] == [1, 2]
     assert all("(" in label for label in labels)

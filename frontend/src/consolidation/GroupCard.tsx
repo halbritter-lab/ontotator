@@ -1,15 +1,16 @@
 /**
  * One finding group of the consolidation view (acceptance fixes spec "WP-E Frontend > Groups", X6–X8, X14, U14).
  * Collapsed: one line ("Hypotonia ✓ absent (Tom Reis) · Change"). Expanded: the comparison table (columns =
- * people, differences marked by weight and the word "differs"), one row of choice chips per difference naming
- * the person, "+ note" and "Guidelines unclear here". A group resolves when every row has a choice.
+ * people, differences marked by weight and the word "differs"), one row of choice chips per relevant difference
+ * naming the person (term, values, conflicting text; see `groupModel`), "+ note" and "Guidelines unclear here".
+ * Overlapping text and notes are shown as information. A group resolves when every row has a choice.
  */
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { Button, Checkbox, InlineConfirm, Select, Textarea } from "../ui";
 import { axisLabel, KIND_LABELS, keepLabel, namesOf, partialText, quoted, REOPEN_EDITED_WARNING, valueWords } from "./consolidationText";
-import { absentPeople, allChosen, choosePayload, choiceSummary, groupTitle, hasKind, needsTerm, passage, peopleOf, presentPeople, rowsOf, stateSummary, takeOverChoices, takeOverWords, termLabel, type ChoiceRow, type Choices, type OtherTerm } from "./groupModel";
+import { absentPeople, allChosen, choosePayload, choiceSummary, groupTitle, hasKind, keepsBoth, needsTerm, passage, peopleOf, presentPeople, resolvePayload, rowsOf, stateSummary, TAKEN_FROM, takeOverChoices, takeOverWords, termLabel, type ChoiceRow, type Choices, type OtherTerm } from "./groupModel";
 import { personName } from "./lanes";
 import { TermPicker } from "./TermPicker";
 import { LaneKey } from "./TextPane";
@@ -84,10 +85,15 @@ function Comparison({ group, people, text }: { group: ConsolidationGroupView; pe
   const notes = members.some(member => member.note?.trim());
   const rows: { label: string; differs: boolean; cells: string[] }[] = [
     { label: "Term", differs: hasKind(group, "term_differs"), cells: members.map(termLabel) },
-    { label: "Text", differs: hasKind(group, "span_differs"), cells: members.map(member => member.spans.length ? quoted(passage(text, member.spans)) : "No text span") },
+    { label: "Text", differs: !!group.span_conflict, cells: members.map(member => member.spans.length ? quoted(passage(text, member.spans)) : "No text span") },
     ...differing.map(axis => ({ label: axisLabel(axis), differs: true, cells: members.map(member => valueWords(member.axes[axis])) })),
-    ...(notes ? [{ label: "Note", differs: hasKind(group, "notes_differ"), cells: members.map(member => member.note?.trim() || "No note") }] : []),
+    // Notes are information, never a decision: the kept finding keeps its own note.
+    ...(notes ? [{ label: "Note", differs: false, cells: members.map(member => member.note?.trim() || "No note") }] : []),
   ];
+  const info = [
+    hasKind(group, "span_differs") && !group.span_conflict && "The text spans overlap",
+    hasKind(group, "notes_differ") && "the notes differ",
+  ].filter(Boolean).join(" and ");
   return <>
     <table className="cons-compare">
       <caption className="visually-hidden">Comparison of {groupTitle(group)}</caption>
@@ -98,6 +104,8 @@ function Comparison({ group, people, text }: { group: ConsolidationGroupView; pe
         {row.cells.map((cell, index) => <td key={index}>{cell}</td>)}
       </tr>)}</tbody>
     </table>
+    {info && <p className="cons-muted">{info[0].toUpperCase() + info.slice(1)}: the kept finding keeps its own {[
+      hasKind(group, "span_differs") && !group.span_conflict && "text span", hasKind(group, "notes_differ") && "note"].filter(Boolean).join(" and ")}.</p>}
     {same.length > 0 && <p className="cons-muted">{differing.length ? "Other values match" : "All values match"} ({same.map(axis => valueWords(members[0].axes[axis])).join(" · ")}).</p>}
   </>;
 }
@@ -138,23 +146,33 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const title = groupTitle(group);
   const present = presentPeople(group, people), absent = absentPeople(group, people);
   const partial = hasKind(group, "partial");
-  const matchOnly = group.kinds.length === 1 && group.kinds[0] === "match";
-  const rows = useMemo(() => rowsOf(group, people, text, otherTerm), [group, people, text, otherTerm]);
+  const both = keepsBoth(choices);
+  const rowsFor = (next: Choices, other: OtherTerm | null = otherTerm) => rowsOf(group, people, text, other, keepsBoth(next));
+  const rows = useMemo(() => rowsOf(group, people, text, otherTerm, both), [group, people, text, otherTerm, both]);
+  // "Take … finding" fills the group's own rows (not the per-term rows of "Keep both").
+  const baseRows = useMemo(() => rowsOf(group, people, text, otherTerm), [group, people, text, otherTerm]);
   const inputIds = group.members.map(member => member.input_id);
-  const kindWords = partial ? `only ${namesOf(present)}` : group.kinds.filter(kind => kind !== "partial").map(kind => KIND_LABELS[kind] ?? kind).join(", ");
+  const kindWords = partial ? `only ${namesOf(present)}` : group.kinds.filter(kind => kind !== "partial")
+    .map(kind => kind === "span_differs" && !group.span_conflict ? "text span shifted" : KIND_LABELS[kind] ?? kind).join(", ");
+  // Nothing to choose (match, or only overlapping text or notes differ): Keep, Edit values…, Other term….
+  const nothingToChoose = rows.length === 0;
   const summary = props.summary ?? stateSummary(group, people);
   const extras = () => ({ ...(note.trim() ? { note: note.trim() } : {}), ...(flag ? { guidelines_unclear: true } : {}) });
 
   const resolve = (payload: Omit<ConsolidationResolvePayload, "input_ids">, line: string) =>
     void props.onResolve({ input_ids: inputIds, ...payload, ...extras() }, line);
   const choose = (next: Choices, nextRows: readonly ChoiceRow[] = rows) =>
-    resolve({ action: "choose", choice: choosePayload(group, nextRows, next) }, choiceSummary(nextRows, next));
+    resolve(resolvePayload(group, nextRows, next), choiceSummary(nextRows, next));
   // The last open row resolves the group (except "partial", which keeps with its button).
-  const settle = (next: Choices, nextRows: readonly ChoiceRow[] = rows) => {
+  const settle = (next: Choices, nextRows: readonly ChoiceRow[] = rowsFor(next)) => {
     setChoices(next);
     if (!partial && allChosen(nextRows, next)) choose(next, nextRows);
   };
-  const onChoose = (row: ChoiceRow, key: string) => settle({ ...choices, [row.id]: key });
+  // Choosing a row by hand drops the member of an earlier "Take … finding".
+  const onChoose = (row: ChoiceRow, key: string) => {
+    const { [TAKEN_FROM]: _taken, ...rest } = choices;
+    settle({ ...rest, [row.id]: key });
+  };
   const keep = () => {
     if (rows.length) { choose(choices); return; }
     resolve({ action: "keep" }, partial ? `kept from ${namesOf(present)}` : "kept");
@@ -167,7 +185,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     setEditing(false);
   };
   // "Take …'s finding" (2+ differing fields): fills every row from that member, naming everything it adopts.
-  const takeOvers = rows.length > 1 ? group.members : [];
+  const takeOvers = baseRows.length > 1 ? group.members : [];
   const missing = rows.filter(row => !row.options.some(option => option.key === choices[row.id]));
   const reopen = () => { if (group.edited) setConfirmReopen(true); else void props.onReopen(); };
 
@@ -215,29 +233,28 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
         <span id={`${noteId}-take`} className="cons-choice-label">Whole finding:</span>
         {takeOvers.map(member => {
           const person = peopleOf(people, [member])[0];
-          const next = takeOverChoices(rows, member);
-          const selected = rows.every(row => choices[row.id] === next[row.id]);
+          const next = takeOverChoices(baseRows, member);
+          const selected = choices[TAKEN_FROM] === member.input_id && baseRows.every(row => choices[row.id] === next[row.id]);
           return <Chip key={member.input_id} selected={selected} disabled={busy} keys={<LaneKey people={people} personId={member.person_id} />}
-            label={`Take ${personName(person.label)}'s finding: ${takeOverWords(member, rows, text)}`} onClick={() => settle(next)} />;
+            label={`Take ${personName(person.label)}'s finding: ${takeOverWords(member, baseRows, text)}`} onClick={() => settle(next)} />;
         })}
       </div>}
       {takeOvers.length > 0 && <p className="cons-muted">Or choose each differing field:</p>}
-      {rows.map(row => <ChipRow key={row.id} row={row} people={people} choices={choices} onChoose={onChoose} disabled={busy}>
-        {row.kind === "term" && !partial && <Chip selected={false} disabled={busy} label="Keep both" onClick={() => resolve({ action: "keep_both" }, "kept both")} />}
-      </ChipRow>)}
+      {rows.map(row => <ChipRow key={row.id} row={row} people={people} choices={choices} onChoose={onChoose} disabled={busy} />)}
+      {both && rows.length > 1 && <p className="cons-muted">Keep both keeps one finding per term; choose the values that differ within a term.</p>}
       {!partial && missing.length > 0 && missing.length < rows.length && <p className="action-reason" role="status">
         Still to choose: {missing.map(row => row.label).join(", ")}.</p>}
       {editing && workspace ? <EditValues group={group} workspace={workspace} busy={busy} onKeep={editValues} onCancel={() => setEditing(false)} />
         : <div className="cons-actions">
-          {(partial || matchOnly) && <Button variant={partial ? "primary" : "secondary"} loading={busy}
+          {(partial || nothingToChoose) && <Button variant={partial ? "primary" : "secondary"} loading={busy}
             aria-disabled={!keepReady || undefined} aria-describedby={!keepReady ? `${noteId}-keep-reason` : undefined}
             onClick={() => { if (keepReady) keep(); }}>{partial ? keepLabel(present) : "Keep"}</Button>}
           <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, "left out"); }}>Leave out</Button>
-          {(partial || matchOnly) && workspace && <Button onClick={() => setEditing(true)}>Edit values…</Button>}
-          {(matchOnly || needsTerm(group)) && workspace && <Button ref={otherTermRef} aria-expanded={picking} onClick={() => setPicking(true)}>Other term…</Button>}
+          {(partial || nothingToChoose) && workspace && <Button onClick={() => setEditing(true)}>Edit values…</Button>}
+          {(nothingToChoose || needsTerm(group)) && workspace && <Button ref={otherTermRef} aria-expanded={picking} onClick={() => setPicking(true)}>Other term…</Button>}
           {props.onEditInEditor && <Button onClick={props.onEditInEditor}>Edit in editor…</Button>}
         </div>}
-      {!keepReady && (partial || matchOnly) && <p id={`${noteId}-keep-reason`} className="action-reason">Choose one option in each row first.</p>}
+      {!keepReady && (partial || nothingToChoose) && <p id={`${noteId}-keep-reason`} className="action-reason">Choose one option in each row first.</p>}
       {workspace && <TermPicker open={picking} anchorRef={otherTermRef} label="Other term" workspace={workspace} layerId={group.members[0].layer_id}
         onClose={() => setPicking(false)} onPick={candidate => {
           setPicking(false);
@@ -249,7 +266,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
           // Another term is one option of the term row; the other differing fields still need their choice.
           const other = { termId: candidate.term_id, label: candidate.label };
           setOtherTerm(other);
-          settle({ ...choices, term: candidate.term_id }, rowsOf(group, people, text, other));
+          const next = { ...choices, term: candidate.term_id };
+          settle(next, rowsFor(next, other));
         }} />}
     </>}
   </>;

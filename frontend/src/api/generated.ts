@@ -3025,6 +3025,18 @@ export interface components {
             majority: {
                 [key: string]: string;
             };
+            /**
+             * Span Conflict
+             * @default false
+             */
+            span_conflict: boolean;
+            /**
+             * Term Parts
+             * @default {}
+             */
+            term_parts: {
+                [key: string]: components["schemas"]["ConsolidationTermPartView"];
+            };
             /** Keep Input Id */
             keep_input_id: string;
             /** Start */
@@ -3117,6 +3129,16 @@ export interface components {
             label: string;
             /** Lane */
             lane: number;
+        };
+        /**
+         * ConsolidationTermPartView
+         * @description The decisions among one term's members ("Keep both" asks them).
+         */
+        ConsolidationTermPartView: {
+            /** Differing Axes */
+            differing_axes: string[];
+            /** Span Conflict */
+            span_conflict: boolean;
         };
         /** ConsolidationView */
         ConsolidationView: {

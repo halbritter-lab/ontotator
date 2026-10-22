@@ -9579,6 +9579,19 @@
             "type": "object",
             "title": "Majority"
           },
+          "span_conflict": {
+            "type": "boolean",
+            "title": "Span Conflict",
+            "default": false
+          },
+          "term_parts": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ConsolidationTermPartView"
+            },
+            "type": "object",
+            "title": "Term Parts",
+            "default": {}
+          },
           "keep_input_id": {
             "type": "string",
             "title": "Keep Input Id"
@@ -9818,6 +9831,29 @@
         ],
         "title": "ConsolidationPersonView",
         "description": "An input author; display name for the assignee and leads only (U8)."
+      },
+      "ConsolidationTermPartView": {
+        "properties": {
+          "differing_axes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Differing Axes"
+          },
+          "span_conflict": {
+            "type": "boolean",
+            "title": "Span Conflict"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "differing_axes",
+          "span_conflict"
+        ],
+        "title": "ConsolidationTermPartView",
+        "description": "The decisions among one term's members (\"Keep both\" asks them)."
       },
       "ConsolidationView": {
         "properties": {

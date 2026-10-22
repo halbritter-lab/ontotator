@@ -155,6 +155,15 @@ def test_a_choice_missing_a_differing_axis_is_refused(cons):
     )
 
 
+def test_keep_on_conflicting_spans_is_refused(cons):
+    """ "Seit 2" / "2 Wochen" share one character: the spans conflict, so the
+    text is a decision of its own (besides the term)."""
+    terms = group(cons, "term_differs")
+    assert terms["span_conflict"] is True
+    assert group(cons, "values_differ")["span_conflict"] is False
+    refused(cons, {"input_ids": inputs(terms), "action": "keep"})
+
+
 def test_annotate_and_reopen_need_one_exact_group(cons):
     ids = inputs(group(cons, "match")) + inputs(group(cons, "partial"))
     refused(cons, {"input_ids": ids, "guidelines_unclear": True}, "annotate")

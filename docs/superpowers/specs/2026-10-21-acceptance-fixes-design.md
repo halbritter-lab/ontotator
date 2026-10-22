@@ -95,8 +95,8 @@ The publish form gets an action bar above the preview: file + note inputs, then 
 | ----------------------- | ----------------------------------------------------------------------------------------- |
 | `match`                 | kept automatically; reopened: Keep / Leave out / Edit values… / Other term… (U14)         |
 | `values_differ`         | per axis: one person's value ("absent · Tom Reis")                                        |
-| `span_differs`          | one person's span                                                                         |
-| `notes_differ`          | one person's note, or none (always offered); not both, see below                          |
+| `span_differs`          | one person's span, only when the spans conflict (see "Relevant differences")              |
+| `notes_differ`          | no decision; shown as information (see "Relevant differences")                            |
 | `term_differs`          | one term plus every other differing field, a whole finding, keep both, or "Other term…"   |
 | `partial` (+ any above) | "Keep Luc Martin's finding" (optionally "Edit values…") or "Leave out", plus the rows     |
 
@@ -104,7 +104,16 @@ A group resolves when every row has a choice (X6).
 
 **Every differing field, deviation (acceptance 2026-10-22):** differences are measured across **all** members of a group, also across terms (`Group.differing_axes`, `span_differs`, `notes_differ`; the majority label still counts members of one term only). A `term_differs` group therefore shows a term row **and** a row per other differing field (axis, text, note); choosing a term no longer settles them. With two or more rows the card also offers "Take Luc Martin's finding: Ataxia (HP:0001251) · absent · patient · current", which fills every row from that person and names everything it adopts; "Other term…" adds the found term to the term row and leaves the other rows to choose. The backend refuses `keep` on a group whose members differ in term or values and a `choose` that does not name every differing axis (`ROUND_INPUT_INVALID`), so an unresolved field always leaves the group open and blocks submit.
 
-**Notes, deviation (final review 2026-10-21):** the note row offers each person's note and always "No note". "Both notes" is not offered: the resolve command takes one person's note (`note_from_input_id`); joining notes needs backend support and is deferred.
+**Relevant differences, deviation (acceptance 2026-10-22, supersedes the text and note rows above):** the consolidator is asked only about differences that change the result.
+
+- **Term and every axis:** always a row (unchanged; axes compared across all members, also across terms).
+- **Text:** a row only when the members' spans genuinely conflict (`agreement.spans_conflict`, `Group.span_conflict`, view `span_conflict`). Two members agree on their text when both are spanless, or when the characters their evidence shares (segments merged, cue segments ignored) are at least half of the shorter evidence: `2 · overlap ≥ min(length A, length B)`. The spans conflict when any two members do not agree (also one spanless, one not). Overlapping spans with small shifts ("Absent reflexes" / "Absent reflexes in both legs") are no decision: span, evidence and cue segments come with the finding the result is based on — the member taken with "Take … finding" when it holds the chosen term, else the chosen term's first member, else the default member (earliest input). The comparison table still shows each person's text; the card says "The text spans overlap: the kept finding keeps its own text span." and the header reads "text span shifted".
+- **Notes:** never a decision and never blocking. The kept finding carries its own note (the member it is based on; the resolve command still accepts `note_from_input_id`, the view no longer sends it); every person's note stays visible in the comparison table as information, and "Take … finding" names the note it carries. The consolidator's own "+ note" for the lead is unchanged.
+- `span_differs` and `notes_differ` stay descriptive kinds: they still keep a group from `match` (no automatic take-over, W1 `all_match` unchanged). A group without any row (only overlapping text or notes differ) offers "Keep" (default member), "Leave out", "Edit values…" and "Other term…", like a reopened match.
+- **Keep both with three or more people:** "Keep both" is an option of the term row. When the members of one term differ among themselves (`Group.term_parts`: per term its own differing axes and span conflict), choosing it adds a row per such difference ("Ataxia · Assertion") instead of silently keeping the term's first finding; the group resolves when they are chosen. `keep_both` takes `term_choices` (one `ResolveChoice` per term with differences; span from one of that term's members); terms without own differences keep their first member.
+- **Server validation matches:** `keep` is refused when terms or values differ or the spans conflict; `choose` must name every differing axis (span from any member); `keep_both` is refused without a `term_choices` entry naming every differing axis for each term in `term_parts`, with a span outside that term, or with a term outside the group; `term_choices` with any other action is refused (all `ROUND_INPUT_INVALID`).
+
+**Notes, deviation (final review 2026-10-21; superseded 2026-10-22 by "Relevant differences", no note row):** the note row offered each person's note and always "No note". "Both notes" is not offered: the resolve command takes one person's note (`note_from_input_id`); joining notes needs backend support and is deferred.
 
 ### Backend
 

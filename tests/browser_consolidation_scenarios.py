@@ -35,7 +35,8 @@ TEXT = (
 )
 AXES = {"assertion": "present", "experiencer": "patient", "temporality": "current"}
 # (term, passage, axis changes) per annotator. Matches: seizures, hearing loss,
-# absence episodes, muscle tone. Value: hypotonia (absent). Span: reflexes.
+# absence episodes, muscle tone. Value: hypotonia (absent). Span: reflexes
+# (overlapping spans: no text decision, "Keep").
 # Partial: reduced hearing (ann-0001 only). Term: prolonged seizure activity
 # (the terms and the assertion differ).
 FINDINGS: dict[str, list[tuple[str, str, dict[str, str]]]] = {

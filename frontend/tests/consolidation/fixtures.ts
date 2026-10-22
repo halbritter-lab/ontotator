@@ -28,7 +28,7 @@ export function member(inputId: string, person: ConsolidationPersonView, termId:
 
 export function group(groupId: string, kinds: string[], members: ConsolidationMemberView[], extra: Partial<ConsolidationGroupView> = {}): ConsolidationGroupView {
   return {
-    group_id: groupId, kinds, differing_axes: [], majority: {}, keep_input_id: members[0].input_id,
+    group_id: groupId, kinds, differing_axes: [], majority: {}, span_conflict: false, term_parts: {}, keep_input_id: members[0].input_id,
     start: members[0].spans[0]?.[0] ?? null, members, state: kinds.includes("match") ? "auto" : "open", edited: false,
     note: null, guidelines_unclear: false, annotation_ids: kinds.includes("match") ? [`cons-${groupId}`] : [], ...extra,
   };

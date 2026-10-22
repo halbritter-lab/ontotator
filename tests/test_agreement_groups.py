@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from ontocurator.domain.agreement import Finding, Group, compare, groups
+from ontocurator.domain.agreement import (
+    Finding,
+    Group,
+    TermPart,
+    compare,
+    groups,
+    spans_conflict,
+)
 
 Span = tuple[int, int]
 
@@ -449,3 +456,64 @@ def test_compare_unchanged_with_type_and_note() -> None:
         "s2": [f("b", 0, "HP:1", ((2, 5),), {"x": "1"}, type_id="other")],
     }
     assert compare(plain, AB) == compare(extended, AB)
+
+
+def test_spans_conflict_only_when_mostly_different_text() -> None:
+    # A small shift ("ataxia" / "severe ataxia") shares the whole shorter span.
+    assert not spans_conflict(
+        [f("a", 0, "HP:1", ((7, 13),)), f("b", 0, "HP:1", ((0, 13),))]
+    )
+    # Sharing exactly half of the shorter evidence still agrees.
+    assert not spans_conflict(
+        [f("a", 0, "HP:1", ((0, 10),)), f("b", 0, "HP:1", ((5, 30),))]
+    )
+    # Less than half of the shorter evidence: different text.
+    assert spans_conflict(
+        [f("a", 0, "HP:1", ((0, 20),)), f("b", 0, "HP:1", ((16, 40),))]
+    )
+    assert spans_conflict([f("a", 0, "HP:1", ((0, 5),)), f("b", 0, "HP:1", ((9, 12),))])
+    # Spanless with spanless agrees; spanless with a span conflicts.
+    assert not spans_conflict([f("a", 0, "HP:1", ()), f("b", 0, "HP:1", ())])
+    assert spans_conflict([f("a", 0, "HP:1", ()), f("b", 0, "HP:1", ((0, 5),))])
+    # Any pair counts; cue segments are ignored.
+    assert spans_conflict(
+        [
+            f("a", 0, "HP:1", ((0, 10),)),
+            f("b", 0, "HP:1", ((0, 4),), cues=((20, 22),)),
+            f("c", 0, "HP:1", ((7, 30),)),
+        ]
+    )
+    assert not spans_conflict(
+        [f("a", 0, "HP:1", ((0, 6),)), f("b", 0, "HP:1", ((0, 6),), cues=((8, 10),))]
+    )
+
+
+def test_span_shift_is_described_but_no_conflict() -> None:
+    g = one(
+        groups(
+            {
+                "s1": [f("a", 0, "HP:1", ((7, 13),), note="x")],
+                "s2": [f("b", 0, "HP:1", ((0, 13),), note="y")],
+            },
+            AB,
+        )
+    )
+    assert g.kinds == frozenset({"span_differs", "notes_differ"})
+    assert g.span_conflict is False
+    assert g.term_parts == {}
+
+
+def test_term_parts_name_the_decisions_within_one_term() -> None:
+    g = one(
+        groups(
+            {
+                "s1": [f("a", 0, "HP:A", ((0, 8),), {"assertion": "present"})],
+                "s2": [f("b", 0, "HP:A", ((0, 8),), {"assertion": "absent"})],
+                "s3": [f("c", 0, "HP:B", ((0, 8),))],
+            },
+            ABC,
+        )
+    )
+    assert "term_differs" in g.kinds
+    assert g.span_conflict is False
+    assert g.term_parts == {"HP:A": TermPart(("assertion",), False)}

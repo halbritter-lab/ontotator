@@ -129,22 +129,64 @@ describe("GroupCard", () => {
   });
 
   it("sends the note and the flag with the decision of an open group", () => {
-    const props = renderCard(byId("g-dd"));
+    const props = renderCard(byId("g-hypo"));
     fireEvent.click(screen.getByRole("button", { name: "+ note" }));
-    fireEvent.change(screen.getByLabelText("Note for the lead"), { target: { value: "Shorter span is enough." } });
+    fireEvent.change(screen.getByLabelText("Note for the lead"), { target: { value: "Negated in the text." } });
     fireEvent.click(screen.getByLabelText("Guidelines unclear here"));
     expect(props.onAnnotate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "“development” · Tom Reis" }));
-    expect(props.onResolve).toHaveBeenCalledWith(expect.objectContaining({ note: "Shorter span is enough.", guidelines_unclear: true, action: "choose" }), "“development” (Tom Reis)");
+    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
+    expect(props.onResolve).toHaveBeenCalledWith(expect.objectContaining({ note: "Negated in the text.", guidelines_unclear: true, action: "choose" }), "absent (Tom Reis)");
   });
 
   it("places note and flag of an open group above its choices, so they are set before the last chip", () => {
-    renderCard(byId("g-dd"));
+    renderCard(byId("g-hypo"));
     const note = screen.getByRole("button", { name: "+ note" });
     const flag = screen.getByLabelText("Guidelines unclear here");
-    const chip = screen.getByRole("button", { name: "“development” · Tom Reis" });
+    const chip = screen.getByRole("button", { name: "absent · Tom Reis" });
     expect(note.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(flag.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("asks nothing for overlapping text and differing notes: Keep takes the default member", () => {
+    const value = { ...byId("g-dd"), kinds: ["span_differs", "notes_differ"],
+      members: byId("g-dd").members.map((item, index) => ({ ...item, note: index ? "Late." : "Early." })) };
+    const props = renderCard(value);
+    expect(screen.queryByRole("group", { name: /^Text/ })).toBeNull();
+    expect(screen.queryByRole("group", { name: /^Note/ })).toBeNull();
+    expect(screen.getByText(/text span shifted, note differs/)).toBeTruthy();
+    expect(screen.getByText("The text spans overlap and the notes differ: the kept finding keeps its own text span and note.")).toBeTruthy();
+    expect(within(screen.getByRole("table")).getByRole("rowheader", { name: "Text" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Keep" }));
+    expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["in-dl", "in-dt"], action: "keep" }, "kept");
+  });
+
+  it("asks the text when the spans conflict", () => {
+    const props = renderCard({ ...byId("g-dd"), span_conflict: true });
+    expect(within(screen.getByRole("table")).getByRole("rowheader", { name: "Text · differs" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Keep" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "“development” · Tom Reis" }));
+    expect(props.onResolve).toHaveBeenCalledWith({
+      input_ids: ["in-dl", "in-dt"], action: "choose", choice: { term_id: "HP:0001263", span_from_input_id: "in-dt", axes: {} },
+    }, "“development” (Tom Reis)");
+  });
+
+  it("asks the values that differ within one term before keeping both (three people)", () => {
+    const absent = { assertion: "absent", experiencer: "patient", temporality: "current" };
+    const value = group("g-three", ["term_differs", "values_differ"], [
+      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
+      member("i2", TOM, "HP:0001251", "Ataxia", [span("Unsteady gait")], { axes: absent }),
+      member("i3", ANA, "HP:0001288", "Gait disturbance", [span("Unsteady gait")]),
+    ], { differing_axes: ["assertion"], term_parts: { "HP:0001251": { differing_axes: ["assertion"], span_conflict: false } } });
+    const props = renderCard(value, { people: [LUC, TOM, ANA] });
+    fireEvent.click(screen.getByRole("button", { name: "Keep both" }));
+    expect(props.onResolve).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Keep both" }).getAttribute("aria-pressed")).toBe("true");
+    expect([...document.querySelectorAll(".cons-choice-label")].map(label => label.textContent)).toEqual(["Whole finding:", "Term · differs:", "Ataxia · Assertion · differs:"]);
+    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
+    expect(props.onResolve).toHaveBeenCalledWith({
+      input_ids: ["i1", "i2", "i3"], action: "keep_both",
+      term_choices: [{ term_id: "HP:0001251", span_from_input_id: "i1", axes: { assertion: "absent" } }],
+    }, "kept both, absent (Tom Reis)");
   });
 
   it("renders no text node inside a table row", () => {
