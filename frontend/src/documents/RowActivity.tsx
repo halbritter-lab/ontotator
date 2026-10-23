@@ -1,8 +1,8 @@
 /**
- * Activity tab of the row panel (acceptance fixes WP-A): the row's history lines newest first, each
+ * History of the text card (acceptance fixes WP-A, U3): the row's history lines newest first, each
  * with its stage tag; the review reason under a rejecting or querying review; the problem report behind
  * a paused task. A stage filter shows "{Stage} ✕" and "Show all stages"; under the list the stage's
- * admin actions (built by the panel).
+ * admin actions (built by the caller).
  */
 import type { ReactNode } from "react";
 import type { DocumentRowView, RowSubmissionView } from "../api/client";
@@ -12,7 +12,7 @@ import { Button } from "../ui/Button";
 import { historyLines, type HistoryLine } from "./historyLines";
 import { reasonDocumentId, ReviewReason, useReviewReason } from "./reviewReason";
 import { RouteLink } from "./RowCells";
-import { STAGE_TITLES } from "./StageStrip";
+import { HISTORY_LINE_PREFIX, STAGE_TITLES } from "./stageLabels";
 
 export interface RowActivityProps {
   row: DocumentRowView;
@@ -41,7 +41,7 @@ export function emptyActivityText(stage?: PanelStage): string {
  * separator after the tag: ": " where the tag replaces the line's own prefix (read as "Review: Ana Weber …").
  */
 function lineParts(line: HistoryLine): { separator: string; body: string } {
-  const prefix = `${STAGE_TITLES[line.stage]}: `;
+  const prefix = `${HISTORY_LINE_PREFIX[line.stage]}: `;
   return line.text.startsWith(prefix) ? { separator: ": ", body: line.text.slice(prefix.length) } : { separator: " ", body: line.text };
 }
 

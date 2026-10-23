@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../../src/api/client";
 import { DocumentsTable, type TableSelection } from "../../src/documents/DocumentsTable";
-import { RowPanel } from "../../src/documents/RowPanel";
+import { TextCard } from "../../src/documents/textCard/TextCard";
 import { DocumentsTabs } from "../../src/documents/DocumentsTabs";
 import { FilterPopover } from "../../src/documents/FilterPopover";
 import { MenuButton, Popover } from "../../src/ui";
@@ -79,8 +79,8 @@ describe("table", () => {
   });
 });
 
-describe("tabs, popover, panel, dialogs", () => {
-  it("tabs, popover, panel, dialogs expose their roles and names", async () => {
+describe("tabs, popover, card, dialogs", () => {
+  it("tabs, popover, card, dialogs expose their roles and names", async () => {
     vi.spyOn(api, "getRowSubmissions").mockResolvedValue(submissions("case-107", "de"));
     const row = scenario7a();
     function Host() {
@@ -93,8 +93,9 @@ describe("tabs, popover, panel, dialogs", () => {
         <button ref={anchor} type="button" onClick={() => setPanel(true)}>Accept result…, case-107 · de</button>
         <MenuButton label="1 more action for case-107 · de" buttonLabel="+1" items={[{ id: "a", label: "Decide on report…", onSelect: vi.fn() }]} />
         <Popover open={false} anchorRef={anchor} label="Plan" onClose={vi.fn()}>plan</Popover>
-        {panel && <RowPanel projectKey="p" rowKey="case-107:de" row={row} rows={[row]} query={{}} returnFocusRef={anchor}
-          onNavigate={vi.fn()} onRoute={vi.fn()} onClose={() => setPanel(false)} reportRoute={reportId => ({ name: "projectProblemReport", key: "p", reportId })} />}
+        {panel && <TextCard projectKey="p" row={row} rows={[row]} query={{}} canManage onSegment={vi.fn()} onView={vi.fn()} onStep={vi.fn()}
+          onNavigate={vi.fn()} onAssign={vi.fn()} onChangePlan={vi.fn()} onCheckMyself={vi.fn()} onChanged={vi.fn()} onClose={() => setPanel(false)}
+          reportRoute={reportId => ({ name: "projectProblemReport", key: "p", reportId })} />}
       </>;
     }
     render(<Host />);
@@ -123,19 +124,15 @@ describe("tabs, popover, panel, dialogs", () => {
     const trigger = screen.getByRole("button", { name: "Accept result…, case-107 · de" });
     trigger.focus();
     fireEvent.click(trigger);
-    // The row panel is a non-modal labelled aside: no dialog role, nothing inert; the heading takes focus on open.
-    const panel = screen.getByRole("complementary", { name: "Details, case-107 · de" });
-    expect(panel.tagName).toBe("ASIDE");
-    expect(panel.getAttribute("aria-modal")).toBeNull();
-    const heading = within(panel).getByRole("heading", { level: 2 });
-    expect(heading.textContent).toBe("case-107 · de v1");
-    expect(document.activeElement).toBe(heading);
-    expect(document.querySelector("[inert]")).toBeNull();
-    expect(within(panel).getByRole("tablist", { name: "Details of case-107 · de" })).toBeTruthy();
-    expect(within(panel).getByRole("tab", { name: "Activity" }).getAttribute("aria-selected")).toBe("true");
-    expect(await within(panel).findByRole("tabpanel", { name: "Activity" })).toBeTruthy();
-    fireEvent.click(within(panel).getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("complementary", { name: "Details, case-107 · de" })).toBeNull();
+    // The text card is a modal dialog named "{case} {language}" with the text path; focus starts inside and returns to the opener.
+    const card = screen.getByRole("dialog", { name: "case-107 de" });
+    expect(card.getAttribute("aria-modal")).toBe("true");
+    expect(card.contains(document.activeElement)).toBe(true);
+    expect(within(card).getByRole("navigation", { name: "Text path" })).toBeTruthy();
+    expect(within(card).queryByRole("tablist")).toBeNull();
+    expect(await within(card).findByRole("button", { name: /^History \(\d+\)$/ })).toBeTruthy();
+    fireEvent.click(within(card).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "case-107 de" })).toBeNull();
     await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 });

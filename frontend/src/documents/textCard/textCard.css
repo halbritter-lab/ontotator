@@ -1,112 +1,55 @@
-/* Documents row panel (acceptance fixes WP-A) and the content it shows: decision block, Activity,
-   Text versions, technical details, selection notices and submissions. Owned by WP A1. */
+/* Text card (U3): the centered card of one text with its path, parts, History and Text details, and the
+   content it shows (Activity lines, text versions, technical details, decision block, selection notices,
+   submissions; moved from documents-panel.css). Below 700 px the card is a full-width sheet (V1). */
 
-/* Frame (U10): non-modal aside on the right below the shell header, over the page without moving it.
-   No scrim, no dimming; only the active row is highlighted. Below 700 px a full-screen sheet (Dialog). */
-.row-panel {
-  position: fixed;
-  --row-panel-top: 0px;
-  top: var(--row-panel-top);
-  right: 0;
-  bottom: 0;
-  z-index: 80;
-  display: flex;
-  flex-direction: column;
-  width: min(480px, 45vw);
-  border-left: 1px solid var(--border-strong);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-2);
-  font-size: var(--size-md);
-  line-height: var(--leading-md);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .row-panel { animation: row-panel-in 150ms ease-out; }
-}
-@keyframes row-panel-in { from { opacity: 0; } to { opacity: 1; } }
+.text-card.ui-dialog { position: relative; }
+.text-card .ui-dialog-heading { padding-inline-end: calc(2 * 32px + var(--space-2)); }
+.text-card-heading { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); word-break: normal; overflow-wrap: break-word; }
+.text-card-version { color: var(--text-muted); font-size: var(--size-sm); font-weight: var(--weight-regular); }
+/* ‹ › sit in the header row, left of the dialog's own ✕. */
+.text-card-nav { position: absolute; top: var(--space-3); right: calc(var(--space-4) + 32px); display: flex; gap: var(--space-1); }
+.text-card-body { display: grid; align-content: start; gap: var(--space-4); min-width: 0; }
+.text-card-body p { margin: 0; }
+.text-card-view { display: grid; justify-items: start; gap: var(--space-3); }
+.text-card-view > :not(button) { justify-self: stretch; }
+.text-card-part { display: grid; gap: var(--space-2); min-width: 0; padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.text-card-part-title,
+.text-card-subheading { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); }
+.text-card-subheading { margin-bottom: var(--space-2); }
+.text-card-muted { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
+.text-card-chips,
+.text-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.text-card-myself { display: grid; justify-items: start; gap: var(--space-1); }
+.text-card-details { display: grid; gap: var(--space-4); }
+.text-card-plan { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.text-card-plan-label { color: var(--text-muted); font-weight: var(--weight-strong); }
+.text-card-banners { display: grid; gap: var(--space-2); }
+.text-card-banner { padding: var(--space-2) var(--space-3); border-left: 3px solid var(--warning); background: var(--surface-sunken); }
+.text-card-footer { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.text-card-footer-end { margin-inline-start: auto; }
 
-.row-panel-header {
-  flex: none;
-  display: flex;
+/* A person on a step: name, state, assignment date, ✕ (state in words, not colour). */
+.assignment-chip {
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border);
-}
-.row-panel-heading { margin: 0; font-size: var(--size-base); line-height: var(--leading-base); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
-.row-panel-version { color: var(--text-muted); font-weight: var(--weight-regular); }
-.row-panel-heading-target:focus { outline: none; }
-.row-panel-heading-target:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); border-radius: var(--radius-sm); }
-.row-panel-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
-
-.row-panel-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  display: grid;
-  align-content: start;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  overflow-wrap: anywhere;
-}
-.row-panel-body p { margin: 0; }
-.row-panel--sheet { display: grid; gap: var(--space-3); }
-.row-panel--sheet .row-panel-body { padding: 0; overflow: visible; }
-.row-panel-sheet.ui-dialog { width: 100vw; max-width: none; height: 100dvh; max-height: none; border-radius: 0; }
-
-/* Stage strip: three compact tiles; the pressed tile is the Activity filter (border and weight, not colour alone). */
-.row-panel-stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
-.row-panel-stage {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  min-height: 44px;
-  padding: var(--space-2);
+  gap: var(--space-1) var(--space-2);
+  padding: 2px var(--space-1) 2px var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
 }
-.row-panel-stage:hover { border-color: var(--border-strong); }
-.row-panel-stage:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
-.row-panel-stage[aria-pressed="true"] { border: 2px solid var(--accent); padding: calc(var(--space-2) - 1px); background: var(--accent-light); }
-.row-panel-stage[aria-pressed="true"] .row-panel-stage-title { font-weight: var(--weight-strong); color: var(--text); }
-.row-panel-stage-title { color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
-.row-panel-stage .stage-cell-status { white-space: normal; }
+.assignment-chip-state,
+.assignment-chip-date { color: var(--text-muted); }
 
-.row-panel-not-planned { display: grid; gap: var(--space-2); }
-.row-panel-not-planned > p { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-
-/* Banners (problem reports; flags in WP-B): sunken with an accent edge, text first. */
-.row-panel-banners { display: grid; gap: var(--space-2); }
-.row-panel-banner { padding: var(--space-2) var(--space-3); border-left: 3px solid var(--warning); background: var(--surface-sunken); }
-
-/* Tabs Activity · Versions (n) · Details */
-.row-panel-tabs { display: flex; gap: var(--space-4); border-bottom: 1px solid var(--border); }
-.row-panel-tab {
-  min-height: 32px;
-  padding: var(--space-1) 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  cursor: pointer;
+/* V1: below 700 px a full-width sheet; long ids break, words do not. */
+@media (max-width: 699px) {
+  .text-card.ui-dialog { position: fixed; inset: 0; width: 100%; max-width: none; max-height: 100dvh; border-radius: 0; }
+  .text-card .stage-path-title,
+  .text-card .stage-path-state { white-space: normal; word-break: normal; }
 }
-.row-panel-tab:hover { color: var(--text); }
-.row-panel-tab:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
-.row-panel-tab[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--text); font-weight: var(--weight-strong); }
-.row-panel-tabpanel { min-width: 0; }
-.row-panel-loading { color: var(--text-muted); }
-.row-panel-subheading { margin: 0 0 var(--space-2); font-size: var(--size-md); font-weight: var(--weight-strong); }
-.row-panel-details { display: grid; gap: var(--space-4); }
-.row-panel-plan { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
-.row-panel-plan-label { color: var(--text-muted); font-weight: var(--weight-strong); }
 
 /* Activity: newest first, a stage tag per line, the filter chip, the stage's admin actions below */
 .row-activity { display: grid; gap: var(--space-3); }
@@ -125,7 +68,7 @@
 }
 .row-activity-empty { color: var(--text-muted); }
 .row-activity-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border); }
-.row-panel-reassign { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
+.stage-actions-reassign { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
 
 .text-version-record { margin: 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
 
@@ -172,7 +115,7 @@
 /* Decision block (the former final-result panel, V6): choose, compare, review changes */
 .final-panel { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
 .final-panel p { margin: 0; }
-.row-panel-decision-title { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); }
+.text-card-decision-title { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); }
 .final-panel-success .notice-content { display: grid; gap: var(--space-1); }
 .final-panel-choose,
 .final-panel-compare,
@@ -193,8 +136,6 @@
 .final-panel-row-actions > * { vertical-align: middle; }
 .final-panel-consolidate { display: grid; gap: var(--space-2); min-width: 0; }
 .final-panel-text-change { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-left: 3px solid var(--warning); background: var(--surface-sunken); }
-/* The panel is narrow (min(480px, 45vw)): the compare table's row actions wrap under the name. */
-.row-panel .final-panel-row-actions { white-space: normal; }
 @media (max-width: 699px) {
   .final-panel-row-actions { white-space: normal; text-align: start; }
   .technical-details { grid-template-columns: minmax(0, 1fr); }
@@ -202,10 +143,8 @@
 }
 
 @media (forced-colors: active) {
-  .row-panel { border-left-color: CanvasText; }
-  .row-panel-stage[aria-pressed="true"] { border-color: Highlight; }
-  .row-panel-tab[aria-selected="true"] { border-bottom-color: Highlight; }
-  .row-panel-banner { border-left-color: CanvasText; }
+  .text-card-banner { border-left-color: CanvasText; }
+  .assignment-chip { border-color: CanvasText; }
   .row-activity-line { border-left-color: CanvasText; }
   .selection-notice { border-left-color: CanvasText; }
   .text-version { border-left-color: CanvasText; }

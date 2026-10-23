@@ -9,6 +9,12 @@ import { plural } from "../app/labels";
 import { formatTime } from "../app/submissionLabels";
 
 export type StageName = "review" | "annotation" | "final";
+
+/** Stage titles: the path names of the text card (Translation, Annotation, Finalization). */
+export const STAGE_TITLES: Readonly<Record<StageName, string>> = { review: "Translation", annotation: "Annotation", final: "Finalization" };
+
+/** The stage word `historyLines` puts before a line ("Review: …"); a tag replaces it. */
+export const HISTORY_LINE_PREFIX: Readonly<Record<StageName, string>> = { review: "Review", annotation: "Annotation", final: "Final" };
 export interface StageText {
   /** Decorative glyph (`aria-hidden`); empty when the word itself is the dash. */
   symbol: string;

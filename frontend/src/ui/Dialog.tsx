@@ -30,6 +30,8 @@ export interface DialogProps {
 const activeDialogs: HTMLElement[] = [];
 let originalOverflow = "";
 const isActive = (element: HTMLElement) => !element.closest("[inert]") && activeDialogs.filter((dialog) => !dialog.closest("[inert]")).at(-1) === element;
+/** True when `element` is the topmost open (non-inert) dialog. */
+export const isTopDialog = isActive;
 function isRendered(element: HTMLElement): boolean {
   const visibility = getComputedStyle(element).visibility;
   if (visibility === "hidden" || visibility === "collapse") return false;

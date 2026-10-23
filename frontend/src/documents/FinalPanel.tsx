@@ -193,8 +193,8 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
       busy={busy} onSave={save} onAnnounce={announce} />;
   }
 
-  return <section className="final-panel row-panel-decision" aria-labelledby={headingId}>
-    <h3 id={headingId} className="row-panel-decision-title">Final result</h3>
+  return <section className="final-panel text-card-decision" aria-labelledby={headingId}>
+    <h3 id={headingId} className="text-card-decision-title">Final result</h3>
     <p className="visually-hidden" role="status" aria-live="polite">{message}</p>
     {success && <div className="notice notice-success final-panel-success">
       <div className="notice-content"><p>{success.text}</p>{success.bar && <p>{success.bar}</p>}</div>

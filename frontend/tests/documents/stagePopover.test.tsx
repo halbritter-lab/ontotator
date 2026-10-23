@@ -64,7 +64,7 @@ describe("StagePopover", () => {
     const onOpenDetails = vi.fn();
     render(<Harness stage="review" onOpenDetails={onOpenDetails} actions={<button type="button">Request correction…</button>} />);
     openPopover();
-    const dialog = screen.getByRole("dialog", { name: "Review activity, case-108 · de" });
+    const dialog = screen.getByRole("dialog", { name: "Translation activity, case-108 · de" });
     // Review lines need no submissions.
     expect(within(dialog).getAllByRole("listitem")[0].textContent).toContain("Ana Weber");
     expect(api.getRowSubmissions).not.toHaveBeenCalled();
@@ -77,15 +77,15 @@ describe("StagePopover", () => {
   it("says when the stage has no activity yet", () => {
     render(<Harness stage="final" />);
     openPopover();
-    const dialog = screen.getByRole("dialog", { name: "Final activity, case-108 · de" });
-    expect(within(dialog).getByText("No final activity yet.")).toBeTruthy();
+    const dialog = screen.getByRole("dialog", { name: "Finalization activity, case-108 · de" });
+    expect(within(dialog).getByText("No finalization activity yet.")).toBeTruthy();
     expect(within(dialog).queryByRole("list")).toBeNull();
   });
 
   it("Escape closes it and returns focus to the stage cell", () => {
     render(<Harness stage="review" />);
     openPopover();
-    const dialog = screen.getByRole("dialog", { name: "Review activity, case-108 · de" });
+    const dialog = screen.getByRole("dialog", { name: "Translation activity, case-108 · de" });
     expect(dialog.contains(document.activeElement)).toBe(true);
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();

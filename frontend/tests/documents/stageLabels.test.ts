@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { DocumentRowView, StageCellView } from "../../src/api/client";
-import { stageText, versionMarkerText, waitingOnText, type StageName } from "../../src/documents/stageLabels";
+import { STAGE_TITLES, stageText, versionMarkerText, waitingOnText, type StageName } from "../../src/documents/stageLabels";
 import { notInPlanRow, row, stepOf } from "./fixtures";
 import { ana, cell, luc, tom } from "./tableFixtures";
 
@@ -138,5 +138,11 @@ describe("unknown states (a newer server)", () => {
   it("show the tone glyph and a dash, never the state code", () => {
     const unknown = cell("brand_new_state" as StageCellView["state"], "running");
     for (const stage of ["review", "annotation", "final"] as const) expect(text(stage, unknown)).toEqual(["◐ —", ""]);
+  });
+});
+
+describe("stage titles", () => {
+  it("are the path names of the text card", () => {
+    expect(STAGE_TITLES).toEqual({ review: "Translation", annotation: "Annotation", final: "Finalization" });
   });
 });
