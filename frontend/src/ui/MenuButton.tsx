@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button } from "./Button";
 
 export interface MenuItem {
@@ -10,8 +10,10 @@ export interface MenuButtonProps {
   /** Accessible name of the button and the menu, e.g. "2 more actions for case-107 · de". */
   label: string;
   items: MenuItem[];
-  /** Visible button text, e.g. "+2". */
+  /** Visible button text, e.g. "More". */
   buttonLabel: string;
+  /** Icon before the text, e.g. `<IconMore />` for a "More" menu. */
+  icon?: ReactNode;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface MenuButtonProps {
  * arrows (wrapping), Home and End move; Enter, Space or click choose; Escape closes; focus returns to the button.
  * Tab and a pointer down outside close the menu without moving focus.
  */
-export function MenuButton({ label, items, buttonLabel }: MenuButtonProps): JSX.Element {
+export function MenuButton({ label, items, buttonLabel, icon }: MenuButtonProps): JSX.Element {
   const [open, setOpen] = useState<null | "first" | "last">(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -81,7 +83,7 @@ export function MenuButton({ label, items, buttonLabel }: MenuButtonProps): JSX.
 
   return <span className="ui-menu-button">
     <Button ref={button} size="sm" aria-label={label} aria-haspopup="menu" aria-expanded={open !== null} aria-controls={open ? menuId : undefined}
-      onClick={() => open ? setOpen(null) : setOpen("first")} onKeyDown={onButtonKeyDown}>{buttonLabel}</Button>
+      onClick={() => open ? setOpen(null) : setOpen("first")} onKeyDown={onButtonKeyDown}>{icon ? <>{icon}<span>{buttonLabel}</span></> : buttonLabel}</Button>
     {open && <div ref={menu} id={menuId} role="menu" aria-label={label} className="ui-menu" onKeyDown={onMenuKeyDown}
       style={{ position: "fixed", top: `${position.top}px`, right: `${position.right}px` }}>
       {items.map((item) => <button key={item.id} type="button" role="menuitem" tabIndex={-1} className="ui-menu-item" onClick={() => choose(item)}>{item.label}</button>)}

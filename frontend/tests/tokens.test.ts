@@ -175,6 +175,33 @@ describe("design tokens", () => {
    * people) must stay apart under every dichromacy; every lane also has its own
    * line style, which is the guarantee for lanes 3 and 4.
    */
+  /*
+   * Axis values (spec 2026-10-23 §3, variant B): every slot aliases existing
+   * colours, and its text stays AA on its own fill.
+   */
+  const AXIS_SLOTS = ["present", "absent", "uncertain", "patient", "family", "other", "current", "historical", "future", "neutral"];
+  const tokensCss = readFileSync(resolve(here, "../src/styles/tokens.css"), "utf8");
+  const axisAlias = (name: string): string => {
+    const match = new RegExp(`${name}:\\s*([^;]+);`).exec(tokensCss);
+    if (!match) throw new Error(`Missing axis token ${name}`);
+    return match[1].trim();
+  };
+  const resolveAlias = (name: string): string => token(/^var\((--[a-z0-9-]+)\)$/.exec(axisAlias(name))?.[1] ?? name);
+
+  it("axis_value_tokens_are_aliases", () => {
+    for (const slot of AXIS_SLOTS) {
+      for (const part of ["text", "fill"]) expect(axisAlias(`--axis-${slot}-${part}`)).toMatch(/^var\(--[a-z0-9-]+\)$/);
+    }
+  });
+
+  it("axis_value_tokens_reach_aa", () => {
+    const failing = AXIS_SLOTS
+      .map((slot) => [slot, contrast(resolveAlias(`--axis-${slot}-text`), resolveAlias(`--axis-${slot}-fill`))] as const)
+      .filter(([, value]) => value < 4.5)
+      .map(([slot, value]) => `${slot}: ${value.toFixed(2)}`);
+    expect(failing).toEqual([]);
+  });
+
   it("consolidation_lane_lines", () => {
     const css = readFileSync(resolve(here, "../src/styles/tokens.css"), "utf8");
     const LANES = ["--accent", "--warning", "--success", "--mark-line"];

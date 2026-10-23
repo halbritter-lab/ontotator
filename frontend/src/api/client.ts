@@ -381,6 +381,14 @@ export interface ApiClientOptions {
   baseUrl?: string;
 }
 
+/**
+ * The request never reached the server (offline, DNS, connection reset). Extends TypeError, what `fetch`
+ * throws, so `isNetworkError` (editor autosave) keeps recognising it.
+ */
+export class NetworkError extends TypeError {
+  constructor(readonly cause: unknown) { super("Connection lost. Try again."); this.name = "NetworkError"; }
+}
+
 export class ApiClient {
   private readonly baseUrl: string;
   /** The session's CSRF token, sent with every write (index D-h). */
@@ -693,7 +701,13 @@ export class ApiClient {
     // Only an answer to a request sent with the current token speaks for the current session;
     // a late 401 for a request sent before a new login must not end the new session.
     const sent = this.csrfToken;
-    const response = await fetch(url, { ...options, headers, credentials: "same-origin" });
+    let response: Response;
+    try {
+      response = await fetch(url, { ...options, headers, credentials: "same-origin" });
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+      throw new NetworkError(cause);
+    }
 
     if (!response.ok) {
       let code: string | undefined;

@@ -141,4 +141,25 @@
   --session-card-shadow-colour: rgba(0, 0, 0, 0.08);
   --flag-shadow-colour: rgba(15, 23, 42, 0.18);
   --language-menu-shadow-colour: rgba(15, 23, 42, 0.14);
+  /* Axis values (spec 2026-10-23 §3, variant B): aliases of existing colours, the word always stays. */
+  --axis-present-text: var(--success);
+  --axis-present-fill: var(--success-light);
+  --axis-absent-text: var(--danger);
+  --axis-absent-fill: var(--danger-light);
+  --axis-uncertain-text: var(--warning);
+  --axis-uncertain-fill: var(--warning-light);
+  --axis-patient-text: var(--accent);
+  --axis-patient-fill: var(--accent-light);
+  --axis-family-text: var(--review-badge-text);
+  --axis-family-fill: var(--review-badge-fill);
+  --axis-other-text: var(--text-muted);
+  --axis-other-fill: var(--surface-sunken);
+  --axis-current-text: var(--notice-info-text);
+  --axis-current-fill: var(--notice-info-fill);
+  --axis-historical-text: var(--text-muted);
+  --axis-historical-fill: var(--surface-sunken);
+  --axis-future-text: var(--notice-warning-text);
+  --axis-future-fill: var(--notice-warning-fill);
+  --axis-neutral-text: var(--text);
+  --axis-neutral-fill: var(--surface-raised);
 }

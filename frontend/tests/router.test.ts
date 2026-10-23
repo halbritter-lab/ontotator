@@ -1,6 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MY_TASKS, navigate, parseRoute, routeHref, SETTINGS_SECTIONS, useRoute, type Route } from "../src/app/router";
+import { MY_TASKS, navigate, PANEL_TABS, parseRoute, routeHref, SETTINGS_SECTIONS, useRoute, type Route } from "../src/app/router";
 
 beforeEach(() => { window.history.replaceState(null, "", "/"); });
 afterEach(() => {
@@ -166,6 +166,26 @@ describe("Documents deep-link parameters", () => {
   it("round_trips_the_row_panel_with_its_stage_filter_and_tab", () => {
     const route: Route = { name: "projectDocuments", key: "p", stage: "annotation", panel: "c:de", panel_stage: "annotation", panel_tab: "versions" };
     expect(routeHref(route)).toBe("#/projects/p/documents?stage=annotation&panel=c%3Ade&panel_stage=annotation&panel_tab=versions");
+    expect(parseRoute(routeHref(route))).toEqual(route);
+  });
+  it("projectCase round-trips show and compare_show", () => {
+    for (const [show, compare] of [["text", "proposals"], ["submission:12", "own:7"], ["final:3", "text"]]) {
+      const route: Route = { name: "projectCase", key: "p", caseId: "c", show, compare_show: compare, documents: { panel: "c:de" } };
+      expect(parseRoute(routeHref(route))).toEqual(route);
+    }
+    expect(routeHref({ name: "projectCase", key: "p", caseId: "c", variant: "v", show: "submission:12" }))
+      .toBe("#/projects/p/cases/c?variant=v&show=submission%3A12");
+  });
+  it("unknown show values are dropped", () => {
+    for (const bad of ["", "draft", "submission:", "submission", "final:", "Text", "own"]) {
+      const query = new URLSearchParams({ show: bad, compare_show: bad }).toString();
+      expect(parseRoute(`#/projects/p/cases/c?${query}`)).toEqual({ name: "projectCase", key: "p", caseId: "c" });
+    }
+  });
+  it("panel_tab history round-trips", () => {
+    expect(PANEL_TABS).toContain("history");
+    const route: Route = { name: "projectDocuments", key: "p", panel: "c:de", panel_tab: "history" };
+    expect(routeHref(route)).toBe("#/projects/p/documents?panel=c%3Ade&panel_tab=history");
     expect(parseRoute(routeHref(route))).toEqual(route);
   });
   it("maps_the_legacy_open_parameter_to_the_row_panel", () => {

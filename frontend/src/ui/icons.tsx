@@ -105,3 +105,21 @@ export const IconBook = (p: IconProps) => (
     <path d="M8 4.25C6.75 3.25 4.75 2.75 2 2.75v9.5c2.75 0 4.75.5 6 1.5 1.25-1 3.25-1.5 6-1.5v-9.5c-2.75 0-4.75.5-6 1.5zM8 4.25v9.5" />
   </Icon>
 );
+
+// Lucide "bot" (ISC, https://lucide.dev, see THIRD_PARTY_NOTICES.md); scaled from its 24 px grid, paths verbatim.
+export const IconBot = (p: IconProps) => (
+  <Icon {...p}>
+    <g transform="scale(0.6667)" strokeWidth="2.25">
+      <path d="M12 8V4H8" />
+      <rect width="16" height="12" x="4" y="8" rx="2" />
+      <path d="M2 14h2" />
+      <path d="M20 14h2" />
+      <path d="M15 13v2" />
+      <path d="M9 13v2" />
+    </g>
+  </Icon>
+);
+
+export const IconMore = (p: IconProps) => (
+  <Icon {...p}><circle cx="3.5" cy="8" r="0.75" /><circle cx="8" cy="8" r="0.75" /><circle cx="12.5" cy="8" r="0.75" /></Icon>
+);

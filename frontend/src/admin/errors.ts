@@ -1,4 +1,4 @@
-import { ApiError } from "../api/client";
+import { ApiError, NetworkError } from "../api/client";
 
 /** The server's guideline file refusals; the client-side file checks reuse them verbatim. */
 export const GUIDELINE_FILE_ERRORS = {
@@ -207,6 +207,8 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
 };
 
 export function errorMessage(error: unknown): string {
+  // Never the raw browser text ("Failed to fetch").
+  if (error instanceof NetworkError) return "Connection lost. Try again.";
   if (error instanceof ApiError && error.code === "REANCHOR_ITEMS_UNRESOLVED" && typeof error.details === "object" && error.details !== null) {
     const count = error.details.count;
     if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) return `${count} finding(s) after text correction still need review. Re-create them or dismiss them with a reason before submitting.`;

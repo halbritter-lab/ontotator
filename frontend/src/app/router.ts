@@ -47,7 +47,7 @@ export interface ProjectDocumentsQuery {
   panel?: string;
   /** Activity filter of the row panel (`review` | `annotation` | `final`); `stage` is the table's stage filter. */
   panel_stage?: string;
-  /** Tab of the row panel (`activity` | `versions` | `details`); absent means Activity. */
+  /** Tab of the row panel (`activity` | `versions` | `details` | `history`); absent means Activity. */
   panel_tab?: string;
   page?: string;
 }
@@ -56,8 +56,11 @@ export interface ProjectDocumentsQuery {
 export type PanelStage = "review" | "annotation" | "final";
 export const PANEL_STAGES: readonly PanelStage[] = ["review", "annotation", "final"];
 /** Tabs of the row panel (route `panel_tab`). */
-export type PanelTab = "activity" | "versions" | "details";
-export const PANEL_TABS: readonly PanelTab[] = ["activity", "versions", "details"];
+export type PanelTab = "activity" | "versions" | "details" | "history";
+export const PANEL_TABS: readonly PanelTab[] = ["activity", "versions", "details", "history"];
+
+/** Layer keys of the text view (`show`, `compare_show`): `text` | `proposals` | `submission:<id>` | `own:<id>` | `final:<id>`. */
+export const isLayerKey = (value: string): boolean => /^(?:text|proposals|(?:submission|own|final):.+)$/.test(value);
 
 /** Options for in-app navigation; `replace` rewrites the current history entry. */
 export interface NavigateOptions { replace?: boolean }
@@ -113,7 +116,8 @@ export type Route =
   | { name: "projects" }
   | { name: "projectSettings"; key: string; section?: SettingsSection }
   | ({ name: "projectDocuments"; key: string } & ProjectDocumentsQuery)
-  | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string; compare?: string; documents?: ProjectDocumentsQuery }
+  /** `show` / `compare_show`: layer keys of the text view (`isLayerKey`); unknown values are dropped. */
+  | { name: "projectCase"; key: string; caseId: string; variant?: string; annotations?: string; compare?: string; show?: string; compare_show?: string; documents?: ProjectDocumentsQuery }
   | { name: "projectProgress"; key: string }
   | { name: "projectExport"; key: string }
   /** Read-only guidelines page; without `version` the version in force. */
@@ -174,10 +178,14 @@ export function parseRoute(hash: string): Route {
     }
     const caseRoute = /^#\/projects\/([^/]+)\/cases\/([^/]+)$/.exec(path);
     if (caseRoute) {
-      const optional: { variant?: string; annotations?: string; compare?: string } = {};
+      const optional: { variant?: string; annotations?: string; compare?: string; show?: string; compare_show?: string } = {};
       for (const field of ["variant", "annotations", "compare"] as const) {
         const value = params.get(field);
         if (value !== null) optional[field] = value;
+      }
+      for (const field of ["show", "compare_show"] as const) {
+        const value = params.get(field);
+        if (value !== null && isLayerKey(value)) optional[field] = value;
       }
       const documents = readDocumentsQuery(params, "documents_");
       return { name: "projectCase", key: decodeURIComponent(caseRoute[1]), caseId: decodeURIComponent(caseRoute[2]), ...optional,
@@ -237,7 +245,7 @@ export function routeHref(route: Route): string {
     case "projectDocuments":
       return `#/projects/${encodeURIComponent(route.key)}/documents${querySuffix(documentsEntries(route))}`;
     case "projectCase": return `#/projects/${encodeURIComponent(route.key)}/cases/${encodeURIComponent(route.caseId)}${querySuffix([
-      ["variant", route.variant], ["annotations", route.annotations], ["compare", route.compare],
+      ["variant", route.variant], ["annotations", route.annotations], ["compare", route.compare], ["show", route.show], ["compare_show", route.compare_show],
       ...documentsEntries(route.documents, "documents_"),
     ])}`;
     case "projectProgress": return `#/projects/${encodeURIComponent(route.key)}/progress`;

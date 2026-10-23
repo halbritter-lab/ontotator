@@ -1032,3 +1032,49 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 @media (forced-colors: active) {
   .language-flag { forced-color-adjust: none; box-shadow: none; outline: 1px solid CanvasText; }
 }
+
+/* Axis value (spec 2026-10-23 §3, variant B): the word on its fixed colour; colour is a second signal. */
+.axis-value { display: inline-block; padding: 0 var(--space-1); border-radius: var(--radius-sm); font-size: var(--size-sm); }
+.axis-value--present { color: var(--axis-present-text); background: var(--axis-present-fill); }
+.axis-value--absent { color: var(--axis-absent-text); background: var(--axis-absent-fill); }
+.axis-value--uncertain { color: var(--axis-uncertain-text); background: var(--axis-uncertain-fill); }
+.axis-value--patient { color: var(--axis-patient-text); background: var(--axis-patient-fill); }
+.axis-value--family { color: var(--axis-family-text); background: var(--axis-family-fill); }
+.axis-value--other { color: var(--axis-other-text); background: var(--axis-other-fill); }
+.axis-value--current { color: var(--axis-current-text); background: var(--axis-current-fill); }
+.axis-value--historical { color: var(--axis-historical-text); background: var(--axis-historical-fill); }
+.axis-value--future { color: var(--axis-future-text); background: var(--axis-future-fill); }
+.axis-value--neutral { color: var(--axis-neutral-text); background: var(--axis-neutral-fill); }
+.axis-value--neutral { border: 1px solid var(--border); }
+
+/* Stage path: arrow segments of a text's path; the tone is also given in words (visually hidden). */
+.stage-path { display: flex; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.stage-path > li { display: flex; flex: 1 1 0; min-width: 0; }
+.stage-path-seg {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-5);
+  border: 0;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--size-sm);
+  text-align: start;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);
+}
+.stage-path > li:first-child .stage-path-seg { padding-inline-start: var(--space-2); clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%); }
+button.stage-path-seg { cursor: pointer; }
+button.stage-path-seg:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }
+.stage-path-title { font-weight: var(--weight-strong); color: var(--text); }
+.stage-path-title, .stage-path-state { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-path-seg--done { background: var(--success-light); box-shadow: inset 0 -2px 0 var(--success); }
+.stage-path-seg--now { background: var(--accent-light); color: var(--text); }
+.stage-path-seg--current, .stage-path-seg--current .stage-path-title { background: var(--accent); color: var(--on-accent); }
+@media (forced-colors: active) {
+  .axis-value { border: 1px solid CanvasText; }
+  .stage-path-seg { clip-path: none; border: 1px solid CanvasText; }
+  .stage-path-seg--current { border-width: 3px; }
+  button.stage-path-seg:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+}
