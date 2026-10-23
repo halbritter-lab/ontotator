@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { cardPath, textCard } from "./proposalCheckHelpers";
 
 /** A Documents row of a scenario: one text and language. */
 export interface ScenarioRow {
@@ -123,3 +124,41 @@ export const filterChip = (page: Page, label: string): Locator =>
 
 /** The page's polite live region (outside the table). */
 export const documentsLive = (page: Page): Locator => page.locator('.documents-page > p[role="status"]');
+
+// --- Text card (U3) and one-line rows (U4); the panel helpers above go with T3 ------------------- //
+
+export { cardPath, textCard } from "./proposalCheckHelpers";
+
+/** The text name of a row: opens the card, selection unchanged ("Open text card, {case} {language}"). */
+export const textName = (page: Page, caseId: string, language: string): Locator =>
+  page.getByRole("button", { name: `Open text card, ${caseId} ${language}`, exact: true });
+
+/** The table row of one text, found by its text name. */
+export const cardRow = (page: Page, caseId: string, language: string): Locator =>
+  documentsTable(page).getByRole("row").filter({ has: textName(page, caseId, language) });
+
+/** The robot icon of a row while nobody is assigned: "{n} tool proposals available; the annotation starts from them". */
+export const robotIcon = (row: Locator, count?: number): Locator =>
+  row.getByRole("img", { name: count === undefined ? /^\d+ tool proposals available; the annotation starts from them$/ : `${count} tool proposals available; the annotation starts from them`, exact: count !== undefined });
+
+/** A path segment of the card by its title ("Translation", "Annotation", "Finalization"); `aria-current="step"` when shown. */
+export const cardSegment = (card: Locator, title: "Translation" | "Annotation" | "Finalization"): Locator =>
+  cardPath(card).getByRole("button", { name: new RegExp(`^${title} `) });
+
+/** Open the card of a text from its text name (selection unchanged) and wait for it. */
+export async function openTextCard(page: Page, caseId: string, language: string): Promise<Locator> {
+  const card = textCard(page, caseId, language);
+  if (!(await card.isVisible())) await textName(page, caseId, language).click();
+  await expect(card).toBeVisible();
+  return card;
+}
+
+/** Show a segment of an open card and wait until it is the current one. */
+export async function showSegment(card: Locator, title: "Translation" | "Annotation" | "Finalization"): Promise<void> {
+  const segment = cardSegment(card, title);
+  if ((await segment.getAttribute("aria-current")) !== "step") await segment.click();
+  await expect(segment).toHaveAttribute("aria-current", "step");
+}
+
+/** ✕ on a person's chip in the card ("Remove {name}"). */
+export const removeChipButton = (card: Locator, name: string): Locator => card.getByRole("button", { name: `Remove ${name}`, exact: true });
