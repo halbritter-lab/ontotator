@@ -11,7 +11,7 @@ from ontocurator.domain.reanchor_resolution import (
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
 from ontocurator.domain.scopes import TaskScope
 
-WorkspaceMode = Literal["independent", "review"]
+WorkspaceMode = Literal["independent", "review", "proposal_check"]
 
 
 class WorkspaceKey(BaseModel):

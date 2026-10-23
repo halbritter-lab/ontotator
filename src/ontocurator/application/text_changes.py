@@ -411,7 +411,7 @@ class TextChangeService:
             conn.execute(
                 select(SubmissionRow.annotator_id).where(
                     SubmissionRow.project_id == pid,
-                    SubmissionRow.mode.in_(["independent"]),
+                    SubmissionRow.mode.in_(["independent", "proposal_check"]),
                     SubmissionRow.document_id.in_(documents),
                 )
             ).scalars()

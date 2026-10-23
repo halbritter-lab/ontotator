@@ -263,7 +263,6 @@ def test_ambiguous_rounds_need_explicit_selection(tmp_path):
     assert selected.targets == targets
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_round_selection_api_resumes_selected_round_and_rejects_incompatible_requests(
     tmp_path,
 ):
@@ -282,7 +281,7 @@ def test_round_selection_api_resumes_selected_round_and_rejects_incompatible_req
         "project_key": "pkg-rev-1",
         "document_id": "doc-1",
         "annotator_id": "reviewer",
-        "mode": "review",
+        "mode": "proposal_check",
     }
     rounds = []
     for name in ("snap_a", "snap_b"):

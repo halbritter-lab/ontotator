@@ -40,6 +40,7 @@ from ontocurator.domain.profiles import (
     resolve_type,
 )
 from ontocurator.domain.review import ReviewDecision
+from ontocurator.domain.scopes import is_review_like
 from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import Submission
 
@@ -609,7 +610,7 @@ def submission_to_unit(
     snapshots = list(submission.snapshots)
     present = {(s.annotation.annotation_id, s.version) for s in snapshots}
     decision: ReviewDecision
-    for decision in submission.decisions if key.mode == "review" else []:
+    for decision in submission.decisions if is_review_like(key.mode) else []:
         target = (decision.target.annotation_id, decision.target.version)
         source = proposal_ref(decision.target.annotation_id)
         if decision.outcome == "confirmed":

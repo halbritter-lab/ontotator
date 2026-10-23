@@ -37,6 +37,7 @@ class Action(StrEnum):
     VIEW_PROJECT = "view_project"
     OPEN_INDEPENDENT = "open_independent"
     OPEN_REVIEW = "open_review"
+    OPEN_PROPOSAL_CHECK = "open_proposal_check"
     EXPORT_OWN_WORK = "export_own_work"
     EXPORT_ALL_WORK = "export_all_work"
     EXPORT_EDIT_LOG = "export_edit_log"
@@ -109,6 +110,7 @@ ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
         {
             Action.VIEW_PROJECT,
             Action.OPEN_INDEPENDENT,
+            Action.OPEN_PROPOSAL_CHECK,
             Action.EXPORT_OWN_WORK,
         }
     ),
@@ -124,9 +126,11 @@ ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
 MODE_ACTIONS: dict[WorkspaceMode, Action] = {
     "independent": Action.OPEN_INDEPENDENT,
     "review": Action.OPEN_REVIEW,
+    "proposal_check": Action.OPEN_PROPOSAL_CHECK,
 }
 # The modes offered for a direct open; "review" is reached only through a
-# consolidation round (D1).
+# consolidation round (D1); "proposal_check" only through an annotate
+# assignment, never as a remembered preference (plan review R19).
 MODE_ORDER: tuple[WorkspaceMode, ...] = ("independent",)
 
 

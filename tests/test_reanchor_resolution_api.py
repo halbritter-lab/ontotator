@@ -7,7 +7,7 @@ from auth_harness import logged_in
 from sqlalchemy import select, update
 from t1_fixtures import annotation, unit
 from test_reanchor_job import children, corrected, execute, generated
-from test_reanchor_resolutions import opened
+from test_reanchor_resolutions import from_proposals, opened
 from test_reanchor_resolutions import pending as pending
 from test_reanchor_resolutions import runtime as runtime
 
@@ -55,7 +55,6 @@ def create(env, opened_view, payload=None, revision=0, mutation="create"):
     )
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_dismiss_requires_reason_and_is_private_with_receipt(pending):
     first = opened(pending).json()
     ref = item(first)
@@ -79,9 +78,10 @@ def test_dismiss_requires_reason_and_is_private_with_receipt(pending):
     other = logged_in(
         pending.app,
         "other",
-        projects={"proj": ["adjudicator"]},
-        assignments=[("proj", pending.output["document_id"], "review")],
+        projects={"proj": ["annotator"]},
+        assignments=[("proj", pending.output["document_id"], "annotate")],
     )
+    from_proposals(pending.db)
     assert opened(pending, other).json()["view"]["draft"]["reanchor_resolutions"] == []
     with pending.db.transaction() as conn:
         events = conn.execute(
@@ -92,7 +92,6 @@ def test_dismiss_requires_reason_and_is_private_with_receipt(pending):
         assert len(events) == 1
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_recreate_exact_unicode_current_evidence_then_resolve_and_invalidate(pending):
     view = opened(pending).json()
     result = create(pending, view)
@@ -133,7 +132,6 @@ def test_recreate_exact_unicode_current_evidence_then_resolve_and_invalidate(pen
     assert deleted.json()["reanchor_resolutions"] == []
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 @pytest.mark.parametrize("submitted_axes", [{}, {"assertion": "present"}])
 @pytest.mark.parametrize("finish", ["edit", "submit_and_export"])
 def test_recreate_preserves_verified_absent_historical_axes_and_defaults(
@@ -148,9 +146,10 @@ def test_recreate_preserves_verified_absent_historical_axes_and_defaults(
     runtime.reviewer = logged_in(
         runtime.app,
         "reviewer",
-        projects={"proj": ["adjudicator"]},
-        assignments=[("proj", runtime.output["document_id"], "review")],
+        projects={"proj": ["annotator"]},
+        assignments=[("proj", runtime.output["document_id"], "annotate")],
     )
+    from_proposals(runtime.db)
     view = opened(runtime).json()
     result = create(runtime, view, command(item(view), axes_values=submitted_axes))
     assert result.status_code == 200, result.text
@@ -234,7 +233,6 @@ def test_recreate_preserves_verified_absent_historical_axes_and_defaults(
     assert updated.get("axes_defaulted", []) == []
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 @pytest.mark.parametrize("forgery", ["set", "source", "layer", "ordinary"])
 def test_forged_recreate_denied_without_changes(pending, forgery):
     view = opened(pending).json()
@@ -257,7 +255,6 @@ def test_forged_recreate_denied_without_changes(pending, forgery):
     assert opened(pending).json()["view"]["draft"]["revision"] == 0
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_revoked_assignment_cannot_replay_or_resolve(pending):
     view = opened(pending).json()
     payload = {"item": item(view), "outcome": "dismissed", "reason": "No match"}
@@ -267,7 +264,6 @@ def test_revoked_assignment_cannot_replay_or_resolve(pending):
     assert resolve(pending, view, payload).status_code == 404
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_stale_revision_and_mutation_reuse_do_not_change_resolution(pending):
     view = opened(pending).json()
     payload = {"item": item(view), "outcome": "dismissed", "reason": "No match"}
@@ -279,14 +275,13 @@ def test_stale_revision_and_mutation_reuse_do_not_change_resolution(pending):
     assert opened(pending).json()["view"]["draft"] == saved.json()
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_foreign_workspace_and_replacement_denied(pending):
     view = opened(pending).json()
     other = logged_in(
         pending.app,
         "foreign",
-        projects={"proj": ["lead", "adjudicator"]},
-        assignments=[("proj", pending.output["document_id"], "review")],
+        projects={"proj": ["lead", "annotator"]},
+        assignments=[("proj", pending.output["document_id"], "annotate")],
     )
     payload = {"item": item(view), "outcome": "dismissed", "reason": "No match"}
     foreign = other.post(
@@ -307,7 +302,6 @@ def test_foreign_workspace_and_replacement_denied(pending):
     assert opened(pending).json()["view"]["draft"]["revision"] == 0
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_independent_workspace_cannot_recreate_or_resolve(pending):
     review = opened(pending).json()
     person = logged_in(
@@ -334,7 +328,6 @@ def test_independent_workspace_cannot_recreate_or_resolve(pending):
     )
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_forged_correction_lineage_cannot_recreate(pending):
     from pg_harness import owner_engine
 
@@ -352,7 +345,6 @@ def test_forged_correction_lineage_cannot_recreate(pending):
     assert result.json()["code"] == "INVALID_REANCHOR_ITEM"
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 @pytest.mark.parametrize("path", ["{text_sha256}", "{annotation,layer_id}"])
 def test_diagnostic_source_mismatch_can_be_dismissed_but_not_recreated(pending, path):
     from pg_harness import tamper
@@ -406,7 +398,6 @@ def test_diagnostic_source_mismatch_can_be_dismissed_but_not_recreated(pending, 
     assert submission.json()["reanchor_resolutions"][0]["outcome"] == "dismissed"
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_submit_blocks_each_unresolved_frozen_input_with_count(pending):
     view = opened(pending).json()
 

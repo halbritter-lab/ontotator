@@ -16,6 +16,7 @@ from ontocurator.authz.visibility import (
     visible_documents,
 )
 from ontocurator.domain.errors import AccessDenied, DomainError
+from ontocurator.domain.scopes import is_review_like
 from ontocurator.domain.variants import TranslationStatus, VariantOrigin
 from ontocurator.domain.workspace import WorkspaceKey, WorkspaceMode
 from ontocurator.storage.database import Database
@@ -229,7 +230,11 @@ def project_documents(
         project_id = authorized_project(conn, key, actor, Action.VIEW_PROJECT)
         fresh = current_access(conn, access, project_id, key)
         all_documents = can(fresh, Action.VIEW_ALL_DOCUMENTS, key)
-        if mode == "review" and not can(fresh, MODE_ACTIONS[mode], key):
+        if (
+            mode is not None
+            and is_review_like(mode)
+            and not can(fresh, MODE_ACTIONS[mode], key)
+        ):
             raise AccessDenied(
                 "MODE_NOT_ALLOWED", "This mode is not allowed in this project."
             )
@@ -345,7 +350,7 @@ def project_documents(
         )
         review_ids = (
             ScopedRepository(db, fresh, actor).review_input_document_ids(key)
-            if mode == "review"
+            if mode is not None and is_review_like(mode)
             else set()
         )
         return [
@@ -367,7 +372,7 @@ def project_documents(
                 text_length=row.text_length,
                 status=statuses.get(row.document_id, "not_started"),
                 has_review_inputs=row.document_id in review_ids
-                if mode == "review"
+                if mode is not None and is_review_like(mode)
                 else None,
                 **({"assignees": assignees[row.document_id]} if all_documents else {}),
             )

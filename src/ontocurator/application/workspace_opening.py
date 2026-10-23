@@ -10,6 +10,7 @@ from ontocurator.auth.audit import Actor
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.review import ReviewTargetSet
+from ontocurator.domain.scopes import is_review_like
 from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.storage.repository import _key_str, _workspace_aliases
 
@@ -40,7 +41,7 @@ class WorkspaceOpeningService:
         pending_proposal_set_ids: list[int] | None = None,
     ) -> OpenedWorkspace:
         if review_round_target_set_id is not None and (
-            key.mode != "review" or targets is not None
+            not is_review_like(key.mode) or targets is not None
         ):
             raise DomainError(
                 "INVALID_REVIEW_ROUND",

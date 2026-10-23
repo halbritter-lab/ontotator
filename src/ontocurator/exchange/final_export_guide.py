@@ -52,6 +52,8 @@ def submission_kind(
     # D1: every review submission is a consolidation (migration 0020).
     if kind == "consolidation" or submission["origin_key"]["mode"] == "review":
         return "consolidation"
+    if submission["origin_key"]["mode"] == "proposal_check":
+        return "proposal_check"
     return "annotation"
 
 

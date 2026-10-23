@@ -10,7 +10,7 @@ from ontocurator.domain.reanchor_resolution import (
     PendingReanchorRef,
     ReanchorResolution,
 )
-from ontocurator.domain.scopes import build_scope
+from ontocurator.domain.scopes import build_scope, is_review_like
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.storage.repository import Repository
 
@@ -27,7 +27,7 @@ def validate_resolution(
     repo: Repository, draft: Draft, resolution: ReanchorResolution
 ) -> None:
     if (
-        draft.key.mode != "review"
+        not is_review_like(draft.key.mode)
         or resolution.item not in draft.reanchor_inputs
         or resolution.reviewer_id != draft.key.annotator_id
     ):
@@ -73,7 +73,7 @@ class ReanchorResolutionService:
         self.repo = repo
 
     def resolve(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
-        if key.mode != "review":
+        if not is_review_like(key.mode):
             raise DomainError("INVALID_WORKSPACE_MODE")
         cmd = ResolveReanchorCommand.model_validate(envelope.payload)
 

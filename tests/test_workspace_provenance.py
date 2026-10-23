@@ -8,7 +8,7 @@ from sqlalchemy import delete, event, func, insert, select, update
 from t1_builders import bundle, native_unit
 from t1_fixtures import TEXT, annotation, create_project, run_import
 from test_auth_api import _app
-from work_plan_support import review_task
+from test_reanchor_resolutions import from_proposals
 
 from ontocurator.application.workspaces import WorkspaceService
 from ontocurator.auth.audit import Actor
@@ -88,18 +88,18 @@ def env(tmp_path, request):
     )
     assert result.status == "succeeded", result.error
     reference_profile(db)
-    # D1: proposals are offered in a review workspace (a consolidation's);
-    # alice also holds the consolidator's task on the source.
-    roles = frozenset({"annotator", "adjudicator"})
+    # Proposals are offered when annotating from proposals (D1: was "assisted").
     alice = logged_in(
         app,
         "alice",
-        projects={"proj": sorted(roles)},
+        projects={"proj": ["annotator"]},
         assignments=[("proj", "source", "annotate")],
     )
-    review_task(db, "proj", "source", "alice")
+    from_proposals(db)
     user = app.state.accounts.get_by_username("alice")
-    repo = ScopedRepository(db, Access(user.id, user.pseudonym, False, {"proj": roles}))
+    repo = ScopedRepository(
+        db, Access(user.id, user.pseudonym, False, {"proj": frozenset({"annotator"})})
+    )
     return SimpleNamespace(
         app=app, db=db, leader=leader, alice=alice, user=user, repo=repo, count=count
     )
@@ -125,9 +125,7 @@ def review_open(app, repo, pseudonym, document_id):
     return SimpleNamespace(status_code=200, text="", json=lambda: body)
 
 
-def opened(env, mode="review"):
-    if mode == "review":
-        return review_open(env.app, env.repo, env.user.pseudonym, "source")
+def opened(env, mode="proposal_check"):
     return env.alice.post(
         "/api/v1/workspaces/open",
         json={"project_key": "proj", "document_id": "source", "mode": mode},
@@ -142,7 +140,6 @@ def offers(view):
     ]
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_offered_metadata_unique_matches_public_projection_without_public_permission(
     env,
 ):
@@ -172,7 +169,9 @@ def test_offered_metadata_unique_matches_public_projection_without_public_permis
         & item.keys()
     )
     url = f"/api/v1/projects/proj/proposal-sets/{item['id']}"
-    assert env.alice.get(url).status_code == 404
+    # Annotating from proposals reads the proposals of the own text (spec
+    # 2026-10-23 §1), never browses versions; from scratch reads nothing.
+    assert env.alice.get(url).json() == item
     assert env.leader.get(url).json() == item
     assert (
         env.alice.get(
@@ -180,10 +179,15 @@ def test_offered_metadata_unique_matches_public_projection_without_public_permis
         ).json()
         == []
     )
+    scratch = logged_in(
+        env.app,
+        "bob",
+        projects={"proj": ["annotator"]},
+        assignments=[("proj", "source", "annotate")],
+    )
+    assert scratch.get(url).status_code == 404
     assert (
-        env.alice.get(
-            "/api/v1/projects/proj/documents/source/reanchor-items"
-        ).status_code
+        scratch.get("/api/v1/projects/proj/documents/source/reanchor-items").status_code
         == 404
     )
 
@@ -232,7 +236,7 @@ def test_blind_and_empty_offers_return_no_metadata_and_issue_no_set_query(env):
         assert env.repo.workspace_proposal_sets(key, [("forged", "v", 1)]) == []
         assert (
             env.repo.workspace_proposal_sets(
-                key.model_copy(update={"mode": "review", "scope_id": ""}), []
+                key.model_copy(update={"mode": "proposal_check", "scope_id": ""}), []
             )
             == []
         )
@@ -248,9 +252,7 @@ def test_blind_and_empty_offers_return_no_metadata_and_issue_no_set_query(env):
         "role",
         "inactive",
         "identity",
-        pytest.param(
-            "mode", marks=pytest.mark.skip(reason="D1: port to proposal_check in P2")
-        ),
+        "mode",
         "foreign",
     ],
 )
@@ -279,7 +281,7 @@ def test_exact_workspace_authority_is_fresh_even_for_empty_offers(env, change):
     if change == "identity":
         key = key.model_copy(update={"annotator_id": "somebody-else"})
     elif change == "mode":
-        key = key.model_copy(update={"mode": "independent"})
+        key = key.model_copy(update={"mode": "review"})
     elif change == "foreign":
         key = key.model_copy(update={"project_key": "foreign"})
     for provided in [offers(view), []]:
@@ -289,7 +291,6 @@ def test_exact_workspace_authority_is_fresh_even_for_empty_offers(env, change):
         assert opened(env).status_code in (401, 403, 404)
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_sibling_text_visibility_and_forged_associations_do_not_grant_sets(env):
     response = opened(env)
     assert response.status_code == 200
@@ -329,14 +330,19 @@ def test_sibling_text_visibility_and_forged_associations_do_not_grant_sets(env):
     assert (
         env.alice.post(
             "/api/v1/workspaces/open",
-            json={"project_key": "proj", "document_id": "sibling", "mode": "review"},
+            json={
+                "project_key": "proj",
+                "document_id": "sibling",
+                "mode": "proposal_check",
+            },
         ).status_code
         != 200
     )
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
-def test_current_layer_scope_rejects_forged_hidden_refs_and_unoffered_pending_set(env):
+def test_unoffered_pending_set_is_never_offered(env):
+    # D1: the hidden-layer half belonged to "assisted" (reference layers only);
+    # proposal_check offers every layer of its scope, like review.
     response = opened(env)
     assert response.status_code == 200
     view = response.json()["view"]
@@ -359,19 +365,6 @@ def test_current_layer_scope_rejects_forged_hidden_refs_and_unoffered_pending_se
             )
         )
     assert len(env.repo.workspace_proposal_sets(key, offers(view))) == 1
-    reference_profile(env.db, reference=False)
-    assert (
-        env.repo.workspace_proposal_sets(
-            key.model_copy(update={"scope_id": ""}), offers(view)
-        )
-        == []
-    )
-    hidden = opened(env)
-    assert hidden.status_code == 200
-    assert (
-        hidden.json()["view"]["available_inputs"] == []
-        and hidden.json()["view"]["proposal_sets"] == []
-    )
 
 
 def test_review_mode_includes_offered_editable_layer_metadata(env):

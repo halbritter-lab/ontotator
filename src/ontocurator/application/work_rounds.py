@@ -34,7 +34,7 @@ from ontocurator.domain.reanchor import (
     text_map,
 )
 from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import TaskScope, build_scope
+from ontocurator.domain.scopes import TaskScope, build_scope, is_review_like
 from ontocurator.domain.serialization import encode_snapshot
 from ontocurator.domain.work_rounds import (
     CARRY_ROUND_KINDS,
@@ -47,6 +47,7 @@ from ontocurator.domain.work_rounds import (
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.storage.database import Database
 from ontocurator.storage.overview_tables import DraftSnapshotRow
+from ontocurator.storage.proposal_queries import newest_proposal_refs
 from ontocurator.storage.repository import Repository, _key_str, _lock_id
 from ontocurator.storage.tables import (
     AssignmentRow,
@@ -147,7 +148,7 @@ def require_independent(
     submitted = select(SubmissionRow.submission_id).where(
         SubmissionRow.project_id == pid,
         SubmissionRow.annotator_id == pseudonym,
-        SubmissionRow.mode.in_(["independent"]),
+        SubmissionRow.mode.in_(["independent", "proposal_check"]),
         SubmissionRow.document_id.in_(row_documents),
     )
     if (
@@ -679,9 +680,25 @@ class WorkRoundService:
                 for i in inputs
                 if i["target_snapshot"] is not None
             ]
-            if mode == "review"
+            if is_review_like(mode)
             else []
         )
+        if mode == "proposal_check" and not sources and kind == "ordinary":
+            # "Annotate from proposals": the newest tool proposal set (spec §1 Targets).
+            editable = {
+                (s.annotation.annotation_id, s.version)
+                for s in self.repo.list_annotations_for_document(
+                    project, document.document_id
+                )
+                if s.annotation.layer_id in scope.editable_layer_ids
+            }
+            targets = ReviewTargetSet.create(
+                [
+                    ref
+                    for ref in newest_proposal_refs(conn, pid, document.document_id)
+                    if (ref.annotation_id, ref.version) in editable
+                ]
+            )
         key = WorkspaceKey(
             format_version="ontocurator-workspace-key/v3",
             round_id=rid,
@@ -690,7 +707,9 @@ class WorkRoundService:
             annotator_id=owner,
             mode=mode,
             scope_id=scope.scope_id,
-            target_set_id=targets.target_set_id if mode == "review" else "targets-0",
+            target_set_id=targets.target_set_id
+            if is_review_like(mode)
+            else "targets-0",
         )
         manifest_content: dict[str, Any] = {
             "submission_ids": sources,

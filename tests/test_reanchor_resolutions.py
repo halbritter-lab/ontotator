@@ -7,7 +7,7 @@ from test_reanchor_job import children, corrected, execute, generated
 from test_reanchor_job import runtime as runtime
 
 from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.storage.tables import DraftRow, ProposalSetRow
+from ontocurator.storage.tables import AssignmentRow, DraftRow, ProposalSetRow
 
 
 @pytest.fixture
@@ -19,10 +19,21 @@ def pending(runtime):
     runtime.reviewer = logged_in(
         runtime.app,
         "reviewer",
-        projects={"proj": ["adjudicator"]},
-        assignments=[("proj", runtime.output["document_id"], "review")],
+        projects={"proj": ["annotator"]},
+        assignments=[("proj", runtime.output["document_id"], "annotate")],
     )
+    from_proposals(runtime.db)
     return runtime
+
+
+def from_proposals(db):
+    """Annotate assignments start from proposals (P3 sets this when assigning)."""
+    with db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.task == "annotate")
+            .values(annotation_mode="proposals")
+        )
 
 
 def opened(env, client=None, **extra):
@@ -31,13 +42,12 @@ def opened(env, client=None, **extra):
         json={
             "project_key": "proj",
             "document_id": env.output["document_id"],
-            "mode": "review",
+            "mode": "proposal_check",
             **extra,
         },
     )
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_pending_inputs_frozen_on_first_review_open(pending):
     first = opened(pending)
     assert first.status_code == 200, first.text
@@ -66,7 +76,9 @@ def test_pending_inputs_frozen_on_first_review_open(pending):
     assert again["pending_reanchor_items"] == view["pending_reanchor_items"]
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
+@pytest.mark.skip(
+    reason="P3: an assignment opens in proposal_check from its annotation_mode"
+)
 def test_assignment_open_preserves_typed_pending_context(pending):
     task = pending.reviewer.get("/api/v1/me/tasks").json()[0]
     response = pending.reviewer.post(
@@ -79,7 +91,6 @@ def test_assignment_open_preserves_typed_pending_context(pending):
     assert view["pending_reanchor_items"][0]["type_id"] == "phenotype"
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_explicit_empty_pending_selection_and_conflict(pending):
     targets = ReviewTargetSet.create([]).model_dump()
     missing = opened(pending, targets=targets)
@@ -94,7 +105,6 @@ def test_explicit_empty_pending_selection_and_conflict(pending):
     assert conflict.json()["code"] == "REANCHOR_INPUTS_CONFLICT"
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_explicit_pending_selection_validates_set_document_and_origin(pending):
     targets = ReviewTargetSet.create([]).model_dump()
     foreign = opened(
@@ -109,7 +119,6 @@ def test_explicit_pending_selection_validates_set_document_and_origin(pending):
     assert len(selected.json()["view"]["draft"]["reanchor_inputs"]) == 2
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_legacy_first_open_initializes_once_under_lock(pending):
     first = opened(pending).json()["view"]
     with pending.db.transaction() as conn:
@@ -145,7 +154,6 @@ def test_independent_workspace_receives_no_pending_inputs(pending):
     assert response.json()["view"]["pending_reanchor_items"] == []
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_upgrade_preserves_pending_producer_payloads(pending, tmp_path):
     from pg_harness import unmigrated_database_url
     from sqlalchemy import MetaData, Table, create_engine, insert, text

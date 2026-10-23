@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Connection, RowMapping, and_, select
+from sqlalchemy import Connection, RowMapping, and_, or_, select
 from sqlalchemy.orm import aliased
 
 from ontocurator.authz.policy import Access, Action, can
@@ -32,6 +32,14 @@ class VersionRef(BaseModel):
     created_at: datetime
 
 
+# Own-submission history labels by workspace mode (plan review R9).
+_OWN_LABELS = {
+    "proposal_check": "My annotation, from proposals",
+    "independent": "My annotation, from scratch",
+    "review": "My consolidation",
+}
+
+
 def may_read_proposals(
     conn: Connection, access: Access, project_id: int, key: str, doc: str
 ) -> bool:
@@ -44,7 +52,15 @@ def may_read_proposals(
             .where(
                 AssignmentRow.project_id == project_id,
                 AssignmentRow.document_id == doc,
-                AssignmentRow.task == "review",
+                # The consolidator, and an annotator annotating from proposals
+                # (spec 2026-10-23 §1); never an annotator from scratch.
+                or_(
+                    AssignmentRow.task == "review",
+                    and_(
+                        AssignmentRow.task == "annotate",
+                        AssignmentRow.annotation_mode == "proposals",
+                    ),
+                ),
                 qualifying_assignment(fresh.user_id),
             )
             .limit(1)
@@ -149,7 +165,7 @@ def visible_annotation_versions(
         VersionRef(
             kind="own",
             id=row.submission_id,
-            label=f"My submission ({'review' if row.mode == 'review' else 'annotate'}), {row.created_at}",
+            label=f"{_OWN_LABELS.get(row.mode, 'My submission')}, {row.created_at}",
             created_at=row.created_at,
         )
         for row in own

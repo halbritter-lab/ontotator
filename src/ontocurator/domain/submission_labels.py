@@ -7,7 +7,9 @@ from typing import Literal
 
 from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS
 
-SubmissionKind = Literal["consolidation", "carry_forward", "annotation"]
+SubmissionKind = Literal[
+    "consolidation", "carry_forward", "annotation", "proposal_check"
+]
 
 
 def round_ordinals(rounds: Iterable[tuple[str, str | None]]) -> dict[str, int]:
@@ -43,4 +45,4 @@ def submission_kind(round_kind: str | None, mode: str | None) -> SubmissionKind:
     # D1: every review submission is a consolidation (migration 0020).
     if round_kind == "consolidation" or mode == "review":
         return "consolidation"
-    return "annotation"
+    return "proposal_check" if mode == "proposal_check" else "annotation"

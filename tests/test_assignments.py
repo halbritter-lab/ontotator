@@ -32,7 +32,11 @@ from ontocurator.storage.tables import (
 
 def test_task_modes() -> None:
     assert MODE_FOR_TASK == {"annotate": "independent", "review": "review"}
-    assert TASK_FOR_MODE == {"independent": "annotate", "review": "review"}
+    assert TASK_FOR_MODE == {
+        "independent": "annotate",
+        "review": "review",
+        "proposal_check": "annotate",
+    }
 
 
 def _assign(

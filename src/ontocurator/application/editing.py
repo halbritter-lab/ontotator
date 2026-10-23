@@ -39,7 +39,7 @@ from ontocurator.domain.profiles import (
 from ontocurator.domain.project_rules import ProjectRules, rule_violations
 from ontocurator.domain.reanchor_resolution import PendingReanchorRef
 from ontocurator.domain.review import ReviewDecision
-from ontocurator.domain.scopes import TaskScope, build_scope
+from ontocurator.domain.scopes import TaskScope, build_scope, is_review_like
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
@@ -522,7 +522,10 @@ class EditingService:
         services: dict[str, OntologyService | Exception],
     ) -> Draft:
         if isinstance(cmd, RecreateReanchorCommand):
-            if draft.key.mode != "review" or cmd.item not in draft.reanchor_inputs:
+            if (
+                not is_review_like(draft.key.mode)
+                or cmd.item not in draft.reanchor_inputs
+            ):
                 raise DomainError("INVALID_REANCHOR_ITEM")
             source = self.repo.verified_reanchor_source(draft.key, cmd.item)
             if (

@@ -44,7 +44,7 @@ from ontocurator.domain.project_rules import ProjectRules
 from ontocurator.domain.reanchor_resolution import PendingReanchorRef, ReanchorItem
 from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.review import ReviewDecision, ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
+from ontocurator.domain.scopes import build_scope, is_review_like
 from ontocurator.domain.serialization import decode_snapshot, encode_snapshot
 from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.work_rounds import (
@@ -2038,7 +2038,7 @@ class Repository:
         if key.scope_id and key.scope_id != scope.scope_id:
             raise DomainError("INVALID_SCOPE")
         layers = scope.reference_layer_ids + (
-            scope.editable_layer_ids if key.mode == "review" else []
+            scope.editable_layer_ids if is_review_like(key.mode) else []
         )
         if not layers:
             return []
@@ -2357,7 +2357,7 @@ class Repository:
     ) -> Draft:
         """Initialize only at open, under the same lock as draft creation."""
         key = draft.key
-        if key.mode != "review" or key.round_id is not None:
+        if not is_review_like(key.mode) or key.round_id is not None:
             if selected:
                 raise DomainError("INVALID_REANCHOR_ITEM")
             return draft
@@ -2422,7 +2422,7 @@ class Repository:
             )
             for item in draft.reanchor_inputs
         }
-        if not refs or draft.key.mode != "review":
+        if not refs or not is_review_like(draft.key.mode):
             return []
         items = []
         for raw in self.get_reanchor_items(
@@ -2938,7 +2938,7 @@ class Repository:
         annotations = [
             a
             for a in latest.snapshots
-            if key.mode != "review"
+            if not is_review_like(key.mode)
             or (a.annotation.annotation_id, a.version) not in confirmed
         ]
         evidence = [ev for a in annotations for ev in a.evidence]

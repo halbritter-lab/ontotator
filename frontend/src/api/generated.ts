@@ -3846,7 +3846,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "consolidation" | "carry_forward" | "annotation";
+            kind: "consolidation" | "carry_forward" | "annotation" | "proposal_check";
             /** Round Id */
             round_id: string | null;
             /** Round Ordinal */
@@ -3950,7 +3950,7 @@ export interface components {
             /** Selected By */
             selected_by: string | null;
             /** Kind */
-            kind: ("consolidation" | "carry_forward" | "annotation") | null;
+            kind: ("consolidation" | "carry_forward" | "annotation" | "proposal_check") | null;
             /** Round Ordinal */
             round_ordinal: number | null;
             /** Author Label */
@@ -4736,7 +4736,7 @@ export interface components {
              * @default independent
              * @enum {string}
              */
-            mode: "independent" | "review";
+            mode: "independent" | "review" | "proposal_check";
             targets?: components["schemas"]["ReviewTargetSet"] | null;
             /** Review Round Target Set Id */
             review_round_target_set_id?: string | null;
@@ -5579,7 +5579,7 @@ export interface components {
             /** Roles */
             roles: ("lead" | "annotator" | "adjudicator")[];
             /** Allowed Modes */
-            allowed_modes: ("independent" | "review")[];
+            allowed_modes: ("independent" | "review" | "proposal_check")[];
             /** Document Count */
             document_count: number;
             /** Can Manage */
@@ -5919,9 +5919,9 @@ export interface components {
             annotator_id?: string | null;
             /**
              * Mode
-             * @constant
+             * @enum {string}
              */
-            mode: "review";
+            mode: "review" | "proposal_check";
         };
         /**
          * ReviewTargetSet
@@ -6143,7 +6143,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "consolidation" | "carry_forward" | "annotation";
+            kind: "consolidation" | "carry_forward" | "annotation" | "proposal_check";
             /** Round Id */
             round_id: string | null;
             /** Round Ordinal */
@@ -6719,7 +6719,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "independent" | "review";
+            mode: "independent" | "review" | "proposal_check";
             /** Editable Layer Ids */
             editable_layer_ids: string[];
             /** Reference Layer Ids */
@@ -7477,7 +7477,7 @@ export interface components {
              */
             kind: "ordinary" | "carry_forward" | "clean_restart" | "consolidation" | "text_change" | "handover";
             /** Mode */
-            mode: ("independent" | "review") | null;
+            mode: ("independent" | "review" | "proposal_check") | null;
             /**
              * State
              * @enum {string}
@@ -7536,7 +7536,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "independent" | "review";
+            mode: "independent" | "review" | "proposal_check";
             /**
              * Scope Id
              * @default
@@ -11285,7 +11285,7 @@ export interface operations {
         parameters: {
             query?: {
                 annotator_id?: string | null;
-                mode?: ("independent" | "review") | null;
+                mode?: ("independent" | "review" | "proposal_check") | null;
                 language?: string | null;
                 status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
                 q?: string | null;

@@ -9,7 +9,14 @@ from pydantic import BaseModel, ConfigDict
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.profiles import TaskProfile, profile_hash
 
-WorkspaceMode = Literal["independent", "review"]
+WorkspaceMode = Literal["independent", "review", "proposal_check"]
+# Modes with targets and decisions: the consolidator's review and
+# "Annotate from proposals" (spec 2026-10-23 §1).
+REVIEW_LIKE_MODES: frozenset[str] = frozenset({"review", "proposal_check"})
+
+
+def is_review_like(mode: str) -> bool:
+    return mode in REVIEW_LIKE_MODES
 
 
 class TaskScope(BaseModel):

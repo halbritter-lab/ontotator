@@ -8,11 +8,13 @@ from ontocurator.assignments.service import AssignmentService
 pytest_plugins = ("test_assignment_round_open_api", "test_translation_review_task")
 
 
-@pytest.mark.skip(reason="D1: port to proposal_check in P2")
+@pytest.mark.skip(
+    reason="P3: an assignment opens in proposal_check from its annotation_mode"
+)
 def test_report_extension_uses_lead_reason_and_resolution_does_not_release_hold(
-    round_work,
+    check_work,
 ):
-    app, client, row, _service, legacy_rounds = round_work
+    app, client, row, _service, legacy_rounds = check_work
     selected = client.post(
         f"/api/v1/assignments/{row.id}/open",
         json={"review_round_target_set_id": legacy_rounds[0].key.target_set_id},
@@ -45,9 +47,9 @@ def test_report_extension_uses_lead_reason_and_resolution_does_not_release_hold(
     other = logged_in(
         app,
         "other",
-        pseudonym="other-reviewer",
-        projects={row.project_key: ["adjudicator"]},
-        assignments=[(row.project_key, "doc-1", "review")],
+        pseudonym="other-annotator",
+        projects={row.project_key: ["annotator"]},
+        assignments=[(row.project_key, "doc-1", "annotate")],
     )
     other_assignment = AssignmentService(app.state.repo.db).list(
         row.project_key, user="other"

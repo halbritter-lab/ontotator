@@ -68,6 +68,7 @@ MODE_FOR_TASK: dict[Task, WorkspaceMode] = {
 TASK_FOR_MODE: dict[WorkspaceMode, Task] = {
     "independent": "annotate",
     "review": "review",
+    "proposal_check": "annotate",
 }
 AssignmentStatus = Literal["open", "in_progress", "submitted", "reopened"]
 

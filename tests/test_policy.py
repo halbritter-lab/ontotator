@@ -14,6 +14,7 @@ TABLE: dict[Action, str] = {
     Action.VIEW_PROJECT: "YYYY-",
     Action.OPEN_INDEPENDENT: "--Y--",
     Action.OPEN_REVIEW: "---Y-",
+    Action.OPEN_PROPOSAL_CHECK: "--Y--",
     Action.EXPORT_OWN_WORK: "YYYY-",
     Action.EXPORT_ALL_WORK: "YY---",
     Action.EXPORT_EDIT_LOG: "YY---",

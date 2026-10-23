@@ -46,9 +46,10 @@ from ontocurator.authz.policy import (
     can,
 )
 from ontocurator.authz.scoped import ScopedRepository, project_not_found
+from ontocurator.authz.versions import require_proposals
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import build_scope
+from ontocurator.domain.scopes import build_scope, is_review_like
 from ontocurator.domain.workspace import (
     Draft,
     MutationEnvelope,
@@ -94,7 +95,7 @@ class ReviewInputsRequest(BaseModel):
     document_id: str
     # Only the logged-in user's own pseudonym; omitted means the same.
     annotator_id: str | None = None
-    mode: Literal["review"]
+    mode: Literal["review", "proposal_check"]
 
 
 class OpenWorkspaceRequest(BaseModel):
@@ -375,18 +376,26 @@ def resolve_term_labels(
 def get_review_inputs(
     req: ReviewInputsRequest,
     request: Request,
+    repo: RepoDep,
     ws_svc: WorkspaceSvcDep,
     principal: PrincipalDep,
 ) -> list[EditorProposal]:
     """Get selectable proposal versions for setting up a review round."""
     own_annotator(principal, req.annotator_id)
     require_mode(request, req.project_key, req.mode)
-    if req.mode != "review":
+    if not is_review_like(req.mode):
         raise DomainError(
             "REVIEW_MODE_REQUIRED",
             "Review inputs can only be queried in review mode",
         )
-    return ws_svc.get_review_inputs(req.project_key, req.document_id)
+    if req.mode == "proposal_check":
+        # Every annotator may open the mode; only one from proposals sees them.
+        with repo.db.transaction() as conn:
+            project_id = repo._require_project(conn, req.project_key)
+            require_proposals(
+                conn, get_access(request), project_id, req.project_key, req.document_id
+            )
+    return ws_svc.get_review_inputs(req.project_key, req.document_id, mode=req.mode)
 
 
 @router.post("/workspaces/open")

@@ -12,6 +12,7 @@ from ontocurator.domain.annotations import AnnotationRef
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.review import ReviewDecision, ReviewOutcome
+from ontocurator.domain.scopes import is_review_like
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
@@ -47,7 +48,7 @@ class ReviewService:
 
     def decide(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
         """Transactionally record a review decision on a workspace draft."""
-        if key.mode != "review":
+        if not is_review_like(key.mode):
             raise DomainError(
                 "INVALID_WORKSPACE_MODE",
                 f"Review decisions are only permitted in review mode, got '{key.mode}'",

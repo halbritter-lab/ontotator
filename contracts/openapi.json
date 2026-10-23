@@ -6498,7 +6498,8 @@
                 {
                   "enum": [
                     "independent",
-                    "review"
+                    "review",
+                    "proposal_check"
                   ],
                   "type": "string"
                 },
@@ -12128,7 +12129,8 @@
             "enum": [
               "consolidation",
               "carry_forward",
-              "annotation"
+              "annotation",
+              "proposal_check"
             ],
             "title": "Kind"
           },
@@ -12475,7 +12477,8 @@
                 "enum": [
                   "consolidation",
                   "carry_forward",
-                  "annotation"
+                  "annotation",
+                  "proposal_check"
                 ]
               },
               {
@@ -14555,7 +14558,8 @@
             "type": "string",
             "enum": [
               "independent",
-              "review"
+              "review",
+              "proposal_check"
             ],
             "title": "Mode",
             "default": "independent"
@@ -16689,7 +16693,8 @@
               "type": "string",
               "enum": [
                 "independent",
-                "review"
+                "review",
+                "proposal_check"
               ]
             },
             "type": "array",
@@ -17726,7 +17731,10 @@
           },
           "mode": {
             "type": "string",
-            "const": "review",
+            "enum": [
+              "review",
+              "proposal_check"
+            ],
             "title": "Mode"
           }
         },
@@ -18479,7 +18487,8 @@
             "enum": [
               "consolidation",
               "carry_forward",
-              "annotation"
+              "annotation",
+              "proposal_check"
             ],
             "title": "Kind"
           },
@@ -20095,7 +20104,8 @@
             "type": "string",
             "enum": [
               "independent",
-              "review"
+              "review",
+              "proposal_check"
             ],
             "title": "Mode"
           },
@@ -22270,7 +22280,8 @@
                 "type": "string",
                 "enum": [
                   "independent",
-                  "review"
+                  "review",
+                  "proposal_check"
                 ]
               },
               {
@@ -22466,7 +22477,8 @@
             "type": "string",
             "enum": [
               "independent",
-              "review"
+              "review",
+              "proposal_check"
             ],
             "title": "Mode"
           },

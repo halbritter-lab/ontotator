@@ -18,7 +18,7 @@ from ontocurator.domain.errors import DomainError, IncompleteReview
 from ontocurator.domain.profiles import TaskProfile, resolve_type
 from ontocurator.domain.project_rules import rule_violations
 from ontocurator.domain.results import latest_submissions
-from ontocurator.domain.scopes import TaskScope, build_scope
+from ontocurator.domain.scopes import TaskScope, build_scope, is_review_like
 from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS
 from ontocurator.domain.workspace import (
     Draft,
@@ -137,7 +137,7 @@ def validate_completion(
         validate_draft_terms(draft, profile, ontology, repo)
 
     # 3. If in review mode, validate review completeness
-    if scope.mode == "review":
+    if is_review_like(scope.mode):
         target_refs = {(t.annotation_id, t.version) for t in draft.targets.targets}
         decided_targets = {
             (d.target.annotation_id, d.target.version) for d in draft.decisions
@@ -366,7 +366,7 @@ class SubmissionService:
                 item.source_ref.annotation_id,
                 item.source_ref.version,
             )
-            if pending_identity in seen or draft.key.mode != "review":
+            if pending_identity in seen or not is_review_like(draft.key.mode):
                 raise DomainError("INVALID_REANCHOR_ITEM")
             seen.add(pending_identity)
             self.repo.reanchor_source_identity(key, item)
@@ -410,7 +410,7 @@ class SubmissionService:
         snapshots: list[AnnotationSnapshot] = []
         decisions = list(draft.decisions)
 
-        if key.mode == "review":
+        if is_review_like(key.mode):
             members = {
                 (a.annotation.annotation_id, a.version): a
                 for a in self.repo.workspace_input_snapshots(key)

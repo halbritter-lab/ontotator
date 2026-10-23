@@ -20,10 +20,16 @@ from ontocurator.domain.profiles import (
 from ontocurator.domain.proposals import ProposalSetView
 from ontocurator.domain.reanchor_resolution import ReanchorItem
 from ontocurator.domain.review import ReviewTargetSet
-from ontocurator.domain.scopes import TaskScope, build_scope
-from ontocurator.domain.workspace import Draft, Submission, WorkspaceKey
+from ontocurator.domain.scopes import TaskScope, build_scope, is_review_like
+from ontocurator.domain.workspace import (
+    Draft,
+    Submission,
+    WorkspaceKey,
+    WorkspaceMode,
+)
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
+from ontocurator.storage.proposal_queries import newest_proposal_refs
 from ontocurator.storage.repository import Repository
 
 
@@ -164,27 +170,42 @@ class WorkspaceService:
         return doc
 
     def get_review_inputs(
-        self, project_key: str, document_id: str
+        self, project_key: str, document_id: str, mode: WorkspaceMode = "review"
     ) -> list[EditorProposal]:
         """The document's proposals on the layers a review may edit.
 
         Never other members' submissions or drafts: anything not assigned to
         a reviewer could bias them (index Q3). Their work reaches review only
-        through workflow assignments (T4).
+        through workflow assignments (T4). ``proposal_check`` offers only the
+        newest tool proposal set (spec 2026-10-23 §1 Targets).
         """
         profile = self.repo.get_task_profile(project_key)
-        scope = build_scope(profile, "review")
+        scope = build_scope(profile, mode)
+        snapshots = self.repo.list_annotations_for_document(project_key, document_id)
+        if mode == "proposal_check":
+            newest = self._newest_refs(project_key, document_id)
+            snapshots = [
+                snap
+                for snap in snapshots
+                if (snap.annotation.annotation_id, snap.version) in newest
+            ]
         return self._editor_proposals(
             project_key,
             document_id,
             [
                 snap
-                for snap in self.repo.list_annotations_for_document(
-                    project_key, document_id
-                )
+                for snap in snapshots
                 if snap.annotation.layer_id in scope.editable_layer_ids
             ],
         )
+
+    def _newest_refs(self, project_key: str, document_id: str) -> set[tuple[str, str]]:
+        with self.repo.db.transaction() as conn:
+            project_id = self.repo._require_project(conn, project_key)
+            return {
+                (ref.annotation_id, ref.version)
+                for ref in newest_proposal_refs(conn, project_id, document_id)
+            }
 
     def _editor_proposals(
         self, project_key: str, document_id: str, snapshots: list[AnnotationSnapshot]
@@ -208,7 +229,7 @@ class WorkspaceService:
     ) -> WorkspaceView:
         """Open or initialize a workspace view."""
         if (
-            key.mode == "review"
+            is_review_like(key.mode)
             and key.round_id is None
             and targets is not None
             and pending_proposal_set_ids is None
@@ -250,14 +271,22 @@ class WorkspaceService:
             effective_targets = ReviewTargetSet.create([])
             available_inputs = []
         else:
-            # review mode
+            # review-like modes (review, proposal_check)
             if targets is not None:
+                # Client targets of a proposal check stay within the newest set.
+                if key.mode == "proposal_check" and not {
+                    (t.annotation_id, t.version) for t in targets.targets
+                } <= self._newest_refs(key.project_key, key.document_id):
+                    raise DomainError(
+                        "INVALID_TARGET_SET",
+                        "Targets must belong to the newest proposal set",
+                    )
                 effective_targets = targets
             else:
                 rounds = [
                     k
                     for k in self.repo.list_workspace_keys(
-                        key.project_key, key.annotator_id, "review", key.document_id
+                        key.project_key, key.annotator_id, key.mode, key.document_id
                     )
                     if k.document_id == key.document_id and k.scope_id == key.scope_id
                 ]
@@ -289,7 +318,7 @@ class WorkspaceService:
                                 version=s.version,
                             )
                             for s in self.get_review_inputs(
-                                key.project_key, key.document_id
+                                key.project_key, key.document_id, key.mode
                             )
                         ]
                     )
