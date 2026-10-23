@@ -612,7 +612,6 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       const source = carrySourceOfFinal(row, target);
       if (source) setTextChange({ kind: "carry", rowKey: rowKeyOf(row), source });
     }}
-    onFocusHeading={() => setPanelFocus(value => value + 1)}
     onDirtyChange={setPanelDirty}
     onConsolidationStarted={(row, round, started) => {
       setPanelDirty(false);

@@ -563,7 +563,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
               </div>
               <span role="status" className="review-sr-only">{matchStatus}</span>
               {/* The text box keeps its full name; the visible title shows the flag instead of the code in brackets. */}
-              <span id="review-translation-label" hidden>{`Translation (${targetLanguage})`}</span>
+              <label id="review-translation-label" htmlFor="review-translation" className="visually-hidden">{`Translation (${targetLanguage})`}</label>
             </div>
             {showChanges
               ? <DiffView ref={setTargetElement} before={workspace.text} after={text} lang={targetLanguage} />

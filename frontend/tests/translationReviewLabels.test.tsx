@@ -18,7 +18,12 @@ it("labels the source and translation columns with language flags instead of cod
   render(<TranslationReviewScreen assignmentId={17} username="alice" onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
 
   // The text box keeps its full name for assistive technology.
-  await screen.findByRole("textbox", { name: "Translation (de)" });
+  const box = await screen.findByRole("textbox", { name: "Translation (de)" });
+  // A real (visually hidden) label, not a `hidden` one: axe label-title-only.
+  const label = document.querySelector<HTMLLabelElement>(`label[for="${box.id}"]`)!;
+  expect(label.textContent).toBe("Translation (de)");
+  expect(label.hidden).toBe(false);
+  expect(label.className).toBe("visually-hidden");
   const titles = [...document.querySelectorAll<HTMLElement>(".translation-column-title")];
   expect(titles.map(title => title.textContent)).toEqual(["Source en", "Translation de"]);
   expect(titles[0].querySelector(".language-tag [data-flag]")).not.toBeNull();

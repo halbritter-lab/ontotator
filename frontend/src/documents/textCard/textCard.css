@@ -2,12 +2,13 @@
    content it shows (Activity lines, text versions, technical details, decision block, selection notices,
    submissions; moved from documents-panel.css). Below 700 px the card is a full-width sheet (V1). */
 
-.text-card.ui-dialog { position: relative; }
-.text-card .ui-dialog-heading { padding-inline-end: calc(2 * 32px + var(--space-2)); }
+/* Only the body scrolls; the header (with ✕) stays on top of any long part content. */
+.text-card.ui-dialog { position: relative; overflow: hidden; }
+.text-card .ui-dialog-header { position: relative; z-index: 1; background: var(--surface-raised); }.text-card .ui-dialog-heading { padding-inline-end: calc(2 * 32px + var(--space-2)); }
 .text-card-heading { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); word-break: normal; overflow-wrap: break-word; }
 .text-card-version { color: var(--text-muted); font-size: var(--size-sm); font-weight: var(--weight-regular); }
 /* ‹ › sit in the header row, left of the dialog's own ✕. */
-.text-card-nav { position: absolute; top: var(--space-3); right: calc(var(--space-4) + 32px); display: flex; gap: var(--space-1); }
+.text-card-nav { position: absolute; top: var(--space-3); right: calc(var(--space-4) + 32px); z-index: 2; display: flex; gap: var(--space-1); }
 .text-card-body { display: grid; align-content: start; gap: var(--space-4); min-width: 0; }
 .text-card-body p { margin: 0; }
 .text-card-view { display: grid; justify-items: start; gap: var(--space-3); }

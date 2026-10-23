@@ -37,7 +37,11 @@ export function annotationState(row: DocumentRowView): State {
   const cell = row.stages?.annotation;
   const detail = cell?.detail ?? {};
   const target = detail.target ?? detail.total ?? 0;
-  const submitted = `${detail.submitted ?? 0} of ${target} submitted`;
+  // The server may send no counts: count the row's annotate work items; without any, no count.
+  const work = (row.work ?? []).filter(item => item.task === "annotate" && item.moved_to_version == null);
+  const total = detail.total ?? detail.target ?? work.length;
+  const done = detail.submitted ?? work.filter(item => item.status === "submitted").length;
+  const submitted = total > 0 ? `${done} of ${total} submitted` : cell?.state === "in_progress" || cell?.state === "paused" ? "in progress" : "submitted";
   switch (cell?.state) {
     case "not_planned": return { state: "not planned", tone: "optional" };
     case "after_review":

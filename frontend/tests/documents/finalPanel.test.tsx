@@ -490,6 +490,15 @@ describe("after a decision", () => {
     expect(await screen.findByRole("button", { name: "Keep final on v1" })).toBeTruthy();
   });
 
+  it("without onFocusHeading (text card) focus moves to the block's Final result heading after Accept result", async () => {
+    const first = chooseRow("case-107", "de");
+    panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
+    renderPanel("case-107:de", page([group("case-107", [first])]), { onFocusHeading: undefined });
+    afterDecision = page([group("case-107", [{ ...first, next_step: null, steps: [] }])]);
+    await acceptResult();
+    await waitFor(() => expect(document.activeElement).toBe(within(block()).getByRole("heading", { level: 3, name: "Final result" })));
+  });
+
   it("none left: No more final results to decide. and Next decision link", async () => {
     const first = chooseRow("case-107", "de");
     const report = chooseRow("case-109", "de", { next_step: stepOf("decide_report"), steps: [stepOf("decide_report")] });

@@ -46,6 +46,13 @@ describe("Annotation", () => {
   it("in progress counts the submissions", () => {
     expect(annotationState(cardRow({ annotation: cell("in_progress", "running", { submitted: 1, total: 2 }) }))).toEqual({ state: "1 of 2 submitted", tone: "now" });
   });
+  it("without server counts counts the annotate work items, never 0 of 0", () => {
+    const work = [annotateItem({ assignment_id: 1, status: "submitted" }), annotateItem({ assignment_id: 2, status: "submitted" })];
+    expect(annotationState(cardRow({ annotation: cell("submitted", "done") }, { work }))).toEqual({ state: "2 of 2 submitted", tone: "done" });
+    expect(annotationState(cardRow({ annotation: cell("consolidating", "running") }, { work }))).toEqual({ state: "2 of 2 submitted", tone: "done" });
+    expect(annotationState(cardRow({ annotation: cell("consolidating", "running") }, { work: [] }))).toEqual({ state: "submitted", tone: "done" });
+    expect(annotationState(cardRow({ annotation: cell("in_progress", "running") }, { work: [] }))).toEqual({ state: "in progress", tone: "now" });
+  });
   it("submitted and consolidating are done", () => {
     expect(annotationState(cardRow({ annotation: cell("submitted", "done", { submitted: 2, total: 2 }) }))).toEqual({ state: "2 of 2 submitted", tone: "done" });
     expect(annotationState(cardRow({ annotation: cell("consolidating", "running", { submitted: 3, total: 3 }) }))).toEqual({ state: "3 of 3 submitted", tone: "done" });

@@ -55,7 +55,7 @@ export interface DecisionBlockProps {
   onCarry?: (row: DocumentRowView, targetDocumentId: string) => void;
   /** A consolidation was started from the block. */
   onConsolidationStarted?: (row: DocumentRowView, round: WorkRoundView, started: ConsolidationStarted) => void;
-  /** Moves focus to the row panel's heading (after a save or "Review again"). */
+  /** Moves focus to the row panel's heading (after a save or "Review again"); default: the block's own "Final result" heading. */
   onFocusHeading?: () => void;
   /**
    * A row without a final decision step: the block shows only "Consolidate…", and only once its data lists at
@@ -144,7 +144,8 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
 
   useEffect(() => {
     if (!focusHeading) return;
-    props.onFocusHeading?.();
+    if (props.onFocusHeading) props.onFocusHeading();
+    else headingRef.current?.focus();
     // Only a new request moves focus.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusHeading]);
@@ -173,6 +174,7 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
   };
   const close = () => { if (!busy) onClose(); };
   const headingId = useId();
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const consolidable = state.data ? consolidationDocuments(listedSubmissions(state.data.panel.submissions ?? [])).length > 0 : false;
   const optionalOnly = props.optional && !noneLeft && !success && !failure;
   if (props.optional && !consolidable && !noneLeft && !success && !failure) return null;
@@ -195,7 +197,7 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
   }
 
   return <section className="final-panel text-card-decision" aria-labelledby={headingId}>
-    <h3 id={headingId} className="text-card-decision-title">Final result</h3>
+    <h3 id={headingId} ref={headingRef} tabIndex={-1} className="text-card-decision-title">Final result</h3>
     <p className="visually-hidden" role="status" aria-live="polite">{message}</p>
     {success && <div className="notice notice-success final-panel-success">
       <div className="notice-content"><p>{success.text}</p>{success.bar && <p>{success.bar}</p>}</div>
