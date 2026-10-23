@@ -271,8 +271,7 @@ textarea.form-control {
 }
 
 .badge-independent,
-.badge-review,
-.badge-assisted {
+.badge-review {
   background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
@@ -418,6 +417,10 @@ textarea.form-control {
   background: var(--surface-sunken);
   color: var(--text);
 }
+
+/* A button that reads as a link (V5): underlined, accent colour; it keeps its button role and state. */
+.btn-quiet.btn-link { color: var(--accent); text-decoration: underline; }
+.btn-quiet.btn-link:hover { color: var(--accent); }
 
 .btn-quiet:disabled:hover {
   background: transparent;
@@ -617,7 +620,9 @@ textarea.form-control {
 .shell-main { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: auto; }
 .shell-main > * { flex-shrink: 0; }
 .shell-main.density-reading { overflow: hidden; }
-.shell-main.density-reading > div:first-child { flex: 1; min-height: 0; }
+.shell-main.density-reading > div:first-child:not(.task-loading) { flex: 1; min-height: 0; }
+/* "Opening task…": a calm line, not a stretched panel (F8). */
+.task-loading { color: var(--text-muted); padding: var(--space-5) var(--space-6); flex: 0 0 auto; }
 /* Reading keeps the editor's viewport-based columns and pane height intact.
    The same navigation stays available through a native keyboard disclosure. */
 .shell-reading .shell-header { flex: none; padding-block: var(--space-2); }
@@ -821,10 +826,10 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 }
 .ui-toast {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
-  max-width: min(40rem, calc(100vw - var(--space-6)));
+  max-width: min(50vw, 40rem);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border-radius: var(--radius);
   background: var(--text);
@@ -836,6 +841,9 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
   animation: toast-in 150ms ease;
 }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* One line (F13): the message is cut with an ellipsis; its full text is in the title. */
+.ui-toast > * { flex: none; }
+.ui-toast > .ui-toast-message { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-toast-note { color: var(--border); }
 .ui-toast .btn,
 .ui-toast .btn-quiet { color: var(--on-accent); }
@@ -864,6 +872,8 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 .data-table-group-select { margin: 0 var(--space-1) 0 0; }
 @media (max-width: 699px) {
   .ui-toast-region { bottom: calc(var(--space-3) + var(--toast-offset, 0px)); }
+  .ui-toast { flex-wrap: wrap; max-width: calc(100vw - var(--space-6)); }
+  .ui-toast > .ui-toast-message { white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ui-toast { animation: none; }

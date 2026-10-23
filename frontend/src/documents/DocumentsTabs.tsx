@@ -2,6 +2,7 @@ import type { DecisionBarView } from "../api/client";
 import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { Button, EmptyState, Tabs } from "../ui";
 import { activeTab, TABS, tabCount, tabRoute, type TabId } from "./filterModel";
+import { onSpaceActivate } from "../ui/spaceActivates";
 import { isPlainClick, RouteLink } from "./RowCells";
 
 export interface DocumentsTabsProps {
@@ -37,7 +38,7 @@ export function DocumentsTabs({ bar, query, projectKey, panelId, onNavigate, upd
     <p className="documents-tabs-meta">
       {updatedAt && <span>{`Updated ${updatedFormat.format(updatedAt)}`}</span>}
       {onRefresh && <Button size="sm" onClick={onRefresh}>Refresh</Button>}
-      {(bar.finals ?? 0) > 0 && <a className="btn btn-secondary btn-sm" href={routeHref(exportRoute)} onClick={event => {
+      {(bar.finals ?? 0) > 0 && <a className="btn btn-secondary btn-sm" href={routeHref(exportRoute)} onKeyDown={onSpaceActivate} onClick={event => {
         if (!isPlainClick(event)) return;
         event.preventDefault(); onNavigate(exportRoute);
       }}>Export final results…</a>}

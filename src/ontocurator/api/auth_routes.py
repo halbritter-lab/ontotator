@@ -144,8 +144,16 @@ def demo_logins(request: Request) -> JSONResponse:
 
     The browser logs in with them through the normal ``/login``.
     """
-    accounts = [
-        {"username": d.username, "password": d.password, "label": d.label}
-        for d in request.app.state.demo_logins
-    ]
+    users = request.app.state.accounts
+    accounts = []
+    for d in request.app.state.demo_logins:
+        user = users.get_by_username(d.username)
+        accounts.append(
+            {
+                "username": d.username,
+                "password": d.password,
+                "label": d.label,
+                "display_name": user.display_name if user else None,
+            }
+        )
     return JSONResponse({"accounts": accounts}, headers={"Cache-Control": "no-store"})

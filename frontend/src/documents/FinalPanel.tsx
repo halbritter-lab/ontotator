@@ -12,6 +12,7 @@ import { Time } from "../app/Time";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, InlineMessage, type ButtonVariant } from "../ui";
 import { InlineConfirm } from "../ui/InlineConfirm";
+import { onSpaceActivate } from "../ui/spaceActivates";
 import { ConsolidationLauncher, type ConsolidationStarted } from "../variants/ConsolidationLauncher";
 import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
@@ -306,7 +307,7 @@ function AllMatchContent(props: ContentProps & { submission: FinalPanelSubmissio
       onConfirm={() => { if (busy === null) onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId); }}>
       <p>{link(route(submission.document_id, submission.submission_id), "Open result")}</p>
     </InlineConfirm>}
-    <p><Button size="sm" variant="quiet" aria-expanded={show} aria-controls={tableId} onClick={() => setShow(value => !value)}>Show submissions</Button></p>
+    <p><Button size="sm" variant="quiet" className="btn-link" aria-expanded={show} aria-controls={tableId} onClick={() => setShow(value => !value)}>Show submissions</Button></p>
     {show && <div id={tableId}><SubmissionTable {...props} listed={listed} /></div>}
   </div>;
 }
@@ -319,7 +320,7 @@ function useEditorRoute(props: ContentProps) {
     ...(Object.keys(query).length ? { documents: query } : {}),
   });
   // Commands ("Open in editor", "Open result") look like buttons; `info` keeps a text link for views that only show information.
-  const link = (target: Route, text: string, label?: string, info = false) => <a className={info ? undefined : "btn btn-secondary btn-sm"} href={routeHref(target)} aria-label={label} onClick={event => {
+  const link = (target: Route, text: string, label?: string, info = false) => <a className={info ? undefined : "btn btn-secondary btn-sm"} href={routeHref(target)} aria-label={label} onKeyDown={info ? undefined : onSpaceActivate} onClick={event => {
     if (!isPlainClick(event)) return;
     event.preventDefault(); onNavigate(target);
   }}>{text}</a>;
@@ -418,7 +419,7 @@ function CompareContent(props: ContentProps): JSX.Element {
     {agreement && <div className="final-panel-agreement">
       <p>{agreementText(agreement)}</p>
       <meter aria-hidden="true" className="final-panel-agreement-bar" min={0} max={Math.max(agreement.total, 1)} value={agreement.matching} />
-      <Button size="sm" variant="quiet" aria-expanded={explain} aria-controls={explanationId} onClick={() => setExplain(value => !value)}>How is this counted?</Button>
+      <Button size="sm" variant="quiet" className="btn-link" aria-expanded={explain} aria-controls={explanationId} onClick={() => setExplain(value => !value)}>How is this counted?</Button>
       {explain && <p id={explanationId} className="cell-secondary">{AGREEMENT_EXPLANATION}</p>}
     </div>}
     <SubmissionTable {...props} listed={listed} />

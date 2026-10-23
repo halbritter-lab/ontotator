@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -136,4 +139,20 @@ it("moves above a dialog footer that opens while the toast is visible", async ()
   await act(async () => { await Promise.resolve(); vi.advanceTimersByTime(50); });
   expect(screen.getByRole("status").style.getPropertyValue("--toast-offset")).toBe("76px");
   spy.mockRestore();
+});
+it("the undo toast stays on one line", () => {
+  const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../src/styles/components.css"), "utf8");
+  const style = document.head.appendChild(document.createElement("style"));
+  style.textContent = css;
+  try {
+    render(<Host onUndo={() => undefined} />);
+    fireEvent.click(screen.getByText("first"));
+    const toast = document.querySelector<HTMLElement>(".ui-toast")!;
+    const message = toast.querySelector<HTMLElement>(".ui-toast-message")!;
+    expect(getComputedStyle(toast).flexWrap).toBe("nowrap");
+    expect(getComputedStyle(toast).maxWidth).toBe("min(50vw, 40rem)");
+    expect(getComputedStyle(message).whiteSpace).toBe("nowrap");
+    expect(getComputedStyle(message).textOverflow).toBe("ellipsis");
+    expect(message.getAttribute("title")).toBe("fr of case-0101: Review off");
+  } finally { style.remove(); }
 });

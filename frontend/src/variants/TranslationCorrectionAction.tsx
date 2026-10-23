@@ -4,6 +4,7 @@ import { api, type AssignmentView, type Member, type VariantSummary } from '../a
 import { eligibleMembers } from '../admin/assignmentUI';
 import { ErrorNotice } from '../admin/ErrorNotice';
 import { Button, Checkbox, InlineMessage, Select, Textarea } from '../ui';
+import { onSpaceActivate } from '../ui/spaceActivates';
 import { notifyFinalSelectionChanged } from './finalSelectionState';
 
 interface Props {
@@ -64,7 +65,7 @@ function CorrectionContent({ projectKey, variant, username, requiredLanguages, d
     </>}
     {error != null && <><ErrorNotice error={error} />{!members && <Button onClick={() => setAttempt(value => value + 1)}>Reload translation reviewers</Button>}</>}
     {assigned && <InlineMessage tone="success">Translation correction assigned to {personLabel(member, { fallback: 'the reviewer' })}.
-      {assigned.username === username && <> <a className="btn btn-secondary btn-sm" href={`#/tasks/${assigned.id}`}>Open my translation review</a></>}
+      {assigned.username === username && <> <a className="btn btn-secondary btn-sm" href={`#/tasks/${assigned.id}`} onKeyDown={onSpaceActivate}>Open my translation review</a></>}
     </InlineMessage>}
   </section>;
 }

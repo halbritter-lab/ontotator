@@ -5,6 +5,7 @@ import { routeHref } from '../app/router';
 import { Button, Checkbox, InlineMessage, Select, Textarea } from '../ui';
 import { ErrorNotice } from '../admin/ErrorNotice';
 import { formatDateTime } from '../app/labels';
+import { onSpaceActivate } from '../ui/spaceActivates';
 import { notifyFinalSelectionChanged } from './finalSelectionState';
 
 /** An input submission; `label` is its visible name ("Ana Weber · Round 1 · 21 Oct, 11:25"), never a code. */
@@ -148,7 +149,7 @@ function ConsolidationContent(props: Props): JSX.Element {
     {created && <InlineMessage tone="success">
       {created.self ? 'Consolidation assigned to you.' : `Consolidation assigned to ${created.name}.`}
       {created.roleGranted && ' You now have the Consolidator role for this project.'}
-      {created.self && <> <a className="btn btn-secondary btn-sm" href={`#/tasks/${created.round.assignment_id}`}>Open my consolidation task</a></>}
+      {created.self && <> <a className="btn btn-secondary btn-sm" href={`#/tasks/${created.round.assignment_id}`} onKeyDown={onSpaceActivate}>Open my consolidation task</a></>}
     </InlineMessage>}
   </section>;
 }

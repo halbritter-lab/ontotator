@@ -106,7 +106,7 @@ export function Toast({ toast, onDismiss, durationMs = 10_000, undoDescription =
           onFocus={() => setPaused((p) => ({ ...p, focus: true }))}
           onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPaused((p) => ({ ...p, focus: false })); }}
         >
-          <span className="ui-toast-message">{toast.message}</span>
+          <span className="ui-toast-message" title={toast.message}>{toast.message}</span>
           {toast.note && <span className="ui-toast-note">{toast.note}</span>}
           {toast.onAction && <Button size="sm" className="ui-toast-action" icon={toast.undo ? <IconUndo className="ui-toast-undo-icon" /> : <IconCheck />} onClick={runAction}>{toast.actionLabel ?? "Undo"}</Button>}
           <IconButton size="sm" variant="quiet" className="ui-toast-close" label="Dismiss" icon={<IconClose />} onClick={onDismiss} />

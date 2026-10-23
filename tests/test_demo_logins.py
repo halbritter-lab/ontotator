@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from auth_harness import ORIGIN, PASSWORD, ensure_user
+from auth_harness import HARNESS, ORIGIN, PASSWORD, ensure_user
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
@@ -130,7 +130,12 @@ def test_on_lists_the_accounts_and_the_normal_login_accepts_them(
     assert listed.headers["cache-control"] == "no-store"
     assert listed.json() == {
         "accounts": [
-            {"username": "demo-lead", "password": PASSWORD, "label": "Project lead"}
+            {
+                "username": "demo-lead",
+                "password": PASSWORD,
+                "label": "Project lead",
+                "display_name": "demo-lead",
+            }
         ]
     }
     assert "/api/v1/auth/demo-logins" not in client.get("/openapi.json").text
@@ -143,3 +148,19 @@ def test_on_lists_the_accounts_and_the_normal_login_accepts_them(
     )
     assert login.status_code == 200, login.text
     assert client.get("/api/v1/auth/me").json()["username"] == "demo-lead"
+
+
+def test_demo_logins_carry_display_names(tmp_path: Path) -> None:
+    logins = (
+        settings.DemoLogin("demo-annotator", PASSWORD, "Annotator"),
+        settings.DemoLogin("demo-missing", PASSWORD, "Consolidator"),
+    )
+    app = _app(tmp_path, demo_logins=logins)
+    app.state.accounts.create_user(HARNESS, "demo-annotator", "Tom Reis")
+
+    accounts = TestClient(app).get("/api/v1/auth/demo-logins").json()["accounts"]
+
+    assert [(a["username"], a["display_name"]) for a in accounts] == [
+        ("demo-annotator", "Tom Reis"),
+        ("demo-missing", None),
+    ]

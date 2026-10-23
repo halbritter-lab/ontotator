@@ -43,10 +43,24 @@ describe("demo accounts on the login screen", () => {
 
     const section = await screen.findByRole("region", { name: "Demo accounts" });
     expect(section.textContent).toContain("demo-annotator");
-    fireEvent.click(screen.getByRole("button", { name: "demo-lead · Project lead" }));
+    fireEvent.click(screen.getByRole("button", { name: "demo-lead (demo-lead), Project lead" }));
 
     await waitFor(() => expect(onLoggedIn).toHaveBeenCalledWith(user));
     expect(login).toHaveBeenCalledWith("demo-lead", "lead-pw");
+  });
+
+  it("shows the display name, the username and the role", async () => {
+    // The server adds display_name (null before the user exists); `DemoLogin` does not declare it.
+    const accounts = [
+      { username: "demo-annotator", password: "pw", label: "Annotator", display_name: "Tom Reis" },
+      { username: "demo-new", password: "pw", label: "Consolidator", display_name: null },
+    ];
+    vi.spyOn(api, "demoLogins").mockResolvedValue(accounts);
+
+    render(<LoginScreen onLoggedIn={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: "Tom Reis (demo-annotator), Annotator" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "demo-new (demo-new), Consolidator" })).toBeTruthy();
   });
 
   it("offers no demo accounts in the dialog after a session ended", async () => {

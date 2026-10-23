@@ -9,6 +9,7 @@ import { IconWarning } from "../ui/icons";
 import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, tabId, Tabs, Toolbar, type Column } from "../ui";
 import { LanguageText } from "../ui/LanguageTag";
 import { AssignedDate } from "../ui/AssignedDate";
+import { onSpaceActivate } from "../ui/spaceActivates";
 import { annotationTaskName } from "../editor/modes";
 
 export interface MyTasksProps {
@@ -146,7 +147,7 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
     </> },
     { id: "assigned", header: "Assigned", cell: task => <AssignedDate at={task.assigned_at} /> },
     { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{formatDateTime(task.updated_at)}</time> },
-    { id: "open", header: "Action", cell: task => <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onClick={event => {
+    { id: "open", header: "Action", cell: task => <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onKeyDown={onSpaceActivate} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate({ name: "task", assignmentId: task.assignment_id });
     }}>{task.held ? "View paused task" : taskActionLabels[task.status]}</a> },
@@ -154,7 +155,7 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
   const empty = <EmptyState title="No documents are assigned to you yet." action={managed.length > 0 &&
     <Toolbar label="Assignment actions">{managed.map(item => {
       const route: Route = { name: "projectDocuments", key: item.project_key };
-      return <a key={item.project_key} className="btn btn-secondary" href={routeHref(route)} onClick={event => {
+      return <a key={item.project_key} className="btn btn-secondary" href={routeHref(route)} onKeyDown={onSpaceActivate} onClick={event => {
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
         onNavigate(route);
@@ -162,7 +163,7 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
     })}</Toolbar>
   }>{managed.length > 0 && "As a project lead, you assign documents to people, yourself included, on the Documents page."}</EmptyState>;
   const allRoute = tabRoute("all");
-  const tabEmpty = <EmptyState title={activeTab.empty} action={<a className="btn btn-secondary" href={routeHref(allRoute)} onClick={event => {
+  const tabEmpty = <EmptyState title={activeTab.empty} action={<a className="btn btn-secondary" href={routeHref(allRoute)} onKeyDown={onSpaceActivate} onClick={event => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(allRoute);
   }}>Show all tasks</a>} />;

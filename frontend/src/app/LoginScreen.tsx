@@ -5,6 +5,9 @@ import { Button } from "../ui/Button";
 import { TextInput } from "../ui/TextInput";
 import { InlineMessage } from "../ui/InlineMessage";
 
+/** The server also sends the account's display name (null before the user exists); `DemoLogin` lives in the contracts chain. */
+type DemoAccount = DemoLogin & { display_name?: string | null };
+
 interface LoginScreenProps {
   /** Shown above the form, e.g. why the previous session ended. */
   notice?: string | null;
@@ -30,7 +33,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
   const [problem, setProblem] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [demoLogins, setDemoLogins] = useState<DemoLogin[]>([]);
+  const [demoLogins, setDemoLogins] = useState<DemoAccount[]>([]);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const shownView = useRef(view);
@@ -87,7 +90,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
     void run(() => api.login(username.trim(), password));
   };
 
-  const loginAs = (demo: DemoLogin) => {
+  const loginAs = (demo: DemoAccount) => {
     if (busy) return;
     void run(() => api.login(demo.username, demo.password));
   };
@@ -221,7 +224,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
           <div className="login-demo-list">
             {demoLogins.map((demo) => (
               <Button key={demo.username} size="sm" disabled={busy} onClick={() => loginAs(demo)}>
-                {demo.label ? `${demo.username} · ${demo.label}` : demo.username}
+                {`${demo.display_name ?? demo.username} (${demo.username})${demo.label ? `, ${demo.label}` : ""}`}
               </Button>
             ))}
           </div>

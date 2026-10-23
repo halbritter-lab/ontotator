@@ -128,6 +128,7 @@ describe("choose", () => {
     const bar = block().querySelector("meter")!;
     expect(bar.getAttribute("aria-hidden")).toBe("true");
     const how = screen.getByRole("button", { name: "How is this counted?" });
+    expect(how.classList.contains("btn-link")).toBe(true); // V5: reads as clickable
     expect(how.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(how);
     expect(how.getAttribute("aria-expanded")).toBe("true");
@@ -393,6 +394,9 @@ describe("full agreement (W1)", () => {
     // The per-submission table waits under "Show submissions"; no Consolidate… with nothing to resolve.
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("button", { name: "Consolidate…" })).toBeNull();
+    const show = screen.getByRole("button", { name: "Show submissions" });
+    expect(show.classList.contains("btn-link")).toBe(true); // V5
+    expect(show.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(accept);
     expect(api.selectFinalResult).not.toHaveBeenCalled();
     const confirm = screen.getByRole("group", { name: "Accept result?" });

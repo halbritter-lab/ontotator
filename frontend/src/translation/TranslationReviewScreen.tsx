@@ -549,12 +549,12 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
       <div className="translation-texts">
         <div className={`translation-columns${comparison ? " translation-columns--comparison" : ""}`}>
           <div className="translation-column">
-            <div className="translation-column-head density-compact"><h2 className="translation-column-title">Source ({sourceLanguage})</h2></div>
+            <div className="translation-column-head density-compact"><h2 className="translation-column-title">Source <LanguageTag code={sourceLanguage} /></h2></div>
             <TextView ref={setSourceElement} text={workspace.source.text} label={`Source (${sourceLanguage})`} lang={sourceLanguage} />
           </div>
           <div className="translation-column">
             <div className="translation-column-head density-compact">
-              <h2 id="review-translation-label" className="translation-column-title">Translation ({targetLanguage})</h2>
+              <h2 className="translation-column-title">Translation <LanguageTag code={targetLanguage} /></h2>
               <div className="translation-column-controls">
               <Checkbox id="review-show-changes" label="Show changes" checked={showChanges} onChange={event => setShowChanges(event.target.checked)} />
               {pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
@@ -562,6 +562,8 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
                 {showMatchingLabel}<span aria-hidden="true"> <Kbd>Alt M</Kbd></span></Button>
               </div>
               <span role="status" className="review-sr-only">{matchStatus}</span>
+              {/* The text box keeps its full name; the visible title shows the flag instead of the code in brackets. */}
+              <span id="review-translation-label" hidden>{`Translation (${targetLanguage})`}</span>
             </div>
             {showChanges
               ? <DiffView ref={setTargetElement} before={workspace.text} after={text} lang={targetLanguage} />
