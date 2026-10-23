@@ -1,19 +1,21 @@
 /**
- * One finding group of the consolidation view (acceptance fixes spec "WP-E Frontend > Groups", X6–X8, X14, U14).
- * Collapsed: one line ("Hypotonia ✓ absent (Tom Reis) · Change"). Expanded: the comparison table (columns =
- * people, differences marked by weight and the word "differs"), one row of choice chips per relevant difference
- * naming the person (term, values, conflicting text; see `groupModel`), "+ note" and "Guidelines unclear here".
- * Overlapping text and notes are shown as information. A group resolves when every row has a choice.
+ * One finding group of the consolidation view (spec §3, mockup variant B). Collapsed: one line with the conflict mark,
+ * the group name (the text excerpt) and its state ("2 fields to decide", "agreed", "decided"). Expanded: the
+ * comparison table (columns = people, rows = term, axes, text, note, whole finding; a check button takes a value in a
+ * conflicting row), the result line that always spells out the one finding, "+ note", "Guidelines unclear here" and
+ * the actions. The last missing choice resolves the group; a group without conflicts resolves with "Keep".
  */
-import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import type { WorkspaceView } from "../app/CaseScreen";
+import { axisOptionLabel } from "../editor/axisLabels";
 import { Button, Checkbox, InlineConfirm, Select, Textarea } from "../ui";
-import { axisLabel, KIND_LABELS, keepLabel, namesOf, partialText, quoted, REOPEN_EDITED_WARNING, valueWords } from "./consolidationText";
-import { absentPeople, allChosen, choosePayload, choiceSummary, groupTitle, hasKind, needsTerm, passage, peopleOf, presentPeople, resolvePayload, rowsOf, stateSummary, TAKEN_FROM, takeOverChoices, takeOverWords, termLabel, type ChoiceRow, type Choices, type OtherTerm } from "./groupModel";
-import { personName } from "./lanes";
+import { IconWarning } from "../ui/icons";
+import { ComparisonTable } from "./ComparisonTable";
+import { axisLabel, groupStatus, keepLabel, partialText, REOPEN_EDITED_WARNING } from "./consolidationText";
+import { absentPeople, choicesComplete, comparisonRows, groupName, hasKind, needsTerm, presentPeople, resolvePayload, resultLine, takeFinding, type Choices, type OtherTerm } from "./groupModel";
+import { ResultLine } from "./ResultLine";
 import { TermPicker } from "./TermPicker";
-import { LaneKey } from "./TextPane";
 import type { GroupOutcome } from "./useConsolidation";
 
 export interface GroupCardProps {
@@ -28,7 +30,7 @@ export interface GroupCardProps {
   narrow?: boolean;
   /** The editor view (layers, axes); without it "Edit values…" and "Other term…" are not offered. */
   workspace?: WorkspaceView | null;
-  /** What this session's decision kept ("absent (Tom Reis)"). */
+  /** What this session's decision kept ("Hypotonia (HP:0001252), Absent, Patient, Current"). */
   summary?: string;
   onExpand: () => void;
   onResolve: (payload: ConsolidationResolvePayload, summary: string) => Promise<boolean>;
@@ -52,64 +54,6 @@ function Snippet({ group, text }: { group: ConsolidationGroupView; text: string 
     <mark className="cons-snippet-mark">{chars.slice(start, end).join("")}</mark>{chars.slice(end, to).join("")}{to < chars.length && "…"}</p>;
 }
 
-/** Colour keys of the people holding a value (decorative; the chip names them). */
-function Keys({ people, holders }: { people: readonly ConsolidationPersonView[]; holders: readonly ConsolidationPersonView[] }): JSX.Element | null {
-  if (!holders.length) return null;
-  return <>{holders.map((person, index) => <LaneKey key={`${person.person_id}-${index}`} people={people} personId={person.person_id} />)}</>;
-}
-
-function Chip({ selected, label, onClick, disabled, keys }: { selected: boolean; label: string; onClick: () => void; disabled?: boolean; keys?: ReactNode }): JSX.Element {
-  return <button type="button" className="cons-chip" aria-pressed={selected} aria-disabled={disabled || undefined}
-    onClick={() => { if (!disabled) onClick(); }}>{keys}{label}</button>;
-}
-
-function ChipRow({ row, people, choices, onChoose, disabled, children }: { row: ChoiceRow; people: readonly ConsolidationPersonView[]; choices: Choices;
-  onChoose: (row: ChoiceRow, key: string) => void; disabled: boolean; children?: ReactNode }): JSX.Element {
-  const id = useId();
-  return <div className="cons-choice-row" role="group" aria-labelledby={id}>
-    <span id={id} className="cons-choice-label">{row.label}<span className="cons-differs-word"> · differs</span>:</span>
-    {row.options.map(option => <Chip key={option.key} selected={choices[row.id] === option.key} label={option.label}
-      keys={<Keys people={people} holders={option.people} />} disabled={disabled} onClick={() => onChoose(row, option.key)} />)}
-    {children}
-  </div>;
-}
-
-/** Comparison table: rows = term, text, differing axes, note; columns = people. */
-function Comparison({ group, people, text }: { group: ConsolidationGroupView; people: readonly ConsolidationPersonView[]; text: string }): JSX.Element {
-  const members = group.members;
-  const holders = peopleOf(people, members);
-  const axes: string[] = [];
-  for (const member of members) for (const axis of Object.keys(member.axes)) if (!axes.includes(axis)) axes.push(axis);
-  const differing = axes.filter(axis => new Set(members.map(member => member.axes[axis] ?? "")).size > 1);
-  const same = axes.filter(axis => !differing.includes(axis));
-  const notes = members.some(member => member.note?.trim());
-  const rows: { label: string; differs: boolean; cells: string[] }[] = [
-    { label: "Term", differs: hasKind(group, "term_differs"), cells: members.map(termLabel) },
-    { label: "Text", differs: !!group.span_conflict, cells: members.map(member => member.spans.length ? quoted(passage(text, member.spans)) : "No text span") },
-    ...differing.map(axis => ({ label: axisLabel(axis), differs: true, cells: members.map(member => valueWords(member.axes[axis])) })),
-    // Notes are information, never a decision: the kept finding keeps its own note.
-    ...(notes ? [{ label: "Note", differs: false, cells: members.map(member => member.note?.trim() || "No note") }] : []),
-  ];
-  const info = [
-    hasKind(group, "span_differs") && !group.span_conflict && "The text spans overlap",
-    hasKind(group, "notes_differ") && "the notes differ",
-  ].filter(Boolean).join(" and ");
-  return <>
-    <table className="cons-compare">
-      <caption className="visually-hidden">Comparison of {groupTitle(group)}</caption>
-      <thead><tr><td />{holders.map((person, index) => <th key={`${person.person_id}-${index}`} scope="col">
-        <LaneKey people={people} personId={person.person_id} />{person.label}</th>)}</tr></thead>
-      <tbody>{rows.map(row => <tr key={row.label} className={row.differs ? "cons-differs" : undefined}>
-        <th scope="row">{row.label}{row.differs && <span className="cons-differs-word"> · differs</span>}</th>
-        {row.cells.map((cell, index) => <td key={index}>{cell}</td>)}
-      </tr>)}</tbody>
-    </table>
-    {info && <p className="cons-muted">{info[0].toUpperCase() + info.slice(1)}: the kept finding keeps its own {[
-      hasKind(group, "span_differs") && !group.span_conflict && "text span", hasKind(group, "notes_differ") && "note"].filter(Boolean).join(" and ")}.</p>}
-    {same.length > 0 && <p className="cons-muted">{differing.length ? "Other values match" : "All values match"} ({same.map(axis => valueWords(members[0].axes[axis])).join(" · ")}).</p>}
-  </>;
-}
-
 /** "Edit values…": every axis of the finding's type, starting from the kept member's values. */
 function EditValues({ group, workspace, busy, onKeep, onCancel }: { group: ConsolidationGroupView; workspace: WorkspaceView; busy: boolean; onKeep: (axes: Record<string, string>) => void; onCancel: () => void }): JSX.Element {
   const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
@@ -121,7 +65,7 @@ function EditValues({ group, workspace, busy, onKeep, onCancel }: { group: Conso
     {axes.map(axis => <Select key={axis.id} id={`${id}-${axis.id}`} label={axis.label} value={values[axis.id] ?? ""}
       onChange={event => setValues(current => ({ ...current, [axis.id]: event.target.value }))}>
       {!values[axis.id] && <option value="">Not specified</option>}
-      {axis.options.map(option => <option key={option} value={option}>{valueWords(option)}</option>)}
+      {axis.options.map(option => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
     </Select>)}
     <div className="cons-actions">
       <Button variant="primary" loading={busy} onClick={() => onKeep(Object.fromEntries(Object.entries(values).filter(([, value]) => !!value)))}>Keep with these values</Button>
@@ -143,55 +87,47 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const otherTermRef = useRef<HTMLButtonElement>(null);
   const noteId = useId();
   const open = group.state === "open";
-  const title = groupTitle(group);
+  // A reopened group starts over: old choices would resolve it with the first check.
+  useEffect(() => { if (open) { setChoices({}); setOtherTerm(null); } }, [open]);
+  const name = groupName(group, text);
   const present = presentPeople(group, people), absent = absentPeople(group, people);
   const partial = hasKind(group, "partial");
-  const rows = useMemo(() => rowsOf(group, people, text, otherTerm), [group, people, text, otherTerm]);
+  const rows = useMemo(() => comparisonRows(group, people, text, choices), [group, people, text, choices]);
+  const line = resultLine(group, people, choices, otherTerm);
+  const conflicts = rows.filter(row => row.conflict).length;
   const inputIds = group.members.map(member => member.input_id);
-  const kindWords = partial ? `only ${namesOf(present)}` : group.kinds.filter(kind => kind !== "partial")
-    .map(kind => kind === "span_differs" && !group.span_conflict ? "text span shifted" : KIND_LABELS[kind] ?? kind).join(", ");
-  // Nothing to choose (match, or only overlapping text or notes differ): Keep, Edit values…, Other term….
-  const nothingToChoose = rows.length === 0;
-  const summary = props.summary ?? stateSummary(group, people);
+  const status = groupStatus(group, conflicts);
   const extras = () => ({ ...(note.trim() ? { note: note.trim() } : {}), ...(flag ? { guidelines_unclear: true } : {}) });
 
-  const resolve = (payload: Omit<ConsolidationResolvePayload, "input_ids">, line: string) =>
-    void props.onResolve({ input_ids: inputIds, ...payload, ...extras() }, line);
-  const choose = (next: Choices, nextRows: readonly ChoiceRow[] = rows) =>
-    resolve(resolvePayload(group, nextRows, next), choiceSummary(nextRows, next));
-  // The last open row resolves the group (except "partial", which keeps with its button).
-  const settle = (next: Choices, nextRows: readonly ChoiceRow[] = rows) => {
+  const resolve = (payload: Omit<ConsolidationResolvePayload, "input_ids">, summary: string) =>
+    void props.onResolve({ input_ids: inputIds, ...payload, ...extras() }, summary);
+  // The last missing choice resolves the group with the finding the result line spells out.
+  const settle = (next: Choices, other: OtherTerm | null = otherTerm) => {
     setChoices(next);
-    if (!partial && allChosen(nextRows, next)) choose(next, nextRows);
+    if (conflicts && choicesComplete(comparisonRows(group, people, text, next), next)) {
+      resolve(resolvePayload(group, next), resultLine(group, people, next, other).finding);
+    }
   };
-  // Choosing a row by hand drops the member of an earlier "Take … finding".
-  const onChoose = (row: ChoiceRow, key: string) => {
-    const { [TAKEN_FROM]: _taken, ...rest } = choices;
-    settle({ ...rest, [row.id]: key });
+  // Choosing a value by hand drops the member of an earlier "Take … finding".
+  const onChoose = (rowId: string, value: string) => {
+    const { whole: _taken, ...rest } = choices;
+    settle({ ...rest, [rowId]: value });
   };
-  const keep = () => {
-    if (rows.length) { choose(choices); return; }
-    resolve({ action: "keep" }, partial ? `kept from ${namesOf(present)}` : "kept");
-  };
-  const keepReady = allChosen(rows, choices);
   const editValues = (axes: Record<string, string>) => {
-    const payload = choosePayload(group, rows, choices);
-    resolve({ action: "choose", choice: { term_id: payload.term_id, span_from_input_id: payload.span_from_input_id, axes } },
-      Object.values(axes).map(valueWords).join(" · ") || "decided");
+    const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
+    resolve({ action: "choose", choice: { term_id: base.term_id, span_from_input_id: base.input_id, axes } },
+      Object.values(axes).map(axisOptionLabel).join(", ") || "decided");
     setEditing(false);
   };
-  // "Take …'s finding" (2+ differing fields): fills every row from that member, naming everything it adopts.
-  const takeOvers = rows.length > 1 ? group.members : [];
-  const missing = rows.filter(row => !row.options.some(option => option.key === choices[row.id]));
   const reopen = () => { if (group.edited) setConfirmReopen(true); else void props.onReopen(); };
 
   const header = <h2 className="cons-group-heading">
     <button ref={props.toggleRef} type="button" className="cons-group-toggle" aria-expanded={expanded} onClick={props.onExpand}>
-      <span className="cons-group-title">{title}</span>
-      {open ? <span className="cons-group-kind"> · {kindWords}</span> : <span className="cons-group-done"> ✓ {summary}</span>}
-      {group.edited && <span className="cons-tag"> · edited in editor</span>}
-      {group.guidelines_unclear && <span className="cons-tag"> · flagged</span>}
-      {open && <span className="cons-group-state"> · open</span>}
+      {open && conflicts > 0 && <span className="cons-conflict"><IconWarning /><span className="visually-hidden">Conflict</span></span>}
+      <span className="cons-group-title">{name}</span>{" "}
+      <span className={open ? "cons-group-state" : "cons-group-done"}>{status}{!open && props.summary ? `: ${props.summary}` : ""}</span>
+      {group.edited && <>{" "}<span className="cons-tag">edited in editor</span></>}
+      {group.guidelines_unclear && <>{" "}<span className="cons-tag">flagged</span></>}
     </button>
   </h2>;
 
@@ -218,51 +154,38 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       }} />
   </div>;
 
+  const table = (tableReadOnly: boolean) => <ComparisonTable name={name} group={group} people={people} rows={rows} readOnly={tableReadOnly}
+    busy={busy} onChoose={onChoose} onTake={member => settle(takeFinding(group, member))} />;
+
   const openBody = <>
     {partial && <p className="cons-partial">{partialText(present, absent)}</p>}
-    {(group.members.length > 1 || !partial) ? <Comparison group={group} people={people} text={text} />
-      : <p className="cons-muted">{termLabel(group.members[0])} · {Object.values(group.members[0].axes).map(valueWords).join(" · ") || "no values"}</p>}
+    {table(readOnly)}
     {!readOnly && <>
-      {/* Note and flag go with the decision, so they come before the chips (the last chip resolves). */}
+      <ResultLine line={line} />
+      {/* Note and flag go with the decision, so they come before the choices (the last choice resolves). */}
       {noteAndFlag(false)}
-      {takeOvers.length > 0 && <div className="cons-take-over" role="group" aria-labelledby={`${noteId}-take`}>
-        <span id={`${noteId}-take`} className="cons-choice-label">Whole finding:</span>
-        {takeOvers.map(member => {
-          const person = peopleOf(people, [member])[0];
-          const next = takeOverChoices(rows, member);
-          const selected = choices[TAKEN_FROM] === member.input_id && rows.every(row => choices[row.id] === next[row.id]);
-          return <Chip key={member.input_id} selected={selected} disabled={busy} keys={<LaneKey people={people} personId={member.person_id} />}
-            label={`Take ${personName(person.label)}'s finding: ${takeOverWords(member, rows, text)}`} onClick={() => settle(next)} />;
-        })}
-      </div>}
-      {takeOvers.length > 0 && <p className="cons-muted">Or choose each differing field:</p>}
-      {rows.map(row => <ChipRow key={row.id} row={row} people={people} choices={choices} onChoose={onChoose} disabled={busy} />)}
-      {!partial && missing.length > 0 && missing.length < rows.length && <p className="action-reason" role="status">
-        Still to choose: {missing.map(row => row.label).join(", ")}.</p>}
       {editing && workspace ? <EditValues group={group} workspace={workspace} busy={busy} onKeep={editValues} onCancel={() => setEditing(false)} />
         : <div className="cons-actions">
-          {(partial || nothingToChoose) && <Button variant={partial ? "primary" : "secondary"} loading={busy}
-            aria-disabled={!keepReady || undefined} aria-describedby={!keepReady ? `${noteId}-keep-reason` : undefined}
-            onClick={() => { if (keepReady) keep(); }}>{partial ? keepLabel(present) : "Keep"}</Button>}
+          {!conflicts && <Button variant="primary" loading={busy}
+            onClick={() => resolve(resolvePayload(group, choices), line.finding)}>{partial ? keepLabel(present) : "Keep"}</Button>}
           <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, "left out"); }}>Leave out</Button>
-          {(partial || nothingToChoose) && workspace && <Button onClick={() => setEditing(true)}>Edit values…</Button>}
-          {(nothingToChoose || needsTerm(group)) && workspace && <Button ref={otherTermRef} aria-expanded={picking} onClick={() => setPicking(true)}>Other term…</Button>}
+          {!conflicts && workspace && <Button onClick={() => setEditing(true)}>Edit values…</Button>}
+          {(!conflicts || needsTerm(group)) && workspace && <Button ref={otherTermRef} aria-expanded={picking} onClick={() => setPicking(true)}>Other term…</Button>}
           {props.onEditInEditor && <Button onClick={props.onEditInEditor}>Edit in editor…</Button>}
         </div>}
-      {!keepReady && (partial || nothingToChoose) && <p id={`${noteId}-keep-reason`} className="action-reason">Choose one option in each row first.</p>}
       {workspace && <TermPicker open={picking} anchorRef={otherTermRef} label="Other term" workspace={workspace} layerId={group.members[0].layer_id}
         onClose={() => setPicking(false)} onPick={candidate => {
+          if (busy) return;
           setPicking(false);
           if (!needsTerm(group)) {
             resolve({ action: "choose", choice: { term_id: candidate.term_id, span_from_input_id: group.keep_input_id, axes: {} } },
               `${candidate.label} (${candidate.term_id})`);
             return;
           }
-          // Another term is one option of the term row; the other differing fields still need their choice.
+          // Another term replaces the members' terms; the other conflicting fields still need their choice.
           const other = { termId: candidate.term_id, label: candidate.label };
           setOtherTerm(other);
-          const next = { ...choices, term: candidate.term_id };
-          settle(next, rowsOf(group, people, text, other));
+          settle({ ...choices, term: candidate.term_id }, other);
         }} />}
     </>}
   </>;
@@ -270,7 +193,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const resolvedBody = <>
     {group.note && !noteOpen && <p className="cons-note-text">Note: {group.note}</p>}
     {readOnly && group.guidelines_unclear && <p className="cons-note-text">Flagged: guidelines unclear</p>}
-    <Comparison group={group} people={people} text={text} />
+    {table(true)}
     {!readOnly && <>
       {confirmReopen ? <InlineConfirm title="Reopen this group?" message={REOPEN_EDITED_WARNING} confirmLabel="Reopen" busy={busy}
         onCancel={() => setConfirmReopen(false)} onConfirm={() => { void props.onReopen().then(() => setConfirmReopen(false)); }} />
@@ -282,11 +205,11 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     </>}
   </>;
 
-  return <li className={["cons-group", expanded && "cons-group-expanded", !open && "cons-group-resolved"].filter(Boolean).join(" ")} data-group={group.group_id}>
+  return <li className={["cons-group", expanded && "cons-group-expanded", !open && "cons-group-resolved", group.state === "auto" && "cons-group-agreed"].filter(Boolean).join(" ")} data-group={group.group_id}>
     <div className="cons-group-line">
       {header}
       {!expanded && !open && !readOnly && <Button size="sm" className="cons-change" loading={busy}
-        aria-label={`Change, ${title}`} onClick={reopen}>Change</Button>}
+        aria-label={`Change, ${name}`} onClick={reopen}>Change</Button>}
     </div>
     {!expanded && confirmReopen && <InlineConfirm title="Reopen this group?" message={REOPEN_EDITED_WARNING} confirmLabel="Reopen" busy={busy}
       onCancel={() => setConfirmReopen(false)} onConfirm={() => { void props.onReopen().then(() => setConfirmReopen(false)); }} />}

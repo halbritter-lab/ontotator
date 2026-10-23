@@ -173,7 +173,8 @@ class ResolveChoice(BaseModel):
 
     term_id: str
     span_from_input_id: str
-    axes: dict[str, str] = Field(default_factory=dict)
+    # null: the axis is not set (a person left it empty).
+    axes: dict[str, str | None] = Field(default_factory=dict)
     # Omitted: the span member's note; null: no note.
     note_from_input_id: str | None = None
 

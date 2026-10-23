@@ -756,3 +756,32 @@ def test_added_findings_are_listed_for_the_assignee_and_the_lead(cons):
     assert body["read_only"] is True
     assert [a["annotation_id"] for a in body["added"]] == [added_id]
     assert body["added_by"] == f"Ada Judicator ({adj})"
+
+
+def test_choose_with_a_null_axis_writes_it_as_not_set(cons):
+    """A person who left a differing axis empty can be taken: null = not set."""
+    values = group(cons, "values_differ")
+    ids = inputs(values)
+    first = values["members"][0]
+    draft = ok(
+        mutate(
+            cons,
+            "resolve",
+            {
+                "input_ids": ids,
+                "action": "choose",
+                "choice": {
+                    "term_id": HYPOTONIA,
+                    "span_from_input_id": first["input_id"],
+                    "axes": {
+                        "assertion": first["axes"]["assertion"],
+                        "temporality": None,
+                    },
+                },
+            },
+        )
+    )
+    chosen = annotation(draft, cons_id(cons, ids, 0))
+    assert chosen.annotation.axes_values.get("temporality") is None
+    assert "temporality" not in chosen.annotation.axes_defaulted
+    assert group(cons, "values_differ")["state"] == "choose"

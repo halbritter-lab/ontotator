@@ -19,7 +19,6 @@
   line-height: var(--leading-xl);
 }
 
-.cons-detail,
 .cons-muted {
   margin: 0;
   color: var(--text-muted);
@@ -191,26 +190,6 @@
   gap: var(--space-3);
 }
 
-.cons-auto {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.cons-auto-banner {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--notice-success-border);
-  border-radius: var(--radius);
-  background: var(--success-light);
-}
-
-.cons-auto-banner p {
-  margin: 0;
-}
-
 .cons-group-list {
   display: grid;
   margin: 0;
@@ -219,10 +198,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-raised);
-}
-
-.cons-group-list[hidden] {
-  display: none;
 }
 
 .cons-group {
@@ -263,7 +238,7 @@
 }
 
 .cons-group-toggle:focus-visible,
-.cons-chip:focus-visible {
+.cons-take:focus-visible {
   outline: var(--focus-width) solid var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
@@ -278,10 +253,17 @@
   color: var(--text-muted);
 }
 
-.cons-group-kind {
-  color: var(--text-muted);
+.cons-group-done,
+.cons-group-state {
   font-size: var(--size-sm);
-  font-weight: var(--weight-strong);
+}
+
+/* Conflict mark: the icon is decorative, the word "Conflict" is visually hidden next to it. */
+.cons-conflict,
+.cons-conflict-mark {
+  color: var(--warning);
+  vertical-align: -2px;
+  margin-inline-end: var(--space-1);
 }
 
 .cons-group-body {
@@ -297,11 +279,14 @@
   margin: 0;
 }
 
+/* Result line: always spells out the one finding the group saves. */
 .cons-result {
-  font-weight: var(--weight-strong);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--accent-light);
 }
 
-/* Comparison table: differences by weight and the word "differs", never colour alone. */
+/* Comparison table: a conflicting row has the warning mark, a tint and a check per person; never colour alone. */
 .cons-compare {
   width: 100%;
   border-collapse: collapse;
@@ -328,59 +313,63 @@
   white-space: nowrap;
 }
 
-.cons-differs td,
-.cons-differs-word {
-  font-weight: var(--weight-strong);
+.cons-compare td {
+  vertical-align: middle;
 }
 
-.cons-differs td {
+.cons-row--conflict td,
+.cons-row--conflict th {
   background: var(--warning-light);
 }
 
-.cons-choice-row,
-.cons-take-over {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-}
-
-.cons-choice-label {
-  color: var(--text-muted);
-  font-size: var(--size-sm);
-}
-
-.cons-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 1px var(--space-3);
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: var(--surface-raised);
+.cons-row--conflict th {
   color: var(--text);
-  font: inherit;
-  font-size: var(--size-sm);
-  cursor: pointer;
-}
-
-.cons-chip:hover {
-  background: var(--surface-sunken);
-}
-
-.cons-chip[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-light);
   font-weight: var(--weight-strong);
 }
 
-.cons-chip[aria-pressed="true"]::before {
-  content: "✓ ";
-  white-space: pre;
+.cons-agreed {
+  color: var(--text-muted);
 }
 
-.cons-chip[aria-disabled="true"] {
+.cons-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cons-take {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.cons-take:hover {
+  background: var(--surface-sunken);
+}
+
+.cons-take[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.cons-take[aria-disabled="true"] {
   cursor: default;
+}
+
+.cons-bot {
+  display: inline-flex;
+  margin-inline-start: var(--space-1);
+  color: var(--text-muted);
+  vertical-align: -2px;
 }
 
 .cons-note-flag {
@@ -460,7 +449,7 @@
     text-decoration-thickness: 2px;
   }
 
-  .cons-chip[aria-pressed="true"],
+  .cons-take[aria-pressed="true"],
   .cons-selected {
     outline: 2px solid CanvasText;
   }

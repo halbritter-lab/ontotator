@@ -146,7 +146,7 @@ export interface ConsolidationResolvePayload {
   input_ids: string[];
   action: "keep" | "choose" | "leave_out";
   /** Only with `choose`. Omit `note_from_input_id` to keep the span member's note; `null` drops it. */
-  choice?: { term_id: string; span_from_input_id: string; axes: Record<string, string>; note_from_input_id?: string | null };
+  choice?: { term_id: string; span_from_input_id: string; axes: Record<string, string | null>; note_from_input_id?: string | null };
   note?: string | null;
   guidelines_unclear?: boolean;
 }

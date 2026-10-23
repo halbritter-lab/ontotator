@@ -14,9 +14,10 @@ import { prefillQuery } from "../editor/termSearch";
 import { nextTaskLabel, remainingTasksText } from "../translation/labels";
 import { Button, EmptyState, InlineMessage, Popover, Select, TextInput, Toast, useMediaQuery, useToast } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
-import { addedHeading, headerDetail, headerTitle, READ_ONLY_REASONS, submittedText, summaryText } from "./consolidationText";
-import { groupTitle, termLabel } from "./groupModel";
-import { autoListDefault, GroupList } from "./GroupList";
+import { StagePath } from "../ui/StagePath";
+import { addedHeading, finalizationState, headerTitle, READ_ONLY_REASONS, submittedText, summaryText } from "./consolidationText";
+import { groupName, termLabel } from "./groupModel";
+import { GroupList, textOrder } from "./GroupList";
 import { SubmitBar } from "./SubmitBar";
 import { SummaryDialog } from "./SummaryDialog";
 import { newFindingTarget, TermPicker } from "./TermPicker";
@@ -46,10 +47,6 @@ export interface ConsolidationScreenProps {
 }
 
 type NextTask = { kind: "loading" } | { kind: "ready"; next: TaskSummary | null; remaining: number } | { kind: "error"; error: unknown };
-
-/** Groups in the order the screen shows them: the automatically kept first, then the others (`GroupList`). */
-const shownOrder = (groups: readonly ConsolidationGroupView[]): ConsolidationGroupView[] =>
-  [...groups.filter(group => group.state === "auto"), ...groups.filter(group => group.state !== "auto")];
 
 /** Codepoint ranges of every exact occurrence of `query` (trimmed) in `text`. */
 export function passagesOf(text: string, query: string): TextRange[] {
@@ -106,7 +103,6 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const narrow = !wide && !medium;
   const [selected, setSelected] = useState<string | null>(null);
-  const [autoListOpen, setAutoListOpen] = useState(false);
   const [summaries, setSummaries] = useState<ReadonlyMap<string, string>>(new Map());
   const [textHidden, setTextHidden] = useState(false);
   const [range, setRange] = useState<TextRange | null>(null);
@@ -126,14 +122,13 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   viewRef.current = view;
   const initialized = useRef(false);
 
-  // First read: the route's group, else the first open group; the automatic list opens with ≤ 3 entries.
+  // First read: the route's group, else the first open group in text order.
   useEffect(() => {
     if (!view || initialized.current) return;
     initialized.current = true;
     const routed = view.groups.find(group => group.group_id === props.group);
-    const first = routed ?? view.groups.find(group => group.state === "open");
+    const first = routed ?? textOrder(view.groups).find(group => group.state === "open");
     setSelected(first?.group_id ?? null);
-    setAutoListOpen(autoListDefault(view.groups) || routed?.state === "auto");
   }, [view, props.group]);
 
   useEffect(() => {
@@ -142,12 +137,11 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   }, [focusRequest]);
 
   const readOnly = !view || view.read_only || !!props.readOnly || submitted;
-  const groups = view?.groups ?? [];
+  const groups = useMemo(() => textOrder(view?.groups ?? []), [view?.groups]);
   const open = groups.filter(group => group.state === "open").length;
 
   const select = (groupId: string, focus = false) => {
     setSelected(groupId);
-    if (viewRef.current?.groups.find(group => group.group_id === groupId)?.state === "auto") setAutoListOpen(true);
     if (focus) setFocusRequest({ groupId });
   };
   const announceTimer = useRef<number | undefined>(undefined);
@@ -157,17 +151,16 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     setAnnouncement("");
     announceTimer.current = window.setTimeout(() => setAnnouncement(text), 0);
   };
-  // J/K walk the groups as shown (automatic first); the ends are announced, as in the row panel.
+  // J/K walk the open groups in text order; the ends are announced, as in the row panel.
   const step = (delta: number) => {
-    const shown = shownOrder(groups);
-    if (!shown.length) return;
-    const index = shown.findIndex(group => group.group_id === selected);
-    const next = index < 0 ? (delta > 0 ? 0 : shown.length - 1) : index + delta;
-    if (next < 0 || next >= shown.length) { announce(delta > 0 ? "Last group" : "First group"); return; }
-    select(shown[next].group_id, true);
+    const index = groups.findIndex(group => group.group_id === selected);
+    let next = index < 0 ? (delta > 0 ? 0 : groups.length - 1) : index + delta;
+    while (next >= 0 && next < groups.length && groups[next].state !== "open") next += delta;
+    if (next < 0 || next >= groups.length) { announce(delta > 0 ? "Last open group" : "First open group"); return; }
+    select(groups[next].group_id, true);
   };
-  useShortcut("j", () => step(1), { description: "Next group", group: "Consolidation", enabled: !!view });
-  useShortcut("k", () => step(-1), { description: "Previous group", group: "Consolidation", enabled: !!view });
+  useShortcut("j", () => step(1), { description: "Next open group", group: "Consolidation", enabled: !!view });
+  useShortcut("k", () => step(-1), { description: "Previous open group", group: "Consolidation", enabled: !!view });
 
   const reopen = async (group: ConsolidationGroupView): Promise<boolean> => {
     const ok = await data.reopen(group.group_id, { input_ids: group.members.map(member => member.input_id) });
@@ -181,11 +174,11 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     const ok = await data.resolve(group.group_id, payload);
     if (!ok) return false;
     setSummaries(current => new Map(current).set(group.group_id, summary));
-    const next = nextOpenAfter(viewRef.current?.groups ?? [], group.group_id);
+    const next = nextOpenAfter(textOrder(viewRef.current?.groups ?? []), group.group_id);
     setSelected(next);
     if (next) setFocusRequest({ groupId: next });
     else submitRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    show({ message: `${groupTitle(group)}: ${summary}.`, actionLabel: "Undo", undo: true, onAction: () => { void reopen(group); } });
+    show({ message: `${groupName(group, viewRef.current?.text ?? "")}: ${summary}.`, actionLabel: "Undo", undo: true, onAction: () => { void reopen(group); } });
     return true;
   };
   const annotate = (group: ConsolidationGroupView, payload: ConsolidationAnnotatePayload) => data.annotate(group.group_id, payload);
@@ -260,8 +253,12 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
           if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); navigate(props.back!);
         }}>Back to documents</a>}
+        <StagePath segments={[
+          { id: "translation", title: "Translation", state: "done", tone: "done" },
+          { id: "annotation", title: "Annotation", state: `${view.people.length} submitted`, tone: "done" },
+          { id: "finalization", title: "Finalization", state: finalizationState(open, groups.length), tone: "now" },
+        ]} />
         <h1 id="cons-title" className="cons-title"><LanguageText text={headerTitle(view, readOnly && !submitted)} code={view.language} /></h1>
-        <p className="cons-detail">{headerDetail(view, open)}</p>
       </div>
       {props.headerActions && <div className="cons-header-actions" role="group" aria-label="Task">{props.headerActions}</div>}
       {!readOnly && <div ref={submitRef}><SubmitBar open={open} onSubmit={() => setDialog({ open: true, busy: false, warning: null, error: null })}
@@ -287,20 +284,19 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       <div className="cons-side">
         <GroupList groups={groups} people={view.people} text={view.text} selected={selected} readOnly={readOnly} busy={data.busy}
           outcomes={data.outcomes} narrow={narrow} workspace={data.workspace} summaries={summaries}
-          autoListOpen={autoListOpen} onAutoListOpen={setAutoListOpen}
           onSelect={groupId => select(groupId)} onResolve={resolve} onAnnotate={annotate} onReopen={reopen}
           onDismissOutcome={data.dismissOutcome} onEditInEditor={editInEditor}
           toggleRef={groupId => element => { if (element) toggles.current.set(groupId, element); else toggles.current.delete(groupId); }} />
         {added.length > 0 && <section className="cons-added-list" aria-label="Added findings">
           <h2 className="cons-subheading">{addedHeading(props.assignmentId !== undefined, view.added_by)}</h2>
-          <ul>{added.map(finding => <li key={finding.annotationId}>{finding.label} · {finding.spans.map(([start, end]) => `“${Array.from(view.text).slice(start, end).join("")}”`).join(" … ")}</li>)}</ul>
+          <ul>{added.map(finding => <li key={finding.annotationId}>{finding.label}, {finding.spans.map(([start, end]) => `“${Array.from(view.text).slice(start, end).join("")}”`).join(" … ")}</li>)}</ul>
         </section>}
       </div>
     </div>
     {typing && <PassageForm text={view.text} anchorRef={addRef} onPick={pickPassage} onClose={() => setTyping(false)} />}
     {data.workspace && addTarget && <TermPicker open={adding} anchorRef={addRef} label="Add finding" workspace={data.workspace} layerId={addTarget.layerId}
       initialQuery={range ? prefillQuery(view.text, [range]) : undefined} onClose={() => setAdding(false)} onPick={(candidate, searchId) => { void addFinding(candidate, searchId); }} />}
-    <SummaryDialog open={dialog.open} summary={summaryText(groups, view.people, added.length)} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
+    <SummaryDialog open={dialog.open} summary={summaryText(groups, added.length)} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
       onSubmit={acknowledged => { void submit(acknowledged); }} onClose={() => setDialog({ open: false, busy: false, warning: null, error: null })} />
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
     <Toast toast={toast} onDismiss={dismiss} undoDescription="Undo the last decision" undoGroup="Consolidation" />

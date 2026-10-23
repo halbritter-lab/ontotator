@@ -50,14 +50,14 @@ describe("TaskEditor switch", () => {
   it("opens the consolidation view for an active consolidation round", async () => {
     mockTask();
     render(<TaskEditor assignmentId={1} user={user} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
-    expect(await screen.findByRole("heading", { name: "Consolidate case-107 · de v2" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Consolidate case-107 de v2" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit in editor…" })).toBeTruthy();
   });
 
   it("offers the guidelines and Report problem in the consolidation view", async () => {
     mockTask({ guideline: { version: 2 } });
     render(<TaskEditor assignmentId={1} user={user} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
-    await screen.findByRole("heading", { name: "Consolidate case-107 · de v2" });
+    await screen.findByRole("heading", { name: "Consolidate case-107 de v2" });
     expect(screen.getByRole("button", { name: /^Guidelines v2/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^Report problem/ })).toBeTruthy();
   });
@@ -65,7 +65,7 @@ describe("TaskEditor switch", () => {
   it("opens the editor with view=editor", async () => {
     mockTask();
     render(<TaskEditor assignmentId={1} user={user} view="editor" onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
-    expect(await screen.findByText("Consolidation review", { exact: true })).toBeTruthy();
+    expect(await screen.findByText("Consolidate", { exact: true })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: /^Consolidate / })).toBeNull();
   });
 });

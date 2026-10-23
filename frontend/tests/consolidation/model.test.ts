@@ -1,135 +1,138 @@
 import { describe, expect, it } from "vitest";
-import { autoBanner, headerDetail, headerTitle, partialText, summaryText } from "../../src/consolidation/consolidationText";
-import { allChosen, choiceSummary, choosePayload, rowsOf, takeOverChoices, takeOverWords } from "../../src/consolidation/groupModel";
-import { ANA, AXIS_DEFS, decidedView, exampleView, group, LUC, member, span, TEXT, TOM } from "./fixtures";
+import { fieldsToDecide, groupStatus, headerTitle, partialText, submittedText, summaryText } from "../../src/consolidation/consolidationText";
+import { choicesComplete, comparisonRows, groupName, resolvePayload, resultLine, takeFinding } from "../../src/consolidation/groupModel";
+import { ANA, decidedView, exampleGroups, exampleView, hypotoniaThree, LUC, span, TEXT, THREE, TOM } from "./fixtures";
 
 describe("consolidation copy", () => {
-  it("summarises the decisions before submitting", () => {
+  it("summarises groups, findings and left out before submitting", () => {
     const view = decidedView();
-    expect(summaryText(view.groups, view.people))
-      .toBe("8 decisions → 7 findings: 4 kept automatically (all matched) · 2 decided · 1 kept from Luc Martin · 1 left out · 1 note · 1 flagged");
+    expect(summaryText(view.groups)).toBe("8 groups, 7 findings, 1 left out");
+    expect(summaryText(view.groups, 1)).toBe("8 groups, 8 findings, 1 left out");
   });
 
-  it("counts findings added outside the groups in the summary and its total", () => {
-    const view = decidedView();
-    expect(summaryText(view.groups, view.people, 1))
-      .toBe("8 decisions → 8 findings: 4 kept automatically (all matched) · 2 decided · 1 kept from Luc Martin · 1 left out · 1 added · 1 note · 1 flagged");
-  });
-
-  it("titles a read-only view as the consolidation of the text", () => {
-    expect(headerTitle(exampleView(), true)).toBe("Consolidation of case-107 · de v2");
-  });
-
-  it("titles the view with text, people and open groups", () => {
-    const view = exampleView();
-    expect(headerTitle(view)).toBe("Consolidate case-107 · de v2");
-    expect(headerDetail(view, 4)).toBe("Luc Martin, Tom Reis · 4 open");
-    expect(autoBanner(4)).toBe("4 findings matched and were kept automatically. Check them in the text.");
+  it("titles the view without separators", () => {
+    expect(headerTitle(exampleView())).toBe("Consolidate case-107 de v2");
+    expect(headerTitle(exampleView(), true)).toBe("Consolidation of case-107 de v2");
   });
 
   it("names who marked a partial finding and who has nothing there", () => {
-    expect(partialText([LUC, ANA], [TOM])).toBe("Luc Martin, Ana Weber marked this · Tom Reis has nothing here");
+    expect(partialText([LUC, ANA], [TOM])).toBe("Luc Martin, Ana Weber marked this. Tom Reis has nothing here.");
+  });
+
+  it("states a group as fields to decide, agreed or decided", () => {
+    expect(fieldsToDecide(1)).toBe("1 field to decide");
+    expect(groupStatus({ state: "open" }, 0)).toBe("to decide");
+    expect(groupStatus({ state: "open" }, 2)).toBe("2 fields to decide");
+    expect(groupStatus({ state: "auto" }, 0)).toBe("agreed");
+    expect(groupStatus({ state: "choose" }, 2)).toBe("decided");
+  });
+
+  it("says who accepts the result after submitting", () => {
+    expect(submittedText(true)).toBe("Consolidation submitted. Accept the result in Documents.");
+    expect(submittedText(false)).toBe("Consolidation submitted. The lead then accepts the result.");
   });
 });
 
-describe("decision rows", () => {
-  it("never asks about notes: the note comes with the kept finding", () => {
-    const value = group("g", ["notes_differ"], [
-      member("i1", LUC, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { note: "Mild." }),
-      member("i2", TOM, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { note: "Severe." }),
-    ]);
-    const rows = rowsOf(value, [LUC, TOM], TEXT);
-    expect(rows).toEqual([]);
-    expect(choosePayload(value, rows, {})).toEqual({ term_id: "HP:0001252", span_from_input_id: "i1", axes: {} });
+const rowOf = (rows: ReturnType<typeof comparisonRows>, id: string) => rows.find(row => row.id === id)!;
+
+describe("comparison model", () => {
+  it("comparison rows mark term and assertion as conflicts and the rest as agreed", () => {
+    const rows = comparisonRows(hypotoniaThree(), THREE, TEXT, {});
+    expect(rows.map(row => row.id)).toEqual(["term", "assertion", "experiencer", "temporality", "text", "whole"]);
+    expect(rowOf(rows, "term").conflict).toBe(true);
+    expect(rowOf(rows, "assertion").conflict).toBe(true);
+    expect(rowOf(rows, "experiencer")).toMatchObject({ conflict: false, agreed: "Patient (all agree)", label: "Experiencer" });
+    expect(rowOf(rows, "temporality").agreed).toBe("Current (all agree)");
+    expect(rowOf(rows, "term").cells.map(cell => cell.display)).toEqual(["Hypotonia", "Hypotonia", "Axial hypotonia"]);
   });
 
-  it("asks about the text only when the spans conflict", () => {
-    const members = [
-      member("i1", LUC, "HP:0001263", "Global developmental delay", [span("Delayed development")]),
-      member("i2", TOM, "HP:0001263", "Global developmental delay", [span("development")]),
-    ];
-    expect(rowsOf(group("g", ["span_differs"], members), [LUC, TOM], TEXT)).toEqual([]);
-    const conflict = rowsOf(group("g", ["span_differs"], members, { span_conflict: true }), [LUC, TOM], TEXT);
-    expect(conflict.map(row => row.id)).toEqual(["span"]);
-    expect(conflict[0].options.map(option => option.label)).toEqual(["“Delayed development” · Luc Martin", "“development” · Tom Reis"]);
+  it("text is information unless spans conflict", () => {
+    const text = rowOf(comparisonRows(hypotoniaThree(), THREE, TEXT, {}), "text");
+    expect(text).toMatchObject({ conflict: false, agreed: null, info: "(overlapping, comes with the chosen finding)" });
+    const conflicting = rowOf(comparisonRows(hypotoniaThree({ span_conflict: true }, { ali: { spans: [span("hypotonia")] } }), THREE, TEXT, {}), "text");
+    expect(conflicting.conflict).toBe(true);
+    expect(conflicting.cells).toHaveLength(3);
   });
 
-  it("labels a majority value with 2 of 3", () => {
-    const value = group("g", ["values_differ"], [
-      member("i1", LUC, "HP:0001252", "Hypotonia", [span("muscular hypotonia")]),
-      member("i2", TOM, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
-      member("i3", ANA, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
-    ], { majority: { assertion: "absent" } });
-    const rows = rowsOf(value, [LUC, TOM, ANA], TEXT);
-    expect(rows.map(row => row.options.map(option => option.label))).toEqual([["present · Luc Martin", "absent · Tom Reis, Ana Weber (2 of 3)"]]);
+  it("notes never block", () => {
+    const rows = comparisonRows(hypotoniaThree({}, { tom: { note: "Mild." }, mia: { note: "Negated." } }), THREE, TEXT, {});
+    expect(rowOf(rows, "note")).toMatchObject({ conflict: false, agreed: null });
+    expect(rowOf(rows, "note").cells.map(cell => cell.display)).toEqual(["Mild.", "Negated.", ""]);
   });
 
-  it("builds the choose payload from the chosen span and values", () => {
-    const value = group("g", ["values_differ", "span_differs"], [
-      member("i1", LUC, "HP:0001263", "Global developmental delay", [span("Delayed development")]),
-      member("i2", TOM, "HP:0001263", "Global developmental delay", [span("development")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
-    ], { span_conflict: true });
-    const rows = rowsOf(value, [LUC, TOM], TEXT);
-    expect(rows.map(row => row.id)).toEqual(["axis:assertion", "span"]);
-    const choices = { "axis:assertion": "absent", span: rows[1].options[1].key };
-    expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001263", span_from_input_id: "i2", axes: { assertion: "absent" } });
-    expect(AXIS_DEFS).toHaveLength(3);
-  });
-  it("asks for every field that differs across terms, not only the term", () => {
-    const value = group("g", ["term_differs", "values_differ"], [
-      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
-      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
-    ], { differing_axes: ["assertion"] });
-    const rows = rowsOf(value, [LUC, TOM], TEXT);
-    expect(rows.map(row => row.id)).toEqual(["term", "axis:assertion"]);
-    expect(allChosen(rows, { term: "HP:0001251" })).toBe(false);
-    const choices = { term: "HP:0001251", "axis:assertion": "absent" };
-    expect(allChosen(rows, choices)).toBe(true);
-    expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001251", span_from_input_id: "i1", axes: { assertion: "absent" } });
-    expect(choiceSummary(rows, choices)).toBe("Ataxia (HP:0001251) (Luc Martin), absent (Tom Reis)");
+  it("result line names the open choices", () => {
+    const group = hypotoniaThree();
+    expect(resultLine(group, THREE, {})).toMatchObject({
+      saved: "Result: 1 finding, Hypotonia (HP:0001252), Assertion not chosen yet, Patient, Current",
+      notTaken: "Not taken: Axial hypotonia (Ali)",
+    });
+    expect(resultLine(group, THREE, { assertion: "absent" }).saved).toBe("Result: 1 finding, Hypotonia (HP:0001252), Absent, Patient, Current");
   });
 
-  it("takes a whole finding from one member and names what it adopts", () => {
-    const value = group("g", ["term_differs", "values_differ", "notes_differ"], [
-      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")], { note: "Mild." }),
-      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
-    ]);
-    const rows = rowsOf(value, [LUC, TOM], TEXT);
-    const choices = takeOverChoices(rows, value.members[1]);
-    expect(choices).toEqual({ __from: "i2", term: "HP:0001288", "axis:assertion": "absent" });
-    expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001288", span_from_input_id: "i2", axes: { assertion: "absent" } });
-    expect(takeOverWords(value.members[1], rows, TEXT)).toBe("Gait disturbance (HP:0001288) · absent · patient · current");
-    expect(takeOverWords(value.members[0], rows, TEXT)).toBe("Ataxia (HP:0001251) · present · patient · current · note “Mild.”");
+  it("taking a whole finding fills every row", () => {
+    const group = hypotoniaThree();
+    const choices = takeFinding(group, group.members[2]);
+    const rows = comparisonRows(group, THREE, TEXT, choices);
+    expect(rowOf(rows, "whole").cells.map(cell => cell.display)).toEqual(["Take Tom's finding", "Take Mia's finding", "Take Ali's finding"]);
+    expect(rowOf(rows, "whole").cells[2].chosen).toBe(true);
+    expect(rowOf(rows, "term").cells.map(cell => cell.chosen)).toEqual([false, false, true]);
+    expect(resultLine(group, THREE, choices)).toMatchObject({
+      finding: "Axial hypotonia (HP:0008936), Present, Patient, Current",
+      saved: "Result: 1 finding, Axial hypotonia (HP:0008936), Present, Patient, Current",
+      notTaken: "Not taken: Hypotonia (Tom, Mia)",
+    });
   });
 
-  it("takes span and note from the member taken with Take … finding, also within one term", () => {
-    const absent = { assertion: "absent", experiencer: "patient", temporality: "current" };
-    const value = group("g", ["term_differs", "values_differ", "span_differs"], [
-      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
-      member("i2", TOM, "HP:0001251", "Ataxia", [span("Unsteady")], { axes: absent }),
-      member("i3", ANA, "HP:0001288", "Gait disturbance", [span("gait")]),
-    ]);
-    const rows = rowsOf(value, [LUC, TOM, ANA], TEXT);
-    const choices = takeOverChoices(rows, value.members[1]);
-    expect(choosePayload(value, rows, choices)).toEqual({ term_id: "HP:0001251", span_from_input_id: "i2", axes: { assertion: "absent" } });
-    // Choosing the other term by hand: the span comes with that term's first member.
-    expect(choosePayload(value, rows, { ...choices, term: "HP:0001288" }).span_from_input_id).toBe("i3");
+  it("payload is keep when everyone agrees and choose otherwise", () => {
+    const agreed = exampleGroups().find(value => value.group_id === "g-seiz")!;
+    expect(resolvePayload(agreed, {})).toEqual({ action: "keep" });
+    const group = hypotoniaThree();
+    expect(resolvePayload(group, { term: "HP:0001252", assertion: "absent" })).toEqual({
+      action: "choose", choice: { term_id: "HP:0001252", axes: { assertion: "absent" }, span_from_input_id: "in-tom" },
+    });
+    expect(resolvePayload(group, takeFinding(group, group.members[2])).choice?.span_from_input_id).toBe("in-ali");
+    expect(choicesComplete(comparisonRows(group, THREE, TEXT, { term: "HP:0001252" }), { term: "HP:0001252" })).toBe(false);
+    expect(choicesComplete(comparisonRows(group, THREE, TEXT, {}), { term: "HP:0008936", assertion: "present" })).toBe(true);
+  });
+
+  it("an other term replaces the members' terms in the result and the payload", () => {
+    const group = hypotoniaThree();
+    const choices = { term: "HP:0002066", assertion: "present" };
+    expect(resultLine(group, THREE, choices, { termId: "HP:0002066", label: "Gait ataxia" })).toMatchObject({
+      saved: "Result: 1 finding, Gait ataxia (HP:0002066), Present, Patient, Current",
+      notTaken: "Not taken: Hypotonia (Tom, Mia), Axial hypotonia (Ali)",
+    });
+    expect(resolvePayload(group, choices).choice).toEqual({ term_id: "HP:0002066", span_from_input_id: "in-tom", axes: { assertion: "present" } });
+  });
+
+  it("an axis a person left empty is sent as null", () => {
+    const group = hypotoniaThree({ differing_axes: ["assertion", "temporality"] }, { ali: { axes: { assertion: "present", experiencer: "patient" } } });
+    const choices = takeFinding(group, group.members[2]);
+    expect(rowOf(comparisonRows(group, THREE, TEXT, choices), "temporality").cells[2].display).toBe("Not specified");
+    expect(resolvePayload(group, choices).choice?.axes).toEqual({ assertion: "present", temporality: null });
+  });
+
+  it("taking a finding in a group without conflicts chooses that person's finding", () => {
+    const agreed = exampleGroups().find(value => value.group_id === "g-dd")!;
+    expect(resolvePayload(agreed, takeFinding(agreed, agreed.members[1]))).toEqual({
+      action: "choose", choice: { term_id: "HP:0001263", span_from_input_id: "in-dt", axes: {} },
+    });
+  });
+
+  it("the text row is keyed by person: identical spans with different notes are separate choices", () => {
+    const group = hypotoniaThree({ span_conflict: true }, { tom: { note: "Mild." }, mia: { note: "Negated." }, ali: { spans: [span("hypotonia")] } });
+    const rows = comparisonRows(group, THREE, TEXT, { text: "in-mia" });
+    expect(rowOf(rows, "text").cells.map(cell => cell.chosen)).toEqual([false, true, false]);
+    expect(resolvePayload(group, { term: "HP:0001252", assertion: "absent", text: "in-mia" }).choice?.span_from_input_id).toBe("in-mia");
+  });
+
+  it("names the group by its text excerpt", () => {
+    expect(groupName(hypotoniaThree(), TEXT)).toBe("muscular hypotonia");
   });
 
   it("never offers keep both", () => {
-    const value = exampleView().groups.find(item => item.kinds.includes("term_differs"))!;
-    const labels = rowsOf(value, [LUC, TOM], TEXT).flatMap(row => row.options.map(option => option.label));
-    expect(labels.length).toBeGreaterThan(0);
-    expect(labels.some(label => label.toLowerCase().includes("both"))).toBe(false);
-  });
-
-  it("offers a term found with Other term as one more term option", () => {
-    const value = group("g", ["term_differs"], [
-      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
-      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")]),
-    ]);
-    const rows = rowsOf(value, [LUC, TOM], TEXT, { termId: "HP:0002066", label: "Gait ataxia" });
-    expect(rows[0].options.map(option => option.label)).toEqual(["Ataxia (HP:0001251) · Luc Martin", "Gait disturbance (HP:0001288) · Tom Reis", "Gait ataxia (HP:0002066) · other term"]);
-    expect(choosePayload(value, rows, { term: "HP:0002066" })).toEqual({ term_id: "HP:0002066", span_from_input_id: "i1", axes: {} });
+    const rows = comparisonRows(hypotoniaThree(), THREE, TEXT, {});
+    const words = rows.flatMap(row => [row.label, row.agreed ?? "", row.info ?? "", ...row.cells.map(cell => cell.display)]);
+    expect(words.filter(word => /both/i.test(word))).toEqual([]);
   });
 });

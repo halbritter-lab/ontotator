@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConsolidationGroupView } from "../../src/api/client";
 import { GroupCard, type GroupCardProps } from "../../src/consolidation/GroupCard";
-import { ANA, exampleGroups, group, LUC, member, span, TEXT, TOM, workspaceView } from "./fixtures";
+import { exampleGroups, group, hypotoniaThree, LUC, member, span, TEXT, THREE, TOM, workspaceView } from "./fixtures";
 
 afterEach(cleanup);
 
@@ -14,19 +14,53 @@ function renderCard(value: ConsolidationGroupView, extra: Partial<GroupCardProps
     onExpand: vi.fn(), onResolve: vi.fn(async () => true), onAnnotate: vi.fn(async () => true), onReopen: vi.fn(async () => true),
     onDismissOutcome: vi.fn(), ...extra,
   };
-  render(<ul><GroupCard {...props} /></ul>);
-  return props;
+  const view = render(<ul><GroupCard {...props} /></ul>);
+  return { props, container: view.container };
 }
 
+const result = () => document.querySelector(".cons-result")?.textContent ?? "";
+
 describe("GroupCard", () => {
-  it("names the person on every value chip and resolves a one-row group with one click", () => {
-    const props = renderCard(byId("g-hypo"));
-    expect(screen.getByRole("button", { name: "present · Luc Martin" }).getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
+  it("the card shows the conflict marker, the name and the count of fields to decide", () => {
+    renderCard(hypotoniaThree(), { people: THREE });
+    const toggle = screen.getByRole("button", { expanded: true });
+    expect(toggle.textContent).toContain("muscular hypotonia");
+    expect(toggle.textContent).toContain("2 fields to decide");
+    expect(within(toggle).getByText("Conflict")).toBeTruthy();
+  });
+
+  it("a conflicting row has a check per person and takes the value", () => {
+    const { props } = renderCard(hypotoniaThree(), { people: THREE });
+    const take = screen.getByRole("button", { name: "Take Absent from Mia Berg for Assertion" });
+    fireEvent.click(take);
+    expect(take.getAttribute("aria-pressed")).toBe("true");
+    expect(result()).toContain("Absent");
+    expect(result()).toContain("Not taken: Axial hypotonia (Ali)");
+    // The term is still open: nothing is saved yet.
+    expect(props.onResolve).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Take Hypotonia from Tom Reis for Term" }));
     expect(props.onResolve).toHaveBeenCalledWith({
-      input_ids: ["in-hl", "in-ht"], action: "choose",
-      choice: { term_id: "HP:0001252", span_from_input_id: "in-hl", axes: { assertion: "absent" } },
-    }, "absent (Tom Reis)");
+      input_ids: ["in-tom", "in-mia", "in-ali"], action: "choose",
+      choice: { term_id: "HP:0001252", span_from_input_id: "in-tom", axes: { assertion: "absent" } },
+    }, "Hypotonia (HP:0001252), Absent, Patient, Current");
+  });
+
+  it("agreed rows are one grey line", () => {
+    renderCard(hypotoniaThree(), { people: THREE });
+    expect(screen.getAllByText("Patient (all agree)")).toHaveLength(1);
+  });
+
+  it("axis values use the fixed colour slots", () => {
+    renderCard(byId("g-hypo"));
+    const row = screen.getByRole("row", { name: /Assertion/ });
+    expect(within(row).getByText("Present").classList.contains("axis-value--present")).toBe(true);
+  });
+
+  it("no pill buttons and no differs text", () => {
+    const { container } = renderCard(hypotoniaThree(), { people: THREE });
+    expect(screen.queryByText(/differs/)).toBeNull();
+    expect(container.querySelector(".cons-chip")).toBeNull();
+    expect(container.textContent).not.toContain("·");
   });
 
   it("resolves a value group with two axes only after both choices", () => {
@@ -34,69 +68,32 @@ describe("GroupCard", () => {
       member("i1", LUC, "HP:0001252", "Hypotonia", [span("muscular hypotonia")]),
       member("i2", TOM, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { axes: { assertion: "absent", experiencer: "patient", temporality: "historical" } }),
     ], { differing_axes: ["assertion", "temporality"] });
-    const props = renderCard(value);
-    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
+    const { props } = renderCard(value);
+    expect(screen.getByRole("button", { expanded: true }).textContent).toContain("2 fields to decide");
+    fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
     expect(props.onResolve).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "absent · Tom Reis" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "current · Luc Martin" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take Current from Luc Martin for Temporality" }));
     expect(props.onResolve).toHaveBeenCalledTimes(1);
     expect(vi.mocked(props.onResolve).mock.calls[0][0].choice?.axes).toEqual({ assertion: "absent", temporality: "current" });
   });
 
-  it("marks differences by weight and the word, never by colour alone", () => {
-    renderCard(byId("g-hypo"));
-    const table = screen.getByRole("table");
-    expect(within(table).getByRole("rowheader", { name: "Assertion · differs" })).toBeTruthy();
-    expect(within(table).getByRole("columnheader", { name: "Luc Martin (ann-0004)" })).toBeTruthy();
-    expect(within(table).getAllByRole("cell", { name: "Hypotonia (HP:0001252)" })).toHaveLength(2);
+  it("takes one person's whole finding", () => {
+    const { props } = renderCard(hypotoniaThree(), { people: THREE });
+    fireEvent.click(screen.getByRole("button", { name: "Take Ali's finding" }));
+    expect(props.onResolve).toHaveBeenCalledWith({
+      input_ids: ["in-tom", "in-mia", "in-ali"], action: "choose",
+      choice: { term_id: "HP:0008936", span_from_input_id: "in-ali", axes: { assertion: "present" } },
+    }, "Axial hypotonia (HP:0008936), Present, Patient, Current");
   });
 
   it("asks to keep or leave out a finding only one person marked", () => {
-    const props = renderCard(byId("g-micro"));
-    expect(screen.getByText("Luc Martin marked this · Tom Reis has nothing here")).toBeTruthy();
-    expect(screen.queryAllByRole("button", { pressed: true })).toHaveLength(0);
+    const { props } = renderCard(byId("g-micro"));
+    expect(screen.getByText("Luc Martin marked this. Tom Reis has nothing here.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Take/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Keep Luc Martin's finding" }));
-    expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["in-ml"], action: "keep" }, "kept from Luc Martin");
+    expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["in-ml"], action: "keep" }, "Microcephaly (HP:0000252), Present, Patient, Current");
     fireEvent.click(screen.getByRole("button", { name: "Leave out" }));
     expect(props.onResolve).toHaveBeenLastCalledWith({ input_ids: ["in-ml"], action: "leave_out" }, "left out");
-  });
-
-  it("shows a majority as 2 of 3 without preselecting it", () => {
-    const value = group("g-maj", ["values_differ"], [
-      member("i1", LUC, "HP:0001252", "Hypotonia", [span("muscular hypotonia")]),
-      member("i2", TOM, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { axes: { assertion: "absent" } }),
-      member("i3", ANA, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { axes: { assertion: "absent" } }),
-    ], { majority: { assertion: "absent" } });
-    renderCard(value, { people: [LUC, TOM, ANA] });
-    expect(screen.getByRole("button", { name: "absent · Tom Reis, Ana Weber (2 of 3)" }).getAttribute("aria-pressed")).toBe("false");
-  });
-
-  it("keeps a group with different terms and assertions open until both are chosen", () => {
-    const value = group("g-both", ["term_differs", "values_differ"], [
-      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
-      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
-    ], { differing_axes: ["assertion"] });
-    const props = renderCard(value);
-    expect(within(screen.getByRole("table")).getByRole("rowheader", { name: "Assertion · differs" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Ataxia (HP:0001251) · Luc Martin" }));
-    expect(props.onResolve).not.toHaveBeenCalled();
-    expect(screen.getByText("Still to choose: Assertion.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
-    expect(props.onResolve).toHaveBeenCalledWith({
-      input_ids: ["i1", "i2"], action: "choose", choice: { term_id: "HP:0001251", span_from_input_id: "i1", axes: { assertion: "absent" } },
-    }, "Ataxia (HP:0001251) (Luc Martin), absent (Tom Reis)");
-  });
-
-  it("takes one person's whole finding, naming term and every value", () => {
-    const value = group("g-both", ["term_differs", "values_differ"], [
-      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
-      member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")], { axes: { assertion: "absent", experiencer: "patient", temporality: "current" } }),
-    ], { differing_axes: ["assertion"] });
-    const props = renderCard(value);
-    fireEvent.click(screen.getByRole("button", { name: "Take Tom Reis's finding: Gait disturbance (HP:0001288) · absent · patient · current" }));
-    expect(props.onResolve).toHaveBeenCalledWith({
-      input_ids: ["i1", "i2"], action: "choose", choice: { term_id: "HP:0001288", span_from_input_id: "i2", axes: { assertion: "absent" } },
-    }, "Gait disturbance (HP:0001288) (Tom Reis), absent (Tom Reis)");
   });
 
   it("shows each person's colour key next to their column", () => {
@@ -105,9 +102,17 @@ describe("GroupCard", () => {
     expect(headers.map(header => header.querySelector(".cons-lane-key")?.getAttribute("data-lane"))).toEqual(["1", "2"]);
   });
 
+  it("findings from a tool proposal carry the robot icon", () => {
+    renderCard(hypotoniaThree({}, { mia: { from_tool_proposal: true } }), { people: THREE });
+    const headers = within(screen.getByRole("table")).getAllByRole("columnheader");
+    const named = (name: string) => headers.find(header => header.textContent?.includes(name))!;
+    expect(within(named("Mia Berg")).getByRole("img", { name: "From a tool proposal" })).toBeTruthy();
+    expect(within(named("Tom Reis")).queryByRole("img", { name: "From a tool proposal" })).toBeNull();
+  });
+
   it("offers Keep, Leave out, Edit values… and Other term… on a reopened match", () => {
     const reopened = { ...byId("g-seiz"), state: "open" as const, annotation_ids: [] };
-    const props = renderCard(reopened, { workspace: workspaceView() });
+    const { props } = renderCard(reopened, { workspace: workspaceView() });
     for (const name of ["Keep", "Leave out", "Edit values…", "Other term…"]) expect(screen.getByRole("button", { name })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
     fireEvent.change(screen.getByLabelText("Assertion"), { target: { value: "absent" } });
@@ -115,49 +120,39 @@ describe("GroupCard", () => {
     expect(props.onResolve).toHaveBeenCalledWith({
       input_ids: ["g-seiz-l", "g-seiz-t"], action: "choose",
       choice: { term_id: "HP:0001250", span_from_input_id: "g-seiz-l", axes: { assertion: "absent", experiencer: "patient", temporality: "current" } },
-    }, "absent · patient · current");
+    }, "Absent, Patient, Current");
   });
 
   it("sends the note and the flag with the decision of an open group", () => {
-    const props = renderCard(byId("g-hypo"));
+    const { props } = renderCard(byId("g-hypo"));
     fireEvent.click(screen.getByRole("button", { name: "+ note" }));
     fireEvent.change(screen.getByLabelText("Note for the lead"), { target: { value: "Negated in the text." } });
     fireEvent.click(screen.getByLabelText("Guidelines unclear here"));
     expect(props.onAnnotate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
-    expect(props.onResolve).toHaveBeenCalledWith(expect.objectContaining({ note: "Negated in the text.", guidelines_unclear: true, action: "choose" }), "absent (Tom Reis)");
+    fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    expect(props.onResolve).toHaveBeenCalledWith(expect.objectContaining({ note: "Negated in the text.", guidelines_unclear: true, action: "choose" }),
+      "Hypotonia (HP:0001252), Absent, Patient, Current");
   });
 
-  it("places note and flag of an open group above its choices, so they are set before the last chip", () => {
-    renderCard(byId("g-hypo"));
-    const note = screen.getByRole("button", { name: "+ note" });
-    const flag = screen.getByLabelText("Guidelines unclear here");
-    const chip = screen.getByRole("button", { name: "absent · Tom Reis" });
-    expect(note.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(flag.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("asks nothing for overlapping text and differing notes: Keep takes the default member", () => {
+  it("shows overlapping text and differing notes as information: Keep takes the default member", () => {
     const value = { ...byId("g-dd"), kinds: ["span_differs", "notes_differ"],
       members: byId("g-dd").members.map((item, index) => ({ ...item, note: index ? "Late." : "Early." })) };
-    const props = renderCard(value);
-    expect(screen.queryByRole("group", { name: /^Text/ })).toBeNull();
-    expect(screen.queryByRole("group", { name: /^Note/ })).toBeNull();
-    expect(screen.getByText(/text span shifted, note differs/)).toBeTruthy();
-    expect(screen.getByText("The text spans overlap and the notes differ: the kept finding keeps its own text span and note.")).toBeTruthy();
-    expect(within(screen.getByRole("table")).getByRole("rowheader", { name: "Text" })).toBeTruthy();
+    const { props } = renderCard(value);
+    expect(screen.getByText("“Delayed development” (overlapping, comes with the chosen finding)")).toBeTruthy();
+    expect(screen.getByRole("rowheader", { name: "Note" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Take .* for / })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Keep" }));
-    expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["in-dl", "in-dt"], action: "keep" }, "kept");
+    expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["in-dl", "in-dt"], action: "keep" },
+      "Global developmental delay (HP:0001263), Present, Patient, Current");
   });
 
   it("asks the text when the spans conflict", () => {
-    const props = renderCard({ ...byId("g-dd"), span_conflict: true });
-    expect(within(screen.getByRole("table")).getByRole("rowheader", { name: "Text · differs" })).toBeTruthy();
+    const { props } = renderCard({ ...byId("g-dd"), span_conflict: true });
     expect(screen.queryByRole("button", { name: "Keep" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "“development” · Tom Reis" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take “development” from Tom Reis for Text" }));
     expect(props.onResolve).toHaveBeenCalledWith({
       input_ids: ["in-dl", "in-dt"], action: "choose", choice: { term_id: "HP:0001263", span_from_input_id: "in-dt", axes: {} },
-    }, "“development” (Tom Reis)");
+    }, "Global developmental delay (HP:0001263), Present, Patient, Current");
   });
 
   it("renders no text node inside a table row", () => {
@@ -167,9 +162,10 @@ describe("GroupCard", () => {
     }
   });
 
-  it("flags an automatically kept group through annotate", () => {
-    const props = renderCard(byId("g-seiz"));
-    expect(screen.getByText("✓ kept automatically")).toBeTruthy();
+  it("marks an automatically kept group agreed and flags it through annotate", () => {
+    const { props } = renderCard(byId("g-seiz"));
+    expect(screen.getByRole("button", { expanded: true }).textContent).toContain("agreed");
+    expect(screen.queryByRole("button", { name: /^Take/ })).toBeNull();
     fireEvent.click(screen.getByLabelText("Guidelines unclear here"));
     expect(props.onAnnotate).toHaveBeenCalledWith({ input_ids: ["g-seiz-l", "g-seiz-t"], guidelines_unclear: true });
   });
@@ -178,7 +174,7 @@ describe("GroupCard", () => {
     const onRetry = vi.fn();
     renderCard(byId("g-hypo"), { outcome: { kind: "error", onRetry } });
     expect(screen.getByRole("alert").textContent).toContain("Could not save. Nothing changed.");
-    expect(screen.getByRole("button", { name: "absent · Tom Reis" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalled();
   });
@@ -193,9 +189,9 @@ describe("GroupCard", () => {
 
   it("warns before reopening a group edited in the editor", () => {
     const edited = { ...byId("g-hypo"), state: "choose" as const, edited: true, annotation_ids: ["cons-1"] };
-    const props = renderCard(edited, { expanded: false, summary: "absent (Tom Reis)" });
-    expect(screen.getByRole("button", { name: /Hypotonia ✓ absent \(Tom Reis\) · edited in editor/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Change, Hypotonia" }));
+    const { props } = renderCard(edited, { expanded: false, summary: "Hypotonia (HP:0001252), Absent, Patient, Current" });
+    expect(screen.getByRole("button", { name: /muscular hypotonia decided: Hypotonia \(HP:0001252\), Absent, Patient, Current edited in editor/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Change, muscular hypotonia" }));
     expect(props.onReopen).not.toHaveBeenCalled();
     expect(screen.getByText("Reopening drops your edit from the editor.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
@@ -207,9 +203,37 @@ describe("GroupCard", () => {
     expect(screen.getByText("muscular hypotonia", { selector: "mark" })).toBeTruthy();
   });
 
+  it("a reopened group starts without the old choices", () => {
+    const props: GroupCardProps = {
+      group: hypotoniaThree(), people: THREE, text: TEXT, expanded: true, readOnly: false, busy: false, onExpand: vi.fn(),
+      onResolve: vi.fn(async () => true), onAnnotate: vi.fn(async () => true), onReopen: vi.fn(async () => true), onDismissOutcome: vi.fn(),
+    };
+    const view = render(<ul><GroupCard {...props} /></ul>);
+    const rerender = (state: ConsolidationGroupView["state"]) => view.rerender(<ul><GroupCard {...props} group={hypotoniaThree({ state })} /></ul>);
+    fireEvent.click(screen.getByRole("button", { name: "Take Absent from Mia Berg for Assertion" }));
+    rerender("choose");
+    rerender("open");
+    fireEvent.click(screen.getByRole("button", { name: "Take Hypotonia from Tom Reis for Term" }));
+    expect(props.onResolve).not.toHaveBeenCalled();
+  });
+
+  it("takes a person who left a differing axis empty: shown as Not specified, sent as null", () => {
+    const value = hypotoniaThree({ differing_axes: ["assertion", "temporality"] }, { ali: { axes: { assertion: "present", experiencer: "patient" } } });
+    const { props } = renderCard(value, { people: THREE });
+    expect(within(screen.getByRole("row", { name: /Temporality/ })).getByText("Not specified")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Take Ali's finding" }));
+    expect(vi.mocked(props.onResolve).mock.calls[0][0].choice?.axes).toEqual({ assertion: "present", temporality: null });
+  });
+
+  it("a resolved table has no conflict mark or tint", () => {
+    const { container } = renderCard({ ...byId("g-hypo"), state: "choose", annotation_ids: ["cons-1"] });
+    expect(container.querySelector(".cons-row--conflict, .cons-conflict-mark")).toBeNull();
+  });
+
   it("offers no actions when read-only", () => {
     renderCard({ ...byId("g-hypo"), state: "choose", annotation_ids: ["cons-1"], guidelines_unclear: true }, { readOnly: true });
     expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Take/ })).toBeNull();
     expect(screen.queryByLabelText("Guidelines unclear here")).toBeNull();
     expect(screen.getByText("Flagged: guidelines unclear")).toBeTruthy();
   });

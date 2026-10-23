@@ -22,7 +22,7 @@ export function SummaryDialog({ open, summary, busy, warning, error, onSubmit, o
     <Button variant="primary" loading={busy} aria-disabled={blocked || undefined}
       onClick={() => { if (!blocked) onSubmit(acknowledged); }}>Submit</Button>
   </>}>
-    <p>The lead then accepts it as the final result.</p>
+    <p>The lead then accepts the result.</p>
     <p className="cons-summary">{summary}</p>
     {warning && <>
       <InlineMessage tone="warning">{warning.count === 1 ? "1 finding has" : `${warning.count || "Some"} findings have`} values that were filled in by default, not chosen. Check them before you submit.</InlineMessage>

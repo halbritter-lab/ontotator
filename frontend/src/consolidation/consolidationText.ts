@@ -9,36 +9,33 @@ export function namesOf(people: readonly Pick<ConsolidationPersonView, "label">[
   return people.map(person => personName(person.label)).join(", ");
 }
 
-/** Header: "Consolidate case-107 · de v2"; read-only "Consolidation of case-107 · de v2". */
+/** Header: "Consolidate case-107 de v2"; read-only "Consolidation of case-107 de v2". */
 export function headerTitle(view: Pick<ConsolidationView, "case_id" | "language" | "document_version">, readOnly = false): string {
-  return `${readOnly ? "Consolidation of" : "Consolidate"} ${view.case_id} · ${view.language} v${view.document_version}`;
+  return `${readOnly ? "Consolidation of" : "Consolidate"} ${view.case_id} ${view.language} v${view.document_version}`;
 }
 
-export function headerDetail(view: Pick<ConsolidationView, "people">, open: number): string {
-  const names = namesOf(view.people);
-  return [names, open > 0 ? `${open} open` : "all groups decided"].filter(Boolean).join(" · ");
+/** Finalization state on the text path. */
+export const finalizationState = (open: number, total: number) => `consolidating, ${open} of ${total} groups open`;
+
+export const OVERLAPPING = "(overlapping, comes with the chosen finding)";
+
+/** "2 fields to decide" / "1 field to decide"; "to decide" when nothing conflicts (Keep or Take). */
+export const fieldsToDecide = (count: number) => count === 0 ? "to decide" : count === 1 ? "1 field to decide" : `${count} fields to decide`;
+
+/** The state word of a group card: what is left to decide, or how it was resolved. */
+export function groupStatus(group: Pick<ConsolidationGroupView, "state">, conflicts: number): string {
+  switch (group.state) {
+    case "open": return fieldsToDecide(conflicts);
+    case "auto": return "agreed";
+    case "leave_out": return "left out";
+    default: return "decided";
+  }
 }
 
-/** Banner of the automatic take-over (U14). */
-export function autoBanner(count: number): string {
-  return count === 1
-    ? "1 finding matched and was kept automatically. Check it in the text."
-    : `${count} findings matched and were kept automatically. Check them in the text.`;
-}
-
-export const KIND_LABELS: Readonly<Record<string, string>> = {
-  match: "matched",
-  values_differ: "value differs",
-  span_differs: "text span differs",
-  notes_differ: "note differs",
-  term_differs: "term differs",
-  partial: "marked by some",
-};
-
-/** "Luc Martin, Ana Weber marked this · Tom Reis has nothing here". */
+/** "Luc Martin, Ana Weber marked this. Tom Reis has nothing here." */
 export function partialText(present: readonly ConsolidationPersonView[], absent: readonly ConsolidationPersonView[]): string {
   const missing = absent.length === 1 ? "has nothing here" : "have nothing here";
-  return `${namesOf(present)} marked this · ${namesOf(absent)} ${missing}`;
+  return `${namesOf(present)} marked this. ${namesOf(absent)} ${missing}.`;
 }
 
 /** "Keep Luc Martin's finding" for one person, "Keep the finding" for several. */
@@ -54,7 +51,7 @@ export const READ_ONLY_REASONS: Readonly<Record<string, string>> = {
 
 /** After submitting: a lead accepts their own consolidation in Documents. */
 export function submittedText(lead: boolean): string {
-  return lead ? "Consolidation submitted. Accept it as final in Documents." : "Consolidation submitted. The lead accepts it as the final result.";
+  return lead ? "Consolidation submitted. Accept the result in Documents." : "Consolidation submitted. The lead then accepts the result.";
 }
 
 /** Heading of the findings added outside the groups. */
@@ -65,61 +62,17 @@ export function addedHeading(own: boolean, addedBy: string | null | undefined): 
 
 export const REOPEN_EDITED_WARNING = "Reopening drops your edit from the editor.";
 
-/** Number of findings a resolved group yields. */
-function findingsOf(group: ConsolidationGroupView): number {
-  if (group.state === "leave_out" || group.state === "open") return 0;
-  return Math.max(1, group.annotation_ids.length);
+/** Summary before submitting: "8 groups, 7 findings, 1 left out"; findings added outside the groups count as findings. */
+export function summaryText(groups: readonly ConsolidationGroupView[], added = 0): string {
+  const findings = groups.filter(group => group.state !== "open" && group.state !== "leave_out").length + added;
+  const leftOut = groups.filter(group => group.state === "leave_out").length;
+  return `${plural(groups.length, "group", "groups")}, ${plural(findings, "finding", "findings")}, ${leftOut} left out`;
 }
 
-/**
- * Summary before submitting (X12): "8 decisions → 7 findings: 4 kept automatically (all matched) · 2 decided ·
- * 1 kept from Luc Martin · 1 left out · 1 added · 1 note · 1 flagged". Zero parts are left out; findings added
- * outside the groups count towards the findings.
- */
-export function summaryText(groups: readonly ConsolidationGroupView[], people: readonly ConsolidationPersonView[], added = 0): string {
-  const decided = groups.filter(group => group.state !== "open");
-  const findings = decided.reduce((sum, group) => sum + findingsOf(group), 0) + added;
-  const auto = decided.filter(group => group.state === "auto").length;
-  const keptFrom = new Map<string, number>();
-  let chosen = 0;
-  for (const group of decided) {
-    if (group.state === "auto" || group.state === "leave_out") continue;
-    if (group.state === "keep" && group.kinds.includes("partial")) {
-      const keep = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
-      const person = people.find(value => value.person_id === keep?.person_id);
-      const name = person ? personName(person.label) : keep?.person_id ?? "";
-      keptFrom.set(name, (keptFrom.get(name) ?? 0) + 1);
-    } else chosen += 1;
-  }
-  const leftOut = decided.filter(group => group.state === "leave_out").length;
-  const notes = decided.filter(group => !!group.note?.trim()).length;
-  const flagged = decided.filter(group => group.guidelines_unclear).length;
-  const parts = [
-    auto ? `${auto} kept automatically (all matched)` : "",
-    chosen ? `${chosen} decided` : "",
-    ...[...keptFrom].map(([name, count]) => `${count} kept from ${name}`),
-    leftOut ? `${leftOut} left out` : "",
-    added ? `${added} added` : "",
-    notes ? plural(notes, "note", "notes") : "",
-    flagged ? `${flagged} flagged` : "",
-  ].filter(Boolean);
-  const head = `${plural(decided.length, "decision", "decisions")} → ${plural(findings, "finding", "findings")}`;
-  return parts.length ? `${head}: ${parts.join(" · ")}` : head;
-}
-
-/** Submit button while groups are open (X12). */
-export function submitLabel(open: number): string {
-  return open > 0 ? `Submit · ${open} open` : "Submit consolidation";
-}
+export const SUBMIT_LABEL = "Submit consolidation";
 
 export function submitReason(open: number): string {
   return open === 1 ? "Resolve the open group first." : `Resolve the ${open} open groups first.`;
-}
-
-/** A spoken value: "clinically_suspected" → "clinically suspected". */
-export function valueWords(value: string | null | undefined): string {
-  if (value === null || value === undefined || value === "") return "not specified";
-  return value.replace(/_/g, " ");
 }
 
 /** Axis row label: "assertion" → "Assertion". */

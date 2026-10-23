@@ -22,30 +22,35 @@ function load(...views: ConsolidationView[]) {
 async function renderScreen(props: Partial<Parameters<typeof ConsolidationScreen>[0]> = {}) {
   const onNavigate = vi.fn();
   render(<><ConsolidationScreen projectKey="pkg-1" roundId="round-c" onNavigate={onNavigate} {...props} /><ShortcutHelpHost /></>);
-  await screen.findByRole("heading", { name: /^(Consolidate|Consolidation of) case-107 · de v2$/ });
+  await screen.findByRole("heading", { name: /^(Consolidate|Consolidation of) case-107 de v2$/ });
   return { onNavigate };
 }
 
 describe("ConsolidationScreen", () => {
-  it("shows the header, the automatic banner and the first open group", async () => {
+  it("the screen shows the text path with Finalization current and the first open group", async () => {
     load(exampleView());
     await renderScreen();
-    expect(screen.getByText("Luc Martin, Tom Reis · 4 open")).toBeTruthy();
-    expect(screen.getByText("4 findings matched and were kept automatically. Check them in the text.")).toBeTruthy();
-    // More than 3 matches: the list starts collapsed behind "Show".
-    expect(screen.getByRole("button", { name: "Show" }).getAttribute("aria-expanded")).toBe("false");
-    await waitFor(() => expect(expandedTitle()).toBe("Hypotonia"));
+    const path = screen.getByRole("navigation", { name: "Text path" });
+    expect(path.textContent).toContain("Finalization");
+    expect(path.textContent).toContain("consolidating, 4 of 8 groups open");
+    expect(path.textContent).toContain("2 submitted");
+    await waitFor(() => expect(expandedTitle()).toBe("muscular hypotonia"));
     // No internal ids, HPO codes shown.
     const text = document.body.textContent ?? "";
     for (const id of ["in-hl", "a-in-hl", "g-hypo", "ws-c", "round-c"]) expect(text).not.toContain(id);
     expect(text).toContain("HP:0001252");
+    expect(text).not.toContain("·");
   });
 
-  it("expands the automatic list by default with up to 3 matches", async () => {
-    const view = exampleView();
-    load({ ...view, groups: view.groups.filter(value => value.group_id !== "g-fever") });
+  it("agreed groups are in the same list, marked agreed", async () => {
+    load(exampleView());
     await renderScreen();
-    expect(screen.getByRole("button", { name: "Hide" }).getAttribute("aria-expanded")).toBe("true");
+    const list = screen.getByRole("list", { name: "Groups" });
+    const titles = [...list.querySelectorAll(".cons-group-title")].map(element => element.textContent);
+    expect(titles).toEqual(["seizures", "muscular hypotonia", "Delayed development", "below the 3rd percentile", "Unsteady gait",
+      "Normal hearing", "Short stature", "Recurrent fever"]);
+    expect(within(list).getByRole("button", { name: /^seizures agreed/ })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Kept automatically" })).toBeNull();
   });
 
   it("collapses a resolved group, opens the next open one and offers Undo", async () => {
@@ -54,59 +59,56 @@ describe("ConsolidationScreen", () => {
     const resolve = vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
     const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(5));
     await renderScreen();
-    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
-    await waitFor(() => expect(expandedTitle()).toBe("Global developmental delay"));
+    fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    await waitFor(() => expect(expandedTitle()).toBe("Delayed development"));
     expect(resolve).toHaveBeenCalledTimes(1);
     const [workspaceId, envelope] = resolve.mock.calls[0];
     expect(workspaceId).toBe("ws-c");
     expect(envelope.expected_revision).toBe(3);
     expect(envelope.payload).toEqual({ input_ids: ["in-hl", "in-ht"], action: "choose", choice: { term_id: "HP:0001252", span_from_input_id: "in-hl", axes: { assertion: "absent" } } });
-    expect(screen.getByRole("button", { name: /^Hypotonia ✓ absent \(Tom Reis\)$/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Change, Hypotonia" })).toBeTruthy();
-    expect(screen.getByText("Hypotonia: absent (Tom Reis).")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^muscular hypotonia decided: Hypotonia \(HP:0001252\), Absent, Patient, Current$/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Change, muscular hypotonia" })).toBeTruthy();
+    expect(screen.getByText("muscular hypotonia: Hypotonia (HP:0001252), Absent, Patient, Current.")).toBeTruthy();
     // Ctrl+Z runs the toast's Undo: the group reopens.
     fireEvent.keyDown(window, { key: "z", ctrlKey: true });
     await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
     expect(reopen.mock.calls[0][1].payload).toEqual({ input_ids: ["in-hl", "in-ht"] });
     expect(reopen.mock.calls[0][1].expected_revision).toBe(4);
-    await waitFor(() => expect(expandedTitle()).toBe("Hypotonia"));
+    await waitFor(() => expect(expandedTitle()).toBe("muscular hypotonia"));
   });
 
-  it("moves between groups with J and K, not while typing, and lists them in the help", async () => {
+  it("J and K walk the open groups, not while typing, and are listed in the help", async () => {
     load(exampleView());
     await renderScreen();
     fireEvent.keyDown(window, { key: "j" });
-    expect(expandedTitle()).toBe("Global developmental delay");
-    await waitFor(() => expect(document.activeElement).toBe(toggle(/^Global developmental delay/)));
+    expect(expandedTitle()).toBe("Delayed development");
+    await waitFor(() => expect(document.activeElement).toBe(toggle(/^Delayed development/)));
     fireEvent.keyDown(window, { key: "k" });
-    await waitFor(() => expect(expandedTitle()).toBe("Hypotonia"));
+    await waitFor(() => expect(expandedTitle()).toBe("muscular hypotonia"));
     fireEvent.click(screen.getByRole("button", { name: "+ note" }));
     const note = screen.getByLabelText("Note for the lead");
     note.focus();
     fireEvent.keyDown(note, { key: "j" });
-    expect(expandedTitle()).toBe("Hypotonia");
+    expect(expandedTitle()).toBe("muscular hypotonia");
     note.blur();
     fireEvent.keyDown(window, { key: "?" });
     const help = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
-    expect(within(help).getByText("Next group")).toBeTruthy();
-    expect(within(help).getByText("Previous group")).toBeTruthy();
+    expect(within(help).getByText("Next open group")).toBeTruthy();
+    expect(within(help).getByText("Previous open group")).toBeTruthy();
   });
 
-  it("walks J and K in the shown order (automatic first) and announces the ends", async () => {
+  it("skips agreed groups with J and K and announces the ends", async () => {
     load(exampleView());
     await renderScreen();
-    expect(expandedTitle()).toBe("Hypotonia");
+    expect(expandedTitle()).toBe("muscular hypotonia");
     fireEvent.keyDown(window, { key: "k" });
-    expect(expandedTitle()).toBe("Recurrent fever");
-    expect(screen.getByRole("button", { name: "Hide" }).getAttribute("aria-expanded")).toBe("true");
-    for (let step = 0; step < 3; step++) fireEvent.keyDown(window, { key: "k" });
-    expect(expandedTitle()).toBe("Seizure");
-    fireEvent.keyDown(window, { key: "k" });
-    expect(expandedTitle()).toBe("Seizure");
-    await waitFor(() => expect(document.body.textContent).toContain("First group"));
-    for (let step = 0; step < 8; step++) fireEvent.keyDown(window, { key: "j" });
-    expect(expandedTitle()).toBe("Ataxia / Gait disturbance");
-    await waitFor(() => expect(document.body.textContent).toContain("Last group"));
+    expect(expandedTitle()).toBe("muscular hypotonia");
+    await waitFor(() => expect(document.body.textContent).toContain("First open group"));
+    for (let step = 0; step < 3; step++) fireEvent.keyDown(window, { key: "j" });
+    expect(expandedTitle()).toBe("Unsteady gait");
+    fireEvent.keyDown(window, { key: "j" });
+    expect(expandedTitle()).toBe("Unsteady gait");
+    await waitFor(() => expect(document.body.textContent).toContain("Last open group"));
   });
 
   it("names the Undo shortcut of a decision in the help", async () => {
@@ -114,7 +116,7 @@ describe("ConsolidationScreen", () => {
     load(exampleView(), after);
     vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
     await renderScreen();
-    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
     await screen.findByRole("button", { name: "Undo" });
     fireEvent.keyDown(window, { key: "?" });
     const help = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
@@ -137,10 +139,10 @@ describe("ConsolidationScreen", () => {
     await renderScreen({ assignmentId: 42 });
     const list = screen.getByRole("region", { name: "Added findings" });
     expect(within(list).getByRole("heading", { name: "Added by you" })).toBeTruthy();
-    expect(list.textContent).toContain("Seizure (HP:0001250) · “last week”");
+    expect(list.textContent).toContain("Seizure (HP:0001250), “last week”");
     expect(document.querySelector(".cons-added")?.textContent).toBe("last week");
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
-    expect(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByText(/· 1 added ·/)).toBeTruthy();
+    expect(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByText("8 groups, 8 findings, 1 left out")).toBeTruthy();
     cleanup();
     load({ ...decidedView(), read_only: true, read_only_reason: "submitted", workspace_id: null, added, added_by: "Ana Weber (ann-0005)" });
     await renderScreen({ readOnly: true });
@@ -153,7 +155,7 @@ describe("ConsolidationScreen", () => {
     load({ ...decidedView(), read_only: true, read_only_reason: "submitted", workspace_id: null });
     const back = { name: "projectDocuments" as const, key: "pkg-1", panel: "case-107:de" };
     const { onNavigate } = await renderScreen({ readOnly: true, back });
-    expect(screen.getByRole("heading", { name: "Consolidation of case-107 · de v2" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Consolidation of case-107 de v2" })).toBeTruthy();
     fireEvent.click(screen.getByRole("link", { name: "Back to documents" }));
     expect(onNavigate).toHaveBeenCalledWith(back);
   });
@@ -165,7 +167,7 @@ describe("ConsolidationScreen", () => {
     await renderScreen({ assignmentId: 42, lead: true });
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByRole("button", { name: "Submit" }));
-    expect(await screen.findByText("Consolidation submitted. Accept it as final in Documents.")).toBeTruthy();
+    expect(await screen.findByText("Consolidation submitted. Accept the result in Documents.")).toBeTruthy();
   });
 
   it("adds a finding from a typed passage without a mouse selection", async () => {
@@ -186,16 +188,16 @@ describe("ConsolidationScreen", () => {
     expect(save.mock.calls[0][1].payload).toMatchObject({ term_id: "HP:0001945", segments: [{ start, end }] });
   });
 
-  it("keeps Submit unavailable with a reason and Next open group while groups are open", async () => {
+  it("Submit is unavailable until every group is resolved", async () => {
     load(exampleView());
     await renderScreen();
-    const submit = screen.getByRole("button", { name: "Submit · 4 open" });
+    const submit = screen.getByRole("button", { name: "Submit consolidation" });
     expect(submit.getAttribute("aria-disabled")).toBe("true");
     expect(document.getElementById(submit.getAttribute("aria-describedby")!)?.textContent).toBe("Resolve the 4 open groups first.");
     fireEvent.click(submit);
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Next open group" }));
-    expect(expandedTitle()).toBe("Global developmental delay");
+    expect(expandedTitle()).toBe("Delayed development");
   });
 
   it("submits after the summary, acknowledges an axis warning and offers the next task", async () => {
@@ -211,14 +213,14 @@ describe("ConsolidationScreen", () => {
     const { onNavigate } = await renderScreen({ assignmentId: 42 });
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
-    expect(within(dialog).getByText("8 decisions → 7 findings: 4 kept automatically (all matched) · 2 decided · 1 kept from Luc Martin · 1 left out · 1 note · 1 flagged")).toBeTruthy();
+    expect(within(dialog).getByText("8 groups, 7 findings, 1 left out")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
     await within(dialog).findByLabelText("I checked these values");
     expect(submit.mock.calls[0][1].payload).toEqual({ command: "submit_workspace", document_checked: true });
     expect(within(dialog).getByRole("button", { name: "Submit" }).getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(within(dialog).getByLabelText("I checked these values"));
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
-    await screen.findByText("Consolidation submitted. The lead accepts it as the final result.");
+    await screen.findByText("Consolidation submitted. The lead then accepts the result.");
     expect(submit.mock.calls[1][1].payload).toEqual({ command: "submit_workspace", document_checked: true,
       warning_acknowledgement: { draft_revision: 3, policy_revision: 1, warning_digest: "abc" } });
     fireEvent.click(await screen.findByRole("button", { name: "Next task: case-108 (de)" }));
@@ -230,7 +232,7 @@ describe("ConsolidationScreen", () => {
   it("is read-only for the lead and opens the group from the route", async () => {
     load({ ...decidedView(), read_only: true, read_only_reason: "submitted", workspace_id: null });
     await renderScreen({ group: "g-dd" });
-    expect(expandedTitle()).toBe("Global developmental delay");
+    expect(expandedTitle()).toBe("Delayed development");
     expect(screen.getByText("This consolidation was submitted. You see its final state.")).toBeTruthy();
     for (const name of [/^Submit/, /^Change/, "Leave out", "Edit in editor…"]) expect(screen.queryByRole("button", { name })).toBeNull();
     expect(screen.queryByLabelText("Guidelines unclear here")).toBeNull();
@@ -241,7 +243,7 @@ describe("ConsolidationScreen", () => {
     load({ ...exampleView(), read_only: true, read_only_reason: "input_withdrawn" });
     await renderScreen();
     expect(screen.getByText(/A submission used here was withdrawn/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "absent · Tom Reis" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Take Absent from Tom Reis for Assertion" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Submit/ })).toBeNull();
   });
 
@@ -338,9 +340,9 @@ describe("ConsolidationScreen", () => {
     const spy = load(exampleView());
     vi.spyOn(api, "resolveConsolidationGroup").mockRejectedValue(new ApiError(409, "conflict", "REVISION_CONFLICT"));
     await renderScreen();
-    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
     const review = await screen.findByRole("button", { name: "Review again" });
-    expect(expandedTitle()).toBe("Hypotonia");
+    expect(expandedTitle()).toBe("muscular hypotonia");
     await act(async () => { fireEvent.click(review); });
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
   });

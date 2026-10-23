@@ -37,6 +37,21 @@ export function group(groupId: string, kinds: string[], members: ConsolidationMe
 const matched = (groupId: string, termId: string, label: string, words: string) =>
   group(groupId, ["match"], [member(`${groupId}-l`, LUC, termId, label, [span(words)]), member(`${groupId}-t`, TOM, termId, label, [span(words)])]);
 
+/** The mockup's three-person group (variant B): Tom and Mia mark Hypotonia, Ali Axial hypotonia; Mia says absent. */
+export const MIA: ConsolidationPersonView = { person_id: "ann-0008", label: "Mia Berg (ann-0008)", lane: 3 };
+export const ALI: ConsolidationPersonView = { person_id: "ann-0009", label: "Ali Kaya (ann-0009)", lane: 4 };
+export const THREE = [{ ...TOM, lane: 1 }, { ...MIA, lane: 2 }, { ...ALI, lane: 3 }];
+
+
+export function hypotoniaThree(extra: Partial<ConsolidationGroupView> = {},
+  memberExtra: Partial<Record<"tom" | "mia" | "ali", Partial<ConsolidationMemberView>>> = {}): ConsolidationGroupView {
+  return group("g-three", ["term_differs", "values_differ"], [
+    member("in-tom", TOM, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], memberExtra.tom),
+    member("in-mia", MIA, "HP:0001252", "Hypotonia", [span("muscular hypotonia")], { axes: { ...AXES, assertion: "absent" }, ...memberExtra.mia }),
+    member("in-ali", ALI, "HP:0008936", "Axial hypotonia", [span("muscular hypotonia")], memberExtra.ali),
+  ], { differing_axes: ["assertion"], ...extra });
+}
+
 export function exampleGroups(): ConsolidationGroupView[] {
   return [
     matched("g-seiz", "HP:0001250", "Seizure", "seizures"),
