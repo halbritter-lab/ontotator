@@ -15,6 +15,7 @@ from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.errors import DomainError
 from ontocurator.exchange.final_content import thaw_content
 from ontocurator.exchange.final_export_guide import guide_files
+from ontocurator.exchange.proposal_checks import proposal_check_records
 from ontocurator.jobs.queue import Job, JobContext
 from ontocurator.storage.final_tables import ExportSelectionSnapshotRow
 
@@ -84,6 +85,9 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
                     "INVALID_EXPORT_SNAPSHOT",
                     "An immutable source finding is unavailable or changed.",
                 )
+        proposal_checks = proposal_check_records(
+            conn, job.project_id, project, content.submissions
+        )
     selected_ids = set(payload["selected_submission_ids"])
     overrides: dict[str, str] = {}
     input_receipt = []
@@ -179,6 +183,8 @@ def final_t1_export(job: Job, ctx: JobContext) -> dict[str, Any]:
             for sub in content.submissions
         },
         "provenance_only_submission_ids": [sub.submission_id for sub in closure],
+        # Additive; left out without proposal checks so older exports stay identical.
+        **({"proposal_checks": proposal_checks} if proposal_checks else {}),
         "files": {
             name: hashlib.sha256(data).hexdigest() for name, data in files.items()
         },

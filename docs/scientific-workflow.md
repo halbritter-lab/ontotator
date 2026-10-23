@@ -124,3 +124,31 @@ computes no agreement statistic and designates no participant as ground truth.
 Preserve uncertain targets and ambiguous branches for adjudication outside the
 automatic extraction. Hashes establish content identity; the annotator ID is the
 logged-in user's pseudonym, so it names the account that did the work.
+
+## Annotation from proposals in the export
+
+In an "Annotate from proposals" round the person goes through the tool's
+proposals one by one, confirms, rejects or corrects each, and adds the findings
+the tool missed. In the final export these submissions have
+`submission_kind` `proposal_check` in `index.csv`. `receipt.json` holds their
+decisions under `proposal_checks`, keyed by submission ID:
+
+- `proposal_set`: the tool proposal set the round worked on (`id` and
+  `annotation_set_id`; `null` values for seed proposals without a set).
+- `decisions`: one entry per proposal with `proposal_ref` (the proposal's
+  URN), `proposal_annotation_id`, `proposal_version`, `decision` (`confirmed`,
+  `rejected`, `corrected` or `uncertain`), `corrected_annotation_id` (the
+  corrected finding, for `corrected`) and `note`.
+- `added_annotation_ids`: findings the person added that are not proposals.
+- `counts`: the number of each decision and of added findings.
+
+The proposals of a round are the **newest proposal set of the document when the
+round was created**. Older sets on the same document are never targets and are
+not in the record. A later import does not change an existing round; its
+proposals only become targets of rounds created after it.
+
+Tool precision is computed per proposal set: group the records by
+`proposal_set.annotation_set_id` and compute
+`confirmed / (confirmed + rejected + corrected)`. A corrected proposal counts as
+not exact. `uncertain` decisions are reported separately and left out of
+precision. Added findings are what the tool missed.

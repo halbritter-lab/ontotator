@@ -207,6 +207,10 @@ def build_readme(
     key = payload["project"]
     name = payload.get("project_name") or key
     state = payload["state"]
+    checks = any(
+        sub["origin_key"]["mode"] == "proposal_check"
+        for sub in payload["content"]["submissions"]
+    )
     out: list[str] = [*_heading("Ontocurator final export", "="), ""]
     out += [
         f"Project:          {name if name == key else f'{name} ({key})'}",
@@ -237,6 +241,14 @@ def build_readme(
         "receipt.json        Audit receipt: selections, warnings, omissions, review",
         "                    decisions and the SHA-256 of every other file, including",
         "                    this README and index.csv.",
+    ]
+    if checks:
+        out += [
+            "  proposal_checks   Per tool proposal of a proposal check: confirmed,",
+            "                    rejected, corrected or uncertain, with the proposal's",
+            "                    ref; plus the findings the person added.",
+        ]
+    out += [
         "",
         *_heading("How to read it"),
         *_wrap(
@@ -257,6 +269,17 @@ def build_readme(
             "  ",
         ),
         *_wrap("Author labels are pseudonyms.", "- ", "  "),
+        *(
+            _wrap(
+                'submission_kind "proposal_check" is annotation from proposals: the '
+                "person went through the tool's proposals one by one. Their decisions "
+                'are under "proposal_checks" in receipt.json.',
+                "- ",
+                "  ",
+            )
+            if checks
+            else []
+        ),
         *_wrap(
             "submitted_at is the time the server recorded the submission, in UTC. "
             "It is empty for exports prepared before this column existed.",
