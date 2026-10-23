@@ -115,6 +115,26 @@ A plain click on an already selected row keeps it selected (unchanged decision);
 the card does not deselect. Deselecting stays on the checkbox and "Clear selection" (F3 is
 satisfied by the card closing on Esc/outside click).
 
+## 2b. Documents table rows
+
+Mockups: `documents-rows-v3.html`, `proposal-icon.html`. Today a text row is 70–100 px
+high (about 7 texts per 1280×900 screen); target is one line of about 40 px (about 16
+texts).
+- Columns: checkbox, Text (flag + language), Translation, Annotation, Finalization,
+  Waiting on, Next step, Last activity (names match the card path).
+- A source text that is not in the plan is folded into the case line ("source en
+  (native), 1 translation"); a planned native text stays a normal row.
+- At most one button per row: the viewer's next step (Open my task, Compare results…,
+  Consolidate…, Accept result…, Assign person…). No per-row "Open" (the row click opens
+  the card) and no "+n".
+- Status cells are one line; a short "who" may follow in grey.
+- Tool proposals: while nobody is assigned to the annotation, the Annotation cell shows a
+  **robot icon** (Lucide "bot", vendored into `ui/icons.tsx` in the house icon style:
+  16 px, currentColor, aria-hidden; ISC licence noted) with the tooltip and accessible text
+  "17 tool proposals available; annotation will check them". Once someone is assigned the
+  icon is gone; the card always shows the count. A Documents filter "With tool proposals /
+  Without" is added.
+
 ## 3. Consolidation
 
 Top of the screen: the same three-part path as the text card, with Finalization current,
