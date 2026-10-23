@@ -85,9 +85,9 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   const placeholder = placeholderRow(page);
 
   // The toolbar counts the open check before the submit dialog was ever opened.
-  await expect(submitButton(page)).toHaveText("Finish & Submit · 1 open");
+  await expect(submitButton(page)).toHaveText("Finish & Submit (1 open)");
   await expect(page.getByRole("button", { name: "Next open item", exact: true })).toBeVisible();
-  await expect(page.getByText("Round 2 · continued from Round 1", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Round 2\W+continued from Round 1$/)).toBeVisible();
   await expect(page.getByText(/^Findings \(2\)$/)).toBeVisible();
   await expect(progress(page)).toHaveText("0 of 1 checked");
   await expect(seizure).toContainText("Check needed");
@@ -110,7 +110,7 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   await expect(seizure).toContainText("Checked");
   await expect(seizure).not.toContainText("Check needed");
   await expect(section.locator("[data-carried-collapsed]")).toBeFocused();
-  await expect(section).toContainText(/Checked · Carried from Round 1 \(submitted /);
+  await expect(section).toContainText(/Checked\W+Carried from Round 1 \(submitted /);
   await expect(submitButton(page)).toHaveText("Finish & Submit Case");
   await expect(page.getByRole("button", { name: "Next open item", exact: true })).toHaveCount(0);
 
@@ -122,7 +122,7 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   await expect(seizure).toContainText("Changed after your check. Check it again.");
   await expect(section).toContainText("You changed this finding after checking it. Check it again.");
   await expect(progress(page)).toHaveText("0 of 1 checked");
-  await expect(submitButton(page)).toHaveText("Finish & Submit · 1 open");
+  await expect(submitButton(page)).toHaveText("Finish & Submit (1 open)");
 
   // "Does not apply…" with a reason removes the carried finding: a dismissed placeholder row.
   const reason = "Not part of this report after the correction.";
@@ -201,7 +201,7 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   await linkTrigger.click();
   const chooser = exception.getByRole("group", { name: "Link to an existing finding", exact: true });
   await expect(chooser.getByRole("radio")).toHaveCount(1);
-  const option = chooser.getByRole("radio", { name: "Hypotonia · “Hypotonie”", exact: true });
+  const option = chooser.getByRole("radio", { name: /^Hypotonia\W+“Hypotonie”$/ });
   await expect(option).toBeChecked();
   await expect(option).toBeFocused();
   await exception.getByRole("button", { name: "Link and mark as checked", exact: true }).click();
@@ -252,10 +252,10 @@ test("corrected text: placeholder with the specific reason; Mark in text, save, 
 
 test("rounds3: Work rounds table, the still-open reason and My submissions across rounds", async ({ page }) => {
   const s = await openTask(page, "rounds3");
-  await expect(page.getByText("Round 3 · continued from Round 2", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Round 3\W+continued from Round 2$/)).toBeVisible();
 
   await page.getByRole("button", { name: "Work rounds", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: `Work rounds · ${s.documents[0]} · de`, exact: true });
+  const dialog = page.getByRole("dialog", { name: new RegExp(`^Work rounds\\W+${s.documents[0]}\\W+de$`) });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Each round keeps its starting point and its submissions. Starting a round does not change the final result.");
   const table = dialog.getByRole("table", { name: "Rounds" });
@@ -292,13 +292,13 @@ test("rounds3: Work rounds table, the still-open reason and My submissions acros
   const mine = page.getByRole("region", { name: "My submissions", exact: true });
   const items = mine.locator("li");
   await expect(items).toHaveCount(3);
-  await expect(items.nth(0)).toContainText(new RegExp(`^Round 1 · ${time.source} · 1 finding`));
-  await expect(items.nth(1)).toContainText(new RegExp(`^Round 2 · ${time.source} · 1 finding`));
-  await expect(items.nth(2)).toHaveText("Round 3 · not submitted yet");
-  await items.nth(0).getByRole("button", { name: /^View Round 1 · / }).click();
+  await expect(items.nth(0)).toContainText(new RegExp(`^Round 1\\W+${time.source}\\W+1 finding`));
+  await expect(items.nth(1)).toContainText(new RegExp(`^Round 2\\W+${time.source}\\W+1 finding`));
+  await expect(items.nth(2)).toHaveText(/^Round 3\W+not submitted yet$/);
+  await items.nth(0).getByRole("button", { name: /^View Round 1\W/ }).click();
   const history = page.getByRole("dialog", { name: "Historical submission", exact: true });
   await expect(history).toBeVisible();
-  await expect(history.getByRole("heading", { level: 2 })).toHaveText(new RegExp(`^Round 1 · ${time.source}$`));
+  await expect(history.getByRole("heading", { level: 2 })).toHaveText(new RegExp(`^Round 1\\W+${time.source}$`));
   await expect(history).toContainText("Seizure");
   await history.locator(".modal-actions").getByRole("button", { name: "Close", exact: true }).click();
   await expect(history).toBeHidden();

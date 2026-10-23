@@ -10,7 +10,8 @@ import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  caseBox, decisionBlock, detailsButton, documentsReady, documentsTab, openFilters, openRowPanel, rowAction, rowCell, rowPanel, textRow, textVersionItems,
+  caseBox, documentsReady, documentsTab, foldedSource, openDecisionBlock, openFilters, openTextCard, rowAction, rowCell, textCard, textName, textNamePattern,
+  textRow, textVersionItems,
 } from "./documentsHelpers";
 import { authenticatedRequest, openTasksHome, TEST_PASSWORD } from "./helpers";
 import { leadScenario, pasteCaseIds, type LeadPerson, type LeadScenario } from "./leadWorkflowHelpers";
@@ -21,6 +22,8 @@ test.use({ actionTimeout: 15_000 });
 /** "20 Oct, 17:18", optionally with seconds or a year. */
 const TIME = String.raw`\d{1,2} [A-Z][a-z]{2}(?: \d{4})?, \d{2}:\d{2}(?::\d{2})?`;
 const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** The separator of joined copy: " · " before U9 removes it (F11). */
+const SEP = String.raw`\W+`;
 
 /** Screenshots for human review only (never baselines). */
 const evidenceDir = () => resolve(test.info().config.rootDir, "../../build/lead-workflow/evidence");
@@ -73,15 +76,21 @@ const toast = (page: Page) => page.locator(".ui-toast");
 const live = (page: Page) => page.locator(".documents-page > p[role=\"status\"]");
 /** The table row of one text (case · language). */
 const row = textRow;
-/** The row panel on Details, where the plan chips of an in-plan row live (VD2). */
+/** The text card on Text details, where the plan chips of a row live (VD2, U3). */
 async function openPlan(page: Page, caseId: string, language: string): Promise<Locator> {
-  const panel = await openRowPanel(page, caseId, language);
-  await panel.getByRole("tab", { name: "Details", exact: true }).click();
-  return panel;
+  const card = await openTextCard(page, caseId, language);
+  await card.getByRole("button", { name: "Text details", exact: true }).click();
+  return card;
 }
-/** A plan chip; in-plan rows show them in the row panel's Details, undecided rows also in the "Plan…" popover (VD2). */
-const chip = (page: Page, flag: "Review" | "Annotate", caseId: string, language: string) =>
-  page.getByRole("button", { name: `${flag}, ${caseId} · ${language}`, exact: true });
+/** A plan chip in the card's Text details ("Translation review, {case} {language}", "Annotate, …"). */
+const chip = (page: Page, flag: "Translation review" | "Annotate", caseId: string, language: string) =>
+  page.getByRole("button", { name: textNamePattern(`${flag}, `, caseId, language) });
+/** The bulk "Plan…" dialog "Work plan · {n} cases". */
+const planDialog = (page: Page, count: number) => page.getByRole("dialog", { name: new RegExp(`^Work plan${SEP}${count} cases$`) });
+/** One language of the bulk plan dialog (its heading "{language} In selection: {n}"). */
+const planLanguage = (dialog: Locator, language: string) => dialog.getByRole("region", { name: new RegExp(`^${esc(language)} In selection`) });
+/** The toast of a bulk plan save: "{n} texts changed." (planReport). */
+const PLAN_SAVED = /^\d+ texts? changed\.$/;
 /** "n texts in m cases selected" of the selection bar (VD4: the selection is a set of texts). */
 const selected = (texts: number, cases: number) => `${texts} ${texts === 1 ? "text" : "texts"} in ${cases} ${cases === 1 ? "case" : "cases"} selected`;
 
@@ -106,23 +115,24 @@ async function finishImport(page: Page, dialog: Locator, documents: number) {
 async function selectByIds(page: Page, clicks: ReturnType<typeof counter>, ids: readonly string[]) {
   await clicks.click(page.getByRole("button", { name: "Select by case IDs…", exact: true }));
   await pasteCaseIds(page, ids);
-  await expect(page.getByRole("dialog").getByText(`${ids.length} found · 0 unknown`, { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog").getByText(new RegExp(`^${ids.length} found${SEP}0 unknown$`))).toBeVisible();
   await clicks.click(page.getByRole("dialog").getByRole("button", { name: `Select ${ids.length}`, exact: true }));
   await expect(page.getByRole("dialog")).toHaveCount(0);
   // "Select by case IDs…" selects every text of the found cases (VD4).
   await expect(bar(page)).toContainText(` in ${ids.length} cases selected`);
 }
 
-/** Plan…, Review on, Annotate on, Save: 4 activations. */
+/** Plan…, Translation review On, Annotate from scratch, Save: 4 activations (U5: radio groups per language). */
 async function planReviewAndAnnotate(page: Page, clicks: ReturnType<typeof counter>, language: string, count: number) {
   await clicks.click(bar(page).getByRole("button", { name: "Plan…", exact: true }));
-  const dialog = page.getByRole("dialog", { name: `Work plan · ${count} cases` });
-  await clicks.click(dialog.getByRole("button", { name: `Review, ${language}, keep`, exact: true }));
-  await clicks.click(dialog.getByRole("button", { name: `Annotate, ${language}, keep`, exact: true }));
-  await expect(dialog.getByText(`${language} in ${count} cases → review, then annotate after the review is accepted. Nothing else changes. ${count} translation reviews and ${count} annotations become "to assign".`)).toBeVisible();
+  const dialog = planDialog(page, count);
+  const steps = planLanguage(dialog, language);
+  await clicks.check(steps.getByRole("group", { name: "Translation review", exact: true }).getByRole("radio", { name: "On", exact: true }));
+  await clicks.check(steps.getByRole("group", { name: "Annotation", exact: true }).getByRole("radio", { name: "Annotate from scratch", exact: true }));
+  await expect(dialog.locator(".work-plan-summary")).toHaveText(/^Will change: \d+ texts?\./);
   await clicks.click(dialog.getByRole("button", { name: `Save for ${count} cases`, exact: true }));
   await expect(dialog).toHaveCount(0);
-  await expect(toast(page).locator(".ui-toast-message")).toHaveText(`Plan saved for ${count} cases · ${language}: review + annotate`);
+  await expect(toast(page).locator(".ui-toast-message")).toHaveText(PLAN_SAVED);
   await expect(toast(page).getByRole("button", { name: "Undo", exact: true })).toBeVisible();
   // The selection stays, so the next click can be "Assign…".
   await expect(bar(page)).toContainText(` in ${count} cases selected`);
@@ -141,7 +151,7 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
   // Opening the upload, choosing the file and "Check" are the upload itself; the count starts at the preview.
   const upload = await uploadPreview(page, s);
   const plan = upload.getByRole("region", { name: "Work plan" });
-  for (const label of ["Sources (50)", "de · MT (50)", "fr · MT (50)", "es · MT (50)"]) await expect(plan.getByRole("rowheader", { name: label })).toBeVisible();
+  for (const label of [/^Sources \(50\)$/, /^de\W+MT \(50\)$/, /^fr\W+MT \(50\)$/, /^es\W+MT \(50\)$/]) await expect(plan.getByRole("rowheader", { name: label })).toBeVisible();
   const chips = plan.getByRole("button", { pressed: false });
   await expect(chips).toHaveCount(7);
   await expect(plan.getByRole("button", { pressed: true })).toHaveCount(0);
@@ -150,31 +160,32 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
   // Not counted: the upload dialog stays open with the import result and is closed here.
   await finishImport(page, upload, 200);
   // "Nothing planned": every translation is undecided (VD3): a normal row with "? not decided" and "Plan…", counted as a
-  // decision (V10). The en sources are never undecided: "— not planned", no decision.
+  // decision (V10). The en sources are never undecided: not planned, folded into the case line, no decision.
   await expect(documentsTab(page, "All", 200)).toBeVisible();
   await expect(documentsTab(page, "Needs your decision", 150)).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Select all 50 filtered cases", exact: true })).toBeVisible();
   for (const language of ["de", "es", "fr"]) {
-    await expect(rowCell(row(page, "case-0101", language), "annotation"), language).toHaveText(/not decided/);
+    await expect(rowCell(row(page, "case-0101", language), "translation"), language).toContainText("not decided");
     await expect(rowAction(page, "Plan…", "case-0101", language)).toBeVisible();
   }
-  await expect(rowCell(row(page, "case-0101", "en"), "annotation")).toHaveText(/not planned/);
+  await expect(foldedSource(page, "case-0101")).toHaveText("source en (native), 3 translations");
+  await expect(textName(page, "case-0101", "en")).toHaveCount(0);
 
   // 2. Plan the 20 de cases from pasted IDs: Select by case IDs…, Select 20, Plan…, Review, Annotate, Save (6 + paste; total 7).
   await selectByIds(page, clicks, de);
   await planReviewAndAnnotate(page, clicks, "de", 20);
   expect(clicks.total).toBe(7);
   // de is planned: review first, then annotate; the other texts of the case stay undecided.
-  await expect(rowCell(row(page, de[0], "de"), "review")).toHaveText(/Unassigned/);
-  await expect(rowCell(row(page, de[0], "de"), "annotation")).toHaveText(/after review/);
+  await expect(rowCell(row(page, de[0], "de"), "translation")).toContainText("Unassigned");
+  await expect(rowCell(row(page, de[0], "de"), "annotation")).toContainText("after translation review");
   await expect(rowAction(page, "Assign review…", de[0], "de")).toBeVisible();
-  await expect(rowCell(row(page, de[0], "fr"), "annotation")).toHaveText(/not decided/);
+  await expect(rowCell(row(page, de[0], "fr"), "translation")).toContainText("not decided");
   await expect(documentsTab(page, "To assign", 20)).toBeVisible();
 
   // 3. Assign the 20 de reviews to one person from the kept selection: Assign…, Ana Weber, Assign 20 (3; total 10).
   await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
-  let dialog = page.getByRole("dialog", { name: "Assign · 20 cases" });
-  await expect(dialog.getByText("Translation review · de · 20 versions", { exact: true })).toBeVisible();
+  let dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}20 cases$`) });
+  await expect(dialog.getByText(new RegExp(`^Translation review${SEP}de${SEP}20 versions$`))).toBeVisible();
   await expect(dialog.getByText("from the plan", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("radio", { name: "One person", exact: true })).toBeChecked();
   // Nobody is preselected (D10).
@@ -188,7 +199,7 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
   // The selection is cleared after a successful assign.
   await expect(bar(page)).toHaveCount(0);
   for (const caseId of [de[0], de[19]]) {
-    await expect(rowCell(row(page, caseId, "de"), "review")).toHaveText(new RegExp(`In progress\s*${esc(s.display_names.ana)}`));
+    await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText(`in review (${s.display_names.ana})`);
     await expect(rowCell(row(page, caseId, "de"), "waiting")).toHaveText(person(s, "ana"));
   }
   await expect(documentsTab(page, "In progress", 20)).toBeVisible();
@@ -201,8 +212,8 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
 
   // 5. Split the 30 fr reviews between two: Assign…, Split evenly, Ana, Ben, Assign 30 (5; total 21).
   await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
-  dialog = page.getByRole("dialog", { name: "Assign · 30 cases" });
-  await expect(dialog.getByText("Translation review · fr · 30 versions", { exact: true })).toBeVisible();
+  dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}30 cases$`) });
+  await expect(dialog.getByText(new RegExp(`^Translation review${SEP}fr${SEP}30 versions$`))).toBeVisible();
   await clicks.click(dialog.getByRole("radio", { name: "Split evenly", exact: true }));
   await clicks.click(dialog.getByRole("checkbox", { name: person(s, "ana"), exact: true }));
   await clicks.click(dialog.getByRole("checkbox", { name: person(s, "ben"), exact: true }));
@@ -230,8 +241,8 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   // With all 20 cases selected, the 6 still in review are skipped and named.
   await page.getByRole("checkbox", { name: "Select all 20 filtered cases", exact: true }).click();
   await bar(page).getByRole("button", { name: "Assign…", exact: true }).click();
-  let dialog = page.getByRole("dialog", { name: "Assign · 20 cases" });
-  await expect(dialog.getByText("Annotation · de · 14 versions", { exact: true })).toBeVisible();
+  let dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}20 cases$`) });
+  await expect(dialog.getByText(new RegExp(`^Annotation${SEP}de${SEP}14 versions$`))).toBeVisible();
   await expect(dialog.getByRole("status", { name: "Summary" })).toContainText("6 still in translation review: waiting for review, they join the next batch");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await bar(page).getByRole("button", { name: "Clear selection", exact: true }).click();
@@ -241,10 +252,10 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   const clicks = counter(page);
   await clicks.click(documentsTab(page, "To assign", 14));
   await clicks.click(page.getByRole("checkbox", { name: "Select all 14 filtered cases", exact: true }));
-  await expect(bar(page)).toContainText(`${selected(14, 14)} · next step: Assign annotation (de)`);
+  await expect(bar(page)).toContainText(new RegExp(`${selected(14, 14)}${SEP}next step: Assign annotation \\(de\\)`));
   await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
-  dialog = page.getByRole("dialog", { name: "Assign · 14 cases" });
-  await expect(dialog.getByText("Annotation · de · 14 versions", { exact: true })).toBeVisible();
+  dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}14 cases$`) });
+  await expect(dialog.getByText(new RegExp(`^Annotation${SEP}de${SEP}14 versions$`))).toBeVisible();
   await clicks.click(dialog.getByRole("radio", { name: person(s, "annotator"), exact: true }));
   await expect(dialog.getByRole("status", { name: "Summary" })).toHaveText("Cy Annotator gets 14 annotations (de). Open tasks: 0 → 14.");
   await clicks.click(dialog.getByRole("button", { name: "Assign 14", exact: true }));
@@ -254,17 +265,17 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   await expect(documentsTab(page, "To assign", 0)).toBeVisible();
   await expect(documentsTab(page, "In progress", 20)).toBeVisible();
 
-  // The 6 cases in review wait for it: under All, the Review facet "In progress" (replaces the Next step filter
-  // "Waiting for translation review") shows exactly them.
+  // The 6 cases in review wait for it: under All, the Translation review facet "In progress" (replaces the Next step
+  // filter "Waiting for translation review") shows exactly them.
   await documentsTab(page, "All").click();
   const filters = await openFilters(page);
-  await filters.getByRole("group", { name: "Review", exact: true }).getByRole("checkbox", { name: "In progress, 6 texts", exact: true }).check();
+  await filters.getByRole("group", { name: "Translation review", exact: true }).getByRole("checkbox", { name: "In progress, 6 texts", exact: true }).check();
   await expect(live(page)).toHaveText("6 texts shown");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /^Details, case-\d{4} · de$/ })).toHaveCount(6);
+  await expect(page.getByRole("button", { name: /^Open text card, case-\d{4} de$/ })).toHaveCount(6);
   for (const caseId of s.in_review!) {
-    await expect(rowCell(row(page, caseId, "de"), "review")).toHaveText(new RegExp(`In progress\s*${esc(s.display_names.ana)}`));
-    await expect(rowCell(row(page, caseId, "de"), "annotation")).toHaveText(/after review/);
+    await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText(`in review (${s.display_names.ana})`);
+    await expect(rowCell(row(page, caseId, "de"), "annotation")).toContainText("after translation review");
     await expect(rowCell(row(page, caseId, "de"), "waiting")).toHaveText(person(s, "ana"));
   }
 });
@@ -276,7 +287,7 @@ test("DEFAULT_IMPORT: import with 0 extra clicks", async ({ page }) => {
   const plan = upload.getByRole("region", { name: "Work plan" });
   // "Review and annotate all translations": both chips on for every translation; the source (with translations) off.
   for (const language of ["de", "fr"]) {
-    await expect(plan.getByRole("button", { name: `Review, ${language}`, exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(plan.getByRole("button", { name: `Translation review, ${language}`, exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(plan.getByRole("button", { name: `Annotate, ${language}`, exact: true })).toHaveAttribute("aria-pressed", "true");
   }
   const clicks = counter(page);
@@ -285,15 +296,15 @@ test("DEFAULT_IMPORT: import with 0 extra clicks", async ({ page }) => {
   await finishImport(page, upload, 9);
   for (const caseId of s.case_ids.de!) {
     for (const language of ["de", "fr"]) {
-      await expect(rowCell(row(page, caseId, language), "review")).toHaveText(/Unassigned/);
-      await expect(rowCell(row(page, caseId, language), "annotation")).toHaveText(/after review/);
+      await expect(rowCell(row(page, caseId, language), "translation")).toContainText("Unassigned");
+      await expect(rowCell(row(page, caseId, language), "annotation")).toContainText("after translation review");
       await expect(rowAction(page, "Assign review…", caseId, language)).toBeVisible();
     }
   }
-  // The chips live in the row panel's Details (VD2): both on.
+  // The chips live in the text card's Text details (VD2): both on.
   const first = s.case_ids.de![0];
   await openPlan(page, first, "de");
-  await expect(chip(page, "Review", first, "de")).toHaveAttribute("aria-pressed", "true");
+  await expect(chip(page, "Translation review", first, "de")).toHaveAttribute("aria-pressed", "true");
   await expect(chip(page, "Annotate", first, "de")).toHaveAttribute("aria-pressed", "true");
   await expect(documentsTab(page, "To assign", 6)).toBeVisible();
 });
@@ -302,20 +313,20 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   const s = await leadScenario(page, "ROWS");
   await loginLead(page, s);
 
-  // Review off on a fr row with Review only (the fixture's "chip" case). The row is in plan, so its chips
-  // sit in the row panel's Details (VD2): the text name, Details, then one chip click with the Undo toast.
+  // Translation review off on a fr row with review only (the fixture's "chip" case). Its chips sit in the text card's
+  // Text details (VD2, U3): the text name, Text details, then one chip click with the Undo toast.
   const caseId = s.cases!.chip;
-  const review = () => chip(page, "Review", caseId, "fr");
+  const review = () => chip(page, "Translation review", caseId, "fr");
   // The lead lands on "Needs your decision" (VD7); the in-plan fr rows are listed under All.
   await documentsTab(page, "All").click();
   await expect(documentsTab(page, "All")).toHaveAttribute("aria-selected", "true");
   const clicks = counter(page);
-  await clicks.click(detailsButton(page, caseId, "fr"));
-  await clicks.click(rowPanel(page, caseId, "fr").getByRole("tab", { name: "Details", exact: true }));
+  await clicks.click(textName(page, caseId, "fr"));
+  await clicks.click(textCard(page, caseId, "fr").getByRole("button", { name: "Text details", exact: true }));
   await expect(review()).toHaveAttribute("aria-pressed", "true");
   await clicks.click(review());
   expect(clicks.total).toBe(3);
-  await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Review off`);
+  await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Translation review off`);
   // Out of plan: a muted row under All (VD1), no longer collapsed behind "not in plan · show".
   const collapsed = row(page, caseId, "fr");
   await expect(collapsed).toHaveClass(/documents-row--not-in-plan/);
@@ -329,26 +340,30 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
 
   // Ctrl+Z works while the toast is visible, also with a case checkbox focused (the checkbox does not toggle).
   await review().click();
-  await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Review off`);
+  await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Translation review off`);
   await expect(collapsed).toHaveClass(/documents-row--not-in-plan/);
+  // The card is modal: close it so the case checkbox can take focus.
+  await textCard(page, caseId, "fr").getByRole("button", { name: "Close", exact: true }).click();
   const box = caseBox(page, caseId, 3);
   await box.focus();
   await page.keyboard.press("Control+z");
   await expect(live(page)).toHaveText("Plan change undone.");
-  await expect(review()).toHaveAttribute("aria-pressed", "true");
   await expect(box).not.toBeChecked();
+  await openPlan(page, caseId, "fr");
+  await expect(review()).toHaveAttribute("aria-pressed", "true");
+  await textCard(page, caseId, "fr").getByRole("button", { name: "Close", exact: true }).click();
 
   // Review off on a review + annotate row with the rule on (the fixture's "acceptance" case) needs the acceptance instead.
   const both = s.cases!.acceptance;
   await openPlan(page, both, "fr");
-  await chip(page, "Review", both, "fr").click();
+  await chip(page, "Translation review", both, "fr").click();
   const offer = page.getByRole("group", { name: "Annotate without review" });
   await expect(offer.getByText("This translation was reviewed outside Ontocurator — accept it as it is", { exact: true })).toBeVisible();
   await expect(offer.getByRole("textbox", { name: "Reason (required)" })).toBeVisible();
   await expect(offer.getByRole("button", { name: "Accept and annotate", exact: true })).toHaveAttribute("aria-disabled", "true");
   await expect(toast(page)).toHaveCount(0);
   await offer.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(chip(page, "Review", both, "fr")).toHaveAttribute("aria-pressed", "true");
+  await expect(chip(page, "Translation review", both, "fr")).toHaveAttribute("aria-pressed", "true");
 });
 
 test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }) => {
@@ -356,23 +371,21 @@ test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }
   await loginLead(page, s);
   await page.getByRole("checkbox", { name: "Select all 10 filtered cases", exact: true }).click();
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Work plan · 10 cases" });
-  // keep → on → off for both cells.
-  for (const flag of ["Review", "Annotate"]) {
-    await dialog.getByRole("button", { name: `${flag}, fr, keep`, exact: true }).click();
-    await dialog.getByRole("button", { name: `${flag}, fr, on`, exact: true }).click();
-    await expect(dialog.getByRole("button", { name: `${flag}, fr, off`, exact: true })).toBeVisible();
-  }
-  await expect(dialog.getByText("fr in 10 cases → not in plan. Nothing else changes.")).toBeVisible();
+  const dialog = planDialog(page, 10);
+  // Both steps of fr off (U5: radio groups per language).
+  const fr = planLanguage(dialog, "fr");
+  await fr.getByRole("group", { name: "Translation review", exact: true }).getByRole("radio", { name: "Off", exact: true }).check();
+  await fr.getByRole("group", { name: "Annotation", exact: true }).getByRole("radio", { name: "Off (not annotated)", exact: true }).check();
+  await expect(dialog.locator(".work-plan-summary")).toHaveText(/^Will change: \d+ texts?\./);
   const save = dialog.getByRole("button", { name: "Save for 10 cases", exact: true });
   await save.click();
 
   // The confirmation inside the dialog names the persons and the final result.
   await expect(dialog.getByText("fr has work in 3 of these cases.", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("listitem").filter({ hasText: "open translation reviews" }))
-    .toHaveText(`2 open translation reviews will be withdrawn (${person(s, "ana")} · ${person(s, "ben")}).`);
+    .toHaveText(new RegExp(`^2 open translation reviews will be withdrawn \\(${esc(person(s, "ana"))}${SEP}${esc(person(s, "ben"))}\\)\\.$`));
   await expect(dialog.getByRole("listitem").filter({ hasText: "final result" }))
-    .toHaveText(`1 final result (${s.final_case} · fr) stays in history but is no longer exported.`);
+    .toHaveText(new RegExp(`^1 final result \\(${esc(s.final_case!)}${SEP}fr\\) stays in history but is no longer exported\\.$`));
   await expect(dialog.getByRole("button", { name: "Back", exact: true })).toBeVisible();
   // The checkbox is required: Save stays focusable but unavailable.
   await expect(save).toHaveAttribute("aria-disabled", "true");
@@ -383,7 +396,7 @@ test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }
   await expect(save).not.toHaveAttribute("aria-disabled", "true");
   await save.click();
   await expect(dialog).toHaveCount(0);
-  await expect(toast(page).locator(".ui-toast-message")).toHaveText("Plan saved for 10 cases · fr: review off, annotate off");
+  await expect(toast(page).locator(".ui-toast-message")).toHaveText(PLAN_SAVED);
   await expect(toast(page).locator(".ui-toast-note")).toHaveText("Undo restores the plan, not withdrawn tasks.");
 
   // The open reviews are withdrawn.
@@ -396,13 +409,13 @@ test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }
   await documentsTab(page, "All").click();
   for (const caseId of Object.values(s.open_reviews!)) {
     await expect(row(page, caseId, "fr")).toHaveClass(/documents-row--not-in-plan/);
-    await expect(rowCell(row(page, caseId, "fr"), "review")).toHaveText(/not planned/);
+    await expect(rowCell(row(page, caseId, "fr"), "translation")).toContainText("not reviewed, optional");
   }
 
   // Export lists the final as "Not planned, not exported" (information).
   await page.getByRole("link", { name: "Export", exact: true }).click();
   await expect(page.getByText(/^Not planned, not exported/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(`${s.final_case} · fr`, { exact: false }).first()).toBeVisible();
+  await expect(page.getByText(new RegExp(`${esc(s.final_case!)}${SEP}fr`)).first()).toBeVisible();
   await expect(page.getByText(/1 not planned/)).toBeVisible();
 });
 
@@ -411,8 +424,8 @@ test("ACCEPTANCE: annotate without review", async ({ page }) => {
   await loginLead(page, s);
   await page.getByRole("checkbox", { name: "Select all 30 filtered cases", exact: true }).click();
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Work plan · 30 cases" });
-  await dialog.getByRole("button", { name: "Annotate, fr, keep", exact: true }).click();
+  const dialog = planDialog(page, 30);
+  await planLanguage(dialog, "fr").getByRole("group", { name: "Annotation", exact: true }).getByRole("radio", { name: "Annotate from scratch", exact: true }).check();
   const block = dialog.getByRole("group", { name: "Acceptance, fr" });
   await expect(block.getByText("fr: 12 of 30 translations are not marked as reviewed in the package. Annotation needs an accepted translation.", { exact: true })).toBeVisible();
   await expect(block.getByText("18 already marked as reviewed in the package metadata need nothing.", { exact: true })).toBeVisible();
@@ -428,21 +441,21 @@ test("ACCEPTANCE: annotate without review", async ({ page }) => {
   await expect(save).not.toHaveAttribute("aria-disabled", "true");
   await save.click();
   await expect(dialog).toHaveCount(0);
-  await expect(toast(page).locator(".ui-toast-message")).toHaveText("Plan saved for 30 cases · fr: annotate");
+  await expect(toast(page).locator(".ui-toast-message")).toHaveText(PLAN_SAVED);
 
-  // Text versions labels both acceptances.
+  // The card's version list labels both acceptances.
   const accepted = s.not_marked!.at(-1)!;
   const marked = s.marked![0];
   const versions = async (caseId: string) => {
-    const area = await openRowPanel(page, caseId, "fr");
-    await textVersionItems(area, 1);
-    return area.getByRole("tabpanel");
+    const card = await openTextCard(page, caseId, "fr");
+    return (await textVersionItems(card, 1)).first();
   };
-  const lead = (await versions(accepted));
-  await expect(lead).toContainText(new RegExp(`Accepted: reviewed outside Ontocurator · Project Lead \\(${esc(s.pseudonyms.lead)}, you\\) · ${TIME} · ${esc(reason)}`));
+  const lead = await versions(accepted);
+  await expect(lead).toContainText(new RegExp(`Accepted: reviewed outside Ontocurator${SEP}Project Lead \\(${esc(s.pseudonyms.lead)}, you\\)${SEP}${TIME}${SEP}${esc(reason)}`));
+  await textCard(page, accepted, "fr").getByRole("button", { name: "Close", exact: true }).click();
   const pkg = await versions(marked);
-  await expect(pkg).toContainText("Accepted: marked as reviewed in the package · R. Roe, 1 Oct");
-  await evidence(page, "acceptance-text-versions", rowPanel(page, marked, "fr"));
+  await expect(pkg).toContainText(/Accepted: marked as reviewed in the package\W+R\. Roe, 1 Oct/);
+  await evidence(page, "acceptance-text-versions", textCard(page, marked, "fr"));
 });
 
 test("ROWS: row actions within three clicks", async ({ page }) => {
@@ -450,24 +463,28 @@ test("ROWS: row actions within three clicks", async ({ page }) => {
   await loginLead(page, s);
   const cases = s.cases!;
 
-  // Accept as final… with one submission (was "Choose final…", V6, X14): the row panel and "Accept as final": 2.
+  // Accept result… with one submission (was "Choose final…", V6, X14, D2): the text card, "Accept result…" and its
+  // confirmation "Accept result": 3.
   let clicks = counter(page);
-  await clicks.click(rowAction(page, "Accept as final…", cases.choose_final, "de"));
-  const accept = decisionBlock(page, cases.choose_final, "de");
-  await expect(accept.getByText(/^Accept .+ as final\?$/)).toBeVisible();
-  await clicks.click(accept.getByRole("button", { name: "Accept as final", exact: true }));
-  expect(clicks.total).toBe(2);
-  // VD17: the panel moves to the next final decision of the list (the review_changes case).
-  const next = decisionBlock(page, cases.review_changes, "de");
-  await expect(next.locator(".final-panel-success")).toContainText(`Final result saved for ${cases.choose_final} · de.`);
-  await rowPanel(page, cases.review_changes, "de").getByRole("button", { name: "Close", exact: true }).first().click();
-  await expect(rowCell(row(page, cases.choose_final, "de"), "final")).toHaveText(/^\W*Final/);
+  await clicks.click(rowAction(page, "Accept result…", cases.choose_final, "de"));
+  const accept = await openDecisionBlock(page, cases.choose_final, "de");
+  await expect(accept.getByText(/^Accept .+ as the result\?$/)).toBeVisible();
+  await clicks.click(accept.getByRole("button", { name: "Accept result…", exact: true }));
+  await clicks.click(accept.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true }));
+  expect(clicks.total).toBe(3);
+  // VD17: the card moves to the next final decision of the list and names the saved one.
+  const card = page.locator('.text-card[role="dialog"]');
+  const next = card.getByRole("region", { name: "Final result", exact: true });
+  await expect(next.locator(".final-panel-success")).toContainText(new RegExp(`Final result saved for ${esc(cases.choose_final)}${SEP}de\\.`));
+  await card.locator("[data-dialog-close]").click();
+  await expect(card).toHaveCount(0);
+  await expect(rowCell(row(page, cases.choose_final, "de"), "finalization")).toContainText("accepted");
 
   // Resolve…: the three options exactly, inline under the row (Change 13); discarding takes 3 (+ typing the reason).
   clicks = counter(page);
   await clicks.click(rowAction(page, "Resolve…", cases.rejected, "de"));
-  const resolve = page.getByRole("group", { name: `Resolve rejected translation, ${cases.rejected} · de`, exact: true });
-  await expect(resolve.getByRole("heading", { name: `Resolve rejected translation, ${cases.rejected} · de` })).toBeFocused();
+  const resolve = page.getByRole("group", { name: textNamePattern("Resolve rejected translation, ", cases.rejected, "de") });
+  await expect(resolve.getByRole("heading", { name: textNamePattern("Resolve rejected translation, ", cases.rejected, "de") })).toBeFocused();
   await expect(resolve.getByRole("button")).toHaveText(["Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel"]);
   await clicks.click(resolve.getByRole("button", { name: "Discard the de translation…", exact: true }));
   const discard = page.getByRole("group", { name: `Discard the de translation of ${cases.rejected}`, exact: true });
@@ -490,17 +507,17 @@ test("ROWS: row actions within three clicks", async ({ page }) => {
   await page.getByRole("link", { name: "Back to Documents" }).first().click();
   await documentsReady(page);
 
-  // Review changes… (PLAN_RESTORED): the panel with "Keep final on v1": 2 (the checkbox confirmation is gone).
+  // Review changes… (PLAN_RESTORED): the card with "Keep final on v1": 2 (the checkbox confirmation is gone).
   clicks = counter(page);
   await clicks.click(rowAction(page, "Review changes…", cases.review_changes, "de"));
-  const review = decisionBlock(page, cases.review_changes, "de");
+  const review = await openDecisionBlock(page, cases.review_changes, "de");
   await expect(review.getByRole("button", { name: "Keep final on v1", exact: true })).toBeVisible();
   await evidence(page, "row-review-changes", review);
   await clicks.click(review.getByRole("button", { name: "Keep final on v1", exact: true }));
   expect(clicks.total).toBe(2);
-  await expect(review.locator(".final-panel-success")).toContainText(`Final result saved for ${cases.review_changes} · de.`);
-  await page.getByRole("complementary").getByRole("button", { name: "Close", exact: true }).first().click();
-  await expect(rowCell(row(page, cases.review_changes, "de"), "final")).toHaveText(/^\W*Final/);
+  await expect(review.locator(".final-panel-success")).toContainText(new RegExp(`Final result saved for ${esc(cases.review_changes)}${SEP}de\\.`));
+  await textCard(page, cases.review_changes, "de").getByRole("button", { name: "Close", exact: true }).first().click();
+  await expect(rowCell(row(page, cases.review_changes, "de"), "finalization")).toContainText("accepted");
 });
 
 test("annotator sees only pseudonyms", async ({ page }) => {
@@ -513,7 +530,7 @@ test("annotator sees only pseudonyms", async ({ page }) => {
     await expect(page.locator("body")).not.toContainText(new RegExp(others.map(esc).join("|")), { timeout: 1_000 });
     expect(where).toBeTruthy();
   };
-  await expect(page.getByRole("cell", { name: `${s.cases!.report} · de`, exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: textNamePattern("", s.cases!.report, "de") })).toBeVisible();
   await noOthers("My tasks");
   await page.getByRole("link", { name: /^View paused task/ }).or(page.getByRole("button", { name: /^View paused task/ })).first().click();
   await expect(page.getByTestId("annotator-identity")).toHaveText(`as ${person(s, "annotator")}`);
@@ -521,8 +538,8 @@ test("annotator sees only pseudonyms", async ({ page }) => {
   await noOthers("paused task screen");
   await page.goBack();
   await expect(page.getByRole("heading", { name: "My tasks", level: 1 })).toBeVisible();
-  await page.getByRole("row").filter({ hasText: `${s.cases!.choose_final} · de` }).getByRole("link", { name: /^View/ })
-    .or(page.getByRole("row").filter({ hasText: `${s.cases!.choose_final} · de` }).getByRole("button", { name: /^View/ })).first().click();
+  const submitted = page.getByRole("row").filter({ hasText: new RegExp(`${esc(s.cases!.choose_final)}${SEP}de`) });
+  await submitted.getByRole("link", { name: /^View/ }).or(submitted.getByRole("button", { name: /^View/ })).first().click();
   await expect(page.getByTestId("annotator-identity")).toHaveText(`as ${person(s, "annotator")}`);
   await noOthers("submitted task screen");
 });
@@ -645,16 +662,16 @@ test("lead corrects a rejected translation and annotation becomes assignable", a
   await loginLead(page, s);
 
   // Resolve… opens the options inline under the row (Change 13); their heading takes focus (F5).
-  await page.getByRole("button", { name: `Resolve…, ${caseId} · de`, exact: true }).click();
+  await rowAction(page, "Resolve…", caseId, "de").click();
   const area = page.locator(".documents-row-notice-slot");
-  const resolve = area.getByRole("group", { name: `Resolve rejected translation, ${caseId} · de`, exact: true });
-  await expect(resolve.getByRole("heading", { name: `Resolve rejected translation, ${caseId} · de` })).toBeFocused();
+  const resolve = area.getByRole("group", { name: textNamePattern("Resolve rejected translation, ", caseId, "de") });
+  await expect(resolve.getByRole("heading", { name: textNamePattern("Resolve rejected translation, ", caseId, "de") })).toBeFocused();
   await expect(resolve.getByRole("button")).toHaveText(["Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel"]);
 
   // Correct the translation…: the panel explains the outcome; its heading takes focus.
   await resolve.getByRole("button", { name: "Correct the translation…", exact: true }).click();
-  const panel = area.getByRole("group", { name: `Correct the translation, ${caseId} · de`, exact: true });
-  await expect(panel.getByRole("heading", { name: `Correct the translation, ${caseId} · de` })).toBeFocused();
+  const panel = area.getByRole("group", { name: textNamePattern("Correct the translation, ", caseId, "de") });
+  await expect(panel.getByRole("heading", { name: textNamePattern("Correct the translation, ", caseId, "de") })).toBeFocused();
   await expect(panel).toContainText("You review v1 yourself and submit it as Accepted with corrections. The corrected text becomes v2 and counts as accepted.");
   // No language confirmation: the lead reads de and has a qualification.
   await expect(panel.getByRole("checkbox")).toHaveCount(0);
@@ -689,9 +706,9 @@ test("lead corrects a rejected translation and annotation becomes assignable", a
   // Back to Documents: the row's next step is Assign annotation (rule on, the translation is accepted).
   await page.getByRole("link", { name: "Back to Documents", exact: true }).click();
   await documentsReady(page);
-  await expect(rowCell(row(page, caseId, "de"), "review")).toHaveText(/Accepted/);
+  await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText("accepted");
   await expect(rowAction(page, "Assign annotation…", caseId, "de")).toBeVisible();
-  await expect(page.getByRole("button", { name: `Resolve…, ${caseId} · de`, exact: true })).toHaveCount(0);
+  await expect(rowAction(page, "Resolve…", caseId, "de")).toHaveCount(0);
 });
 
 test("every Progress count opens Documents with the same number of rows", async ({ page }) => {
@@ -718,7 +735,8 @@ test("every Progress count opens Documents with the same number of rows", async 
     expect(page.url().endsWith(link.href), `${label}: ${page.url()}`).toBeTruthy();
     await expect(page.locator("table.documents-skeleton")).toHaveCount(0, { timeout: 30_000 });
     await documentsReady(page);
-    const shown = page.getByRole("button", { name: /^Details, case-\d{4} · [a-z]{2}$/ });
+    // Texts in view: the text names plus the not-planned sources folded into their case lines.
+    const shown = page.getByRole("button", { name: /^Open text card, case-\d{4} [a-z]{2}$|^source [a-z]{2} \(native\), \d+ translations?$/ });
     if (Number(count) === 0) {
       await expect(page.getByText(/^(No texts match these filters\.|Nothing needs your decision|Nothing to assign|Nothing in progress|Nothing done yet|No texts yet)$/).first(), label).toBeVisible();
     }
@@ -734,7 +752,7 @@ test("every Progress count opens Documents with the same number of rows", async 
 test("problem report shows Name (ann-…) to the lead", async ({ page }) => {
   const s = await leadScenario(page, "ROWS");
   await loginLead(page, s);
-  await page.getByRole("button", { name: `Decide on report…, ${s.cases!.report} · de`, exact: true }).click();
+  await rowAction(page, "Decide on report…", s.cases!.report, "de").click();
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
   const reporter = person(s, "annotator");
   await expect(page.getByRole("region", { name: "History", exact: true })).toContainText(`${reporter} reported the problem.`);

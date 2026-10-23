@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import { documentsTab, rowAction } from "./documentsHelpers";
+import { documentsTab, openTextCard, rowAction, textCard, textName, textNamePattern, textVersionItems } from "./documentsHelpers";
 import { openTasksHome, selectText, submitCase, TASKS_HOME, TEST_PASSWORD } from "./helpers";
 
 interface Actor { username: string; code: string }
@@ -105,7 +105,7 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Members", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings/members$`));
   const members = page.getByRole("form", { name: "Add member", exact: true });
-  for (const [actor, role] of [[lead, "Project lead"], [annotator, "Annotator"]] as const) {
+  for (const [actor, role] of [[lead, "Lead"], [annotator, "Annotator"]] as const) {
     await members.getByLabel(/^Username/).fill(actor.username);
     await members.getByRole("checkbox", { name: `New member: ${role}`, exact: true }).check();
     await members.getByRole("button", { name: "Add member", exact: true }).click();
@@ -128,20 +128,15 @@ async function selectProject(page: Page, key: string) {
 /** The navigation link "Documents", with the decision counter "Documents, n need your decision" once O8 shows it (V3). */
 const DOCUMENTS_LINK = /^Documents(, \d+ needs? your decision)?$/;
 
-/** The text name of the Documents row of one text in English: "Details, {text} · en" (opens the row panel). */
-const rowDetails = (page: Page, caseId: string) =>
-  page.getByRole("button", { name: `Details, ${caseId} · en`, exact: true });
+/** The text name of the Documents row of one text in English: "Open text card, {text} en". */
+const rowDetails = (page: Page, caseId: string) => textName(page, caseId, "en");
 
-/** Open the row panel of a text on "Versions (n)" (one version per text here). */
+/** Open the text card of a text on its Translation part with the version list (one version per text here). */
 async function openTextVersions(page: Page, caseId: string) {
   // "Documents" opens "Needs your decision" while anything waits for the lead (VD7); the row is under All.
   await documentsTab(page, "All").click();
-  const area = page.getByRole("complementary", { name: `Details, ${caseId} · en`, exact: true });
-  if (!(await area.count())) await rowDetails(page, caseId).click();
-  await area.getByRole("tab", { name: /^Versions \(\d+\)$/ }).click();
-  const version = area.locator("li.text-version");
-  await expect(version).toHaveCount(1);
-  return version;
+  const card = await openTextCard(page, caseId, "en");
+  return (await textVersionItems(card, 1)).first();
 }
 
 async function importTwoDocuments(page: Page) {
@@ -157,13 +152,13 @@ async function importTwoDocuments(page: Page) {
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
   await expect(preview).toContainText("2 documents added");
   await expect(preview).toContainText("1 with normalized text");
-  const rows = page.getByRole("button", { name: /^Details, / });
+  const rows = page.getByRole("button", { name: /^Open text card, / });
   await expect(rows).toHaveCount(0);
   await upload.getByRole("button", { name: "Import 2 texts", exact: true }).click();
   // The upload dialog closes itself after the import; Documents reports the result.
   await expect(upload).toHaveCount(0);
   await expect(page.locator(".ui-toast-message")).toHaveText("Imported 2 documents and 0 proposals.");
-  // One row per text and language, no row panel open, each with its lead action: "Assign annotation…" when the
+  // One row per text and language, no text card open, each with its lead action: "Assign annotation…" when the
   // project's import plan annotates sources, else "Plan…" (VD1, VD2, VD3).
   await documentsTab(page, "All").click();
   await expect(rows).toHaveCount(2);
@@ -179,18 +174,16 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await selectProject(page, setup.key);
   await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
   await importTwoDocuments(page);
-  // Plan annotation for "one" if the import left it outside the plan (the row's "Plan…" popover, VD2), then
-  // assign it through the row's Assign dialog and its seeded "Random distribution…".
+  // Plan annotation for "one" if the import left it outside the plan ("Plan…" opens the text card on Text details
+  // with the plan chips, VD2, U3), then assign it through the row's Assign dialog and its seeded "Random distribution…".
   if (await rowAction(page, "Plan…", "one", "en").count()) {
     await rowAction(page, "Plan…", "one", "en").click();
-    const plan = page.getByRole("dialog", { name: "Plan, one · en", exact: true });
-    // An undecided row offers "Annotate" / "Don't annotate"; a decided one its chip.
-    const choice = plan.getByRole("group", { name: "Annotate, one · en", exact: true });
-    const annotate = plan.getByRole("button", { name: "Annotate, one · en", exact: true });
-    if (await choice.count()) await choice.getByRole("button", { name: "Annotate", exact: true }).click();
-    else if ((await annotate.getAttribute("aria-pressed")) !== "true") await annotate.click();
+    const card = textCard(page, "one", "en");
+    const annotate = card.getByRole("button", { name: textNamePattern("Annotate, ", "one", "en") });
+    if ((await annotate.getAttribute("aria-pressed")) !== "true") await annotate.click();
     await expect(annotate).toHaveAttribute("aria-pressed", "true");
-    await page.keyboard.press("Escape");
+    await card.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(card).toHaveCount(0);
   }
   await rowAction(page, "Assign annotation…", "one", "en").click();
   const assign = page.getByRole("dialog", { name: "Assign annotation", exact: true });
@@ -203,22 +196,24 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await distribution.locator(".modal-actions").getByRole("button", { name: "Close", exact: true }).click();
   await expect(distribution).toHaveCount(0);
   if (await assign.count()) await assign.getByRole("button", { name: "Cancel", exact: true }).click();
+  // No dialog may stay open (the failure names the one that does).
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await logout(page);
   await redeemCode(page, setup.annotator);
   const tasks = page.getByTestId("task-row");
   await expect(tasks).toHaveCount(1);
-  // My tasks names the text as "{case ID} · {language}".
-  await expect(tasks).toContainText("one · en");
-  await expect(page.getByTestId("task-row").filter({ hasText: "two · en" })).toHaveCount(0);
+  // My tasks names the text as "{case ID} {language}" (" · " before U9).
+  await expect(tasks).toContainText(/one\W+en/);
+  await expect(page.getByTestId("task-row").filter({ hasText: /two\W+en/ })).toHaveCount(0);
   await tasks.getByRole("link", { name: /^(Start|Continue|View)$/ }).click();
   await selectText(page, 0, 9);
   await page.getByLabel("Search term", { exact: true }).fill("Hypotonia");
   await page.locator(".candidate-card").filter({ hasText: "HP:0001252" }).first().click();
   // A new project presets the clinical creation defaults (U5): the finding starts with them unconfirmed.
   const axes = [["Assertion", "Present"], ["Experiencer", "Patient"], ["Temporality", "Current"]] as const;
-  const axisRadio = (axis: string, name: string) =>
-    page.getByRole("group", { name: new RegExp(`^${axis}`) }).getByRole("radio", { name, exact: true });
-  for (const [axis, value] of axes) await expect(axisRadio(axis, `${value} · default`)).toBeChecked();
+  const axisRadio = (axis: string, name: string | RegExp) =>
+    page.getByRole("group", { name: new RegExp(`^${axis}`) }).getByRole("radio", { name, exact: typeof name === "string" });
+  for (const [axis, value] of axes) await expect(axisRadio(axis, new RegExp(`^${value}\\W+default\\)?$`))).toBeChecked();
   await page.getByRole("button", { name: /^Confirm defaults \(3\)/ }).click();
   // Controlled axes reflect the asynchronous server response, as in design.spec.ts.
   for (const [axis, value] of axes) await expect(axisRadio(axis, value)).toBeChecked();
@@ -294,6 +289,8 @@ test.describe("Administration through real accounts and jobs", () => {
     await reopen.getByRole("button", { name: "Reopen assignment", exact: true }).click();
     await expect(reopen).toHaveCount(0);
     await expect(document).toContainText("Reopened");
+    // The text card is modal: close it before logging out.
+    await textCard(page, "one", "en").getByRole("button", { name: "Close", exact: true }).click();
     await logout(page);
     await loginExisting(page, setup.annotator);
     await expect(page.getByTestId("task-row")).toHaveCount(1);

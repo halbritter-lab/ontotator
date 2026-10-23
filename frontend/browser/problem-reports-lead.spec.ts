@@ -9,7 +9,7 @@
  */
 import { expect, request as playwrightRequest, test, type APIRequestContext, type Browser, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
-import { documentsReady, openRowPanel, rowAction, rowCell, rowPanel, textRow } from "./documentsHelpers";
+import { documentsReady, openTextCard, rowAction, rowCell, textCard, textRow } from "./documentsHelpers";
 import { authenticatedRequest, loginExisting, TEST_PASSWORD } from "./helpers";
 import { problemReportScenario, type ProblemReportScenario } from "./problemReportHelpers";
 
@@ -124,7 +124,7 @@ async function confirmRestart(box: Locator, reporter: string, reason: string) {
 
 /** Documents table helpers (documentsHelpers.ts; the same accessible names as the Documents specs). */
 const languageRow = textRow;
-const expand = openRowPanel;
+const expand = openTextCard;
 
 /** The final result's submission id of the reporter's row (A de), read by the lead. */
 async function finalSubmissionOf(page: Page, s: ProblemReportScenario): Promise<string | null> {
@@ -145,7 +145,7 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await openLeadPage(page, s, report);
 
   // Close while the reporter's task is paused: the pause stays.
-  await expect(fact(page, "Paused tasks")).toContainText(`Task ${task} · ${asLeadSees(s, "reporter")}`);
+  await expect(fact(page, "Paused tasks")).toContainText(new RegExp(`Task ${task}\\W+${esc(asLeadSees(s, "reporter"))}`));
   const close = await openIntent(page, "Close report (pauses stay)", "Close report");
   await expect(close).toContainText(`Task ${task} stays paused. Release it separately with Release pause.`);
   await close.getByRole("textbox", { name: new RegExp(`^Outcome for ${esc(asLeadSees(s, "reporter"))}`) }).fill("Source corrected; continue later.");
@@ -160,18 +160,18 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await expect(row).toBeVisible();
   // The orphaned pause is the row's next step (a decision for the lead): "Resume task…" in the Action column.
   await expect(row).toHaveClass(/data-table-row--decision/);
-  await expect(rowCell(row, "annotation")).toContainText("Paused");
+  await expect(rowCell(row, "annotation")).toContainText("⏸");
   await rowAction(page, "Resume task…", caseId, "de").click();
 
   // The report page opens "Release pause" with the reporter's task preselected; nothing was sent yet.
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
   const release = group(page, "Release pause");
   await expect(release).toBeVisible();
-  await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task} · `) })).toBeChecked();
+  await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task}\\W`) })).toBeChecked();
   await expect(fact(page, "Paused tasks")).toContainText("Paused");
   await release.getByRole("textbox", { name: /^Reason/ }).fill("Source corrected; continue the annotation.");
   await release.getByRole("button", { name: "Release pause", exact: true }).click();
-  await expect(outcome(page)).toContainText(`Released the pause on Task ${task} · ${asLeadSees(s, "reporter")}. The report is still closed.`);
+  await expect(outcome(page)).toContainText(new RegExp(`Released the pause on Task ${task}\\W+${esc(asLeadSees(s, "reporter"))}\\. The report is still closed\\.`));
   await expect(page.locator(".lead-summary")).toHaveText("Nothing left to decide.");
 
   // Back in Documents: the row is decided, has no problem issue, and the report is listed as Closed.
@@ -183,14 +183,14 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await expect(plain).toBeVisible();
   await expect(rowAction(page, "Resume task…", caseId, "de")).toHaveCount(0);
   await expect(rowAction(page, "Decide on report…", caseId, "de")).toHaveCount(0);
-  await expect(rowCell(plain, "annotation")).not.toContainText("Paused");
+  await expect(rowCell(plain, "annotation")).not.toContainText("⏸");
   const expanded = await expand(page, caseId, "de");
   await expect(expanded.getByText(/task is paused, but its report is resolved/)).toHaveCount(0);
   await expect(expanded.getByRole("link", { name: "Resume task" })).toHaveCount(0);
-  // The closed report: no banner, listed under Details.
-  await expect(expanded.locator(".row-panel-banner")).toHaveCount(0);
-  await expanded.getByRole("tab", { name: "Details", exact: true }).click();
-  const reports = expanded.getByRole("tabpanel").locator("section").filter({ has: page.getByRole("heading", { name: "Problem reports (1)" }) });
+  // The closed report: no banner, listed under Text details.
+  await expect(expanded.locator(".text-card-banner")).toHaveCount(0);
+  await expanded.getByRole("button", { name: "Text details", exact: true }).click();
+  const reports = expanded.locator("section").filter({ has: page.getByRole("heading", { name: "Problem reports (1)" }) });
   const listed = reports.getByRole("listitem");
   await expect(listed).toHaveCount(1);
   await expect(listed).toContainText(REPORT_TEXT);
@@ -234,11 +234,11 @@ test("restart is refused while another report pauses the task, succeeds after th
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
   await expect(page.locator(".report-text").first()).toHaveText(OTHER_REPORT_TEXT);
   const release = await openIntent(page, "Release pause…", "Release pause");
-  await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task} · `) })).toBeChecked();
+  await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task}\\W`) })).toBeChecked();
   await expect(release).toContainText("Also paused by another report: stays paused");
   await release.getByRole("textbox", { name: /^Reason/ }).fill("Second report can wait; the restart goes first.");
   await release.getByRole("button", { name: "Release pause", exact: true }).click();
-  await expect(outcome(page)).toContainText(`Released the pause on Task ${task} · ${asLeadSees(s, "reporter")}. The report is still open. Task ${task} is still paused by another report.`);
+  await expect(outcome(page)).toContainText(new RegExp(`Released the pause on Task ${task}\\W+${esc(asLeadSees(s, "reporter"))}\\. The report is still open\\. Task ${task} is still paused by another report\\.`));
   expect(other.report_id).not.toBe(report.report_id);
 
   // Back on the first report: the restart now succeeds and the final result is unchanged.
@@ -352,22 +352,22 @@ test("the back link restores the full Documents query (decision, panel, page)", 
   const report = await fileReport(s.users.reporter, s.tasks.reporter);
   await loginExisting(page, s.users.lead);
 
-  // From Documents: decision filter and the row panel, then the report (its banner) and back.
+  // From Documents: decision filter and the text card, then the report (its banner) and back.
   const open = `${caseId}:de`;
   await openDocuments(page, s, `?decision=report-or-pause&panel=${encodeURIComponent(open)}`);
   const area = await expand(page, caseId, "de");
   const query = hashQueryOf(page.url());
   expect(query).toEqual(["decision=report-or-pause", `panel=${open}`]);
-  await area.locator(".row-panel-banner").getByRole("link", { name: /^Open problem report, / }).click();
+  await area.locator(".text-card-banner").getByRole("link", { name: /^Open problem report, / }).click();
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/problem-reports/${esc(report.report_id)}\\?`));
   const back = page.getByRole("link", { name: "Back to Documents" }).first();
   await back.click();
   await documentsReady(page);
   expect(hashQueryOf(page.url())).toEqual(query);
-  await expect(rowPanel(page, caseId, "de")).toBeVisible();
+  await expect(textCard(page, caseId, "de")).toBeVisible();
 
-  // A deep link carrying a page number keeps it too (a legacy documents_open becomes the row panel).
+  // A deep link carrying a page number keeps it too (a legacy documents_open becomes the text card).
   await page.goto(reportUrl(s, report.report_id,
     `?${new URLSearchParams([["documents_decision", "report-or-pause"], ["documents_open", open], ["documents_page", "2"]])}`));
   await expect(page.getByRole("heading", { name: "Problem report", level: 1 })).toBeVisible();

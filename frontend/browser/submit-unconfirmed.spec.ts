@@ -71,15 +71,15 @@ test("confirm one row, then the rest with Confirm all, and submit without a warn
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   const dialog = submitDialog(page);
   const section = dialog.locator("[data-unconfirmed-values]");
-  await expect(section.getByRole("heading", { name: "Unconfirmed values · 3 findings", exact: true })).toBeVisible();
+  await expect(section.getByRole("heading", { name: "Unconfirmed values (3 findings)", exact: true })).toBeVisible();
   await expect(section.getByRole("listitem")).toHaveCount(3);
-  await expect(section.getByText(/^Assertion: Present · .+: Patient · Temporality: Current$/).first()).toBeVisible();
+  await expect(section.getByText(/^Assertion: Present\W+.+: Patient\W+Temporality: Current$/).first()).toBeVisible();
   await evidence(page, "submit-unconfirmed.png");
 
   const confirms = section.getByRole("button", { name: /^Confirm values of / });
   await confirms.first().click();
   await expect(section.getByRole("listitem")).toHaveCount(2);
-  await expect(section.getByRole("heading", { name: "Unconfirmed values · 2 findings", exact: true })).toBeVisible();
+  await expect(section.getByRole("heading", { name: "Unconfirmed values (2 findings)", exact: true })).toBeVisible();
   // The focus moves to the next row's "Confirm", never to the page body.
   await expect(confirms.first()).toBeFocused();
 
@@ -102,7 +102,7 @@ test("one click submits with the ticked unconfirmed values", async ({ page }) =>
 
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   const dialog = submitDialog(page);
-  await expect(dialog.getByRole("heading", { name: "Unconfirmed values · 2 findings", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Unconfirmed values (2 findings)", exact: true })).toBeVisible();
   const submit = dialog.getByRole("button", { name: "Submit case", exact: true });
   await dialog.getByRole("checkbox", { name: "Entire text checked for further findings" }).check();
   await expect(submit).toHaveAttribute("aria-disabled", "true");

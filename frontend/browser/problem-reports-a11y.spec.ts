@@ -141,7 +141,7 @@ test("keyboard only: Tab reaches the five intents in order; Enter, Space, Escape
   await page.keyboard.press("Space");
   const releaseBox = confirmBox(page, "Release pause");
   await expect(releaseBox.getByRole("heading", { name: "Release pause" })).toBeFocused();
-  await expect(releaseBox.getByRole("checkbox", { name: new RegExp(`^Task ${task} · `) })).toBeChecked();
+  await expect(releaseBox.getByRole("checkbox", { name: new RegExp(`^Task ${task}\\W`) })).toBeChecked();
   await tabTo(page, releaseBox.getByRole("button", { name: "Cancel", exact: true }), 10);
   await page.keyboard.press("Enter");
   await expect(releaseBox).toHaveCount(0);
@@ -262,7 +262,7 @@ test("reporter dialog at 390 x 844: a full-height sheet, the footer Close stays 
   await expect(entry(page)).toBeVisible();
   // The toolbar entry keeps its text at this width (never icon-only).
   await expect(entry(page)).toContainText("Report problem");
-  await expect(entry(page).locator(".problem-badge")).toHaveText("Paused · 6 open");
+  await expect(entry(page).locator(".problem-badge")).toHaveText(/^Paused\W+6 open$/);
 
   await entry(page).click();
   const dialog = reportsDialog(page, task);
@@ -334,7 +334,7 @@ test("axe: reporter dialog (list and new report views) and lead page (default an
   await expect(entry(page)).toHaveAccessibleName("Report problem Task paused, 1 open report");
   await expect(entry(page)).toHaveAccessibleName(/Report problem/);
   await expect(entry(page)).toHaveAccessibleName(/Task paused/);
-  await expect(entry(page).locator(".problem-badge")).toHaveText("Paused · 1 open");
+  await expect(entry(page).locator(".problem-badge")).toHaveText(/^Paused\W+1 open$/);
   // The badge's shape is decorative.
   const icons = await entry(page).locator("svg").evaluateAll(svgs => svgs.map(svg => svg.closest('[aria-hidden="true"]') !== null || svg.getAttribute("aria-hidden") === "true"));
   expect(icons.length).toBeGreaterThan(0);

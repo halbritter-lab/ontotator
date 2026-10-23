@@ -22,9 +22,15 @@ const viewerUrl = (s: Scenario, document: string, annotations = 'text') =>
   `/#/projects/${encodeURIComponent(s.project)}/cases/${encodeURIComponent(s.case_id)}?${new URLSearchParams({ variant: document, annotations })}`;
 const token = (ref: VersionRef) => JSON.stringify([ref.kind, ref.id]);
 
+/** The text view's layer key of a ref ("Show" values, U7): "proposals" or "{kind}:{id}". */
+const layer = (ref: VersionRef) => (ref.kind === 'proposals' ? 'proposals' : `${ref.kind}:${ref.id}`);
+
+/** Open the editor's "Versions" fold-out; the text view (U7) has its selects in the toolbar and no fold-out. */
 async function openVersions(page: Page) {
   const disclosure = page.locator('details.case-version-controls, details.comparison-identity-choices');
-  await expect(disclosure).toHaveCount(1);
+  // Wait until either the editor's fold-out or the text view's toolbar has rendered.
+  await expect(disclosure.or(page.locator('.text-view-toolbar')).first()).toBeVisible();
+  if (!await disclosure.count()) return;
   await expect(disclosure).toBeVisible();
   if (!await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) {
     await disclosure.locator(':scope > summary').focus();
@@ -86,7 +92,8 @@ async function expectExactText(page: Page, text: string) {
 }
 async function options(page: Page) {
   await openVersions(page);
-  return page.getByLabel('Annotations', { exact: true }).locator('option').evaluateAll(nodes => nodes.map(node => ({ value: (node as HTMLOptionElement).value, label: node.textContent })));
+  // The editor's "Annotations", the text view's "Show" (U7).
+  return page.getByLabel(/^(Annotations|Show)$/).locator('option').evaluateAll(nodes => nodes.map(node => ({ value: (node as HTMLOptionElement).value, label: node.textContent })));
 }
 
 test('mixed-role assigned task opens the real case, exact equal-version runs and opaque immutable text survive reload', async ({ page }) => {
@@ -106,21 +113,17 @@ test('mixed-role assigned task opens the real case, exact equal-version runs and
   expect(decodeURIComponent(new URL(page.url()).hash)).toContain(s.case_id);
   await page.reload();
   await expectExactText(page, s.texts.source);
-  await openVersions(page);
-  await page.getByLabel('Language', { exact: true }).selectOption('de');
-  await openVersions(page);
-  await page.getByLabel('Text version', { exact: true }).selectOption(s.documents.target);
+  // Another language opens the text view (U7): one "Language and version" select.
+  const version = page.getByLabel('Language and version', { exact: true });
+  await version.selectOption(s.documents.target);
   await expectExactText(page, s.texts.target);
-  await openVersions(page);
-  const versions = await page.getByLabel('Text version', { exact: true }).locator('option').allTextContents();
-  expect(versions.filter(label => label.startsWith('v1'))).toHaveLength(2);
+  const versions = await version.locator('option').allTextContents();
+  expect(versions.filter(label => label.startsWith('de, version 1'))).toHaveLength(2);
   expect(new Set(versions).size).toBe(versions.length);
-  await openVersions(page);
-  await page.getByLabel('Text version', { exact: true }).selectOption(s.documents.other);
+  await version.selectOption(s.documents.other);
   const selectedUrl = page.url();
   await page.reload();
-  await openVersions(page);
-  await expect(page.getByLabel('Text version', { exact: true })).toHaveValue(s.documents.other);
+  await expect(version).toHaveValue(s.documents.other);
   await expect(page).toHaveURL(selectedUrl);
   await expect(page.getByRole('link', { name: 'Open my task', exact: true })).toHaveCount(0);
   const writes: string[] = [];
@@ -202,7 +205,7 @@ test('current own refs, foreign submissions and sibling proposal sets are indepe
     expect(forged.status()).toBe(404);
     await alice.goto(viewerUrl(s, s.documents.target));
     await expectExactText(alice, s.texts.target);
-    await expect.poll(async () => (await options(alice)).filter(option => option.value !== 'text').map(option => option.value)).toEqual(refs.map(token));
+    await expect.poll(async () => (await options(alice)).filter(option => option.value !== 'text' && option.value !== '').map(option => option.value)).toEqual(refs.map(layer));
     const readerContext = await browser.newContext({ baseURL: test.info().project.use.baseURL });
     const reader = await readerContext.newPage();
     try {
@@ -318,15 +321,15 @@ test('wide editor keeps the real text and docked inspector/tree floors with visi
   await expect(page.getByLabel('Annotations', { exact: true })).toBeVisible();
 });
 
-for (const width of [1024, 700, 600]) test(`viewer selectors and immutable text remain reachable at ${width}px`, async ({ page }) => {
+for (const width of [1024, 700, 600]) test(`text view selects and immutable text remain reachable at ${width}px`, async ({ page }) => {
   const s = await scenario(page);
   await loginExisting(page, s.users.alice);
   await page.setViewportSize({ width, height: 800 });
   await page.goto(viewerUrl(s, s.documents.target));
   await expectExactText(page, s.texts.target);
   await page.evaluate(() => document.fonts.ready);
-  await openVersions(page);
-  for (const label of ['Language', 'Text version', 'Annotations']) {
+  // The text view's one toolbar (U7): "Language and version" and "Show".
+  for (const label of ['Language and version', 'Show']) {
     const select = page.getByLabel(label, { exact: true }); await expect(select).toBeVisible();
     await select.focus(); await expect(select).toBeFocused();
     const box = await select.boundingBox(); expect(box).not.toBeNull();
@@ -356,7 +359,7 @@ test('restricted annotator completes exact assigned work and retains pending own
   // The task's own read-only history ("My submissions") lists exactly this one submission.
   const mine = page.getByRole('region', { name: 'My submissions', exact: true });
   await expect(mine.getByRole('heading', { name: 'My submissions', exact: true })).toBeVisible();
-  const viewOwn = mine.getByRole('button', { name: /^View (Initial submission|Round \d+) · / });
+  const viewOwn = mine.getByRole('button', { name: /^View (Initial submission|Round \d+)\W/ });
   await expect(viewOwn).toHaveCount(1);
   await viewOwn.click();
   const history = page.getByRole('dialog', { name: 'Historical submission' });
@@ -372,12 +375,13 @@ test('restricted annotator completes exact assigned work and retains pending own
   expect(forbidden.status()).toBe(404);
   expect((await forbidden.json()).code).toBe('VERSION_NOT_FOUND');
   // The own submission opens read-only in the case viewer; other annotation versions stay unavailable.
-  await page.goto(viewerUrl(s, s.documents.target, token({ kind: 'own', id: own.submission_id } as VersionRef)));
-  await expect(page.getByRole('complementary', { name: 'Read-only annotations', exact: true })).toContainText('HP:0001252');
+  await page.goto(`${viewerUrl(s, s.documents.target)}&show=${encodeURIComponent(layer({ kind: 'own', id: own.submission_id } as VersionRef))}`);
+  await expect(page.getByRole('region', { name: 'Findings', exact: true })).toContainText('HP:0001252');
   await expect(textSurface(page)).toHaveText(s.texts.target);
   await page.goto(viewerUrl(s, s.documents.target, token({ kind: 'proposals', id: '1' } as VersionRef)));
   await expect(page.getByText('This annotation version is not available to you.', { exact: true })).toBeVisible();
-  await expect(textSurface(page)).toHaveCount(0);
+  // The text view (U7) keeps the text and shows no findings of the unavailable layer.
+  await expect(page.getByRole('region', { name: 'Findings', exact: true })).toHaveCount(0);
   await page.goto(viewerUrl(s, s.documents.source));
   await expect(page.getByText('This text version is not available to you.', { exact: true })).toBeVisible();
   await expect(textSurface(page)).toHaveCount(0);

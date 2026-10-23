@@ -31,7 +31,6 @@ type Scenario = {
   users: Record<'alice' | 'bob' | 'reader' | 'lead', string>;
   assignments: Record<'alice' | 'alice_source' | 'bob' | 'reader', number>;
 };
-const refToken = (ref: Ref) => JSON.stringify([ref.kind, ref.id]);
 const path = (s: Scenario, doc: string, suffix: string) =>
   `/api/v1/projects/${encodeURIComponent(s.project)}/documents/${encodeURIComponent(doc)}/${suffix}`;
 const caseUrl = (s: Scenario, doc = s.documents.target) =>
@@ -49,9 +48,14 @@ const firstLineOffset = (surface: Locator) => surface.evaluate(el => {
   return range.getBoundingClientRect().top - el.getBoundingClientRect().top;
 });
 
+/** The text version select: the editor's "Text version", the text view's "Language and version" (U7). */
+const versionSelect = (scope: Page | Locator) => scope.getByLabel(/^(Text version|Language and version)$/);
+/** Open the editor's "Versions" fold-out; the text view (U7) has its selects in the toolbar and no fold-out. */
 async function openVersions(page: Page) {
   const disclosure = page.locator('details.case-version-controls, details.comparison-identity-choices');
-  await expect(disclosure).toHaveCount(1);
+  // Wait until either the editor's fold-out or the text view's toolbar has rendered.
+  await expect(disclosure.or(page.locator('.text-view-toolbar')).first()).toBeVisible();
+  if (!await disclosure.count()) return;
   await expect(disclosure).toBeVisible();
   if (!await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) {
     await disclosure.locator(':scope > summary').focus();
@@ -70,8 +74,7 @@ async function openViewer(page: Page, s: Scenario, doc = s.documents.target) {
   await page.goto(caseUrl(s, doc));
   const viewer = page.getByRole('region', { name: 'Case viewer' });
   await expect(viewer).toBeVisible();
-  await openVersions(page);
-  await expect(viewer.locator('.variant-selectors').getByLabel('Text version', { exact: true })).toHaveValue(doc);
+  await expect(viewer.getByLabel('Language and version', { exact: true })).toHaveValue(doc);
   await expect(viewerLeft(page)).toBeVisible();
 }
 async function readyEditor(page: Page, s: Scenario) {
@@ -83,7 +86,7 @@ async function readyEditor(page: Page, s: Scenario) {
 }
 async function openComparison(page: Page, s: Scenario) {
   await openVersions(page); await page.getByRole('button', { name: 'Compare', exact: true }).click();
-  await expect(comparison(page).getByLabel('Text version', { exact: true })).toHaveValue(s.documents.source);
+  await expect(versionSelect(comparison(page))).toHaveValue(s.documents.source);
   await expect(rightText(page)).toHaveText(s.texts.source);
   await page.evaluate(() => document.fonts.ready);
 }
@@ -199,8 +202,8 @@ test('unequal counts map proportionally, toggle off and below1100 suspend coupli
   await page.setViewportSize({ width: 1280, height: 720 });
   await openViewer(page, s); await openComparison(page, s);
   const pane = comparison(page), left = viewerLeft(page), right = rightText(page);
-  await pane.getByLabel('Language', { exact: true }).selectOption('de');
-  await pane.getByLabel('Text version', { exact: true }).selectOption(s.documents.other);
+  // The text view's comparison chooses language and version in one select (U7).
+  await pane.getByLabel('Language and version', { exact: true }).selectOption(s.documents.other);
   await expect(right.locator('[data-paragraph]')).toHaveCount(9);
   await expect(comparisonStatus(page).getByText('Paragraphs differ (13 / 9); scrolling is approximate.', { exact: true })).toBeVisible();
   await comparisonControls(page).getByLabel('Couple scrolling').check();
@@ -387,11 +390,12 @@ test('manual right variant/ref/coupling survive real left retry, then current ex
   const s = await scenario(page); await loginExisting(page, s.users.alice); await annotation(page, s, true);
   const own = (await refs(page, s, s.documents.target)).find(ref => ref.kind === 'own')!;
   await page.route('**/api/v1/me/tasks', route => route.abort('failed'));
-  await openViewer(page, s, s.documents.source); await openVersions(page); await page.getByRole('button', { name: 'Compare', exact: true }).click();
+  await openViewer(page, s, s.documents.source); await page.getByRole('button', { name: 'Compare', exact: true }).click();
   const pane = comparison(page);
-  await pane.getByLabel('Language', { exact: true }).selectOption('de');
-  await pane.getByLabel('Text version', { exact: true }).selectOption(s.documents.target);
-  await pane.getByLabel('Annotations', { exact: true }).selectOption(refToken(own));
+  // The text view's comparison: "Language and version" and "Show" (layer keys "{kind}:{id}", U7).
+  const ownLayer = `${own.kind}:${own.id}`;
+  await pane.getByLabel('Language and version', { exact: true }).selectOption(s.documents.target);
+  await pane.getByLabel('Show', { exact: true }).selectOption(ownLayer);
   await expect(pane.locator('.readonly-annotations')).toContainText('HP:0001252');
   await comparisonControls(page).getByLabel('Couple scrolling', { exact: true }).uncheck();
   const owner = await pane.elementHandle();
@@ -403,22 +407,22 @@ test('manual right variant/ref/coupling survive real left retry, then current ex
   await page.route(pattern, async route => { entered(); await paused; try { await route.continue(); } finally { continued(); } });
   try {
     await page.getByRole('button', { name: 'Retry', exact: true }).click(); await started;
-    await expect(pane.getByLabel('Text version', { exact: true })).toHaveValue(s.documents.target);
+    await expect(pane.getByLabel('Language and version', { exact: true })).toHaveValue(s.documents.target);
     await expect(pane.locator('.readonly-annotations')).toHaveCount(0);
     expect(await pane.evaluate((element, previous) => element === previous, owner)).toBe(true);
   } finally { release(); await done; await page.unroute(pattern); }
   await expect(pane.locator('.readonly-annotations')).toContainText('HP:0001252');
-  await expect(pane.getByLabel('Annotations', { exact: true })).toHaveValue(refToken(own));
+  await expect(pane.getByLabel('Show', { exact: true })).toHaveValue(ownLayer);
   await expect(comparisonControls(page).getByLabel('Couple scrolling', { exact: true })).not.toBeChecked();
   await manage(browser, s, s.assignments.alice, 'revoke');
-  await pane.getByLabel('Annotations', { exact: true }).selectOption('text');
+  await pane.getByLabel('Show', { exact: true }).selectOption('text');
   const denied = page.waitForResponse(response => response.request().method() === 'GET' && response.url().includes('/annotation-versions/own/') && response.status() === 404);
-  await pane.getByLabel('Annotations', { exact: true }).selectOption(refToken(own));
+  await pane.getByLabel('Show', { exact: true }).selectOption(ownLayer);
   await denied;
   await expect(pane.locator('.readonly-annotations')).toHaveCount(0); await exactText(rightText(page), s.texts.target);
   await pane.getByRole('button', { name: 'Retry comparison', exact: true }).click();
   await expect.poll(async () => (await refs(page, s, s.documents.target)).length).toBe(0);
-  await expect(pane.getByLabel('Text version', { exact: true })).toHaveValue(s.documents.target);
+  await expect(pane.getByLabel('Language and version', { exact: true })).toHaveValue(s.documents.target);
   const forged = await authenticatedRequest(page, path(s, s.documents.target, `annotation-versions/own/${encodeURIComponent(own.id)}`));
   expect(forged.status()).toBe(404);
 });
@@ -427,10 +431,8 @@ for (const width of [800, 600]) test(`comparison stacks with reachable independe
   const s = await scenario(page); await loginExisting(page, s.users.alice); await page.setViewportSize({ width, height: 800 });
   await openViewer(page, s); await openComparison(page, s);
   await rightText(page).scrollIntoViewIfNeeded(); await expect(rightText(page)).toBeInViewport({ ratio: 0.2 });
-  await expect(comparison(page).getByLabel('Text version', { exact: true })).toBeDisabled();
-  await comparison(page).getByLabel('Language', { exact: true }).selectOption('de');
-  await expect(comparison(page).getByLabel('Text version', { exact: true })).toBeEnabled();
-  for (const name of ['Language', 'Text version', 'Annotations']) {
+  await comparison(page).getByLabel('Language and version', { exact: true }).selectOption(s.documents.other);
+  for (const name of ['Language and version', 'Show']) {
     const select = comparison(page).getByLabel(name, { exact: true }); await select.scrollIntoViewIfNeeded(); await select.focus(); await expect(select).toBeFocused();
     const rect = await select.boundingBox(); expect(rect!.x).toBeGreaterThanOrEqual(0); expect(rect!.x + rect!.width).toBeLessThanOrEqual(width + 1);
   }

@@ -10,8 +10,8 @@ test("one confirmation submits a two-layer negative finding", async ({ page }) =
 });
 
 test("defaulted warning reveals a hidden result and an explicit axis confirmation clears it", async ({ page }) => {
-  await importPackage(page, "decisions", "pkg-defaulted-decisions", "defaulted-reviewer");
-  await openCase(page, { task: "review" });
+  await importPackage(page, "decisions", "pkg-defaulted-decisions", "defaulted-reviewer", { proposals: true });
+  await openCase(page, { task: "annotate" });
   const proposal = page.locator('.sidebar [data-list-key^="target:"]').first();
   await proposal.click(); await page.keyboard.press("1");
   await expect(proposal).toContainText("Confirmed");
@@ -20,7 +20,7 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await expect(page.locator('.sidebar [data-list-key^="target:"]').nth(1)).toContainText("Rejected");
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   const submitDialog = page.getByRole("dialog", { name: "Submit case" });
-  await expect(submitDialog.getByRole("heading", { name: "Unconfirmed values · 1 finding", exact: true })).toBeVisible();
+  await expect(submitDialog.getByRole("heading", { name: "Unconfirmed values (1 finding)", exact: true })).toBeVisible();
   // The section lists each finding with unconfirmed values and its own "Go to" action.
   await submitDialog.getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Visibility for Hidden findings" })).toBeChecked();
@@ -37,8 +37,8 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
 });
 
 test("repeated outcome keys keep decisions and zero resets without losing the note", async ({ page }) => {
-  await importPackage(page, "single", "browser-fixture-decision-semantics", "stable-key-reviewer");
-  await openCase(page, { task: "review" });
+  await importPackage(page, "single", "browser-fixture-decision-semantics", "stable-key-reviewer", { proposals: true });
+  await openCase(page, { task: "annotate" });
   const proposal = page.locator('.sidebar [data-list-key^="target:"]').first();
   await proposal.click();
   await page.getByRole("textbox", { name: "Reviewer note" }).fill("Initial reviewer note");
@@ -68,9 +68,9 @@ test("repeated outcome keys keep decisions and zero resets without losing the no
 
 
 test("unresolved notes are required, survive reload and block submission when locally cleared", async ({ page }) => {
-  await importPackage(page, "single", "pkg-unresolved-export", "unresolved-note-reviewer");
+  await importPackage(page, "single", "pkg-unresolved-export", "unresolved-note-reviewer", { proposals: true });
   const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
-  await openCase(page, { task: "review" });
+  await openCase(page, { task: "annotate" });
   const opened = await (await openedResponse).json();
   const proposals = page.locator('.sidebar [data-list-key^="target:"]');
   await proposals.first().click();
@@ -264,9 +264,9 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
 
 
 test("repairing a historical spanless proposal collects a clinical reason without changing its source", async ({ page }) => {
-  await importPackage(page, "spanless", "pkg-spanless-decisions", "spanless-source-repair");
+  await importPackage(page, "spanless", "pkg-spanless-decisions", "spanless-source-repair", { proposals: true });
   const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
-  await openCase(page, { task: "review" });
+  await openCase(page, { task: "annotate" });
   const opened = await (await openedResponse).json();
   const source = opened.view.available_inputs.find((item: { annotation: { evidence_refs: unknown[] } }) => !item.annotation.evidence_refs?.length);
   const sourceBefore = JSON.stringify(source);
@@ -308,11 +308,11 @@ test("repairing a historical spanless proposal collects a clinical reason withou
 
 
 test("a project prohibiting spanless findings repairs a source only after supporting text is selected", async ({ page }) => {
-  await importPackage(page, "spanless", "pkg-spanless-decisions", "spanless-prohibited-repair");
+  await importPackage(page, "spanless", "pkg-spanless-decisions", "spanless-prohibited-repair", { proposals: true });
   const disabled = await authenticatedRequest(page, "/api/v1/projects/pkg-spanless-decisions/settings", "PATCH", { allow_spanless_findings: false });
   expect(disabled.ok()).toBeTruthy();
   const openedResponse = page.waitForResponse(r => /assignments\/\d+\/open$/.test(r.url()) && r.request().method() === "POST");
-  await openCase(page, { task: "review" });
+  await openCase(page, { task: "annotate" });
   const opened = await (await openedResponse).json();
   const source = opened.view.available_inputs.find((item: { annotation: { evidence_refs: unknown[] } }) => !item.annotation.evidence_refs?.length);
   const sourceBefore = JSON.stringify(source);

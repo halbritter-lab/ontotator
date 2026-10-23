@@ -3,8 +3,8 @@ import { importPackage, openCase } from "./helpers";
 
 test("sidebar scrolls proposals and saved findings as one list with stable reading geometry", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await importPackage(page, "?scenario=many_proposals", "pkg-many-proposals", "sidebar-reviewer");
-  await openCase(page, { task: "review" });
+  await importPackage(page, "?scenario=many_proposals", "pkg-many-proposals", "sidebar-reviewer", { proposals: true });
+  await openCase(page, { task: "annotate" });
 
   const scroller = page.locator(".sidebar .sidebar-scroll");
   const proposalsHeader = scroller.locator(".sidebar-header").filter({ hasText: "Review Proposals (30)" });

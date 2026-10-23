@@ -53,10 +53,11 @@ export async function authenticatedRequest(page: Page, path: string, method = "G
  * Create the user ``pseudonym`` with every role in ``projects`` (idempotent;
  * test-only route of the browser server) and log in through the login screen.
  */
-export async function loginAs(page: Page, pseudonym: string, projects: string[] = []) {
+export async function loginAs(page: Page, pseudonym: string, projects: string[] = [], options: { proposals?: boolean } = {}) {
   const username = usernameFor(pseudonym);
   const query = new URLSearchParams({ username, pseudonym });
   if (projects.length) query.set("projects", projects.join(","));
+  if (options.proposals) query.set("proposals", "true");
   const created = await page.request.post(`/__test_user__?${query.toString()}`);
   expect(created.ok()).toBeTruthy();
   await openTasksHome(page);
@@ -91,14 +92,14 @@ export async function openCase(page: Page, options: { task?: "annotate" | "revie
  * and filter My tasks. The browser server seeds every scenario at
  * start-up (``_scenario`` names the one the spec relies on).
  */
-export async function importPackage(page: Page, _scenario: string, projectKey: string, annotator: string) {
-  await loginAs(page, annotator, [projectKey]);
+export async function importPackage(page: Page, _scenario: string, projectKey: string, annotator: string, options: { proposals?: boolean } = {}) {
+  await loginAs(page, annotator, [projectKey], options);
   await page.goto(`${LAUNCH_URL}#/?project=${encodeURIComponent(projectKey)}`);
   await expect(page.locator("#project-select")).toBeVisible();
   await expect(page.locator("#project-select")).toHaveValue(projectKey);
 }
 
-/** "Finish & Submit Case" (or "Finish & Submit · n open"), tick "Entire text checked" and confirm. */
+/** "Finish & Submit Case" (or "Finish & Submit (n open)"), tick "Entire text checked" and confirm. */
 export async function submitCase(page: Page) {
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   const dialog = page.getByRole("dialog", { name: "Submit case" });

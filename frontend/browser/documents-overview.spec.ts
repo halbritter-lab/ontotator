@@ -1,14 +1,15 @@
 /**
  * Documents overview scenarios 1-16 (plan O10c Step 2, "Shared contracts › Scenario table"):
  * one isolated project per scenario (tests/browser_overview_scenarios.py), opened as the
- * lead at 1280 px; every row's three stage cells (line 1 and line 2), Waiting on, Action
- * and decision edge as the table, with a screenshot `scenario-{n}.png`. Plus the Progress
+ * lead at 1280 px; every row's three one-line stage cells (the text card's short state and who,
+ * spec 2026-10-23 §2b), Waiting on, Next step and decision edge as the table, with a screenshot
+ * `scenario-{n}.png`. A not-planned source is folded into its case line. Plus the Progress
  * → Documents click-through: every Progress count equals the Documents count it opens.
  */
 import { expect, test, type Page } from "@playwright/test";
 import {
-  documentsReady, documentsTabs, evidence, expectEdge, expectStage, expectWaiting, openDocuments, rowAction, rowCell, rowHeader, textRow,
-  type CellText,
+  documentsReady, documentsTabs, evidence, expectEdge, expectStage, expectWaiting, foldedSource, namePattern, openDocuments, rowAction, rowCell, rowHeader,
+  textRow, type CellText,
 } from "./documentsOverviewHelpers";
 import { loginOverviewUser, overviewScenario, type OverviewScenarioName } from "./overviewHelpers";
 
@@ -16,113 +17,123 @@ test.setTimeout(240_000);
 test.use({ viewport: { width: 1280, height: 900 } });
 
 const ANA = "Ana Weber", TOM = "Tom Reis", LUC = "Luc Martin";
-/** "10:40" today or "20 Oct, 10:40" (stage cell times). */
-const TIME = String.raw`(\d{1,2} \w{3},? )?\d{2}:\d{2}`;
-const NONE: CellText = { line1: "—", line2: "" };
-const SOURCE: CellText = { line1: "— source", line2: "" };
-const NOT_PLANNED: CellText = { line1: "— not planned", line2: "" };
-const UNCHANGED: CellText = { line1: "✓ Accepted", line2: "unchanged" };
-const CORRECTED: CellText = { line1: "✓ Accepted", line2: `with corrections · v1 → v2 · ${ANA}` };
+const WAITING: CellText = { state: "waiting", who: "" };
+const SOURCE: CellText = { state: "source text", who: "" };
+const ACCEPTED: CellText = { state: "accepted", who: "" };
+const NOT_PLANNED: CellText = { state: "not planned", who: "" };
+const AFTER_REVIEW: CellText = { state: "after translation review", who: "" };
+/** "{n} of {m} submitted" without who (submitted annotation; the count follows the per-text setting). */
+const SUBMITTED: CellText = { state: /\d+ of \d+ submitted/, who: "" };
+const ACCEPTED_ON = /accepted( \d{1,2} [A-Z][a-z]{2})?/;
 
 interface RowExpect {
   case_id: string;
   language: string;
-  review: CellText;
+  translation: CellText;
   annotation: CellText;
-  final: CellText;
+  finalization: CellText;
   waiting: "You" | "—" | readonly string[];
-  /** The Action column's first button; null = no step button (a quiet "Plan…" on rows outside the plan is allowed, VD2). */
+  /** The Next step column's first button; null = none. */
   action: string | null;
   edge: boolean;
   /** Text cell marker ("v2 corrected"). */
   marker?: string;
 }
 
-const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, RowExpect[]> = {
+/** A not-planned source folded into the case line instead of its own row. */
+interface FoldedExpect {
+  case_id: string;
+  folded: string;
+}
+
+const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect | FoldedExpect)[]> = {
   S1: [
-    { case_id: "case-101", language: "de", review: { line1: "? not decided", line2: "" }, annotation: { line1: "? not decided", line2: "" }, final: NONE, waiting: "You", action: "Plan…", edge: true },
-    { case_id: "case-101", language: "en", review: SOURCE, annotation: NOT_PLANNED, final: NONE, waiting: "—", action: "Plan…", edge: false },
+    { case_id: "case-101", language: "de", translation: { state: "not decided", who: "" }, annotation: { state: /\d+ of \d+ assigned/, who: "" }, finalization: WAITING, waiting: "You", action: "Plan…", edge: true },
+    { case_id: "case-101", folded: "source en (native), 1 translation" },
   ],
   S2: [
-    { case_id: "case-102", language: "de", review: { line1: "⚠ Check failed", line2: "unassigned" }, annotation: { line1: "○ after review", line2: "" }, final: NONE, waiting: "You", action: "Assign review…", edge: false },
+    { case_id: "case-102", language: "de", translation: { state: "Check failed", who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: "You", action: "Assign review…", edge: false },
   ],
   S3: [
-    { case_id: "case-103", language: "de", review: { line1: "◐ In progress", line2: ANA }, annotation: { line1: "○ after review", line2: "" }, final: NONE, waiting: [ANA], action: null, edge: false },
+    { case_id: "case-103", language: "de", translation: { state: `in review (${ANA})`, who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: [ANA], action: null, edge: false },
   ],
   S4: [
-    { case_id: "case-104", language: "de", review: { line1: "✕ Rejected", line2: new RegExp(`^${ANA} · ${TIME}$`) }, annotation: { line1: "○ blocked", line2: "translation rejected" }, final: NONE, waiting: "You", action: "Resolve…", edge: true },
-    { case_id: "case-104", language: "fr", review: { line1: "? Query", line2: new RegExp(`^${LUC} · ${TIME}$`) }, annotation: { line1: "○ blocked", line2: "queried" }, final: NONE, waiting: "You", action: "Resolve…", edge: true },
+    { case_id: "case-104", language: "de", translation: { state: "Rejected", who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: "You", action: "Resolve…", edge: true },
+    { case_id: "case-104", language: "fr", translation: { state: "Query", who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: "You", action: "Resolve…", edge: true },
   ],
   S5: [
-    { case_id: "case-105", language: "de", review: CORRECTED, annotation: { line1: "○ 0 of 2 assigned", line2: "" }, final: NONE, waiting: "You", action: "Assign annotation…", edge: false },
+    { case_id: "case-105", language: "de", translation: ACCEPTED, annotation: { state: "0 of 2 assigned", who: "" }, finalization: WAITING, waiting: "You", action: "Assign annotation…", edge: false },
   ],
   S6: [
-    { case_id: "case-106", language: "de", review: UNCHANGED, annotation: { line1: "◐ 1 of 2 submitted", line2: `waiting: ${TOM}` }, final: { line1: "○ after annotation", line2: "" }, waiting: [TOM], action: null, edge: false },
+    { case_id: "case-106", language: "de", translation: ACCEPTED, annotation: { state: "1 of 2 submitted", who: TOM }, finalization: WAITING, waiting: [TOM], action: null, edge: false },
   ],
   S7a: [
-    { case_id: "case-107", language: "de", review: UNCHANGED, annotation: { line1: "✓ submitted", line2: `${ANA} · 3 findings` }, final: { line1: "● Your choice", line2: "1 submission" }, waiting: "You", action: "Accept as final…", edge: true },
+    { case_id: "case-107", language: "de", translation: ACCEPTED, annotation: SUBMITTED, finalization: { state: "Your choice", who: "" }, waiting: "You", action: "Accept result…", edge: true },
   ],
   S7b: [
-    { case_id: "case-107", language: "en", review: SOURCE, annotation: { line1: "✓ 2 of 2 submitted", line2: new RegExp(`^(${ANA}, ${TOM}|${TOM}, ${ANA})$`) }, final: { line1: "● Your choice", line2: "2 submissions · 3 of 3 match" }, waiting: "You", action: "Compare results…", edge: true },
+    { case_id: "case-107", language: "en", translation: SOURCE, annotation: { state: "2 of 2 submitted", who: "" }, finalization: { state: "ready to compare", who: "" }, waiting: "You", action: "Compare results…", edge: true },
   ],
+  // D1: Luc's open annotation review became a consolidation (tests/browser_overview_scenarios.py build_s8).
   S8: [
-    { case_id: "case-108", language: "de", review: UNCHANGED, annotation: { line1: "◐ In review", line2: `2 submitted · review: ${LUC}` }, final: { line1: "○ after review", line2: "" }, waiting: [LUC], action: null, edge: false },
+    { case_id: "case-108", language: "de", translation: ACCEPTED, annotation: { state: /\d+ of 2 submitted/, who: "" }, finalization: { state: /consolidating( \(\d+ of \d+ groups open\))?/, who: "" }, waiting: [LUC], action: null, edge: false },
   ],
   S9: [
-    { case_id: "case-109", language: "de", review: UNCHANGED, annotation: { line1: "⏸ Paused", line2: new RegExp(`^${TOM}: “Satz 3 unvollständig.*…”$`) }, final: NONE, waiting: "You", action: "Decide on report…", edge: true },
+    { case_id: "case-109", language: "de", translation: ACCEPTED, annotation: { state: /\d+ of \d+ submitted/, who: TOM }, finalization: WAITING, waiting: "You", action: "Decide on report…", edge: true },
   ],
   S10: [
-    { case_id: "case-110", language: "de", review: UNCHANGED, annotation: { line1: "— not planned", line2: "Review only" }, final: NONE, waiting: "—", action: null, edge: false },
+    { case_id: "case-110", language: "de", translation: ACCEPTED, annotation: NOT_PLANNED, finalization: WAITING, waiting: "—", action: null, edge: false },
   ],
   S11: [
-    { case_id: "case-111", language: "de", review: UNCHANGED, annotation: { line1: "✓ 2 of 2 submitted", line2: new RegExp(`^(${ANA}, ${TOM}|${TOM}, ${ANA})$`) }, final: { line1: "✓ Final", line2: `Round 1 · ${ANA}` }, waiting: "—", action: null, edge: false },
-    // Table: "✓ submitted" (per text 1); "Annotations per text" is a project setting and de needs 2 (O10a hand-back).
-    { case_id: "case-111", language: "fr", review: UNCHANGED, annotation: { line1: "✓ 2 of 2 submitted" }, final: { line1: "✓ Final", line2: `Consolidation · ${LUC}` }, waiting: "—", action: null, edge: false },
-    { case_id: "case-111", language: "en", review: SOURCE, annotation: NOT_PLANNED, final: NONE, waiting: "—", action: null, edge: false },
+    { case_id: "case-111", language: "de", translation: ACCEPTED, annotation: { state: "2 of 2 submitted", who: "" }, finalization: { state: ACCEPTED_ON, who: "" }, waiting: "—", action: null, edge: false },
+    { case_id: "case-111", language: "fr", translation: ACCEPTED, annotation: { state: "2 of 2 submitted", who: "" }, finalization: { state: ACCEPTED_ON, who: "" }, waiting: "—", action: null, edge: false },
+    { case_id: "case-111", folded: "source en (native), 2 translations" },
   ],
   S12: [
-    { case_id: "case-112", language: "de", review: CORRECTED, annotation: { line1: "⚠ In progress on old text", line2: `${TOM} works on v1` }, final: NONE, waiting: "You", action: "Handle text change…", edge: true, marker: "v2 corrected" },
+    { case_id: "case-112", language: "de", translation: ACCEPTED, annotation: { state: "In progress on old text", who: "" }, finalization: WAITING, waiting: "You", action: "Handle text change…", edge: true, marker: "v2 corrected" },
   ],
   S13: [
-    { case_id: "case-113", language: "de", review: CORRECTED, annotation: { line1: "⚠ Submitted on v1", line2: `${ANA} · v2 not annotated` }, final: { line1: "○ after annotation", line2: "" }, waiting: "You", action: "Carry to v2…", edge: true, marker: "v2 corrected" },
+    { case_id: "case-113", language: "de", translation: ACCEPTED, annotation: { state: "Submitted on v1", who: "" }, finalization: WAITING, waiting: "You", action: "Carry to v2…", edge: true, marker: "v2 corrected" },
   ],
   S14: [
-    { case_id: "case-114", language: "de", review: CORRECTED, annotation: { line1: "✓ submitted" }, final: { line1: "⚠ Final is on old text", line2: `Round 1 · ${ANA} · v1` }, waiting: "You", action: "Review changes…", edge: true, marker: "v2 corrected" },
+    { case_id: "case-114", language: "de", translation: ACCEPTED, annotation: SUBMITTED, finalization: { state: "Final is on old text", who: "" }, waiting: "You", action: "Review changes…", edge: true, marker: "v2 corrected" },
   ],
   S15: [
-    { case_id: "case-115", language: "en", review: SOURCE, annotation: NOT_PLANNED, final: NONE, waiting: "—", action: null, edge: false, marker: "v2 corrected" },
+    { case_id: "case-115", folded: "source en (native), 1 translation" },
     // Source changed: decision colour, but step kind assign (no edge, To assign, VD14).
-    { case_id: "case-115", language: "de", review: { line1: "⚠ Source changed", line2: "translation from en v1" }, annotation: { line1: "✓ submitted" }, final: { line1: "⚠ may be outdated", line2: "source changed" }, waiting: "You", action: "Assign review…", edge: false },
+    { case_id: "case-115", language: "de", translation: { state: "Source changed", who: "" }, annotation: SUBMITTED, finalization: { state: "may be outdated", who: "" }, waiting: "You", action: "Assign review…", edge: false },
   ],
   S16: [
-    { case_id: "case-116", language: "de", review: { line1: "◐ Re-review in progress", line2: `${ANA} · reason: “Dosis prüfen”` }, annotation: { line1: "◐ In progress", line2: new RegExp(`^${TOM} · (Round 1 · )?v1 · may change$`) }, final: NONE, waiting: [ANA, TOM], action: null, edge: false },
+    { case_id: "case-116", language: "de", translation: { state: `in review (${ANA})`, who: "" }, annotation: { state: /\d+ of \d+ submitted/, who: TOM }, finalization: WAITING, waiting: [ANA, TOM], action: null, edge: false },
   ],
 };
 
-async function expectRow(page: Page, expected: RowExpect): Promise<void> {
+async function expectRow(page: Page, expected: RowExpect | FoldedExpect): Promise<void> {
+  if ("folded" in expected) {
+    await expect(foldedSource(page, expected.case_id), `${expected.case_id} source`).toHaveText(expected.folded);
+    return;
+  }
   const { case_id: caseId, language } = expected;
   const row = textRow(page, caseId, language);
-  await expect(row, `${caseId} · ${language}`).toHaveCount(1);
-  await test.step(`${caseId} · ${language}`, async () => {
-    await expectStage(rowCell(row, "review"), expected.review);
+  await expect(row, `${caseId} ${language}`).toHaveCount(1);
+  await test.step(`${caseId} ${language}`, async () => {
+    await expectStage(rowCell(row, "translation"), expected.translation);
     await expectStage(rowCell(row, "annotation"), expected.annotation);
-    await expectStage(rowCell(row, "final"), expected.final);
+    await expectStage(rowCell(row, "finalization"), expected.finalization);
     await expectWaiting(row, expected.waiting);
     await expectEdge(page, row, expected.edge);
-    const actions = rowCell(row, "action").getByRole("button");
+    const actions = rowCell(row, "next").getByRole("button");
     if (expected.action) {
       await expect(rowAction(page, expected.action, caseId, language)).toBeVisible();
-      await expect(actions.first()).toHaveAccessibleName(`${expected.action}, ${caseId} · ${language}`);
+      await expect(actions.first()).toHaveAccessibleName(namePattern(`${expected.action}, `, caseId, language));
     } else {
-      // Rows outside the plan keep a quiet "Plan…" (VD2); in-plan rows without a lead step show nothing.
-      await expect(actions.filter({ hasNotText: /^Plan…$/ })).toHaveCount(0);
+      await expect(actions).toHaveCount(0);
     }
     if (expected.marker) await expect(rowHeader(row).locator(".documents-version-marker")).toHaveText(expected.marker);
   });
 }
 
-for (const [name, rows] of Object.entries(SCENARIOS) as [Exclude<OverviewScenarioName, "WALKTHROUGH">, RowExpect[]][]) {
-  test(`scenario ${name.slice(1)}: stage cells, Waiting on and Action as the Scenario table`, async ({ page }) => {
+for (const [name, rows] of Object.entries(SCENARIOS) as [Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect | FoldedExpect)[]][]) {
+  test(`scenario ${name.slice(1)}: stage cells, Waiting on and Next step as the Scenario table`, async ({ page }) => {
     const s = await overviewScenario(page, name);
     await loginOverviewUser(page, s, "lead");
     await openDocuments(page, s.project);
@@ -130,16 +141,6 @@ for (const [name, rows] of Object.entries(SCENARIOS) as [Exclude<OverviewScenari
     await evidence(page, `scenario-${name.slice(1)}`);
   });
 }
-
-test.fixme("scenario 16: Annotation line 2 reads exactly \"Tom Reis · v1 · may change\"", async ({ page }) => {
-  // Scenario table 16: "◐ In progress · Tom Reis · v1 · may change". The table shows
-  // "Tom Reis · Round 1 · v1 · may change": stageLabels.ts adds the round ordinal for every
-  // in-progress cell, also beside the "may change" note (measured 2026-10-21).
-  const s = await overviewScenario(page, "S16");
-  await loginOverviewUser(page, s, "lead");
-  await openDocuments(page, s.project);
-  await expectStage(rowCell(textRow(page, "case-116", "de"), "annotation"), { line1: "◐ In progress", line2: `${TOM} · v1 · may change` });
-});
 
 const progressLinks = (page: Page) => page.locator(".progress-page a[href*='/documents']");
 

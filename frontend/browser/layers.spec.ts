@@ -8,8 +8,8 @@ const PACKAGE_IDS: Record<string, string> = {
   assisted: "pkg-scenario-b",
 };
 
-const importScenario = (page: Page, scenario: string, annotator: string) =>
-  importPackage(page, `?scenario=${scenario}`, PACKAGE_IDS[scenario], annotator);
+const importScenario = (page: Page, scenario: string, annotator: string, options: { proposals?: boolean } = {}) =>
+  importPackage(page, `?scenario=${scenario}`, PACKAGE_IDS[scenario], annotator, options);
 
 test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)", () => {
   test("Scenario A: Single-layer baseline has zero extra interaction controls and preserves document order", async ({ page }) => {
@@ -69,8 +69,8 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   });
 
   test("Scenario B: Assigned review with reference layer (cannot activate reference, visibility toggle)", async ({ page }) => {
-    await importScenario(page, "assisted", "user-scenario-b");
-    await openCase(page, { task: "review" });
+    await importScenario(page, "assisted", "user-scenario-b", { proposals: true });
+    await openCase(page, { task: "annotate" });
 
     // 1. Layer controls visible because package has 2 layers
     await expect(page.locator(".layer-controls")).toBeVisible();
@@ -118,20 +118,20 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
   });
 
   test("Review excludes reference targets and permits returning to a case with references", async ({ page }) => {
-    await importScenario(page, "review_references", "review-reference-navigation");
-    await openCase(page, { task: "review" });
+    await importScenario(page, "review_references", "review-reference-navigation", { proposals: true });
+    await openCase(page, { task: "annotate" });
     // Reference annotations are not review targets: only the one proposal is listed.
     await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (1)" })).toBeVisible();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();
 
-    // A case with no proposals still needs checking; it can yield a negative result.
+    // A case with no proposals still needs checking; it is annotated from scratch (D2) and can yield a negative result.
     await expect(page.locator(".case-navigation").getByRole("button", { name: /Next Case/i })).toBeEnabled();
     const caseTwo = page.locator(".case-navigation select option").filter({ hasText: /Case 2 of 2/i });
     await expect(caseTwo).toBeEnabled();
     await page.locator(".case-navigation").getByRole("button", { name: /Next Case/i }).click();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2/i);
-    await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (0)" })).toBeVisible();
+    await expect(page.locator(".sidebar-header").filter({ hasText: /Review Proposals/ })).toHaveCount(0);
     await submitCase(page);
     await page.getByRole("button", { name: /Stay in case/i }).click();
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
@@ -141,7 +141,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
 
     // Returning to the case with references from My tasks works.
     await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: "My tasks", exact: true }).click();
-    await openCase(page, { task: "review" });
+    await openCase(page, { task: "annotate" });
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);
     await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (1)" })).toBeVisible();
     await expect(page.getByRole("button", { name: /MONDO:0005027/ })).toBeVisible();

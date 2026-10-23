@@ -19,7 +19,8 @@ type ProblemReport = components["schemas"]["ProblemReportView"];
 test.setTimeout(180_000);
 test.use({ actionTimeout: 15_000 });
 
-const REPORT_TEXT = "The German text misses the sentence about the muscle tone.";
+const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const REPORT_TEXT ="The German text misses the sentence about the muscle tone.";
 
 /** Another person's browser window (own cookie jar), logged in. */
 async function actor(browser: Browser, username: string) {
@@ -80,7 +81,7 @@ async function fileReport(page: Page, s: ProblemReportScenario, text = REPORT_TE
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Paused");
   await expect(fact(dialog, "Report")).toHaveText("Open");
   await expect(fact(dialog, "Your task")).toContainText("Paused since");
-  await expect(badge(page)).toHaveText("Paused · 1 open");
+  await expect(badge(page)).toHaveText(/^Paused\W+1 open$/);
   await expect(entry(page)).toHaveAccessibleName("Report problem Task paused, 1 open report");
   await expect(banner(page)).toBeVisible();
   return dialog;
@@ -229,10 +230,10 @@ test("a lead releases the pause in another window: the open dialog and editor up
     await openLeadPage(lead.page, s);
     await decide(lead.page).getByRole("button", { name: "Release pause…", exact: true }).click();
     const release = group(lead.page, "Release pause");
-    await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task} · `) })).toBeChecked();
+    await expect(release.getByRole("checkbox", { name: new RegExp(`^Task ${task}\\W`) })).toBeChecked();
     await release.getByRole("textbox", { name: /^Reason/ }).fill("Source checked; continue.");
     await release.getByRole("button", { name: "Release pause", exact: true }).click();
-    await expect(lead.page.locator(".lead-outcome")).toContainText(`Released the pause on Task ${task} · ${leadSees(s, "reporter")}. The report is still open.`);
+    await expect(lead.page.locator(".lead-outcome")).toContainText(new RegExp(`Released the pause on Task ${task}\\W+${esc(leadSees(s, "reporter"))}\\. The report is still open\\.`));
   } finally {
     await lead.close();
   }
@@ -263,12 +264,12 @@ test("the lead pauses the same-text task: its owner sees only the lead's reason,
     await decide(lead.page).getByRole("button", { name: "Pause other tasks…", exact: true }).click();
     const pause = group(lead.page, "Pause other tasks");
     const sameText = pause.getByRole("group", { name: /^Same text: / });
-    const candidate = sameText.getByRole("checkbox", { name: new RegExp(`^Task ${other} · `) });
+    const candidate = sameText.getByRole("checkbox", { name: new RegExp(`^Task ${other}\\W`) });
     await expect(candidate).toBeVisible();
     await candidate.check();
     await pause.getByRole("textbox", { name: /Reason shown to the task owners/ }).fill(leadReason);
     await pause.getByRole("button", { name: "Pause 1 task", exact: true }).click();
-    await expect(lead.page.locator(".lead-outcome")).toContainText(`Paused Task ${other} · ${leadSees(s, "same_text")}. Their owners see your reason.`);
+    await expect(lead.page.locator(".lead-outcome")).toContainText(new RegExp(`Paused Task ${other}\\W+${esc(leadSees(s, "same_text"))}\\. Their owners see your reason\\.`));
   } finally {
     await lead.close();
   }

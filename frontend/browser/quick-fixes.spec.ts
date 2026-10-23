@@ -109,7 +109,7 @@ test('Q1 (B1): Work rounds and original evidence dialogs keep Close in a fixed f
     await page.setViewportSize(size);
     const roundsButton = page.getByRole('button', { name: 'Work rounds', exact: true });
     await roundsButton.click();
-    const rounds = page.getByRole('dialog', { name: /^Work rounds · / });
+    const rounds = page.getByRole('dialog', { name: /^Work rounds\W/ });
     await expect(rounds.getByRole('table', { name: 'Rounds' }).or(rounds.getByRole('list', { name: 'Rounds' }))).toBeVisible();
     await footerClose(rounds, 'Close', roundsButton);
     // Select the carried finding (from the list pane on narrow screens); Details shows its section.

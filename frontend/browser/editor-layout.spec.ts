@@ -103,7 +103,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) 
 
     // Work rounds.
     await page.getByRole("button", { name: "Work rounds", exact: true }).click();
-    const rounds = page.getByRole("dialog", { name: /^Work rounds · / });
+    const rounds = page.getByRole("dialog", { name: /^Work rounds\W/ });
     await expect(rounds.getByText("Round 2", { exact: true }).first()).toBeVisible();
     await expectCloseInView(page, rounds, "Close");
     await evidence(page, `work-rounds-${size.width}`);

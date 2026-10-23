@@ -200,7 +200,7 @@ test("axe has no violations on the drawer, Settings › Guidelines and the withd
     const leadPage = await lead.newPage();
     await loginGuidelineUser(leadPage, s, "lead");
     await leadPage.goto(`/#/projects/${encodeURIComponent(s.project)}/settings/guideline`);
-    await expect(leadPage.locator(".guidelines-current-facts")).toContainText("v1 · v1.md · ");
+    await expect(leadPage.locator(".guidelines-current-facts")).toContainText(/v1\W+v1\.md\W/);
     await expect(leadPage.getByRole("table", { name: "Guideline versions" })).toBeVisible();
     expect(await axeViolations(leadPage, "main"), "Settings › Guidelines").toEqual([]);
     // With a chosen file and its preview.

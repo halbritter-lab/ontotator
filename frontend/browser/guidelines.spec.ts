@@ -11,7 +11,7 @@ import { resolve } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
-import { decisionBlock, documentsReady, openRowPanel, rowPanel } from "./documentsHelpers";
+import { decisionBlock, documentsReady, openTextCard, showSegment, textCard } from "./documentsHelpers";
 import { authenticatedRequest, submitCase } from "./helpers";
 import { guidelineScenario, loginGuidelineUser, type GuidelinePerson, type GuidelineScenario } from "./guidelineHelpers";
 
@@ -87,14 +87,15 @@ async function publish(page: Page, s: GuidelineScenario, file: "v1.md" | "v2.md"
 }
 
 /**
- * Lead Documents: the decision block of ``case · language`` in the row panel (route parameters ``panel`` and
+ * Lead Documents: the decision block of ``case language`` in the text card (route parameters ``panel`` and
  * ``panel_stage``), loaded; a decided row opens it through "Change final…".
  */
 async function finalResult(page: Page, s: GuidelineScenario, caseId: string, language: string): Promise<Locator> {
   await visit(page, `/#/projects/${encodeURIComponent(s.project)}/documents?panel=${encodeURIComponent(`${caseId}:${language}`)}&panel_stage=final`);
-  await expect(rowPanel(page, caseId, language)).toBeVisible();
-  const panel = decisionBlock(page, caseId, language);
-  const change = rowPanel(page, caseId, language).getByRole("button", { name: "Change final…", exact: true });
+  const card = textCard(page, caseId, language);
+  await expect(card).toBeVisible();
+  const panel = decisionBlock(card);
+  const change = card.getByRole("button", { name: "Change final…", exact: true });
   await expect(panel.or(change).first()).toBeVisible();
   if (!(await panel.count())) await change.click();
   await expect(panel).toBeVisible();
@@ -102,12 +103,12 @@ async function finalResult(page: Page, s: GuidelineScenario, caseId: string, lan
   return panel;
 }
 
-/** Lead Documents: open the "Translation reviews" dialog of the row ``case · language`` (Text versions in its history). */
+/** Lead Documents: open the "Translation reviews" dialog of the row ``case language`` (the card's version list). */
 async function translationReviews(page: Page, s: GuidelineScenario, caseId: string, language: string): Promise<void> {
   await visit(page, `/#/projects/${encodeURIComponent(s.project)}/documents`);
   await documentsReady(page);
-  const area = await openRowPanel(page, caseId, language);
-  await area.getByRole("tab", { name: /^Versions \(\d+\)$/ }).click();
+  const area = await openTextCard(page, caseId, language);
+  await showSegment(area, "Translation");
   await area.getByRole("button", { name: /^Translation reviews for / }).first().click();
 }
 
@@ -167,7 +168,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await visit(page, settingsUrl(s));
     await expect(page.getByText("No guidelines yet. Upload a .md or .txt file. Annotators and reviewers will find it in every task.", { exact: true })).toBeVisible();
     await publish(page, s, "v1.md", 1);
-    await expect(page.locator(".guidelines-current-facts")).toContainText("v1 · v1.md · ");
+    await expect(page.locator(".guidelines-current-facts")).toContainText(/v1\W+v1\.md\W/);
     await evidence(page, "lead-published-v1");
 
     // 2. Ana: first-exposure notice, drawer (no script run, no image request), submit.
@@ -339,7 +340,7 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await expect(page.getByLabel("What changed? (optional)")).toHaveValue("Republished v1");
     await page.getByRole("button", { name: "Publish as v3", exact: true }).click();
     await expect(page.locator(".guidelines-success")).toContainText("Published v3.");
-    await expect(page.locator(".guidelines-current-facts")).toContainText(/^v3 · v1\.md/);
+    await expect(page.locator(".guidelines-current-facts")).toContainText(/^v3\W+v1\.md/);
     await evidence(page, "lead-republished-v1");
   } finally {
     await Promise.all([ana.close(), ben.close()]);
@@ -350,7 +351,7 @@ test("PUBLISHED: refused files show the server messages", async ({ page }) => {
   const s = await guidelineScenario(page, "PUBLISHED");
   await loginGuidelineUser(page, s, "lead");
   await visit(page, settingsUrl(s));
-  await expect(page.locator(".guidelines-current-facts")).toContainText("v1 · v1.md · ");
+  await expect(page.locator(".guidelines-current-facts")).toContainText(/v1\W+v1\.md\W/);
 
   // The server refuses the same files with these codes; the UI shows their messages (admin/errors.ts).
   const refusal = async (file: "big.txt" | "bad.pdf", mimeType: string) => {
@@ -389,7 +390,7 @@ test("PUBLISHED: Publish and Discard stay above a long preview and stick while i
   const s = await guidelineScenario(page, "PUBLISHED");
   await loginGuidelineUser(page, s, "lead");
   await visit(page, settingsUrl(s));
-  await expect(page.locator(".guidelines-current-facts")).toContainText("v1 · v1.md · ", { timeout: 20_000 });
+  await expect(page.locator(".guidelines-current-facts")).toContainText(/v1\W+v1\.md\W/, { timeout: 20_000 });
   const paragraphs = Array.from({ length: 120 }, (_, index) => `Paragraph ${index + 1}: annotate what the text states about the patient.`);
   await fileInput(page).setInputFiles({ name: "long.md", mimeType: "text/markdown", buffer: Buffer.from(`# Long guideline\n\n${paragraphs.join("\n\n")}\n`) });
   const preview = page.getByRole("region", { name: "Preview of long.md", exact: true });
@@ -430,10 +431,10 @@ test("PUBLISHED: My tasks link and the guidelines page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Project guidelines", level: 1 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Guidelines v1", level: 2 })).toBeVisible();
   await expect(page.getByText(V1_TEXT)).toBeVisible();
-  await expect(page.locator(".guideline-reader-meta")).toHaveText(/^Published .+ · First version$/);
+  await expect(page.locator(".guideline-reader-meta")).toHaveText(/^Published .+\W+First version$/);
   const versions = page.getByRole("list", { name: "Versions" });
   await expect(versions.getByRole("listitem")).toHaveCount(1);
-  await expect(versions.getByRole("listitem").first()).toHaveText(/^v1 · Published .+ · First version · current$/);
+  await expect(versions.getByRole("listitem").first()).toHaveText(/^v1\W+Published .+\W+First version\W+current$/);
   // Non-leads see no reach.
   await expect(page.getByText(/Seen by/)).toHaveCount(0);
   await evidence(page, "guidelines-page");

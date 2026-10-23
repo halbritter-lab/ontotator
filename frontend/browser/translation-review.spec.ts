@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
+import { openTextCard, rowAction, showSegment, textCard, textNamePattern } from './documentsHelpers';
 import { authenticatedRequest, loginExisting, TEST_PASSWORD } from './helpers';
 
 test.setTimeout(90_000);
@@ -62,18 +63,18 @@ async function leadContext(browser: Browser, s: Scenario) {
   const page = await context.newPage(); await loginExisting(page, s.users.lead);
   return { page, close: () => context.close() };
 }
-/** The "Versions" entry of one exact document in its Documents row panel (text · language). */
+/** The version list entry of one exact document in its Documents text card. */
 async function documentRow(page: Page, id: string) {
   const project = decodeURIComponent(/#\/projects\/([^/?]+)\/documents/.exec(page.url())![1]);
   const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
-  const name = `${doc.case_id} · ${doc.language}`;
-  // The row panel (text name "Details, …") on "Versions (n)".
-  const panel = page.getByRole('complementary', { name: `Details, ${name}`, exact: true });
-  if (!await panel.count()) await page.getByRole('button', { name: `Details, ${name}`, exact: true }).click();
-  await panel.getByRole('tab', { name: /^Versions \(\d+\)$/ }).click();
-  const versions = panel.getByRole('tabpanel');
-  const version = versions.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
+  // The text card (text name "Open text card, …") on its Translation part with the version list; one card at a time.
+  const card = textCard(page, doc.case_id, doc.language);
+  const other = page.locator('.text-card[role="dialog"]');
+  if (!await card.count() && await other.count()) await other.getByRole('button', { name: 'Close', exact: true }).first().click();
+  await openTextCard(page, doc.case_id, doc.language);
+  await showSegment(card, 'Translation');
+  const version = card.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
   await expect(version).toHaveCount(1);
   return version;
 }
@@ -133,17 +134,15 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
     await lead.page.goto(documentsUrl(s));
     const row = await documentRow(lead.page, s.documents.target);
     await expect(row).toContainText('Ready for review');
-    // Work plan: the lead turns Review on in the row panel's Details (VD2), then assigns it from the row action.
-    const rowName = `${s.case_id} · de`;
-    const table = lead.page.getByRole('table', { name: 'Documents', exact: true });
-    const panel = lead.page.getByRole('complementary', { name: `Details, ${rowName}`, exact: true });
-    await panel.getByRole('tab', { name: 'Details', exact: true }).click();
-    const review = panel.getByRole('button', { name: `Review, ${rowName}`, exact: true });
+    // Work plan: the lead turns Translation review on in the text card's Text details (VD2), then assigns it from the row action.
+    const panel = textCard(lead.page, s.case_id, 'de');
+    await panel.getByRole('button', { name: 'Text details', exact: true }).click();
+    const review = panel.getByRole('button', { name: textNamePattern('Translation review, ', s.case_id, 'de') });
     if ((await review.getAttribute('aria-pressed')) !== 'true') await review.click();
     await expect(review).toHaveAttribute('aria-pressed', 'true');
-    // The panel lies over the right part of the table: close it before the row action.
+    // The card is modal: close it before the row action.
     await panel.getByRole('button', { name: 'Close', exact: true }).click();
-    await table.getByRole('button', { name: `Assign review…, ${rowName}`, exact: true }).click();
+    await rowAction(lead.page, 'Assign review…', s.case_id, 'de').click();
     const dialog = lead.page.getByRole('dialog', { name: 'Assign translation review', exact: true });
     await dialog.getByRole('table', { name: 'Members' }).getByRole('radio', { name: new RegExp(s.users.reviewer) }).check();
     // The row holds two parallel de translations (target and failed); the row assigns both roots.
@@ -217,8 +216,8 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', { name: 'My tasks', exact: true }).click();
   const submittedTask = page.getByTestId('task-row').filter({ has: page.locator(`a[href="#/tasks/${assignmentId}"]`) });
   await expect(submittedTask).toContainText('Submitted');
-  // My tasks names the text as "{case ID} · {language}".
-  await expect(submittedTask).toContainText(`${s.case_id} · de`);
+  // My tasks names the text as "{case ID} {language}".
+  await expect(submittedTask).toContainText(new RegExp(`${s.case_id}\\W+de`));
   await submittedTask.getByRole('link', { name: 'View', exact: true }).click();
   await expect(target(page)).toHaveAttribute('readonly', ''); expect(writes).toEqual([]);
   const reopenedLead = await leadContext(browser, s);

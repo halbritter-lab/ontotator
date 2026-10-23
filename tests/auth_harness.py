@@ -12,6 +12,7 @@ import io
 import json
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -73,6 +74,35 @@ def grant(
     return True
 
 
+# Texts whose "annotations per text" count the harness lifts past the stored
+# maximum (5, a DB CHECK) for the assignment it wraps: (project id, document).
+_LIFTED: ContextVar[frozenset[tuple[int, str]]] = ContextVar(
+    "harness_lifted", default=frozenset()
+)
+MAX_PER_TEXT = 5
+
+
+def _install_lift() -> None:
+    """Wrap the service's held-annotations count once: within a lifted
+    ``harness_annotation`` (same thread/context only) a full text counts as
+    one below the maximum, so the real assign path runs unchanged."""
+    from ontocurator.assignments import service
+
+    if getattr(service.held_annotations, "harness_lift", False):
+        return
+    real = service.held_annotations
+
+    def held(conn: Any, project_id: int, document_ids: Iterable[str]) -> Any:
+        counts = real(conn, project_id, document_ids)
+        for key in _LIFTED.get():
+            if key[0] == project_id and counts[key[1]] >= MAX_PER_TEXT:
+                counts[key[1]] = MAX_PER_TEXT - 1
+        return counts
+
+    held.harness_lift = True  # type: ignore[attr-defined]
+    service.held_annotations = held
+
+
 @contextmanager
 def harness_annotation(
     db: Any, project: str, document_id: str, task: str = "annotate"
@@ -104,13 +134,24 @@ def harness_annotation(
             update(ProjectRow)
             .where(ProjectRow.id == row.id)
             .values(
-                annotations_per_text=max(row.annotations_per_text, held + 1),
+                annotations_per_text=min(
+                    MAX_PER_TEXT, max(row.annotations_per_text, held + 1)
+                ),
                 tool_proposal_mode="scratch",
             )
         )
+    # Beyond the stored maximum (browser fixture projects collect many test
+    # users): lift the count for this text and this context only.
+    lifted = held + 1 > MAX_PER_TEXT
+    token = None
+    if lifted:
+        _install_lift()
+        token = _LIFTED.set(_LIFTED.get() | {(row.id, document_id)})
     try:
         yield
     finally:
+        if token is not None:
+            _LIFTED.reset(token)
         with db.transaction() as conn:
             conn.execute(
                 update(ProjectRow)
@@ -149,7 +190,12 @@ def ensure_assignment(
 
 
 def provision_assignments(
-    app: FastAPI, username: str, project: str, roles: Iterable[str]
+    app: FastAPI,
+    username: str,
+    project: str,
+    roles: Iterable[str],
+    *,
+    mode: str | None = None,
 ) -> None:
     # Task "review" comes only from a consolidation start (D1).
     tasks = ["annotate"] if "annotator" in roles else []
@@ -174,6 +220,54 @@ def provision_assignments(
                         task,
                         confirm_language=True,
                     )
+    if mode is not None:
+        user = app.state.accounts.get_by_username(username)
+        _set_mode(app.state.repo.db, user.id, project, mode == "proposals")
+
+
+def _set_mode(db: Any, user_id: int, key: str, proposals: bool) -> None:
+    """With ``proposals`` the annotate assignments of ``user_id`` on texts with
+    tool proposals (an imported set or the seed package's own proposals, which
+    form one set, ``proposal_queries``) start from them; otherwise all of them
+    start from scratch, as before P3, even when an earlier fixture user fixed
+    the text's mode (shared seed projects). Fixture setup only."""
+    from sqlalchemy import select, update
+
+    from ontocurator.storage.tables import (
+        AnnotationSnapshotRow,
+        AssignmentRow,
+        ProjectRow,
+        ProposalAnnotationRow,
+    )
+
+    with db.transaction() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == key)
+        ).scalar_one()
+        with_proposals = (
+            select(AnnotationSnapshotRow.document_id)
+            .join(
+                ProposalAnnotationRow,
+                (ProposalAnnotationRow.project_id == AnnotationSnapshotRow.project_id)
+                & (
+                    ProposalAnnotationRow.annotation_id
+                    == AnnotationSnapshotRow.annotation_id
+                )
+                & (ProposalAnnotationRow.version == AnnotationSnapshotRow.version),
+            )
+            .where(AnnotationSnapshotRow.project_id == project_id)
+        )
+        conn.execute(
+            update(AssignmentRow)
+            .where(
+                AssignmentRow.project_id == project_id,
+                AssignmentRow.user_id == user_id,
+                AssignmentRow.task == "annotate",
+                AssignmentRow.revoked_at.is_(None),
+                *([AssignmentRow.document_id.in_(with_proposals)] if proposals else []),
+            )
+            .values(annotation_mode="proposals" if proposals else "scratch")
+        )
 
 
 def log_in(client: TestClient, username: str) -> dict[str, Any]:

@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
- * Locators and checks of the documents overview specs (plan O10c): the stage-column table,
+ * Locators and checks of the documents overview specs (plan O10c): the one-line stage table,
  * its tabs, the navigation counter and the evidence screenshots. Each spec builds its own
  * scenario projects through overviewHelpers.ts.
  */
@@ -46,47 +46,50 @@ export async function tabCount(page: Page, label: string): Promise<number> {
 
 export const documentsTable = (page: Page): Locator => page.getByRole("table", { name: "Documents", exact: true });
 
-export const rowName = (caseId: string, language: string): string => `${caseId} · ${language}`;
+/** "{case} {language}": the row part of the text card's name and of the row's own names. */
+export const rowName = (caseId: string, language: string): string => `${caseId} ${language}`;
 
-/** The table row of one text, found by its checkbox "Select {case} · {language}". */
+/** A name "{prefix}{case}{sep}{language}" whatever the separator (" · " before U9, " " after). */
+export const namePattern = (prefix: string, caseId: string, language: string): RegExp =>
+  new RegExp(`^${esc(prefix)}${esc(caseId)}(?: · | )${esc(language)}$`);
+
+/** The text name of a row: opens the text card ("Open text card, {case} {language}"). */
+export const textName = (page: Page, caseId: string, language: string): Locator =>
+  page.getByRole("button", { name: `Open text card, ${rowName(caseId, language)}`, exact: true });
+
+/** The table row of one text, found by its text name. */
 export const textRow = (page: Page, caseId: string, language: string): Locator =>
-  documentsTable(page).locator("tr").filter({ has: page.getByRole("checkbox", { name: `Select ${rowName(caseId, language)}`, exact: true }) });
+  documentsTable(page).locator("tr").filter({ has: textName(page, caseId, language) });
 
 /** Columns after the row checkbox and the row header "Text". */
-const COLUMN = { review: 0, annotation: 1, final: 2, waiting: 3, action: 4, activity: 5 } as const;
+const COLUMN = { translation: 0, annotation: 1, finalization: 2, waiting: 3, next: 4, activity: 5 } as const;
 export type Column = keyof typeof COLUMN;
 export const rowCell = (row: Locator, column: Column): Locator => row.locator(":scope > td:not(.data-table-select-cell)").nth(COLUMN[column]);
 export const rowHeader = (row: Locator): Locator => row.locator(':scope > th[scope="row"]');
 
-/** A row action "{label}, {case} · {language}" (Action column or narrow card). */
+/** A row's next-step button "{label}, {case} {language}" (Next step column or narrow card). */
 export const rowAction = (page: Page, label: string, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `${label}, ${rowName(caseId, language)}`, exact: true });
+  page.getByRole("button", { name: namePattern(`${label}, `, caseId, language) });
 
-/** The "+n" menu button of a row. */
-export const moreActions = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: new RegExp(`^\\+\\d+ more actions?, ${esc(rowName(caseId, language))}$`) });
+/** The row's "More" menu button ("More actions, {case} {language}"). */
+export const moreMenu = (page: Page, caseId: string, language: string): Locator =>
+  page.getByRole("button", { name: `More actions, ${rowName(caseId, language)}`, exact: true });
 
-/** The text name of a row, the row panel's entry "Details, {case} · {language}". */
-export const detailsButton = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `Details, ${rowName(caseId, language)}`, exact: true });
+/** The text card dialog "{case} {language}" (a full-width sheet below 700 px). */
+export const textCard = (page: Page, caseId: string, language: string): Locator =>
+  page.getByRole("dialog", { name: rowName(caseId, language), exact: true });
 
-/** The row panel "Details, {case} · {language}" (aside; a dialog sheet below 700 px). */
-export const rowPanel = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole(page.viewportSize() && page.viewportSize()!.width < 700 ? "dialog" : "complementary", { name: `Details, ${rowName(caseId, language)}`, exact: true });
-
-/** One stage cell's expectation: line 1 (symbol + word) and line 2 ("" = no second line). */
+/** One stage cell: the card's short state and (in brackets, grey) who works on it; `who: ""` = none. */
 export interface CellText {
-  line1: string | RegExp;
-  line2?: string | RegExp;
+  state: string | RegExp;
+  who?: string | RegExp;
 }
 
-/** Assert line 1 and (when given) line 2 of a stage cell. */
+/** Assert a one-line stage cell through its `title` ("{state}" or "{state} ({who})"); without `who` any who passes. */
 export async function expectStage(cell: Locator, expected: CellText): Promise<void> {
-  await expect(cell.locator(".stage-cell-status")).toHaveText(expected.line1);
-  if (expected.line2 === undefined) return;
-  const detail = cell.locator(".stage-cell-detail");
-  if (expected.line2 === "") await expect(detail).toHaveCount(0);
-  else await expect(detail).toHaveText(expected.line2);
+  const part = (value: string | RegExp) => (typeof value === "string" ? esc(value) : value.source);
+  const who = expected.who === undefined ? String.raw`(?: \(.*\))?` : expected.who === "" ? "" : String.raw` \(${part(expected.who)}\)`;
+  await expect(cell.locator(".stage-cell")).toHaveAttribute("title", new RegExp(`^${part(expected.state)}${who}$`));
 }
 
 /** Waiting on: "You", "—", or every listed person (display names, in any order). */
@@ -134,3 +137,11 @@ export async function axeViolations(page: Page, include: string): Promise<string
 /** The document's horizontal overflow in CSS px (0 = no horizontal scrolling). */
 export const horizontalOverflow = (page: Page): Promise<number> =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+
+/** The slim case line of a case: its ID, plus the folded source when that is not planned. */
+export const caseLine = (page: Page, caseId: string): Locator =>
+  documentsTable(page).locator(".documents-group-label").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) });
+
+/** The not-planned source folded into the case line: the button "source en (native), 1 translation" opens its card. */
+export const foldedSource = (page: Page, caseId: string): Locator =>
+  caseLine(page, caseId).getByRole("button", { name: /^source \S+ \(native\), \d+ translations?$/ });

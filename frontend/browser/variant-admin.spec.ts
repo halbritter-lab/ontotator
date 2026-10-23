@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { openFilters } from './documentsHelpers';
+import { openFilters, openTextCard, showSegment, textCard } from './documentsHelpers';
 import { authenticatedRequest, loginExisting, selectText, TEST_PASSWORD } from './helpers';
 
 test.setTimeout(120_000);
@@ -66,19 +66,18 @@ async function finishedJob(page: Page, id: number): Promise<Job> {
   }, { timeout: 30_000 }).toMatch(/^(succeeded|failed)$/);
   expect(result!.status, result!.error ?? '').toBe('succeeded'); return result!;
 }
-/** The "Text versions" entry of one exact document in its expanded Documents row (text · language). */
+/** The version list entry of one exact document in its Documents text card. */
 async function documentRow(page: Page, id: string) {
   const project = decodeURIComponent(/#\/projects\/([^/?]+)\/documents/.exec(page.url())![1]);
   const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
-  const name = `${doc.case_id} · ${doc.language}`;
-  // Rows not in the work plan are ordinary (muted) rows under All (VD1).
-  // The row panel (text name "Details, …") on "Versions (n)".
-  const panel = page.getByRole('complementary', { name: `Details, ${name}`, exact: true });
-  if (!await panel.count()) await page.getByRole('button', { name: `Details, ${name}`, exact: true }).click();
-  await panel.getByRole('tab', { name: /^Versions \(\d+\)$/ }).click();
-  const versions = panel.getByRole('tabpanel');
-  const version = versions.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
+  // The text card (text name "Open text card, …") on its Translation part with the version list; one card at a time.
+  const card = textCard(page, doc.case_id, doc.language);
+  const other = page.locator('.text-card[role="dialog"]');
+  if (!await card.count() && await other.count()) await other.getByRole('button', { name: 'Close', exact: true }).first().click();
+  await openTextCard(page, doc.case_id, doc.language);
+  await showSegment(card, 'Translation');
+  const version = card.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
   await expect(version).toHaveCount(1);
   return version;
 }
@@ -107,11 +106,11 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   const planned = upload.preview!.variants!.find(v => v.language === 'de')!;
   expect(planned.external_id).toBe(s.external_id); expect(planned.failed_checks).toEqual(['units_added']);
   expect(planned.derived_in_upload).toBe(true); expect(planned.origin).toBe('machine_translation');
-  const checkbox = dialog.getByRole('checkbox', { name: `Accept without review: ${s.external_id} · de · v1`, exact: true });
+  const checkbox = dialog.getByRole('checkbox', { name: new RegExp(`^Accept without review: ${s.external_id}\\W+de\\W+v1$`) });
   const importButton = dialog.getByRole('button', { name: /^Import \d+ (texts?|cases?)$/ });
   await checkbox.check(); await expect(importButton).toBeDisabled();
   const reason = 'Independent lead accepts this generic example after checking its units.';
-  await dialog.getByRole('textbox', { name: `Reason: ${s.external_id} · de · v1 (required)`, exact: true }).fill(reason);
+  await dialog.getByRole('textbox', { name: new RegExp(`^Reason: ${s.external_id}\\W+de\\W+v1 \\(required\\)$`) }).fill(reason);
   const committing = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/uploads/${created.upload_id}/commit`));
   await importButton.click();
   const committed = await committing; expect(committed.ok(), await committed.text()).toBeTruthy();
@@ -128,7 +127,7 @@ test('ordinary lead imports an explicit reasoned override with the real preview 
   // The filter popover replaces "More filters" (V4): Origin "Machine translation" and Review "Accepted" (the translation status).
   const filters = await openFilters(page);
   await filters.getByRole('checkbox', { name: /^Machine translation, / }).check();
-  await filters.getByRole('group', { name: 'Review', exact: true }).getByRole('checkbox', { name: /^Accepted, / }).check();
+  await filters.getByRole('group', { name: 'Translation review', exact: true }).getByRole('checkbox', { name: /^Accepted, / }).check();
   await page.keyboard.press('Escape');
   const row = await documentRow(page, target.document_id); await expect(row).toContainText('Accepted without review');
   expect(new URL(page.url()).hash).toContain('origin=machine_translation'); expect(new URL(page.url()).hash).toContain('review_state=accepted');
@@ -181,9 +180,8 @@ test('current accepted-to-reviewed gate refuses old editable commands and submis
     expect(history.assignment.last_submission_id).toBe(submission.submission_id); expect(history.view.submissions).toContainEqual(submission);
     const historyReply = await authenticatedRequest(historian.page, `/api/v1/workspaces/${encodeURIComponent(historical.workspace_id)}/submissions/${submission.submission_id}`); expect(historyReply.ok()).toBeTruthy(); expect(await historyReply.json()).toEqual(submission);
     const before = await (await authenticatedRequest(lead.page, `${root(s)}/assignments`)).json() as Assignment[];
-    for (const task of ['annotate', 'review']) {
-      // The reviewer gains only the actual adjudicator role needed for annotation review.
-      if (task === 'review') { const role = await authenticatedRequest(lead.page, `${root(s)}/members/${encodeURIComponent(s.users.reviewer)}`, 'PUT', { roles: ['annotator', 'adjudicator'], revoke_assignments: false }); expect(role.ok()).toBeTruthy(); }
+    // D1: the annotation review task is gone; only annotate can be assigned (a consolidation creates review tasks).
+    for (const task of ['annotate']) {
       const refused = await authenticatedRequest(lead.page, `${root(s)}/assignments`, 'POST', { task, confirm_language: false, rows: [{ document_id: s.documents.failed, username: s.users.reviewer }] });
       expect(refused.ok()).toBeTruthy(); expect(await refused.json()).toMatchObject({ created: [], refused: [{ code: 'TRANSLATION_NOT_ACCEPTED', document_id: s.documents.failed }] });
     }

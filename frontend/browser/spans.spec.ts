@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { importPackage, mentionWithOffsets, openCase, selectText } from "./helpers";
 
-const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture-spans", annotator);
+const importFixture = (page: Page, annotator: string, options: { proposals?: boolean } = {}) => importPackage(page, "", "browser-fixture-spans", annotator, options);
 
 /** The six mark fills of the design tokens, as computed `rgb(...)` strings. */
 const markFills = (page: Page) =>
@@ -22,8 +22,8 @@ const paintedFill = async (fills: string[], run: Locator) => {
 
 test.describe("Evidence Spans Proof & Verification", () => {
   test("review mode: proposal evidence spans are precisely marked with DOM metadata and visual highlights", async ({ page }) => {
-    await importFixture(page, "reviewer-spans-proof");
-    await openCase(page, { task: "review" });
+    await importFixture(page, "reviewer-spans-proof", { proposals: true });
+    await openCase(page, { task: "annotate" });
     await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
 
     // 1. Select and verify that first proposal (HP:0001252 Hypotonia, span [0:9]) is active

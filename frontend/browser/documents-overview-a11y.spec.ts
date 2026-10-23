@@ -1,15 +1,15 @@
 /**
  * Documents overview accessibility (plan O10c Step 3; spec "Accessibility", "Narrow"):
- * keyboard-only use of tabs, filter popover, row checkbox ranges, the final-result panel and
+ * keyboard-only use of tabs, filter popover, row checkbox ranges, the text card's decision block and
  * the "Handle text change…" dialog; reflow at 390 and 320 CSS px without horizontal scrolling
  * (cards and sheets); forced colours keep the stage symbols and the decision edge; axe on
- * table, popover, panel and dialogs. Every test builds its own scenario projects.
+ * table, popover, text card and dialogs. Every test builds its own scenario projects.
  */
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  axeViolations, documentsTab, documentsTabs, evidence, expectStage, horizontalOverflow, openDocuments, rowAction, rowCell, rowPanel, textRow,
+  axeViolations, documentsTab, documentsTabs, evidence, expectStage, horizontalOverflow, namePattern, openDocuments, rowAction, rowCell, textCard, textRow,
 } from "./documentsOverviewHelpers";
 import { loginOverviewUser, overviewScenario, type OverviewScenario, type OverviewScenarioName } from "./overviewHelpers";
 
@@ -35,8 +35,11 @@ async function tabTo(page: Page, target: Locator, limit = 60): Promise<void> {
 
 const filterButton = (page: Page) => page.getByRole("button", { name: /^Filter(, \d+ active)?$/ });
 const filterPopover = (page: Page) => page.getByRole("dialog", { name: "Filter", exact: true });
+/** A text-change dialog "{title} · {case} · {language}" whatever the separator (U9 removes " · "). */
+const textChangeDialog = (page: Page, title: string, caseId: string, language: string) =>
+  page.getByRole("dialog", { name: new RegExp(`^${title}\\W+${caseId}\\W+${language}$`) });
 
-test("keyboard-only: tabs, filter popover, row checkbox range, panel accept, Handle text change… dialog", async ({ page }) => {
+test("keyboard-only: tabs, filter popover, row checkbox range, text card accept, Handle text change… dialog", async ({ page }) => {
   // Tabs, popover and range on scenario 4 (two translations needing a decision).
   const s4 = await leadOn(page, "S4");
   const tabs = documentsTabs(page);
@@ -71,8 +74,8 @@ test("keyboard-only: tabs, filter popover, row checkbox range, panel accept, Han
   await page.keyboard.press("Enter");
   await expect(filterButton(page)).toHaveAccessibleName("Filter");
 
-  const de = page.getByRole("checkbox", { name: "Select case-104 · de", exact: true });
-  const fr = page.getByRole("checkbox", { name: "Select case-104 · fr", exact: true });
+  const de = page.getByRole("checkbox", { name: namePattern("Select ", "case-104", "de") });
+  const fr = page.getByRole("checkbox", { name: namePattern("Select ", "case-104", "fr") });
   await tabTo(page, de, 80);
   await page.keyboard.press("Space");
   await expect(de).toBeChecked();
@@ -82,21 +85,24 @@ test("keyboard-only: tabs, filter popover, row checkbox range, panel accept, Han
   await expect(de).toBeChecked();
   void s4;
 
-  // Row panel accept on scenario 7a (one submission: "Accept as final…").
+  // Text card accept on scenario 7a (one submission: "Accept result…").
   await leadOn(page, "S7a");
-  const accept = rowAction(page, "Accept as final…", "case-107", "de");
+  const accept = rowAction(page, "Accept result…", "case-107", "de");
   await tabTo(page, accept, 80);
   await page.keyboard.press("Enter");
-  const panel = rowPanel(page, "case-107", "de");
+  const panel = textCard(page, "case-107", "de");
   await expect(panel).toBeVisible();
-  await expect(panel.getByRole("heading", { level: 2 })).toBeFocused();
-  const acceptFinal = panel.getByRole("button", { name: "Accept as final", exact: true });
+  await expect(panel.locator(":focus")).toHaveCount(1);
+  const acceptFinal = panel.getByRole("region", { name: "Final result", exact: true }).getByRole("button", { name: "Accept result…", exact: true });
   await tabTo(page, acceptFinal);
+  await page.keyboard.press("Enter");
+  const confirm = panel.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true });
+  await tabTo(page, confirm);
   await page.keyboard.press("Enter");
   await expect(panel.getByText("No more final results to decide.", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
-  await expectStage(rowCell(textRow(page, "case-107", "de"), "final"), { line1: "✓ Final" });
+  await expectStage(rowCell(textRow(page, "case-107", "de"), "finalization"), { state: /accepted( .+)?/ });
   await expect(page.locator(":focus")).toHaveCount(1);
 
   // Handle text change… on scenario 12: open, Escape returns focus, reopen, arrow to "Let … finish on v1", Apply.
@@ -104,7 +110,7 @@ test("keyboard-only: tabs, filter popover, row checkbox range, panel accept, Han
   const handle = rowAction(page, "Handle text change…", "case-112", "de");
   await tabTo(page, handle, 80);
   await page.keyboard.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "Handle text change · case-112 · de", exact: true });
+  const dialog = textChangeDialog(page, "Handle text change", "case-112", "de");
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
@@ -122,7 +128,7 @@ test("keyboard-only: tabs, filter popover, row checkbox range, panel accept, Han
   await tabTo(page, dialog.getByRole("button", { name: "Apply", exact: true }));
   await page.keyboard.press("Enter");
   await expect(dialog).toHaveCount(0);
-  await expectStage(rowCell(textRow(page, "case-112", "de"), "annotation"), { line1: "◐ Finishing on v1" });
+  await expectStage(rowCell(textRow(page, "case-112", "de"), "annotation"), { state: "Finishing on v1" });
 });
 
 const documentsTable = (page: Page) => page.getByRole("table", { name: "Documents", exact: true });
@@ -131,7 +137,7 @@ const documentsTable = (page: Page) => page.getByRole("table", { name: "Document
 async function reflowCardsAndSheets(page: Page, width: number, s12: OverviewScenario): Promise<void> {
   await page.setViewportSize({ width, height: 800 });
   await openDocuments(page, s12.project);
-  const card = page.getByRole("article", { name: "case-112 · de", exact: true });
+  const card = page.getByRole("article", { name: namePattern("", "case-112", "de") });
   await expect(card).toBeVisible();
   await expect(documentsTable(page)).toHaveCount(0);
   await expect(card).toContainText("Annotation: ⚠ In progress on old text");
@@ -151,7 +157,7 @@ async function reflowCardsAndSheets(page: Page, width: number, s12: OverviewScen
   const box = await handle.boundingBox();
   expect(box?.height ?? 0, "full-width card action ≥ 32 px").toBeGreaterThanOrEqual(32);
   await handle.click();
-  const dialog = page.getByRole("dialog", { name: "Handle text change · case-112 · de", exact: true });
+  const dialog = textChangeDialog(page, "Handle text change", "case-112", "de");
   await expect(dialog).toBeVisible();
   expect(await horizontalOverflow(page), `${width} px dialog sheet`).toBeLessThanOrEqual(0);
   expect(await dialog.evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(width);
@@ -160,16 +166,15 @@ async function reflowCardsAndSheets(page: Page, width: number, s12: OverviewScen
   await expect(dialog).toHaveCount(0);
 }
 
-/** At ``width`` px on scenario 7a: the row panel as a full-screen sheet. */
+/** At ``width`` px on scenario 7a: the text card as a full-width sheet. */
 async function reflowPanel(page: Page, width: number, s7a: OverviewScenario): Promise<void> {
   await page.setViewportSize({ width, height: 800 });
   await openDocuments(page, s7a.project);
-  await rowAction(page, "Accept as final…", "case-107", "de").click();
-  const panel = rowPanel(page, "case-107", "de");
+  await rowAction(page, "Accept result…", "case-107", "de").click();
+  const panel = textCard(page, "case-107", "de");
   await expect(panel).toBeVisible();
-  expect(await horizontalOverflow(page), `${width} px panel sheet`).toBeLessThanOrEqual(0);
-  // After the 150 ms slide the sheet fits the viewport.
-  await expect.poll(() => panel.evaluate(element => Math.round(element.getBoundingClientRect().right)), { message: `${width} px panel right edge`, timeout: 5_000 }).toBeLessThanOrEqual(width);
+  expect(await horizontalOverflow(page), `${width} px card sheet`).toBeLessThanOrEqual(0);
+  await expect.poll(() => panel.evaluate(element => Math.round(element.getBoundingClientRect().right)), { message: `${width} px card right edge`, timeout: 5_000 }).toBeLessThanOrEqual(width);
   await evidence(page, `reflow-${width}-panel`);
   await page.keyboard.press("Escape");
   await expect(panel).toHaveCount(0);
@@ -192,15 +197,15 @@ async function fixEvidence(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: resolve(dir, `${name}.png`), fullPage: true });
 }
 
-test("320 px: a card's stage cell opens the stage popover; Open full details opens the sheet with Back (axe clean)", async ({ page }) => {
+test("320 px: a card's stage line opens the stage popover; Open full details opens the text card sheet (axe clean)", async ({ page }) => {
   const s12 = await overviewScenario(page, "S12");
   await loginOverviewUser(page, s12, "lead");
   await page.setViewportSize({ width: 320, height: 800 });
   await openDocuments(page, s12.project);
-  const card = page.getByRole("article", { name: "case-112 · de", exact: true });
-  const stage = card.getByRole("button", { name: /^Annotation: .+\. Show history, case-112 · de$/ });
+  const card = page.getByRole("article", { name: namePattern("", "case-112", "de") });
+  const stage = card.getByRole("button", { name: /^Annotation: .+\. Show history, case-112\W+de$/ });
   await stage.click();
-  const popover = page.getByRole("dialog", { name: "Annotation activity, case-112 · de", exact: true });
+  const popover = page.getByRole("dialog", { name: namePattern("Annotation activity, ", "case-112", "de") });
   await expect(popover).toBeVisible();
   await expect(popover.getByText("Loading activity…", { exact: true })).toHaveCount(0);
   await expect(popover.getByRole("list", { name: "Latest annotation activity" }).getByRole("listitem").first()).toBeVisible();
@@ -215,14 +220,14 @@ test("320 px: a card's stage cell opens the stage popover; Open full details ope
   await stage.click();
   await popover.getByRole("button", { name: "Open full details", exact: true }).click();
   await expect(popover).toHaveCount(0);
-  const sheet = rowPanel(page, "case-112", "de");
+  const sheet = textCard(page, "case-112", "de");
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("button", { name: "Show all stages", exact: true })).toBeVisible();
+  await expect(sheet.getByRole("navigation", { name: "Text path", exact: true }).getByRole("button", { name: /^Annotation / })).toHaveAttribute("aria-current", "step");
   await expect(page).toHaveURL(/panel_stage=annotation/);
   expect(await horizontalOverflow(page), "320 px sheet").toBeLessThanOrEqual(0);
-  expect(await axeViolations(page, '[role="dialog"]'), "row panel sheet from the stage popover").toEqual([]);
+  expect(await axeViolations(page, '[role="dialog"]'), "text card sheet from the stage popover").toEqual([]);
   await fixEvidence(page, "a3-stage-sheet-320");
-  await sheet.getByRole("button", { name: "Back", exact: true }).click();
+  await sheet.getByRole("button", { name: "Close", exact: true }).click();
   await expect(sheet).toHaveCount(0);
   await expect(stage).toBeFocused();
 });
@@ -252,7 +257,7 @@ test("forced colours keep symbols and the decision edge", async ({ page }) => {
   await evidence(page, "forced-colours");
 });
 
-test("axe has no violations on table, popover, panel and dialogs", async ({ page }) => {
+test("axe has no violations on table, popover, text card and dialogs", async ({ page }) => {
   const s12 = await leadOn(page, "S12");
   expect(await axeViolations(page, "main"), "table").toEqual([]);
   await filterButton(page).click();
@@ -260,7 +265,7 @@ test("axe has no violations on table, popover, panel and dialogs", async ({ page
   expect(await axeViolations(page, '[role="dialog"]'), "filter popover").toEqual([]);
   await page.keyboard.press("Escape");
   await rowAction(page, "Handle text change…", "case-112", "de").click();
-  const handle = page.getByRole("dialog", { name: "Handle text change · case-112 · de", exact: true });
+  const handle = textChangeDialog(page, "Handle text change", "case-112", "de");
   await expect(handle).toBeVisible();
   await expect(handle.getByText("Checking…")).toHaveCount(0);
   expect(await axeViolations(page, '[role="dialog"]'), "Handle text change dialog").toEqual([]);
@@ -269,16 +274,16 @@ test("axe has no violations on table, popover, panel and dialogs", async ({ page
 
   await leadOn(page, "S13");
   await rowAction(page, "Carry to v2…", "case-113", "de").click();
-  const carry = page.getByRole("dialog", { name: "Carry to v2 · case-113 · de", exact: true });
+  const carry = textChangeDialog(page, "Carry to v2", "case-113", "de");
   await expect(carry).toBeVisible();
   expect(await axeViolations(page, '[role="dialog"]'), "Carry to v2 dialog").toEqual([]);
   await page.keyboard.press("Escape");
 
   await leadOn(page, "S7b");
   await rowAction(page, "Compare results…", "case-107", "en").click();
-  const panel = rowPanel(page, "case-107", "en");
+  const panel = textCard(page, "case-107", "en");
   await expect(panel).toBeVisible();
   await expect(panel.getByText("Loading submissions…")).toHaveCount(0);
-  expect(await axeViolations(page, ".row-panel"), "row panel with the decision block (compare)").toEqual([]);
+  expect(await axeViolations(page, ".text-card"), "text card with the decision block (compare)").toEqual([]);
   await evidence(page, "axe-panel");
 });

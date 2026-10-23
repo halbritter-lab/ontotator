@@ -63,8 +63,9 @@ async function checkContrastAndTextSize(page: Page) {
 }
 
 async function openReview(page: Page, query: string, projectKey: string, annotator: string) {
-  await importPackage(page, query, projectKey, annotator);
-  await openCase(page, { task: "review" });
+  // D1: review decisions on tool proposals happen in "Annotate from proposals" (proposal check).
+  await importPackage(page, query, projectKey, annotator, { proposals: true });
+  await openCase(page, { task: "annotate" });
 }
 
 const proposal = (page: Page, termId: string) =>

@@ -10,7 +10,7 @@ import {
   TEST_PASSWORD,
 } from "./helpers";
 
-const importFixture = (page: Page, annotator: string) => importPackage(page, "", "browser-fixture-workflow", annotator);
+const importFixture = (page: Page, annotator: string, options: { proposals?: boolean } = {}) => importPackage(page, "", "browser-fixture-workflow", annotator, options);
 
 test("first run: log in without projects, get a T1 import, open a case without typing initials", async ({ page }) => {
   // A user without assignments sees the empty list, and nothing to upload.
@@ -66,8 +66,8 @@ test("login: a wrong password is refused; a setup code sets the password and log
 });
 
 test("real backend: review, resume, reload and submit", async ({ page }) => {
-  await importFixture(page, "browser-reviewer");
-  await openCase(page, { task: "review" });
+  await importFixture(page, "browser-reviewer", { proposals: true });
+  await openCase(page, { task: "annotate" });
   await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
   await page.locator(".doc-item").filter({ hasText: "HP:0001252" }).click();
   await expect(page.getByLabel(/Proposal details/i).getByText("Present", { exact: true })).toBeVisible();
@@ -78,7 +78,7 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
   // Back in My tasks the assignment is in progress; reopening resumes it without asking again.
   await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: "My tasks", exact: true }).click();
   await expect(page.getByTestId("task-row").filter({ hasText: "In progress" })).not.toHaveCount(0);
-  await openCase(page, { task: "review" });
+  await openCase(page, { task: "annotate" });
   await expect(page.locator(".sidebar-header").filter({ hasText: "Review Proposals (2)" })).toBeVisible();
   await expect(page.locator(".doc-item").filter({ hasText: "HP:0001252" })).toContainText(/confirmed/i);
   await page.locator(".doc-item").filter({ hasText: "HP:0001250" }).click();

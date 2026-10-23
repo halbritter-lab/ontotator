@@ -35,7 +35,7 @@ export async function documentsScenario(page: Page, name: string): Promise<Docum
 
 const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** The tablist "Needs your decision · To assign · In progress · Done · All"; visible once the page has loaded. */
+/** The tablist "Documents views"; visible once the page has loaded. */
 export const documentsTabs = (page: Page): Locator => page.getByRole("tablist", { name: "Documents views", exact: true });
 
 /** Wait until Documents shows its tabs (the page has loaded its first rows page). */
@@ -51,59 +51,75 @@ export function documentsTab(page: Page, label: string, count?: number): Locator
 
 export const documentsTable = (page: Page): Locator => page.getByRole("table", { name: "Documents", exact: true });
 
-/** The text name of a row, the row panel's entry: "Details, {case} · {language}" (a card's "Details" below 700 px). */
-export const detailsButton = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `Details, ${caseId} · ${language}`, exact: true });
+/** A name "{prefix}{case}{sep}{language}{suffix}" whatever the separator (" · " before U9, " " after). */
+export const textNamePattern = (prefix: string, caseId: string, language: string, suffix = ""): RegExp =>
+  new RegExp(`^${esc(prefix)}${esc(caseId)}(?: · | )${esc(language)}${esc(suffix)}$`);
 
-/** The table row of one text (case · language). */
+/** The text name of a row: opens the card, selection unchanged ("Open text card, {case} {language}"). */
+export const textName = (page: Page, caseId: string, language: string): Locator =>
+  page.getByRole("button", { name: `Open text card, ${caseId} ${language}`, exact: true });
+
+/** The table row of one text, found by its text name. */
 export const textRow = (page: Page, caseId: string, language: string): Locator =>
-  documentsTable(page).getByRole("row").filter({ has: detailsButton(page, caseId, language) });
+  documentsTable(page).getByRole("row").filter({ has: textName(page, caseId, language) });
+
+/** The same row (T2's name). */
+export const cardRow = textRow;
 
 /** Cell positions of a text row (the row header "Text" is not a cell; cell 0 is the row checkbox). */
-export const STAGE_COLUMNS = { select: 0, review: 1, annotation: 2, final: 3, waiting: 4, action: 5, activity: 6 } as const;
+export const STAGE_COLUMNS = { select: 0, translation: 1, annotation: 2, finalization: 3, waiting: 4, next: 5, activity: 6 } as const;
 export const rowCell = (row: Locator, column: keyof typeof STAGE_COLUMNS): Locator => row.getByRole("cell").nth(STAGE_COLUMNS[column]);
 
-/** A row action button "{label}, {case} · {language}" (Action column or narrow card). */
+/** A row's next-step button "{label}, {case} {language}" (Next step column or narrow card). */
 export const rowAction = (page: Page, label: string, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `${label}, ${caseId} · ${language}`, exact: true });
+  page.getByRole("button", { name: textNamePattern(`${label}, `, caseId, language) });
 
-/** The row checkbox "Select {case} · {language}". */
+/** The row's "More" menu button ("More actions, {case} {language}"). */
+export const moreMenu = (page: Page, caseId: string, language: string): Locator =>
+  page.getByRole("button", { name: `More actions, ${caseId} ${language}`, exact: true });
+
+/** The row checkbox "Select {case} {language}". */
 export const rowBox = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("checkbox", { name: `Select ${caseId} · ${language}`, exact: true });
+  page.getByRole("checkbox", { name: textNamePattern("Select ", caseId, language) });
+
+/** The not-planned source folded into its case line: the button "source en (native), 1 translation" opens its card. */
+export const foldedSource = (page: Page, caseId: string): Locator =>
+  documentsTable(page).locator(".documents-group-label").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) })
+    .getByRole("button", { name: /^source \S+ \(native\), \d+ translations?$/ });
 
 /** The case (group) checkbox "Select {case} ({n} texts)". */
 export const caseBox = (page: Page, caseId: string, texts: number): Locator =>
   page.getByRole("checkbox", { name: `Select ${caseId} (${texts === 1 ? "1 text" : `${texts} texts`})`, exact: true });
 
-/**
- * The row panel "Details, {case} · {language}": the non-modal aside from 700 px, the full-screen sheet
- * (a dialog) below. Its decision block is the region "Final result".
- */
-export const rowPanel = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole(page.viewportSize() && page.viewportSize()!.width < 700 ? "dialog" : "complementary", { name: `Details, ${caseId} · ${language}`, exact: true });
+/** The decision block of a text card (its Finalization part): the region "Final result". */
+export const decisionBlock = (card: Locator): Locator => card.getByRole("region", { name: "Final result", exact: true });
 
-/** The decision block of the row panel (the former final-result panel). */
-export const decisionBlock = (page: Page, caseId: string, language: string): Locator =>
-  rowPanel(page, caseId, language).getByRole("region", { name: "Final result", exact: true });
-
-/** Open the row panel of a row from its text name (unfiltered) on Activity and wait until its activity has loaded. */
-export async function openRowPanel(page: Page, caseId: string, language: string): Promise<Locator> {
-  const panel = rowPanel(page, caseId, language);
-  if (!(await panel.isVisible())) await detailsButton(page, caseId, language).click();
-  await expect(panel).toBeVisible();
-  const activity = panel.getByRole("tab", { name: "Activity", exact: true });
-  if ((await activity.getAttribute("aria-selected")) !== "true") await activity.click();
-  await expect(panel.getByText(`Loading ${caseId} · ${language}…`, { exact: true })).toHaveCount(0);
-  return panel;
+/** Open a text's card on its Finalization part and return the decision block. */
+export async function openDecisionBlock(page: Page, caseId: string, language: string): Promise<Locator> {
+  const card = await openTextCard(page, caseId, language);
+  await showSegment(card, "Finalization");
+  return decisionBlock(card);
 }
 
-/** Activity lines of an open row panel (newest first; each starts with its stage, e.g. "Annotation: …"). */
-export const activityLines = (panel: Locator): Locator => panel.getByRole("list", { name: "Activity", exact: true }).getByRole("listitem");
+/** Open the card of a text on History and wait until its lines have loaded; returns the card. */
+export async function openCardHistory(page: Page, caseId: string, language: string): Promise<Locator> {
+  const card = await openTextCard(page, caseId, language);
+  const history = card.getByRole("button", { name: /^History \(\d+\)$/ });
+  await expect(history).toBeVisible();
+  await history.click();
+  await expect(card.getByRole("button", { name: "Back", exact: true })).toBeVisible();
+  return card;
+}
 
-/** Switch the row panel to "Versions (n)"; returns its version items. */
-export async function textVersionItems(panel: Locator, count: number): Promise<Locator> {
-  await panel.getByRole("tab", { name: `Versions (${count})`, exact: true }).click();
-  return panel.getByRole("tabpanel").locator("li.text-version");
+/** History lines of an open card (newest first; each starts with its stage, e.g. "Annotation: …"). */
+export const activityLines = (card: Locator): Locator => card.getByRole("list", { name: "Activity", exact: true }).getByRole("listitem");
+
+/** Show the card's Translation part; returns its version items (``count`` is checked). */
+export async function textVersionItems(card: Locator, count: number): Promise<Locator> {
+  await showSegment(card, "Translation");
+  const items = card.locator("ul.text-versions > li.text-version");
+  await expect(items).toHaveCount(count);
+  return items;
 }
 
 /** The "Filter" button (its name gains ", n active" with active filters). */
@@ -125,17 +141,9 @@ export const filterChip = (page: Page, label: string): Locator =>
 /** The page's polite live region (outside the table). */
 export const documentsLive = (page: Page): Locator => page.locator('.documents-page > p[role="status"]');
 
-// --- Text card (U3) and one-line rows (U4); the panel helpers above go with T3 ------------------- //
+// --- Text card (U3) ------------------------------------------------------------------------------ //
 
 export { cardPath, textCard } from "./proposalCheckHelpers";
-
-/** The text name of a row: opens the card, selection unchanged ("Open text card, {case} {language}"). */
-export const textName = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `Open text card, ${caseId} ${language}`, exact: true });
-
-/** The table row of one text, found by its text name. */
-export const cardRow = (page: Page, caseId: string, language: string): Locator =>
-  documentsTable(page).getByRole("row").filter({ has: textName(page, caseId, language) });
 
 /** The robot icon of a row while nobody is assigned: "{n} tool proposals available; the annotation starts from them". */
 export const robotIcon = (row: Locator, count?: number): Locator =>
@@ -148,7 +156,9 @@ export const cardSegment = (card: Locator, title: "Translation" | "Annotation" |
 /** Open the card of a text from its text name (selection unchanged) and wait for it. */
 export async function openTextCard(page: Page, caseId: string, language: string): Promise<Locator> {
   const card = textCard(page, caseId, language);
-  if (!(await card.isVisible())) await textName(page, caseId, language).click();
+  // A card may be on its way (VD17 moves it to the next decision): give it a moment before opening it by name.
+  const open = await card.isVisible() || await card.waitFor({ timeout: 2_000 }).then(() => true, () => false);
+  if (!open) await textName(page, caseId, language).click();
   await expect(card).toBeVisible();
   return card;
 }

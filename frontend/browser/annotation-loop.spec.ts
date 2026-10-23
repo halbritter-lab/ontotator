@@ -96,10 +96,10 @@ async function caretOffset(page: Page): Promise<number | null> {
   });
 }
 
-/** Axes that show an unconfirmed default: "· default" on the checked radio or the selected option (long lists). */
+/** Axes that show an unconfirmed default: "(default)" on the checked radio or the selected option (long lists). */
 const defaultedAxes = (page: Page) => page.locator(".values-section [data-axis-field]").evaluateAll(fields => fields
   .filter(field => !!field.querySelector(".axis-option.is-default")
-    || (field.querySelector("select")?.selectedOptions[0]?.textContent ?? "").includes("· default"))
+    || (field.querySelector("select")?.selectedOptions[0]?.textContent ?? "").includes("(default)"))
   .map(field => (field as HTMLElement).dataset.axisField));
 
 const focusIsTextPane =(page: Page) => page.evaluate(() => document.activeElement?.classList.contains("text-container") ?? false);
@@ -163,7 +163,7 @@ test("three actions per finding with right top hit and defaults", async ({ page 
   await expect(activeHit(page)).toContainText("HP:0001250");
   await expect(search(page)).toHaveAttribute("aria-expanded", "true");
   await expect(search(page)).toHaveAttribute("aria-activedescendant", (await activeHit(page).getAttribute("id"))!);
-  await expect(newFinding(page).locator(".search-hint")).toContainText(/\d+ terms? · .*choose · .*add · .*cancel/);
+  await expect(newFinding(page).locator(".search-hint")).toContainText(/\d+ terms?\W.*choose\W.*add\W.*cancel/);
   expect(await textGeometry(page, start, end)).toEqual(before);
   await evidence(page, "1-marked");
 
@@ -690,6 +690,6 @@ test("forced colours keep the active hit and the dashed default border", async (
   for (const style of await defaults.evaluateAll(elements => elements.map(element => getComputedStyle(element).outlineStyle))) {
     expect(style).toBe("dashed");
   }
-  await expect(defaults.first()).toContainText("· default");
+  await expect(defaults.first()).toContainText("(default)");
   await evidence(page, "14-forced-colours-defaults");
 });

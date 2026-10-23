@@ -103,7 +103,7 @@ test("My tasks flags the failed-translation row", async ({ page }) => {
   const rows = page.getByTestId("task-row");
   const failed = rows.filter({ has: page.locator(`a[href="#/tasks/${s.assignments["failed-translation"]}"]`) });
   const second = rows.filter({ has: page.locator(`a[href="#/tasks/${s.assignments["second-translation"]}"]`) });
-  await expect(failed).toContainText("failed-translation · de");
+  await expect(failed).toContainText(/failed-translation\W+de/);
   const flag = failed.locator(".task-check-flag");
   await expect(flag).toHaveText("1 automatic check failed");
   await expect(flag.locator("svg")).toBeVisible();
@@ -128,7 +128,7 @@ test("1440×900: both texts show at least 15 lines and the rail shows four decis
   await expect(submitButton(page)).toBeInViewport({ ratio: 1 });
   expect(await page.evaluate(() => [document.documentElement.scrollTop, document.querySelector(".translation-review")!.scrollTop])).toEqual([0, 0]);
   const crumb = page.getByRole("navigation", { name: "Breadcrumb" }).locator('[aria-current="page"]');
-  await expect(crumb).toHaveText("failed-translation · Translation review (de)");
+  await expect(crumb).toHaveText(/^failed-translation\W+Translation review \(de\)$/);
   await expect(crumb).toHaveAttribute("title", `Assignment ${s.assignments["failed-translation"]}`);
   await expect(page.getByRole("link", { name: "Back to my tasks", exact: true })).toHaveCount(0);
   // Coupling is offered beside the editable translation too, unchecked by default.
@@ -276,7 +276,7 @@ test("keyboard only: 1, Ctrl+Enter, Enter, Enter opens the next task", async ({ 
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`#/tasks/${s.assignments["second-translation"]}$`));
   await expect(target(page)).toHaveValue(s.texts["second-translation"]);
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).locator('[aria-current="page"]')).toHaveText("second-translation · Translation review (de)");
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).locator('[aria-current="page"]')).toHaveText(/^second-translation\W+Translation review \(de\)$/);
   // Four activations: 1, Ctrl+Enter, Enter, Enter (spec A.10).
 });
 

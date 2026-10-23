@@ -246,7 +246,7 @@ test("forced colours keep the chosen segment and the dashed default outline", as
   for (const style of await defaults.evaluateAll(elements => elements.map(element => getComputedStyle(element).outlineStyle))) {
     expect(style).toBe("dashed");
   }
-  await expect(defaults.first()).toContainText("· default");
+  await expect(defaults.first()).toContainText("(default)");
   await evidence(page, "04-forced-colours");
 });
 

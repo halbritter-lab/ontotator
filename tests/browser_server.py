@@ -422,6 +422,7 @@ def register_test_user_route(
         projects: str | None = Query(None),
         assign: Literal["all", "none"] = Query("all"),
         system_admin: bool = Query(False),
+        proposals: bool = Query(False),
     ) -> dict[str, str]:
         """Create a fixture user; system administrator requires explicit opt-in.
 
@@ -429,6 +430,9 @@ def register_test_user_route(
         ``projects`` (comma-separated keys) gives the user every role there,
         also when the user exists already. ``assign=all`` (the default) also
         provisions assignments; ``assign=none`` skips only that provisioning.
+        ``proposals=true`` lets the provisioned annotate assignments of texts
+        with tool proposals start from them (proposal check; D1 replaced the
+        annotation review task the editor's review decisions used to need).
         ``system_admin=true`` bootstraps a new administrator for administration
         UI tests. It never promotes an existing ordinary fixture user.
 
@@ -459,7 +463,13 @@ def register_test_user_route(
             if assign == "all":
                 from auth_harness import provision_assignments
 
-                provision_assignments(app, user.username, key, ROLES)
+                provision_assignments(
+                    app,
+                    user.username,
+                    key,
+                    ROLES,
+                    mode="proposals" if proposals else "scratch",
+                )
         if existing is not None:
             if not setup:
                 return {"username": user.username, "pseudonym": user.pseudonym}
@@ -784,9 +794,13 @@ def register_variant_scenario_route(app: FastAPI) -> None:
                     db, key, documents[document], username
                 ).id
                 continue
-            assignments[name] = service.assign(
-                Actor.cli(), key, documents[document], username, task
-            ).id
+            from auth_harness import harness_annotation
+
+            # Two annotators on the target (P3 enforces the per-text limit).
+            with harness_annotation(db, key, documents[document], task):
+                assignments[name] = service.assign(
+                    Actor.cli(), key, documents[document], username, task
+                ).id
         return {
             "project": key,
             "import_job_id": imported.id,
@@ -931,6 +945,16 @@ def register_translation_review_scenario_route(app: FastAPI) -> None:
             roles.extend([("manager", "lead"), ("historian", "annotator")])
         if workflow:
             roles.append(("consolidator", "adjudicator"))
+        if workflow or manager:
+            # Two annotators on one text (P3 enforces the per-text limit).
+            from sqlalchemy import update
+
+            with db.transaction() as conn:
+                conn.execute(
+                    update(ProjectRow)
+                    .where(ProjectRow.project_key == key)
+                    .values(annotations_per_text=2)
+                )
         for name, role in roles:
             username = f"{key}-{name}"
             issued = accounts.create_user(Actor.cli(), username, username)
@@ -1241,34 +1265,47 @@ def register_reanchor_scenario_route(app: FastAPI) -> None:
         accounts = app.state.accounts
         users = {}
         pseudonyms = {}
-        for name, role in [
-            ("annotator", "annotator"),
-            ("adjudicator", "adjudicator"),
-            ("second_reviewer", "adjudicator"),
-            ("lead", "lead"),
+        # D1: the re-anchored items are resolved in "Annotate from proposals"
+        # (proposal check, P2): the two reviewers hold annotate assignments
+        # that start from the proposals; the names stay for the spec. Their
+        # Consolidator role lets them compare with the old text version.
+        for name, roles in [
+            ("annotator", ["annotator"]),
+            ("adjudicator", ["annotator", "adjudicator"]),
+            ("second_reviewer", ["annotator", "adjudicator"]),
+            ("lead", ["lead"]),
         ]:
             username = f"{key}-{name}"
             issued = accounts.create_user(Actor.cli(), username, username)
             accounts.redeem_code(username, issued.code, TEST_PASSWORD)
-            app.state.memberships.add(Actor.cli(), key, username, [role])
+            app.state.memberships.add(Actor.cli(), key, username, roles)
             accounts.set_languages(Actor.cli(), username, ["en"])
             users[name] = username
             pseudonyms[name] = issued.user.pseudonym
+        from auth_harness import harness_annotation
+        from sqlalchemy import update
+
+        from ontocurator.storage.tables import AssignmentRow
+
         service = AssignmentService(db)
         owner = "annotator" if assisted else "adjudicator"
-        task = "annotate" if assisted else "review"
-        from work_plan_support import review_task
-
-        # D1: review tasks only as a consolidation start creates them; opening
-        # them without a consolidation round is refused (port to P2/T3).
-        assignment = (
-            service.assign(Actor.cli(), key, document.document_id, users[owner], task)
-            if task == "annotate"
-            else review_task(db, key, document.document_id, users[owner])
-        )
-        second_assignment = review_task(
-            db, key, document.document_id, users["second_reviewer"]
-        )
+        task = "annotate"
+        made = []
+        for name in (owner, "second_reviewer"):
+            with harness_annotation(db, key, document.document_id, "annotate"):
+                made.append(
+                    service.assign(
+                        Actor.cli(), key, document.document_id, users[name], task
+                    )
+                )
+        if not assisted:
+            with db.transaction() as conn:
+                conn.execute(
+                    update(AssignmentRow)
+                    .where(AssignmentRow.id.in_([row.id for row in made]))
+                    .values(annotation_mode="proposals")
+                )
+        assignment, second_assignment = made
         return {
             "project": key,
             "document_id": document.document_id,

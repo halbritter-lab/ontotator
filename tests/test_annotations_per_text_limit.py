@@ -131,3 +131,27 @@ def test_batch_counts_revoked_submitted_work_like_single_assign(tmp_path):
     )
     assert saved.status_code == 200, saved.text
     assert [c["document_id"] for c in saved.json()["created"]] == [env.c2]
+
+
+def test_harness_lifts_the_count_past_the_maximum_and_keeps_the_limit(tmp_path):
+    """Browser fixture projects collect many test users: the harness assigns a
+    sixth annotator although the stored limit stops at 5 (DB CHECK)."""
+    from auth_harness import grant, harness_annotation
+    from work_plan_support import _user
+
+    env = proposal_env(tmp_path, per_text=5)
+    for index in range(6):
+        name = f"extra{index}"
+        _user(env.app, name, f"Extra {index}")
+        assert grant(env.app, name, "proj", ["annotator"])
+        with harness_annotation(env.db, "proj", env.c1):
+            AssignmentService(env.db).assign(
+                _lead_actor(env),
+                "proj",
+                env.c1,
+                name,
+                "annotate",
+                confirm_language=True,
+            )
+    # Outside the harness the real limit applies again.
+    assert refused_code(env, env.c1, "tom") == "ANNOTATIONS_PER_TEXT_REACHED"

@@ -8,15 +8,16 @@ type Opened = components['schemas']['AssignmentOpenResponse'];
 type Metadata = components['schemas']['ProposalSetView'];
 type Scenario = {
   project: string; document_id: string; old_document_id: string; text: string; old_text: string;
-  users: Record<'annotator'|'adjudicator'|'lead'|'second_reviewer', string>; pseudonyms: Record<'annotator'|'adjudicator'|'lead'|'second_reviewer', string>; assignment_id: number; second_assignment_id:number; task: 'annotate'|'review';
+  users: Record<'annotator'|'adjudicator'|'lead'|'second_reviewer', string>; pseudonyms: Record<'annotator'|'adjudicator'|'lead'|'second_reviewer', string>; assignment_id: number; second_assignment_id:number; task: 'annotate';
   import_job_id: number; children: {id:number;status:string;result:{carried:number;needs_review:number};payload:{old_document_id:string;new_document_id:string;producer:{kind:string;job_id:number}}}[];
   pending: Item[]; metadata: Metadata;
 };
 const left = (page:Page) => page.locator('.app-layout > .center-pane .text-container');
 const panel = (page:Page) => page.getByRole('region',{name:'Needs review after the text change',exact:true});
 const documentPath = (s:Scenario, suffix:string) => `/api/v1/projects/${encodeURIComponent(s.project)}/documents/${encodeURIComponent(s.document_id)}/${suffix}`;
-async function scenario(page:Page,assisted=false):Promise<Scenario> {
-  const response=await page.request.post(`/__test_reanchor__?assisted=${assisted}`,{timeout:90_000});
+/** D1: the reviewers ("adjudicator", "second_reviewer") resolve re-anchored items in "Annotate from proposals" (proposal check). */
+async function scenario(page:Page):Promise<Scenario> {
+  const response=await page.request.post('/__test_reanchor__',{timeout:90_000});
   expect(response.ok()).toBeTruthy();const s=await response.json() as Scenario;
   expect(s.children).toHaveLength(1);const child=s.children[0];
   expect(child.status).toBe('succeeded');expect(child.payload.producer).toEqual({kind:'import',job_id:s.import_job_id});
@@ -33,9 +34,9 @@ async function workspace(page:Page,s:Scenario):Promise<Opened> {
   expect(response.ok()).toBeTruthy();return await response.json() as Opened;
 }
 async function ready(page:Page,s:Scenario) {
-  await loginExisting(page,s.users[s.task==='annotate'?'annotator':'adjudicator']);
+  await loginExisting(page,s.users.adjudicator);
   const roles=await (await authenticatedRequest(page,'/api/v1/projects')).json() as {project_key:string;roles:string[]}[];
-  expect(roles.find(row=>row.project_key===s.project)?.roles).toEqual([s.task==='annotate'?'annotator':'adjudicator']);
+  expect(roles.find(row=>row.project_key===s.project)?.roles).toEqual(['adjudicator','annotator']);
   await openCase(page,{projectKey:s.project,documentId:s.document_id,task:s.task});
   await expect(left(page)).toHaveText(s.text);await expect(page.locator('.status-badge')).toContainText('Saved');
   await page.evaluate(()=>document.fonts.ready);
@@ -102,7 +103,7 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   await expect(reason).toBeFocused();
   await reason.fill('The corrected sentence no longer supports this finding.');
   await secondRow.getByRole('button',{name:'Save dismissal',exact:true}).click();
-  await expect(panel(page)).toContainText('0 pending · 2 resolved');
+  await expect(panel(page)).toContainText(/0 pending\W+2 resolved/);
   const saved=await workspace(page,s), resolution=saved.view.draft.reanchor_resolutions!;
   expect(resolution).toHaveLength(2);
   const recreated=resolution.find(item=>item.outcome==='recreated')!;
@@ -111,7 +112,7 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   expect(recreated.item).toEqual({proposal_set_id:first.proposal_set_id,source_ref:first.source_ref});
   expect(snapshot.annotation.term_id).toBe(first.term_id);
   expect(snapshot.annotation.axes_values).toEqual(first.axes_values);
-  expect(snapshot.annotation.axes_defaulted ?? []).toEqual(first.axes_defaulted.filter(axis=>axis!=='experiencer'));
+  expect(snapshot.annotation.axes_defaulted ?? []).toEqual((first.axes_defaulted ?? []).filter(axis=>axis!=='experiencer'));
   const replacementDetails=firstRow.getByText(/^Replacement:/);
   await expect(replacementDetails).toBeHidden();
   await firstRow.getByText('Resolution details',{exact:true}).click();
@@ -129,12 +130,12 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   expect(Array.from(s.text).slice(cpStart,cpEnd).join('')).toBe('Ataxia 😀new');
   expect(resolution.find(item=>item.outcome==='dismissed')).toMatchObject({reviewer_id:s.pseudonyms.adjudicator,reason:'The corrected sentence no longer supports this finding.'});
   expect(await (await authenticatedRequest(page,documentPath(s,'reanchor-items'))).json()).toEqual(s.pending);
-  await page.reload();await expect(panel(page)).toContainText('0 pending · 2 resolved');
+  await page.reload();await expect(panel(page)).toContainText(/0 pending\W+2 resolved/);
   const other=await browser.newContext({baseURL:test.info().project.use.baseURL});
   try {
     const second=await other.newPage();await loginExisting(second,s.users.second_reviewer);
-    await openCase(second,{projectKey:s.project,documentId:s.document_id,task:'review'});
-    await expect(panel(second)).toContainText('2 pending · 0 resolved');
+    await openCase(second,{projectKey:s.project,documentId:s.document_id,task:'annotate'});
+    await expect(panel(second)).toContainText(/2 pending\W+0 resolved/);
     const response=await authenticatedRequest(second,`/api/v1/assignments/${s.second_assignment_id}/open`,'POST');
     expect(response.ok()).toBeTruthy();const own=await response.json() as Opened;
     expect(own.view.draft.reanchor_resolutions??[]).toEqual([]);
@@ -215,7 +216,7 @@ async function nativeAcrossExpiry(page:Page,s:Scenario,button:Locator,method:'po
 for(const width of [1280,1024,600])test(`real pending contexts preserve producer data, owned scroll and transient native selection at ${width}`,async({page})=>{
   await page.setViewportSize({width,height:900});const s=await scenario(page);await ready(page,s);
   const before=await workspace(page,s),writes=writesSince(page);
-  expect(before.view.key.mode).toBe('review');
+  expect(before.view.key.mode).toBe('proposal_check');
   const response=await authenticatedRequest(page,documentPath(s,'reanchor-items'));expect(response.ok()).toBeTruthy();
   const items=await response.json() as Item[];expect(items).toEqual(s.pending);
   await page.locator('.case-version-controls > summary').click();
@@ -298,44 +299,4 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
     expect(adopted.annotation.provenance.source_refs).toContain(`${offered.annotation.annotation_id}:${offered.version}`);
     await expect(page.locator('.sidebar [data-list-key^="annotation:"] .badge-ai')).toHaveCount(0);
   }
-});
-
-test('ordinary mounted annotate stays blind; same-assignment assisted API carrier and current revocation enforce provenance privacy',async({page,browser})=>{
-  const s=await scenario(page,true),inventoryReads:string[]=[];
-  page.on('request',request=>{if(request.method()==='GET' && /\/(proposal-sets|reanchor-items)(\/|\?|$)/.test(new URL(request.url()).pathname))inventoryReads.push(request.url());});
-  await ready(page,s);const opened=await workspace(page,s);
-  // Actual App annotation assignments deliberately open blind/independent.
-  expect(opened.view.key.mode).toBe('independent');
-  expect(opened.view.available_inputs??[]).toEqual([]);expect(opened.view.proposal_sets??[]).toEqual([]);
-  await expect(page.getByRole('region',{name:'Reference annotations',exact:true})).toHaveCount(0);
-  const source=page.getByRole('region',{name:'Proposal source',exact:true});
-  await expect(source).toHaveCount(0);await expect(panel(page)).toHaveCount(0);expect(inventoryReads).toEqual([]);
-  // Real API evidence under the SAME current cookie/annotate assignment. This
-  // existing endpoint supports assisted; it does not mount an alternate App.
-  const body:components['schemas']['OpenWorkspaceRequest']={project_key:s.project,document_id:s.document_id,mode:'assisted'};
-  const assisted=await authenticatedRequest(page,'/api/v1/workspaces/open','POST',body);expect(assisted.ok()).toBeTruthy();
-  const current=await assisted.json() as components['schemas']['OpenWorkspaceResponse'];
-  expect(current.view.key).toMatchObject({project_key:s.project,document_id:s.document_id,annotator_id:s.pseudonyms.annotator,mode:'assisted'});
-  expect(current.view.proposal_sets??[]).toHaveLength(1);
-  const metadata=current.view.proposal_sets![0];
-  expect(metadata).toMatchObject({id:s.metadata.id,document_id:s.document_id,annotation_set_id:s.metadata.annotation_set_id,origin:'reanchor',source_document_id:s.old_document_id,source_version:s.metadata.source_version,actors:s.metadata.actors});
-  const offered=(current.view.available_inputs??[]).filter(value=>value.proposal_set_id===metadata.id);
-  expect(offered).toHaveLength(s.children[0].result.carried);
-  expect(offered.every(value=>value.document_id===s.document_id && value.annotation.document_id===s.document_id)).toBe(true);
-  const actor=metadata.actors.find(value=>value.actor_id===offered[0].annotation.provenance.actor.actor_id)!;
-  expect(actor).toBeDefined();expect(actor.actor_id).toBe('ontocurator-reanchor');
-  expect(offered[0].notes).toContain('score 0.91');
-  expect(inventoryReads).toEqual([]);await expect(source).toHaveCount(0);await expect(panel(page)).toHaveCount(0);
-  await test.info().attach('actual-assisted-api-carrier',{body:Buffer.from(JSON.stringify({key:current.view.key,proposal_sets:current.view.proposal_sets,offered})),contentType:'application/json'});
-  const denied=await authenticatedRequest(page,`/api/v1/projects/${encodeURIComponent(s.project)}/proposal-sets/${s.metadata.id}`);
-  expect([403,404]).toContain(denied.status());
-  const pendingDenied=await authenticatedRequest(page,documentPath(s,'reanchor-items'));expect([403,404]).toContain(pendingDenied.status());
-  const management=await browser.newContext({baseURL:test.info().project.use.baseURL});
-  try {
-    const lead=await management.newPage();await loginExisting(lead,s.users.lead);
-    const revoked=await authenticatedRequest(lead,`/api/v1/assignments/${s.assignment_id}/revoke`,'POST',{reason:'Current exact provenance authority removed'});expect(revoked.ok()).toBeTruthy();
-  } finally {await management.close();}
-  const stale=await authenticatedRequest(page,'/api/v1/workspaces/open','POST',body);expect([403,404]).toContain(stale.status());
-  const taskStale=await authenticatedRequest(page,`/api/v1/assignments/${s.assignment_id}/open`,'POST');expect([403,404]).toContain(taskStale.status());
-  await page.reload();await expect(page.getByRole('heading',{name:'This task is no longer assigned to you.',exact:true})).toBeVisible();await expect(page.locator('.reference-item')).toHaveCount(0);await expect(source).toHaveCount(0);await expect(panel(page)).toHaveCount(0);
 });

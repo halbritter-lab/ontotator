@@ -52,7 +52,7 @@ def browser_user_route(monkeypatch):
     def grant_roles(user_id, username, project_key):
         grants.append((user_id, username, project_key))
 
-    def provision(target_app, username, project_key, roles):
+    def provision(target_app, username, project_key, roles, mode=None):
         assert target_app is app
         provisions.append((username, project_key, roles))
 
