@@ -298,7 +298,9 @@ from ontocurator.domain.annotation_modes import TextMode, text_mode, workspace_m
 
 
 def mode(**kw):
-    base = dict(project_mode="proposals", plan_override=None, proposal_count=17, work_modes=())
+    base = dict(
+        project_mode="proposals", plan_override=None, proposal_count=17, work_modes=()
+    )
     return text_mode(**(base | kw))
 
 
@@ -309,21 +311,31 @@ def test_project_setting_applies_to_texts_with_proposals():
 
 def test_texts_without_proposals_are_always_from_scratch():
     assert mode(proposal_count=0) == TextMode("scratch", "no_proposals", False)
-    assert mode(proposal_count=0, plan_override="proposals") == TextMode("scratch", "no_proposals", False)
+    assert mode(proposal_count=0, plan_override="proposals") == TextMode(
+        "scratch", "no_proposals", False
+    )
 
 
 def test_plan_override_wins_over_project_setting():
     assert mode(plan_override="scratch") == TextMode("scratch", "plan", False)
-    assert mode(project_mode="scratch", plan_override="proposals") == TextMode("proposals", "plan", False)
+    assert mode(project_mode="scratch", plan_override="proposals") == TextMode(
+        "proposals", "plan", False
+    )
 
 
 def test_oldest_work_locks_the_mode():
-    locked = mode(project_mode="scratch", plan_override="scratch", work_modes=("proposals", "scratch"))
+    locked = mode(
+        project_mode="scratch",
+        plan_override="scratch",
+        work_modes=("proposals", "scratch"),
+    )
     assert locked == TextMode("proposals", "locked", True)
 
 
 def test_lock_holds_without_proposals():
-    assert mode(proposal_count=0, work_modes=("proposals",)) == TextMode("proposals", "locked", True)
+    assert mode(proposal_count=0, work_modes=("proposals",)) == TextMode(
+        "proposals", "locked", True
+    )
 
 
 @pytest.mark.parametrize(
@@ -402,13 +414,17 @@ def text_mode(
     return TextMode(project_mode, "project", False)
 
 
-def workspace_mode(task: str, annotation_mode: AnnotationMode | None) -> WorkspaceModeName:
+def workspace_mode(
+    task: str, annotation_mode: AnnotationMode | None
+) -> WorkspaceModeName:
     """The workspace an assignment opens (replaces ``MODE_FOR_TASK[task]``)."""
     if task == "review":
         return "review"  # the consolidator's workspace (L1: consolidation only)
     if task == "annotate":
         if annotation_mode is None:
-            raise ValueError("An annotate assignment always has a mode (migration 0021)")
+            raise ValueError(
+                "An annotate assignment always has a mode (migration 0021)"
+            )
         return "proposal_check" if annotation_mode == "proposals" else "independent"
     raise ValueError(f"Task {task!r} has no annotation workspace")
 ```
@@ -443,19 +459,34 @@ def _exec(conn: Connection, sql: str, **params: Any) -> Any:
 
 
 def _seed(conn: Connection) -> None:
-    _exec(conn, f"INSERT INTO {S}.projects (project_key, name, manifest, manifest_sha256,"
-          " task_profile, task_profile_sha256) VALUES ('old', 'old', '{}', 'm', '{}', 't')")
-    _exec(conn, f"INSERT INTO {S}.users (username, display_name, pseudonym)"
-          " VALUES ('ann', 'Ann', 'ann-0001')")
-    _exec(conn, f"INSERT INTO {S}.documents (project_id, document_id, language, text,"
-          " case_id, external_id, version, origin, text_sha256)"
-          f" SELECT id, 'd1', 'en', 'x', 'c1', 'c1', 1, 'native', 'h' FROM {S}.projects")
+    _exec(
+        conn,
+        f"INSERT INTO {S}.projects (project_key, name, manifest, manifest_sha256,"
+        " task_profile, task_profile_sha256) VALUES ('old', 'old', '{}', 'm', '{}', 't')",
+    )
+    _exec(
+        conn,
+        f"INSERT INTO {S}.users (username, display_name, pseudonym)"
+        " VALUES ('ann', 'Ann', 'ann-0001')",
+    )
+    _exec(
+        conn,
+        f"INSERT INTO {S}.documents (project_id, document_id, language, text,"
+        " case_id, external_id, version, origin, text_sha256)"
+        f" SELECT id, 'd1', 'en', 'x', 'c1', 'c1', 1, 'native', 'h' FROM {S}.projects",
+    )
     for task in ("annotate", "review", "translation_review"):
-        _exec(conn, f"INSERT INTO {S}.assignments (project_id, document_id, user_id, task, status)"
-              f" SELECT p.id, 'd1', u.id, :task, 'open' FROM {S}.projects p, {S}.users u",
-              task=task)
-    _exec(conn, f"INSERT INTO {S}.work_plan_rows (project_id, case_id, language, review,"
-          f" annotate, decided) SELECT id, 'c1', 'en', false, true, true FROM {S}.projects")
+        _exec(
+            conn,
+            f"INSERT INTO {S}.assignments (project_id, document_id, user_id, task, status)"
+            f" SELECT p.id, 'd1', u.id, :task, 'open' FROM {S}.projects p, {S}.users u",
+            task=task,
+        )
+    _exec(
+        conn,
+        f"INSERT INTO {S}.work_plan_rows (project_id, case_id, language, review,"
+        f" annotate, decided) SELECT id, 'c1', 'en', false, true, true FROM {S}.projects",
+    )
 
 
 @pytest.fixture
@@ -473,24 +504,41 @@ def migrated(tmp_path) -> Iterator[tuple[str, Engine]]:
 def test_existing_projects_keep_scratch_and_new_projects_get_proposals(migrated):
     _url, engine = migrated
     with engine.begin() as conn:
-        assert _exec(conn, f"SELECT tool_proposal_mode FROM {S}.projects").scalar_one() == "scratch"
-        _exec(conn, f"INSERT INTO {S}.projects (project_key, name, manifest, manifest_sha256,"
-              " task_profile, task_profile_sha256) VALUES ('new', 'new', '{}', 'm', '{}', 't')")
-        assert _exec(conn, f"SELECT tool_proposal_mode FROM {S}.projects"
-                     " WHERE project_key = 'new'").scalar_one() == "proposals"
+        assert (
+            _exec(conn, f"SELECT tool_proposal_mode FROM {S}.projects").scalar_one()
+            == "scratch"
+        )
+        _exec(
+            conn,
+            f"INSERT INTO {S}.projects (project_key, name, manifest, manifest_sha256,"
+            " task_profile, task_profile_sha256) VALUES ('new', 'new', '{}', 'm', '{}', 't')",
+        )
+        assert (
+            _exec(
+                conn,
+                f"SELECT tool_proposal_mode FROM {S}.projects"
+                " WHERE project_key = 'new'",
+            ).scalar_one()
+            == "proposals"
+        )
 
 
 def test_existing_annotate_assignments_are_scratch_others_null(migrated):
     _url, engine = migrated
     with engine.begin() as conn:
-        rows = dict(_exec(conn, f"SELECT task, annotation_mode FROM {S}.assignments").all())
+        rows = dict(
+            _exec(conn, f"SELECT task, annotation_mode FROM {S}.assignments").all()
+        )
     assert rows == {"annotate": "scratch", "review": None, "translation_review": None}
 
 
 def test_plan_override_is_null_by_default(migrated):
     _url, engine = migrated
     with engine.begin() as conn:
-        assert _exec(conn, f"SELECT annotation_mode FROM {S}.work_plan_rows").scalar_one() is None
+        assert (
+            _exec(conn, f"SELECT annotation_mode FROM {S}.work_plan_rows").scalar_one()
+            is None
+        )
 
 
 @pytest.mark.parametrize(
@@ -512,9 +560,13 @@ def test_downgrade_removes_the_columns(migrated):
     url, engine = migrated
     command.downgrade(alembic_config(url), PREVIOUS)
     with engine.begin() as conn:
-        names = _exec(conn, "SELECT column_name FROM information_schema.columns"
-                      " WHERE table_schema = :s AND column_name IN"
-                      " ('tool_proposal_mode', 'annotation_mode')", s=S).all()
+        names = _exec(
+            conn,
+            "SELECT column_name FROM information_schema.columns"
+            " WHERE table_schema = :s AND column_name IN"
+            " ('tool_proposal_mode', 'annotation_mode')",
+            s=S,
+        ).all()
     assert names == []
 ```
 
@@ -546,24 +598,49 @@ MODES = "('proposals', 'scratch')"
 def upgrade() -> None:
     op.add_column(
         "projects",
-        sa.Column("tool_proposal_mode", sa.Text(), nullable=False,
-                  server_default=sa.text("'scratch'")),
+        sa.Column(
+            "tool_proposal_mode",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("'scratch'"),
+        ),
         schema=SCHEMA,
     )
-    op.alter_column("projects", "tool_proposal_mode",
-                    server_default=sa.text("'proposals'"), schema=SCHEMA)
-    op.create_check_constraint(op.f("ck_projects_tool_proposal_mode"), "projects",
-                               f"tool_proposal_mode IN {MODES}", schema=SCHEMA)
-    op.add_column("work_plan_rows", sa.Column("annotation_mode", sa.Text(), nullable=True),
-                  schema=SCHEMA)
-    op.create_check_constraint(op.f("ck_work_plan_rows_annotation_mode"), "work_plan_rows",
-                               f"annotation_mode IN {MODES}", schema=SCHEMA)
-    op.add_column("assignments", sa.Column("annotation_mode", sa.Text(), nullable=True),
-                  schema=SCHEMA)
-    op.execute(f"UPDATE {SCHEMA}.assignments SET annotation_mode = 'scratch'"
-               " WHERE task = 'annotate'")
+    op.alter_column(
+        "projects",
+        "tool_proposal_mode",
+        server_default=sa.text("'proposals'"),
+        schema=SCHEMA,
+    )
     op.create_check_constraint(
-        op.f("ck_assignments_annotation_mode"), "assignments",
+        op.f("ck_projects_tool_proposal_mode"),
+        "projects",
+        f"tool_proposal_mode IN {MODES}",
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "work_plan_rows",
+        sa.Column("annotation_mode", sa.Text(), nullable=True),
+        schema=SCHEMA,
+    )
+    op.create_check_constraint(
+        op.f("ck_work_plan_rows_annotation_mode"),
+        "work_plan_rows",
+        f"annotation_mode IN {MODES}",
+        schema=SCHEMA,
+    )
+    op.add_column(
+        "assignments",
+        sa.Column("annotation_mode", sa.Text(), nullable=True),
+        schema=SCHEMA,
+    )
+    op.execute(
+        f"UPDATE {SCHEMA}.assignments SET annotation_mode = 'scratch'"
+        " WHERE task = 'annotate'"
+    )
+    op.create_check_constraint(
+        op.f("ck_assignments_annotation_mode"),
+        "assignments",
         f"(task = 'annotate' AND annotation_mode IN {MODES})"
         " OR (task <> 'annotate' AND annotation_mode IS NULL)",
         schema=SCHEMA,
@@ -571,12 +648,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(op.f("ck_assignments_annotation_mode"), "assignments", schema=SCHEMA)
+    op.drop_constraint(
+        op.f("ck_assignments_annotation_mode"), "assignments", schema=SCHEMA
+    )
     op.drop_column("assignments", "annotation_mode", schema=SCHEMA)
-    op.drop_constraint(op.f("ck_work_plan_rows_annotation_mode"), "work_plan_rows",
-                       schema=SCHEMA)
+    op.drop_constraint(
+        op.f("ck_work_plan_rows_annotation_mode"), "work_plan_rows", schema=SCHEMA
+    )
     op.drop_column("work_plan_rows", "annotation_mode", schema=SCHEMA)
-    op.drop_constraint(op.f("ck_projects_tool_proposal_mode"), "projects", schema=SCHEMA)
+    op.drop_constraint(
+        op.f("ck_projects_tool_proposal_mode"), "projects", schema=SCHEMA
+    )
     op.drop_column("projects", "tool_proposal_mode", schema=SCHEMA)
 ```
 
@@ -619,7 +701,11 @@ from dataclasses import dataclass
 from sqlalchemy import Connection, func, select
 
 from ontocurator.domain.annotations import AnnotationRef
-from ontocurator.storage.tables import AnnotationSnapshotRow, ProposalAnnotationRow, ProposalSetRow
+from ontocurator.storage.tables import (
+    AnnotationSnapshotRow,
+    ProposalAnnotationRow,
+    ProposalSetRow,
+)
 
 
 @dataclass(frozen=True)
@@ -628,8 +714,12 @@ class ProposalSetRef:
     annotation_set_id: str | None
 
 
-def newest_proposal_set(conn: Connection, project_id: int, document_id: str) -> ProposalSetRef | None: ...
-def newest_proposal_refs(conn: Connection, project_id: int, document_id: str) -> list[AnnotationRef]: ...
+def newest_proposal_set(
+    conn: Connection, project_id: int, document_id: str
+) -> ProposalSetRef | None: ...
+def newest_proposal_refs(
+    conn: Connection, project_id: int, document_id: str
+) -> list[AnnotationRef]: ...
 def newest_proposal_counts(conn: Connection, project_id: int) -> dict[str, int]:
     """Proposals of the newest set per document id (documents without proposals absent); one query."""
 ```
@@ -687,13 +777,19 @@ from ontocurator.storage.proposal_queries import newest_proposal_refs
 
 
 def _key(annotator: str = "checker-1") -> WorkspaceKey:
-    return WorkspaceKey(project_key="pkg-rev-1", document_id="doc-1",
-                        annotator_id=annotator, mode="proposal_check",
-                        target_set_id="targets-0")
+    return WorkspaceKey(
+        project_key="pkg-rev-1",
+        document_id="doc-1",
+        annotator_id=annotator,
+        mode="proposal_check",
+        target_set_id="targets-0",
+    )
 
 
 def _env(payload, mutation, revision) -> MutationEnvelope:
-    return MutationEnvelope(mutation_id=mutation, expected_revision=revision, payload=payload)
+    return MutationEnvelope(
+        mutation_id=mutation, expected_revision=revision, payload=payload
+    )
 
 
 def test_mode_is_review_like_and_belongs_to_annotate():
@@ -719,11 +815,15 @@ def test_targets_are_the_newest_proposal_set(tmp_path: Path):
     ctx = _setup_review_test_env(tmp_path)
     view = ctx["ws_svc"].open(_key())
     with ctx["repo"].db.transaction() as conn:
-        pid = ctx["repo"].project_id(conn, "pkg-rev-1")  # adapt to the repository's lookup
+        pid = ctx["repo"].project_id(
+            conn, "pkg-rev-1"
+        )  # adapt to the repository's lookup
         refs = newest_proposal_refs(conn, pid, "doc-1")
-    editable = {(s.annotation.annotation_id, s.version)
-                for s in ctx["repo"].list_annotations_for_document("pkg-rev-1", "doc-1")
-                if s.annotation.layer_id in view.scope.editable_layer_ids}
+    editable = {
+        (s.annotation.annotation_id, s.version)
+        for s in ctx["repo"].list_annotations_for_document("pkg-rev-1", "doc-1")
+        if s.annotation.layer_id in view.scope.editable_layer_ids
+    }
     expected = {(r.annotation_id, r.version) for r in refs} & editable
     assert {(t.annotation_id, t.version) for t in view.targets.targets} == expected
     assert view.key.mode == "proposal_check"
@@ -735,19 +835,36 @@ def test_every_proposal_needs_a_decision_and_submission_keeps_confirmed(tmp_path
     key, targets = view.key, list(view.targets.targets)
     assert len(targets) >= 2
     revision = 0
-    ctx["edit_svc"].apply(key, _env(CheckLayerCommand(
-        kind="check_layer", layer_id="hpo-layer", checked=True).model_dump(), "chk", revision))
+    ctx["edit_svc"].apply(
+        key,
+        _env(
+            CheckLayerCommand(
+                kind="check_layer", layer_id="hpo-layer", checked=True
+            ).model_dump(),
+            "chk",
+            revision,
+        ),
+    )
     revision += 1
     with pytest.raises((IncompleteReview, DomainError)):
-        ctx["sub_svc"].submit(key, _env(SubmitCommand(document_checked=True).model_dump(),
-                                        "early", revision))
+        ctx["sub_svc"].submit(
+            key,
+            _env(SubmitCommand(document_checked=True).model_dump(), "early", revision),
+        )
     outcomes = ["confirmed", "rejected"] + ["confirmed"] * (len(targets) - 2)
     for index, (target, outcome) in enumerate(zip(targets, outcomes, strict=True)):
-        ctx["rev_svc"].decide(key, _env(DecisionCommand(target=target, outcome=outcome)
-                                        .model_dump(), f"d{index}", revision))
+        ctx["rev_svc"].decide(
+            key,
+            _env(
+                DecisionCommand(target=target, outcome=outcome).model_dump(),
+                f"d{index}",
+                revision,
+            ),
+        )
         revision += 1
-    submission = ctx["sub_svc"].submit(key, _env(SubmitCommand(document_checked=True)
-                                                 .model_dump(), "submit", revision))
+    submission = ctx["sub_svc"].submit(
+        key, _env(SubmitCommand(document_checked=True).model_dump(), "submit", revision)
+    )
     kept = {(s.annotation.annotation_id, s.version) for s in submission.snapshots}
     assert (targets[1].annotation_id, targets[1].version) not in kept
     assert (targets[0].annotation_id, targets[0].version) in kept
@@ -812,6 +929,8 @@ class TextRow:
 def text_row(conn: Connection, project_id: int, document_id: str) -> TextRow: ...
 def text_documents(conn: Connection, project_id: int, row: TextRow) -> list[str]:
     """Every version's document id of the text, oldest first."""
+
+
 def text_target_document(conn: Connection, project_id: int, row: TextRow) -> str:
     """The newest counted version: the document new work goes to."""
 ```
@@ -833,10 +952,15 @@ from ontocurator.storage.plan_tables import WorkPlanFlagsRow
 from ontocurator.storage.proposal_queries import newest_proposal_refs
 from ontocurator.storage.tables import AssignmentRow, ProjectRow, SubmissionRow
 
-SUBMISSION_MODES: dict[str, AnnotationMode] = {"proposal_check": "proposals", "independent": "scratch"}
+SUBMISSION_MODES: dict[str, AnnotationMode] = {
+    "proposal_check": "proposals",
+    "independent": "scratch",
+}
 
 
-def work_modes(conn: Connection, project_id: int, documents: list[str]) -> list[AnnotationMode]:
+def work_modes(
+    conn: Connection, project_id: int, documents: list[str]
+) -> list[AnnotationMode]:
     """Modes of the text's annotation work, oldest first (plan "Pure rule" 1):
     non-revoked annotate assignments, revoked ones with submitted work, and
     annotation submissions (also without an assignment)."""
@@ -845,7 +969,8 @@ def work_modes(conn: Connection, project_id: int, documents: list[str]) -> list[
             AssignmentRow.project_id == project_id,
             AssignmentRow.task == "annotate",
             AssignmentRow.document_id.in_(documents),
-            AssignmentRow.revoked_at.is_(None) | AssignmentRow.last_submission_id.is_not(None),
+            AssignmentRow.revoked_at.is_(None)
+            | AssignmentRow.last_submission_id.is_not(None),
         )
     ).all()
     submissions = conn.execute(
@@ -902,17 +1027,23 @@ def held_annotations(
     wanted = list(document_ids)
     if not wanted:
         return Counter()
-    return Counter(dict(conn.execute(
-        select(AssignmentRow.document_id, func.count())
-        .where(
-            AssignmentRow.project_id == project_id,
-            AssignmentRow.document_id.in_(wanted),
-            AssignmentRow.task == "annotate",
-            AssignmentRow.revoked_at.is_(None)
-            | AssignmentRow.last_submission_id.is_not(None),
+    return Counter(
+        dict(
+            conn.execute(
+                select(AssignmentRow.document_id, func.count())
+                .where(
+                    AssignmentRow.project_id == project_id,
+                    AssignmentRow.document_id.in_(wanted),
+                    AssignmentRow.task == "annotate",
+                    AssignmentRow.revoked_at.is_(None)
+                    | AssignmentRow.last_submission_id.is_not(None),
+                )
+                .group_by(AssignmentRow.document_id)
+            )
+            .tuples()
+            .all()
         )
-        .group_by(AssignmentRow.document_id)
-    ).tuples().all()))
+    )
 ```
 
 - `_assign_locked`, after the `existing` checks and before `check_assignable`, for `task == "annotate"`:
@@ -970,7 +1101,9 @@ def doc(case: str) -> str:
     return f"{case}-en"
 
 
-def proposal_env(tmp_path: Any, *, per_text: int = 2, mode: str = "proposals") -> SimpleNamespace:
+def proposal_env(
+    tmp_path: Any, *, per_text: int = 2, mode: str = "proposals"
+) -> SimpleNamespace:
     from auth_harness import grant, logged_in
     from t1_builders import bundle, native_unit
     from t1_fixtures import TEXT, annotation, create_project, run_import
@@ -989,8 +1122,15 @@ def proposal_env(tmp_path: Any, *, per_text: int = 2, mode: str = "proposals") -
     period = TEXT.index("Neonatalzeit")
     proposals = [
         annotation("p1", (seizure, seizure + len("Krampfanfälle")), text=TEXT),
-        annotation("p2", (period, period + len("Neonatalzeit")), text=TEXT, term_id="HP:0001250"),
-        annotation("p3", (second, second + len("Krampfanfälle")), text=TEXT, assertion="absent"),
+        annotation(
+            "p2",
+            (period, period + len("Neonatalzeit")),
+            text=TEXT,
+            term_id="HP:0001250",
+        ),
+        annotation(
+            "p3", (second, second + len("Krampfanfälle")), text=TEXT, assertion="absent"
+        ),
     ]
     units = [
         native_unit(doc("c1"), "en", TEXT, case_id="c1", annotations=proposals),
@@ -1003,13 +1143,30 @@ def proposal_env(tmp_path: Any, *, per_text: int = 2, mode: str = "proposals") -
         assert grant(app, username, "proj", ["annotator"])
     lead = logged_in(app, "leader", projects={"proj": ["lead"]}, assignments=[])
     with db.transaction() as conn:
-        pid = conn.execute(select(ProjectRow.id).where(ProjectRow.project_key == "proj")).scalar_one()
-        conn.execute(update(ProjectRow).where(ProjectRow.id == pid)
-                     .values(annotations_per_text=per_text, tool_proposal_mode=mode,
-                             annotate_accepted_translations_only=False))
-        store.write_rows(conn, pid, {RowKey("c1", "en"): PlanFlags(False, True),
-                                     RowKey("c2", "en"): PlanFlags(False, True)}, actor_id=None)
-    return SimpleNamespace(app=app, db=db, pid=pid, lead=lead, c1=doc("c1"), c2=doc("c2"))
+        pid = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == "proj")
+        ).scalar_one()
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.id == pid)
+            .values(
+                annotations_per_text=per_text,
+                tool_proposal_mode=mode,
+                annotate_accepted_translations_only=False,
+            )
+        )
+        store.write_rows(
+            conn,
+            pid,
+            {
+                RowKey("c1", "en"): PlanFlags(False, True),
+                RowKey("c2", "en"): PlanFlags(False, True),
+            },
+            actor_id=None,
+        )
+    return SimpleNamespace(
+        app=app, db=db, pid=pid, lead=lead, c1=doc("c1"), c2=doc("c2")
+    )
 
 
 def client(env: SimpleNamespace, username: str):
@@ -1019,14 +1176,22 @@ def client(env: SimpleNamespace, username: str):
 
 
 def assign(env: SimpleNamespace, document_id: str, username: str) -> dict[str, Any]:
-    response = env.lead.post(f"{BASE}/assignments", json={
-        "document_id": document_id, "username": username, "task": "annotate",
-        "confirm_language": True})
+    response = env.lead.post(
+        f"{BASE}/assignments",
+        json={
+            "document_id": document_id,
+            "username": username,
+            "task": "annotate",
+            "confirm_language": True,
+        },
+    )
     assert response.status_code == 200, response.text
     return response.json()
 
 
-def open_task(env: SimpleNamespace, username: str, assignment_id: int) -> dict[str, Any]:
+def open_task(
+    env: SimpleNamespace, username: str, assignment_id: int
+) -> dict[str, Any]:
     response = client(env, username).post(f"/api/v1/assignments/{assignment_id}/open")
     assert response.status_code == 200, response.text
     return response.json()
@@ -1055,8 +1220,11 @@ def env(tmp_path):
 
 def _set_project_mode(env, mode):
     with env.db.transaction() as conn:
-        conn.execute(update(ProjectRow).where(ProjectRow.id == env.pid)
-                     .values(tool_proposal_mode=mode))
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.id == env.pid)
+            .values(tool_proposal_mode=mode)
+        )
 
 
 def test_text_with_proposals_gets_proposals_and_opens_the_proposal_check(env):
@@ -1070,7 +1238,9 @@ def test_text_with_proposals_gets_proposals_and_opens_the_proposal_check(env):
 def test_text_without_proposals_gets_scratch(env):
     assignment = assign(env, env.c2, "anno")
     assert assignment["annotation_mode"] == "scratch"
-    assert open_task(env, "anno", assignment["id"])["view"]["key"]["mode"] == "independent"
+    assert (
+        open_task(env, "anno", assignment["id"])["view"]["key"]["mode"] == "independent"
+    )
 
 
 def test_project_setting_scratch_gives_scratch(tmp_path):
@@ -1096,13 +1266,17 @@ def test_revoked_submitted_work_keeps_the_lock(env):
     assert assign(env, env.c1, "anno2")["annotation_mode"] == "proposals"
 
 
-@pytest.mark.parametrize(("document", "wrong_mode"), [("c1", "independent"), ("c2", "proposal_check")])
+@pytest.mark.parametrize(
+    ("document", "wrong_mode"), [("c1", "independent"), ("c2", "proposal_check")]
+)
 def test_an_annotate_assignment_opens_only_its_own_mode(env, document, wrong_mode):
     """Plan review R8 guard (``assisted`` is gone, the rule stays)."""
     document_id = getattr(env, document)
     assign(env, document_id, "anno")
-    response = client(env, "anno").post("/api/v1/workspaces/open", json={
-        "project_key": "proj", "document_id": document_id, "mode": wrong_mode})
+    response = client(env, "anno").post(
+        "/api/v1/workspaces/open",
+        json={"project_key": "proj", "document_id": document_id, "mode": wrong_mode},
+    )
     assert response.status_code == 403, response.text
     assert response.json()["code"] == "MODE_NOT_ALLOWED"
 
@@ -1123,8 +1297,12 @@ def test_remove_discards_the_draft(env):
     target = opened["view"]["targets"]["targets"][0]
     decided = client(env, "anno").post(
         f"/api/v1/workspaces/{opened['workspace_id']}/decisions",
-        json={"mutation_id": "d1", "expected_revision": opened["view"]["revision"],
-              "payload": {"target": target, "outcome": "confirmed"}})
+        json={
+            "mutation_id": "d1",
+            "expected_revision": opened["view"]["revision"],
+            "payload": {"target": target, "outcome": "confirmed"},
+        },
+    )
     assert decided.status_code == 200, decided.text
     env.lead.post(f"/api/v1/assignments/{first['id']}/remove")
     again = assign(env, env.c1, "anno")
@@ -1150,11 +1328,16 @@ def test_remove_needs_the_lead(env):
 
 def _lead_roles(env):
     with env.db.transaction() as conn:
-        return set(conn.execute(
-            select(ProjectMembershipRow.role)
-            .join(UserRow, UserRow.id == ProjectMembershipRow.user_id)
-            .where(ProjectMembershipRow.project_id == env.pid, UserRow.username == "leader")
-        ).scalars())
+        return set(
+            conn.execute(
+                select(ProjectMembershipRow.role)
+                .join(UserRow, UserRow.id == ProjectMembershipRow.user_id)
+                .where(
+                    ProjectMembershipRow.project_id == env.pid,
+                    UserRow.username == "leader",
+                )
+            ).scalars()
+        )
 
 
 def test_myself_grants_annotator_and_assigns(env):
@@ -1170,9 +1353,15 @@ def test_myself_grants_annotator_and_assigns(env):
 def test_myself_counts_towards_the_limit(env):
     assign(env, env.c1, "anno")
     assign(env, env.c1, "anno2")
-    response = env.lead.post(f"{BASE}/assignments", json={
-        "document_id": env.c1, "username": "leader", "task": "annotate",
-        "confirm_language": True})
+    response = env.lead.post(
+        f"{BASE}/assignments",
+        json={
+            "document_id": env.c1,
+            "username": "leader",
+            "task": "annotate",
+            "confirm_language": True,
+        },
+    )
     assert response.json()["code"] == "ANNOTATIONS_PER_TEXT_REACHED"
 
 
@@ -1181,9 +1370,15 @@ def test_myself_follows_the_mode_rule(env):
 
 
 def test_self_assign_needs_the_lead(env):
-    response = client(env, "anno").post(f"{BASE}/assignments", json={
-        "document_id": env.c1, "username": "anno", "task": "annotate",
-        "confirm_language": True})
+    response = client(env, "anno").post(
+        f"{BASE}/assignments",
+        json={
+            "document_id": env.c1,
+            "username": "anno",
+            "task": "annotate",
+            "confirm_language": True,
+        },
+    )
     assert response.status_code == 403
 
 
@@ -1219,8 +1414,15 @@ def test_single_assign_refuses_above_the_limit(tmp_path):
     env = proposal_env(tmp_path, per_text=2)
     assign(env, env.c1, "anno")
     assign(env, env.c1, "anno2")
-    response = env.lead.post(f"{BASE}/assignments", json={
-        "document_id": env.c1, "username": "tom", "task": "annotate", "confirm_language": True})
+    response = env.lead.post(
+        f"{BASE}/assignments",
+        json={
+            "document_id": env.c1,
+            "username": "tom",
+            "task": "annotate",
+            "confirm_language": True,
+        },
+    )
     assert response.json()["code"] == "ANNOTATIONS_PER_TEXT_REACHED"
     assert response.json()["details"] == {"limit": 2, "assigned": 2}
 
@@ -1228,8 +1430,10 @@ def test_single_assign_refuses_above_the_limit(tmp_path):
 def test_reassign_keeps_the_count(tmp_path):
     env = proposal_env(tmp_path, per_text=1)
     first = assign(env, env.c1, "anno")
-    response = env.lead.post(f"/api/v1/assignments/{first['id']}/reassign",
-                             json={"username": "anno2", "confirm_language": True})
+    response = env.lead.post(
+        f"/api/v1/assignments/{first['id']}/reassign",
+        json={"username": "anno2", "confirm_language": True},
+    )
     assert response.status_code == 200, response.text
     assert response.json()["annotation_mode"] == "proposals"
 
@@ -1299,7 +1503,9 @@ from proposal_check_support import BASE, proposal_env
 def test_setting_reads_and_writes(tmp_path):
     env = proposal_env(tmp_path)
     assert env.lead.get(f"{BASE}/settings").json()["tool_proposal_mode"] == "proposals"
-    response = env.lead.patch(f"{BASE}/settings", json={"tool_proposal_mode": "scratch"})
+    response = env.lead.patch(
+        f"{BASE}/settings", json={"tool_proposal_mode": "scratch"}
+    )
     assert response.status_code == 200, response.text
     assert env.lead.get(f"{BASE}/settings").json()["tool_proposal_mode"] == "scratch"
 
@@ -1312,7 +1518,12 @@ def test_omitted_setting_keeps_the_value(tmp_path):
 
 def test_invalid_value_is_refused(tmp_path):
     env = proposal_env(tmp_path)
-    assert env.lead.patch(f"{BASE}/settings", json={"tool_proposal_mode": "assisted"}).status_code == 422
+    assert (
+        env.lead.patch(
+            f"{BASE}/settings", json={"tool_proposal_mode": "assisted"}
+        ).status_code
+        == 422
+    )
 ```
 
 (Adapt the settings URL and method to `api/project_routes.py:365-371`.)
@@ -1326,8 +1537,11 @@ from work_plan_support import revision_of
 
 def patch(env, mode, case="c1", user=None, **flags):
     who = env.lead if user is None else client(env, user)
-    return who.patch(f"{BASE}/work-plans/{case}/en", json={
-        "annotation_mode": mode, "expected_revision": revision_of(env, case)} | flags)
+    return who.patch(
+        f"{BASE}/work-plans/{case}/en",
+        json={"annotation_mode": mode, "expected_revision": revision_of(env, case)}
+        | flags,
+    )
 
 
 def test_override_scratch_then_assignment_is_scratch(tmp_path):
@@ -1369,8 +1583,14 @@ def test_proposals_refused_without_proposals(tmp_path):
 def test_undo_restores_the_previous_mode(tmp_path):
     env = proposal_env(tmp_path)
     undo = patch(env, "scratch").json()["undo"]
-    restored = env.lead.put(f"{BASE}/work-plans/rows", json={
-        "rows": undo["rows"], "expected_revisions": undo["revisions"], "undo": True})
+    restored = env.lead.put(
+        f"{BASE}/work-plans/rows",
+        json={
+            "rows": undo["rows"],
+            "expected_revisions": undo["revisions"],
+            "undo": True,
+        },
+    )
     assert restored.status_code == 200, restored.text
     assert assign(env, env.c1, "anno")["annotation_mode"] == "proposals"
 
@@ -1378,12 +1598,19 @@ def test_undo_restores_the_previous_mode(tmp_path):
 def test_bulk_preview_and_save_skip_locked_rows(tmp_path):
     env = proposal_env(tmp_path)
     assign(env, env.c1, "anno")
-    body = {"rows": [{"case_id": "c1", "language": "en"}, {"case_id": "c2", "language": "en"}],
-            "languages": {"en": {"annotation_mode": "scratch"}}}
+    body = {
+        "rows": [
+            {"case_id": "c1", "language": "en"},
+            {"case_id": "c2", "language": "en"},
+        ],
+        "languages": {"en": {"annotation_mode": "scratch"}},
+    }
     preview = env.lead.post(f"{BASE}/work-plans/bulk/preview", json=body).json()
     assert preview["languages"][0]["mode_locked"] == 1
-    saved = env.lead.put(f"{BASE}/work-plans/bulk",
-                         json=body | {"expected_revisions": preview["revisions"]})
+    saved = env.lead.put(
+        f"{BASE}/work-plans/bulk",
+        json=body | {"expected_revisions": preview["revisions"]},
+    )
     assert saved.status_code == 200, saved.text
     assert saved.json()["mode_locked"] == [{"case_id": "c1", "language": "en"}]
     assert saved.json()["mode_no_proposals"] == []
@@ -1440,7 +1667,9 @@ def proposal_check_record(
     ``proposal_set``: the set the targets belong to (looked up by the caller
     from ``proposal_annotations.proposal_set_id`` of the targets; all targets
     of a round come from one set, plan "Proposal targets")."""
-    replaced = {d.replacement.annotation_id for d in submission.decisions if d.replacement}
+    replaced = {
+        d.replacement.annotation_id for d in submission.decisions if d.replacement
+    }
     targets = {t.annotation_id for t in submission.targets.targets}
     decisions = [
         {
@@ -1448,10 +1677,15 @@ def proposal_check_record(
             "proposal_annotation_id": d.target.annotation_id,
             "proposal_version": d.target.version,
             "decision": DECISION_WORDS[d.outcome],
-            "corrected_annotation_id": d.replacement.annotation_id if d.replacement else None,
+            "corrected_annotation_id": d.replacement.annotation_id
+            if d.replacement
+            else None,
             "note": d.note,
         }
-        for d in sorted(submission.decisions, key=lambda d: (d.target.annotation_id, d.target.version))
+        for d in sorted(
+            submission.decisions,
+            key=lambda d: (d.target.annotation_id, d.target.version),
+        )
     ]
     added = sorted(
         s.annotation.annotation_id
@@ -1459,11 +1693,17 @@ def proposal_check_record(
         if s.annotation.annotation_id not in replaced
         and s.annotation.annotation_id not in targets
     )
-    counts = {word: sum(1 for d in decisions if d["decision"] == word)
-              for word in ("confirmed", "rejected", "corrected", "uncertain")}
+    counts = {
+        word: sum(1 for d in decisions if d["decision"] == word)
+        for word in ("confirmed", "rejected", "corrected", "uncertain")
+    }
     return {
-        "proposal_set": None if proposal_set is None else {
-            "id": proposal_set.id, "annotation_set_id": proposal_set.annotation_set_id},
+        "proposal_set": None
+        if proposal_set is None
+        else {
+            "id": proposal_set.id,
+            "annotation_set_id": proposal_set.annotation_set_id,
+        },
         "decisions": decisions,
         "added_annotation_ids": added,
         "counts": counts | {"added": len(added)},
@@ -1510,8 +1750,12 @@ def consolidation_progress(
         1
         for group in groups
         if is_open(
-            ((ref.annotation_id, ref.version)
-             for ref in (member_ref(found.members[i]) for i in group.members.values())),
+            (
+                (ref.annotation_id, ref.version)
+                for ref in (
+                    member_ref(found.members[i]) for i in group.members.values()
+                )
+            ),
             decisions,
         )
     )
@@ -1528,21 +1772,41 @@ def consolidation_progress(
 
 ```python
 def test_keep_both_is_refused(cons):
-    refused(cons, {"input_ids": inputs(group(cons, "term_differs")), "action": "keep_both"})
+    refused(
+        cons, {"input_ids": inputs(group(cons, "term_differs")), "action": "keep_both"}
+    )
 
 
 def test_term_choices_are_refused(cons):
     item = group(cons, "term_differs")
-    refused(cons, {"input_ids": inputs(item), "action": "choose", "choice": choice(item),
-                   "term_choices": [choice(item)]})
+    refused(
+        cons,
+        {
+            "input_ids": inputs(item),
+            "action": "choose",
+            "choice": choice(item),
+            "term_choices": [choice(item)],
+        },
+    )
 
 
 def test_choose_on_term_differs_writes_one_finding(cons):
     item = group(cons, "term_differs")
-    response = mutate(cons, "resolve", {"input_ids": inputs(item), "action": "choose",
-                                        "choice": choice(item, axes={
-                                            axis: item["members"][0]["axes"].get(axis, "present")
-                                            for axis in item["differing_axes"]})})
+    response = mutate(
+        cons,
+        "resolve",
+        {
+            "input_ids": inputs(item),
+            "action": "choose",
+            "choice": choice(
+                item,
+                axes={
+                    axis: item["members"][0]["axes"].get(axis, "present")
+                    for axis in item["differing_axes"]
+                },
+            ),
+        },
+    )
     assert response.status_code == 200, response.text
     resolved = group(cons, "term_differs")
     assert len(resolved["annotation_ids"]) == 1
@@ -1581,9 +1845,16 @@ class AnnotationModeView(BaseModel):
     proposal_count: int = 0
 
     @classmethod
-    def of(cls, mode: TextMode, override: str | None, proposal_count: int) -> "AnnotationModeView":
-        return cls(mode=mode.mode, source=mode.source, locked=mode.locked,
-                   override=override, proposal_count=proposal_count)
+    def of(
+        cls, mode: TextMode, override: str | None, proposal_count: int
+    ) -> "AnnotationModeView":
+        return cls(
+            mode=mode.mode,
+            source=mode.source,
+            locked=mode.locked,
+            override=override,
+            proposal_count=proposal_count,
+        )
 ```
 
 Additions (all with defaults; additive):
@@ -1610,8 +1881,11 @@ from proposal_check_support import BASE, assign, client, proposal_env
 def rows(env, **params):
     response = env.lead.get(f"{BASE}/document-rows", params=params)
     assert response.status_code == 200, response.text
-    return {(r["case_id"], r["language"]): r
-            for g in response.json()["groups"] for r in g["rows"]}
+    return {
+        (r["case_id"], r["language"]): r
+        for g in response.json()["groups"]
+        for r in g["rows"]
+    }
 
 
 def test_proposal_count_and_mode_before_assignment(tmp_path):
@@ -1619,8 +1893,13 @@ def test_proposal_count_and_mode_before_assignment(tmp_path):
     found = rows(env)
     c1, c2 = found[("c1", "en")], found[("c2", "en")]
     assert c1["proposal_count"] == 3
-    assert c1["annotation_mode"] == {"mode": "proposals", "source": "project", "locked": False,
-                                     "override": None, "proposal_count": 3}
+    assert c1["annotation_mode"] == {
+        "mode": "proposals",
+        "source": "project",
+        "locked": False,
+        "override": None,
+        "proposal_count": 3,
+    }
     assert c2["proposal_count"] == 0
     assert c2["annotation_mode"]["source"] == "no_proposals"
 
@@ -1674,7 +1953,10 @@ class TextLayerEntry(BaseModel):
     kind: Literal["proposals", "submission", "own", "final", "person"]
     ref: VersionRef | None  # None when not available
     label: str
-    state: Literal["submitted", "in_progress", "not_started", "accepted", "not_accepted"] | None = None
+    state: (
+        Literal["submitted", "in_progress", "not_started", "accepted", "not_accepted"]
+        | None
+    ) = None
     count: int | None = None  # findings (submissions) or proposals
     available: bool
     reason: str | None = None
