@@ -129,7 +129,7 @@ def outside_work_plan(
     task: Task,
 ) -> bool:
     """A new task needs its row's flag: Review for translation reviews, Annotate
-    for annotation and annotation review; a discarded version takes none."""
+    for annotation and consolidation; a discarded version takes none."""
     if variant.document_id in discarded:
         return True
     flags = plan.get(RowKey(variant.case_id, variant.language))

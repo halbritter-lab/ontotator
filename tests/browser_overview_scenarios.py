@@ -265,11 +265,32 @@ def assign(scenario: Scenario, document_id: str, name: str, task: str) -> int:
     from ontocurator.assignments.service import AssignmentService
 
     _access, actor = identity(scenario, "lead")
-    return (
-        AssignmentService(scenario.db)
-        .assign(actor, scenario.key, document_id, scenario.users[name], task)  # type: ignore[arg-type]
-        .id
-    )
+    service = AssignmentService(scenario.db)
+    if task == "review":
+        # D1: the consolidator's task, created the way a consolidation start does.
+        from sqlalchemy import select
+
+        from ontocurator.storage.tables import ProjectRow
+
+        with scenario.db.transaction() as conn:
+            project = (
+                conn.execute(
+                    select(ProjectRow).where(ProjectRow.project_key == scenario.key)
+                )
+                .mappings()
+                .one()
+            )
+            target = service._target(conn, scenario.users[name])
+            return service._assign_locked(
+                conn, actor, project, document_id, target, "review", False
+            ).id
+    return service.assign(
+        actor,
+        scenario.key,
+        document_id,
+        scenario.users[name],
+        task,  # type: ignore[arg-type]
+    ).id
 
 
 def batch_assign(
@@ -774,12 +795,14 @@ def build_s7b(app: FastAPI) -> dict[str, Any]:
 
 
 def build_s8(app: FastAPI) -> dict[str, Any]:
-    """case-108 de, per text 2: accepted, two submissions, annotation review
-    (adjudication) open by Luc."""
+    """case-108 de, per text 2: accepted, two submissions, a consolidation
+    open by Luc (D1: was an annotation review)."""
     scenario, de = _accepted("S8", "case-108", per_text=2, app=app)
     ana = assign_and_annotate(scenario, de, "ana", PRESETS["three"])
     tom = assign_and_annotate(scenario, de, "tom", PRESETS["tom_v1"])
-    review = assign(scenario, de, "luc", "review")
+    review = start_consolidation(
+        scenario, de, "luc", [ana["submission_id"], tom["submission_id"]]
+    )
     return result(
         scenario,
         [("case-108", "de")],

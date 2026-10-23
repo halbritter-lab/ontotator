@@ -299,7 +299,7 @@ def test_non_lead_is_refused_like_create_assignments(
         f"{BASE}/assignments",
         json={
             "rows": [{"document_id": env.target, "username": username}],
-            "task": "review",
+            "task": "annotate",
         },
     )
     assert (compare.status_code, compare.json()["code"]) == (status, code)
@@ -337,8 +337,14 @@ def assert_nothing_written_for_leader(env: Any) -> None:
     assert review_assignments(env, "leader") == []
 
 
+def _review_task(env: Any) -> int:
+    from work_plan_support import review_task
+
+    return int(review_task(env.db, "proj", env.target, "adj").id)
+
+
 def test_current_revision_of_an_existing_assignment_is_used(env):
-    review = assign(env, env.target, "adj", "review")
+    review = _review_task(env)
     response = env.lead.post(
         URL, json=body(env, reviewer="adj", expected_workflow_revision=0)
     )
@@ -422,7 +428,7 @@ def test_stale_revision_bumped_after_the_unlocked_read_is_a_conflict(env, monkey
     """The expected revision reaches ``create_in``: a bump by a writer that
     does not take the project lock (between the unlocked ``active_for`` read
     and the row lock) is refused, not accepted silently."""
-    review = assign(env, env.target, "adj", "review")
+    review = _review_task(env)
     original = AssignmentService._locked
 
     def bumped(conn, assignment_id):

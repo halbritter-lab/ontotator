@@ -140,7 +140,7 @@ def test_links_match_the_spec_table(env):
     }
     assert link(annotation, "in_progress") == {
         "plan": ANNOTATE_ON,
-        "step": ["annotation_in_progress", "annotation_review_in_progress"],
+        "step": ["annotation_in_progress", "consolidation_in_progress"],
         "paused": "no",
     }
     assert link(annotation, "paused") == {"plan": ANNOTATE_ON, "paused": "yes"}

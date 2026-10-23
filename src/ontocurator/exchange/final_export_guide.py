@@ -49,9 +49,10 @@ def submission_kind(
     # Text-change and handover rounds keep the submission kind carry_forward.
     if kind in CARRY_ROUND_KINDS:
         return "carry_forward"
-    if kind == "consolidation":
-        return kind
-    return "review" if submission["origin_key"]["mode"] == "review" else "annotation"
+    # D1: every review submission is a consolidation (migration 0020).
+    if kind == "consolidation" or submission["origin_key"]["mode"] == "review":
+        return "consolidation"
+    return "annotation"
 
 
 def _warning_codes(payload: Mapping[str, Any]) -> dict[tuple[str, str], list[str]]:

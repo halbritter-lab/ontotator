@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.profiles import TaskProfile, profile_hash
 
-WorkspaceMode = Literal["independent", "review", "assisted"]
+WorkspaceMode = Literal["independent", "review"]
 
 
 class TaskScope(BaseModel):

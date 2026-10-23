@@ -128,22 +128,28 @@ def test_review_open_computes_stable_target_identity(app_client):
         "annotation_id": inputs[0]["annotation"]["annotation_id"],
         "version": inputs[0]["version"],
     }
-    first = _open(
-        client,
-        config,
-        "review",
-        {"target_set_id": "", "targets": [target]},
-        scenario="single",
+    # D1: a review workspace opens only through a consolidation round, so the
+    # target identity is checked on the service the round open uses.
+    from ontocurator.application.workspaces import WorkspaceService
+    from ontocurator.domain.annotations import AnnotationRef
+    from ontocurator.domain.review import ReviewTargetSet
+    from ontocurator.domain.workspace import WorkspaceKey
+
+    service = WorkspaceService(
+        client.app.state.repo, client.app.state.ontology_registry
     )
-    second = _open(
-        client,
-        config,
-        "review",
-        {"target_set_id": "", "targets": [target]},
-        scenario="single",
+    targets = ReviewTargetSet.create([AnnotationRef(**target)])
+    key = WorkspaceKey(
+        project_key=pkg_id,
+        document_id=doc_id,
+        annotator_id="reviewer",
+        mode="review",
+        target_set_id=targets.target_set_id,
     )
-    assert first["workspace_id"] == second["workspace_id"]
-    assert len(first["view"]["key"]["target_set_id"]) == 64
+    first = service.open(key, targets, pending_proposal_set_ids=[])
+    second = service.open(key, targets, pending_proposal_set_ids=[])
+    assert first.key == second.key
+    assert len(first.key.target_set_id) == 64
 
 
 def test_search_is_recorded_and_exported(app_client):

@@ -159,6 +159,13 @@ def _wait_for_children(scenario: Scenario, job_id: int, timeout: float = 30) -> 
 def assign(scenario: Scenario, document_id: str, name: str, task: str) -> int:
     from ontocurator.assignments.service import AssignmentService
 
+    if task == "review":
+        # D1: the consolidator's task, as a consolidation start creates it.
+        from work_plan_support import review_task
+
+        return int(
+            review_task(scenario.db, scenario.key, document_id, scenario.users[name]).id
+        )
     return (
         AssignmentService(scenario.db)
         .assign(Actor.cli(), scenario.key, document_id, scenario.users[name], task)  # type: ignore[arg-type]
@@ -341,7 +348,6 @@ def build_s0(app: FastAPI) -> dict[str, Any]:
     add_user(scenario, "translator", ["annotator"], qualification="Physician")
     accept_translation(scenario, v1, "translator")
     first = submit(scenario, v1, "ann-0004")
-    review = submit(scenario, v1, "ann-0003", "review")
     select(scenario, v1, first["submission_id"])
     # The same annotator carries the selected result to the correction (open).
     carry_assignment = assign(scenario, v2, "ann-0004", "annotate")
@@ -359,7 +365,6 @@ def build_s0(app: FastAPI) -> dict[str, Any]:
         documents={"en": docs[("synthetic-accepted", "en", 1)], "v1": v1, "v2": v2},
         submissions={
             "selected": first["submission_id"],
-            "review": review["submission_id"],
         },
         rounds={"selected": first["round_id"], "carried": carried.round_id},
     )

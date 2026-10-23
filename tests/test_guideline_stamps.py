@@ -127,7 +127,7 @@ Submit = Callable[[], Submission]
 
 
 def _plain(tmp_path, mode: str) -> tuple[Repository, Submit]:
-    """Independent, assisted or review submit on an unscoped repository."""
+    """Independent or review submit on an unscoped repository."""
     repo, ontology, workspaces, _editor, _document = _setup_test_env(tmp_path)
     targets = ReviewTargetSet.create([])
     key = WorkspaceKey(
@@ -257,7 +257,7 @@ def _carry_forward(request) -> tuple[Repository, Submit]:
 
 @pytest.mark.parametrize(
     "path_name",
-    ["independent", "assisted", "review", "consolidation", "carry_forward"],
+    ["independent", "review", "consolidation", "carry_forward"],
 )
 def test_each_submit_path_stamps_the_current_version(
     tmp_path, request, path_name: str
@@ -324,7 +324,7 @@ def test_no_version_in_force_stamps_null_on_translation_reviews(review_env) -> N
 
 
 def test_current_version_withdrawn_stamps_null_on_submissions(tmp_path) -> None:
-    repo, submit = _plain(tmp_path, "assisted")
+    repo, submit = _plain(tmp_path, "independent")
     guidelines = Guidelines(repo.db, "pkg-1")
     guidelines.publish("First rules")
     guidelines.withdraw(1)

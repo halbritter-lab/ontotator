@@ -33,7 +33,6 @@ def facts(**kw):
         open_translation_reviews=0,
         annotation_assignments=0,
         open_annotations=0,
-        open_annotation_reviews=0,
         missing_final=False,
         has_final=False,
         check_failed=False,
@@ -110,15 +109,6 @@ def test_not_in_plan_has_no_step_and_in_plan_is_its_own_fact():
                 open_annotations=1,
             ),
             "annotation_in_progress",
-        ),
-        (
-            dict(
-                annotate=True,
-                translation_statuses=("accepted",),
-                annotation_assignments=1,
-                open_annotation_reviews=1,
-            ),
-            "annotation_review_in_progress",
         ),
         (
             dict(review=True, annotate=True, open_translation_reviews=1),
@@ -331,9 +321,7 @@ _PARALLEL = [
 
 def _valid(f: StepFacts) -> bool:
     """Invariants the application guarantees when it builds StepFacts."""
-    open_work = (
-        f.open_translation_reviews or f.open_annotations or f.open_annotation_reviews
-    )
+    open_work = f.open_translation_reviews or f.open_annotations
     if f.is_source and (f.review or f.open_translation_reviews):
         return False
     if f.missing_final and (not f.annotate or f.has_final or open_work):
@@ -366,7 +354,6 @@ def test_needs_attention_never_appears_for_valid_facts():
         open_reviews,
         assigned,
         open_annotations,
-        open_annotation_reviews,
         missing_final,
         has_final,
     ) in itertools.product(
@@ -381,7 +368,6 @@ def test_needs_attention_never_appears_for_valid_facts():
         [(root,) for root in _ROOTS] + list(itertools.combinations(_PARALLEL, 2)),
         (0, 1),
         (0, 1, 2),
-        (0, 1),
         (0, 1),
         (False, True),
         (False, True),
@@ -404,7 +390,6 @@ def test_needs_attention_never_appears_for_valid_facts():
             open_translation_reviews=open_reviews,
             annotation_assignments=assigned,
             open_annotations=open_annotations,
-            open_annotation_reviews=open_annotation_reviews,
             missing_final=missing_final,
             has_final=has_final,
             check_failed=any(
@@ -685,3 +670,21 @@ def test_one_step_per_old_work_item():
         if s.code == "carry_text_change"
     ]
     assert [s.submission_id for s in carry] == ["s-ana", "s-tom"]
+
+
+def test_open_consolidation_is_its_own_in_progress_step():
+    # D1: the consolidator's task replaces the annotation review step; the
+    # row never falls back to "needs attention" while a consolidation runs.
+    f = facts(
+        annotate=True,
+        translation_statuses=("accepted",),
+        per_text=2,
+        annotation_assignments=2,
+        open_consolidations=1,
+    )
+    steps = derive_steps(f)
+    assert [(s.code, s.kind, s.stage) for s in steps] == [
+        ("consolidation_in_progress", "in_progress", "final")
+    ]
+    assert row_stage(f) == "final"
+    assert row_stage(replace(f, has_final=True)) == "final"

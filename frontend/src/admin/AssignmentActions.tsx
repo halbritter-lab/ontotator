@@ -38,10 +38,12 @@ function Actions({ assignment, members, onChanged, directReassign = false }: Ass
     } finally { if (alive.current) { writing.current = false; setBusy(false); } }
   };
   if (assignment.revoked_at) return <span>Removed</span>;
+  // D1: a consolidation task (task review) cannot be handed to someone else.
+  const reassignable = assignment.task !== "review";
   return <>
-    {directReassign && <Button size="sm" onClick={() => setAction("reassign")}>Reassign…</Button>}
+    {directReassign && reassignable && <Button size="sm" onClick={() => setAction("reassign")}>Reassign…</Button>}
     <details><summary aria-label={`Actions for ${assignment.pseudonym}: ${labelFor(taskLabels, assignment.task)}, ${assignment.document_id}`}>Assignment actions</summary>
-    {!directReassign && <Button onClick={() => setAction("reassign")}>Reassign …</Button>}
+    {!directReassign && reassignable && <Button onClick={() => setAction("reassign")}>Reassign …</Button>}
     {assignment.status === "submitted" && <Button onClick={() => setAction("reopen")}>Reopen</Button>}
     <Button onClick={() => setAction("revoke")}>Remove assignment</Button>
     </details>

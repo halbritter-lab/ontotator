@@ -220,8 +220,8 @@ it("row mode shows context, Currently and Change task", async () => {
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
   await ready();
   fireEvent.click(screen.getByRole("button", { name: "Change task" }));
-  fireEvent.change(screen.getByRole("combobox", { name: "Task" }), { target: { value: "review:de" } });
-  await waitFor(() => expect(lastPreview().task).toBe("review"));
+  fireEvent.change(screen.getByRole("combobox", { name: "Task" }), { target: { value: "translation_review:de" } });
+  await waitFor(() => expect(lastPreview().task).toBe("translation_review"));
 });
 
 it("offers Random distribution… as a secondary button", async () => {

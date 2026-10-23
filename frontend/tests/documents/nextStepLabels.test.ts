@@ -22,7 +22,7 @@ describe("next step labels", () => {
       translation_review_in_progress: "Translation review in progress",
       assign_annotation: "Assign annotation",
       annotation_in_progress: "Annotation in progress",
-      annotation_review_in_progress: "Annotation review in progress",
+      consolidation_in_progress: "Consolidation in progress",
       waiting_for_translation_review: "Waiting for translation review",
       done: "Done",
       translation_accepted: "Translation accepted",

@@ -8,7 +8,7 @@ import { ErrorNotice } from "./ErrorNotice";
 import { errorMessage } from "./errors";
 import { memberReason, memberUnavailable, needsPeopleMessage, onePersonSummary, partlyAssignedLines, personName, resultMessage, skippedLines, splitSummary, stepLabel, stepName } from "./assignSummary";
 
-export type AssignWorkTask = "translation_review" | "annotate" | "review";
+export type AssignWorkTask = "translation_review" | "annotate";
 export type AssignWorkDialogProps =
   | { mode: "row"; projectKey: string; row: DocumentRowView; task: AssignWorkTask; newReviewOfAccepted?: boolean; reviewReason?: "source_changed"; onClose: () => void; onAssigned: (message: string) => void }
   | { mode: "cases"; projectKey: string; caseIds: readonly string[]; sort: "case" | "import" | "activity"; filters: DocumentRowFilters; onClose: () => void; onAssigned: (message: string, skipped: readonly string[]) => void };
@@ -17,7 +17,7 @@ type Preview = BatchPreview;
 type Step = { task: AssignWorkTask; language: string; versions: number };
 type Refused = { case_id: string; language: string; username: string; code: string };
 const stepKey = (task: string, language: string) => `${task}:${language}`;
-const isTask = (value: string): value is AssignWorkTask => value === "translation_review" || value === "annotate" || value === "review";
+const isTask = (value: string): value is AssignWorkTask => value === "translation_review" || value === "annotate";
 
 export function AssignWorkDialog(props: AssignWorkDialogProps): JSX.Element {
   const identity = props.mode === "row" ? ["row", props.projectKey, props.row.case_id, props.row.language, props.task, !!props.newReviewOfAccepted, props.reviewReason ?? null] : ["cases", props.projectKey, props.caseIds];
@@ -208,7 +208,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const reasonId = `${id}-assign-reason`;
   const limitId = `${id}-limit`;
   const stepOptions = props.mode === "row"
-    ? (["translation_review", "annotate", "review"] as const).filter(item => item !== "translation_review" || !props.row.is_source).map(item => ({ value: stepKey(item, props.row.language), label: stepName(item) }))
+    ? (["translation_review", "annotate"] as const).filter(item => item !== "translation_review" || !props.row.is_source).map(item => ({ value: stepKey(item, props.row.language), label: stepName(item) }))
     : (steps ?? []).map(step => ({ value: stepKey(step.task, step.language), label: stepLabel(step.task, step.language, step.versions) }));
   const changeStep = (value: string) => { reset(); setChosen([]); setCurrent(value); };
   const closing = busy ? undefined : props.onClose;

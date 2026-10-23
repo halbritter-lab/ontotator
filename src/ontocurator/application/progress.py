@@ -54,7 +54,7 @@ LINKS: dict[str, tuple[str, str, dict[str, Link]]] = {
             "to_assign": ANNOTATE_ON | {"step": ("assign_annotation",)},
             "in_progress": ANNOTATE_ON
             | {
-                "step": ("annotation_in_progress", "annotation_review_in_progress"),
+                "step": ("annotation_in_progress", "consolidation_in_progress"),
                 "paused": "no",
             },
             "paused": ANNOTATE_ON | {"paused": "yes"},

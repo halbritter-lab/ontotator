@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from auth_harness import HARNESS, logged_in, upload_package
 from pg_harness import database_url_for
+from work_plan_support import review_task
 
 from ontocurator.api.app import create_app
 from ontocurator.application.workspaces import WorkspaceService
@@ -71,7 +72,7 @@ def test_project_list_shows_roles_and_modes(app: Any) -> None:
     assert project["name"] == DEMO_ID
     assert project["description"] is None
     assert project["roles"] == ["annotator"]
-    assert project["allowed_modes"] == ["independent", "assisted"]
+    assert project["allowed_modes"] == ["independent"]
     assert project["document_count"] == 2
 
 
@@ -83,7 +84,7 @@ def test_the_project_list_shows_only_visible_projects(app: Any) -> None:
     [project] = root.get("/api/v1/projects").json()
     # The uploader holds every role of the project it created.
     assert project["roles"] == ["adjudicator", "annotator", "lead"]
-    assert project["allowed_modes"] == ["independent", "review", "assisted"]
+    assert project["allowed_modes"] == ["independent"]
 
 
 def test_an_annotator_cannot_open_review_mode(app: Any) -> None:
@@ -93,23 +94,24 @@ def test_an_annotator_cannot_open_review_mode(app: Any) -> None:
         assert response.status_code == 403, response.text
         assert response.json()["code"] == "MODE_NOT_ALLOWED"
     assert _open(alice, "independent").status_code == 200
-    assert _open(alice, "assisted").status_code == 200
+    assert _open(alice, "assisted").status_code == 422
 
 
-def test_an_adjudicator_reviews(app: Any) -> None:
+def test_an_adjudicator_reviews_only_through_a_consolidation(app: Any) -> None:
     bob = _member(app, "bob", "adjudicator")
 
     opened = _open(bob, "review")
 
-    assert opened.status_code == 200, opened.text
+    # D1: a review workspace opens only through its consolidation round.
+    assert opened.status_code == 403, opened.text
+    assert opened.json()["code"] == "MODE_NOT_ALLOWED"
     assert _open(bob, "independent").json()["code"] == "MODE_NOT_ALLOWED"
-    assert _open(bob, "assisted").json()["code"] == "MODE_NOT_ALLOWED"
 
 
 def test_a_lead_without_annotator_role_cannot_annotate(app: Any) -> None:
     lead = _member(app, "lead", "lead")
 
-    for mode in ("independent", "assisted", "review"):
+    for mode in ("independent", "review"):
         response = _open(lead, mode)
         assert response.status_code == 403, (mode, response.text)
         assert response.json()["code"] == "MODE_NOT_ALLOWED"
@@ -120,6 +122,7 @@ def test_a_lead_without_annotator_role_cannot_annotate(app: Any) -> None:
 def test_the_review_document_list_is_refused_to_annotators(app: Any) -> None:
     alice = _member(app, "alice", "annotator")
     bob = _member(app, "bob", "adjudicator")
+    review_task(app.state.repo.db, DEMO_ID, DOCUMENT, "bob")
     path = f"/api/v1/projects/{DEMO_ID}/documents"
 
     refused = alice.get(path, params={"mode": "review"})
@@ -206,23 +209,13 @@ def test_review_never_shows_other_members_work(app: Any) -> None:
     assert alices
 
     bob = _member(app, "bob", "adjudicator")
+    review_task(app.state.repo.db, DEMO_ID, DOCUMENT, "bob")
     inputs = _review_inputs(bob)
-    review = _open(bob, "review")
 
     assert inputs.status_code == 200, inputs.text
     shown = {(s["annotation"]["annotation_id"], s["version"]) for s in inputs.json()}
     assert shown == _proposals(app)
-    assert review.status_code == 200, review.text
-    view = review.json()["view"]
-    targets = {(t["annotation_id"], t["version"]) for t in view["targets"]["targets"]}
-    assert targets == _proposals(app)
-    available = {
-        (s["annotation"]["annotation_id"], s["version"])
-        for s in view["available_inputs"]
-    }
-    assert not available & alices
-    assert not targets & alices
-    assert view["submissions"] == []
+    assert not shown & alices
 
     # The service gives the same answer as the route.
     from types import SimpleNamespace

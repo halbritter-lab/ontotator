@@ -573,18 +573,6 @@ def test_review_accepted_translation_skips_versions_with_a_correction(env, tmp_p
     assert skipped(result) == {CASES[0]: "step_differs"}
 
 
-def test_review_task_has_no_automatic_re_review(env):
-    set_status(env, "accepted", *CASES[:2])
-    for case in CASES[:2]:
-        submit(env, assign(env, de(case), "cyd", "annotate"), f"s-{case}")
-    submit(env, assign(env, de(CASES[0]), "adj", "review"), "r-0")
-    result = preview(env, "review", case_ids=CASES[:2])
-    assert [(t["case_id"], t["remaining"]) for t in result["targets"]] == [
-        (CASES[1], 1)
-    ]
-    assert skipped(result) == {CASES[0]: "already_assigned"}
-
-
 def test_open_tasks_count_paused_work_in_batch_and_members(env):
     task_id = assign(env, de(CASES[0]), "ana", "translation_review")
     with env.db.transaction() as conn:

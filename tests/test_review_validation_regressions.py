@@ -99,11 +99,6 @@ def test_review_targets_exclude_references_but_workspace_keeps_them(tmp_path):
         "ann-ref-1",
         "ann-ref-2",
     }
-    assisted = service.open(key.model_copy(update={"mode": "assisted"}))
-    assert {s.annotation.annotation_id for s in assisted.available_inputs} == {
-        "ann-ref-1",
-        "ann-ref-2",
-    }
 
 
 @pytest.mark.parametrize(

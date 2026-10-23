@@ -43,13 +43,13 @@ def test_preferences_start_empty(app: FastAPI) -> None:
 def test_updates_merge_per_package_and_survive(tmp_path: Path) -> None:
     client = logged_in(create_app(_config(tmp_path)), "alice")
 
-    first = client.put(URL, json={"mode_by_package": {"pkg-a": "review"}})
+    first = client.put(URL, json={"mode_by_package": {"pkg-a": "independent"}})
     second = client.put(URL, json={"mode_by_package": {"pkg-b": "independent"}})
 
     assert first.status_code == second.status_code == 200, second.text
     merged = {
         **EMPTY_PREFERENCES,
-        "mode_by_package": {"pkg-a": "review", "pkg-b": "independent"},
+        "mode_by_package": {"pkg-a": "independent", "pkg-b": "independent"},
     }
     assert second.json() == merged
     # A restarted server reads the same preferences.
@@ -85,11 +85,11 @@ def test_each_user_has_their_own_preferences(app: FastAPI) -> None:
     alice = logged_in(app, "alice")
     bob = logged_in(app, "bob")
 
-    alice.put(URL, json={"mode_by_package": {"pkg-a": "review"}})
-    bob.put(URL, json={"mode_by_package": {"pkg-a": "assisted"}})
+    alice.put(URL, json={"mode_by_package": {"pkg-a": "independent"}})
+    bob.put(URL, json={"mode_by_package": {"pkg-b": "independent"}})
 
-    assert alice.get(URL).json()["mode_by_package"] == {"pkg-a": "review"}
-    assert bob.get(URL).json()["mode_by_package"] == {"pkg-a": "assisted"}
+    assert alice.get(URL).json()["mode_by_package"] == {"pkg-a": "independent"}
+    assert bob.get(URL).json()["mode_by_package"] == {"pkg-b": "independent"}
 
 
 def test_invalid_values_are_refused(app: FastAPI) -> None:

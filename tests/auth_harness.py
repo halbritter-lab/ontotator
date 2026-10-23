@@ -84,6 +84,12 @@ def ensure_assignment(
     )
     if any(row.task == task for row in rows):
         return
+    if task == "review":
+        # D1: the consolidator's task, as a consolidation start creates it.
+        from work_plan_support import review_task
+
+        review_task(app.state.repo.db, project, document_id, username, HARNESS)
+        return
     # Synthetic users have no language preferences; this explicit override is
     # audited exactly as it is for an administrator confirming the language.
     service.assign(HARNESS, project, document_id, username, task, confirm_language=True)
@@ -92,11 +98,8 @@ def ensure_assignment(
 def provision_assignments(
     app: FastAPI, username: str, project: str, roles: Iterable[str]
 ) -> None:
-    tasks = []
-    if "annotator" in roles:
-        tasks.append("annotate")
-    if "adjudicator" in roles:
-        tasks.append("review")
+    # Task "review" comes only from a consolidation start (D1).
+    tasks = ["annotate"] if "annotator" in roles else []
     from ontocurator.assignments.service import AssignmentService
 
     service = AssignmentService(app.state.repo.db)

@@ -249,16 +249,6 @@ class WorkspaceService:
         elif key.mode == "independent":
             effective_targets = ReviewTargetSet.create([])
             available_inputs = []
-        elif key.mode == "assisted":
-            effective_targets = ReviewTargetSet.create([])
-            all_inputs = self.repo.list_annotations_for_document(
-                key.project_key, key.document_id
-            )
-            available_inputs = [
-                s
-                for s in all_inputs
-                if s.annotation.layer_id in scope.reference_layer_ids
-            ]
         else:
             # review mode
             if targets is not None:

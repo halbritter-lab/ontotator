@@ -128,7 +128,6 @@ function annotationText(cell: StageCellView): StageText {
       return { symbol: "◐", word: "In progress", detail: join(people, detail.round_ordinal != null ? `Round ${detail.round_ordinal}` : null, change, waiting) };
     }
     case "paused": return pausedText(cell);
-    case "in_review": return { symbol: "◐", word: "In review", detail: join(`${detail.submitted ?? 0} submitted`, people && `review: ${people}`, waiting) };
     case "consolidating": return { symbol: "◐", word: "Consolidating", detail: people };
     case "old_text_open":
       return { symbol: "⚠", word: "In progress on old text", detail: people ? `${people} ${several ? "work" : "works"} on ${version(detail.from_version) ?? "the old text"}` : "" };

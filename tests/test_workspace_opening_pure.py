@@ -56,7 +56,7 @@ def test_legacy_review_keeps_ambiguous_target_selection_instead_of_resuming_boun
     assert not workspaces.repo.db.called
 
 
-@pytest.mark.parametrize("mode", ["independent", "assisted"])
+@pytest.mark.parametrize("mode", ["independent"])
 def test_legacy_open_resolves_requested_mode_and_current_profile_without_binding(mode):
     service, workspaces, key, _bound = context(mode="independent")
     requested = key.model_copy(update={"mode": mode})
@@ -71,7 +71,7 @@ def test_legacy_open_resolves_requested_mode_and_current_profile_without_binding
     assert not workspaces.repo.db.called
 
 
-@pytest.mark.parametrize("mode", ["independent", "assisted"])
+@pytest.mark.parametrize("mode", ["independent"])
 def test_unbound_legacy_workspace_keeps_current_mode_scope_and_editability(mode):
     service, workspaces, key, _bound = context(mode=mode)
     workspaces.repo.workspace_assignment.return_value.active_round_id = None

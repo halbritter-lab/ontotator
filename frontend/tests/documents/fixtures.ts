@@ -307,7 +307,7 @@ export function scenarioS0(): DocumentsScenario {
     [rowKey(caseId, "de")]: submissions(caseId, "de", {
       submissions: [
         submission({ submission_id: "sub-s0-r1", document_id: v1.document_id, chain_name: "DeepL", author_label: "ann-0004", round_id: "round-s0-1", round_ordinal: 1, round_state: "superseded", is_latest_in_round: true, recorded_at: "2026-10-18T10:00:00Z" }),
-        submission({ submission_id: "sub-s0-review", document_id: v1.document_id, chain_name: "DeepL", author_label: "ann-0003", mode: "review", kind: "review", recorded_at: "2026-10-18T12:00:00Z" }),
+        submission({ submission_id: "sub-s0-review", document_id: v1.document_id, chain_name: "DeepL", author_label: "ann-0003", mode: "independent", kind: "annotation", recorded_at: "2026-10-18T12:00:00Z" }),
       ],
       rounds: [
         round({ round_id: "round-s0-1", assignment_id: 41, document_id: v1.document_id, chain_name: "DeepL", author_label: "ann-0004", round_ordinal: 1, state: "superseded" }),
@@ -543,7 +543,7 @@ const STEP_KINDS: Record<NextStepView["code"], NextStepView["kind"]> = {
   translation_not_accepted: "decision", choose_final: "decision", needs_attention: "decision",
   handle_text_change: "decision", carry_text_change: "decision",
   assign_translation_review: "assign", assign_annotation: "assign", review_source_change: "assign",
-  translation_review_in_progress: "in_progress", annotation_in_progress: "in_progress", annotation_review_in_progress: "in_progress", waiting_for_translation_review: "in_progress",
+  translation_review_in_progress: "in_progress", annotation_in_progress: "in_progress", consolidation_in_progress: "in_progress", waiting_for_translation_review: "in_progress",
   done: "done", translation_accepted: "done",
 };
 

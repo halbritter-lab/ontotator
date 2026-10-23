@@ -53,7 +53,7 @@ it("names the View link with the full submission label and adds round suffixes",
   const link = screen.getByRole("link", { name: `View Annotation · Round 1 · ann-0004 · de v1 · ${time("2026-10-18T10:00:00Z")}` });
   expect(link.textContent).toBe("Round 1 · superseded");
   expect(link.getAttribute("href")).toBe(routeHref(leadView(data.submissions[0])));
-  expect(screen.getByRole("link", { name: /^View Review · Initial submission · ann-0003/ }).textContent).toBe("Initial submission");
+  expect(screen.getByRole("link", { name: /^View Annotation · Initial submission · ann-0003/ }).textContent).toBe("Initial submission");
 });
 
 it("marks latest and earlier submissions of a round with several submissions", () => {

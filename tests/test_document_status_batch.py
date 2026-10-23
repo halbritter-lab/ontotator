@@ -25,7 +25,7 @@ from ontocurator.storage.tables import (
 
 
 @pytest.mark.parametrize("count", [1, 1000])
-@pytest.mark.parametrize("mode", ["independent", "assisted", "review"])
+@pytest.mark.parametrize("mode", ["independent", "review"])
 def test_dashboard_sql_is_bounded(tmp_path: Path, count: int, mode: str) -> None:
     repo = Repository(database_for(tmp_path / "db"))
     package = _sample_package("pkg-a")
@@ -55,7 +55,7 @@ def test_dashboard_sql_is_bounded(tmp_path: Path, count: int, mode: str) -> None
     assert len(statements) <= 8
 
 
-@pytest.mark.parametrize("mode", ["independent", "assisted", "review"])
+@pytest.mark.parametrize("mode", ["independent", "review"])
 def test_batch_status_keeps_origins_rounds_and_newer_drafts(
     tmp_path: Path, mode: str
 ) -> None:

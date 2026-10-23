@@ -42,7 +42,7 @@ function timeText(iso: string, now: Date): string {
 }
 
 const SUBMISSION_PREFIX: Readonly<Record<RowSubmissionView["kind"], string>> = {
-  annotation: "Annotation", carry_forward: "Annotation", review: "Annotation review", consolidation: "Consolidation",
+  annotation: "Annotation", carry_forward: "Annotation", consolidation: "Consolidation",
 };
 const workPrefix = (item: WorkItem) => (item.task === "review" ? "Annotation review" : "Annotation");
 const who = (item: WorkItem) => personLabel(item.author_label, item.is_me, item.person);

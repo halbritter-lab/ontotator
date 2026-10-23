@@ -12,7 +12,7 @@ from t1_builders import bundle, correction_unit, native_unit, translation_unit
 from t1_fixtures import create_project, run_import
 from test_auth_api import _app
 from test_case_api import BASE, CORRECTED, SOURCE, TARGET
-from work_plan_support import plan_all
+from work_plan_support import plan_all, review_task
 
 from ontocurator.assignments.service import AssignmentService
 from ontocurator.domain.errors import DomainError
@@ -196,21 +196,13 @@ def test_disjointness_is_only_annotate_review_not_translation_review(case_env):
     assert assigned(env)["id"] == tr["id"]
     assert proposed(env, task="annotate")["rows"][0]["username"] == "alice"
     annotation = assigned(env, task="annotate")
-    refused = env.lead.post(
-        f"{BASE}/assignments",
-        json={
-            "rows": [{"document_id": TARGET, "username": "alice"}],
-            "task": "review",
-            "confirm_language": True,
-        },
-    )
-    assert refused.json()["refused"][0]["code"] == "ADJUDICATOR_IS_ANNOTATOR"
+    with pytest.raises(DomainError, match="ADJUDICATOR_IS_ANNOTATOR"):
+        review_task(env.db, "proj", TARGET, "alice")
     env.lead.post(f"/api/v1/assignments/{annotation['id']}/revoke", json={})
-    review = assigned(env, task="review")
-    assert review["task"] == "review"
+    assert review_task(env.db, "proj", TARGET, "alice").task == "review"
 
 
-@pytest.mark.parametrize("task", ["annotate", "review"])
+@pytest.mark.parametrize("task", ["annotate"])
 def test_current_acceptance_gate_assignments_proposals_and_option_false(case_env, task):
     env = case_env
     username = "alice" if task == "annotate" else "reviewer"
@@ -342,7 +334,7 @@ def test_review_http_round_trip_qualification_history_reopen_and_current_metadat
     records = f"{BASE}/documents/{quote(TARGET, safe='')}/translation-reviews"
     assert [item["id"] for item in env.alice.get(records).json()] == [record["id"]]
     assert env.reviewer.get(records).status_code == 404
-    assigned(env, username="reviewer", task="review")
+    review_task(env.db, "proj", TARGET, "reviewer")
     assert env.reviewer.get(records).json() == []
     assert len(env.lead.get(records).json()) == 1
     tasks = env.alice.get("/api/v1/me/tasks").json()
@@ -456,7 +448,7 @@ def command(revision=0, mutation="edit"):
     }
 
 
-@pytest.mark.parametrize("mode", ["independent", "assisted"])
+@pytest.mark.parametrize("mode", ["independent"])
 def test_gate_after_receipt_replay_blocks_editable_open_new_commands_and_submit(
     case_env, mode
 ):

@@ -776,6 +776,14 @@ def register_variant_scenario_route(app: FastAPI) -> None:
             ("reader", "source", "review"),
         ]:
             username = users["alice" if name == "alice_source" else name].username
+            if task == "review":
+                # D1: the consolidator's task, as a consolidation start creates it.
+                from work_plan_support import review_task
+
+                assignments[name] = review_task(
+                    db, key, documents[document], username
+                ).id
+                continue
             assignments[name] = service.assign(
                 Actor.cli(), key, documents[document], username, task
             ).id
@@ -1249,11 +1257,17 @@ def register_reanchor_scenario_route(app: FastAPI) -> None:
         service = AssignmentService(db)
         owner = "annotator" if assisted else "adjudicator"
         task = "annotate" if assisted else "review"
-        assignment = service.assign(
-            Actor.cli(), key, document.document_id, users[owner], task
+        from work_plan_support import review_task
+
+        # D1: review tasks only as a consolidation start creates them; opening
+        # them without a consolidation round is refused (port to P2/T3).
+        assignment = (
+            service.assign(Actor.cli(), key, document.document_id, users[owner], task)
+            if task == "annotate"
+            else review_task(db, key, document.document_id, users[owner])
         )
-        second_assignment = service.assign(
-            Actor.cli(), key, document.document_id, users["second_reviewer"], "review"
+        second_assignment = review_task(
+            db, key, document.document_id, users["second_reviewer"]
         )
         return {
             "project": key,

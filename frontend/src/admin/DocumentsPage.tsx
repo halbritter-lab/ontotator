@@ -116,7 +116,7 @@ interface PanelOpenOptions { opener?: HTMLElement | null; focus?: boolean; chang
 
 /** The focused element (the control that ran a row action), as the row panel's opener. */
 const focusedElement = (): HTMLElement | null => (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null);
-export type AssignTask = "translation_review" | "annotate" | "review";
+export type AssignTask = "translation_review" | "annotate";
 
 /** Previous / Next; at either end an `aria-disabled` link that stays focusable (focus survives the page change). */
 function PagingLink({ route, onNavigate, children }: { route: Route | null; onNavigate: (route: Route) => void; children: ReactNode }): JSX.Element {
@@ -597,7 +597,6 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     onReload={() => rows.reload()}
     onNavigate={route => onNavigate(route)}
     onRowAction={(row, step) => { if (step.action !== "choose_final" && step.action !== "review_changes") closeRowPanel(); onAction(row, step); }}
-    onAssign={row => onAssign(row, "review")}
     onCarry={(row, target) => {
       const source = carrySourceOfFinal(row, target);
       if (source) setTextChange({ kind: "carry", rowKey: rowKeyOf(row), source });

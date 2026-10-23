@@ -629,7 +629,7 @@ describe("the tree in the App", () => {
     const save = vi.spyOn(api, "updatePreferences").mockResolvedValue({ last_annotator_id: "dr-a", mode_by_package: {} });
     const project: ProjectSummary = {
       project_key: "pkg", name: "Tree test project", description: null,
-      roles: ["annotator"], allowed_modes: ["independent", "assisted"],
+      roles: ["annotator"], allowed_modes: ["independent"],
       document_count: 1, can_manage: false,
     };
     vi.spyOn(api, "listProjects").mockResolvedValue([project]);

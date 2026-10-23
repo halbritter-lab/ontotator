@@ -131,7 +131,7 @@ def test_round_ordinals_and_kinds():
     assert submission_kind("consolidation", "review") == "consolidation"
     assert submission_kind("carry_forward", "independent") == "carry_forward"
     assert submission_kind("ordinary", "independent") == "annotation"
-    assert submission_kind(None, "review") == "review"
+    assert submission_kind(None, "review") == "consolidation"  # D1
 
 
 def test_bar_categories_counts_and_prefix():

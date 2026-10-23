@@ -35,7 +35,7 @@ const REPORT_STATE_TEXT = { open: "Open", resolved: "Closed", withdrawn: "Withdr
 /** Tabs in order with their visible names. */
 const TABS: readonly (readonly [PanelTab, string])[] = [["activity", "Activity"], ["versions", "Versions"], ["details", "Details"]];
 
-export type AssignTaskKind = "translation_review" | "annotate" | "review";
+export type AssignTaskKind = "translation_review" | "annotate";
 
 /** Where the panel goes next: another row, another stage filter or another tab. */
 export interface RowPanelTarget {
@@ -366,11 +366,10 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
   const workIds = new Set(row.work.filter(item => item.task !== "translation_review" && item.status !== "submitted" && item.moved_to_version == null).map(item => item.assignment_id));
   const reassignable: AssignmentView[] = show("annotation") && textVersionTools
     ? textVersionTools.assignments.filter(assignment => workIds.has(assignment.id) && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
-  const review = show("annotation") && onAssign && canAssignAnnotationReview(row);
   const correction = show("review") && onRequestCorrection && canRequestCorrection?.(row);
   const newReview = show("review") && onAssign && canAssignNewReview(row);
   const changeFinal = show("final") && onChangeFinal && canChangeFinal?.(row);
-  if (!reassignable.length && !review && !correction && !newReview && !changeFinal) return null;
+  if (!reassignable.length && !correction && !newReview && !changeFinal) return null;
   const personOf = (pseudonym: string) => {
     const display = textVersionTools?.members.find(member => member.pseudonym === pseudonym)?.display_name?.trim();
     return display ? `${display} (${pseudonym})` : pseudonym;
@@ -380,7 +379,6 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
       <span>{personOf(assignment.pseudonym)}</span>
       {textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} onChanged={textVersionTools.onAssignmentsChanged} directReassign />}
     </div>)}
-    {review && <Button size="sm" onClick={() => onAssign(row, "review")}>Assign annotation review…</Button>}
     {correction && <Button size="sm" onClick={() => onRequestCorrection(row)}>Request correction…</Button>}
     {newReview && <Button size="sm" onClick={() => onAssign(row, "translation_review", { newReviewOfAccepted: true })}>Assign a new review…</Button>}
     {changeFinal && <Button size="sm" onClick={() => onChangeFinal(row)}>Change final…</Button>}

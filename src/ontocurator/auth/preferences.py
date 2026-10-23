@@ -18,7 +18,7 @@ from ontocurator.application.preferences import (
 from ontocurator.storage.database import Database
 from ontocurator.storage.tables import UserPreferencesRow
 
-_MODES = ("independent", "review", "assisted")
+_MODES = ("independent",)
 
 
 def _from_stored(data: object) -> Preferences:

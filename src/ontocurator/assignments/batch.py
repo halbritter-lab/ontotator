@@ -31,7 +31,14 @@ from ontocurator.assignments.service import (
 )
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import TASK_ROLES, Access, Action, Role, Task
+from ontocurator.authz.policy import (
+    TASK_ROLES,
+    Access,
+    Action,
+    AssignableTask,
+    Role,
+    Task,
+)
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain import document_rows as rules
@@ -76,7 +83,7 @@ _REVIEWABLE_ACCEPTANCES = frozenset({"lead", "override"})
 
 @dataclass(frozen=True)
 class BatchSpec:
-    task: Task
+    task: AssignableTask
     language: str
     case_ids: tuple[str, ...]
     mode: Mode
@@ -218,9 +225,6 @@ class _Rows:
         work = self._work(version.document_id, task)
         if task == "annotate":
             remaining = self.facts.annotations_per_text - len(work)
-        elif task == "review":
-            # No automatic re-review: any non-revoked review fills the slot.
-            remaining = 0 if work else 1
         else:
             remaining = 0 if any(_open(item) for item in work) else 1
         return _Target(
@@ -306,18 +310,8 @@ class _Rows:
         else:
             if not annotate:
                 return _Match((), "not_in_plan", holders)
-            if task == "annotate":
-                if ASSIGN_STEPS[task] in codes:
-                    candidates = [self._target(v, task) for v in newest]
-            else:  # review: a submitted annotation to review
-                candidates = [
-                    self._target(v, task)
-                    for v in newest
-                    if any(
-                        item.status == "submitted" and not item.held
-                        for item in self._work(v.document_id, "annotate")
-                    )
-                ]
+            if ASSIGN_STEPS[task] in codes:
+                candidates = [self._target(v, task) for v in newest]
         targets = tuple(t for t in candidates if t.remaining > 0)
         if targets:
             return _Match(targets, None, holders)

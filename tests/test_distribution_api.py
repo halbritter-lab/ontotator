@@ -550,7 +550,7 @@ def test_context_task_seed_and_forged_hash_refused_before_writes(stored):
     original = proposals.propose(Actor.cli(), "p", ["first"], "annotate", seed=7)
     service = DistributionConfirmationService(db)
     rows = [ConfirmationRow("first", "alice")]
-    for task, seed in [("review", 7), ("annotate", 8)]:
+    for task, seed in [("translation_review", 7), ("annotate", 8)]:
         with pytest.raises(DomainError, match="DISTRIBUTION_CONTEXT_INVALID"):
             service.confirm(
                 Actor.cli(), "p", rows, original.context, task=task, seed=seed

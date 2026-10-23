@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event, get_ident
+from typing import Any
 
 import pytest
 from pg_harness import database_for
@@ -29,13 +30,32 @@ from ontocurator.storage.tables import (
 )
 
 
-def test_task_modes_preserve_legacy_assisted() -> None:
+def test_task_modes() -> None:
     assert MODE_FOR_TASK == {"annotate": "independent", "review": "review"}
-    assert TASK_FOR_MODE == {
-        "independent": "annotate",
-        "assisted": "annotate",
-        "review": "review",
-    }
+    assert TASK_FOR_MODE == {"independent": "annotate", "review": "review"}
+
+
+def _assign(
+    db: Database,
+    service: AssignmentService,
+    key: str,
+    document_id: str,
+    user: str,
+    task: str,
+) -> Any:
+    """Task ``review`` as a consolidation start creates it (D1); others as usual."""
+    if task != "review":
+        return service.assign(Actor.cli(), key, document_id, user, task)  # type: ignore[arg-type]
+    with db.transaction() as conn:
+        project = (
+            conn.execute(select(ProjectRow).where(ProjectRow.project_key == key))
+            .mappings()
+            .one()
+        )
+        target = service._target(conn, user)
+        return service._assign_locked(
+            conn, Actor.cli(), project, document_id, target, "review", True
+        )
 
 
 @pytest.fixture
@@ -137,9 +157,9 @@ def test_adjudicator_exclusion_both_directions(core, first, second) -> None:
                 project_id=_project, user_id=users["alice"], role="adjudicator"
             )
         )
-    service.assign(Actor.cli(), "p", "first", "alice", first)
+    _assign(db, service, "p", "first", "alice", first)
     with pytest.raises(DomainError, match="ADJUDICATOR_IS_ANNOTATOR"):
-        service.assign(Actor.cli(), "p", "first", "alice", second)
+        _assign(db, service, "p", "first", "alice", second)
 
 
 def test_reassign_reopen_revoke_preserve_history_and_audit(core) -> None:
@@ -512,7 +532,7 @@ def test_my_tasks_across_projects_respects_each_task_role(core) -> None:
                 project_id=other, user_id=users["alice"], role="adjudicator"
             )
         )
-    review = service.assign(Actor.cli(), "q", "review", "alice", "review")
+    review = _assign(db, service, "q", "review", "alice", "review")
     assert {row.assignment_id for row in service.my_tasks(users["alice"])} == {
         original.id,
         review.id,

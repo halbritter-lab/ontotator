@@ -633,7 +633,7 @@ def test_document_filters_preserve_current_assignment_visibility(project):
     )
 
 
-@pytest.mark.parametrize("mode", ["independent", "assisted", "review"])
+@pytest.mark.parametrize("mode", ["independent", "review"])
 @pytest.mark.parametrize(
     "scenario",
     ["empty", "imported", "newer", "origins", "round", "checked", "conflict"],

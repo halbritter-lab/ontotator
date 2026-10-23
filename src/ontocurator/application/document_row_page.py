@@ -688,15 +688,15 @@ def _step_work(
     *,
     reviews: Sequence[rules.AssignmentFact],
     open_annotations: Sequence[rules.AssignmentFact],
-    open_reviews: Sequence[rules.AssignmentFact],
+    consolidations: Sequence[rules.AssignmentFact],
 ) -> Sequence[rules.AssignmentFact]:
     """The work items whose people own an in-progress step."""
     if code == "translation_review_in_progress":
         return reviews
     if code == "annotation_in_progress":
         return open_annotations
-    if code == "annotation_review_in_progress":
-        return open_reviews
+    if code == "consolidation_in_progress":
+        return consolidations
     return ()
 
 
@@ -838,7 +838,8 @@ def _row_steps(
     ]
     annotations = [item for item in current if item.task == "annotate"]
     open_annotations = [item for item in annotations if _open(item)]
-    open_reviews = [item for item in current if item.task == "review" and _open(item)]
+    # D1: every review task is a consolidation.
+    consolidations = [item for item in current if item.task == "review" and _open(item)]
     warnings = ctx.warnings.get(key, [])
     report_id = next(
         (w.get("report_id") for w in warnings if w["code"] == "OPEN_PROBLEM_REPORT"),
@@ -919,7 +920,7 @@ def _row_steps(
         open_translation_reviews=len(reviews),
         annotation_assignments=assigned_min,
         open_annotations=len(open_annotations),
-        open_annotation_reviews=len(open_reviews),
+        open_consolidations=len(consolidations),
         missing_final=missing_final,
         has_final=final is not None,
         check_failed=needs_reviewer is not None
@@ -972,7 +973,7 @@ def _row_steps(
             step.code,
             reviews=reviews,
             open_annotations=open_annotations,
-            open_reviews=open_reviews,
+            consolidations=consolidations,
         )
     ]
     views: list[dict[str, Any]] = []
@@ -1030,7 +1031,7 @@ def _row_steps(
                 code,
                 reviews=reviews,
                 open_annotations=open_annotations,
-                open_reviews=open_reviews,
+                consolidations=consolidations,
             )
             version = version_of.get(reviews[0].document_id, version)
             detail = _version_detail("version", version)
@@ -1052,12 +1053,12 @@ def _row_steps(
                 if is_source
                 else _version_detail("version", version)
             )
-        else:  # annotation_in_progress, annotation_review_in_progress
+        else:  # annotation_in_progress, consolidation_in_progress
             work = _step_work(
                 code,
                 reviews=reviews,
                 open_annotations=open_annotations,
-                open_reviews=open_reviews,
+                consolidations=consolidations,
             )
             rounds = {
                 ctx.ordinals.get(item.active_round_id)

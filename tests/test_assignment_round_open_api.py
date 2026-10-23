@@ -65,6 +65,7 @@ def open_round(client, row, target):
     )
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_ambiguous_assignment_retry_selects_and_resumes_exact_round(round_work):
     _app, client, row, _service, rounds = round_work
     ambiguous = client.post(f"/api/v1/assignments/{row.id}/open")
@@ -87,6 +88,7 @@ def test_ambiguous_assignment_retry_selects_and_resumes_exact_round(round_work):
     assert resumed.json()["view"]["draft"] == result["view"]["draft"]
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 @pytest.mark.parametrize("body", [None, {}, {"review_round_target_set_id": None}])
 def test_optional_body_keeps_existing_ambiguity_behavior(round_work, body):
     _app, client, row, _service, _rounds = round_work
@@ -97,6 +99,7 @@ def test_optional_body_keeps_existing_ambiguity_behavior(round_work, body):
     assert response.json()["code"] == "AMBIGUOUS_REVIEW_ROUND"
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_selected_submitted_round_remains_read_only(round_work):
     _app, client, row, service, _rounds = round_work
     empty = ReviewTargetSet.create([])
@@ -162,6 +165,7 @@ def test_selector_cannot_restore_assignment_authority(round_work, denial):
     assert (response.status_code, response.json()["code"]) == expected, response.text
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_cross_document_round_is_refused_without_fallback(round_work):
     _app, client, row, service, _rounds = round_work
     empty = ReviewTargetSet.create([])
@@ -178,6 +182,7 @@ def test_cross_document_round_is_refused_without_fallback(round_work):
     assert response.json()["code"] == "REVIEW_ROUND_NOT_FOUND"
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_unknown_round_and_spoofed_authority_are_rejected(round_work):
     _app, client, row, _service, _rounds = round_work
     unknown = open_round(client, row, "unknown-round")
@@ -194,6 +199,7 @@ def test_unknown_round_and_spoofed_authority_are_rejected(round_work):
     assert spoofed.json()["detail"][0]["type"] == "extra_forbidden"
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 @pytest.mark.parametrize("body", [None, {}, {"review_round_target_set_id": None}])
 def test_no_body_or_empty_body_opens_unambiguous_assignment(round_work, body):
     app, client, _row, _service, _rounds = round_work

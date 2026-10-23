@@ -132,12 +132,40 @@ def service(env: Any, username: str = "leader") -> Any:
     return WorkPlanService(env.db, Actor(user.id, f"user:{username}"), access)
 
 
+def review_task(
+    db: Any, key: str, document_id: str, username: str, actor: Any = None
+) -> Any:
+    """Task ``review`` the way only a consolidation start creates it (D1):
+    ``_assign_locked`` with its checks; the public ``assign`` refuses it."""
+    from ontocurator.assignments.service import AssignmentService
+    from ontocurator.auth.audit import Actor
+    from ontocurator.storage.tables import ProjectRow
+
+    service = AssignmentService(db)
+    with db.transaction() as conn:
+        project = (
+            conn.execute(select(ProjectRow).where(ProjectRow.project_key == key))
+            .mappings()
+            .one()
+        )
+        target = service._target(conn, username)
+        return service._assign_locked(
+            conn, actor or Actor.cli(), project, document_id, target, "review", True
+        )
+
+
 def assign(env: Any, document_id: str, username: str, task: str, **extra: Any) -> int:
     """Assign through the real service as the lead; returns the assignment ID."""
     from ontocurator.assignments.service import AssignmentService
     from ontocurator.auth.audit import Actor
 
     lead = env.app.state.accounts.get_by_username("leader")
+    if task == "review" and not extra:
+        return int(
+            review_task(
+                env.db, "proj", document_id, username, Actor(lead.id, "user:leader")
+            ).id
+        )
     return (
         AssignmentService(env.db)
         .assign(

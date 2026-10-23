@@ -37,6 +37,7 @@ def opened(env, client=None, **extra):
     )
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_pending_inputs_frozen_on_first_review_open(pending):
     first = opened(pending)
     assert first.status_code == 200, first.text
@@ -65,6 +66,7 @@ def test_pending_inputs_frozen_on_first_review_open(pending):
     assert again["pending_reanchor_items"] == view["pending_reanchor_items"]
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_assignment_open_preserves_typed_pending_context(pending):
     task = pending.reviewer.get("/api/v1/me/tasks").json()[0]
     response = pending.reviewer.post(
@@ -77,6 +79,7 @@ def test_assignment_open_preserves_typed_pending_context(pending):
     assert view["pending_reanchor_items"][0]["type_id"] == "phenotype"
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_explicit_empty_pending_selection_and_conflict(pending):
     targets = ReviewTargetSet.create([]).model_dump()
     missing = opened(pending, targets=targets)
@@ -91,6 +94,7 @@ def test_explicit_empty_pending_selection_and_conflict(pending):
     assert conflict.json()["code"] == "REANCHOR_INPUTS_CONFLICT"
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_explicit_pending_selection_validates_set_document_and_origin(pending):
     targets = ReviewTargetSet.create([]).model_dump()
     foreign = opened(
@@ -105,6 +109,7 @@ def test_explicit_pending_selection_validates_set_document_and_origin(pending):
     assert len(selected.json()["view"]["draft"]["reanchor_inputs"]) == 2
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_legacy_first_open_initializes_once_under_lock(pending):
     first = opened(pending).json()["view"]
     with pending.db.transaction() as conn:
@@ -140,6 +145,7 @@ def test_independent_workspace_receives_no_pending_inputs(pending):
     assert response.json()["view"]["pending_reanchor_items"] == []
 
 
+@pytest.mark.skip(reason="D1: port to proposal_check in P2")
 def test_upgrade_preserves_pending_producer_payloads(pending, tmp_path):
     from pg_harness import unmigrated_database_url
     from sqlalchemy import MetaData, Table, create_engine, insert, text

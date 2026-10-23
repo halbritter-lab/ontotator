@@ -70,7 +70,6 @@ describe("Annotation cell", () => {
     expect(text("annotation", cell("in_progress", "running", { people: [tom], note: "may_change", version: 1 }))).toEqual(["◐ In progress", "Tom Reis · v1 · may change"]);
   });
   it("paused", () => expect(text("annotation", cell("paused", "decision", { people: [tom], excerpt: "Satz 3 unvollständig…" }))).toEqual(["⏸ Paused", "Tom Reis: “Satz 3 unvollständig…”"]));
-  it("in_review", () => expect(text("annotation", cell("in_review", "running", { people: [luc], submitted: 2 }))).toEqual(["◐ In review", "2 submitted · review: Luc Martin"]));
   it("consolidating", () => expect(text("annotation", cell("consolidating", "running", { people: [luc] }))).toEqual(["◐ Consolidating", "Luc Martin"]));
   it("old_text_open", () => expect(text("annotation", cell("old_text_open", "decision", { people: [tom], from_version: 1, version: 2 }))).toEqual(["⚠ In progress on old text", "Tom Reis works on v1"]));
   it("old_text_submitted", () => expect(text("annotation", cell("old_text_submitted", "decision", { people: [ana], from_version: 1, version: 2, note: "v2_not_annotated" })))

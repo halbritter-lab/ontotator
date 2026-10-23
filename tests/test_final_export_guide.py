@@ -179,7 +179,7 @@ def test_submission_kind_falls_back_to_mode():
     table = rows(build_index_csv(data, ["final"], ["earlier"]))
     assert {
         r["submission_id"]: r["submission_kind"] for r in table if r["submission_id"]
-    }["earlier"] == "review"
+    }["earlier"] == "consolidation"  # D1: every review submission is one
 
 
 def test_old_snapshots_without_recorded_time_leave_submitted_at_empty():

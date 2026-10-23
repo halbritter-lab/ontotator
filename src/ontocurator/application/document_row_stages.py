@@ -313,9 +313,6 @@ def stage_facts(
             if submissions == 1 and len(submitted) == 1
             else None
         ),
-        annotation_reviewers=_unique(
-            [item.user_id for item in open_reviews if not consolidating(item)]
-        ),
         consolidators=_unique(
             [item.user_id for item in open_reviews if consolidating(item)]
         ),

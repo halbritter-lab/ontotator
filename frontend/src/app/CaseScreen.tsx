@@ -2773,17 +2773,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <span
             title={roundTitle ?? (roundKind !== "consolidation" && !isCarryKind(roundKind) && view.key.mode === "independent" ? "You do not see proposals from other people or tools." : undefined)}
             className={`badge ${
-              view.key.mode === "review"
-                ? "badge-review"
-                : view.key.mode === "assisted"
-                ? "badge-assisted"
-                : "badge-independent"
+              view.key.mode === "review" ? "badge-review" : "badge-independent"
             }`}
           >
             {roundKind === "consolidation" ? "Consolidation review" : roundKind === "text_change" ? TEXT_CHANGE_ORIGIN : isCarryKind(roundKind) ? roundBadge ?? "Review carried findings" : view.key.mode === "review"
               ? "Review proposals"
-              : view.key.mode === "assisted"
-              ? "Assisted annotation"
               : "Independent annotation"}
           </span>
           {consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })}>Back to consolidation</a> : null}

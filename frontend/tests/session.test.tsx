@@ -22,7 +22,7 @@ const oneCaseServer = (view = caseView()) => {
   const project: ProjectSummary = {
     project_key: "pkg", name: "Session test project", description: null,
     roles: view.key.mode === "review" ? ["adjudicator"] : ["annotator"],
-    allowed_modes: view.key.mode === "review" ? ["review"] : ["independent", "assisted"],
+    allowed_modes: view.key.mode === "review" ? ["review"] : ["independent"],
     document_count: 1, can_manage: false,
   };
   vi.spyOn(api, "listProjects").mockResolvedValue([project]);
@@ -155,7 +155,7 @@ describe("sessions in the API client", () => {
 
     await client.me();
     await client.listProjects();
-    await client.updatePreferences({ mode_by_package: { pkg: "review" } });
+    await client.updatePreferences({ mode_by_package: { pkg: "independent" } });
     await expect(client.logout()).resolves.toBeUndefined();
 
     const [meUrl, meInit] = fetchMock.mock.calls[0];

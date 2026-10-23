@@ -15,7 +15,7 @@ export function memberOptionLabel(member: Member): string {
 }
 /** The document fields task-language and review checks need (a `DocumentSummary` satisfies it). */
 export type TaskDocument = Pick<DocumentSummary, "document_id" | "language" | "translation_status">;
-export const eligibleMembers = (members: Member[], task: Task) => members.filter(member => member.roles.includes(task === "review" ? "adjudicator" : "annotator"));
+export const eligibleMembers = (members: Member[], task: Task | "review") => members.filter(member => member.roles.includes(task === "review" ? "adjudicator" : "annotator"));
 export function useCaseVariants(key: string, supplied?: readonly CaseSummary[] | null) {
   const [loaded, setLoaded] = useState<CaseSummary[] | null>(null);
   const [error, setError] = useState<unknown>();
@@ -44,7 +44,7 @@ export function useAlive() {
   return alive;
 }
 export function TaskSelect({ value, onChange, disabled, translationReviewAllowed = false }: { value: Task; onChange: (task: Task) => void; disabled?: boolean; translationReviewAllowed?: boolean }) {
-  return <Select id="assignment-task" label="Task" value={value} disabled={disabled} onChange={event => { if (event.target.value !== "translation_review" || translationReviewAllowed) onChange(event.target.value as Task); }}><option value="annotate">{taskLabels.annotate}</option><option value="review">{taskLabels.review}</option>{translationReviewAllowed && <option value="translation_review">{taskLabels.translation_review}</option>}</Select>;
+  return <Select id="assignment-task" label="Task" value={value} disabled={disabled} onChange={event => { if (event.target.value !== "translation_review" || translationReviewAllowed) onChange(event.target.value as Task); }}><option value="annotate">{taskLabels.annotate}</option>{translationReviewAllowed && <option value="translation_review">{taskLabels.translation_review}</option>}</Select>;
 }
 export function useMembers(key: string) {
   const [members, setMembers] = useState<Member[] | null>(null);

@@ -2346,7 +2346,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "annotate" | "review" | "translation_review";
+            task: "annotate" | "translation_review";
             /**
              * Confirm Language
              * @default false
@@ -2624,7 +2624,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "translation_review" | "annotate" | "review";
+            task: "translation_review" | "annotate";
             /** Language */
             language: string;
             /** Case Ids */
@@ -2666,7 +2666,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "translation_review" | "annotate" | "review";
+            task: "translation_review" | "annotate";
             /** Language */
             language: string;
             /** Case Ids */
@@ -3374,7 +3374,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "annotate" | "review" | "translation_review";
+            task: "annotate" | "translation_review";
             /** Per Document */
             per_document: number;
             /** Seed */
@@ -3442,7 +3442,7 @@ export interface components {
             /** Plan */
             plan?: ("review" | "annotate" | "review_and_annotate" | "not_in_plan" | "not_decided")[];
             /** Step */
-            step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[];
+            step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "consolidation_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[];
             /** Stage */
             stage?: ("translation_review" | "annotation" | "final" | "done")[];
             /** Translation Status */
@@ -3482,7 +3482,7 @@ export interface components {
             /** Segment */
             segment?: ("decision" | "assign" | "progress" | "done") | null;
             /** Step */
-            step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
+            step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "consolidation_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention") | ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "consolidation_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
             /** Stage */
             stage?: ("translation_review" | "annotation" | "final" | "done") | ("translation_review" | "annotation" | "final" | "done")[] | null;
             /** Owner */
@@ -3494,7 +3494,7 @@ export interface components {
             /** Review State */
             review_state?: ("source" | "not_planned" | "undecided" | "unassigned" | "check_failed" | "in_progress" | "re_review" | "paused" | "rejected" | "query" | "not_accepted" | "source_changed" | "accepted") | ("source" | "not_planned" | "undecided" | "unassigned" | "check_failed" | "in_progress" | "re_review" | "paused" | "rejected" | "query" | "not_accepted" | "source_changed" | "accepted")[] | null;
             /** Annotation State */
-            annotation_state?: ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "in_review" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted") | ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "in_review" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted")[] | null;
+            annotation_state?: ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted") | ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted")[] | null;
             /** Final State */
             final_state?: ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final") | ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final")[] | null;
             /** Waiting On */
@@ -3846,7 +3846,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "consolidation" | "carry_forward" | "annotation" | "review";
+            kind: "consolidation" | "carry_forward" | "annotation";
             /** Round Id */
             round_id: string | null;
             /** Round Ordinal */
@@ -3950,7 +3950,7 @@ export interface components {
             /** Selected By */
             selected_by: string | null;
             /** Kind */
-            kind: ("consolidation" | "carry_forward" | "annotation" | "review") | null;
+            kind: ("consolidation" | "carry_forward" | "annotation") | null;
             /** Round Ordinal */
             round_ordinal: number | null;
             /** Author Label */
@@ -4548,7 +4548,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention";
+            code: "decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "consolidation_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention";
             /**
              * Kind
              * @enum {string}
@@ -4736,7 +4736,7 @@ export interface components {
              * @default independent
              * @enum {string}
              */
-            mode: "independent" | "review" | "assisted";
+            mode: "independent" | "review";
             targets?: components["schemas"]["ReviewTargetSet"] | null;
             /** Review Round Target Set Id */
             review_round_target_set_id?: string | null;
@@ -5030,7 +5030,7 @@ export interface components {
             last_annotator_id?: string | null;
             /** Mode By Package */
             mode_by_package?: {
-                [key: string]: "independent" | "review" | "assisted";
+                [key: string]: "independent";
             };
             /** Search Languages By Annotator */
             search_languages_by_annotator?: {
@@ -5047,7 +5047,7 @@ export interface components {
             last_annotator_id?: string | null;
             /** Mode By Package */
             mode_by_package?: {
-                [key: string]: "independent" | "review" | "assisted";
+                [key: string]: "independent";
             } | null;
             /** Search Languages By Annotator */
             search_languages_by_annotator?: {
@@ -5579,7 +5579,7 @@ export interface components {
             /** Roles */
             roles: ("lead" | "annotator" | "adjudicator")[];
             /** Allowed Modes */
-            allowed_modes: ("independent" | "review" | "assisted")[];
+            allowed_modes: ("independent" | "review")[];
             /** Document Count */
             document_count: number;
             /** Can Manage */
@@ -5593,7 +5593,7 @@ export interface components {
              * Task
              * @enum {string}
              */
-            task: "annotate" | "review" | "translation_review";
+            task: "annotate" | "translation_review";
             /**
              * Per Document
              * @default 1
@@ -6143,7 +6143,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "consolidation" | "carry_forward" | "annotation" | "review";
+            kind: "consolidation" | "carry_forward" | "annotation";
             /** Round Id */
             round_id: string | null;
             /** Round Ordinal */
@@ -6719,7 +6719,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "independent" | "review" | "assisted";
+            mode: "independent" | "review";
             /** Editable Layer Ids */
             editable_layer_ids: string[];
             /** Reference Layer Ids */
@@ -7477,7 +7477,7 @@ export interface components {
              */
             kind: "ordinary" | "carry_forward" | "clean_restart" | "consolidation" | "text_change" | "handover";
             /** Mode */
-            mode: ("independent" | "review" | "assisted") | null;
+            mode: ("independent" | "review") | null;
             /**
              * State
              * @enum {string}
@@ -7536,7 +7536,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "independent" | "review" | "assisted";
+            mode: "independent" | "review";
             /**
              * Scope Id
              * @default
@@ -9622,7 +9622,7 @@ export interface operations {
                 final?: ("missing" | "none" | "any") | null;
                 case?: string | null;
                 segment?: ("decision" | "assign" | "progress" | "done") | null;
-                step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
+                step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "consolidation_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
                 stage?: ("translation_review" | "annotation" | "final" | "done")[] | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;
@@ -9630,7 +9630,7 @@ export interface operations {
                 paused?: ("yes" | "no") | null;
                 sort?: "case" | "-case" | "import" | "activity" | "-activity";
                 review_state?: ("source" | "not_planned" | "undecided" | "unassigned" | "check_failed" | "in_progress" | "re_review" | "paused" | "rejected" | "query" | "not_accepted" | "source_changed" | "accepted")[] | null;
-                annotation_state?: ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "in_review" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted")[] | null;
+                annotation_state?: ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted")[] | null;
                 final_state?: ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final")[] | null;
                 /** @description "me" or a pseudonym */
                 waiting_on?: string[] | null;
@@ -9679,7 +9679,7 @@ export interface operations {
                 final?: ("missing" | "none" | "any") | null;
                 case?: string | null;
                 segment?: ("decision" | "assign" | "progress" | "done") | null;
-                step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "annotation_review_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
+                step?: ("decide_plan" | "decide_report" | "resume_task" | "confirm_final" | "handle_text_change" | "carry_text_change" | "resolve_rejected" | "resolve_queried" | "translation_not_accepted" | "choose_final" | "assign_translation_review" | "review_source_change" | "translation_review_in_progress" | "assign_annotation" | "annotation_in_progress" | "consolidation_in_progress" | "waiting_for_translation_review" | "done" | "translation_accepted" | "needs_attention")[] | null;
                 stage?: ("translation_review" | "annotation" | "final" | "done")[] | null;
                 /** @description "me" or a pseudonym */
                 owner?: string | null;
@@ -9687,7 +9687,7 @@ export interface operations {
                 paused?: ("yes" | "no") | null;
                 sort?: "case" | "-case" | "import" | "activity" | "-activity";
                 review_state?: ("source" | "not_planned" | "undecided" | "unassigned" | "check_failed" | "in_progress" | "re_review" | "paused" | "rejected" | "query" | "not_accepted" | "source_changed" | "accepted")[] | null;
-                annotation_state?: ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "in_review" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted")[] | null;
+                annotation_state?: ("not_planned" | "undecided" | "after_review" | "blocked" | "unassigned" | "partly_assigned" | "in_progress" | "paused" | "consolidating" | "old_text_open" | "old_text_submitted" | "finishing_on_old" | "submitted")[] | null;
                 final_state?: ("none" | "after_annotation" | "after_review" | "choose" | "confirm" | "old_text" | "may_be_outdated" | "final")[] | null;
                 /** @description "me" or a pseudonym */
                 waiting_on?: string[] | null;
@@ -11285,7 +11285,7 @@ export interface operations {
         parameters: {
             query?: {
                 annotator_id?: string | null;
-                mode?: ("independent" | "review" | "assisted") | null;
+                mode?: ("independent" | "review") | null;
                 language?: string | null;
                 status?: ("unassigned" | "open" | "in_progress" | "submitted" | "reopened" | "held") | null;
                 q?: string | null;

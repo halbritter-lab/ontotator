@@ -37,7 +37,7 @@ def client(monkeypatch):
         lambda *_: SimpleNamespace(
             project_key="server-project",
             document_id="server-doc",
-            task="review",
+            task="annotate",
             active_round_id=None,
         ),
     )
@@ -80,7 +80,24 @@ def test_optional_body_forwards_only_selected_round(client, body, expected):
         forwarded.document_id,
         forwarded.mode,
         forwarded.annotator_id,
-    ) == ("server-project", "server-doc", "review", None)
+    ) == ("server-project", "server-doc", "independent", None)
+
+
+def test_review_task_without_consolidation_round_is_invalid(client, monkeypatch):
+    http, calls, _owner = client
+    monkeypatch.setattr(
+        routes.AssignmentService,
+        "_get",
+        lambda *_: SimpleNamespace(
+            project_key="server-project",
+            document_id="server-doc",
+            task="review",
+            active_round_id=None,
+        ),
+    )
+    response = http.post("/api/v1/assignments/12/open")
+    assert response.json() == {"code": "TASK_INVALID"}
+    assert calls == []
 
 
 @pytest.mark.parametrize(

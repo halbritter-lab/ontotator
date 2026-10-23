@@ -15,7 +15,7 @@ MAX_ANNOTATOR_ID_LENGTH = 64
 
 MAX_SEARCH_LANGUAGES = 32
 
-PreferenceMode = Literal["independent", "review", "assisted"]
+PreferenceMode = Literal["independent"]
 
 
 def normalize_annotator_id(value: str) -> str:

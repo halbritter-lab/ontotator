@@ -399,6 +399,11 @@ def open_workspace(
     """Open or initialize a workspace view of the logged-in user."""
     annotator_id = own_annotator(principal, req.annotator_id)
     require_mode(request, req.project_key, req.mode)
+    if req.mode == "review":
+        # D1: a review workspace is a consolidation, opened through its round.
+        raise AccessDenied(
+            "MODE_NOT_ALLOWED", "A consolidation opens through its round."
+        )
     key = WorkspaceKey(
         project_key=req.project_key,
         document_id=req.document_id,

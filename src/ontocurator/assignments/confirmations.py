@@ -75,6 +75,8 @@ class DistributionConfirmationService:
         seed: int | None = None,
         confirm_language: bool = False,
     ) -> ConfirmationOutcome:
+        if task == "review":
+            raise DomainError("TASK_NOT_ASSIGNABLE", {"task": "review"})
         validate_selection(
             context.document_ids, context.task, context.per_document, context.seed
         )

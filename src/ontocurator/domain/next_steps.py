@@ -51,7 +51,7 @@ StepCode = Literal[
     "translation_review_in_progress",
     "assign_annotation",
     "annotation_in_progress",
-    "annotation_review_in_progress",
+    "consolidation_in_progress",
     "waiting_for_translation_review",
     "done",
     "translation_accepted",
@@ -123,7 +123,6 @@ class StepFacts:
     # Non-revoked annotate assignments, minimum over the row's target versions.
     annotation_assignments: int
     open_annotations: int
-    open_annotation_reviews: int
     # missing_final_counts(..., per_text=per_text), restricted to Annotate on.
     missing_final: bool
     has_final: bool
@@ -145,6 +144,8 @@ class StepFacts:
     # Rule 6a: an unresolved SOURCE_UPDATE_UNREVIEWED obligation on the
     # row's newest translation version.
     source_changed: bool = False
+    # Rule 9a: open consolidations (the consolidator's task, D1).
+    open_consolidations: int = 0
 
 
 @dataclass(frozen=True)
@@ -192,10 +193,10 @@ def row_stage(facts: StepFacts) -> Stage:
         if facts.has_final and not (
             facts.unacknowledged_final_cause
             or facts.open_annotations
-            or facts.open_annotation_reviews
+            or facts.open_consolidations
         ):
             return "done"
-        if facts.has_final or _final_ready(facts):
+        if facts.has_final or _final_ready(facts) or facts.open_consolidations:
             return "final"
         return "annotation"
     return "done"
@@ -341,7 +342,7 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
                 target=facts.per_text if counted else None,
             )
         )
-    # 9: annotation or optional annotation review open (a finish_then_carry
+    # 9: annotation open (a finish_then_carry
     # assignment on the old version included). ``open_annotations`` already
     # counts that open assignment; ``finishing`` keeps the rule self-contained
     # for facts built without it.
@@ -349,9 +350,10 @@ def derive_steps(facts: StepFacts, *, row: object = None) -> list[Step]:
         steps.append(
             Step("annotation_in_progress", "in_progress", "annotation", None, ())
         )
-    if facts.open_annotation_reviews:
+    # 9a: a consolidation open.
+    if facts.open_consolidations:
         steps.append(
-            Step("annotation_review_in_progress", "in_progress", "annotation", None, ())
+            Step("consolidation_in_progress", "in_progress", "final", None, ())
         )
     # 10: waiting for the translation review before annotation may start.
     if (

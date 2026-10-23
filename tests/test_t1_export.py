@@ -198,7 +198,7 @@ def test_submissions_export_as_a_valid_bundle(db: Database) -> None:
     _submit(
         db,
         "ann-0002",
-        "assisted",
+        "review",
         [_own(db, "ann-0002", "b1", None, full)],
         submission_id="s-b",
     )
@@ -208,16 +208,16 @@ def test_submissions_export_as_a_valid_bundle(db: Database) -> None:
     sets = {u.annotation_set.annotation_set_id: u.annotation_set for u in units}
     assert sorted(sets) == [
         "proj:ann-0001:independent:s-new",
-        "proj:ann-0002:assisted:s-b",
+        "proj:ann-0002:review:s-b",
     ]
     independent = sets["proj:ann-0001:independent:s-new"]
     assert independent.set_kind == "individual"
     assert independent.blind is True
     assert independent.stage == "independent"
     assert independent.annotations[0].mentions[0].segments[0].start == 63
-    assisted = sets["proj:ann-0002:assisted:s-b"]
-    assert assisted.blind is False
-    assert assisted.annotations[0].document_level is True
+    review = sets["proj:ann-0002:review:s-b"]
+    assert review.blind is False
+    assert review.annotations[0].document_level is True
     assert manifest.bundle_id.startswith("proj-")
 
 
@@ -388,7 +388,7 @@ def test_the_edit_log_is_pseudonymised(db: Database) -> None:
     _submit(
         db,
         "ann-0001",
-        "assisted",
+        "review",
         [_own(db, "ann-0001", "a2", (6, 19), full)],
         submission_id="s-1",
     )

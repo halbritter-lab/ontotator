@@ -64,7 +64,7 @@ describe("LayerControls Component", () => {
 
   const sampleScope: TaskScope = {
     scope_id: "scope-multi",
-    mode: "assisted",
+    mode: "review",
     editable_layer_ids: ["phenotype", "disease"],
     reference_layer_ids: ["reference"],
   };

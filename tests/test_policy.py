@@ -13,7 +13,6 @@ PROJECT = "A"
 TABLE: dict[Action, str] = {
     Action.VIEW_PROJECT: "YYYY-",
     Action.OPEN_INDEPENDENT: "--Y--",
-    Action.OPEN_ASSISTED: "--Y--",
     Action.OPEN_REVIEW: "---Y-",
     Action.EXPORT_OWN_WORK: "YYYY-",
     Action.EXPORT_ALL_WORK: "YY---",
@@ -88,9 +87,10 @@ def test_allowed_modes_follow_roles() -> None:
     def modes(*roles: Role) -> list[str]:
         return allowed_modes(access({PROJECT: frozenset(roles)}), PROJECT)
 
-    assert modes("annotator") == ["independent", "assisted"]
-    assert modes("adjudicator") == ["review"]
-    assert modes("annotator", "adjudicator") == ["independent", "review", "assisted"]
+    # D1: "review" opens only through a consolidation round.
+    assert modes("annotator") == ["independent"]
+    assert modes("adjudicator") == []
+    assert modes("annotator", "adjudicator") == ["independent"]
     assert modes() == []
     assert modes("lead") == []
     assert allowed_modes(access(admin=True), PROJECT) == []

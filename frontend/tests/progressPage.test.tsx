@@ -23,7 +23,7 @@ const progress: ProjectProgress = {
     annotation: { scope: "annotate", done: 2, total: 11, counts: { waiting_for_review: 4, to_assign: 3, in_progress: 1, paused: 1, submitted: 2 }, links: {
       waiting_for_review: { ...ANNOTATE_ON, step: ["translation_review_in_progress", "waiting_for_translation_review"] },
       to_assign: { ...ANNOTATE_ON, step: ["assign_annotation"] },
-      in_progress: { ...ANNOTATE_ON, step: ["annotation_in_progress", "annotation_review_in_progress"], paused: "no" },
+      in_progress: { ...ANNOTATE_ON, step: ["annotation_in_progress", "consolidation_in_progress"], paused: "no" },
       paused: { ...ANNOTATE_ON, paused: "yes" },
       submitted: { ...ANNOTATE_ON, stage: ["final", "done"], paused: "no" },
     } },
@@ -98,7 +98,7 @@ it("links every count to the server's query", async () => {
   expect(href("Translation review", "Rejected or queried · your decision: 0")).toBe(`#/projects/p/documents?step=resolve_rejected,resolve_queried&${review}`);
   expect(href("Translation review", "Accepted: 2")).toBe(`#/projects/p/documents?translation_status=accepted&${review}`);
   expect(href("Annotation", "Waiting for translation review: 4")).toBe(`#/projects/p/documents?step=translation_review_in_progress,waiting_for_translation_review&${annotate}`);
-  expect(href("Annotation", "In progress: 1")).toBe(`#/projects/p/documents?step=annotation_in_progress,annotation_review_in_progress&${annotate}&paused=no`);
+  expect(href("Annotation", "In progress: 1")).toBe(`#/projects/p/documents?step=annotation_in_progress,consolidation_in_progress&${annotate}&paused=no`);
   expect(href("Annotation", "Paused by a problem report: 1")).toBe(`#/projects/p/documents?${annotate}&paused=yes`);
   expect(href("Annotation", "Submitted: 2")).toBe(`#/projects/p/documents?stage=final,done&${annotate}&paused=no`);
   expect(href("Final result", "Not ready (work open): 9")).toBe(`#/projects/p/documents?stage=translation_review,annotation&${annotate}`);

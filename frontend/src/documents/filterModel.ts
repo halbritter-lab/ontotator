@@ -62,7 +62,7 @@ export const FACET_GROUPS: readonly FacetGroup[] = [
   ] },
   { id: "annotation", legend: "Annotation", options: [
     option("annotation_state", "Unassigned", "unassigned", "partly_assigned"),
-    option("annotation_state", "In progress", "in_progress", "in_review", "consolidating", "finishing_on_old"),
+    option("annotation_state", "In progress", "in_progress", "consolidating", "finishing_on_old"),
     option("annotation_state", "Paused", "paused"),
     option("annotation_state", "On old text", "old_text_open", "old_text_submitted"),
     option("annotation_state", "Submitted", "submitted"),

@@ -159,7 +159,7 @@ def test_reference_layer_generates_no_checking_obligation(
         project_key="pkg-scenario-b",
         document_id="doc-beta",
         annotator_id="dr-meier",
-        mode="assisted",
+        mode="review",
         target_set_id="targets-0",
     )
     view = ws_svc.open(key)
@@ -184,7 +184,7 @@ def test_reference_layer_generates_no_checking_obligation(
     assert sub.checked_layer_ids == ["target-layer"]
 
 
-def test_assisted_mode_allows_any_number_of_source_and_target_annotations(
+def test_review_mode_allows_any_number_of_source_and_target_annotations(
     tmp_path: Path, test_registry: OntologyRegistry
 ):
     db = database_for(tmp_path / "editor.db")
@@ -200,7 +200,7 @@ def test_assisted_mode_allows_any_number_of_source_and_target_annotations(
         project_key="pkg-scenario-b",
         document_id="doc-beta",
         annotator_id="dr-meier",
-        mode="assisted",
+        mode="review",
         target_set_id="targets-0",
     )
     view = ws_svc.open(key)

@@ -429,7 +429,12 @@ def test_editor_proposals_include_notes_and_set_id(staged, tmp_path):
     path = bundle(tmp_path / "one.zip", [unit("doc")])
     upload = _ready(app, admin, kind="t1", name=path.name, data=path.read_bytes())
     assert _commit(app, admin, upload).status == "succeeded"
-    reviewer = logged_in(app, "reviewer", projects={"proj": ["adjudicator"]})
+    reviewer = logged_in(
+        app,
+        "reviewer",
+        projects={"proj": ["adjudicator"]},
+        assignments=[("proj", "doc", "review")],
+    )
     response = reviewer.post(
         "/api/v1/workspaces/review-inputs",
         json={"project_key": "proj", "document_id": "doc", "mode": "review"},

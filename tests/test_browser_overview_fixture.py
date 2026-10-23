@@ -267,11 +267,11 @@ SCENARIO_TABLE: dict[str, dict[tuple[str, str], Expect]] = {
     "S8": {
         ("case-108", "de"): Expect(
             ACCEPTED,
-            ("in_review", "running"),
+            ("consolidating", "running"),
             ("after_review", "waiting"),
             LUC,
             None,
-            {"annotation": {"people": [LUC], "submitted": 2}},
+            {"annotation": {"people": [LUC]}},
         ),
     },
     "S9": {

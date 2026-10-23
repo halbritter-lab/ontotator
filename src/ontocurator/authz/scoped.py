@@ -253,7 +253,7 @@ class ScopedRepository(Repository):
             .with_for_update(key_share=True)
         ).one()
         # Another compatible draft can submit the same task while this row
-        # lock waits (for example legacy assisted versus independent).
+        # lock waits.
         self.require_workable(conn, key, mutation=True)
         require_annotation_gate(
             conn, self._require_project(conn, key.project_key), key.document_id

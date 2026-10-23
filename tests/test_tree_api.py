@@ -64,6 +64,34 @@ def _open(client, project_key, annotator="annotator-1", mode="independent"):
     return resp.json()["workspace_id"], resp.json()["view"]["key"]
 
 
+def _review_key(client, annotator="annotator-1"):
+    """A review workspace key (its scope keeps the reference layers); D1:
+    review opens only through a consolidation, so the task and the open go
+    through the services, the tree requests through the API."""
+    from auth_harness import username_for
+    from work_plan_support import review_task
+
+    from ontocurator.application.workspaces import WorkspaceService
+    from ontocurator.domain.review import ReviewTargetSet
+
+    _open(client, "pkg-scenario-b", annotator=annotator)  # joins the project
+    app = client.app
+    review_task(
+        app.state.repo.db, "pkg-scenario-b", "doc-beta", username_for(annotator)
+    )
+    key = WorkspaceKey(
+        project_key="pkg-scenario-b",
+        document_id="doc-beta",
+        annotator_id=annotator,
+        mode="review",
+        target_set_id=ReviewTargetSet.create([]).target_set_id,
+    )
+    view = WorkspaceService(app.state.repo, app.state.ontology_registry).open(
+        key, ReviewTargetSet.create([]), pending_proposal_set_ids=[]
+    )
+    return view.key.model_dump(mode="json")
+
+
 def _command(client, ws_id, revision, payload, mutation_id=None):
     return client.post(
         f"/api/v1/workspaces/{ws_id}/commands",
@@ -500,7 +528,7 @@ def test_a_search_with_the_old_browse_route_is_not_a_tree_walk(walk):
 def test_the_tree_follows_the_layer_and_a_walk_cannot_change_layers(app_client):
     client, _ = app_client
     _import(client, make_layered_package("assisted"))
-    _, ws_key = _open(client, "pkg-scenario-b", mode="assisted")
+    ws_key = _review_key(client)
 
     opened = _tree(
         client,
@@ -535,13 +563,13 @@ def test_a_layer_outside_the_scope_of_the_workspace_has_no_tree(app_client):
     _import(client, make_layered_package("assisted"))
     # Working independently, the reference layer is not part of the scope.
     _, ws_key = _open(client, "pkg-scenario-b", mode="independent")
-    _, assisted_key = _open(client, "pkg-scenario-b", mode="assisted")
+    review_key = _review_key(client)
     fields = {
         "annotation_id": "note-1",
         "layer_id": "reference-layer",
         "term_id": "MONDO:0001250",
     }
-    browse_id = _tree(client, assisted_key, "open", **fields).json()["browse_id"]
+    browse_id = _tree(client, review_key, "open", **fields).json()["browse_id"]
     before = _event(client, browse_id)
 
     for endpoint, extra in (("open", {}), ("node", {"browse_id": browse_id})):
@@ -561,7 +589,7 @@ def test_tree_requests_are_refused_in_a_mode_the_roles_do_not_give(tmp_path):
     )
     app = create_app(config)
     _import(AutoLoginClient(app), make_layered_package("assisted"))
-    # An annotator only: independent and assisted, never review.
+    # An annotator only: independent, never review.
     client = logged_in(
         app, "walker", pseudonym="walker", projects={"pkg-scenario-b": ["annotator"]}
     )

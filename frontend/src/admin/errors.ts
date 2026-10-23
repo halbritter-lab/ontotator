@@ -177,6 +177,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   T1_UNSUPPORTED: "The exchange file uses a feature that is not supported here.",
   TARGET_NOT_FOUND: "The review target could not be found.",
   TASK_INVALID: "Choose an annotation or review task.",
+  TASK_NOT_ASSIGNABLE: "This task can no longer be assigned.",
   TEXT_EMPTY: "The uploaded text is empty.",
   TEXT_NOT_UTF8: "Save the text as UTF-8 before uploading it.",
   UNRESOLVED_ADOPTED_COPY: "An adopted annotation is missing its source. Check the imported provenance.",

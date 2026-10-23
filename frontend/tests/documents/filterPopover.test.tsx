@@ -79,7 +79,7 @@ it("checking updates the route at once and keeps the popover open", () => {
   fireEvent.click(screen.getByRole("checkbox", { name: "fr, 3 texts" }));
   expect(onChange).toHaveBeenLastCalledWith({ language: "de,fr" });
   fireEvent.click(screen.getByRole("checkbox", { name: "In progress, 3 texts" }));
-  expect(onChange).toHaveBeenLastCalledWith({ annotation_state: "in_progress,in_review,consolidating,finishing_on_old" });
+  expect(onChange).toHaveBeenLastCalledWith({ annotation_state: "in_progress,consolidating,finishing_on_old" });
   expect(screen.getByRole("dialog", { name: "Filter" })).toBeTruthy();
   expect((screen.getByRole("checkbox", { name: "fr, 3 texts" }) as HTMLInputElement).checked).toBe(true);
   // Escape closes and returns focus to the button.

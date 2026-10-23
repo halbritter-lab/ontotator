@@ -49,7 +49,6 @@ _STEP_DEFAULTS: dict[str, Any] = dict(
     open_translation_reviews=0,
     annotation_assignments=0,
     open_annotations=0,
-    open_annotation_reviews=0,
     missing_final=False,
     has_final=False,
     check_failed=False,
@@ -237,17 +236,16 @@ SCENARIOS: list[tuple[str, StageFacts, tuple[str, ...], dict[str, dict[str, Any]
         },
     ),
     (
-        "8-annotation-review",
+        "8-consolidation",
         facts(
             per_text=2,
             annotation_assignments=2,
-            open_annotation_reviews=1,
             annotators_submitted=(ANA, TOM),
-            annotation_reviewers=(LUC,),
+            consolidators=(LUC,),
             submissions=2,
         ),
-        ("accepted", "done", "in_review", "running", "after_review", "waiting"),
-        {"annotation": {"submitted": 2, "people": (LUC,)}},
+        ("accepted", "done", "consolidating", "running", "after_review", "waiting"),
+        {"annotation": {"people": (LUC,)}},
     ),
     (
         "9-paused",
@@ -604,11 +602,8 @@ def test_final_cell_before_decision() -> None:
         )
     )
     assert (c.final.state, c.final.tone) == ("after_annotation", "waiting")
-    # While an annotation review or a consolidation is open.
-    for extra in (
-        dict(open_annotation_reviews=1, annotation_reviewers=(LUC,)),
-        dict(open_annotations=1, consolidators=(LUC,)),
-    ):
+    # While a consolidation is open.
+    for extra in (dict(open_annotations=1, consolidators=(LUC,)),):
         c = cells(
             facts(
                 per_text=2,
@@ -904,9 +899,7 @@ _ROOTS = [
 
 def _valid(f: StepFacts) -> bool:
     """Invariants the application guarantees (as in test_next_steps_domain)."""
-    open_work = (
-        f.open_translation_reviews or f.open_annotations or f.open_annotation_reviews
-    )
+    open_work = f.open_translation_reviews or f.open_annotations
     if f.is_source and (f.review or f.open_translation_reviews):
         return False
     if f.missing_final and (not f.annotate or f.has_final or open_work):
@@ -966,7 +959,7 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
         _ROOTS,
         (0, 1),
         (0, 1, 2),
-        (None, "annotation", "annotation_review"),
+        (None, "annotation"),
         (False, True),
         (False, True),
         (None, "open", "submitted", "finishing", "source_changed", "waiting"),
@@ -996,7 +989,6 @@ def test_every_lead_step_has_exactly_one_actionable_cell() -> None:
             open_translation_reviews=open_reviews,
             annotation_assignments=assigned,
             open_annotations=int(open_work == "annotation"),
-            open_annotation_reviews=int(open_work == "annotation_review"),
             missing_final=missing_final,
             has_final=has_final,
             check_failed=status == "automatic_check_failed",
@@ -1123,14 +1115,11 @@ def test_annotation_counts_eligible_submissions() -> None:
     assert c.final.state == "none"
 
 
-def test_consolidation_counts_as_open_review_but_shows_consolidating() -> None:
-    # A consolidation assignment is a review task: it is one of the open
-    # annotation reviews, yet the cell names the consolidator.
+def test_consolidation_shows_consolidating() -> None:
     c = cells(
         facts(
             per_text=2,
             annotation_assignments=2,
-            open_annotation_reviews=1,
             annotators_submitted=(ANA, TOM),
             consolidators=(LUC,),
             submissions=2,
@@ -1139,19 +1128,6 @@ def test_consolidation_counts_as_open_review_but_shows_consolidating() -> None:
     assert (c.annotation.state, c.annotation.tone) == ("consolidating", "running")
     assert c.annotation.detail.people == (LUC,)
     assert (c.final.state, c.final.tone) == ("after_review", "waiting")
-    # An annotation review beside it keeps the cell in review.
-    c = cells(
-        facts(
-            per_text=2,
-            annotation_assignments=2,
-            open_annotation_reviews=2,
-            annotators_submitted=(ANA, TOM),
-            annotation_reviewers=(ANA,),
-            consolidators=(LUC,),
-            submissions=2,
-        )
-    )
-    assert (c.annotation.state, c.annotation.detail.people) == ("in_review", (ANA,))
 
 
 def test_final_choose_counts_consolidation_submissions() -> None:

@@ -643,7 +643,8 @@ class EditEventRow(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(ProjectRow.id))
-    draft_id: Mapped[int] = mapped_column(BigInteger, ForeignKey(DraftRow.id))
+    # No foreign key since 0020: edit events outlive purged drafts.
+    draft_id: Mapped[int] = mapped_column(BigInteger)
     user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey(UserRow.id))
     session_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey(SessionRow.id)

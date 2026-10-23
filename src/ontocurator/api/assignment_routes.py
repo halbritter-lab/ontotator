@@ -30,7 +30,7 @@ from ontocurator.assignments.service import (
     TaskSummary,
 )
 from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Action, Task, can
+from ontocurator.authz.policy import Action, AssignableTask, Task, can
 from ontocurator.authz.visibility import qualifying_assignment
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.guidelines import Notice
@@ -139,7 +139,7 @@ class AssignmentRowRequest(BaseModel):
 class DistributionContextView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     document_ids: list[str] = Field(min_length=1)
-    task: Task
+    task: AssignableTask
     per_document: StrictInt = Field(ge=1)
     seed: StrictInt
     state_sha256: str = Field(pattern="^[a-f0-9]{64}$")
@@ -157,7 +157,7 @@ class DistributionContextView(BaseModel):
 class ProposalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     document_ids: list[str] = Field(min_length=1)
-    task: Task
+    task: AssignableTask
     per_document: StrictInt = Field(default=1, ge=1)
     seed: StrictInt | None = None
 
@@ -196,7 +196,7 @@ class ProposalResponse(BaseModel):
 class AssignRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     rows: list[AssignmentRowRequest]
-    task: Task
+    task: AssignableTask
     confirm_language: bool = False
     seed: int | None = None
     context: DistributionContextView | None = None
@@ -480,7 +480,10 @@ def open_assignment(
     body: AssignmentOpenRequest | None = None,
 ) -> AssignmentOpenResponse:
     assignment = _owned_assignment(request, principal.user_id, assignment_id)
-    if assignment.task not in MODE_FOR_TASK:
+    if assignment.task not in MODE_FOR_TASK or (
+        # D1: a review task is a consolidation and opens only through its round.
+        assignment.task == "review" and assignment.active_round_id is None
+    ):
         raise DomainError("TASK_INVALID")
     if assignment.active_round_id is not None and not (
         body and body.review_round_target_set_id

@@ -67,7 +67,6 @@ MODE_FOR_TASK: dict[Task, WorkspaceMode] = {
 }
 TASK_FOR_MODE: dict[WorkspaceMode, Task] = {
     "independent": "annotate",
-    "assisted": "annotate",
     "review": "review",
 }
 AssignmentStatus = Literal["open", "in_progress", "submitted", "reopened"]
@@ -516,7 +515,10 @@ class AssignmentService:
         newest version with a lead or override acceptance; turns Review on for
         its row in the same transaction. ``review_reason="source_changed"``
         (VD14): a review of a translation whose source text changed, see
-        ``enable_source_change_review``."""
+        ``enable_source_change_review``. Task ``review`` is created only by
+        a consolidation start (D1)."""
+        if task == "review":
+            raise DomainError("TASK_NOT_ASSIGNABLE", {"task": "review"})
         with self.db.transaction() as conn:
             target = self._target(conn, username)
             project = self._prepare(conn, actor, key, target)
@@ -634,6 +636,9 @@ class AssignmentService:
             task = cast(Task, old["task"])
             if task not in ADMINISTRATION_TASKS:
                 raise DomainError("TASK_INVALID")
+            if task == "review":
+                # D1: a consolidation task opens only through its round.
+                raise DomainError("TASK_NOT_ASSIGNABLE", {"task": "review"})
             existing = self.active_for(
                 conn, project["id"], old["document_id"], target, task
             )

@@ -44,10 +44,10 @@ def test_task_scope_construction() -> None:
     assert scope_b_indep.editable_layer_ids == ["target-layer"]
     assert scope_b_indep.reference_layer_ids == []
 
-    # In assisted/review mode: reference layers are populated
-    scope_b_assisted = build_scope(pkg_b.manifest.task_profile, "assisted")
-    assert scope_b_assisted.editable_layer_ids == ["target-layer"]
-    assert scope_b_assisted.reference_layer_ids == ["reference-layer"]
+    # In review mode: reference layers are populated
+    scope_b_review = build_scope(pkg_b.manifest.task_profile, "review")
+    assert scope_b_review.editable_layer_ids == ["target-layer"]
+    assert scope_b_review.reference_layer_ids == ["reference-layer"]
 
     pkg_c = make_layered_package("multi_editable")
     scope_c = build_scope(pkg_c.manifest.task_profile, "independent")
@@ -111,12 +111,12 @@ def test_editing_rejects_mutation_on_reference_layer(tmp_path: Path) -> None:
     registry = _setup_registry_for_package(pkg)
     editing_service = EditingService(repo, registry)
 
-    scope = build_scope(pkg.manifest.task_profile, "assisted")
+    scope = build_scope(pkg.manifest.task_profile, "review")
     key = WorkspaceKey(
         project_key=pkg.manifest.package_id,
         document_id="doc-beta",
         annotator_id="dr-meier",
-        mode="assisted",
+        mode="review",
         scope_id=scope.scope_id,
         target_set_id="targets-0",
     )

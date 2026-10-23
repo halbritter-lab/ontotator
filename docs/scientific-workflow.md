@@ -1,18 +1,18 @@
 # A small scientific annotation workflow
 
-Ontocurator records annotation and review results. A submitted review is not
-automatically an adjudicated gold standard. Review displays source provenance,
-including tool/AI markers; use independent mode for annotation without proposals,
-and do not describe source-visible review as a source-blinded experiment.
+Ontocurator records annotation and consolidation results. A submitted
+consolidation is not automatically an adjudicated gold standard. Consolidation
+displays source provenance; annotation from scratch (`independent` mode) shows
+neither proposals nor other people's work.
 
 ## Before distributing work
 
 Use a versioned task profile and a pinned ontology. State the annotation unit,
 allowed types/axes, evidence requirements and inclusion/exclusion rules in a
 shared annotation guideline. Record that guideline's version in the study
-protocol alongside package/profile identities. Fix the intended working mode;
-an independent-only distribution should allow only `independent`, and a
-review-only distribution should allow only `review`.
+protocol alongside package/profile identities. Annotation is distributed
+in `independent` mode; `review` is the consolidator's mode of a consolidation
+round and is never distributed on its own.
 
 Retain the original work package and the distributed application artifact. For
 language comparisons, fix the search resources and language selection for each
@@ -55,16 +55,13 @@ the importing machine's global translation files.
 2. Give two annotators their own user accounts and the same original package,
    ontology, application and guideline. The annotator ID is the logged-in
    user's pseudonym, so each person works under their own ID.
-3. Each annotator works independently in the configured mode. In review, every
-   text remains inspectable even when no proposals exist. Before submission,
-   confirm that the whole text and each required layer were checked.
+3. Each annotator works independently. Before submission, confirm that the
+   whole text and each required layer were checked.
 4. Reopen one submitted case, make a correction and submit again. Export the
    whole package for each annotator, retaining both exports unchanged.
 5. Import one export into a fresh database. Log in as the same annotator, open
-   their review and verify that its target set, decisions and approved counterversions are
-   restored. Multiple rounds require explicit round selection. A different
-   reviewer starts from the submitted current results, not historical originals
-   retained solely as dependencies.
+   their work and verify that its annotations and evidence are restored.
+   Multiple rounds require explicit round selection.
 6. Run the analysis command below for each export. Verify expected case coverage,
    check negative/uncertain cases, and inspect the corrected case's selected
    revision and quoted evidence.
@@ -79,8 +76,8 @@ ontocurator analyze annotator-a.zip --annotator A --output annotator-a.json
 ontocurator analyze annotator-b.zip --annotator B --output annotator-b.json
 ```
 
-`--mode independent`, `--mode review` or `--mode assisted` restricts the output to
-that working mode. `--annotator` is repeatable and declares expected people; it
+`--mode independent` (annotation) or `--mode review` (consolidation) restricts the
+output to that working mode. `--annotator` is repeatable and declares expected people; it
 does not remove other contributors present in the package. Without the option,
 only people represented by submissions are known. An entirely unsubmitted export
 therefore needs an expected annotator ID to produce missing-work rows. Analyze

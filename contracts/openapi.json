@@ -3337,7 +3337,7 @@
                       "translation_review_in_progress",
                       "assign_annotation",
                       "annotation_in_progress",
-                      "annotation_review_in_progress",
+                      "consolidation_in_progress",
                       "waiting_for_translation_review",
                       "done",
                       "translation_accepted",
@@ -3511,7 +3511,6 @@
                       "partly_assigned",
                       "in_progress",
                       "paused",
-                      "in_review",
                       "consolidating",
                       "old_text_open",
                       "old_text_submitted",
@@ -3892,7 +3891,7 @@
                       "translation_review_in_progress",
                       "assign_annotation",
                       "annotation_in_progress",
-                      "annotation_review_in_progress",
+                      "consolidation_in_progress",
                       "waiting_for_translation_review",
                       "done",
                       "translation_accepted",
@@ -4066,7 +4065,6 @@
                       "partly_assigned",
                       "in_progress",
                       "paused",
-                      "in_review",
                       "consolidating",
                       "old_text_open",
                       "old_text_submitted",
@@ -6500,8 +6498,7 @@
                 {
                   "enum": [
                     "independent",
-                    "review",
-                    "assisted"
+                    "review"
                   ],
                   "type": "string"
                 },
@@ -7723,7 +7720,6 @@
             "type": "string",
             "enum": [
               "annotate",
-              "review",
               "translation_review"
             ],
             "title": "Task"
@@ -8429,8 +8425,7 @@
             "type": "string",
             "enum": [
               "translation_review",
-              "annotate",
-              "review"
+              "annotate"
             ],
             "title": "Task"
           },
@@ -8526,8 +8521,7 @@
             "type": "string",
             "enum": [
               "translation_review",
-              "annotate",
-              "review"
+              "annotate"
             ],
             "title": "Task"
           },
@@ -10400,7 +10394,6 @@
             "type": "string",
             "enum": [
               "annotate",
-              "review",
               "translation_review"
             ],
             "title": "Task"
@@ -10595,7 +10588,7 @@
                 "translation_review_in_progress",
                 "assign_annotation",
                 "annotation_in_progress",
-                "annotation_review_in_progress",
+                "consolidation_in_progress",
                 "waiting_for_translation_review",
                 "done",
                 "translation_accepted",
@@ -10854,7 +10847,7 @@
                   "translation_review_in_progress",
                   "assign_annotation",
                   "annotation_in_progress",
-                  "annotation_review_in_progress",
+                  "consolidation_in_progress",
                   "waiting_for_translation_review",
                   "done",
                   "translation_accepted",
@@ -10880,7 +10873,7 @@
                     "translation_review_in_progress",
                     "assign_annotation",
                     "annotation_in_progress",
-                    "annotation_review_in_progress",
+                    "consolidation_in_progress",
                     "waiting_for_translation_review",
                     "done",
                     "translation_accepted",
@@ -11041,7 +11034,6 @@
                   "partly_assigned",
                   "in_progress",
                   "paused",
-                  "in_review",
                   "consolidating",
                   "old_text_open",
                   "old_text_submitted",
@@ -11061,7 +11053,6 @@
                     "partly_assigned",
                     "in_progress",
                     "paused",
-                    "in_review",
                     "consolidating",
                     "old_text_open",
                     "old_text_submitted",
@@ -12137,8 +12128,7 @@
             "enum": [
               "consolidation",
               "carry_forward",
-              "annotation",
-              "review"
+              "annotation"
             ],
             "title": "Kind"
           },
@@ -12485,8 +12475,7 @@
                 "enum": [
                   "consolidation",
                   "carry_forward",
-                  "annotation",
-                  "review"
+                  "annotation"
                 ]
               },
               {
@@ -14037,7 +14026,7 @@
               "translation_review_in_progress",
               "assign_annotation",
               "annotation_in_progress",
-              "annotation_review_in_progress",
+              "consolidation_in_progress",
               "waiting_for_translation_review",
               "done",
               "translation_accepted",
@@ -14566,8 +14555,7 @@
             "type": "string",
             "enum": [
               "independent",
-              "review",
-              "assisted"
+              "review"
             ],
             "title": "Mode",
             "default": "independent"
@@ -15353,11 +15341,7 @@
           "mode_by_package": {
             "additionalProperties": {
               "type": "string",
-              "enum": [
-                "independent",
-                "review",
-                "assisted"
-              ]
+              "const": "independent"
             },
             "type": "object",
             "title": "Mode By Package"
@@ -15405,11 +15389,7 @@
               {
                 "additionalProperties": {
                   "type": "string",
-                  "enum": [
-                    "independent",
-                    "review",
-                    "assisted"
-                  ]
+                  "const": "independent"
                 },
                 "type": "object"
               },
@@ -16709,8 +16689,7 @@
               "type": "string",
               "enum": [
                 "independent",
-                "review",
-                "assisted"
+                "review"
               ]
             },
             "type": "array",
@@ -16753,7 +16732,6 @@
             "type": "string",
             "enum": [
               "annotate",
-              "review",
               "translation_review"
             ],
             "title": "Task"
@@ -18501,8 +18479,7 @@
             "enum": [
               "consolidation",
               "carry_forward",
-              "annotation",
-              "review"
+              "annotation"
             ],
             "title": "Kind"
           },
@@ -20118,8 +20095,7 @@
             "type": "string",
             "enum": [
               "independent",
-              "review",
-              "assisted"
+              "review"
             ],
             "title": "Mode"
           },
@@ -22294,8 +22270,7 @@
                 "type": "string",
                 "enum": [
                   "independent",
-                  "review",
-                  "assisted"
+                  "review"
                 ]
               },
               {
@@ -22491,8 +22466,7 @@
             "type": "string",
             "enum": [
               "independent",
-              "review",
-              "assisted"
+              "review"
             ],
             "title": "Mode"
           },

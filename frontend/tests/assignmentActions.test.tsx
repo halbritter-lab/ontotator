@@ -37,3 +37,8 @@ it("lists other members in the identity format with open tasks", () => {
   fireEvent.click(screen.getByText("Assignment actions")); fireEvent.click(screen.getByRole("button", { name: "Reassign …" }));
   expect(screen.getByRole("option", { name: "Bob (B) — en, de · 1 open task" })).toBeDefined();
 });
+it("offers no reassign for a consolidation task", () => {
+  render(<><AssignmentActions assignment={{ ...assignment, task: "review" }} members={members} onChanged={vi.fn()} directReassign /><AssignmentActions assignment={{ ...assignment, id: 4, task: "review" }} members={members} onChanged={vi.fn()} /></>);
+  expect(screen.queryByRole("button", { name: /^Reassign/ })).toBeNull();
+  expect(screen.getAllByRole("button", { name: "Remove assignment", hidden: true })).toHaveLength(2);
+});

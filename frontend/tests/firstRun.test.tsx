@@ -21,7 +21,7 @@ const view = (): WorkspaceView => {
 };
 const project: ProjectSummary = {
   project_key: "pkg", name: "First run project", description: null,
-  roles: ["annotator"], allowed_modes: ["independent", "assisted"],
+  roles: ["annotator"], allowed_modes: ["independent"],
   document_count: 1, can_manage: false,
 };
 

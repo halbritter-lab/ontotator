@@ -38,7 +38,7 @@ from ontocurator.domain.work_plans import RowKey
 
 router = APIRouter(prefix="/api/v1/projects/{key}", tags=["assignments"])
 
-BatchTask = Literal["translation_review", "annotate", "review"]
+BatchTask = Literal["translation_review", "annotate"]
 
 
 class DocumentRowFilters(BaseModel):

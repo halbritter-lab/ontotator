@@ -181,7 +181,7 @@ def test_reference_layer_review_targets_are_rejected_before_import(
 
 
 @pytest.mark.parametrize("legacy_scope", [False, True])
-@pytest.mark.parametrize("mode", ["independent", "assisted", "review"])
+@pytest.mark.parametrize("mode", ["independent", "review"])
 def test_reference_layer_approved_snapshots_are_rejected_before_import(
     tmp_path, mode, legacy_scope
 ):

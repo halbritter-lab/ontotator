@@ -19,6 +19,9 @@ from ontocurator.domain.workspace import WorkspaceMode
 Role = Literal["lead", "annotator", "adjudicator"]
 ROLES: tuple[Role, ...] = get_args(Role)
 Task = Literal["annotate", "review", "translation_review"]
+# D1: task "review" is the consolidator's task; only a consolidation start
+# creates it, never an assignment request.
+AssignableTask = Literal["annotate", "translation_review"]
 # Administration uses the central task vocabulary; annotation modes remain separate.
 ADMINISTRATION_TASKS = frozenset(get_args(Task))
 TASK_ROLES: Mapping[Task, frozenset[Role]] = {
@@ -33,7 +36,6 @@ class Action(StrEnum):
 
     VIEW_PROJECT = "view_project"
     OPEN_INDEPENDENT = "open_independent"
-    OPEN_ASSISTED = "open_assisted"
     OPEN_REVIEW = "open_review"
     EXPORT_OWN_WORK = "export_own_work"
     EXPORT_ALL_WORK = "export_all_work"
@@ -107,7 +109,6 @@ ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
         {
             Action.VIEW_PROJECT,
             Action.OPEN_INDEPENDENT,
-            Action.OPEN_ASSISTED,
             Action.EXPORT_OWN_WORK,
         }
     ),
@@ -122,11 +123,11 @@ ROLE_ACTIONS: dict[Role, frozenset[Action]] = {
 }
 MODE_ACTIONS: dict[WorkspaceMode, Action] = {
     "independent": Action.OPEN_INDEPENDENT,
-    "assisted": Action.OPEN_ASSISTED,
     "review": Action.OPEN_REVIEW,
 }
-# The order modes are offered in.
-MODE_ORDER: tuple[WorkspaceMode, ...] = ("independent", "review", "assisted")
+# The modes offered for a direct open; "review" is reached only through a
+# consolidation round (D1).
+MODE_ORDER: tuple[WorkspaceMode, ...] = ("independent",)
 
 
 def can(access: Access, action: Action, project_key: str | None = None) -> bool:

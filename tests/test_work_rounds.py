@@ -199,9 +199,9 @@ def test_consolidation_rechecks_actual_contributor_and_profile(rounds, changed):
                 project_id=pid, user_id=lead.user_id, role="adjudicator"
             )
         )
-    assignment = AssignmentService(repo.db).assign(
-        Actor.cli(), "pkg-1", "doc-1", "anna", "review"
-    )
+    from work_plan_support import review_task
+
+    assignment = review_task(repo.db, "pkg-1", "doc-1", "anna")
     with repo.db.transaction() as conn:
         if changed == "separation_policy":
             conn.execute(
@@ -263,9 +263,15 @@ def create_consolidation_fixture(rounds):
                 )
             )
             conn.execute(insert(UserLanguageRow).values(user_id=uid, language="en"))
-        assigned = AssignmentService(repo.db).assign(
-            Actor.cli(), "pkg-1", "doc-1", name, task
-        )
+        if task == "review":
+            # D1: the consolidator's task, as a consolidation start creates it.
+            from work_plan_support import review_task
+
+            assigned = review_task(repo.db, "pkg-1", "doc-1", name)
+        else:
+            assigned = AssignmentService(repo.db).assign(
+                Actor.cli(), "pkg-1", "doc-1", name, task
+            )
         identity = Access(uid, name, False, {"pkg-1": frozenset({role})})
         actors.append((identity, Actor.user(uid, name), assigned))
     inputs = []

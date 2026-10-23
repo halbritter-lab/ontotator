@@ -42,7 +42,7 @@ describe("result selection", () => {
       target, outcome: "changed", replacement: { annotation_id: "copy", version: "old" } }]);
     expect(resultSnapshots(draft, [])).toEqual([]);
   });
-  it.each(["independent", "assisted", "review"] as const)(
+  it.each(["independent", "review"] as const)(
     "keeps a defaulted copy from a non-target proposal in %s results", (mode) => {
       const source = snap("non-target", "p1");
       const copy = snap("copy", "v1", ["assertion"]);
@@ -53,7 +53,7 @@ describe("result selection", () => {
       expect(defaultedResults(results)).toEqual([copy]);
     });
 
-  it.each(["independent", "assisted"] as const)(
+  it.each(["independent"] as const)(
     "only excludes active-target adoption copies in review mode, retaining %s authored results", (mode) => {
       const source = snap("source", "p1");
       const copy = snap("copy", "v1", ["assertion"]);

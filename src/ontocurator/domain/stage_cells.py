@@ -67,7 +67,6 @@ AnnotationState = Literal[
     "partly_assigned",
     "in_progress",
     "paused",
-    "in_review",
     "consolidating",
     "old_text_open",
     "old_text_submitted",
@@ -151,7 +150,6 @@ class StageFacts:
     annotators_submitted: tuple[int, ...] = ()  # authors of ``submissions``
     round_ordinal: int | None = None  # the one open round, if exactly one
     findings: int | None = None  # finding_count when exactly one submission
-    annotation_reviewers: tuple[int, ...] = ()
     consolidators: tuple[int, ...] = ()
     paused_by: int | None = None  # reporter of the open report
     paused_excerpt: str | None = None  # ≤ 60 characters
@@ -241,7 +239,7 @@ STEP_CELL: Mapping[StepCode, CellName | None] = {
     "translation_review_in_progress": "review",
     "assign_annotation": "annotation",
     "annotation_in_progress": "annotation",
-    "annotation_review_in_progress": "annotation",
+    "consolidation_in_progress": "annotation",
     "waiting_for_translation_review": "annotation",
     "done": None,
     "translation_accepted": None,
@@ -457,19 +455,8 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
             note="carried_on_submit",
         )
     submitted = facts.submissions
-    # A consolidation assignment is a review task, so it also counts in
-    # ``open_annotation_reviews``: consolidators win unless an annotation
-    # review runs beside them.
-    if facts.consolidators and not facts.annotation_reviewers:
+    if facts.consolidators:
         return _cell("consolidating", "running", people=facts.consolidators)
-    if step.open_annotation_reviews or facts.annotation_reviewers:
-        return _cell(
-            "in_review",
-            "running",
-            people=facts.annotation_reviewers,
-            submitted=submitted,
-            **waiting_note,
-        )
     if step.open_annotations or facts.annotators_open:
         note: dict[str, Any] = (
             {"note": "may_change", "version": newest}
@@ -548,11 +535,7 @@ def _final(facts: StageFacts, codes: frozenset[str]) -> StageCell:
                 from_version=facts.source_changed_from,
             )
         return _cell("final", "done", **_final_detail(facts))
-    if (
-        step.open_annotation_reviews
-        or facts.annotation_reviewers
-        or facts.consolidators
-    ):
+    if facts.consolidators:
         return _cell("after_review", "waiting")
     if facts.submissions or step.old_submitted:
         return _cell("after_annotation", "waiting")

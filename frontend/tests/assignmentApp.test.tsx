@@ -34,7 +34,7 @@ function clickSection(name: string | RegExp): void {
 it("uses the assigned task list, cleans old identity preferences and routes through the real shell", async () => {
   window.history.replaceState(null, "", "#/?status=all");
   localStorage.setItem("ontocurator.annotatorId", "someone-else");
-  localStorage.setItem("ontocurator.mode.pkg", "assisted");
+  localStorage.setItem("ontocurator.mode.pkg", "independent");
   vi.spyOn(api, "listProjects").mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
   const preferences = vi.spyOn(api, "getPreferences");

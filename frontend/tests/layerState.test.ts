@@ -81,9 +81,9 @@ describe("layerState", () => {
     reference_layer_ids: [],
   };
 
-  const assistedScope: TaskScope = {
-    scope_id: "scope-assisted",
-    mode: "assisted",
+  const referenceScope: TaskScope = {
+    scope_id: "scope-reference",
+    mode: "review",
     editable_layer_ids: ["mondo-layer"],
     reference_layer_ids: ["ref-layer"],
   };
@@ -125,8 +125,8 @@ describe("layerState", () => {
     });
 
     it("rejects activating a reference layer", () => {
-      const initial = initLayerSelection([mondoLayer, refLayer], assistedScope);
-      expect(() => setActiveLayer(initial, [mondoLayer, refLayer], assistedScope, "ref-layer")).toThrow();
+      const initial = initLayerSelection([mondoLayer, refLayer], referenceScope);
+      expect(() => setActiveLayer(initial, [mondoLayer, refLayer], referenceScope, "ref-layer")).toThrow();
     });
 
     it("activating a hidden editable layer automatically makes it visible", () => {

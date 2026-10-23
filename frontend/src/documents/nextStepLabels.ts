@@ -28,7 +28,7 @@ export const STEP_LABELS: Readonly<Record<StepCode, string>> = {
   translation_review_in_progress: "Translation review in progress",
   assign_annotation: "Assign annotation",
   annotation_in_progress: "Annotation in progress",
-  annotation_review_in_progress: "Annotation review in progress",
+  consolidation_in_progress: "Consolidation in progress",
   waiting_for_translation_review: "Waiting for translation review",
   done: "Done",
   translation_accepted: "Translation accepted",
@@ -62,8 +62,8 @@ export const BADGE_LABELS: Readonly<Record<StepBadge, string>> = {
 export const STEP_FILTER_GROUPS: readonly (readonly [string, readonly StepCode[]])[] = [
   ["Problem reports and paused tasks", ["decide_report", "resume_task"]],
   ["Translation review", ["resolve_rejected", "resolve_queried", "translation_not_accepted", "assign_translation_review", "review_source_change", "translation_review_in_progress", "waiting_for_translation_review"]],
-  ["Annotation", ["handle_text_change", "carry_text_change", "assign_annotation", "annotation_in_progress", "annotation_review_in_progress"]],
-  ["Final result", ["choose_final", "confirm_final"]],
+  ["Annotation", ["handle_text_change", "carry_text_change", "assign_annotation", "annotation_in_progress"]],
+  ["Final result", ["choose_final", "confirm_final", "consolidation_in_progress"]],
   ["Done", ["done", "translation_accepted"]],
 ];
 

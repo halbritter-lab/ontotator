@@ -220,8 +220,9 @@ describe("stage strip and Activity", () => {
     expect(banner.textContent).toBe("1 open problem report · Open");
     fireEvent.click(within(banner as HTMLElement).getByRole("link", { name: "Open problem report, Cut off" }));
     expect(onRoute).toHaveBeenCalledWith(reportRoute("r-1"));
-    fireEvent.click(within(panel()).getByRole("button", { name: "Assign annotation review…" }));
-    expect(onAssign).toHaveBeenCalledWith(target, "review");
+    // D1: no annotation review task to assign.
+    expect(within(panel()).queryByRole("button", { name: "Assign annotation review…" })).toBeNull();
+    expect(onAssign).not.toHaveBeenCalled();
     // Consolidation starts only from the decision block.
     expect(within(panel()).queryByText(/Start consolidation/)).toBeNull();
   });

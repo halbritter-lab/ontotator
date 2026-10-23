@@ -147,7 +147,7 @@ def require_independent(
     submitted = select(SubmissionRow.submission_id).where(
         SubmissionRow.project_id == pid,
         SubmissionRow.annotator_id == pseudonym,
-        SubmissionRow.mode.in_(["independent", "assisted"]),
+        SubmissionRow.mode.in_(["independent"]),
         SubmissionRow.document_id.in_(row_documents),
     )
     if (
@@ -449,6 +449,11 @@ class WorkRoundService:
                 "ROUND_KIND_INVALID", "This endpoint handles annotation rounds"
             )
         mode = MODE_FOR_TASK[assignment["task"]]
+        if mode == "review" and kind in {"ordinary", "clean_restart"}:
+            # D1: a review round is a consolidation; ordinary review is gone.
+            raise DomainError(
+                "ROUND_KIND_INVALID", "A review round is a consolidation round"
+            )
         prior_id = assignment["active_round_id"]
         if kind == "consolidation" and (
             (
@@ -677,18 +682,6 @@ class WorkRoundService:
             if mode == "review"
             else []
         )
-        if mode == "review" and not sources and kind == "ordinary":
-            targets = ReviewTargetSet.create(
-                [
-                    AnnotationRef(
-                        annotation_id=s.annotation.annotation_id, version=s.version
-                    )
-                    for s in self.repo.list_annotations_for_document(
-                        project, document.document_id
-                    )
-                    if s.annotation.layer_id in scope.editable_layer_ids
-                ]
-            )
         key = WorkspaceKey(
             format_version="ontocurator-workspace-key/v3",
             round_id=rid,
