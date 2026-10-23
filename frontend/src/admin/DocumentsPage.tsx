@@ -34,7 +34,7 @@ import { DecisionBlock } from "../documents/FinalPanel";
 import { StageActions, type StageActionsProps } from "../documents/StageActions";
 import { TextCard } from "../documents/textCard/TextCard";
 import type { CardView, SegmentId } from "../documents/textCard/cardModel";
-import { PlanDialog } from "../documents/PlanDialog";
+import { TextPlanDialog } from "../documents/PlanSteps";
 import { HandleTextChangeDialog } from "../documents/HandleTextChangeDialog";
 import { CarryDialog, carrySourceOfFinal, carrySourceOfStep, type CarrySource } from "../documents/CarryDialog";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
@@ -649,7 +649,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   };
   const closeCorrection = () => { setCorrectionFor(null); reloadAfterAction(); };
 
-  const [planFor, setPlanFor] = useState<string | null>(null);
+  const [planFor, setPlanFor] = useState<DocumentRowView | null>(null);
   /** "Annotate from proposals myself": the lead's own annotate assignment (P3 grants the annotator role), then its task. */
   const checkMyself = async (row: DocumentRowView) => {
     const username = currentUser?.username ?? "";
@@ -676,7 +676,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     onView={view => openCard({ key: panelKey, stage: panelStage, tab: view === "path" ? undefined : view })}
     onStep={stepCard} onClose={closeCard} onNavigate={route => onNavigate(route)}
     onAssign={(row, task) => { void onAssign(row, task); }}
-    onChangePlan={row => setPlanFor(row.case_id)} onCheckMyself={checkMyself} onChanged={reloadAfterAction}
+    onChangePlan={row => setPlanFor(row)} onCheckMyself={checkMyself} onChanged={reloadAfterAction}
     decision={decision} textVersionTools={textVersionTools} canManage me={currentUser ?? null}
     reportRoute={reportId => ({ name: "projectProblemReport", key: projectKey, reportId, documents: query })}
     adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} sourceLanguage={panelSource}
@@ -688,8 +688,9 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       message={`The consolidation you were setting up is not saved. Show ${caseOfTextKey(pendingPanel.target.key)} ${languageOfTextKey(pendingPanel.target.key)} anyway?`}
       confirmLabel="Discard" cancelLabel="Keep editing" onConfirm={() => { setPanelDirty(false); showPanel(pendingPanel.target, pendingPanel.options); }}
       onCancel={() => setPendingPanel(null)} /> : null} /> : null;
-  const planDialog = planFor ? <PlanDialog projectKey={projectKey} caseIds={[planFor]} onClose={() => setPlanFor(null)}
-    onSaved={(_result, message) => { setPlanFor(null); showToast({ message }); announce(message); reloadAfterAction(); }} /> : null;
+  // "Change plan…" of the card: one text, one row PATCH through the page's plan saves (Undo toast, revisions).
+  const planDialog = planFor ? <TextPlanDialog row={planFor} groupRevision={groupOf(planFor.case_id)?.plan_revision ?? 1} saves={planSaves}
+    onClose={() => setPlanFor(null)} /> : null;
 
   const resolvePanel = (row: DocumentRowView, panel: ResolveOptions): JSX.Element => {
     const key = rowKeyOf(row);

@@ -90,11 +90,6 @@ export interface PlanSaves {
   flagsOf: (row: DocumentRowView, groupRevision: number) => PlanFlagState;
   isBusy: (row: Pick<DocumentRowView, "case_id" | "language">, flag: PlanFlag) => boolean;
   toggle: (row: DocumentRowView, flag: PlanFlag, groupRevision: number) => void;
-  /**
-   * Sets a flag to `value` (the two-option control of an undecided row): a change saves like a chip; the
-   * value the row already has records the decision ("Don't annotate" on an undecided row).
-   */
-  set: (row: DocumentRowView, flag: PlanFlag, value: boolean, groupRevision: number) => void;
   noticeOf: (row: Pick<DocumentRowView, "case_id" | "language">) => PlanNotice | null;
   /** A save on this page decided the row (its local flags stand until the rows refetch). */
   decidedLocally: (row: Pick<DocumentRowView, "case_id" | "language">) => boolean;
@@ -103,6 +98,11 @@ export interface PlanSaves {
   confirm: (row: Pick<DocumentRowView, "case_id" | "language">) => void;
   accept: (row: Pick<DocumentRowView, "case_id" | "language">, reason: string) => void;
   undoAnyway: (row: Pick<DocumentRowView, "case_id" | "language">) => void;
+  /**
+   * One row PATCH with the flags and the annotation mode ("Change plan…", P4: one transaction): Undo toast on
+   * success; every error is thrown to the dialog (revisions of WORK_PLAN_CHANGED are noted first).
+   */
+  saveRow: (row: DocumentRowView, change: Pick<PlanRowPatch, "review" | "annotate" | "annotation_mode">, groupRevision: number, options?: { confirm?: boolean; reason?: string }) => Promise<void>;
   /** A plan revision seen elsewhere (Resolve options, dialogs). */
   noteRevision: (caseId: string, revision: number) => void;
   /** Latest plan revision known for a case (the group's or a newer saved one). */
@@ -165,9 +165,12 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
   };
   const setOverride = (key: string, flags: PlanFlagState, revision: number) => setOverrides(current => new Map(current).set(key, { flags, revision }));
 
-  const changedElsewhere = (key: string, error: ApiError) => {
+  const noteChanged = (error: ApiError) => {
     const cases = isRecord(error.details) && Array.isArray(error.details.cases) ? error.details.cases : [];
     for (const item of cases) if (isRecord(item) && typeof item.case_id === "string" && typeof item.revision === "number") noteRevision(item.case_id, item.revision);
+  };
+  const changedElsewhere = (key: string, error: ApiError) => {
+    noteChanged(error);
     setNotice(key, { kind: "changed" });
     latest.current.onChanged();
   };
@@ -252,39 +255,41 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
     });
   };
 
-  /** Records an undecided row's plan with its current flags (`PUT …/work-plans/rows` writes the row as decided). */
-  const decide = (request: PlanRequest, flags: PlanFlagState) => {
-    const key = `${request.caseId}:${request.language}`;
-    const busyKey = `${key}:${request.flag}`;
-    mark(setBusy, busyKey, true);
+  const saveRow: PlanSaves["saveRow"] = (row, change, groupRevision, options = {}) => new Promise((resolve, reject) => {
+    const key = keyOf(row);
     mark(setSendingKeys, key, true);
     latest.current.onAnnounce("Saving…");
-    enqueue(request.caseId, async () => {
+    // The queued task never rejects (the queue chains with then); the outcome goes to the dialog's promise.
+    enqueue(row.case_id, async () => {
       try {
-        const result = await api.setWorkPlanRows(projectKey, {
-          rows: [{ case_id: request.caseId, language: request.language, review: flags.review, annotate: flags.annotate }],
-          expected_revisions: { [request.caseId]: revisionFor(request.caseId, request.groupRevision) }, undo: false, confirm: false,
+        const result = await api.patchWorkPlan(projectKey, row.case_id, row.language, {
+          ...change,
+          expected_revision: revisionFor(row.case_id, groupRevision),
+          confirm: options.confirm ?? false,
+          ...(options.reason !== undefined ? { accept_external_review: { reason: options.reason } } : {}),
         });
-        const revision = result.revisions[request.caseId] ?? revisionFor(request.caseId, request.groupRevision);
-        noteRevision(request.caseId, revision);
-        setOverride(key, flags, revision);
+        noteRevision(row.case_id, result.revision);
+        setOverride(key, { review: result.flags.review, annotate: result.flags.annotate }, result.revision);
         setNotice(key, null);
         latest.current.onAnnounce("");
         latest.current.showToast({
-          message: `${request.language} of ${request.caseId}: ${flagName(request.flag)} ${request.value ? "on" : "off"}`,
-          actionLabel: "Undo", undo: true, onAction: () => undo(key, result.undo, false),
+          message: `${row.language} of ${row.case_id}: plan saved`,
+          actionLabel: "Undo",
+          undo: true,
+          onAction: () => undo(key, result.undo, false),
+          ...(result.withdrawn.length ? { note: UNDO_WITHDRAWN_NOTE } : {}),
         });
         latest.current.onChanged();
+        resolve();
       } catch (error: unknown) {
         latest.current.onAnnounce("");
-        if (error instanceof ApiError && error.code === "WORK_PLAN_CHANGED") changedElsewhere(key, error);
-        else setNotice(key, { kind: "error", error, retry: () => decide(request, flags) });
+        if (error instanceof ApiError && error.code === "WORK_PLAN_CHANGED") { noteChanged(error); latest.current.onChanged(); }
+        reject(error);
       } finally {
-        mark(setBusy, busyKey, false);
         mark(setSendingKeys, key, false);
       }
     });
-  };
+  });
 
   const flagsOf = (row: DocumentRowView, groupRevision: number): PlanFlagState => {
     const override = overrides.get(keyOf(row));
@@ -324,15 +329,6 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
       if (notice) setNotice(key, null);
       send({ caseId: row.case_id, language: row.language, flag, value: !flagsOf(row, groupRevision)[flag], groupRevision });
     },
-    set: (row, flag, value, groupRevision) => {
-      const key = keyOf(row);
-      if (busy.has(`${key}:${flag}`)) return;
-      if (notices.get(key)) setNotice(key, null);
-      const flags = flagsOf(row, groupRevision);
-      const request = { caseId: row.case_id, language: row.language, flag, value, groupRevision };
-      if (flags[flag] !== value) send(request);
-      else if (row.plan_row?.decided === false && !overrides.has(key)) decide(request, flags);
-    },
     noticeOf: row => notices.get(keyOf(row)) ?? null,
     decidedLocally: row => overrides.has(keyOf(row)),
     dismiss: row => setNotice(keyOf(row), null),
@@ -348,6 +344,7 @@ export function usePlanSaves({ projectKey, onAnnounce, onChanged, showToast }: P
       const notice = notices.get(keyOf(row));
       if (notice?.kind === "undo_conflict") undo(keyOf(row), notice.undo, true);
     },
+    saveRow,
     noteRevision,
     revisionOf: revisionFor,
   };

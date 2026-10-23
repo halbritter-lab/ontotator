@@ -3,34 +3,45 @@ import { api, ApiError, type BulkPlanRequest, type BulkPreview, type BulkResult,
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { plural } from "../app/labels";
 import { personLabel, textLabel } from "../app/identity";
-import { Button, Checkbox, Dialog, IconCheck, IconClose, InlineMessage, Textarea, TriStateButton, type TriState } from "../ui";
-import { allKeep, changedChoices, describePlanChange, languageName, savedSummary, SOURCE_KEY, type PlanChoices } from "./planSummary";
+import { Button, Checkbox, Dialog, InlineMessage, Textarea, type TriState } from "../ui";
+import { allKeep, changedChoices, languageName, planReport, SOURCE_KEY, type PlanChoices } from "./planSummary";
+import { ANNOTATION_LABELS, PlanOption, proposalsHelp, REVIEW_HELP, SCRATCH_HELP } from "./PlanSteps";
 
 export interface PlanDialogProps {
   projectKey: string;
   caseIds: readonly string[];
   /** Preset cells (selection bar quick action or acceptance entry); missing cells are "keep". */
-  initial?: Record<string, { review?: TriState; annotate?: TriState }>;
+  initial?: PlanChoices;
   onClose: () => void;
   /** Called after a successful save; the caller closes the dialog, shows the Undo toast and keeps the selection. */
   onSaved: (result: BulkResult, summary: string) => void;
 }
 
 type LanguagePreview = BulkPreview["languages"][number];
-type Flag = "review" | "annotate";
 
 const DEBOUNCE_MS = 250;
 const CHANGED_MESSAGE = "This plan changed. Reloaded the current plan.";
 const CHECKING = "Checking consequences…";
 
 const hasConsequences = (c: ConsequencesView): boolean => !!(c.withdrawn.length || c.finals_leaving.length || c.restored.length || c.open_reports?.length);
-const currentValue = (counts: { on: number; off: number } | null): "on" | "off" => (counts && counts.on > 0 ? "on" : "off");
-const mixedTitle = (counts: { on: number; off: number } | null): string | undefined => (counts && counts.on > 0 && counts.off > 0 ? `${counts.on} on, ${counts.off} off` : undefined);
-const rowLabel = (language: LanguagePreview): string => (language.key === SOURCE_KEY ? languageName(language) : `${language.key} · MT`);
-
-function StateText({ value }: { value: TriState | "mixed" }): JSX.Element {
-  return <span className="work-plan-state" data-state={value}>{value === "on" && <IconCheck />}{value === "off" && <IconClose />}<span>{value}</span></span>;
-}
+/** "Keep (12 on, 8 off)": the current values in the selection. */
+const keepLabel = (counts: { on: number; off: number } | null): string => {
+  const parts = counts ? [counts.on && `${counts.on} on`, counts.off && `${counts.off} off`].filter(Boolean) : [];
+  return parts.length ? `Keep (${parts.join(", ")})` : "Keep";
+};
+type AnnotationChoice = "keep" | "off" | "on" | "proposals" | "scratch";
+/** "on" = annotate with each text's mode kept (a quick-action preset); the mode radios set a mode. */
+const annotationChoice = (choice: PlanChoices[string] | undefined): AnnotationChoice => {
+  if (choice?.annotate === "off") return "off";
+  if (choice?.annotate !== "on") return "keep";
+  return choice.annotation_mode === "proposals" || choice.annotation_mode === "scratch" ? choice.annotation_mode : "on";
+};
+const annotationCells: Record<Exclude<AnnotationChoice, "on">, { annotate: TriState; annotation_mode: "keep" | "proposals" | "scratch" }> = {
+  keep: { annotate: "keep", annotation_mode: "keep" },
+  off: { annotate: "off", annotation_mode: "keep" },
+  proposals: { annotate: "on", annotation_mode: "proposals" },
+  scratch: { annotate: "on", annotation_mode: "scratch" },
+};
 
 const taskNames: Record<string, [string, string]> = {
   translation_review: ["open translation review", "open translation reviews"],
@@ -65,12 +76,11 @@ function consequenceGroups(consequences: ConsequencesView): { language: string; 
   });
 }
 
-/** Plan many cases at once (spec D19): tri-state cells per language, live preview, confirmation inside the dialog. */
+/** Plan many cases at once (spec D19, F5): per language the steps in words with Keep, live preview, confirmation inside the dialog. */
 export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: PlanDialogProps): JSX.Element {
   const ids = useId().replace(/:/g, "");
   const summaryId = `${ids}-summary`;
   const reasonId = `${ids}-save-reason`;
-  const single = caseIds.length === 1;
   const caseKey = JSON.stringify(caseIds);
   const [choices, setChoices] = useState<PlanChoices>(() => ({ ...(initial ?? {}) }));
   const [preview, setPreview] = useState<{ request: string; data: BulkPreview } | null>(null);
@@ -90,31 +100,8 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
 
   const languages = preview?.data.languages ?? [];
   const totalCases = preview?.data.cases ?? caseIds.length;
-  const current = (language: LanguagePreview, flag: Flag): "on" | "off" => currentValue(flag === "review" ? language.review : language.annotate);
-  /** One case: the cell shows the stored value until the lead toggles it. */
-  const effective = (language: LanguagePreview, flag: Flag): "on" | "off" => {
-    const chosen = choices[language.key]?.[flag];
-    return chosen === "on" || chosen === "off" ? chosen : current(language, flag);
-  };
-  // Only the cells that change something: keep is dropped, and for one case a value equal to the stored one.
-  const diff: PlanChoices = useMemo(() => {
-    if (!single) return changedChoices(choices);
-    const result: PlanChoices = {};
-    for (const language of languages) {
-      for (const flag of (language.key === SOURCE_KEY ? ["annotate"] : ["review", "annotate"]) as Flag[]) {
-        const value = effective(language, flag);
-        if (value !== current(language, flag)) result[language.key] = { ...result[language.key], [flag]: value };
-      }
-    }
-    return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [choices, single, preview]);
-  const requestLanguages: Record<string, LanguageChangeRequest> = useMemo(() => {
-    if (!single || allKeep(diff)) return diff;
-    // One case: send the explicit value of every cell (never keep).
-    return Object.fromEntries(languages.map(language => [language.key, language.key === SOURCE_KEY ? { annotate: effective(language, "annotate") } : { review: effective(language, "review"), annotate: effective(language, "annotate") }]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diff, single, preview]);
+  const diff: PlanChoices = useMemo(() => changedChoices(choices), [choices]);
+  const requestLanguages: Record<string, LanguageChangeRequest> = diff;
   const requestKey = JSON.stringify(requestLanguages);
 
   useEffect(() => {
@@ -138,7 +125,8 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
   const acceptance = fresh && ruleOn ? preview.data.languages.filter(language => language.not_accepted > 0) : [];
   const acceptable = (language: LanguagePreview) => language.not_accepted - language.not_acceptable > 0;
   const acceptLanguages = acceptance.filter(language => acceptable(language) && accept[language.key]).map(language => language.key);
-  const summary = nothing ? "Nothing to change yet." : fresh ? describePlanChange({ choices: diff, languages, toAssign: preview.data.to_assign, ruleOn }) : CHECKING;
+  const sum = (count: (language: LanguagePreview) => number | undefined) => languages.reduce((total, language) => total + (count(language) ?? 0), 0);
+  const summary = nothing ? "Nothing to change yet." : fresh ? planReport(plural(sum(language => language.will_change), "text"), sum(language => language.mode_locked), sum(language => language.mode_no_proposals)) : CHECKING;
 
   let blocked: string | null = null;
   if (step.kind === "confirm") blocked = understood ? null : "Confirm that you understand the consequences first.";
@@ -151,8 +139,8 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
     else if (open) blocked = `${open.key}: accept the translations as reviewed outside Ontocurator with a reason, or turn Review on.`;
   }
 
-  const setCell = (key: string, flag: Flag, value: TriState) => {
-    setChoices(currentChoices => ({ ...currentChoices, [key]: { ...currentChoices[key], [flag]: value } }));
+  const setCells = (key: string, cells: PlanChoices[string]) => {
+    setChoices(currentChoices => ({ ...currentChoices, [key]: { ...currentChoices[key], ...cells } }));
     setNotice(null); setError(undefined);
   };
 
@@ -169,7 +157,7 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
     try {
       const result = await api.saveWorkPlans(projectKey, body);
       if (!alive.current) return;
-      onSaved(result, savedSummary(caseIds.length, diff));
+      onSaved(result, planReport(`${plural(result.changed_rows, "text")} changed`, result.mode_locked?.length ?? 0, result.mode_no_proposals?.length ?? 0));
     } catch (failure: unknown) {
       if (!alive.current) return;
       if (failure instanceof ApiError && failure.code === "WORK_PLAN_CONFIRMATION_REQUIRED" && typeof failure.details === "object" && failure.details !== null) {
@@ -190,11 +178,6 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
   const groups = confirming ? consequenceGroups(step.consequences) : [];
   const withdrawing = confirming && step.consequences.withdrawn.length > 0;
   const title = `Work plan · ${plural(caseIds.length, "case")}`;
-  const shown = (language: LanguagePreview, flag: Flag): TriState | "mixed" => {
-    if (single) return effective(language, flag);
-    const value = choices[language.key]?.[flag] ?? "keep";
-    return value;
-  };
 
   const footer = <>
     <span id={reasonId} className="work-plan-save-reason" hidden={!blocked || blocked === summary}>{blocked}</span>
@@ -207,25 +190,31 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
       {notice && <InlineMessage tone="info">{notice}</InlineMessage>}
       {!preview && previewError === undefined && <p className="field-hint">{CHECKING}</p>}
       {previewError !== undefined && <><ErrorNotice error={previewError} /><Button size="sm" onClick={() => setReload(value => value + 1)}>Retry</Button></>}
-      {preview && <div className="work-plan-table-scroll"><table className="data-table density-compact work-plan-table">
-        <thead><tr><th scope="col">Language</th><th scope="col">In selection</th><th scope="col">Translation review</th><th scope="col">Annotate</th></tr></thead>
-        <tbody>{languages.map(language => {
-          const count = language.cases_in_selection === totalCases ? String(language.cases_in_selection) : `${language.cases_in_selection} of ${totalCases}`;
-          const cell = (flag: Flag) => {
-            const column = flag === "review" ? "Translation review" : "Annotate";
-            if (flag === "review" && language.key === SOURCE_KEY) return <td className="work-plan-none" data-label={column}>–</td>;
-            const counts = flag === "review" ? language.review : language.annotate;
-            const name = `${flag === "review" ? "Translation review" : "Annotate"}, ${language.key === SOURCE_KEY ? languageName(language) : language.key}`;
-            if (confirming) return <td data-label={column}><StateText value={shown(language, flag)} /></td>;
-            if (single) {
-              const value = effective(language, flag);
-              return <td data-label={column}><TriStateButton value={value} label={name} describedBy={summaryId} onChange={() => setCell(language.key, flag, value === "on" ? "off" : "on")} /></td>;
-            }
-            return <td data-label={column}><TriStateButton value={choices[language.key]?.[flag] ?? "keep"} mixed={mixedTitle(counts)} label={name} describedBy={summaryId} onChange={next => setCell(language.key, flag, next)} /></td>;
-          };
-          return <tr key={language.key}><th scope="row">{rowLabel(language)}</th><td className="work-plan-count" data-label="In selection">{count}</td>{cell("review")}{cell("annotate")}</tr>;
-        })}</tbody>
-      </table></div>}
+      {preview && !confirming && languages.map(language => {
+        const count = language.cases_in_selection === totalCases ? String(language.cases_in_selection) : `${language.cases_in_selection} of ${totalCases}`;
+        const group = `${ids}-${language.key}`;
+        const review = choices[language.key]?.review ?? "keep";
+        const annotation = annotationChoice(choices[language.key]);
+        const option = (step: "review" | "annotation", value: string, label: string, checked: boolean, onChoose: () => void, help?: string) =>
+          <PlanOption group={`${group}-${step}`} value={value} label={label} help={help} checked={checked} onChoose={onChoose} />;
+        return <section key={language.key} className="work-plan-language" aria-labelledby={`${group}-name`} aria-describedby={summaryId}>
+          <h3 id={`${group}-name`} className="work-plan-language-name">{languageName(language)} <span className="work-plan-count">In selection: {count}</span></h3>
+          {language.key !== SOURCE_KEY && <fieldset className="plan-step">
+            <legend>Translation review</legend>
+            {option("review", "keep", keepLabel(language.review), review === "keep", () => setCells(language.key, { review: "keep" }))}
+            {option("review", "on", "On", review === "on", () => setCells(language.key, { review: "on" }), REVIEW_HELP.on)}
+            {option("review", "off", "Off", review === "off", () => setCells(language.key, { review: "off" }), REVIEW_HELP.off)}
+          </fieldset>}
+          <fieldset className="plan-step">
+            <legend>Annotation</legend>
+            {option("annotation", "keep", keepLabel(language.annotate), annotation === "keep", () => setCells(language.key, annotationCells.keep))}
+            {option("annotation", "off", ANNOTATION_LABELS.off, annotation === "off", () => setCells(language.key, annotationCells.off))}
+            {annotation === "on" && option("annotation", "on", "Annotate", true, () => undefined)}
+            {option("annotation", "proposals", ANNOTATION_LABELS.proposals, annotation === "proposals", () => setCells(language.key, annotationCells.proposals), proposalsHelp())}
+            {option("annotation", "scratch", ANNOTATION_LABELS.scratch, annotation === "scratch", () => setCells(language.key, annotationCells.scratch), SCRATCH_HELP)}
+          </fieldset>
+        </section>;
+      })}
       <p id={summaryId} className="work-plan-summary" aria-live="polite"><strong>Will change:</strong> {summary}</p>
       {!confirming && acceptance.map(language => {
         const rejected = language.not_acceptable - language.in_review;

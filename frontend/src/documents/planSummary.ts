@@ -1,19 +1,13 @@
 /**
- * Copy of the plan dialog (spec "Plan dialog for several cases (D19)"): the live "Will change"
- * summary and the line of the Undo toast after a save. Pure, so the dialog and the selection bar
- * quick actions word plan changes the same way.
+ * Copy of the plan dialog (spec "Plan dialog for several cases (D19)", F5): the live "Will change"
+ * line, the mode report and the line of the Undo toast after a save. Pure, so the dialog and the
+ * selection bar quick actions word plan changes the same way.
  */
 import { plural } from "../app/labels";
 import type { TriState } from "../ui/TriStateButton";
 
 /** Choices per language key ("source" = each case's source row). Missing cells are "keep". */
-export type PlanChoices = Record<string, { review?: TriState; annotate?: TriState }>;
-
-export interface PlanSummaryLanguage {
-  key: string;
-  source_languages?: readonly string[];
-  cases_in_selection: number;
-}
+export type PlanChoices = Record<string, { review?: TriState; annotate?: TriState; annotation_mode?: "keep" | "proposals" | "scratch" | "project" }>;
 
 export const SOURCE_KEY = "source";
 
@@ -26,7 +20,8 @@ export function languageName(language: { key: string; source_languages?: readonl
 /** Source first, then the languages in alphabetical order. */
 export const compareKeys = (a: string, b: string): number => (a === SOURCE_KEY ? -1 : b === SOURCE_KEY ? 1 : a.localeCompare(b));
 
-const changed = (choice: PlanChoices[string] | undefined): boolean => !!choice && ((choice.review ?? "keep") !== "keep" || (choice.annotate ?? "keep") !== "keep");
+const changed = (choice: PlanChoices[string] | undefined): boolean =>
+  !!choice && ((choice.review ?? "keep") !== "keep" || (choice.annotate ?? "keep") !== "keep" || (choice.annotation_mode ?? "keep") !== "keep");
 
 export function allKeep(choices: PlanChoices): boolean {
   return !Object.values(choices).some(changed);
@@ -40,54 +35,24 @@ export function changedChoices(choices: PlanChoices): PlanChoices {
     const kept: PlanChoices[string] = {};
     if (choice.review && choice.review !== "keep") kept.review = choice.review;
     if (choice.annotate && choice.annotate !== "keep") kept.annotate = choice.annotate;
+    if (choice.annotation_mode && choice.annotation_mode !== "keep") kept.annotation_mode = choice.annotation_mode;
     result[key] = kept;
   }
   return result;
 }
 
-function effect(review: TriState, annotate: TriState, ruleOn: boolean): string {
-  if (review === "on" && annotate === "on") return ruleOn ? "translation review, then annotate after the review is accepted" : "translation review and annotation in parallel";
-  if (review === "off" && annotate === "off") return "not in plan";
-  const parts: string[] = [];
-  if (review === "on") parts.push("translation review");
-  if (annotate === "on") parts.push("annotate");
-  if (review === "off") parts.push("translation review off");
-  if (annotate === "off") parts.push("annotate off");
-  return parts.join(", ");
-}
-
-function toAssignSentence(toAssign: Record<string, number>): string {
-  const parts: string[] = [];
-  const reviews = toAssign.translation_review ?? 0;
-  const annotations = toAssign.annotate ?? 0;
-  if (reviews) parts.push(plural(reviews, "translation review"));
-  if (annotations) parts.push(plural(annotations, "annotation"));
-  if (!parts.length) return "";
-  const total = reviews + annotations;
-  return `${parts.join(" and ")} ${total === 1 ? "becomes" : "become"} "to assign".`;
-}
-
 /**
- * "de in 20 cases → review, then annotate after the review is accepted. Nothing else changes.
- * 20 translation reviews and 20 annotations become "to assign"." — or "Nothing to change yet."
+ * "{head}; {locked} kept their mode because the annotation has started; {n} have no tool proposals."
+ * (parts with 0 omitted). Head: "20 texts" in the preview, "18 texts changed" in the toast.
  */
-export function describePlanChange(input: { choices: PlanChoices; languages: readonly PlanSummaryLanguage[]; toAssign?: Record<string, number>; ruleOn: boolean }): string {
-  const active = changedChoices(input.choices);
-  const keys = Object.keys(active).sort(compareKeys);
-  if (!keys.length) return "Nothing to change yet.";
-  const byKey = new Map(input.languages.map(language => [language.key, language]));
-  const sentences = keys.map(key => {
-    const language = byKey.get(key) ?? { key, cases_in_selection: 0 };
-    const choice = active[key];
-    return `${languageName(language)} in ${plural(language.cases_in_selection, "case")} → ${effect(choice.review ?? "keep", choice.annotate ?? "keep", input.ruleOn)}.`;
-  });
-  if (input.languages.some(language => !active[language.key])) sentences.push("Nothing else changes.");
-  const assign = toAssignSentence(input.toAssign ?? {});
-  if (assign) sentences.push(assign);
-  return sentences.join(" ");
+export function planReport(head: string, locked: number, noProposals: number): string {
+  const parts = [head];
+  if (locked) parts.push(`${locked} kept their mode because the annotation has started`);
+  if (noProposals) parts.push(`${noProposals} have no tool proposals`);
+  return `${parts.join("; ")}.`;
 }
 
-/** Toast line after a save: "Plan saved for 20 cases · de: translation review and annotation". */
+/** Toast line after a quick action: "Plan saved for 20 cases · de: translation review and annotation". */
 export function savedSummary(caseCount: number, choices: PlanChoices): string {
   const active = changedChoices(choices);
   const parts = Object.keys(active).sort(compareKeys).map(key => {

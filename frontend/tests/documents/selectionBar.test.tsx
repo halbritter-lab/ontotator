@@ -152,20 +152,22 @@ it("Annotation only, no translation review opens the plan dialog with the accept
   expect(api.previewWorkPlans).toHaveBeenCalledWith("p", { rows, preset: "annotate_only", confirm: false });
   expect(await within(dialog).findByText("de: 12 of 20 translations are not marked as reviewed in the package. Annotation needs an accepted translation.")).toBeTruthy();
   expect(within(dialog).getByLabelText("These translations were reviewed outside Ontocurator — accept them as they are")).toBeTruthy();
-  expect(within(dialog).getByRole("button", { name: "Annotate, de, on" })).toBeTruthy();
+  const annotation = within(within(dialog).getByRole("region", { name: /^de In selection/ })).getByRole("group", { name: "Annotation" });
+  expect((within(annotation).getByRole("radio", { name: "Annotate" }) as HTMLInputElement).checked).toBe(true);
 });
 
 it("opens the plan dialog for Plan… and keeps the selection after save", async () => {
   render(<Harness />);
   fireEvent.click(within(bar()).getByRole("button", { name: "Plan…" }));
   const dialog = await screen.findByRole("dialog", { name: "Work plan · 20 cases" });
-  fireEvent.click(await within(dialog).findByRole("button", { name: "Translation review, de, keep" }));
-  fireEvent.click(within(dialog).getByRole("button", { name: "Annotate, de, keep" }));
+  const de = await within(dialog).findByRole("region", { name: /^de In selection/ });
+  fireEvent.click(within(within(de).getByRole("group", { name: "Translation review" })).getByRole("radio", { name: "On" }));
+  fireEvent.click(within(within(de).getByRole("group", { name: "Annotation" })).getByRole("radio", { name: "Annotate from scratch" }));
   const save = within(dialog).getByRole("button", { name: "Save for 20 cases" });
   await waitFor(() => expect(save.getAttribute("aria-disabled")).toBeNull());
   await act(async () => { fireEvent.click(save); });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  expect(await screen.findByText("Plan saved for 20 cases · de: translation review and annotation")).toBeTruthy();
+  expect(await screen.findByText("20 texts changed.")).toBeTruthy();
   expect(within(bar()).getByText("20 texts in 20 cases selected")).toBeTruthy();
 });
 

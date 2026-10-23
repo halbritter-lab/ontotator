@@ -30,6 +30,18 @@ describe("runPlanUndo", () => {
     });
   });
 
+  it("sends back the annotation mode and the decided state of each row", async () => {
+    const set = vi.spyOn(api, "setWorkPlanRows").mockResolvedValue(result);
+    await runPlanUndo("p", { rows: [
+      { case_id: "case-0101", language: "de", review: false, annotate: true, restored_revision: null, annotation_mode: null, decided: false },
+      { case_id: "case-0108", language: "fr", review: true, annotate: true, restored_revision: 3, annotation_mode: "scratch", decided: true },
+    ], revisions: undo.revisions });
+    expect(set.mock.calls[0][1].rows).toEqual([
+      { case_id: "case-0101", language: "de", review: false, annotate: true, restored_revision: null, annotation_mode: null, decided: false },
+      { case_id: "case-0108", language: "fr", review: true, annotate: true, restored_revision: 3, annotation_mode: "scratch", decided: true },
+    ]);
+  });
+
   it("returns needs_confirm with the consequences on 409 WORK_PLAN_CONFIRMATION_REQUIRED and resends with confirm", async () => {
     const set = vi.spyOn(api, "setWorkPlanRows").mockRejectedValueOnce(new ApiError(409, "Confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences)).mockResolvedValueOnce(result);
     await expect(runPlanUndo("p", undo)).resolves.toEqual({ kind: "needs_confirm", consequences });

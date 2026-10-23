@@ -22,7 +22,12 @@ function changedCases(details: unknown): { case_id: string; revision: number }[]
 export async function runPlanUndo(projectKey: string, undo: UndoView, options?: { confirm?: boolean }): Promise<PlanUndoOutcome> {
   try {
     const result = await api.setWorkPlanRows(projectKey, {
-      rows: undo.rows.map(row => ({ case_id: row.case_id, language: row.language, review: row.review, annotate: row.annotate, restored_revision: row.restored_revision ?? null })),
+      // The server restores `annotation_mode` and `decided` only when the row names them (null clears an override).
+      rows: undo.rows.map(row => ({
+        case_id: row.case_id, language: row.language, review: row.review, annotate: row.annotate, restored_revision: row.restored_revision ?? null,
+        ...(row.annotation_mode !== undefined ? { annotation_mode: row.annotation_mode } : {}),
+        ...(row.decided !== undefined ? { decided: row.decided } : {}),
+      })),
       expected_revisions: undo.revisions,
       undo: true,
       confirm: options?.confirm ?? false,
