@@ -44,6 +44,21 @@ describe("My tasks component", () => {
     expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 4 });
   });
 
+  it("shows the annotation mode and the assigned date", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 23, 15, 0));
+    const at = new Date(2026, 9, 23, 10, 40).toISOString();
+    vi.mocked(api.listMyTasks).mockResolvedValue([{ ...task(7, "open"), annotation_mode: "proposals", assigned_at: at }, { ...task(8, "open"), annotation_mode: "scratch" }, task(2, "open")]);
+    try {
+      render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+      const rows = await screen.findAllByTestId("task-row");
+      expect(within(rows[0]).getByText("Annotation, from proposals")).toBeDefined();
+      expect(within(rows[0]).getByText("assigned today 10:40")).toBeDefined();
+      expect(within(rows[1]).getByText("Annotation, from scratch")).toBeDefined();
+      expect(within(rows[2]).getByText("Consolidation")).toBeDefined();
+    } finally { vi.useRealTimers(); }
+  });
+
   it("shows loading while the request is pending", async () => {
     const pending = deferred<TaskSummary[]>();
     vi.mocked(api.listMyTasks).mockReturnValue(pending.promise);
@@ -304,7 +319,7 @@ describe("My tasks text label", () => {
     const rows = await screen.findAllByTestId("task-row");
     const table = screen.getByRole("table", { name: "My tasks" });
     expect(within(table).getAllByRole("columnheader").map(header => header.textContent)).toEqual(
-      ["Text", "Project", "Task", "Status", "Last change", "Action"]);
+      ["Text", "Project", "Task", "Status", "Assigned", "Last change", "Action"]);
     expect(within(rows[0]).getByText("case-0101 · de")).toBeDefined();
     expect(within(rows[0]).queryByText("EXT-5")).toBeNull();
     expect(rows[0].getAttribute("aria-label")).toBe("Project P (p): case-0101 · de");

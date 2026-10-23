@@ -224,6 +224,29 @@ it("row mode shows context, Currently and Change task", async () => {
   await waitFor(() => expect(lastPreview().task).toBe("translation_review"));
 });
 
+it("shows the annotation mode of the text", async () => {
+  const withMode = (mode: "proposals" | "scratch", source: "project" | "no_proposals") => ({ ...row, annotation_mode: { mode, source, locked: false, override: null, proposal_count: mode === "proposals" ? 4 : 0 } }) as unknown as DocumentRowView;
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={withMode("proposals", "project")} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
+  await ready();
+  expect(screen.getByText("Annotation, from proposals")).toBeDefined();
+  cleanup();
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={withMode("scratch", "no_proposals")} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
+  await ready();
+  expect(screen.getByText("Annotation, from scratch")).toBeDefined();
+  expect(screen.getByText("This text has no tool proposals, so it is annotated from scratch.")).toBeDefined();
+});
+
+it("lists holders with their assignment date", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 23, 15, 0));
+  try {
+    const dated = { ...row, work: row.work.map(item => ({ ...item, assigned_at: new Date(2026, 9, 23, 10, 40).toISOString() })) } as DocumentRowView;
+    render(<AssignWorkDialog mode="row" projectKey="p/key" row={dated} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
+    await ready();
+    expect(screen.getByText("Currently: Ana Weber (ann-0004), assigned today 10:40")).toBeDefined();
+  } finally { vi.useRealTimers(); }
+});
+
 it("offers Random distribution… as a secondary button", async () => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);

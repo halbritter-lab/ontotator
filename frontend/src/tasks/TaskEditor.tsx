@@ -37,7 +37,7 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
     }, error => { if (active) setState({ identity, error }); });
     return () => { active = false; };
   }, [identity, retry]);
-  if (!state || state.identity !== identity) return <InlineMessage tone="info">Opening task...</InlineMessage>;
+  if (!state || state.identity !== identity) return <p className="task-loading" role="status">Opening task…</p>;
   if (state.error) return <section>{state.error instanceof ApiError && state.error.code === "ASSIGNMENT_NOT_FOUND"
     ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={state.error} />}
     <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button></section>;
@@ -120,7 +120,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); back();
   }}>Back to my tasks</a>;
-  if (loading) return <InlineMessage tone="info">Opening task...</InlineMessage>;
+  if (loading) return <p className="task-loading" role="status">Opening task…</p>;
   if (error) {
     const rounds: string[] = error instanceof ApiError && error.code === "AMBIGUOUS_REVIEW_ROUND"
       && typeof error.details === "object" && Array.isArray(error.details?.rounds) ? error.details.rounds.filter((value): value is string => typeof value === "string") : [];

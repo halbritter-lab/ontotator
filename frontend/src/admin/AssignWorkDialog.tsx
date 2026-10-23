@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { api, ApiError, type BatchAssignRequest, type BatchPersonView, type BatchPreview, type DocumentRowFilters, type DocumentRowView } from "../api/client";
 import { personLabel, textLabel } from "../app/identity";
+import { assignedText } from "../app/assignedDate";
+import { annotationTaskName } from "../editor/modes";
 import { plural } from "../app/labels";
 import { Button, Dialog, Select } from "../ui";
 import { DistributionDialog } from "./DistributionDialog";
@@ -202,7 +204,12 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     summaryLines.push(...skippedLines(fresh.skipped, language));
   }
 
-  const holders = props.mode === "row" && task ? props.row.work.filter(item => item.task === task).map(item => personLabel(item.person ?? { pseudonym: item.author_label })) : [];
+  const now = new Date();
+  const holders = props.mode === "row" && task ? props.row.work.filter(item => item.task === task).map(item => {
+    const name = personLabel(item.person ?? { pseudonym: item.author_label });
+    return item.assigned_at ? `${name}, ${assignedText(new Date(item.assigned_at), now)}` : name;
+  }) : [];
+  const textMode = props.mode === "row" && task === "annotate" ? props.row.annotation_mode ?? null : null;
   const newest = props.mode === "row" ? props.row.versions.filter(version => version.is_newest_in_chain).at(-1) ?? props.row.versions.at(-1) : undefined;
   const target = shown?.targets[0];
   const reasonId = `${id}-assign-reason`;
@@ -221,7 +228,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     <div className="assign-dialog">
       {props.mode === "row" && <div className="assign-context">
         <p><strong>{textLabel({ case_id: props.row.case_id, language: props.row.language, version: newest?.version }, { withVersion: (newest?.version ?? 1) > 1 })}</strong></p>
-        <p className="assign-muted">Currently: {holders.length ? holders.join(", ") : "nobody"}</p>
+        {textMode && <p>{annotationTaskName(textMode.mode)}{textMode.source === "no_proposals" && <span className="assign-muted"> This text has no tool proposals, so it is annotated from scratch.</span>}</p>}
+        <p className="assign-muted">Currently: {holders.length ? holders.join("; ") : "nobody"}</p>
         {task === "annotate" && target && shown && <p className="assign-muted">{`${shown.per_text - target.remaining} of ${shown.per_text} annotators assigned`}</p>}
       </div>}
 

@@ -1,4 +1,5 @@
 import type { AnnotationSnapshot, Draft } from "../api/client";
+import { isReviewLike } from "./modes";
 
 const identity = (ref: { annotation_id: string; version: string }) => JSON.stringify([ref.annotation_id, ref.version]);
 const snapshotKey = (snapshot: AnnotationSnapshot) => identity({ annotation_id: snapshot.annotation.annotation_id, version: snapshot.version });
@@ -6,7 +7,7 @@ const snapshotKey = (snapshot: AnnotationSnapshot) => identity({ annotation_id: 
 /** Results relevant to completion, including unresolved proposals with reviewer flags. */
 export function resultSnapshots(draft: Draft, proposals: AnnotationSnapshot[]): AnnotationSnapshot[] {
   const annotations = draft.annotations ?? [];
-  if (draft.key.mode !== "review") return unique(annotations);
+  if (!isReviewLike(draft.key.mode)) return unique(annotations);
   const decisions = draft.decisions ?? [];
   const activeTargets = draft.targets?.targets ?? [];
   const results = annotations.filter(s => {

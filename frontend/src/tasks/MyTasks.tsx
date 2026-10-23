@@ -8,6 +8,8 @@ import { failedChecksTitle } from "../translation/labels";
 import { IconWarning } from "../ui/icons";
 import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, tabId, Tabs, Toolbar, type Column } from "../ui";
 import { LanguageText } from "../ui/LanguageTag";
+import { AssignedDate } from "../ui/AssignedDate";
+import { annotationTaskName } from "../editor/modes";
 
 export interface MyTasksProps {
   project?: string;
@@ -33,7 +35,8 @@ export const taskActionLabels: Record<TaskSummary["status"], string> = {
   open: "Start", reopened: "Continue", in_progress: "Continue", submitted: "View",
 };
 
-export function taskDescription(task: Pick<TaskSummary, "task" | "language" | "source_language" | "target_language">): string {
+export function taskDescription(task: Pick<TaskSummary, "task" | "language" | "source_language" | "target_language" | "annotation_mode">): string {
+  if (task.task === "annotate") return annotationTaskName(task.annotation_mode);
   if (task.task !== "translation_review") return taskLabels[task.task];
   return `${taskLabels.translation_review} (${task.source_language ?? "unknown language"} to ${task.target_language ?? task.language})`;
 }
@@ -141,6 +144,7 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
       <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>
       {task.held && <><StatusBadge tone="warning">Paused</StatusBadge><p>{task.hold_reason ?? "A project problem needs attention."}</p></>}
     </> },
+    { id: "assigned", header: "Assigned", cell: task => <AssignedDate at={task.assigned_at} /> },
     { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{formatDateTime(task.updated_at)}</time> },
     { id: "open", header: "Action", cell: task => <a className="btn btn-secondary" href={routeHref({ name: "task", assignmentId: task.assignment_id })} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;

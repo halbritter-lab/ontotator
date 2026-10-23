@@ -472,7 +472,7 @@ describe("workflow settings", () => {
     vi.mocked(api.updateProjectSettings).mockResolvedValue({ ...settings, import_plan: "nothing", annotations_per_text: 3 });
     fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
     await within(form).findByText("Workflow saved.");
-    expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 3 });
+    expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 3, tool_proposal_mode: "proposals" });
   });
 
   it("shows how many rows exceed a lowered target", async () => {
@@ -498,6 +498,27 @@ describe("workflow settings", () => {
     renderSettings("workflow");
     const form = await screen.findByRole("form", { name: "Workflow" });
     fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
-    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 2 }));
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 2, tool_proposal_mode: "proposals" }));
+  });
+
+  it("saves Texts with tool proposals", async () => {
+    vi.mocked(api.getProjectSettings).mockResolvedValue({ ...settings, tool_proposal_mode: "proposals" });
+    renderSettings("workflow");
+    const form = await screen.findByRole("form", { name: "Workflow" });
+    const group = within(form).getByRole("radiogroup", { name: "Texts with tool proposals" });
+    expect(within(group).getByRole("radio", { name: /Annotate from proposals/ })).toHaveProperty("checked", true);
+    expect(within(group).getByText("Annotators go through the tool's proposals one by one, confirm, reject or correct each, and add the findings the tool missed.")).toBeTruthy();
+    expect(within(group).getByText("Annotators start from the plain text and do not see the proposals.")).toBeTruthy();
+    fireEvent.click(within(group).getByRole("radio", { name: /Annotate from scratch/ }));
+    vi.mocked(api.updateProjectSettings).mockResolvedValue({ ...settings, tool_proposal_mode: "scratch" });
+    fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
+    await within(form).findByText("Workflow saved.");
+    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, expect.objectContaining({ tool_proposal_mode: "scratch" }));
+  });
+
+  it("names the consolidator rule in D2 words", async () => {
+    renderSettings("rules");
+    expect(await screen.findByRole("checkbox", { name: "The consolidator of a text may not be one of its annotators" })).toBeTruthy();
+    expect(screen.queryByText(/adjudicator/i)).toBeNull();
   });
 });

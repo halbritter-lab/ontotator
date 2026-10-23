@@ -77,8 +77,13 @@ export function ProfileUpload({ onChange, disabled, id = "project-profile-file" 
   </>;
 }
 
-export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number }
-export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1 });
+export type ToolProposalMode = "proposals" | "scratch";
+export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number; tool_proposal_mode: ToolProposalMode }
+export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1, tool_proposal_mode: settings.tool_proposal_mode ?? "proposals" });
+const toolProposalOptions: { value: ToolProposalMode; label: string; help: string }[] = [
+  { value: "proposals", label: "Annotate from proposals", help: "Annotators go through the tool's proposals one by one, confirm, reject or correct each, and add the findings the tool missed." },
+  { value: "scratch", label: "Annotate from scratch", help: "Annotators start from the plain text and do not see the proposals." },
+];
 const importPlanOptions: { value: WorkflowDraft["import_plan"]; label: string }[] = [
   { value: "nothing", label: "Nothing planned" },
   { value: "review_and_annotate_translations", label: "Review and annotate all translations" },
@@ -114,6 +119,16 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
         </label>)}
       </div>
       <div id={`${prefix}-plan-hint`} className="field-hint">Applies to texts imported from now on.</div>
+    </div>
+    <div className="form-group">
+      <div id={`${prefix}-tools-label`} className="form-label">Texts with tool proposals</div>
+      <div role="radiogroup" aria-labelledby={`${prefix}-tools-label`} className="settings-radio-group">
+        {toolProposalOptions.map(option => <label key={option.value} className="form-checkbox-row">
+          <input type="radio" name={`${prefix}-tool-proposals`} value={option.value} checked={value.tool_proposal_mode === option.value} disabled={disabled}
+            aria-describedby={`${prefix}-tools-${option.value}`} onChange={() => onChange({ ...value, tool_proposal_mode: option.value })} />
+          <span>{option.label}<span id={`${prefix}-tools-${option.value}`} className="field-hint">{option.help}</span></span>
+        </label>)}
+      </div>
     </div>
     <TextInput id={`${prefix}-annotations`} label="Annotations per text" type="number" min={1} max={5} step={1} required hint="How many people annotate each text independently." value={Number.isFinite(target) ? String(target) : ""} disabled={disabled}
       onChange={event => onChange({ ...value, annotations_per_text: event.target.value === "" ? Number.NaN : Number(event.target.value) })} />

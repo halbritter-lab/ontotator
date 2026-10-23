@@ -161,7 +161,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     const open = vi.spyOn(api, "openAssignment").mockImplementation(() => new Promise(resolve => { finishOpen = resolve; }));
     render(<App />);
     fireEvent.click(await screen.findByRole("link", { name: /^(Start|Continue|View)$/ }));
-    await screen.findByText("Opening task...");
+    await screen.findByText("Opening task…");
     expect(open).toHaveBeenCalledTimes(1);
     await act(async () => finishOpen(assigned({ read_only: false, workspace_id: "ws", view: baseView() })));
     await screen.findByTestId("annotator-identity");

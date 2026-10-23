@@ -106,6 +106,8 @@ import { isTextEntryTarget, isTypingTarget, useShortcut, useShortcutHint } from 
 import { CaseNavigation } from "./CaseNavigation";
 import { adjacentCase, orderTasks } from "./caseOrder";
 import type { RouteLeaveGuard } from "./router";
+import { isReviewLike, modeBadge } from "../editor/modes";
+import { LanguageTag } from "../ui/LanguageTag";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
@@ -291,7 +293,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [draft, setDraft] = useState<Draft>(view.draft);
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
-  const pendingReanchorItems = view.key.mode === "review" ? view.pending_reanchor_items ?? [] : [];
+  const pendingReanchorItems = isReviewLike(view.key.mode) ? view.pending_reanchor_items ?? [] : [];
   const unresolvedReanchorCount = pendingReanchorItems.filter(item =>
     !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? [])).length;
   const carriedInputs = isCarryKind(roundKind) || (view.key.mode === "independent" && roundInputs.length) ? roundInputs : NO_ROUND_INPUTS;
@@ -551,7 +553,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Review mode targets
   const reviewTargets: TargetProposal[] = useMemo(() => {
-    if (view.key.mode !== "review" || !view.targets) return [];
+    if (!isReviewLike(view.key.mode) || !view.targets) return [];
     return (view.targets.targets ?? []).map((targetRef) => {
       // Find snapshot in available_inputs
       const snap = (view.available_inputs ?? []).find(
@@ -595,7 +597,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     s.annotation.annotation_id === selectedTarget.annotation_id && s.version === selectedTarget.version);
 
   const targetMentions: MentionDisplay[] = useMemo(() => {
-    if (view.key.mode !== "review") return [];
+    if (!isReviewLike(view.key.mode)) return [];
     const mentions: MentionDisplay[] = [];
     for (const target of reviewTargets) {
       if (!target.layer_id || !layerSelection.visibleLayerIds.includes(target.layer_id)) continue;
@@ -910,7 +912,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     };
   }, []);
 
-  const hasInvalidReviewNote = !readOnly && view.key.mode === "review" && (draft.decisions ?? []).some(d => {
+  const hasInvalidReviewNote = !readOnly && isReviewLike(view.key.mode) && (draft.decisions ?? []).some(d => {
     const local = noteDrafts[refKey(d.target)];
     return d.outcome === "uncertain" && local !== undefined && !local.trim() && local !== (d.note ?? "");
   });
@@ -1090,7 +1092,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
    * overridden, and an adopted copy only records "changed" once it actually differs.
    */
   const syncReplacementDecision = async (annotationId: string) => {
-    if (view.key.mode !== "review") return;
+    if (!isReviewLike(view.key.mode)) return;
     const current = latestDraft.current;
     const ann = (current.annotations ?? []).find((a) => a.annotation.annotation_id === annotationId);
     if (!ann) return;
@@ -1743,7 +1745,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // --- Ontology tree -----------------------------------------------------------
   // The annotation the inspector shows as editable right now (same precedence as the pane itself).
   const treeAnnotation =
-    !selectedSource && !pendingAnnotation && !(view.key.mode === "review" && selectedTarget)
+    !selectedSource && !pendingAnnotation && !(isReviewLike(view.key.mode) && selectedTarget)
       ? selectedAnnotation
       : null;
   // While the term of a new annotation is being searched there is nothing for the tree to
@@ -2249,7 +2251,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     reanchor: pendingReanchorItems.filter(item => !currentReanchorResolution(item, draft.reanchor_resolutions ?? [], draft.annotations ?? []))
       .map(item => ({ key: reanchorKey(item), term: termLabel(item.layer_id, item.term_id) ?? item.term_id })),
     unconfirmed: unconfirmedEntries,
-    openTargets: view.key.mode === "review" ? openReviewTargets.map(target => {
+    openTargets: isReviewLike(view.key.mode) ? openReviewTargets.map(target => {
       const snapshot = (view.available_inputs ?? []).find(s => s.annotation.annotation_id === target.annotation_id && s.version === target.version);
       return { key: refKey(target), term: snapshot ? snapshotTerm(snapshot) : target.annotation_id, evidenceId: snapshot ? firstEvidenceId(snapshot) : undefined };
     }) : [],
@@ -2330,7 +2332,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       setSubmitError(`Save the draft review decision before ${action}.`);
       return true;
     }
-    if (readOnlyRef.current || view.key.mode !== "review") return false;
+    if (readOnlyRef.current || !isReviewLike(view.key.mode)) return false;
     const invalid = (latestDraft.current.decisions ?? []).filter(d => {
       const local = noteDraftsRef.current[refKey(d.target)];
       // Submission revalidates legacy decisions; leaving only protects changed local drafts.
@@ -2380,7 +2382,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const rowsRemain = unconfirmed.length > 0;
     if (readOnlyRef.current || submittingWorkspace.current || (rowsRemain && (view.require_chosen_axes || !axisWarningAcknowledged))) return;
     if (!textCheckedConfirmed || blockInvalidUnresolvedNotes() || submissionIssues.length || unresolvedReanchorCount || pendingCarriedCount) return;
-    if (view.key.mode === "review") {
+    if (isReviewLike(view.key.mode)) {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
       if (missingTargets.length > 0) {
         setSubmitError(
@@ -2478,7 +2480,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, [selectedAnnotationTypeDef, view.axes_config]);
 
   const linkedTargetForSelectedAnnotation = useMemo(() => {
-    if (!selectedAnnotation || view.key.mode !== "review") return null;
+    if (!selectedAnnotation || !isReviewLike(view.key.mode)) return null;
     const annId = selectedAnnotation.annotation.annotation_id;
     // 1. Check decisions
     const dec = (draft.decisions ?? []).find(
@@ -2650,9 +2652,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setSelectedTargetId(refKey(reviewTargets[index]));
     setSelectedAnnotationId(null);
     setSelectedSourceId(null);
-  }, { ...shortcutOptions, enabled: view.key.mode === "review" && reviewTargets.length > 0,
-    group: "Review", description: "Next / previous review proposal" });
-  const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && view.key.mode === "review" && !!selectedTarget, group: "Review" };
+  }, { ...shortcutOptions, enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0,
+    group: "Decisions", description: "Next / previous review proposal" });
+  const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && isReviewLike(view.key.mode) && !!selectedTarget, group: "Decisions" };
   useShortcut("1", () => {
     if (!selectedTarget || selectedTarget.is_obsolete || selectedTarget.is_unknown) return false;
     void handleReviewDecision({ outcome: "confirmed" });
@@ -2683,7 +2685,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   useShortcutHint(["Shift + arrows, then release Shift"], "Select text with the keyboard to create a mention");
   // Finding keys (spec B.7): own editable findings and the new finding only, never proposals or read-only views.
   const ownFindingActive = !readOnly && !display && !!selectedAnnotation && !pendingAnnotation && !selectedSource
-    && !selectedInputState && !(view.key.mode === "review" && selectedTarget);
+    && !selectedInputState && !(isReviewLike(view.key.mode) && selectedTarget);
   const pendingSearchable = !readOnly && !display && !!pendingAnnotation && !pendingAnnotation.carriedInput && !savedPendingReanchor;
   useShortcut("/", () => {
     if (pendingSearchable) {
@@ -2741,6 +2743,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     <VariantDetails detail={versions.detail} documentId={view.document.document_id} />
   </details> : null;
 
+  const badge = modeBadge(view.key.mode);
   return (
     <ProposalMetadataProvider scope={`${workspaceId}:${JSON.stringify(view.key)}`} projectKey={view.key.project_key} proposals={view.available_inputs ?? []} metadata={view.proposal_sets ?? []} allowPublicFetch={false}>
     <div ref={rootRef} className={compareOpen ? "case-screen case-comparing" : "case-screen"}>
@@ -2770,15 +2773,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             />
           ) : null}
           <h1 className="case-title" title={view.document.document_id}>{assignmentNavigation?.current.external_id || view.document.document_id}</h1>
+          <LanguageTag code={view.document.language} />
           <span
-            title={roundTitle ?? (roundKind !== "consolidation" && !isCarryKind(roundKind) && view.key.mode === "independent" ? "You do not see proposals from other people or tools." : undefined)}
-            className={`badge ${
-              view.key.mode === "review" ? "badge-review" : "badge-independent"
-            }`}
+            title={roundTitle ?? (roundKind !== "consolidation" && !isCarryKind(roundKind) ? badge.title : undefined)}
+            className={`badge ${badge.className}`}
           >
-            {roundKind === "consolidation" ? "Consolidation review" : roundKind === "text_change" ? TEXT_CHANGE_ORIGIN : isCarryKind(roundKind) ? roundBadge ?? "Review carried findings" : view.key.mode === "review"
-              ? "Review proposals"
-              : "Independent annotation"}
+            {roundKind === "consolidation" ? modeBadge("review").label : roundKind === "text_change" ? TEXT_CHANGE_ORIGIN : isCarryKind(roundKind) ? roundBadge ?? "Review carried findings" : badge.label}
           </span>
           {consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })}>Back to consolidation</a> : null}
           {/* The display name has a bounded width (full text in the title), so the header
@@ -2914,7 +2914,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 await resolveReanchor(item,"dismissed",reason);
                 if ([activeReanchor,pendingAnnotation?.reanchorItem].some(value=>value && reanchorKey(value)===reanchorKey(item))) cancelPending();
               }} />
-            {view.key.mode === "review" && (
+            {isReviewLike(view.key.mode) && (
               <div className="sidebar-section">
                 <div className="sidebar-header">
                   {roundKind === "consolidation" ? "Selected submitted findings" : "Review Proposals"} ({reviewTargets.length})
@@ -3260,7 +3260,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   if (!unsavedAnnotationNotes().length) carried.clearError(state.input.input_id);
                 }} />
             </div>;
-          })() : view.key.mode === "review" && selectedTarget ? (
+          })() : isReviewLike(view.key.mode) && selectedTarget ? (
             <ReviewActions
               source={targetSnapshot}
               readOnly={readOnly}
@@ -3438,7 +3438,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       <SubmitCaseDialog
         open={submitDialogOpen}
         documentId={view.document.document_id}
-        reviewMode={view.key.mode === "review"}
+        reviewMode={isReviewLike(view.key.mode)}
         resultCount={completionResults.length}
         confirmedCount={confirmedCount}
         unresolvedDecisionCount={(draft.decisions ?? []).filter(d => d.outcome === "uncertain").length}

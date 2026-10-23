@@ -35,6 +35,14 @@ describe("result selection", () => {
     expect(resultSnapshots(draft, [older, confirmed, rejected, uncertain, pending, changed, confirmed]).map(ref))
       .toEqual([ref(authored), ref(replacement), ref(confirmed), ref(uncertain)]);
   });
+  it("treats annotate-from-proposals drafts like review drafts", () => {
+    const confirmed = snap("confirmed"); const rejected = snap("rejected");
+    const draft = draftOf("proposal_check", [], [ref(confirmed), ref(rejected)], [
+      { decision_id: "confirm", reviewer_id: "curator", target: ref(confirmed), outcome: "confirmed" },
+      { decision_id: "reject", reviewer_id: "curator", target: ref(rejected), outcome: "rejected" },
+    ]);
+    expect(resultSnapshots(draft, [confirmed, rejected]).map(ref)).toEqual([ref(confirmed)]);
+  });
   it("never substitutes another version for a missing exact replacement", () => {
     const current = snap("copy", "new"); current.annotation.provenance.source_refs = ["target:v1"];
     const target = { annotation_id: "target", version: "v1" };

@@ -87,7 +87,7 @@ export function TranslationReviewScreen(props: TranslationReviewScreenProps): JS
     }, failure => { if (active) { setError(failure); setReadyIdentity(identity); } });
     return () => { active = false; };
   }, [identity]);
-  if (readyIdentity !== identity) return <InlineMessage tone="info">Opening translation review...</InlineMessage>;
+  if (readyIdentity !== identity) return <p className="task-loading" role="status">Opening translation review…</p>;
   if (error || !loaded) return <section><h1>Translation review</h1>
     {error instanceof ApiError && error.code === "ASSIGNMENT_NOT_FOUND" ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={error} />}
     <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button></section>;

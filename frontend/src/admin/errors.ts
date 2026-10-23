@@ -10,7 +10,7 @@ export const GUIDELINE_FILE_ERRORS = {
 
 /** Coverage is checked against the committed backend administration catalog. */
 export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
-  AXIS_CONFIRMATION_WARNING: "Review the unconfirmed axis values, then explicitly acknowledge the warning to submit them unchanged.",
+  AXIS_CONFIRMATION_WARNING: "Check the unconfirmed axis values, then explicitly acknowledge the warning to submit them unchanged.",
   NOT_A_TRANSLATION: "This text is not in a translation chain.",
   REANCHOR_LANGUAGE_MISMATCH: "Annotations can only be carried between text versions in the same language.",
   REANCHOR_PRODUCER_INVALID: "The annotation carry-over job is not associated with this text correction.",
@@ -57,7 +57,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   RESTART_AGREEMENT_REQUIRED: "Ask the project lead to agree to a clean restart through the problem report.",
   ROUND_ACTIVE: "This task already has unfinished work. Complete it or agree on a clean restart first.",
   ROUND_ALREADY_EXISTS: "This task already has a work round. Open it from the round history.",
-  ROUND_INPUTS_INCOMPLETE: "Review every carried finding before submitting. Complete it or dismiss it with a reason.",
+  ROUND_INPUTS_INCOMPLETE: "Check every carried finding before submitting. Complete it or dismiss it with a reason.",
   ROUND_INPUT_CARRIED_FINDING_PRESENT: "This carried finding is still on the text. Dismiss it from the finding itself so it is removed at the same time.",
   ROUND_INPUT_INVALID: "Choose the exact eligible submissions shown for this task.",
   ROUND_INPUT_RESOLUTION_STALE: "A finding changed after completion. Review and complete its current version again.",
@@ -74,7 +74,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   SOURCE_REVIEW_NOT_NEEDED: "The source change of this translation is already reviewed. No source review is needed.",
   WORKFLOW_REQUEST_CONFLICT: "This request was already used for another action. Reload the task before trying again.",
   WORKFLOW_REVISION_CONFLICT: "The task changed in another session. Reload it and review the current state before continuing.",
-  ADJUDICATOR_IS_ANNOTATOR: "This reviewer also has annotation work on the document. Choose another reviewer.",
+  ADJUDICATOR_IS_ANNOTATOR: "This consolidator also has annotation work on this text. Choose another consolidator.",
   ADMIN_REQUIRED: "Only a system administrator may do this.",
   AMBIGUOUS_SEARCH_EVENT: "This search event has more than one source. Check its provenance.",
   AMBIGUOUS_REVIEW_ROUND: "More than one review round is available. Choose the intended round.",

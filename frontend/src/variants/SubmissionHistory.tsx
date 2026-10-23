@@ -24,7 +24,7 @@ interface HistoryData { rows: RowSubmissionView[]; rounds: RowRoundView[]; final
 function ownRow(row: SubmissionHistorySummary, version: number, findings: number): RowSubmissionView {
   return {
     submission_id: row.submission_id, document_id: row.document_id, version, chain_name: null, author_label: row.author_label,
-    is_me: true, recorded_at: row.created_at, mode: row.mode, kind: row.mode === 'review' ? 'consolidation' : 'annotation',
+    is_me: true, recorded_at: row.created_at, mode: row.mode, kind: row.mode === 'review' ? 'consolidation' : row.mode === 'proposal_check' ? 'proposal_check' : 'annotation',
     round_id: row.round_id ?? null, round_ordinal: null, round_state: null, is_latest_in_round: null, finding_count: findings,
     guideline_version: row.guideline_version ?? null, guideline_withdrawn: row.guideline_withdrawn,
   };

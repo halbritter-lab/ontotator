@@ -103,7 +103,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   const work: Record<Section, () => Promise<ProjectSettings>> = {
     General: () => api.updateProjectSettings(projectKey, { name: general.name, description: general.description.trim() ? general.description : null, languages: general.languages }),
     Rules: () => api.updateProjectSettings(projectKey, rules),
-    Workflow: () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text }),
+    Workflow: () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text, tool_proposal_mode: workflow.tool_proposal_mode }),
     "Creation defaults": () => api.updateProjectSettings(projectKey, { creation_defaults: creationDefaults }),
     Pins: () => api.updatePins(projectKey, serializePins(ids, pins)),
     Profile: () => api.updateProjectProfile(projectKey, uploaded!.profile),
@@ -200,7 +200,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
           <option value="optional">Allowed with an optional reason</option>
         </Select>
         <Checkbox id="project-rule-chosen" label="Every axis must be chosen before submission" hint="When off, unconfirmed axis values require a submission warning acknowledgement. Acknowledging a warning does not confirm clinical values." checked={rules.require_chosen_axes} onChange={event => { setRules({ ...rules, require_chosen_axes: event.target.checked }); setSaved(null); }} />
-        <Checkbox id="project-rule-adjudicator" label="The adjudicator of a document may not be one of its annotators" checked={rules.adjudicator_not_annotator} onChange={event => { setRules({ ...rules, adjudicator_not_annotator: event.target.checked }); setSaved(null); }} />
+        <Checkbox id="project-rule-adjudicator" label="The consolidator of a text may not be one of its annotators" checked={rules.adjudicator_not_annotator} onChange={event => { setRules({ ...rules, adjudicator_not_annotator: event.target.checked }); setSaved(null); }} />
         <Checkbox id="project-rule-contiguous" label="Only contiguous mentions" checked={rules.contiguous_mentions_only} onChange={event => { setRules({ ...rules, contiguous_mentions_only: event.target.checked }); setSaved(null); }} />
         <Checkbox id="project-rule-translations" label="Annotate translations only after an accepted review" checked={rules.annotate_accepted_translations_only} onChange={event => { setRules({ ...rules, annotate_accepted_translations_only: event.target.checked }); setSaved(null); }} />
         <details className="settings-secondary-rules"><summary>More rule settings: hidden axis values</summary><HiddenAxisValuesField profile={model.profile} axisDefaults={model.axis_defaults} value={rules.hidden_axis_values} onChange={hidden_axis_values => { setRules({ ...rules, hidden_axis_values }); setSaved(null); }} disabled={busy !== null} /></details>

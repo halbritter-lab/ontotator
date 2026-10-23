@@ -201,7 +201,7 @@ it("ignores an open response after navigating away while it was loading", async 
   let finish!: (value: AssignmentWorkspace) => void;
   vi.mocked(api.openAssignment).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   render(<App user={testUser("alice")} />);
-  await screen.findByText("Opening task...");
+  await screen.findByText("Opening task…");
   clickSection(/^My tasks/);
   await screen.findByRole("heading", { name: "My tasks" });
   await act(async () => finish(assigned(workspaceFixture(), 17)));

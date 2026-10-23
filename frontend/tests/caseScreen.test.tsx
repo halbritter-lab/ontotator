@@ -262,7 +262,7 @@ describe("CaseScreen integration", () => {
     );
 
     expect(screen.getByRole("heading", { level: 1, name: "doc-test-1" })).toBeDefined();
-    expect(screen.getByText("Independent annotation")).toBeDefined();
+    expect(screen.getByText("Annotate from scratch")).toBeDefined();
     expect(screen.getByText("No finding selected")).toBeDefined();
   });
 
@@ -2409,10 +2409,10 @@ describe("CaseScreen integration", () => {
 
     it("names modes and identity without jargon", () => {
       render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} annotatorName="Alice" />);
-      const badge = screen.getByText("Independent annotation");
-      expect(badge.getAttribute("title")).toBe("You do not see proposals from other people or tools.");
+      const badge = screen.getByText("Annotate from scratch");
+      expect(badge.getAttribute("title")).toBe("You see neither the tool's proposals nor other people's work.");
       expect(screen.getByTestId("annotator-identity").textContent).toBe("as Alice (user-test)");
-      expect(document.body.textContent).not.toMatch(/Annotating as|Annotate from scratch/);
+      expect(document.body.textContent).not.toMatch(/Annotating as|Independent annotation/);
     });
 
     it("hides the selection intent and explains segment and mention adding", async () => {
