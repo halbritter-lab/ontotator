@@ -22,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ontocurator import settings
 from ontocurator.api.admin_routes import router as admin_router
+from ontocurator.api.auth_routes import demo_router as demo_login_router
 from ontocurator.api.auth_routes import router as auth_router
 from ontocurator.api.body_limits import BodyLimitMiddleware
 from ontocurator.api.document_row_routes import router as document_row_router
@@ -499,6 +500,16 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     app.include_router(upload_router)
     app.include_router(me_router)
     app.include_router(auth_router)
+    if config is not None and config.demo_logins:
+        logger.warning(
+            "DEMO LOGINS ARE ON (ONTOCURATOR_DEMO_LOGINS_FILE): the login page "
+            "offers %d one-click accounts and sends their passwords to every "
+            "browser that opens it. Use this only on a loopback demo stack, "
+            "never in production.",
+            len(config.demo_logins),
+        )
+        app.state.demo_logins = config.demo_logins
+        app.include_router(demo_login_router)
     app.include_router(router)
     app.include_router(tree_router)
     app.include_router(health_router)

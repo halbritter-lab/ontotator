@@ -25,7 +25,10 @@ from ontocurator.auth.sessions import SessionService
 SESSION_COOKIE = "ontocurator_session"
 CSRF_HEADER = "x-csrf-token"
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-PUBLIC_PATHS = frozenset({"/api/v1/auth/login", "/api/v1/auth/redeem-code"})
+# demo-logins exists only while demo logins are configured (404 otherwise).
+PUBLIC_PATHS = frozenset(
+    {"/api/v1/auth/login", "/api/v1/auth/redeem-code", "/api/v1/auth/demo-logins"}
+)
 CROSS_SITE_MESSAGE = "The request does not come from this site."
 
 

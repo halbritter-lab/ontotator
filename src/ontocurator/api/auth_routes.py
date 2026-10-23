@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from ontocurator.api.identity import PrincipalDep
@@ -11,6 +12,9 @@ from ontocurator.auth.accounts import AccountService
 from ontocurator.auth.sessions import Principal, SessionService
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+# Included only while ONTOCURATOR_DEMO_LOGINS_FILE is set; otherwise 404.
+demo_router = APIRouter(prefix="/api/v1/auth", include_in_schema=False)
+DEMO_LOGINS_PATH = "/api/v1/auth/demo-logins"
 
 # Generous bounds: they only stop absurd bodies, the rules are checked later.
 MAX_USERNAME_INPUT = 256
@@ -132,3 +136,16 @@ def logout(principal: PrincipalDep, request: Request) -> Response:
 def me(principal: PrincipalDep) -> CurrentUser:
     """The logged-in user."""
     return CurrentUser.of(principal)
+
+
+@demo_router.get("/demo-logins")
+def demo_logins(request: Request) -> JSONResponse:
+    """DEMO ONLY: the one-click accounts of a loopback demo stack.
+
+    The browser logs in with them through the normal ``/login``.
+    """
+    accounts = [
+        {"username": d.username, "password": d.password, "label": d.label}
+        for d in request.app.state.demo_logins
+    ]
+    return JSONResponse({"accounts": accounts}, headers={"Cache-Control": "no-store"})

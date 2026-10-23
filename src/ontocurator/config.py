@@ -40,6 +40,9 @@ class AppConfig(BaseModel):
     # Matched lower-case, IDN names in punycode (as browsers send them).
     # None: every host (tests); `serve` always sets them.
     trusted_hosts: tuple[str, ...] | None = None
+    # DEMO ONLY (ONTOCURATOR_DEMO_LOGINS_FILE): one-click logins on the login
+    # page of a loopback demo stack; their passwords reach every browser.
+    demo_logins: tuple[settings.DemoLogin, ...] = ()
     max_upload_bytes: int = 50 * 1024 * 1024
     max_ontology_bytes: int = 300 * 1024 * 1024
 

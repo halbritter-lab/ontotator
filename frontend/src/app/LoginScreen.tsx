@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { api, AuthError, type CurrentUser } from "../api/client";
+import { api, AuthError, type CurrentUser, type DemoLogin } from "../api/client";
 
 import { Button } from "../ui/Button";
 import { TextInput } from "../ui/TextInput";
@@ -30,6 +30,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
   const [problem, setProblem] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [demoLogins, setDemoLogins] = useState<DemoLogin[]>([]);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const shownView = useRef(view);
@@ -37,6 +38,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
   // A dialog takes the focus to its first field; switching views moves it to the new heading.
   useEffect(() => {
     if (overlay) firstFieldRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // DEMO ONLY: a loopback demo stack may offer one-click accounts on the login page (not in the
+  // dialog after a session ended, which resumes the open work); otherwise the server answers 404.
+  useEffect(() => {
+    if (overlay) return;
+    let current = true;
+    void api.demoLogins().then((logins) => {
+      if (current) setDemoLogins(logins);
+    });
+    return () => {
+      current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -71,6 +85,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
     e.preventDefault();
     if (busy) return;
     void run(() => api.login(username.trim(), password));
+  };
+
+  const loginAs = (demo: DemoLogin) => {
+    if (busy) return;
+    void run(() => api.login(demo.username, demo.password));
   };
 
   const submitCode = (e: React.FormEvent) => {
@@ -195,6 +214,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
             Back to login
           </Button>
         </form>
+      )}
+      {view === "login" && demoLogins.length > 0 && (
+        <section className="login-demo" aria-labelledby="login-demo-title">
+          <h2 id="login-demo-title">Demo accounts</h2>
+          <div className="login-demo-list">
+            {demoLogins.map((demo) => (
+              <Button key={demo.username} size="sm" disabled={busy} onClick={() => loginAs(demo)}>
+                {demo.label ? `${demo.username} · ${demo.label}` : demo.username}
+              </Button>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

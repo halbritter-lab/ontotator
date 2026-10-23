@@ -297,6 +297,13 @@ export class ApiError extends Error {
   }
 }
 
+/** DEMO ONLY: a one-click login offered by a loopback demo stack. */
+export interface DemoLogin {
+  username: string;
+  password: string;
+  label: string;
+}
+
 /** 401 (not logged in, session ended, failed login) or 403 (not allowed, CSRF, origin). */
 export class AuthError extends ApiError {
   constructor(message = "Not allowed", details?: ApiErrorDetails, code = "FORBIDDEN", status = 403) {
@@ -765,6 +772,19 @@ export class ApiClient {
     });
     this.setCsrfToken(user.csrf_token);
     return user;
+  }
+
+  /**
+   * DEMO ONLY: one-click accounts of a loopback demo stack (ONTOCURATOR_DEMO_LOGINS_FILE).
+   * The server answers 404 unless they are configured; that and any other failure give none.
+   */
+  async demoLogins(): Promise<DemoLogin[]> {
+    try {
+      const body = await this.request<{ accounts?: DemoLogin[] }>("/api/v1/auth/demo-logins", { method: "GET" });
+      return Array.isArray(body?.accounts) ? body.accounts : [];
+    } catch {
+      return [];
+    }
   }
 
   /** Set the password with a setup or reset code, then log in. Stores the CSRF token. */

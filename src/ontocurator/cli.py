@@ -229,6 +229,9 @@ def serve(
             None if public_origin is None else settings.canonical_origin(public_origin)
         )
         admin_password_hash = settings.read_secret("ONTOCURATOR_ADMIN_PASSWORD_HASH")
+        demo_logins = settings.demo_logins(
+            public_origin=canonical_public_origin, bind_host=host
+        )
     except settings.SettingsError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -289,6 +292,7 @@ def serve(
         public_origin=canonical_public_origin,
         admin_password_hash=admin_password_hash,
         trusted_hosts=trusted_hosts,
+        demo_logins=demo_logins,
     )
 
     try:

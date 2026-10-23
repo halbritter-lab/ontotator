@@ -15,7 +15,7 @@ from ontocurator.api.health import ReadinessProbe, router
 from ontocurator.api.security import install_security
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import DomainError
-from ontocurator.settings import server_settings
+from ontocurator.settings import demo_logins, server_settings
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,8 @@ def app_from_env() -> FastAPI:
         public_origin=runtime.public_origin,
         admin_password_hash=runtime.admin_password_hash,
         trusted_hosts=tuple(hosts),
+        # The container binds 0.0.0.0; only the public origin can be checked.
+        demo_logins=demo_logins(public_origin=runtime.public_origin),
     )
     try:
         return create_app(config, expose_docs=not production)

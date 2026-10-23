@@ -7,6 +7,7 @@ from both. The Docker service contract uses only the file form (T2 D1).
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -102,6 +103,98 @@ def server_settings(env: Mapping[str, str] | None = None) -> ServerSettings:
         admin_password_hash=read_secret("ONTOCURATOR_ADMIN_PASSWORD_HASH", env),
         database_url=url,
     )
+
+
+DEMO_LOGINS_ENV = "ONTOCURATOR_DEMO_LOGINS_FILE"
+MAX_DEMO_LOGINS = 20
+
+
+@dataclass(frozen=True)
+class DemoLogin:
+    """A one-click login offered on the login page of a loopback demo stack."""
+
+    username: str
+    password: str = field(repr=False)
+    label: str = ""
+
+
+def is_loopback_host(host: str) -> bool:
+    """``localhost`` or a loopback IP address (``[::1]`` brackets allowed)."""
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
+def demo_logins(
+    env: Mapping[str, str] | None = None,
+    *,
+    public_origin: str | None,
+    bind_host: str | None = None,
+) -> tuple[DemoLogin, ...]:
+    """The demo accounts from ``ONTOCURATOR_DEMO_LOGINS_FILE``; () when unset.
+
+    DEMO ONLY: their passwords are sent to every browser that opens the login
+    page. The file holds a JSON list of ``{"username", "password", "label"}``
+    objects. Refused in production, with a public origin that is not a
+    loopback address, and when the server binds a non-loopback address
+    (``bind_host``; a container binds 0.0.0.0, so it is checked only when
+    given).
+
+    Raises:
+        SettingsError: for a refused setting or an unreadable/invalid file.
+    """
+    env = os.environ if env is None else env
+    path = env.get(DEMO_LOGINS_ENV)
+    if path is None:
+        return ()
+    if env.get("ONTOCURATOR_ENV", "development") == "production":
+        raise SettingsError(f"{DEMO_LOGINS_ENV} must never be set in production")
+    origin_host = urlsplit(public_origin).hostname if public_origin else None
+    if origin_host is not None and not is_loopback_host(origin_host):
+        raise SettingsError(
+            f"{DEMO_LOGINS_ENV} needs a loopback public origin, not {public_origin}"
+        )
+    if bind_host is not None and not is_loopback_host(bind_host):
+        raise SettingsError(
+            f"{DEMO_LOGINS_ENV} needs a loopback address to bind, not {bind_host}"
+        )
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise SettingsError(
+            f"Unable to read {DEMO_LOGINS_ENV}: {exc.strerror or exc}"
+        ) from exc
+    except ValueError:
+        raise SettingsError(f"{DEMO_LOGINS_ENV} is not valid JSON") from None
+    problem = (
+        f"{DEMO_LOGINS_ENV} must hold a list of 1 to {MAX_DEMO_LOGINS} objects "
+        'with non-empty "username" and "password" strings and an optional "label"'
+    )
+    if not isinstance(raw, list) or not 1 <= len(raw) <= MAX_DEMO_LOGINS:
+        raise SettingsError(problem)
+    logins: list[DemoLogin] = []
+    for entry in raw:
+        if not isinstance(entry, dict) or set(entry) - {
+            "username",
+            "password",
+            "label",
+        }:
+            raise SettingsError(problem)
+        username, password = entry.get("username"), entry.get("password")
+        label = entry.get("label", "")
+        if not (
+            isinstance(username, str)
+            and username.strip()
+            and isinstance(password, str)
+            and password
+            and isinstance(label, str)
+        ):
+            raise SettingsError(problem)
+        logins.append(DemoLogin(username.strip(), password, label.strip()))
+    return tuple(logins)
 
 
 def read_secret(name: str, env: Mapping[str, str] | None = None) -> str | None:

@@ -304,4 +304,19 @@ uv run python scripts/container_check.py --image ontocurator:release --smoke
 
 The checker uses a unique disposable Compose project, temporary build placeholders for image reuse and cleans up that project's volumes. It seeds a project, runs browser smoke while the stack is healthy, then verifies readiness failures, permissions and production network settings. `--smoke` is optional for direct checker invocation. The seed/load-test harnesses stream inputs over stdin into writable `/tmp`; ontology uploads become searchable while workers remain running.
 
+### Demo logins (loopback demo stacks only)
+
+**Never for production.** For manual tests on a local loopback stack, `ONTOCURATOR_DEMO_LOGINS_FILE` may name a JSON file of demo accounts:
+
+```json
+[
+  {"username": "demo-lead", "password": "…", "label": "Project lead"},
+  {"username": "demo-annotator", "password": "…", "label": "Annotator"}
+]
+```
+
+The file is read once at startup. The login page then shows a "Demo accounts" section with one button per account; a button logs in through the normal `/api/v1/auth/login` (same rate limits, lockouts, audit and session). To do so, `GET /api/v1/auth/demo-logins` sends **every listed password in plain text to every browser that opens the login page**. Only list throwaway demo accounts, mount the file read-only and keep the stack bound to `127.0.0.1`.
+
+Unset (the default), nothing changes: the endpoint answers 404 and the page has no demo section. The server refuses to start with the setting when `ONTOCURATOR_ENV=production`, when the public origin is not a loopback address, or when `ontocurator serve` binds a non-loopback address. A container binds `0.0.0.0` internally, so there only the public origin is checked; keep the published port on `127.0.0.1`. While it is on, every start logs the warning `DEMO LOGINS ARE ON`.
+
 For representative performance measurements, follow [loadtest/README.md](../loadtest/README.md). Use a fresh separate dev project, real HPO release from 2026-06-23 or newer, 1,000 synthetic documents and 30 synthetic users. Warm separately, then measure five minutes under the actual two-worker app and Compose limits. Record CPU/RAM, Docker version, image identity, ontology SHA/release, workload, percentiles, errors and resource evidence. Strict p95 targets are search 150 ms, open 300 ms, write 150 ms and dashboard 500 ms; equality fails. Preserve failed results and profile before tuning. Full measurement and performance acceptance remain pending until an actual run and report exist; harness tests provide no performance evidence. Generated `loadtest/results/` artifacts stay local by default.
