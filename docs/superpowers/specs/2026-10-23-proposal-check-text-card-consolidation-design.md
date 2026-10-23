@@ -89,6 +89,10 @@ Below the path: the selected segment's details and its own actions.
   submitted) and the date it was assigned ("assigned 23 Oct"), "+ Person", and on each chip an ✕ that removes the assignment after a
   confirmation dialog ("Remove Tom Reis from the annotation of EN100024? Their draft is
   discarded." Cancel / Remove). Submitted work cannot be removed this way.
+- The lead can do a proposal check themselves from the Annotation part: "Check proposals
+  myself" assigns the annotation to the lead (granting the annotator role in this project
+  automatically, as for self-consolidation) and opens the task. It counts as one of the
+  annotations per text like any other (F24).
 - **Finalization:** "Compare results…", "Consolidate…", "Accept result…", final result
   with "Open result".
 
@@ -111,9 +115,12 @@ plan). With one or zero selected texts there is no bar; the card is the place to
 bar keeps its floating position. Its buttons and labels are reviewed against the new task
 names (no "Annotate only" style labels without context).
 
-A plain click on an already selected row keeps it selected (unchanged decision); closing
-the card does not deselect. Deselecting stays on the checkbox and "Clear selection" (F3 is
-satisfied by the card closing on Esc/outside click).
+Row click toggles the selection (F3, replaces the 2026-10-22 "never deselects" rule):
+- click on an unselected row: select it and open its card;
+- click on a selected row: deselect it, the card does not open;
+- click on the text name (flag + language): open the card without changing the selection;
+- checkbox, Shift- and Ctrl-click behave as before. Closing the card never changes the
+  selection.
 
 ## 2b. Documents table rows
 
