@@ -331,6 +331,9 @@ ROW_KEYS = {
     "flagged_unclear",
     "flagged_group_id",
     "flagged_round_id",
+    "proposal_count",
+    "annotation_mode",
+    "consolidation_progress",
 }
 VERSION_KEYS = {
     "document_id",
@@ -363,6 +366,9 @@ WORK_KEYS = {
     "round_state",
     "lead_correction",
     "moved_to_version",
+    "assigned_at",
+    "assigned_by",
+    "annotation_mode",
 }
 FINAL_KEYS = {
     "author",

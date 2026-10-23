@@ -2293,6 +2293,31 @@ export interface components {
             provenance: components["schemas"]["Provenance"];
         };
         /**
+         * AnnotationModeView
+         * @description The text's annotation mode as the card, plan dialog and rows show it.
+         */
+        AnnotationModeView: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "proposals" | "scratch";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "no_proposals" | "locked" | "plan" | "project";
+            /** Locked */
+            locked: boolean;
+            /** Override */
+            override?: ("proposals" | "scratch") | null;
+            /**
+             * Proposal Count
+             * @default 0
+             */
+            proposal_count: number;
+        };
+        /**
          * AnnotationRef
          * @description Reference binding annotation ID and immutable version hash.
          */
@@ -3159,6 +3184,16 @@ export interface components {
             lane: number;
         };
         /**
+         * ConsolidationProgressView
+         * @description Open and total groups of the row's active consolidation round.
+         */
+        ConsolidationProgressView: {
+            /** Open */
+            open: number;
+            /** Total */
+            total: number;
+        };
+        /**
          * ConsolidationTermPartView
          * @description The decisions among one term's members ("Keep both" asks them).
          */
@@ -3628,6 +3663,13 @@ export interface components {
             flagged_group_id?: string | null;
             /** Flagged Round Id */
             flagged_round_id?: string | null;
+            /**
+             * Proposal Count
+             * @default 0
+             */
+            proposal_count: number;
+            annotation_mode?: components["schemas"]["AnnotationModeView"] | null;
+            consolidation_progress?: components["schemas"]["ConsolidationProgressView"] | null;
         };
         /** DocumentRowsPage */
         DocumentRowsPage: {
@@ -6825,6 +6867,10 @@ export interface components {
             case_id?: string | null;
             /** Failed Check Count */
             failed_check_count?: number | null;
+            /** Assigned At */
+            assigned_at?: string | null;
+            /** Annotation Mode */
+            annotation_mode?: ("proposals" | "scratch") | null;
         };
         /** TemplateInfo */
         TemplateInfo: {
@@ -7509,6 +7555,11 @@ export interface components {
             lead_correction: boolean;
             /** Moved To Version */
             moved_to_version?: number | null;
+            /** Assigned At */
+            assigned_at?: string | null;
+            assigned_by?: components["schemas"]["PersonRefView"] | null;
+            /** Annotation Mode */
+            annotation_mode?: ("proposals" | "scratch") | null;
         };
         /** WorkRoundView */
         WorkRoundView: {
@@ -9717,6 +9768,7 @@ export interface operations {
                 /** @description "me" or a pseudonym */
                 waiting_on?: string[] | null;
                 flags?: "guidelines_unclear"[] | null;
+                proposals?: ("with" | "without")[] | null;
             };
             header?: never;
             path: {
@@ -9774,6 +9826,7 @@ export interface operations {
                 /** @description "me" or a pseudonym */
                 waiting_on?: string[] | null;
                 flags?: "guidelines_unclear"[] | null;
+                proposals?: ("with" | "without")[] | null;
             };
             header?: never;
             path: {

@@ -28,6 +28,7 @@ GROUPS = (
     "plan",
     "waiting_on",
     "flags",
+    "proposals",
 )
 
 

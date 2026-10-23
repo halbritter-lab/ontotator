@@ -84,6 +84,9 @@ export function work(overrides: Partial<WorkItemView> & Pick<WorkItemView, "assi
     round_state: null,
     lead_correction: false,
     moved_to_version: null,
+    assigned_at: null,
+    assigned_by: null,
+    annotation_mode: null,
     ...overrides,
   };
 }
@@ -154,6 +157,9 @@ export function row(overrides: Partial<DocumentRowView> & Pick<DocumentRowView, 
     flagged_unclear: 0,
     flagged_group_id: null,
     flagged_round_id: null,
+    proposal_count: 0,
+    annotation_mode: null,
+    consolidation_progress: null,
     ...overrides,
   };
 }

@@ -15,6 +15,7 @@ from sqlalchemy import Connection, and_, exists, func, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB
 
 from ontocurator.application import document_row_panel, documents_visits
+from ontocurator.application.annotation_modes import SUBMISSION_MODES
 from ontocurator.application.document_row_page import (
     build_page_with_context,
     case_ids,
@@ -38,12 +39,15 @@ from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Access
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain import document_rows as rules
+from ontocurator.domain.annotation_modes import AnnotationMode
 from ontocurator.domain.next_steps import Stage, StepCode
 from ontocurator.domain.work_plans import PlanFlags, RowKey
 from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
 from ontocurator.storage.final_tables import FinalSelectionRow
 from ontocurator.storage.overview_tables import TextChangeResolutionRow
+from ontocurator.storage.plan_tables import WorkPlanFlagsRow
+from ontocurator.storage.proposal_queries import newest_proposal_counts
 from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import (
     AssignmentRow,
@@ -86,6 +90,7 @@ EXCERPT_LENGTH = 120
 
 FinalFilter = Literal["missing", "none", "any"]
 Paused = Literal["yes", "no"]
+ProposalFilter = Literal["with", "without"]
 REPEATABLE = (
     "language",
     "origin",
@@ -97,6 +102,7 @@ REPEATABLE = (
     "final_state",
     "waiting_on",
     "flags",
+    "proposals",
 )
 
 
@@ -149,6 +155,9 @@ class RowQuery:
     # Acceptance fixes X5: "guidelines_unclear" = a flagged finding in the
     # submitted consolidation of the row's current version.
     flags: tuple[str, ...] = ()
+    # Facet "Tool proposals" (spec 2026-10-23 §2b): the newest proposal set of
+    # the row's target document has proposals ("with") or none ("without").
+    proposals: tuple[ProposalFilter, ...] = ()
     sort: Sort = "case"
     # "{case_id}:{language}" keys kept visible this visit (Task 5.9). A key
     # splits at the last ":" (case ids may contain ":"; language codes do not).
@@ -300,6 +309,16 @@ class RowFacts:
     # document id -> its latest submitted consolidation if that one passes
     # the "guidelines unclear" pre-check (``load_consolidation_flags``).
     consolidation_flags: dict[str, FlaggedConsolidation] = field(default_factory=dict)
+    # Annotation mode facts (spec 2026-10-23 §1, plan "Pure rule"): proposals
+    # of the newest proposal set per document; the project setting; the plan
+    # overrides per row; annotation submissions per document as
+    # (recorded_at, annotation mode), oldest first.
+    proposal_counts: dict[str, int] = field(default_factory=dict)
+    project_mode: AnnotationMode = "proposals"
+    mode_overrides: dict[RowKey, AnnotationMode] = field(default_factory=dict)
+    annotation_submissions: dict[str, list[tuple[datetime, AnnotationMode]]] = field(
+        default_factory=dict
+    )
 
 
 def load_last_activity(
@@ -567,6 +586,10 @@ def _assignments(conn: Connection, pid: int) -> list[rules.AssignmentFact]:
             user_id=row.user_id,
             active_round_id=row.active_round_id,
             lead_correction=row.lead_correction,
+            created_at=row.created_at,
+            created_by=row.created_by,
+            annotation_mode=row.annotation_mode,
+            submitted_work=row.last_submission_id is not None,
         )
         for row in conn.execute(
             select(
@@ -579,6 +602,10 @@ def _assignments(conn: Connection, pid: int) -> list[rules.AssignmentFact]:
                 AssignmentRow.user_id,
                 AssignmentRow.active_round_id,
                 AssignmentRow.lead_correction,
+                AssignmentRow.created_at,
+                AssignmentRow.created_by,
+                AssignmentRow.annotation_mode,
+                AssignmentRow.last_submission_id,
                 UserRow.pseudonym,
             )
             .join(UserRow, UserRow.id == AssignmentRow.user_id)
@@ -892,6 +919,43 @@ def _source_obligations(
     return {document_id: tuple(items) for document_id, items in result.items()}
 
 
+def _mode_overrides(conn: Connection, pid: int) -> dict[RowKey, AnnotationMode]:
+    """Per-row annotation mode overrides of the work plan (NULL = project)."""
+    return {
+        RowKey(row.case_id, row.language): row.annotation_mode
+        for row in conn.execute(
+            select(
+                WorkPlanFlagsRow.case_id,
+                WorkPlanFlagsRow.language,
+                WorkPlanFlagsRow.annotation_mode,
+            ).where(
+                WorkPlanFlagsRow.project_id == pid,
+                WorkPlanFlagsRow.annotation_mode.is_not(None),
+            )
+        )
+    }
+
+
+def _annotation_submissions(
+    conn: Connection, pid: int
+) -> dict[str, list[tuple[datetime, AnnotationMode]]]:
+    """Annotation submissions per document as (recorded_at, annotation mode),
+    oldest first; with or without an assignment (plan "Pure rule" 1)."""
+    found: dict[str, list[tuple[datetime, AnnotationMode]]] = {}
+    for row in conn.execute(
+        select(SubmissionRow.document_id, SubmissionRow.recorded_at, SubmissionRow.mode)
+        .where(
+            SubmissionRow.project_id == pid,
+            SubmissionRow.mode.in_(list(SUBMISSION_MODES)),
+        )
+        .order_by(SubmissionRow.recorded_at)
+    ):
+        found.setdefault(row.document_id, []).append(
+            (row.recorded_at, SUBMISSION_MODES[row.mode])
+        )
+    return found
+
+
 def _user_ids(conn: Connection, pseudonyms: Iterable[str]) -> dict[str, int]:
     """User id per pseudonym (pseudonyms without an account are left out)."""
     wanted = sorted(set(pseudonyms))
@@ -932,6 +996,7 @@ def load_facts(
             ProjectRow.adjudicator_not_annotator,
             ProjectRow.annotate_accepted_translations_only,
             ProjectRow.annotations_per_text,
+            ProjectRow.tool_proposal_mode,
         ).where(ProjectRow.id == pid)
     ).one()
     viewer = conn.execute(
@@ -955,6 +1020,7 @@ def load_facts(
             [
                 viewer_user_id,
                 *(item.user_id for item in assignments),
+                *(item.created_by for item in assignments if item.created_by),
                 *(item.reporter_id for item in reports.values() if item.reporter_id),
                 *(
                     item["accepted_by"]
@@ -1029,6 +1095,10 @@ def load_facts(
         last_submissions=_last_submissions(conn, pid),
         source_obligations=_source_obligations(causes),
         consolidation_flags={} if lean else load_consolidation_flags(conn, pid),
+        proposal_counts=newest_proposal_counts(conn, pid),
+        project_mode=project.tool_proposal_mode,
+        mode_overrides=_mode_overrides(conn, pid),
+        annotation_submissions=_annotation_submissions(conn, pid),
     )
 
 

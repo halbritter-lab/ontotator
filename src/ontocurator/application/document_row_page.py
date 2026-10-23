@@ -16,6 +16,7 @@ from ontocurator.application import document_row_stages as stages
 from ontocurator.domain import document_rows as rules
 from ontocurator.domain import next_steps as steps_rules
 from ontocurator.domain import stage_cells as cells_rules
+from ontocurator.domain.annotation_modes import AnnotationMode, text_mode
 from ontocurator.domain.document_rows import PAGE_SIZE
 from ontocurator.domain.work_plans import PlanFlags
 from ontocurator.domain.work_plans import RowKey as PlanKey
@@ -135,6 +136,9 @@ class _Context:
         self.step_facts: dict[RowKey, steps_rules.StepFacts] = {}
         # Stage cells per row (documents overview), filled by _row_steps.
         self.cells: dict[RowKey, cells_rules.StageCells] = {}
+        # Row -> its active, editable consolidation round (progress is filled
+        # for the shown rows after paging, ``fill_consolidation_progress``).
+        self.consolidating: dict[RowKey, str] = {}
         # Pseudonym <-> user id of everyone with an assignment.
         self.user_ids: dict[str, int] = {}
         self.pseudonyms: dict[int, str] = {}
@@ -479,6 +483,20 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
     row_cells = ctx.cells[key]
     others_at = facts.others_activity.get(key)
     flagged_round = _consolidation_flags(facts, live)
+    proposal_count = facts.proposal_counts.get(_target(live or chains).document_id, 0)
+    consolidating = next(
+        (
+            item.active_round_id
+            for item in active
+            if item.task == "review"
+            and item.active_round_id in ctx.rounds
+            and ctx.rounds[item.active_round_id].kind == "consolidation"
+            and ctx.rounds[item.active_round_id].state == "editable"
+        ),
+        None,
+    )
+    if consolidating is not None:
+        ctx.consolidating[key] = consolidating
     return {
         "case_id": case_id,
         "language": language,
@@ -570,6 +588,62 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
         "flagged_unclear": 1 if flagged_round is not None else 0,
         "flagged_group_id": None,
         "flagged_round_id": flagged_round,
+        "proposal_count": proposal_count,
+        "annotation_mode": _annotation_mode(
+            facts, key, versions, row_assignments, proposal_count, planned=annotate
+        ),
+        "consolidation_progress": None,
+    }
+
+
+def _target(chains: Sequence[rules.Chain]) -> rules.Version:
+    """The row's target document as ``text_targets.text_target_document``:
+    the newest counted version of the (live) root with the highest position."""
+    latest = max(
+        chains,
+        key=lambda c: (-1 if c.root.position is None else c.root.position, c.root_id),
+    )
+    return [v for v in latest.versions if not v.not_newer][-1]
+
+
+def _annotation_mode(
+    facts: RowFacts,
+    key: RowKey,
+    versions: Sequence[rules.Version],
+    assignments: Sequence[rules.AssignmentFact],
+    proposal_count: int,
+    *,
+    planned: bool,
+) -> dict[str, Any] | None:
+    """``AnnotationModeView`` fields (plan "Pure rule"); None for rows that
+    are not planned for annotation and have no annotation work."""
+    work: list[tuple[datetime, AnnotationMode]] = [
+        (item.created_at, item.annotation_mode)
+        for item in assignments
+        if item.task == "annotate"
+        and (not item.revoked or item.submitted_work)
+        and item.created_at is not None
+        and item.annotation_mode is not None
+    ] + [
+        found
+        for v in versions
+        for found in facts.annotation_submissions.get(v.document_id, ())
+    ]
+    if not planned and not work:
+        return None
+    override = facts.mode_overrides.get(PlanKey(*key))
+    mode = text_mode(
+        project_mode=facts.project_mode,
+        plan_override=override,
+        proposal_count=proposal_count,
+        work_modes=(m for _at, m in sorted(work, key=lambda item: item[0])),
+    )
+    return {
+        "mode": mode.mode,
+        "source": mode.source,
+        "locked": mode.locked,
+        "override": override,
+        "proposal_count": proposal_count,
     }
 
 
@@ -619,6 +693,11 @@ def _work_item(
         "moved_to_version": (
             moved_version.version if moved_version is not None else None
         ),
+        "assigned_at": item.created_at,
+        "assigned_by": (
+            ctx.person_of(item.created_by) if item.created_by is not None else None
+        ),
+        "annotation_mode": item.annotation_mode,
     }
 
 
@@ -1181,6 +1260,8 @@ def _row_level_matches(ctx: _Context, row: Mapping[str, Any], query: RowQuery) -
         if selected and row["stages"][name]["state"] not in selected:
             return False
     if query.flags and not row["flagged_unclear"]:
+        return False
+    if query.proposals and facets.proposal_value(row) not in query.proposals:
         return False
     if query.waiting_on:
         viewer = ctx.facts.viewer_pseudonym

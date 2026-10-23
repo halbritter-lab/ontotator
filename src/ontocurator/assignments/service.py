@@ -119,6 +119,10 @@ class TaskSummary:
     # Spec A.7: failed automatic checks of the reviewed variant's translation run
     # (the list ReviewWorkspace.failed_checks shows); None for other tasks.
     failed_check_count: int | None = None
+    # Spec 2026-10-23 §2: the assignment date and the annotation mode fixed
+    # at assignment time (annotate only).
+    assigned_at: datetime | None = None
+    annotation_mode: AnnotationMode | None = None
 
 
 def _assignments() -> Select[tuple[object, ...]]:
@@ -954,6 +958,8 @@ class AssignmentService:
                 AssignmentRow.task,
                 AssignmentRow.status,
                 AssignmentRow.updated_at,
+                AssignmentRow.created_at.label("assigned_at"),
+                AssignmentRow.annotation_mode,
             )
             .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
             .join(

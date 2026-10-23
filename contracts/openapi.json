@@ -3639,6 +3639,29 @@
               ],
               "title": "Flags"
             }
+          },
+          {
+            "name": "proposals",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "with",
+                      "without"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Proposals"
+            }
           }
         ],
         "responses": {
@@ -4192,6 +4215,29 @@
                 }
               ],
               "title": "Flags"
+            }
+          },
+          {
+            "name": "proposals",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "with",
+                      "without"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Proposals"
             }
           }
         ],
@@ -7601,6 +7647,61 @@
         "title": "Annotation",
         "description": "Annotation entity referencing ontology term, layer, type, context axes and evidence."
       },
+      "AnnotationModeView": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "scratch"
+            ],
+            "title": "Mode"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "no_proposals",
+              "locked",
+              "plan",
+              "project"
+            ],
+            "title": "Source"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          },
+          "override": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override"
+          },
+          "proposal_count": {
+            "type": "integer",
+            "title": "Proposal Count",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "source",
+          "locked"
+        ],
+        "title": "AnnotationModeView",
+        "description": "The text's annotation mode as the card, plan dialog and rows show it."
+      },
       "AnnotationRef": {
         "properties": {
           "annotation_id": {
@@ -9915,6 +10016,26 @@
         "title": "ConsolidationPersonView",
         "description": "An input author; display name for the assignee and leads only (U8)."
       },
+      "ConsolidationProgressView": {
+        "properties": {
+          "open": {
+            "type": "integer",
+            "title": "Open"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "open",
+          "total"
+        ],
+        "title": "ConsolidationProgressView",
+        "description": "Open and total groups of the row's active consolidation round."
+      },
       "ConsolidationTermPartView": {
         "properties": {
           "differing_axes": {
@@ -11532,6 +11653,31 @@
               }
             ],
             "title": "Flagged Round Id"
+          },
+          "proposal_count": {
+            "type": "integer",
+            "title": "Proposal Count",
+            "default": 0
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnnotationModeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consolidation_progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsolidationProgressView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -20428,6 +20574,33 @@
               }
             ],
             "title": "Failed Check Count"
+          },
+          "assigned_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned At"
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Mode"
           }
         },
         "type": "object",
@@ -22398,6 +22571,43 @@
               }
             ],
             "title": "Moved To Version"
+          },
+          "assigned_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned At"
+          },
+          "assigned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonRefView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Mode"
           }
         },
         "additionalProperties": false,

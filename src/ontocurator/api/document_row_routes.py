@@ -20,12 +20,14 @@ from ontocurator.application.document_rows import (
     FinalFilter,
     Paused,
     PlanFilter,
+    ProposalFilter,
     RowQuery,
     Segment,
     Sort,
 )
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Task
+from ontocurator.domain.annotation_modes import AnnotationMode, ModeSource, TextMode
 from ontocurator.domain.document_rows import BarCategory
 from ontocurator.domain.next_steps import (
     Badge,
@@ -114,6 +116,11 @@ class WorkItemView(_View):
     lead_correction: bool = False
     # Text changes (V5): version this (revoked) work was moved to.
     moved_to_version: int | None = None
+    # Spec 2026-10-23 §2: assignment date, assigner and the annotation mode
+    # fixed at assignment time (annotate only).
+    assigned_at: datetime | None = None
+    assigned_by: PersonRefView | None = None
+    annotation_mode: AnnotationMode | None = None
 
 
 class ReportIssueView(_View):
@@ -281,6 +288,35 @@ class NextStepView(_View):
     document_id: str | None = None
 
 
+class AnnotationModeView(_View):
+    """The text's annotation mode as the card, plan dialog and rows show it."""
+
+    mode: AnnotationMode
+    source: ModeSource
+    locked: bool
+    override: AnnotationMode | None = None
+    proposal_count: int = 0
+
+    @classmethod
+    def of(
+        cls, mode: TextMode, override: AnnotationMode | None, proposal_count: int
+    ) -> "AnnotationModeView":
+        return cls(
+            mode=mode.mode,
+            source=mode.source,
+            locked=mode.locked,
+            override=override,
+            proposal_count=proposal_count,
+        )
+
+
+class ConsolidationProgressView(_View):
+    """Open and total groups of the row's active consolidation round."""
+
+    open: int
+    total: int
+
+
 class DocumentRowView(_View):
     case_id: str
     language: str
@@ -327,6 +363,13 @@ class DocumentRowView(_View):
     flagged_unclear: int = 0
     flagged_group_id: str | None = None
     flagged_round_id: str | None = None
+    # Spec 2026-10-23 §2, §2b: proposals of the newest proposal set of the
+    # row's target document, the text's annotation mode (None: not planned
+    # for annotation and no annotation work) and the progress of an active
+    # consolidation round (shown rows only).
+    proposal_count: int = 0
+    annotation_mode: AnnotationModeView | None = None
+    consolidation_progress: ConsolidationProgressView | None = None
 
 
 class DocumentGroupView(_View):
@@ -545,11 +588,13 @@ def _filters(
         list[str] | None, Query(description='"me" or a pseudonym')
     ] = None,
     flags: Annotated[list[FlagFilter] | None, Query()] = None,
+    proposals: Annotated[list[ProposalFilter] | None, Query()] = None,
 ) -> dict[str, Any]:
     """Filters shared by the rows page and the filtered case IDs.
 
     ``language``, ``origin``, ``step``, ``stage``, ``plan``, the stage states,
-    ``waiting_on`` and ``flags`` repeat: OR within one, AND across.
+    ``waiting_on``, ``flags`` and ``proposals`` repeat: OR within one, AND
+    across.
     """
     if decision is not None and final is not None:
         raise _exclusive("final", "decision")
@@ -576,6 +621,7 @@ def _filters(
         "final_state": tuple(final_state or ()),
         "waiting_on": tuple(waiting_on or ()),
         "flags": tuple(flags or ()),
+        "proposals": tuple(proposals or ()),
     }
 
 

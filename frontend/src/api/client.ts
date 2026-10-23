@@ -102,7 +102,7 @@ export type DocumentsSummaryView = components["schemas"]["DocumentsSummaryView"]
 export type CommitUploadPlan = Partial<Pick<components["schemas"]["CommitUpload"], "plan_languages" | "plan_cases" | "accept_external_review">>;
 type RowsParameters = Omit<NonNullable<operations["document_rows_api_v1_projects__key__document_rows_get"]["parameters"]["query"]>, "retain">;
 type CaseIdsParameters = NonNullable<operations["document_case_ids_api_v1_projects__key__document_rows_case_ids_get"]["parameters"]["query"]>;
-/** Repeatable filters (`language`, `origin`, `step`, `stage`, `plan`, stage states, `waiting_on`) with one value each. */
+/** Repeatable filters (`language`, `origin`, `step`, `stage`, `plan`, stage states, `waiting_on`, `flags`, `proposals`) with one value each. */
 type SingleFilters<Query> = { [Name in keyof Query]: NonNullable<Query[Name]> extends readonly (infer Item)[] ? Item | null : Query[Name] };
 /** Repeatable filters with one value or several (OR); sent as repeated parameters. */
 type RepeatableFilters<Query> = { [Name in keyof Query]: NonNullable<Query[Name]> extends readonly (infer Item)[] ? Item | Item[] | null : Query[Name] };

@@ -6,8 +6,10 @@ import unicodedata
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
 
+from ontocurator.domain.annotation_modes import AnnotationMode
 from ontocurator.domain.submission_labels import (
     SubmissionKind,
     round_ordinals,
@@ -132,6 +134,14 @@ class AssignmentFact:
     active_round_id: str | None
     # F1 (FD1): the lead's own correction of a rejected or queried version.
     lead_correction: bool = False
+    # Assignment date and assigner (spec 2026-10-23 §2) and the annotation
+    # mode fixed at assignment time (annotate only).
+    created_at: datetime | None = None
+    created_by: int | None = None
+    annotation_mode: AnnotationMode | None = None
+    # A submission exists (``last_submission_id``): revoked work still locks
+    # the text's annotation mode.
+    submitted_work: bool = False
 
 
 def base_chain_name(root: Version) -> str:
