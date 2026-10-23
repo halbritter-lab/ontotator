@@ -94,6 +94,9 @@ class ProjectRow(Base):
             "import_plan IN ('nothing', 'review_and_annotate_translations')",
             name="import_plan",
         ),
+        CheckConstraint(
+            "tool_proposal_mode IN ('proposals', 'scratch')", name="tool_proposal_mode"
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
@@ -136,6 +139,7 @@ class ProjectRow(Base):
     import_plan: Mapped[str] = mapped_column(
         server_default=text("'review_and_annotate_translations'")
     )
+    tool_proposal_mode: Mapped[str] = mapped_column(server_default=text("'proposals'"))
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
@@ -803,6 +807,12 @@ class AssignmentRow(Base):
         CheckConstraint(
             "status IN ('open', 'in_progress', 'submitted', 'reopened')", name="status"
         ),
+        CheckConstraint(
+            "(task = 'annotate' AND annotation_mode IS NOT NULL"
+            " AND annotation_mode IN ('proposals', 'scratch'))"
+            " OR (task <> 'annotate' AND annotation_mode IS NULL)",
+            name="annotation_mode",
+        ),
         Index(
             "uq_assignments_active",
             "project_id",
@@ -834,6 +844,7 @@ class AssignmentRow(Base):
     workflow_revision: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
     # FD1: the lead's own translation review of a rejected or queried version.
     lead_correction: Mapped[bool] = mapped_column(server_default=text("false"))
+    annotation_mode: Mapped[str | None]
 
 
 class TranslationReviewRow(Base):

@@ -45,7 +45,12 @@ class WorkPlanFlagsRow(Base):
     """The Review and Annotate flags of one language version."""
 
     __tablename__ = "work_plan_rows"
-    __table_args__ = (UniqueConstraint("project_id", "case_id", "language"),)
+    __table_args__ = (
+        UniqueConstraint("project_id", "case_id", "language"),
+        CheckConstraint(
+            "annotation_mode IN ('proposals', 'scratch')", name="annotation_mode"
+        ),
+    )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     project_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey(f"{SCHEMA}.projects.id")
@@ -56,6 +61,7 @@ class WorkPlanFlagsRow(Base):
     annotate: Mapped[bool]
     # False only for system rows under "Nothing planned" (plan not decided yet).
     decided: Mapped[bool]
+    annotation_mode: Mapped[str | None]
     restored_revision: Mapped[int | None] = mapped_column(BigInteger)
     updated_by: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey(f"{SCHEMA}.users.id")

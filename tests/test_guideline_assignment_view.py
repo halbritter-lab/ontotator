@@ -54,6 +54,7 @@ def team(tmp_path) -> SimpleNamespace:
                     user_id=ann_id,
                     task="annotate",
                     status=status,
+                    annotation_mode="scratch",
                 )
                 .returning(AssignmentRow.id)
             ).scalar_one()

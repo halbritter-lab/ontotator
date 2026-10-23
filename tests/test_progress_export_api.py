@@ -94,6 +94,7 @@ def _assignment(
                 user_id=user.id,
                 task=task,
                 status=status,
+                annotation_mode="scratch" if task == "annotate" else None,
                 revoked_at=datetime.now(UTC) if revoked else None,
             )
             .returning(AssignmentRow.id)

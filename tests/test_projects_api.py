@@ -159,6 +159,7 @@ def test_removing_a_member_with_open_work_needs_confirmation(app):
                 user_id=user.id,
                 task="annotate",
                 status="reopened",
+                annotation_mode="scratch",
             )
             .returning(AssignmentRow.id)
         ).scalar_one()
@@ -326,7 +327,13 @@ def test_membership_revocation_failure_rolls_back_work_roles_audit_and_sessions(
         )
         aid = conn.execute(
             insert(AssignmentRow)
-            .values(project_id=pid, document_id="d1", user_id=user.id, task="annotate")
+            .values(
+                project_id=pid,
+                document_id="d1",
+                user_id=user.id,
+                task="annotate",
+                annotation_mode="scratch",
+            )
             .returning(AssignmentRow.id)
         ).scalar_one()
     real = assignments.record_audit

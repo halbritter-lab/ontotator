@@ -301,6 +301,7 @@ def test_project_load_counts_all_tasks_and_reopened_but_not_submitted_revoked_or
                     user_id=users["alice"],
                     task=task,
                     status=status,
+                    annotation_mode="scratch" if task == "annotate" else None,
                     revoked_at=revoked,
                 )
             )
@@ -460,6 +461,7 @@ def test_database_opposite_assignment_excludes_only_when_enabled(
                 user_id=users["alice"],
                 task=opposite,
                 status="submitted",
+                annotation_mode="scratch" if opposite == "annotate" else None,
             )
         )
     result = service.propose(Actor.cli(), "p", ["first"], task, seed=0)

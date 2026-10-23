@@ -73,6 +73,7 @@ def stored(tmp_path):
                 user_id=uid,
                 task="annotate",
                 status="submitted",
+                annotation_mode="scratch",
             )
             .returning(AssignmentRow.id)
         ).scalar_one()

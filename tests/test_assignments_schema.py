@@ -43,8 +43,9 @@ def test_only_one_active_assignment_per_task(
 ) -> None:
     db, project_id, user_id = administration
     insert = text(
-        f"INSERT INTO {SCHEMA}.assignments (project_id, document_id, user_id, task)"
-        " VALUES (:project, 'd', :user, :task) RETURNING id"
+        f"INSERT INTO {SCHEMA}.assignments (project_id, document_id, user_id, task,"
+        " annotation_mode) VALUES (:project, 'd', :user, :task,"
+        " CASE WHEN :task = 'annotate' THEN 'scratch' END) RETURNING id"
     )
     params = {"project": project_id, "user": user_id, "task": "annotate"}
     with db.engine.begin() as conn:
@@ -103,8 +104,9 @@ def test_assignments_reject_invalid_values(
     with pytest.raises(IntegrityError) as invalid, db.engine.begin() as conn:
         conn.execute(
             text(
-                f"INSERT INTO {SCHEMA}.assignments (project_id, document_id, user_id, task, status)"
-                " VALUES (:project, :document_id, :user, :task, :status)"
+                f"INSERT INTO {SCHEMA}.assignments (project_id, document_id, user_id, task,"
+                " status, annotation_mode) VALUES (:project, :document_id, :user, :task,"
+                " :status, CASE WHEN :task = 'annotate' THEN 'scratch' END)"
             ),
             params,
         )

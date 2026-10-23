@@ -85,6 +85,7 @@ class Env:
                         user_id=values.pop("user_id", self.ann),
                         task=task,
                         status=status,
+                        annotation_mode="scratch" if task == "annotate" else None,
                         **values,
                     )
                     .returning(AssignmentRow.id)

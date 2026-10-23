@@ -468,6 +468,7 @@ class AssignmentService:
                 created_at=now,
                 updated_at=now,
                 lead_correction=lead_correction,
+                annotation_mode="scratch" if task == "annotate" else None,
             )
             .returning(AssignmentRow.id)
         ).scalar_one()

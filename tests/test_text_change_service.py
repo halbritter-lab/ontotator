@@ -1054,6 +1054,7 @@ def test_carry_author_refused_when_the_author_left_the_project(env):
                 document_id=env.docs[1],
                 user_id=tom,
                 task="annotate",
+                annotation_mode="scratch",
                 status="open",
                 created_by=env.lead()[1].user_id,
                 created_at=func.now(),
