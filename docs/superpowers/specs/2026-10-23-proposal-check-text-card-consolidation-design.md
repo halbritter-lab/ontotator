@@ -205,6 +205,12 @@ target of the card's links ("View proposals", "Compare with source", a person's 
 - V6: page titles keep the standard left padding.
 - V7: filter popover option list fully visible; documents table fits 768 px without
   horizontal scroll where possible.
+- "Annotations per text" is enforced: the seeded case cons-three got a third annotation
+  assignment although the project limit is 2. Find out whether that path bypasses the limit
+  (seed via API) and refuse it with a clear reason, or document why it is allowed.
+- Documents page: the document itself is about 3990 px tall while the app shell is 900 px;
+  scrolling the page instead of the main column shows an empty page. Fix the overflow.
+- The two flaky spans-resize pending-mark drag browser tests are fixed or stabilised.
 - Native test server: `ontocurator-local/config.ps1` readiness wait longer than 5 minutes
   (first start takes longer).
 
