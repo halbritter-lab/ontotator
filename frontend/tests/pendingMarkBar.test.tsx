@@ -95,3 +95,25 @@ it("places itself once the mark is drawn after the bar mounted", async () => {
   expect(bar.classList.contains("is-hidden")).toBe(false);
   expect(bar.style.top).toBe("64px");
 });
+
+it("follows the mark when the text pane is resized without a change inside it", () => {
+  // jsdom has no ResizeObserver: a stub that lets the test fire it.
+  let fire = () => {};
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: () => void) { fire = callback; }
+    observe() {}
+    disconnect() {}
+  });
+  try {
+    const { host, text } = setup([rect(40, 50)]);
+    const { bar } = renderBar(text, host);
+    expect(bar.style.top).toBe("64px");
+    // A line appears above the pane: the text moves down, nothing inside the pane changes.
+    const run = text.querySelector<HTMLElement>('.run[data-mentions="other,ev-pending"]')!;
+    vi.spyOn(run, "getClientRects").mockReturnValue([rect(78, 50)] as unknown as DOMRectList);
+    act(() => fire());
+    expect(bar.style.top).toBe("102px");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

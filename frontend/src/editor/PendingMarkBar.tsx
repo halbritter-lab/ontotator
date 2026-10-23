@@ -47,8 +47,13 @@ export function PendingMarkBar({ textElement, evidenceId, segmentsKey, onDiscard
     // The span editor draws (and redraws) the mark after this effect: follow its runs.
     const observer = typeof MutationObserver === "undefined" || !textElement ? null : new MutationObserver(update);
     observer?.observe(textElement!, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-mentions"] });
+    // The text also moves without a mutation inside it: a line appearing above the pane (it shrinks) or a
+    // narrower pane (lines rewrap). A stale bar would cover the mark and its drag handles.
+    const resized = typeof ResizeObserver === "undefined" || !textElement ? null : new ResizeObserver(update);
+    resized?.observe(textElement!);
     return () => {
       observer?.disconnect();
+      resized?.disconnect();
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
