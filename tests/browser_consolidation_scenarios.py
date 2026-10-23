@@ -6,6 +6,8 @@ only, never shipped.
 spec's 8 groups: 4 match (kept automatically), 1 value, 1 span, 1 partial,
 1 term (whose assertion differs too). The lead has no Adjudicator role. With ``started=true`` the lead has
 already started the consolidation as consolidator (self-grant, start command).
+``people=3`` adds ann-0003 (ann-0001's findings, but "hypotonia" as another
+term), so the hypotonia group is a three-way term and assertion conflict.
 """
 
 from __future__ import annotations
@@ -25,6 +27,9 @@ from browser_documents_scenarios import (
     start_round,
 )
 from fastapi import FastAPI, Query
+from sqlalchemy import update
+
+from ontocurator.storage.tables import ProjectRow
 
 CASE = "case-0107"
 TEXT = (
@@ -60,6 +65,12 @@ FINDINGS: dict[str, list[tuple[str, str, dict[str, str]]]] = {
         ("HP:0001252", "Weak muscle tone", {}),
     ],
 }
+# The fixture ontology has no "Axial hypotonia"; another term overlapping
+# ann-0001's span makes the term conflict.
+THIRD: list[tuple[str, str, dict[str, str]]] = [
+    ("HP:0000707", "hypotonia", {}) if finding[1] == "muscular hypotonia" else finding
+    for finding in FINDINGS["ann-0001"]
+]
 
 
 def at(words: str) -> dict[str, int]:
@@ -67,7 +78,12 @@ def at(words: str) -> dict[str, int]:
     return {"start": start, "end": start + len(words)}
 
 
-def _annotate(scenario: Scenario, name: str, document_id: str) -> str:
+def _annotate(
+    scenario: Scenario,
+    name: str,
+    document_id: str,
+    findings: list[tuple[str, str, dict[str, str]]],
+) -> str:
     """Assign, start round 1, mark the designed findings and submit."""
     from ontocurator.application.editing import EditingService
     from ontocurator.authz.scoped import ScopedRepository
@@ -78,7 +94,7 @@ def _annotate(scenario: Scenario, name: str, document_id: str) -> str:
     access, actor = identity(scenario, name)
     scoped = ScopedRepository(scenario.db, access, actor)
     editing = EditingService(scoped, scenario.app.state.ontology_registry)
-    for term, words, changes in FINDINGS[name]:
+    for term, words, changes in findings:
         payload: dict[str, Any] = {
             "command": "create_annotation",
             "annotation_id": f"ann-{uuid4().hex[:12]}",
@@ -126,7 +142,7 @@ def start_as_lead(scenario: Scenario, document_id: str, sources: list[str]) -> A
     )
 
 
-def build(app: FastAPI, started: bool) -> dict[str, Any]:
+def build(app: FastAPI, started: bool, people: int = 2) -> dict[str, Any]:
     from t1_builders import native_unit
 
     scenario = new_project(app, "C1")
@@ -135,7 +151,20 @@ def build(app: FastAPI, started: bool) -> dict[str, Any]:
     add_user(scenario, "lead", ["lead"])
     add_user(scenario, "ann-0001", ["annotator"])
     add_user(scenario, "ann-0002", ["annotator"])
-    sources = [_annotate(scenario, name, document_id) for name in FINDINGS]
+    findings = dict(FINDINGS)
+    if people == 3:
+        add_user(scenario, "ann-0003", ["annotator"])
+        findings["ann-0003"] = THIRD
+        with scenario.db.transaction() as conn:
+            conn.execute(
+                update(ProjectRow)
+                .where(ProjectRow.project_key == scenario.key)
+                .values(annotations_per_text=3)
+            )
+    sources = [
+        _annotate(scenario, name, document_id, items)
+        for name, items in findings.items()
+    ]
     ids: dict[str, Any] = {}
     if started:
         round_view = start_as_lead(scenario, document_id, sources)
@@ -158,7 +187,9 @@ def register_consolidation_scenario_route(app: FastAPI) -> None:
     """Register ``POST /__test_consolidation__`` ahead of the static frontend."""
 
     @app.post("/__test_consolidation__")
-    def consolidation_scenario(started: bool = Query(False)) -> dict[str, Any]:
-        return build(app, started)
+    def consolidation_scenario(
+        started: bool = Query(False), people: int = Query(2, ge=2, le=3)
+    ) -> dict[str, Any]:
+        return build(app, started, people)
 
     app.router.routes.insert(0, app.router.routes.pop())

@@ -84,3 +84,26 @@ def test_unstarted_scenario_leaves_the_lead_without_the_role(
     assert response.status_code == 200, response.text
     lead = next(m for m in response.json() if m["username"] == built["users"]["lead"])
     assert "adjudicator" not in lead["roles"]
+
+
+def test_three_people_hypotonia_group(client: TestClient) -> None:
+    response = client.post(
+        "/__test_consolidation__", params={"started": "true", "people": 3}
+    )
+    assert response.status_code == 200, response.text
+    built = response.json()
+    assert len(built["submissions"]) == 3
+    login(client, built["users"]["lead"])
+    view = client.get(f"/api/v1/rounds/{built['round_id']}/consolidation").json()
+    assert [person["lane"] for person in view["people"]] == [1, 2, 3]
+    hypotonia = next(
+        g
+        for g in view["groups"]
+        for m in g["members"]
+        if m["term_id"] == "HP:0001252" and m["axes"]["assertion"] == "absent"
+    )
+    assert hypotonia["state"] == "open"
+    assert "term_differs" in hypotonia["kinds"]
+    assert "assertion" in hypotonia["differing_axes"]
+    assert len(hypotonia["members"]) == 3
+    assert len({m["person_id"] for m in hypotonia["members"]}) == 3
