@@ -16,6 +16,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from ontocurator.application import document_row_panel, documents_visits
 from ontocurator.application.annotation_modes import SUBMISSION_MODES
+from ontocurator.application.consolidation import consolidation_progress
 from ontocurator.application.document_row_page import (
     build_page_with_context,
     case_ids,
@@ -41,20 +42,23 @@ from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain import document_rows as rules
 from ontocurator.domain.annotation_modes import AnnotationMode
 from ontocurator.domain.next_steps import Stage, StepCode
+from ontocurator.domain.review import ReviewDecision
 from ontocurator.domain.work_plans import PlanFlags, RowKey
+from ontocurator.domain.workspace import WorkspaceKey
 from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
 from ontocurator.storage.final_tables import FinalSelectionRow
 from ontocurator.storage.overview_tables import TextChangeResolutionRow
 from ontocurator.storage.plan_tables import WorkPlanFlagsRow
 from ontocurator.storage.proposal_queries import newest_proposal_counts
-from ontocurator.storage.repository import Repository
+from ontocurator.storage.repository import Repository, _key_str
 from ontocurator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
     DocumentRow,
     DraftRow,
     ProjectRow,
+    ReviewDecisionRow,
     SubmissionRow,
     TranslationReviewDraftRow,
     TranslationReviewRow,
@@ -956,6 +960,60 @@ def _annotation_submissions(
     return found
 
 
+def _draft_decisions(conn: Connection, pid: int, round_id: str) -> list[ReviewDecision]:
+    """The decisions of the round's live draft, read like
+    ``consolidation._draft``: nothing decided while no draft exists (a read
+    never creates one)."""
+    key = conn.execute(
+        select(WorkRoundRow.workspace_key).where(
+            WorkRoundRow.project_id == pid, WorkRoundRow.round_id == round_id
+        )
+    ).scalar_one_or_none()
+    if key is None:
+        return []
+    return [
+        ReviewDecision.model_validate(payload)
+        for payload in conn.execute(
+            select(ReviewDecisionRow.payload)
+            .join(DraftRow, DraftRow.id == ReviewDecisionRow.draft_id)
+            .where(
+                DraftRow.project_id == pid,
+                DraftRow.draft_key == _key_str(WorkspaceKey.model_validate(key)),
+            )
+            .order_by(ReviewDecisionRow.position)
+        ).scalars()
+    ]
+
+
+def fill_consolidation_progress(
+    conn: Connection, pid: int, facts: RowFacts, page: Mapping[str, Any]
+) -> None:
+    """``consolidation_progress`` of the page's shown rows whose active work
+    holds an editable consolidation round. Runs after paging, so only shown
+    rows cost queries."""
+    rounds = {item.round_id: item for item in facts.rounds}
+    active_round = {a.assignment_id: a.active_round_id for a in facts.assignments}
+    for group in page["groups"]:
+        for row in group["rows"]:
+            round_id = next(
+                (
+                    found
+                    for item in row["work"]
+                    if item["task"] == "review"
+                    and (found := active_round.get(item["assignment_id"])) in rounds
+                    and rounds[found].kind == "consolidation"
+                    and rounds[found].state == "editable"
+                ),
+                None,
+            )
+            if round_id is None:
+                continue
+            open_count, total = consolidation_progress(
+                conn, pid, round_id, _draft_decisions(conn, pid, round_id)
+            )
+            row["consolidation_progress"] = {"open": open_count, "total": total}
+
+
 def _user_ids(conn: Connection, pseudonyms: Iterable[str]) -> dict[str, int]:
     """User id per pseudonym (pseudonyms without an account are left out)."""
     wanted = sorted(set(pseudonyms))
@@ -1116,6 +1174,7 @@ class DocumentRowsService:
             # (after paging).
             document_row_panel.fill_agreement(conn, pid, ctx, page)
             fill_consolidation_flags(conn, pid, facts.consolidation_flags, page)
+            fill_consolidation_progress(conn, pid, facts, page)
             return page
 
     def case_ids(self, key: str, query: RowQuery) -> dict[str, Any]:

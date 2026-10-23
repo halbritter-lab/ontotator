@@ -136,9 +136,6 @@ class _Context:
         self.step_facts: dict[RowKey, steps_rules.StepFacts] = {}
         # Stage cells per row (documents overview), filled by _row_steps.
         self.cells: dict[RowKey, cells_rules.StageCells] = {}
-        # Row -> its active, editable consolidation round (progress is filled
-        # for the shown rows after paging, ``fill_consolidation_progress``).
-        self.consolidating: dict[RowKey, str] = {}
         # Pseudonym <-> user id of everyone with an assignment.
         self.user_ids: dict[str, int] = {}
         self.pseudonyms: dict[int, str] = {}
@@ -484,19 +481,6 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
     others_at = facts.others_activity.get(key)
     flagged_round = _consolidation_flags(facts, live)
     proposal_count = facts.proposal_counts.get(_target(live or chains).document_id, 0)
-    consolidating = next(
-        (
-            item.active_round_id
-            for item in active
-            if item.task == "review"
-            and item.active_round_id in ctx.rounds
-            and ctx.rounds[item.active_round_id].kind == "consolidation"
-            and ctx.rounds[item.active_round_id].state == "editable"
-        ),
-        None,
-    )
-    if consolidating is not None:
-        ctx.consolidating[key] = consolidating
     return {
         "case_id": case_id,
         "language": language,
