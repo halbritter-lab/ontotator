@@ -177,6 +177,15 @@
         ],
         "createdAt": "2026-10-21T21:00:37.758Z",
         "reason": "assistant decided: current-row marker mirrors the established documents-cards.css card edge and the components.css forced-colors fallback (already sanctioned)"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/189250-1792745471/content/text-card.html"
+        ],
+        "createdAt": "2026-10-23T08:55:22.827Z",
+        "reason": "Claude: intentional faded placeholder table behind a dimmed backdrop in a throwaway brainstorm mockup"
       }
     ]
   }
