@@ -71,16 +71,6 @@ describe("GroupCard", () => {
     expect(screen.getByRole("button", { name: "absent · Tom Reis, Ana Weber (2 of 3)" }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("offers one term, keep both or another term when terms differ", () => {
-    const props = renderCard(byId("g-gait"), { workspace: workspaceView() });
-    expect(screen.getByRole("button", { name: "Keep both" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Other term…" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Ataxia (HP:0001251) · Luc Martin" }));
-    expect(props.onResolve).toHaveBeenCalledWith({
-      input_ids: ["in-gl", "in-gt"], action: "choose", choice: { term_id: "HP:0001251", span_from_input_id: "in-gl", axes: {} },
-    }, "Ataxia (HP:0001251) (Luc Martin)");
-  });
-
   it("keeps a group with different terms and assertions open until both are chosen", () => {
     const value = group("g-both", ["term_differs", "values_differ"], [
       member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
@@ -168,25 +158,6 @@ describe("GroupCard", () => {
     expect(props.onResolve).toHaveBeenCalledWith({
       input_ids: ["in-dl", "in-dt"], action: "choose", choice: { term_id: "HP:0001263", span_from_input_id: "in-dt", axes: {} },
     }, "“development” (Tom Reis)");
-  });
-
-  it("asks the values that differ within one term before keeping both (three people)", () => {
-    const absent = { assertion: "absent", experiencer: "patient", temporality: "current" };
-    const value = group("g-three", ["term_differs", "values_differ"], [
-      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
-      member("i2", TOM, "HP:0001251", "Ataxia", [span("Unsteady gait")], { axes: absent }),
-      member("i3", ANA, "HP:0001288", "Gait disturbance", [span("Unsteady gait")]),
-    ], { differing_axes: ["assertion"], term_parts: { "HP:0001251": { differing_axes: ["assertion"], span_conflict: false } } });
-    const props = renderCard(value, { people: [LUC, TOM, ANA] });
-    fireEvent.click(screen.getByRole("button", { name: "Keep both" }));
-    expect(props.onResolve).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Keep both" }).getAttribute("aria-pressed")).toBe("true");
-    expect([...document.querySelectorAll(".cons-choice-label")].map(label => label.textContent)).toEqual(["Whole finding:", "Term · differs:", "Ataxia · Assertion · differs:"]);
-    fireEvent.click(screen.getByRole("button", { name: "absent · Tom Reis" }));
-    expect(props.onResolve).toHaveBeenCalledWith({
-      input_ids: ["i1", "i2", "i3"], action: "keep_both",
-      term_choices: [{ term_id: "HP:0001251", span_from_input_id: "i1", axes: { assertion: "absent" } }],
-    }, "kept both, absent (Tom Reis)");
   });
 
   it("renders no text node inside a table row", () => {

@@ -144,11 +144,9 @@ export type ConsolidationView = components["schemas"]["ConsolidationView"];
 /** Payload of `resolveConsolidationGroup` (backend `ResolveCommand`; the envelope payload is untyped in the OpenAPI). */
 export interface ConsolidationResolvePayload {
   input_ids: string[];
-  action: "keep" | "choose" | "keep_both" | "leave_out";
+  action: "keep" | "choose" | "leave_out";
   /** Only with `choose`. Omit `note_from_input_id` to keep the span member's note; `null` drops it. */
   choice?: { term_id: string; span_from_input_id: string; axes: Record<string, string>; note_from_input_id?: string | null };
-  /** Only with `keep_both`: one choice per term whose own members differ (`term_parts`); other terms keep their first member. */
-  term_choices?: { term_id: string; span_from_input_id: string; axes: Record<string, string>; note_from_input_id?: string | null }[];
   note?: string | null;
   guidelines_unclear?: boolean;
 }

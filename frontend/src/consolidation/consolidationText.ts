@@ -68,7 +68,6 @@ export const REOPEN_EDITED_WARNING = "Reopening drops your edit from the editor.
 /** Number of findings a resolved group yields. */
 function findingsOf(group: ConsolidationGroupView): number {
   if (group.state === "leave_out" || group.state === "open") return 0;
-  if (group.state === "keep_both") return Math.max(2, group.annotation_ids.length);
   return Math.max(1, group.annotation_ids.length);
 }
 

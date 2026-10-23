@@ -44,7 +44,6 @@ __all__ = [
     "Group",
     "GroupKind",
     "Pair",
-    "TermPart",
     "compare",
     "groups",
     "match",
@@ -83,15 +82,6 @@ class Agreement:
 
 
 @dataclass(frozen=True)
-class TermPart:
-    """The decisions among the members of one term of a ``term_differs``
-    group, asked when both terms are kept ("Keep both")."""
-
-    differing_axes: tuple[str, ...]  # sorted axes differing among the term's members
-    span_conflict: bool  # ``spans_conflict`` among the term's members
-
-
-@dataclass(frozen=True)
 class Group:
     """One consolidation group: the findings of several submissions that
     describe the same thing (``groups``)."""
@@ -105,9 +95,6 @@ class Group:
     majority: Mapping[str, str]  # axis -> value of > half of >= 3 same-term members
     # ``spans_conflict`` among all members: the text is a decision ("Text" row).
     span_conflict: bool = False
-    # Term id -> its members' own decisions, only for terms with any (and only
-    # when terms differ); "Keep both" asks them per term.
-    term_parts: Mapping[str, TermPart] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -339,15 +326,6 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
     if not kinds:
         kinds.add("match")
 
-    term_parts: dict[str, TermPart] = {}
-    if len(terms) > 1:
-        for term in terms:
-            same = by_term[term]
-            own = _differing(same)
-            conflict = spans_conflict(same)
-            if own or conflict:
-                term_parts[term] = TermPart(tuple(sorted(own)), conflict)
-
     majority = {
         axis: next(iter(values))
         for axis, values in sorted(winners.items())
@@ -363,7 +341,6 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
         start=min(starts) if starts else None,
         majority=majority,
         span_conflict=spans_conflict(findings),
-        term_parts=term_parts,
     )
 
 

@@ -1,7 +1,7 @@
 """Only relevant differences are consolidation decisions (acceptance fixes
 spec, deviation 2026-10-22): the term and every differing axis always; the
-text only when the spans genuinely conflict; notes never. "Keep both" with
-three people asks the axis differences among the members of one term.
+text only when the spans genuinely conflict; notes never. A group with
+three people and two terms still resolves to exactly one finding.
 
 Three submissions on c1-en (anno, ana, anno2):
 
@@ -111,82 +111,28 @@ def test_a_small_span_shift_is_no_decision_and_keep_takes_the_first_member(cons)
     assert kept.evidence_refs
 
 
-def test_keep_both_with_three_people_asks_the_values_within_one_term(cons):
+def test_choose_with_three_people_and_two_terms_writes_one_finding(cons):
     terms = term_group(cons)
-    assert terms["span_conflict"] is False
-    assert terms["term_parts"] == {
-        STATUS: {"differing_axes": ["assertion"], "span_conflict": False}
-    }
     ids = inputs(terms)
-    # Without a choice for STATUS the first STATUS finding would be kept silently.
-    refused(cons, {"input_ids": ids, "action": "keep_both"})
     absent = member(terms, STATUS, "absent")
-    # The axis must be named; the span comes from a STATUS member.
-    refused(
-        cons,
-        {
-            "input_ids": ids,
-            "action": "keep_both",
-            "term_choices": [
-                {"term_id": STATUS, "span_from_input_id": absent["input_id"]}
-            ],
-        },
-    )
-    febrile = member(terms, FEBRILE, "present")
-    refused(
-        cons,
-        {
-            "input_ids": ids,
-            "action": "keep_both",
-            "term_choices": [
-                {
-                    "term_id": STATUS,
-                    "span_from_input_id": febrile["input_id"],
-                    "axes": {"assertion": "absent"},
-                }
-            ],
-        },
-    )
     draft = ok(
         mutate(
             cons,
             "resolve",
             {
                 "input_ids": ids,
-                "action": "keep_both",
-                "term_choices": [
-                    {
-                        "term_id": STATUS,
-                        "span_from_input_id": absent["input_id"],
-                        "axes": {"assertion": "absent"},
-                    }
-                ],
+                "action": "choose",
+                "choice": {
+                    "term_id": STATUS,
+                    "span_from_input_id": absent["input_id"],
+                    "axes": {"assertion": "absent"},
+                },
             },
         )
     )
-    status = annotation(draft, cons_id(cons, ids, 0)).annotation
-    other = annotation(draft, cons_id(cons, ids, 1)).annotation
-    assert (status.term_id, status.axes_values["assertion"]) == (STATUS, "absent")
-    assert (other.term_id, other.axes_values["assertion"]) == (FEBRILE, "present")
-    assert term_group(cons)["state"] == "keep_both"
-
-
-def test_term_choices_go_with_keep_both_only(cons):
-    terms = term_group(cons)
-    absent = member(terms, STATUS, "absent")
-    refused(
-        cons,
-        {
-            "input_ids": inputs(terms),
-            "action": "choose",
-            "choice": {
-                "term_id": STATUS,
-                "span_from_input_id": absent["input_id"],
-                "axes": {"assertion": "absent"},
-            },
-            "term_choices": [],
-        },
-    )
+    chosen = annotation(draft, cons_id(cons, ids, 0)).annotation
+    assert (chosen.term_id, chosen.axes_values["assertion"]) == (STATUS, "absent")
+    assert term_group(cons)["annotation_ids"] == [cons_id(cons, ids, 0)]
 
 
 def test_keep_is_refused_while_terms_or_values_differ(cons):

@@ -10,7 +10,7 @@ import type { ConsolidationAnnotatePayload, ConsolidationGroupView, Consolidatio
 import type { WorkspaceView } from "../app/CaseScreen";
 import { Button, Checkbox, InlineConfirm, Select, Textarea } from "../ui";
 import { axisLabel, KIND_LABELS, keepLabel, namesOf, partialText, quoted, REOPEN_EDITED_WARNING, valueWords } from "./consolidationText";
-import { absentPeople, allChosen, choosePayload, choiceSummary, groupTitle, hasKind, keepsBoth, needsTerm, passage, peopleOf, presentPeople, resolvePayload, rowsOf, stateSummary, TAKEN_FROM, takeOverChoices, takeOverWords, termLabel, type ChoiceRow, type Choices, type OtherTerm } from "./groupModel";
+import { absentPeople, allChosen, choosePayload, choiceSummary, groupTitle, hasKind, needsTerm, passage, peopleOf, presentPeople, resolvePayload, rowsOf, stateSummary, TAKEN_FROM, takeOverChoices, takeOverWords, termLabel, type ChoiceRow, type Choices, type OtherTerm } from "./groupModel";
 import { personName } from "./lanes";
 import { TermPicker } from "./TermPicker";
 import { LaneKey } from "./TextPane";
@@ -146,11 +146,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const title = groupTitle(group);
   const present = presentPeople(group, people), absent = absentPeople(group, people);
   const partial = hasKind(group, "partial");
-  const both = keepsBoth(choices);
-  const rowsFor = (next: Choices, other: OtherTerm | null = otherTerm) => rowsOf(group, people, text, other, keepsBoth(next));
-  const rows = useMemo(() => rowsOf(group, people, text, otherTerm, both), [group, people, text, otherTerm, both]);
-  // "Take … finding" fills the group's own rows (not the per-term rows of "Keep both").
-  const baseRows = useMemo(() => rowsOf(group, people, text, otherTerm), [group, people, text, otherTerm]);
+  const rows = useMemo(() => rowsOf(group, people, text, otherTerm), [group, people, text, otherTerm]);
   const inputIds = group.members.map(member => member.input_id);
   const kindWords = partial ? `only ${namesOf(present)}` : group.kinds.filter(kind => kind !== "partial")
     .map(kind => kind === "span_differs" && !group.span_conflict ? "text span shifted" : KIND_LABELS[kind] ?? kind).join(", ");
@@ -164,7 +160,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const choose = (next: Choices, nextRows: readonly ChoiceRow[] = rows) =>
     resolve(resolvePayload(group, nextRows, next), choiceSummary(nextRows, next));
   // The last open row resolves the group (except "partial", which keeps with its button).
-  const settle = (next: Choices, nextRows: readonly ChoiceRow[] = rowsFor(next)) => {
+  const settle = (next: Choices, nextRows: readonly ChoiceRow[] = rows) => {
     setChoices(next);
     if (!partial && allChosen(nextRows, next)) choose(next, nextRows);
   };
@@ -185,7 +181,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     setEditing(false);
   };
   // "Take …'s finding" (2+ differing fields): fills every row from that member, naming everything it adopts.
-  const takeOvers = baseRows.length > 1 ? group.members : [];
+  const takeOvers = rows.length > 1 ? group.members : [];
   const missing = rows.filter(row => !row.options.some(option => option.key === choices[row.id]));
   const reopen = () => { if (group.edited) setConfirmReopen(true); else void props.onReopen(); };
 
@@ -233,15 +229,14 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
         <span id={`${noteId}-take`} className="cons-choice-label">Whole finding:</span>
         {takeOvers.map(member => {
           const person = peopleOf(people, [member])[0];
-          const next = takeOverChoices(baseRows, member);
-          const selected = choices[TAKEN_FROM] === member.input_id && baseRows.every(row => choices[row.id] === next[row.id]);
+          const next = takeOverChoices(rows, member);
+          const selected = choices[TAKEN_FROM] === member.input_id && rows.every(row => choices[row.id] === next[row.id]);
           return <Chip key={member.input_id} selected={selected} disabled={busy} keys={<LaneKey people={people} personId={member.person_id} />}
-            label={`Take ${personName(person.label)}'s finding: ${takeOverWords(member, baseRows, text)}`} onClick={() => settle(next)} />;
+            label={`Take ${personName(person.label)}'s finding: ${takeOverWords(member, rows, text)}`} onClick={() => settle(next)} />;
         })}
       </div>}
       {takeOvers.length > 0 && <p className="cons-muted">Or choose each differing field:</p>}
       {rows.map(row => <ChipRow key={row.id} row={row} people={people} choices={choices} onChoose={onChoose} disabled={busy} />)}
-      {both && rows.length > 1 && <p className="cons-muted">Keep both keeps one finding per term; choose the values that differ within a term.</p>}
       {!partial && missing.length > 0 && missing.length < rows.length && <p className="action-reason" role="status">
         Still to choose: {missing.map(row => row.label).join(", ")}.</p>}
       {editing && workspace ? <EditValues group={group} workspace={workspace} busy={busy} onKeep={editValues} onCancel={() => setEditing(false)} />
@@ -267,7 +262,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
           const other = { termId: candidate.term_id, label: candidate.label };
           setOtherTerm(other);
           const next = { ...choices, term: candidate.term_id };
-          settle(next, rowsFor(next, other));
+          settle(next, rowsOf(group, people, text, other));
         }} />}
     </>}
   </>;

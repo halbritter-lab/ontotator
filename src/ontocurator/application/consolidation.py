@@ -54,7 +54,12 @@ from ontocurator.domain.serialization import decode_snapshot
 from ontocurator.domain.work_rounds import WorkRoundView
 from ontocurator.domain.workspace import Submission
 from ontocurator.storage.repository import Repository, _key_str
-from ontocurator.storage.tables import DocumentRow, SubmissionRow, UserRow
+from ontocurator.storage.tables import (
+    DocumentRow,
+    ProposalAnnotationRow,
+    SubmissionRow,
+    UserRow,
+)
 from ontocurator.storage.workflow_tables import RoundInputRow, WorkRoundRow
 
 __all__ = [
@@ -64,6 +69,7 @@ __all__ = [
     "consolidated_content_sha256",
     "consolidation_group_id",
     "consolidation_groups",
+    "consolidation_progress",
     "is_open",
     "member_ref",
     "open_group_count",
@@ -97,6 +103,7 @@ class RoundMember:
     person_id: str  # the source author's pseudonym
     snapshot: AnnotationSnapshot  # the target snapshot
     finding: Finding
+    source_id: str  # the annotation id in its source submission or draft
 
 
 @dataclass(frozen=True)
@@ -189,6 +196,7 @@ def round_members(
             finding=finding_of(
                 item, key=row.input_id, order=position[submission], defaults=defaults
             ),
+            source_id=row.payload["source_snapshot"]["annotation"]["annotation_id"],
         )
         position[submission] += 1
     return RoundMembers(order=order, authors=authors, members=members)
@@ -243,16 +251,16 @@ def is_open(
     return any(target not in decided for target in targets)
 
 
-def open_group_count(
+def consolidation_progress(
     conn: Connection, pid: int, round_id: str, decisions: Sequence[ReviewDecision]
-) -> int:
-    """How many groups of the round are open under ``decisions`` (submit
-    gating, ``CONSOLIDATION_GROUPS_OPEN``)."""
+) -> tuple[int, int]:
+    """``(open, total)`` groups of the round under ``decisions``."""
     profile, defaults = project_profile(conn, pid)
     found = round_members(conn, pid, round_id, profile, defaults)
-    return sum(
+    groups = list(round_groups(found))
+    open_count = sum(
         1
-        for group in round_groups(found)
+        for group in groups
         if is_open(
             (
                 (ref.annotation_id, ref.version)
@@ -263,6 +271,15 @@ def open_group_count(
             decisions,
         )
     )
+    return open_count, len(groups)
+
+
+def open_group_count(
+    conn: Connection, pid: int, round_id: str, decisions: Sequence[ReviewDecision]
+) -> int:
+    """How many groups of the round are open under ``decisions`` (submit
+    gating, ``CONSOLIDATION_GROUPS_OPEN``)."""
+    return consolidation_progress(conn, pid, round_id, decisions)[0]
 
 
 @dataclass(frozen=True)
@@ -325,6 +342,7 @@ class ConsolidationReader:
                 )
             ).one()
             people = _people(conn, access, order, found.authors)
+            from_proposal = _from_tool_proposal(conn, pid, members)
             added = _added(members, content, defaults)
             added_by = (
                 _people(conn, access, ["self"], {"self": item.annotator_id})[0]["label"]
@@ -343,7 +361,7 @@ class ConsolidationReader:
             "text": document.text,
             "people": people,
             "groups": [
-                _group_view(group, members, content)
+                _group_view(group, members, content, from_proposal)
                 for group in _groups(order, members)
             ],
             "added": added,
@@ -440,10 +458,59 @@ def _people(
     return people
 
 
+def _from_tool_proposal(
+    conn: Connection, pid: int, members: Mapping[str, RoundMember]
+) -> set[str]:
+    """Input ids whose finding comes from a tool proposal: its source
+    annotation id (any version) is a proposal of the project, or it is the
+    replacement of a decision on a proposal in its source submission (a
+    corrected one). Target snapshots carry ``input-…`` ids, so the source
+    snapshot's id is the one compared."""
+    sids = {
+        m.submission_id
+        for m in members.values()
+        if not m.submission_id.startswith("draft-")
+    }
+    # (source submission, replacement annotation id) -> target annotation id
+    corrected: dict[tuple[str, str], str] = {}
+    if sids:
+        for row in conn.execute(
+            select(SubmissionRow.submission_id, SubmissionRow.payload).where(
+                SubmissionRow.project_id == pid,
+                SubmissionRow.submission_id.in_(sids),
+            )
+        ):
+            for decision in Submission.model_validate(row.payload).decisions:
+                if decision.replacement is not None:
+                    corrected[
+                        (row.submission_id, decision.replacement.annotation_id)
+                    ] = decision.target.annotation_id
+    candidates = {m.source_id for m in members.values()} | set(corrected.values())
+    if not candidates:
+        return set()
+    proposals = set(
+        conn.execute(
+            select(ProposalAnnotationRow.annotation_id)
+            .where(
+                ProposalAnnotationRow.project_id == pid,
+                ProposalAnnotationRow.annotation_id.in_(candidates),
+            )
+            .distinct()
+        ).scalars()
+    )
+    marked: set[str] = set()
+    for input_id, member in members.items():
+        target = corrected.get((member.submission_id, member.source_id))
+        if member.source_id in proposals or target in proposals:
+            marked.add(input_id)
+    return marked
+
+
 def _group_view(
     group: Group,
     members: Mapping[str, RoundMember],
     content: _Content,
+    from_proposal: set[str],
 ) -> dict[str, Any]:
     inputs = list(group.members.values())
     member_views = []
@@ -465,6 +532,7 @@ def _group_view(
                 "spans": [list(span) for span in member.finding.spans],
                 "cues": [list(span) for span in member.finding.cues],
                 "note": annotation.note or None,
+                "from_tool_proposal": input_id in from_proposal,
             }
         )
     state = _state(targets, content)
@@ -474,13 +542,6 @@ def _group_view(
         "differing_axes": list(group.differing_axes),
         "majority": dict(group.majority),
         "span_conflict": group.span_conflict,
-        "term_parts": {
-            term: {
-                "differing_axes": list(part.differing_axes),
-                "span_conflict": part.span_conflict,
-            }
-            for term, part in group.term_parts.items()
-        },
         "keep_input_id": group.members[group.keep],
         "start": group.start,
         "members": member_views,

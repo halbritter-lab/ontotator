@@ -22,13 +22,13 @@ export function member(inputId: string, person: ConsolidationPersonView, termId:
   extra: Partial<ConsolidationMemberView> = {}): ConsolidationMemberView {
   return {
     input_id: inputId, person_id: person.person_id, annotation_id: `a-${inputId}`, term_id: termId, term_label: termLabel,
-    layer_id: "phenotype", type_id: "default", axes: { ...AXES }, spans, cues: [], note: null, ...extra,
+    layer_id: "phenotype", type_id: "default", axes: { ...AXES }, spans, cues: [], note: null, from_tool_proposal: false, ...extra,
   };
 }
 
 export function group(groupId: string, kinds: string[], members: ConsolidationMemberView[], extra: Partial<ConsolidationGroupView> = {}): ConsolidationGroupView {
   return {
-    group_id: groupId, kinds, differing_axes: [], majority: {}, span_conflict: false, term_parts: {}, keep_input_id: members[0].input_id,
+    group_id: groupId, kinds, differing_axes: [], majority: {}, span_conflict: false, keep_input_id: members[0].input_id,
     start: members[0].spans[0]?.[0] ?? null, members, state: kinds.includes("match") ? "auto" : "open", edited: false,
     note: null, guidelines_unclear: false, annotation_ids: kinds.includes("match") ? [`cons-${groupId}`] : [], ...extra,
   };

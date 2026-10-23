@@ -396,7 +396,7 @@ export interface paths {
         put?: never;
         /**
          * Resolve Consolidation Group
-         * @description Resolve one group: ``keep``, ``choose``, ``keep_both`` or
+         * @description Resolve one group to exactly one finding: ``keep``, ``choose`` or
          *     ``leave_out`` (payload ``ResolveCommand``).
          */
         post: operations["resolve_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_resolve_post"];
@@ -3083,13 +3083,6 @@ export interface components {
              * @default false
              */
             span_conflict: boolean;
-            /**
-             * Term Parts
-             * @default {}
-             */
-            term_parts: {
-                [key: string]: components["schemas"]["ConsolidationTermPartView"];
-            };
             /** Keep Input Id */
             keep_input_id: string;
             /** Start */
@@ -3100,7 +3093,7 @@ export interface components {
              * State
              * @enum {string}
              */
-            state: "open" | "auto" | "keep" | "choose" | "keep_both" | "leave_out";
+            state: "open" | "auto" | "keep" | "choose" | "leave_out";
             /**
              * Edited
              * @default false
@@ -3129,7 +3122,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "auto" | "keep" | "choose" | "keep_both" | "leave_out";
+            action: "auto" | "keep" | "choose" | "leave_out";
             /**
              * Guidelines Unclear
              * @default false
@@ -3170,6 +3163,11 @@ export interface components {
             ][];
             /** Note */
             note?: string | null;
+            /**
+             * From Tool Proposal
+             * @default false
+             */
+            from_tool_proposal: boolean;
         };
         /**
          * ConsolidationPersonView
@@ -3192,16 +3190,6 @@ export interface components {
             open: number;
             /** Total */
             total: number;
-        };
-        /**
-         * ConsolidationTermPartView
-         * @description The decisions among one term's members ("Keep both" asks them).
-         */
-        ConsolidationTermPartView: {
-            /** Differing Axes */
-            differing_axes: string[];
-            /** Span Conflict */
-            span_conflict: boolean;
         };
         /** ConsolidationView */
         ConsolidationView: {

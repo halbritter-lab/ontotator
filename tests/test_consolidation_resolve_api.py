@@ -123,6 +123,23 @@ def inputs(item: dict[str, Any]) -> list[str]:
     return [m["input_id"] for m in item["members"]]
 
 
+def payload(item: dict[str, Any], action: str) -> dict[str, Any]:
+    """A resolve payload; ``choose`` takes the first member's term, span and
+    values for every differing axis."""
+    body: dict[str, Any] = {"input_ids": inputs(item), "action": action}
+    if action == "choose":
+        first = item["members"][0]
+        body["choice"] = {
+            "term_id": first["term_id"],
+            "span_from_input_id": first["input_id"],
+            "axes": {
+                axis: first["axes"].get(axis, "present")
+                for axis in item["differing_axes"]
+            },
+        }
+    return body
+
+
 def revision(ns: Any) -> int:
     with ns.env.db.transaction() as conn:
         return int(
@@ -261,21 +278,6 @@ def test_choose_takes_axes_from_two_people(cons):
         True,
     )
     assert after["edited"] is False
-
-
-def test_keep_both_on_term_differs_writes_two_annotations(cons):
-    terms = group(cons, "term_differs")
-    ids = inputs(terms)
-    draft = ok(mutate(cons, "resolve", {"input_ids": ids, "action": "keep_both"}))
-    first, second = cons_id(cons, ids, 0), cons_id(cons, ids, 1)
-    assert annotation(draft, first).annotation.term_id == STATUS
-    assert annotation(draft, second).annotation.term_id == FEBRILE
-    marked = decisions_on(draft, target_refs(cons, ids))
-    assert {d.replacement.annotation_id for d in marked} == {first, second}
-    assert {d.consolidation.action for d in marked} == {"keep_both"}
-    after = group(cons, "term_differs")
-    assert after["state"] == "keep_both"
-    assert after["annotation_ids"] == sorted([first, second])
 
 
 def test_leave_out_records_reject_decisions_only(cons):
@@ -440,10 +442,10 @@ def test_annotate_an_open_group_is_refused(cons):
 
 def test_reopen_deletes_annotations_and_decisions(cons):
     ids = inputs(group(cons, "term_differs"))
-    ok(mutate(cons, "resolve", {"input_ids": ids, "action": "keep_both"}))
+    ok(mutate(cons, "resolve", payload(group(cons, "term_differs"), "choose")))
     draft = ok(mutate(cons, "reopen", {"input_ids": ids}))
     assert not decisions_on(draft, target_refs(cons, ids))
-    assert not {cons_id(cons, ids, 0), cons_id(cons, ids, 1)} & {
+    assert cons_id(cons, ids, 0) not in {
         s.annotation.annotation_id for s in draft.annotations
     }
     assert group(cons, "term_differs")["state"] == "open"
@@ -516,14 +518,8 @@ def test_an_edited_choice_submits_without_reopening(cons):
         "choose",
         True,
     )
-    for kind, action in (("term_differs", "keep_both"), ("partial", "leave_out")):
-        ok(
-            mutate(
-                cons,
-                "resolve",
-                {"input_ids": inputs(group(cons, kind)), "action": action},
-            )
-        )
+    for kind, action in (("term_differs", "choose"), ("partial", "leave_out")):
+        ok(mutate(cons, "resolve", payload(group(cons, kind), action)))
     response = submit_acknowledged(cons.adj, view(cons)["workspace_id"], revision(cons))
     assert response.status_code == 200, response.text
     notes = {
@@ -607,15 +603,11 @@ def test_unscoped_repository_sees_the_resolution(cons):
 
 def resolve_all(ns: Any) -> None:
     for kind, action in (
-        ("term_differs", "keep_both"),
+        ("term_differs", "choose"),
         ("values_differ", "leave_out"),
         ("partial", "keep"),
     ):
-        ok(
-            mutate(
-                ns, "resolve", {"input_ids": inputs(group(ns, kind)), "action": action}
-            )
-        )
+        ok(mutate(ns, "resolve", payload(group(ns, kind), action)))
 
 
 def test_group_commands_after_submit_are_refused(cons):
@@ -699,11 +691,11 @@ def test_an_editor_decision_on_an_auto_group_replaces_its_result(cons):
 
 def test_clearing_a_decision_of_a_resolved_group_reopens_it(cons):
     ids = inputs(group(cons, "term_differs"))
-    ok(mutate(cons, "resolve", {"input_ids": ids, "action": "keep_both"}))
+    ok(mutate(cons, "resolve", payload(group(cons, "term_differs"), "choose")))
     refs = target_refs(cons, ids)
     draft = decide(cons, sorted(refs)[0], None)
     assert not decisions_on(draft, refs)
-    assert not {cons_id(cons, ids, 0), cons_id(cons, ids, 1)} & {
+    assert cons_id(cons, ids, 0) not in {
         s.annotation.annotation_id for s in draft.annotations
     }
     assert group(cons, "term_differs")["state"] == "open"

@@ -7,7 +7,7 @@ from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import InvalidAnnotation
 
 ReviewOutcome = Literal["confirmed", "rejected", "changed", "uncertain"]
-ConsolidationAction = Literal["auto", "keep", "choose", "keep_both", "leave_out"]
+ConsolidationAction = Literal["auto", "keep", "choose", "leave_out"]
 
 
 class ConsolidationMark(BaseModel):

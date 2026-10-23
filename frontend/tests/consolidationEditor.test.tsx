@@ -49,6 +49,7 @@ function consolidationView(): WorkspaceView {
 const member = (inputId: string, personId: string, annotationId: string, termId: string) => ({
   input_id: inputId, person_id: personId, annotation_id: annotationId, term_id: termId, term_label: termId,
   layer_id: "phenotype", type_id: "default", axes: { assertion: "present" }, spans: [], cues: [], note: null,
+  from_tool_proposal: false,
 });
 
 const consolidation: ConsolidationView = {
@@ -59,7 +60,7 @@ const consolidation: ConsolidationView = {
     { person_id: "ann-0007", label: "Tom Reis (ann-0007)", lane: 2 },
   ],
   groups: [{
-    group_id: "g1", kinds: ["term_differs"], differing_axes: [], majority: {}, span_conflict: false, term_parts: {}, keep_input_id: "in-1", start: null, state: "open",
+    group_id: "g1", kinds: ["term_differs"], differing_axes: [], majority: {}, span_conflict: false, keep_input_id: "in-1", start: null, state: "open",
     edited: false, note: null, guidelines_unclear: false, annotation_ids: [],
     members: [member("in-1", "ann-0004", "a-luc", "HP:0001252"), member("in-2", "ann-0007", "a-tom", "HP:0001250")],
   }],

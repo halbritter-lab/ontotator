@@ -48,13 +48,8 @@ class ConsolidationMemberView(_View):
     spans: list[tuple[int, int]]
     cues: list[tuple[int, int]]
     note: str | None = None
-
-
-class ConsolidationTermPartView(_View):
-    """The decisions among one term's members ("Keep both" asks them)."""
-
-    differing_axes: list[str]
-    span_conflict: bool
+    # The finding is a confirmed or corrected tool proposal (robot icon).
+    from_tool_proposal: bool = False
 
 
 class ConsolidationGroupView(_View):
@@ -66,12 +61,10 @@ class ConsolidationGroupView(_View):
     # the text is a decision. ``span_differs`` alone (overlapping spans with
     # small shifts) is not.
     span_conflict: bool = False
-    # Term id -> its members' own decisions, for "Keep both" (terms with any).
-    term_parts: dict[str, ConsolidationTermPartView] = {}
     keep_input_id: str
     start: int | None
     members: list[ConsolidationMemberView]
-    state: Literal["open", "auto", "keep", "choose", "keep_both", "leave_out"]
+    state: Literal["open", "auto", "keep", "choose", "leave_out"]
     edited: bool = False
     note: str | None = None
     guidelines_unclear: bool = False
@@ -158,7 +151,7 @@ def resolve_consolidation_group(
     request: Request,
     principal: PrincipalDep,
 ) -> Draft:
-    """Resolve one group: ``keep``, ``choose``, ``keep_both`` or
+    """Resolve one group to exactly one finding: ``keep``, ``choose`` or
     ``leave_out`` (payload ``ResolveCommand``)."""
     key = own_key(principal, decode_workspace_id(workspace_id))
     return _groups_service(request).resolve(key, envelope)

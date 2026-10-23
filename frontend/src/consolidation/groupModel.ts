@@ -4,9 +4,8 @@
  * across all members, also across terms, so choosing a term never settles a value), and one for the text only when
  * the spans genuinely conflict (`group.span_conflict`, backend `agreement.spans_conflict`). Overlapping spans with
  * small shifts and differing notes are no decision: span, evidence and note come with the finding the result is
- * based on (the chosen term's first member, "Take … finding" or the default member). "Keep both" keeps one finding
- * per term; terms whose own members differ (`group.term_parts`) then get their own rows. A group resolves when every
- * row has a choice; "Take … finding" fills every row from one member.
+ * based on (the chosen term's first member, "Take … finding" or the default member). A group resolves to exactly one
+ * finding when every row has a choice; "Take … finding" fills every row from one member.
  */
 import type { ConsolidationGroupView, ConsolidationMemberView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import { axisLabel, namesOf, quoted, valueWords } from "./consolidationText";
@@ -35,14 +34,12 @@ export interface ChoiceRow {
   id: string;
   kind: RowKind;
   axis?: string;
-  /** "Keep both": the term whose members this row compares. */
+  /** The term whose members this row compares (rows of one term only). */
   term?: string;
   label: string;
   options: ChoiceOption[];
 }
 
-/** Term row option and choice key of "Keep both". */
-export const KEEP_BOTH = "__keep_both";
 /** Choice key remembering the member taken with "Take … finding" (its span and note come with it). */
 export const TAKEN_FROM = "__from";
 
@@ -154,17 +151,11 @@ function spanRow(members: readonly ConsolidationMemberView[], people: readonly C
   return spans.length ? [{ id: `${prefix}span`, kind: "span", term, label: `${labelPrefix}Text`, options: spans }] : [];
 }
 
-/** Whether "Keep both" asks per-term rows (a term's own members differ). */
-export const keepBothAsks = (group: ConsolidationGroupView) => Object.keys(group.term_parts ?? {}).length > 0;
-
 /**
- * The decision rows of a group. The term row (with "Keep both" unless partial), a row per axis differing among all
- * members and, only for conflicting spans, the text row. With "Keep both" chosen (`keepBoth`), the term row is
- * followed by the rows of every term whose own members differ ("Ataxia · Assertion"), instead of the group's rows.
- * `other` adds a term found with "Other term…" to the term row.
+ * The decision rows of a group. The term row, a row per axis differing among all members and, only for conflicting
+ * spans, the text row. `other` adds a term found with "Other term…" to the term row.
  */
-export function rowsOf(group: ConsolidationGroupView, people: readonly ConsolidationPersonView[], text: string, other?: OtherTerm | null,
-  keepBoth = false): ChoiceRow[] {
+export function rowsOf(group: ConsolidationGroupView, people: readonly ConsolidationPersonView[], text: string, other?: OtherTerm | null): ChoiceRow[] {
   const members = group.members;
   const rows: ChoiceRow[] = [];
   if (needsTerm(group)) {
@@ -177,21 +168,7 @@ export function rowsOf(group: ConsolidationGroupView, people: readonly Consolida
       options.push({ key: other.termId, label: `${other.label} (${other.termId}) · other term`, inputId: group.keep_input_id,
         inputIds: [], value: other.termId, people: [] });
     }
-    if (!hasKind(group, "partial")) {
-      options.push({ key: KEEP_BOTH, label: "Keep both", inputId: group.keep_input_id, inputIds: [], value: null, people: [] });
-    }
     rows.push({ id: TERM_ROW, kind: "term", label: "Term", options });
-    if (keepBoth) {
-      for (const term of terms) {
-        const part = group.term_parts?.[term.termId];
-        if (!part) continue;
-        const own = members.filter(member => member.term_id === term.termId);
-        const prefix = `both:${term.termId}:`, label = `${term.label.replace(/ \(.*\)$/, "")} · `;
-        rows.push(...axisRows(own, people, {}, prefix, label, term.termId).filter(row => row.axis && part.differing_axes.includes(row.axis)));
-        if (part.span_conflict) rows.push(...spanRow(own, people, text, prefix, label, term.termId));
-      }
-      return rows;
-    }
   }
   rows.push(...axisRows(members, people, group.majority));
   if (group.span_conflict) rows.push(...spanRow(members, people, text));
@@ -202,9 +179,6 @@ export type Choices = Readonly<Record<string, string>>;
 
 export const allChosen = (rows: readonly ChoiceRow[], choices: Choices) =>
   rows.every(row => row.options.some(option => option.key === choices[row.id]));
-
-/** Whether the choices pick "Keep both". */
-export const keepsBoth = (choices: Choices) => choices[TERM_ROW] === KEEP_BOTH;
 
 /** The choices that take every row from one member ("Take Tom Reis's finding"); its span and note come with it. */
 export function takeOverChoices(rows: readonly ChoiceRow[], member: ConsolidationMemberView): Record<string, string> {
@@ -230,7 +204,7 @@ export function takeOverWords(member: ConsolidationMemberView, rows: readonly Ch
 
 type ResolveChoice = NonNullable<ConsolidationResolvePayload["choice"]>;
 
-/** The axis values and the span member chosen in `rows` (those of one term with "Keep both"). */
+/** The axis values and the span member chosen in `rows`. */
 function chosenParts(rows: readonly ChoiceRow[], choices: Choices) {
   const picked = (row: ChoiceRow) => row.options.find(option => option.key === choices[row.id]);
   const axes: Record<string, string> = {};
@@ -260,21 +234,8 @@ export function choosePayload(group: ConsolidationGroupView, rows: readonly Choi
   return { term_id: termId, span_from_input_id: base, axes };
 }
 
-/** The `term_choices` of "Keep both": one per term whose own members differ, from that term's rows. */
-export function keepBothChoices(group: ConsolidationGroupView, rows: readonly ChoiceRow[], choices: Choices): ResolveChoice[] {
-  return Object.keys(group.term_parts ?? {}).map(termId => {
-    const { axes, span } = chosenParts(rows.filter(row => row.term === termId), choices);
-    const first = group.members.find(member => member.term_id === termId)!;
-    return { term_id: termId, span_from_input_id: span?.inputId ?? first.input_id, axes };
-  });
-}
-
 /** The resolve payload (without ids, note and flag) of a fully answered group. */
 export function resolvePayload(group: ConsolidationGroupView, rows: readonly ChoiceRow[], choices: Choices): Omit<ConsolidationResolvePayload, "input_ids"> {
-  if (keepsBoth(choices)) {
-    const termChoices = keepBothChoices(group, rows, choices);
-    return termChoices.length ? { action: "keep_both", term_choices: termChoices } : { action: "keep_both" };
-  }
   return { action: "choose", choice: choosePayload(group, rows, choices) };
 }
 
@@ -284,7 +245,6 @@ export function choiceSummary(rows: readonly ChoiceRow[], choices: Choices): str
   for (const row of rows) {
     const option = row.options.find(value => value.key === choices[row.id]);
     if (!option) continue;
-    if (option.key === KEEP_BOTH) { parts.push("kept both"); continue; }
     const what = row.kind === "axis" ? valueWords(option.value) : option.label.split(" · ")[0];
     parts.push(option.people.length ? `${what} (${namesOf(option.people)})` : what);
   }
@@ -296,7 +256,6 @@ export function stateSummary(group: ConsolidationGroupView, people: readonly Con
   switch (group.state) {
     case "auto": return "kept automatically";
     case "leave_out": return "left out";
-    case "keep_both": return "kept both";
     case "keep": {
       if (!hasKind(group, "partial")) return "kept";
       const keep = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];

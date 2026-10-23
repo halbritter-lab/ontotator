@@ -15,6 +15,7 @@ from test_consolidation_resolve_api import (
     inputs,
     mutate,
     ok,
+    payload,
     revision,
     view,
 )
@@ -60,13 +61,7 @@ def test_open_groups_refuse_the_submit_with_their_count(cons):
 
 
 def test_an_uncertain_decision_keeps_the_group_open(cons):
-    ok(
-        mutate(
-            cons,
-            "resolve",
-            {"input_ids": inputs(group(cons, "term_differs")), "action": "keep_both"},
-        )
-    )
+    ok(mutate(cons, "resolve", payload(group(cons, "term_differs"), "choose")))
     ok(
         mutate(
             cons,
@@ -105,13 +100,7 @@ def test_an_uncertain_decision_keeps_the_group_open(cons):
 
 
 def test_all_resolved_submits(cons):
-    ok(
-        mutate(
-            cons,
-            "resolve",
-            {"input_ids": inputs(group(cons, "term_differs")), "action": "keep_both"},
-        )
-    )
+    ok(mutate(cons, "resolve", payload(group(cons, "term_differs"), "choose")))
     ok(
         mutate(
             cons,
@@ -130,9 +119,9 @@ def test_all_resolved_submits(cons):
     response = submit_acknowledged(cons.adj, workspace, revision(cons))
     assert response.status_code == 200, response.text
     submitted = response.json()
-    # The automatic match + two term annotations + the kept partial finding,
+    # The automatic match + the chosen term + the kept partial finding,
     # all with the provenance of a consolidation (uniform export).
-    assert len(submitted["snapshots"]) == 4
+    assert len(submitted["snapshots"]) == 3
     assert {
         s["annotation"]["provenance"]["method"] for s in submitted["snapshots"]
     } == {"merged"}
@@ -144,7 +133,7 @@ def test_all_resolved_submits(cons):
     assert after["read_only_reason"] == "submitted"
     assert [g["state"] for g in after["groups"]] == [
         "auto",
-        "keep_both",
+        "choose",
         "leave_out",
         "keep",
     ]

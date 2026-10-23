@@ -1168,7 +1168,7 @@
           "consolidation"
         ],
         "summary": "Resolve Consolidation Group",
-        "description": "Resolve one group: ``keep``, ``choose``, ``keep_both`` or\n``leave_out`` (payload ``ResolveCommand``).",
+        "description": "Resolve one group to exactly one finding: ``keep``, ``choose`` or\n``leave_out`` (payload ``ResolveCommand``).",
         "operationId": "resolve_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_resolve_post",
         "parameters": [
           {
@@ -9768,14 +9768,6 @@
             "title": "Span Conflict",
             "default": false
           },
-          "term_parts": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ConsolidationTermPartView"
-            },
-            "type": "object",
-            "title": "Term Parts",
-            "default": {}
-          },
           "keep_input_id": {
             "type": "string",
             "title": "Keep Input Id"
@@ -9805,7 +9797,6 @@
               "auto",
               "keep",
               "choose",
-              "keep_both",
               "leave_out"
             ],
             "title": "State"
@@ -9862,7 +9853,6 @@
               "auto",
               "keep",
               "choose",
-              "keep_both",
               "leave_out"
             ],
             "title": "Action"
@@ -9973,6 +9963,11 @@
               }
             ],
             "title": "Note"
+          },
+          "from_tool_proposal": {
+            "type": "boolean",
+            "title": "From Tool Proposal",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -10035,29 +10030,6 @@
         ],
         "title": "ConsolidationProgressView",
         "description": "Open and total groups of the row's active consolidation round."
-      },
-      "ConsolidationTermPartView": {
-        "properties": {
-          "differing_axes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Differing Axes"
-          },
-          "span_conflict": {
-            "type": "boolean",
-            "title": "Span Conflict"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "differing_axes",
-          "span_conflict"
-        ],
-        "title": "ConsolidationTermPartView",
-        "description": "The decisions among one term's members (\"Keep both\" asks them)."
       },
       "ConsolidationView": {
         "properties": {

@@ -132,7 +132,7 @@ describe("ConsolidationScreen", () => {
     mockViewport(1280);
     const [start, end] = span("last week");
     const added = [{ input_id: "ann-new", person_id: "ann-0005", annotation_id: "ann-new", term_id: "HP:0001250", term_label: "Seizure",
-      layer_id: "phenotype", type_id: "default", axes: {}, spans: [[start, end] as [number, number]], cues: [], note: null }];
+      layer_id: "phenotype", type_id: "default", axes: {}, spans: [[start, end] as [number, number]], cues: [], note: null, from_tool_proposal: false }];
     load({ ...decidedView(), added, added_by: "Ana Weber (ann-0005)" });
     await renderScreen({ assignmentId: 42 });
     const list = screen.getByRole("region", { name: "Added findings" });
@@ -311,7 +311,7 @@ describe("ConsolidationScreen", () => {
     // After the save the view is read again: the server lists the added finding.
     vi.mocked(api.getConsolidation).mockResolvedValueOnce(exampleView()).mockResolvedValue({ ...exampleView(),
       added: [{ input_id: "ann-new", person_id: "ann-0009", annotation_id: "ann-new", term_id: "HP:0001250", term_label: "Seizure",
-        layer_id: "phenotype", type_id: "default", axes: {}, spans: [[start, end]], cues: [], note: null }], added_by: "Ada Judicator (ann-0009)" });
+        layer_id: "phenotype", type_id: "default", axes: {}, spans: [[start, end]], cues: [], note: null, from_tool_proposal: false }], added_by: "Ada Judicator (ann-0009)" });
     await renderScreen({ workspaceView: workspaceView() });
     const add = screen.getByRole("button", { name: "Add finding" });
     const body = document.querySelector(".cons-text-body")!;

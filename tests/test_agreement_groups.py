@@ -12,7 +12,6 @@ from collections.abc import Mapping
 from ontocurator.domain.agreement import (
     Finding,
     Group,
-    TermPart,
     compare,
     groups,
     spans_conflict,
@@ -500,20 +499,3 @@ def test_span_shift_is_described_but_no_conflict() -> None:
     )
     assert g.kinds == frozenset({"span_differs", "notes_differ"})
     assert g.span_conflict is False
-    assert g.term_parts == {}
-
-
-def test_term_parts_name_the_decisions_within_one_term() -> None:
-    g = one(
-        groups(
-            {
-                "s1": [f("a", 0, "HP:A", ((0, 8),), {"assertion": "present"})],
-                "s2": [f("b", 0, "HP:A", ((0, 8),), {"assertion": "absent"})],
-                "s3": [f("c", 0, "HP:B", ((0, 8),))],
-            },
-            ABC,
-        )
-    )
-    assert "term_differs" in g.kinds
-    assert g.span_conflict is False
-    assert g.term_parts == {"HP:A": TermPart(("assertion",), False)}

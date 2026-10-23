@@ -1,6 +1,7 @@
 """Resolve validation (acceptance fixes spec "WP-E Backend > Resolve"): the
-input ids name exactly one group, ``keep_both`` needs a term difference and
-a choice stays inside the group. Every refusal writes nothing."""
+input ids name exactly one group, a group resolves to exactly one finding
+(``keep_both`` and ``term_choices`` are refused) and a choice stays inside
+the group. Every refusal writes nothing."""
 
 from __future__ import annotations
 
@@ -64,10 +65,45 @@ def test_repeated_ids_are_refused(cons):
     refused(cons, {"input_ids": [only, only], "action": "keep"})
 
 
-def test_keep_both_needs_term_differs(cons):
+def test_keep_both_is_refused(cons):
     refused(
-        cons, {"input_ids": inputs(group(cons, "values_differ")), "action": "keep_both"}
+        cons, {"input_ids": inputs(group(cons, "term_differs")), "action": "keep_both"}
     )
+
+
+def test_term_choices_are_refused(cons):
+    item = group(cons, "term_differs")
+    refused(
+        cons,
+        {
+            "input_ids": inputs(item),
+            "action": "choose",
+            "choice": choice(item),
+            "term_choices": [choice(item)],
+        },
+    )
+
+
+def test_choose_on_term_differs_writes_one_finding(cons):
+    item = group(cons, "term_differs")
+    response = mutate(
+        cons,
+        "resolve",
+        {
+            "input_ids": inputs(item),
+            "action": "choose",
+            "choice": choice(
+                item,
+                axes={
+                    axis: item["members"][0]["axes"].get(axis, "present")
+                    for axis in item["differing_axes"]
+                },
+            ),
+        },
+    )
+    assert response.status_code == 200, response.text
+    resolved = group(cons, "term_differs")
+    assert len(resolved["annotation_ids"]) == 1
 
 
 def test_choose_needs_a_choice(cons):

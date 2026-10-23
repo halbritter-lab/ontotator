@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { autoBanner, headerDetail, headerTitle, partialText, summaryText } from "../../src/consolidation/consolidationText";
-import { allChosen, choiceSummary, choosePayload, KEEP_BOTH, resolvePayload, rowsOf, takeOverChoices, takeOverWords } from "../../src/consolidation/groupModel";
+import { allChosen, choiceSummary, choosePayload, rowsOf, takeOverChoices, takeOverWords } from "../../src/consolidation/groupModel";
 import { ANA, AXIS_DEFS, decidedView, exampleView, group, LUC, member, span, TEXT, TOM } from "./fixtures";
 
 describe("consolidation copy", () => {
@@ -116,26 +116,11 @@ describe("decision rows", () => {
     expect(choosePayload(value, rows, { ...choices, term: "HP:0001288" }).span_from_input_id).toBe("i3");
   });
 
-  it("asks the values within one term when both terms are kept (three people)", () => {
-    const absent = { assertion: "absent", experiencer: "patient", temporality: "current" };
-    const value = group("g", ["term_differs", "values_differ"], [
-      member("i1", LUC, "HP:0001251", "Ataxia", [span("Unsteady gait")]),
-      member("i2", TOM, "HP:0001251", "Ataxia", [span("Unsteady gait")], { axes: absent }),
-      member("i3", ANA, "HP:0001288", "Gait disturbance", [span("Unsteady gait")]),
-    ], { differing_axes: ["assertion"], term_parts: { "HP:0001251": { differing_axes: ["assertion"], span_conflict: false } } });
-    const rows = rowsOf(value, [LUC, TOM, ANA], TEXT);
-    expect(rows[0].options.map(option => option.key)).toEqual(["HP:0001251", "HP:0001288", KEEP_BOTH]);
-    const both = rowsOf(value, [LUC, TOM, ANA], TEXT, null, true);
-    expect(both.map(row => [row.id, row.label])).toEqual([["term", "Term"], ["both:HP:0001251:axis:assertion", "Ataxia · Assertion"]]);
-    expect(allChosen(both, { term: KEEP_BOTH })).toBe(false);
-    const choices = { term: KEEP_BOTH, "both:HP:0001251:axis:assertion": "absent" };
-    expect(allChosen(both, choices)).toBe(true);
-    expect(resolvePayload(value, both, choices)).toEqual({ action: "keep_both",
-      term_choices: [{ term_id: "HP:0001251", span_from_input_id: "i1", axes: { assertion: "absent" } }] });
-    expect(choiceSummary(both, choices)).toBe("kept both, absent (Tom Reis)");
-    // Without differences inside a term "Keep both" needs nothing more.
-    const plain = { ...value, term_parts: {} };
-    expect(resolvePayload(plain, rowsOf(plain, [LUC, TOM, ANA], TEXT, null, true), { term: KEEP_BOTH })).toEqual({ action: "keep_both" });
+  it("never offers keep both", () => {
+    const value = exampleView().groups.find(item => item.kinds.includes("term_differs"))!;
+    const labels = rowsOf(value, [LUC, TOM], TEXT).flatMap(row => row.options.map(option => option.label));
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.some(label => label.toLowerCase().includes("both"))).toBe(false);
   });
 
   it("offers a term found with Other term as one more term option", () => {
@@ -144,7 +129,7 @@ describe("decision rows", () => {
       member("i2", TOM, "HP:0001288", "Gait disturbance", [span("Unsteady gait")]),
     ]);
     const rows = rowsOf(value, [LUC, TOM], TEXT, { termId: "HP:0002066", label: "Gait ataxia" });
-    expect(rows[0].options.map(option => option.label)).toEqual(["Ataxia (HP:0001251) · Luc Martin", "Gait disturbance (HP:0001288) · Tom Reis", "Gait ataxia (HP:0002066) · other term", "Keep both"]);
+    expect(rows[0].options.map(option => option.label)).toEqual(["Ataxia (HP:0001251) · Luc Martin", "Gait disturbance (HP:0001288) · Tom Reis", "Gait ataxia (HP:0002066) · other term"]);
     expect(choosePayload(value, rows, { term: "HP:0002066" })).toEqual({ term_id: "HP:0002066", span_from_input_id: "i1", axes: {} });
   });
 });
