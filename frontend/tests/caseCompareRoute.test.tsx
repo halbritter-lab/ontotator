@@ -17,6 +17,8 @@ beforeEach(() => {
   vi.spyOn(api, 'getCase').mockResolvedValue(caseDetail);
   vi.spyOn(api, 'getVariantText').mockImplementation(async (_project, doc) => ({ document_id: doc, text: `Immutable ${doc}`, text_sha256: 'text' }));
   vi.spyOn(api, 'listAnnotationVersions').mockResolvedValue([ownRef, linked]);
+  vi.spyOn(api, 'listTextLayers').mockResolvedValue([{ kind: 'submission', ref: linked, label: 'Reader B, submitted 16 Oct', state: 'submitted', available: true },
+    { kind: 'own', ref: ownRef, label: ownRef.label, state: 'submitted', available: true }]);
   vi.spyOn(api, 'getAnnotationVersion').mockResolvedValue(historical);
   vi.spyOn(api, 'listMyTasks').mockResolvedValue([]);
   vi.spyOn(api, 'resolveTermLabels').mockResolvedValue([]);
@@ -25,13 +27,13 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window
 
 it('opens the comparison with the right side of the compare query when navigated through App', async () => {
   window.history.replaceState(null, '', routeHref({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'target',
-    annotations: refKey(ownRef), compare: refKey(linked), documents: { decision: 'all', panel: `${caseDetail.case_id}:de` } }));
+    show: `own:${ownRef.id}`, compare: 'target', compare_show: 'submission:sub-2', documents: { decision: 'all', panel: `${caseDetail.case_id}:de` } }));
   render(<App user={testUser('lead')} />);
   const panel = await screen.findByRole('region', { name: 'Comparison' });
   await waitFor(() => expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'submission', 'sub-2'));
   expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'own', ownRef.id);
-  expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('target');
-  expect(within(panel).getByLabelText<HTMLSelectElement>('Annotations').value).toBe(refKey(linked));
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Language and version').value).toBe('target');
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Show').value).toBe('submission:sub-2');
 });
 
 it('keeps the viewer without a comparison when the route has no compare query', async () => {

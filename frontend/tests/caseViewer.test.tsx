@@ -11,6 +11,7 @@ beforeEach(() => {
   vi.spyOn(api, 'getCase').mockResolvedValue(caseDetail);
   vi.spyOn(api, 'getVariantText').mockImplementation(async (_project, doc) => ({ document_id: doc, text: `Immutable ${doc} 😃`, text_sha256: 'text' }));
   vi.spyOn(api, 'listAnnotationVersions').mockResolvedValue([ownRef]);
+  vi.spyOn(api, 'listTextLayers').mockResolvedValue([{ kind: 'own', ref: ownRef, label: ownRef.label, state: 'submitted', available: true }]);
   vi.spyOn(api, 'getAnnotationVersion').mockResolvedValue(historical);
   vi.spyOn(api, 'listMyTasks').mockResolvedValue([]);
   vi.spyOn(api, 'resolveTermLabels').mockResolvedValue([]);
@@ -18,15 +19,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const props = { projectKey: 'pkg', caseId: caseDetail.case_id, variant: 'target', username: 'alice', onNavigate: vi.fn() };
 
-it('shows the exact selected final result while retaining the explicitly requested different text version', async () => {
+it('opens the accepted final result as a layer of the Show list, without the workflow-warnings fetch', async () => {
   const { CaseViewer } = await import('../src/variants/CaseViewer');
-  vi.mocked(api.getWorkflowWarnings).mockResolvedValue({ project: 'pkg', selections: [{ case_id: caseDetail.case_id, language: 'de', document_id: 'other-run', submission_id: 'pinned-result', revision: 4 }], warnings: [], omissions: [], state_digest: 'a'.repeat(64) });
-  render(<CaseViewer {...props} />);
-  await screen.findByText('Immutable target 😃');
-  expect(screen.getByText('Final result uses another text version')).toBeTruthy();
-  expect(screen.getByRole('link', { name: 'View selected final text' }).getAttribute('href')).toContain('variant=other-run');
-  expect(screen.queryByText('Immutable other-run 😃')).toBeNull();
-  expect(api.getAnnotationVersion).not.toHaveBeenCalled();
+  const finalRef = { kind: 'final' as const, id: 'pinned-result', label: 'Final result', created_at: '2026-10-21T00:00:00Z' };
+  vi.mocked(api.listTextLayers).mockResolvedValue([{ kind: 'final', ref: finalRef, label: 'Final result, accepted 21 Oct', state: 'accepted', available: true }]);
+  render(<CaseViewer {...props} show="final:pinned-result" />);
+  await screen.findByRole('heading', { name: 'Final result, accepted 21 Oct' });
+  expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'final', 'pinned-result');
+  expect(api.getWorkflowWarnings).not.toHaveBeenCalled();
 });
 
 it('returns directly to Documents with the original authorized project and filters', async () => {
@@ -34,18 +34,17 @@ it('returns directly to Documents with the original authorized project and filte
   const onNavigate = vi.fn();
   render(<CaseViewer {...props} onNavigate={onNavigate} documents={{ language: 'de', status: 'submitted', q: 'GSC17' }} />);
   await screen.findByText('Immutable target 😃');
-  fireEvent.click(screen.getByRole('link', { name: 'Back to Documents' }));
+  fireEvent.click(screen.getByRole('link', { name: 'Documents' }));
   expect(onNavigate).toHaveBeenCalledWith({ name: 'projectDocuments', key: 'pkg', language: 'de', status: 'submitted', q: 'GSC17' });
 });
 
-it('reads immutable text without opening work and keeps Text only useful when refs are denied', async () => {
+it('reads immutable text without opening work and keeps Text only useful when layers are denied', async () => {
   const { CaseViewer } = await import('../src/variants/CaseViewer');
-  vi.mocked(api.listAnnotationVersions).mockRejectedValue(new ApiError(404, 'Denied', 'VERSION_NOT_FOUND'));
+  vi.mocked(api.listTextLayers).mockRejectedValue(new ApiError(404, 'Denied', 'VERSION_NOT_FOUND'));
   const open = vi.spyOn(api, 'openAssignment'), metadata = vi.spyOn(api, 'getVariantMetadata');
   render(<CaseViewer {...props} />);
   await screen.findByText('Immutable target 😃');
-  expect(screen.getByText('Machine translation · accepted')).toBeTruthy();
-  expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('text');
+  expect((screen.getByLabelText('Show') as HTMLSelectElement).value).toBe('text');
   expect(open).not.toHaveBeenCalled(); expect(metadata).not.toHaveBeenCalled();
   expect(api.getAnnotationVersion).not.toHaveBeenCalled();
 });
@@ -57,7 +56,7 @@ it('renders only the offered exact snapshot and real supported task IDs', async 
     { assignment_id: 8, workflow_revision: 0, held: false, project_key: 'foreign', project_name: 'P', document_id: 'target', language: 'de', task: 'review', status: 'open', updated_at: '' },
   ]);
   render(<CaseViewer {...props} annotations={refKey(ownRef)} />);
-  await screen.findByText('HP:old');
+  await screen.findAllByText('HP:old');
   expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'own', ownRef.id);
   expect(screen.getByText('assertion: present (defaulted)')).toBeTruthy();
   const translationTask = screen.getByRole('link', { name: 'Open my translation review task' });
@@ -96,7 +95,7 @@ it('drops protected text and late replies on variant and user replacement', asyn
 it('does not revive a previous snapshot while reselecting it waits for fresh authority', async () => {
   const { CaseViewer } = await import('../src/variants/CaseViewer');
   const mounted = render(<CaseViewer {...props} annotations={refKey(ownRef)} />);
-  await screen.findByText('HP:old');
+  await screen.findAllByText('HP:old');
   mounted.rerender(<CaseViewer {...props} annotations="text" />);
   expect(screen.queryByText('HP:old')).toBeNull();
   let refuse!: (error: unknown) => void;
@@ -120,7 +119,7 @@ it('labels correction-run checks as inherited from the actual translation ancest
   fireEvent.click(screen.getByText('Translation details'));
   expect(screen.getByRole('heading', { name: 'Source' })).toBeTruthy();
   expect(screen.getByRole('heading', { name: 'Translation' })).toBeTruthy();
-  expect(screen.getByRole('heading', { name: 'Review' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Translation review' })).toBeTruthy();
   expect(screen.getByText('Inherited translation-run checks')).toBeTruthy();
   expect(screen.getByText('Test provider')).toBeTruthy();
   expect(screen.getByText('numbers: failed')).toBeTruthy();
@@ -144,25 +143,22 @@ it('opens independent comparison alongside the actual viewer without replacing l
   const open = vi.spyOn(api, 'openAssignment');
   const { CaseViewer } = await import('../src/variants/CaseViewer');
   const mounted = render(<CaseViewer {...props} annotations={refKey(ownRef)} />);
-  await screen.findByText('HP:old');
+  await screen.findAllByText('HP:old');
   const left = mounted.container.querySelector('.text-container');
   const compare = screen.getByRole('button', { name: 'Compare' });
   fireEvent.click(compare);
   await screen.findByText('Immutable source 😃');
   const toolbar = screen.getByRole('toolbar', { name: 'Comparison controls' });
-  const leftIdentity = screen.getByRole('group', { name: 'Current text identity' });
   const rightIdentity = screen.getByRole('group', { name: 'Comparison text identity' });
-  expect(within(leftIdentity).getByRole('heading', { name: 'Current text' })).toBeTruthy();
   expect(within(rightIdentity).getByRole('heading', { name: 'Comparison text' })).toBeTruthy();
   expect(toolbar.closest('.comparison-reading')).toBe(mounted.container.querySelector('.comparison-reading'));
   expect(toolbar.closest('.compare-pane')).toBeNull();
   expect(within(toolbar).getByRole('checkbox', { name: 'Couple scrolling' })).toBeTruthy();
-  expect(within(leftIdentity).getAllByRole('combobox')).toHaveLength(3);
-  expect(within(rightIdentity).getAllByRole('combobox')).toHaveLength(3);
-  expect(mounted.container.querySelector('.comparison-reading > .viewer-left-controls .variant-selectors')).toBeTruthy();
-  expect(screen.getByRole('region', { name: 'Comparison' }).querySelector('.compare-controls .variant-selectors')).toBeTruthy();
+  expect(within(screen.getByRole('group', { name: 'Text view' })).getAllByRole('combobox')).toHaveLength(2);
+  expect(within(rightIdentity).getAllByRole('combobox')).toHaveLength(2);
+  expect(mounted.container.querySelector('.variant-selectors')).toBeNull();
   expect(mounted.container.querySelector('.text-container')).toBe(left);
-  expect(screen.getByText('HP:old')).toBeTruthy();
+  expect(screen.getAllByText('HP:old').length).toBeGreaterThan(0);
   expect(open).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Close comparison' }));
   expect(mounted.container.querySelector('.text-container')).toBe(left);
@@ -179,10 +175,11 @@ it('retains comparison owner, explicit choices and coupling-off through actual d
   fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
   await screen.findByText('Immutable source 😃');
   const panel = screen.getByRole('region', { name: 'Comparison' });
-  fireEvent.change(within(panel).getByLabelText('Language'), { target: { value: 'de' } });
+  fireEvent.change(within(panel).getByLabelText('Language and version'), { target: { value: 'other-run' } });
   await within(panel).findByText('Immutable other-run 😃');
-  fireEvent.change(within(panel).getByLabelText('Annotations'), { target: { value: refKey(ownRef) } });
-  await within(panel).findByText('HP:old');
+  await waitFor(() => expect(within(panel).getByLabelText<HTMLSelectElement>('Show').options).toHaveLength(2));
+  fireEvent.change(within(panel).getByLabelText('Show'), { target: { value: `own:${ownRef.id}` } });
+  await within(panel).findAllByText('HP:old');
   fireEvent.click(screen.getByRole('checkbox', { name: 'Couple scrolling' }));
   let finishCase!: (value: typeof caseDetail) => void;
   let finishLeft!: (value: Awaited<ReturnType<typeof api.getVariantText>>) => void;
@@ -194,15 +191,15 @@ it('retains comparison owner, explicit choices and coupling-off through actual d
   expect(screen.getByRole('region', { name: 'Comparison' })).toBe(panel);
   expect(within(panel).queryByText('HP:old')).toBeNull();
   expect(within(panel).queryByText('Immutable other-run 😃')).toBeNull();
-  expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('other-run');
-  expect(within(panel).getByLabelText<HTMLSelectElement>('Annotations').value).toBe(refKey(ownRef));
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Language and version').value).toBe('other-run');
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Show').value).toBe(`own:${ownRef.id}`);
   expect((screen.getByRole('checkbox', { name: 'Couple scrolling' }) as HTMLInputElement).checked).toBe(false);
   await act(async () => finishCase({ ...caseDetail }));
   expect(within(panel).queryByText('HP:old')).toBeNull();
   await act(async () => finishLeft({ document_id: 'target', text: 'Fresh left text', text_sha256: 'text' }));
-  await within(panel).findByText('HP:old');
+  await within(panel).findAllByText('HP:old');
   expect(api.getAnnotationVersion).toHaveBeenCalledTimes(priorGets + 1);
-  expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('other-run');
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Language and version').value).toBe('other-run');
   expect((screen.getByRole('checkbox', { name: 'Couple scrolling' }) as HTMLInputElement).checked).toBe(false);
   await act(async () => mounted.rerender(<CaseViewer {...props} username="bob" />));
   expect(screen.queryByRole('region', { name: 'Comparison' })).toBeNull();
@@ -220,7 +217,6 @@ it('restricts ordinary annotators to text without generic browsing or forbidden 
   expect(api.listAnnotationVersions).not.toHaveBeenCalled();
   mounted.rerender(<CaseViewer {...props} annotations={refKey({ kind: 'submission', id: ownRef.id })} />);
   await screen.findByText('This annotation version is not available to you.');
-  expect(screen.queryByText(/Immutable target/)).toBeNull();
   expect(api.listAnnotationVersions).not.toHaveBeenCalled();
   expect(api.getAnnotationVersion).not.toHaveBeenCalled();
 });
@@ -242,7 +238,7 @@ it('lets an annotator open an old own submission from the history as an own ref,
   const route = onNavigate.mock.calls.at(-1)![0];
   expect(route).toEqual({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'target', annotations: refKey(ownRef) });
   mounted.rerender(<CaseViewer {...props} onNavigate={onNavigate} annotations={route.annotations} />);
-  await screen.findByText('HP:old');
+  await screen.findAllByText('HP:old');
   expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'own', ownRef.id);
   expect(api.getAnnotationVersion).not.toHaveBeenCalledWith('pkg', 'target', 'submission', expect.anything());
   expect(rows).not.toHaveBeenCalled();
@@ -253,16 +249,17 @@ it('opens a deep-linked comparison with that right side and keeps annotations wh
   vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
   const { CaseViewer } = await import('../src/variants/CaseViewer');
   const linked = { ...ownRef, kind: 'submission' as const, id: 'sub-2', label: 'ann-0002 · submission' };
-  vi.mocked(api.listAnnotationVersions).mockResolvedValue([ownRef, linked]);
+  vi.mocked(api.listTextLayers).mockResolvedValue([{ kind: 'submission', ref: linked, label: 'Reader B, submitted 16 Oct', state: 'submitted', available: true },
+    { kind: 'own', ref: ownRef, label: ownRef.label, state: 'submitted', available: true }]);
   const onNavigate = vi.fn();
   const documents = { decision: 'all', page: '2', open: [`${caseDetail.case_id}:de`] };
-  render(<CaseViewer {...props} onNavigate={onNavigate} annotations={refKey(ownRef)} compare={refKey(linked)} documents={documents} />);
+  render(<CaseViewer {...props} onNavigate={onNavigate} annotations={refKey(ownRef)} compare="target" compareShow="submission:sub-2" documents={documents} />);
   const panel = await screen.findByRole('region', { name: 'Comparison' });
   await waitFor(() => expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'submission', 'sub-2'));
-  expect(within(panel).getByLabelText<HTMLSelectElement>('Text version').value).toBe('target');
-  expect(within(panel).getByLabelText<HTMLSelectElement>('Annotations').value).toBe(refKey(linked));
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Language and version').value).toBe('target');
+  expect(within(panel).getByLabelText<HTMLSelectElement>('Show').value).toBe('submission:sub-2');
   fireEvent.click(screen.getByRole('button', { name: 'Close comparison' }));
-  expect(onNavigate).toHaveBeenCalledWith({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'target', annotations: refKey(ownRef), documents });
+  expect(onNavigate).toHaveBeenCalledWith({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'target', show: `own:${ownRef.id}`, documents });
 });
 
 it('restores the full documents query on the back link, including open rows, page and decision', async () => {
@@ -271,18 +268,10 @@ it('restores the full documents query on the back link, including open rows, pag
   const documents = { decision: 'confirm-final', page: '3', open: [`${caseDetail.case_id}:de`, 'other:en'], language: 'de' };
   render(<CaseViewer {...props} onNavigate={onNavigate} documents={documents} />);
   await screen.findByText('Immutable target 😃');
-  const back = screen.getByRole('link', { name: 'Back to Documents' });
+  const back = screen.getByRole('link', { name: 'Documents' });
   expect(back.getAttribute('href')).toBe(routeHref({ name: 'projectDocuments', key: 'pkg', ...documents }));
   fireEvent.click(back);
   expect(onNavigate).toHaveBeenCalledWith({ name: 'projectDocuments', key: 'pkg', ...documents });
-});
-
-it('uses a collapsed native Versions disclosure for permitted browsing', async () => {
-  const { CaseViewer } = await import('../src/variants/CaseViewer');
-  render(<CaseViewer {...props} />);
-  await screen.findByText(/Immutable target/);
-  const disclosure = screen.getByText('Versions').closest('details')!;
-  expect(disclosure.open).toBe(false);
 });
 
 it('shows a lead the read-only check states of a submitted carry-forward submission', async () => {
@@ -312,6 +301,6 @@ it('shows a lead the read-only check states of a submitted carry-forward submiss
   expect(within(section).getAllByText('Carried from Round 1')).toHaveLength(2);
   mounted.rerender(<CaseViewer {...props} annotations={refKey(plainRef)} />);
   await waitFor(() => expect(history).toHaveBeenCalledWith('pkg', 'target', 'sub-plain'));
-  await screen.findByText('HP:old');
+  await screen.findAllByText('HP:old');
   await waitFor(() => expect(screen.queryByRole('region', { name: 'Carried findings' })).toBeNull());
 });

@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api, type AnnotationVersion, type CaseDetail, type VariantText, type VersionRef } from '../api/client';
+import { api, type AnnotationVersion, type CaseDetail, type TextLayerEntry, type VariantText, type VersionRef } from '../api/client';
 import { ErrorNotice } from '../admin/ErrorNotice';
 import { useTermLabels } from '../editor/useTermLabels';
 import { Button, IconButton, InlineMessage } from '../ui';
@@ -10,6 +10,10 @@ import { useCoupledScroll } from './useCoupledScroll';
 import { annotationOptions, pickVariant, refForKey, refKey } from './versionState';
 import { VariantSelectors } from './VariantSelectors';
 import { ReadOnlyAnnotationView } from './ReadOnlyAnnotationView';
+import { VersionSelect } from './VersionSelect';
+import { ShowSelect } from './ShowSelect';
+import { LayerFindings } from './LayerFindings';
+import { layerKey, layerRefs, refForLayer } from './useTextLayers';
 
 export interface ComparePaneProps {
   projectKey: string; username: string; caseDetail: CaseDetail; leftDocumentId: string;
@@ -17,6 +21,8 @@ export interface ComparePaneProps {
   toolbarHost?: HTMLElement | null;
   /** Right side preselected by a deep link (`compare` of the case route); the reader can still change it. */
   initialRight?: { documentId: string; refKey: string };
+  /** Text view: the server's layers, one language-and-version select, the Show select and the findings; keys are layer keys. */
+  layers?: boolean;
 }
 
 /** Only traverse explicitly readable, same-case lineage. No ID or status inference. */
@@ -36,7 +42,7 @@ function defaultComparison(detail: CaseDetail, documentId: string) {
   return { id: row ? documentId : null, source: !row };
 }
 
-export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, suspended = false, editing = false, onClose, toolbarHost, initialRight }: ComparePaneProps): JSX.Element {
+export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, leftText, leftElement, leftContext, suspended = false, editing = false, onClose, toolbarHost, initialRight, layers = false }: ComparePaneProps): JSX.Element {
   const couplingNoteId = useId();
   // User choices outlive left annotation changes; requests must still reauthorize in each context.
   const choiceIdentity = useMemo(() => ({}), [projectKey, username, caseDetail.case_id, leftDocumentId, initialRight?.documentId, initialRight?.refKey]);
@@ -50,17 +56,18 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
   const selectionIdentity = useMemo(() => ({}), [choiceIdentity, selectedId]);
   const [retry, setRetry] = useState(0);
   const contentIdentity = useMemo(() => ({}), [identity, selectedId, retry, suspended]);
-  const [content, setContent] = useState<{ identity: object; text: VariantText | null; refs: VersionRef[] | null; textError?: unknown; refsError?: unknown } | null>(null);
+  const find = (key: string, refs: readonly VersionRef[]) => layers ? refForLayer(key, refs) : refForKey(key, refs);
+  const [content, setContent] = useState<{ identity: object; text: VariantText | null; refs: VersionRef[] | null; entries?: TextLayerEntry[]; textError?: unknown; refsError?: unknown } | null>(null);
   const current = !suspended && available && content?.identity === contentIdentity ? content : null;
   const [choice, setChoice] = useState<{ identity: object; key: string } | null>(null);
   const refs = current?.refs;
   const newest = refs?.reduce<VersionRef | null>((best, ref) => !best || Date.parse(ref.created_at) > Date.parse(best.created_at) ? ref : best, null);
   // A deep-linked ref waits for the offered refs; one no longer offered falls back to Text only.
-  const linked = !manual && preselected ? (!refs ? preselected.refKey : refForKey(preselected.refKey, refs) ? preselected.refKey : null) : undefined;
+  const linked = !manual && preselected ? (!refs || preselected.refKey === 'text' ? preselected.refKey : find(preselected.refKey, refs) ? preselected.refKey : null) : undefined;
   const selection = choice?.identity === selectionIdentity ? choice.key
     : linked !== undefined ? linked ?? 'text'
-    : !manual && !initial.source && newest ? refKey(newest) : 'text';
-  const ref = refForKey(selection, refs ?? []);
+    : !manual && !initial.source && newest ? (layers ? layerKey : refKey)(newest) : 'text';
+  const ref = find(selection, refs ?? []);
   const payloadIdentity = useMemo(() => ({}), [contentIdentity, selection]);
   const [payload, setPayload] = useState<{ identity: object; value?: AnnotationVersion; error?: unknown } | null>(null);
   const snapshot = payload?.identity === payloadIdentity && ref ? payload.value : undefined;
@@ -87,7 +94,8 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
       if (active) setContent(value => ({ identity: contentIdentity, text: null, refs: null, ...(value?.identity === contentIdentity ? value : {}), ...patch }));
     };
     api.getVariantText(projectKey, selectedId).then(text => update({ text }), textError => update({ textError }));
-    api.listAnnotationVersions(projectKey, selectedId).then(refs => update({ refs }), refsError => update({ refsError }));
+    if (layers) api.listTextLayers(projectKey, selectedId).then(entries => update({ entries, refs: layerRefs(entries) }), refsError => update({ refsError }));
+    else api.listAnnotationVersions(projectKey, selectedId).then(refs => update({ refs }), refsError => update({ refsError }));
     return () => { active = false; };
   }, [contentIdentity]);
   useEffect(() => {
@@ -114,9 +122,13 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
     {toolbarHost === undefined && globalControls}
     <div role="group" aria-label="Comparison text identity" className="comparison-pane-identity">
     {toolbarHost !== undefined && <h2 className="comparison-pane-title">Comparison text</h2>}
-    <VariantSelectors caseDetail={caseDetail} currentDocumentId={selectedId ?? ''} annotationOptions={annotationOptions(refs ?? [], false)} selectedAnnotation={selection}
+    {layers ? <div className="text-view-selects">
+      <VersionSelect caseDetail={caseDetail} value={selectedId ?? ''} onChange={select} />
+      <ShowSelect entries={current?.entries ?? []} value={selection} otherLabel={ref?.label}
+        onChange={key => { if (key === 'text' || find(key, refs ?? [])) setChoice({ identity: selectionIdentity, key }); }} />
+    </div> : <VariantSelectors caseDetail={caseDetail} currentDocumentId={selectedId ?? ''} annotationOptions={annotationOptions(refs ?? [], false)} selectedAnnotation={selection}
       onLanguage={language => { const id = pickVariant(caseDetail, language); if (id) select(id); }} onVersion={select}
-      onAnnotation={key => { if (key === 'text' || refForKey(key, refs ?? [])) setChoice({ identity: selectionIdentity, key }); }} />
+      onAnnotation={key => { if (key === 'text' || find(key, refs ?? [])) setChoice({ identity: selectionIdentity, key }); }} />}
     </div>
     {!initial.id && <InlineMessage tone="info">Original source is not available; choose a comparison text.</InlineMessage>}
     {linked === null && choice?.identity !== selectionIdentity && <InlineMessage tone="info">The linked submission is not available to you.</InlineMessage>}
@@ -128,5 +140,7 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
     {current?.text ? <ReadOnlyAnnotationView key={JSON.stringify([username, projectKey, caseDetail.case_id, selectedId, selection, retry, leftContext])}
       text={current.text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} onTextElement={setRightElement} proposalContext={ref?.kind === "proposals" && snapshot ? {projectKey,documentId:selectedId!,scope:JSON.stringify([username,projectKey,caseDetail.case_id,selectedId,selection,retry,leftContext]),setId:ref.id} : undefined} />
       : available && !suspended && !current?.textError ? <InlineMessage tone="info">Loading comparison text...</InlineMessage> : null}
+    {layers && ref && snapshot && <LayerFindings key={selection} labelFor={labelFor} annotations={snapshot.annotations}
+      label={current?.entries?.find(entry => entry.ref && layerKey(entry.ref) === selection)?.label ?? ref.label} />}
   </section>;
 }

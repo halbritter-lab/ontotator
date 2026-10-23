@@ -16,6 +16,7 @@ beforeEach(()=>{
   vi.spyOn(api,'getCase').mockResolvedValue(caseDetail); vi.spyOn(api,'resolveTermLabels').mockResolvedValue([]);vi.spyOn(api,'listMyTasks').mockResolvedValue([]);
   vi.spyOn(api,'getVariantText').mockImplementation(async (_project,doc)=>({document_id:doc,text:'Immutable '+doc,text_sha256:'text'}));
   vi.spyOn(api,'listAnnotationVersions').mockResolvedValue([ownRef,{...ownRef,kind:'proposals',id:'4',label:'Offered tool set'}]);
+  vi.spyOn(api,'listTextLayers').mockResolvedValue([]);
   vi.spyOn(api,'getAnnotationVersion').mockResolvedValue(historical);vi.spyOn(api,'getReanchorItems').mockResolvedValue([item()]);
 });
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
@@ -186,7 +187,7 @@ it('loads viewer pending items only for an actually offered proposal ref, never 
   vi.spyOn(api,'listProjects').mockResolvedValue([leadProject]);
   const props={projectKey:'pkg',caseId:caseDetail.case_id,variant:'target',username:'alice',onNavigate:vi.fn()};
   const mounted=render(<CaseViewer {...props}/>);await screen.findByText('Immutable target');expect(api.getReanchorItems).not.toHaveBeenCalled();
-  mounted.rerender(<CaseViewer {...props} annotations={refKey(ownRef)}/>);await screen.findByText('HP:old');expect(api.getReanchorItems).not.toHaveBeenCalled();
+  mounted.rerender(<CaseViewer {...props} annotations={refKey(ownRef)}/>);await screen.findAllByText('HP:old');expect(api.getReanchorItems).not.toHaveBeenCalled();
   mounted.rerender(<CaseViewer {...props} annotations={refKey({kind:'proposals',id:'4'})}/>);
   await screen.findByRole('heading',{name:'Needs review after the text change (1)'});
   expect(api.getReanchorItems).toHaveBeenCalledTimes(1);expect(api.getReanchorItems).toHaveBeenCalledWith('pkg','target');

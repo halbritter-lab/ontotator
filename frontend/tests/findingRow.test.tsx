@@ -37,3 +37,11 @@ describe("axisOptionLabel", () => {
     expect(axisOptionLabel(null)).toBe("Not specified");
   });
 });
+
+describe("FindingRow axis values", () => {
+  it("axis values carry their fixed colour slot", () => {
+    const { getByText } = render(<ul><FindingRow snapshot={snapshot(1)} selected={false} termLabel={() => "Seizure"}
+      showLayer={false} axes={[{ id: "assertion", label: "Assertion", value: "absent" }]} defaulted={false} onActivate={vi.fn()} /></ul>);
+    expect(getByText("Absent").className).toContain("axis-value--absent");
+  });
+});

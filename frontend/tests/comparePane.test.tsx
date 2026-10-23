@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { api, ApiError, type VariantText } from '../src/api/client';
 import { caseDetail, historical, ownRef, variant } from './variantFixtures';
@@ -222,4 +222,17 @@ it('preselects a deep-linked right side and falls back to Text only when the ref
   await screen.findByText('The linked submission is not available to you.');
   expect(screen.getByLabelText<HTMLSelectElement>('Annotations').value).toBe('text');
   expect(api.getAnnotationVersion).not.toHaveBeenCalledWith('pkg', 'target', 'submission', 'gone');
+});
+
+it('axis values carry their fixed colour slot', async () => {
+  const absent = { ...historical, annotations: [{ ...historical.annotations[0],
+    annotation: { ...historical.annotations[0].annotation, axes_values: { assertion: 'absent' } } }] };
+  vi.mocked(api.getAnnotationVersion).mockResolvedValue(absent);
+  vi.spyOn(api, 'listTextLayers').mockResolvedValue([{ kind: 'own', ref: ownRef, label: ownRef.label, state: 'submitted', available: true }]);
+  render(<ComparePane {...props} layers initialRight={{ documentId: 'target', refKey: `own:${ownRef.id}` }} />);
+  const findings = await screen.findByRole('region', { name: 'Findings' });
+  await waitFor(() => expect(within(findings).getByText('Absent').className).toContain('axis-value--absent'));
+  expect(screen.getByLabelText<HTMLSelectElement>('Show').value).toBe(`own:${ownRef.id}`);
+  expect(screen.getByLabelText<HTMLSelectElement>('Language and version').value).toBe('target');
+  expect(api.listAnnotationVersions).not.toHaveBeenCalled();
 });
