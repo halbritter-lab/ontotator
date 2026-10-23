@@ -11,7 +11,8 @@ import { group, page, row, submissions, version, work } from "./documents/fixtur
 const zRow = (overrides: Partial<DocumentRowView> = {}) =>
   row({ case_id: "z/doc", language: "en", position: 4, versions: [version({ document_id: "z/doc" })], ...overrides });
 const aRow = row({ case_id: "a", language: "de", position: 9, versions: [version({ document_id: "a" })] });
-const rowsPage = (z: DocumentRowView = zRow()) => page([group("z/doc", [z]), group("a", [aRow])]);
+// z/doc has two texts: the selection bar shows from two selected texts on.
+const rowsPage = (z: DocumentRowView = zRow()) => page([group("z/doc", [z, zRow({ language: "de" })]), group("a", [aRow])]);
 
 /** Batch preview for the selection: one annotation per case; Alice reads en. */
 function batchPreview(body: BatchAssignRequest): BatchPreview {
@@ -42,7 +43,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(n
 it("keeps the SAME focused ID input while actual App navigation controls every typed query", async () => {
   const user = userEvent.setup();
   render(<App user={testUser("lead", { is_system_admin: false })} />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
+  await screen.findByRole("button", { name: "Open text card, z/doc en" });
   const input = screen.getByLabelText("Case ID or text");
   await user.type(input, "abc");
   await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?q=abc"));
@@ -62,10 +63,10 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   vi.spyOn(api, "previewAssignmentBatch").mockImplementation(async (_key, body) => batchPreview(body));
   vi.spyOn(api, "commitAssignmentBatch").mockResolvedValue({ created: [{ ...assignment, username: "alice" }] });
   render(<App user={testUser("lead", { is_system_admin: false })} />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 text)" }));
+  await screen.findByRole("button", { name: "Open text card, z/doc en" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (2 texts)" }));
   const bar = screen.getByRole("region", { name: "Selection" });
-  expect(within(bar).getByText("1 text in 1 case selected")).toBeTruthy();
+  expect(within(bar).getByText("2 texts in 1 case selected")).toBeTruthy();
   fireEvent.click(within(bar).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
   fireEvent.click(await within(dialog).findByRole("radio", { name: /Alice/ }));
@@ -77,7 +78,7 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   await waitFor(() => expect(api.listAssignments).toHaveBeenCalledTimes(2));
   expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
-  expect(screen.getAllByRole("link", { name: /^Open in editor, \S+, \S+$/ }).map(link => link.getAttribute("aria-label") ?? link.textContent)).toEqual(["Open in editor, z/doc en", "Open in editor, a, de"]);
+  expect(screen.getAllByRole("button", { name: /^Open text card, / }).map(button => button.getAttribute("aria-label"))).toEqual(["Open text card, z/doc en", "Open text card, z/doc de", "Open text card, a de"]);
   expect(window.location.hash).toBe("#/projects/p%2Fkey/documents");
 });
 

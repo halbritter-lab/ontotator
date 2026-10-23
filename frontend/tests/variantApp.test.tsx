@@ -80,9 +80,11 @@ it('documents Open link preserves opaque IDs, guarded navigation and native modi
   vi.spyOn(api, 'listMembers').mockResolvedValue([]);
   vi.spyOn(api, 'listAssignments').mockResolvedValue([]);
   const onNavigate = vi.fn();
-  render(<DocumentsPage projectKey="p/ %" canManage query={{}} onNavigate={onNavigate} />);
-  const link = await screen.findByRole('link', { name: `Open in editor, ${caseDetail.case_id}, en` });
-  const destination = { name: 'projectCase' as const, key: 'p/ %', caseId: caseDetail.case_id, variant: 'z/doc' };
+  // The text card's "View text" opens the text in the viewer.
+  render(<DocumentsPage projectKey="p/ %" canManage query={{ panel: fixtures.rowKey(caseDetail.case_id, 'en') }} onNavigate={onNavigate} />);
+  const link = await within(await screen.findByRole('dialog', { name: `${caseDetail.case_id} en` })).findByRole('link', { name: /^View text / });
+  // Back from the viewer returns to the open card.
+  const destination = { name: 'projectCase' as const, key: 'p/ %', caseId: caseDetail.case_id, variant: 'z/doc', documents: { panel: fixtures.rowKey(caseDetail.case_id, 'en') } };
   expect(link.getAttribute('href')).toBe(routeHref(destination));
   fireEvent.click(link, { ctrlKey: true }); expect(onNavigate).not.toHaveBeenCalled();
   fireEvent.click(link); expect(onNavigate).toHaveBeenCalledWith(destination);

@@ -27,7 +27,8 @@ function batchPreview(body: BatchAssignRequest): BatchPreview {
 
 beforeEach(() => {
   vi.spyOn(api, "getProjectSettings").mockResolvedValue({ languages: ["en", "de"] } as never);
-  vi.spyOn(api, "listDocumentRows").mockImplementation(async () => page([group("z/doc", [zRow()])]));
+  // Two texts in z/doc: the selection bar shows from two selected texts on.
+  vi.spyOn(api, "listDocumentRows").mockImplementation(async () => page([group("z/doc", [zRow(), zRow({ language: "de" })])]));
   vi.spyOn(api, "getRowSubmissions").mockImplementation(async (_key, caseId, language) => submissions(caseId, language));
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue(documents);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
@@ -46,7 +47,7 @@ it("keeps the same focused ID input while a controlled parent applies every type
     return <DocumentsPage projectKey="p/key" canManage query={query} onNavigate={route => { if (route.name === "projectDocuments") setQuery(route); }} />;
   }
   const user = userEvent.setup(); render(<ControlledDocuments />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
+  await screen.findByRole("button", { name: "Open text card, z/doc en" });
   const input = screen.getByLabelText("Case ID or text");
   await user.type(input, "abc");
   expect(screen.getByLabelText("Case ID or text")).toBe(input);
@@ -58,9 +59,9 @@ it("keeps the same focused ID input while a controlled parent applies every type
 
 it("assigns the selected cases from the selection bar and refreshes rows and inventories after success", async () => {
   render(<DocumentsPage projectKey="p/key" canManage query={{ language: "en" }} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
+  await screen.findByRole("button", { name: "Open text card, z/doc en" });
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 text)" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (2 texts)" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
   expect(api.selectionSummary).toHaveBeenCalledWith("p/key", ["z/doc"], { language: "en" });
@@ -89,8 +90,8 @@ it("wires actual assignment IDs through the Text versions actions and refreshes 
 it("closes an open assign dialog on project change and ignores its pending mutation", async () => {
   const pending = deferred<Awaited<ReturnType<typeof api.commitAssignmentBatch>>>(); vi.mocked(api.commitAssignmentBatch).mockReturnValue(pending.promise);
   const view = render(<DocumentsPage projectKey="p/key" canManage query={{}} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 text)" }));
+  await screen.findByRole("button", { name: "Open text card, z/doc en" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (2 texts)" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
   fireEvent.click(await within(dialog).findByRole("radio", { name: /Alice/ }));
@@ -98,7 +99,7 @@ it("closes an open assign dialog on project change and ignores its pending mutat
   await waitFor(() => expect(assign.getAttribute("aria-disabled")).toBeNull());
   fireEvent.click(assign);
   view.rerender(<DocumentsPage projectKey="other" canManage query={{}} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
+  await screen.findByRole("button", { name: "Open text card, z/doc en" });
   await act(async () => { pending.resolve({ created: [assignment] }); });
   expect(screen.queryByRole("dialog", { name: "Assign 1 case" })).toBeNull();
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
