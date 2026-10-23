@@ -61,6 +61,12 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
+/** "Accept result…", then "Accept result" in the "Accept result?" confirmation. */
+async function acceptResult(): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Accept result?" })).getByRole("button", { name: "Accept result" }));
+}
+
 describe("choose", () => {
   it("accept: Accept Ana Weber’s annotation as the result? with Round line and Accept result…", async () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de", { guideline_version: 2 });
@@ -84,6 +90,11 @@ describe("choose", () => {
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
     fireEvent.click(accept);
+    // Every "Accept result…" asks first (Copy table: confirm title "Accept result?").
+    expect(api.selectFinalResult).not.toHaveBeenCalled();
+    const confirm = screen.getByRole("group", { name: "Accept result?" });
+    expect(within(confirm).getByText("Accept Ana Weber’s annotation as the result?", { selector: ".inline-confirm-message" })).toBeTruthy();
+    fireEvent.click(within(confirm).getByRole("button", { name: "Accept result" }));
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-107-de", submission_id: "case-107-s1", expected_revision: 0, acknowledged_cause_ids: [] });
   });
 
@@ -470,7 +481,7 @@ describe("after a decision", () => {
     renderPanel("case-107:de", page([group("case-107", [first]), group("case-108", [between]), group("case-109", [next])], { bar: bar({ total: 3, missing_final: 1 }) }));
     const decided = { ...first, next_step: null, steps: [], categories: [] };
     afterDecision = page([group("case-107", [decided]), group("case-108", [between]), group("case-109", [next])], { bar: bar({ total: 2, missing_final: 0 }) });
-    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
+    await acceptResult();
     await waitFor(() => expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Final result: case-109 de"));
     expect(screen.getByText("Final result saved for case-107 de.")).toBeTruthy();
     expect(screen.getByText("Needs your decision: 3 → 2, Final result missing: 1 → 0")).toBeTruthy();
@@ -486,7 +497,7 @@ describe("after a decision", () => {
     const onRowAction = vi.fn();
     renderPanel("case-107:de", page([group("case-107", [first]), group("case-109", [report])]), { onRowAction });
     afterDecision = page([group("case-107", [{ ...first, next_step: null, steps: [] }]), group("case-109", [report])]);
-    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
+    await acceptResult();
     expect(await screen.findByText("No more final results to decide.")).toBeTruthy();
     expect(screen.getByText("Final result saved for case-107 de.")).toBeTruthy();
     await waitFor(() => expect(liveRegion().textContent).toBe("Final result saved. No more final results to decide."));
@@ -510,7 +521,7 @@ describe("after a decision", () => {
       </>;
     }
     render(<Switcher />);
-    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
+    await acceptResult();
     expect(await screen.findByText("No more final results to decide.")).toBeTruthy();
     fireEvent.click(screen.getByText("Show case-108"));
     expect(await screen.findByText("Accept Ana Weber’s annotation as the result?")).toBeTruthy();
@@ -521,7 +532,7 @@ describe("after a decision", () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     const initial = page([group("case-107", [chooseRow("case-107", "de")])]);
     const { rerender } = renderPanel("case-107:de", initial);
-    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
+    await acceptResult();
     await waitFor(() => expect(api.selectFinalResult).toHaveBeenCalled());
     rerender(<Harness initialKey="case-107:de" initialPage={initial} refreshError={new Error("offline")} />);
     expect(await screen.findByText("Final result saved for case-107 de. The list could not be refreshed.")).toBeTruthy();
@@ -534,7 +545,7 @@ describe("failures", () => {
     const onReload = vi.fn();
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]), { onReload });
     vi.mocked(api.selectFinalResult).mockRejectedValue(new ConflictError("conflict", "REVISION_CONFLICT", { current_revision: 1 }));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
+    await acceptResult();
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe("This final result changed.Review again");
     const calls = vi.mocked(api.finalPanel).mock.calls.length;
@@ -548,7 +559,7 @@ describe("failures", () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
     vi.mocked(api.selectFinalResult).mockRejectedValue(new ConflictError("own", "OWN_RESULT_NOT_SELECTABLE"));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
+    await acceptResult();
     expect((await screen.findByRole("alert")).textContent).toContain(`${OWN_REASON} Nothing was saved.`);
   });
 
@@ -556,13 +567,13 @@ describe("failures", () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
     vi.mocked(api.selectFinalResult).mockRejectedValueOnce(new ApiError(500, "boom"));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
+    await acceptResult();
     expect(await screen.findByText("Could not save. Nothing changed.")).toBeTruthy();
     vi.mocked(api.selectFinalResult).mockRejectedValueOnce(new AuthError("expired", undefined, "NOT_AUTHENTICATED", 401));
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Your session ended. Nothing was saved. Sign in and confirm again.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Accept result…" }).getAttribute("aria-busy")).toBeNull();
+    expect(screen.getByRole("button", { name: "Accept result" }).getAttribute("aria-busy")).toBeNull();
     expect(api.selectFinalResult).toHaveBeenCalledTimes(2);
   });
 

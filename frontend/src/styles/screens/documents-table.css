@@ -35,7 +35,6 @@
 @media (max-width: 899px) {
   .documents-filter-groups { grid-template-columns: minmax(0, 1fr); }
   .documents-table th:has(.documents-col-wide), .documents-table td:has(> .documents-col-wide) { display: none; }
-  .documents-status-cell { max-width: 10rem; }
 }
 .documents-filter-group { display: grid; align-content: start; gap: 2px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .documents-filter-group > legend { margin-bottom: var(--space-1); padding: 0; font-weight: var(--weight-strong); }
@@ -88,8 +87,14 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 .documents-activity-cell { display: inline-flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
 /* Status cells: one line, cut with an ellipsis (the full text is the title); the short "who" in grey. */
 .documents-status-cell { display: flex; align-items: center; gap: var(--space-2); max-width: 16rem; min-width: 0; }
-.documents-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* `display: block` overrides the stacked .stage-cell column (icon, label, who on one line). */
+.documents-status.stage-cell { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .documents-status-who { color: var(--text-muted); }
+/* Below 900 px: narrower status cells and cell padding so the one-line row fits 768 px (after the base rules, which would win otherwise). */
+@media (max-width: 899px) {
+  .documents-status-cell { max-width: 9rem; }
+  .documents-table { --cell-pad-x: var(--space-2); }
+}
 /* Robot icon: the text has tool proposals and nobody is assigned yet; the accent of the editor's AI badge. */
 .documents-bot { display: inline-flex; flex: none; color: var(--accent); }
 /* A click on a row's empty area selects it and opens its card (a second click deselects): pointer cursor; the checkbox cell keeps its own. */

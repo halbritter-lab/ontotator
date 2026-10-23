@@ -281,16 +281,9 @@ function PanelContent(props: ContentProps): JSX.Element {
 function AllMatchContent(props: ContentProps & { submission: FinalPanelSubmissionView }): JSX.Element {
   const { row, data, submission, busy, onSave, onAnnounce, onDirtyChange } = props;
   const id = useId();
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useConfirming(onDirtyChange);
   const [show, setShow] = useState(false);
   const { route, link } = useEditorRoute(props);
-  useEffect(() => {
-    if (!confirming) return;
-    onDirtyChange?.(true);
-    return () => onDirtyChange?.(false);
-    // Only the confirmation's open state counts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [confirming]);
   const listed = listedSubmissions(data.panel.submissions ?? []);
   const compared = listed.filter(item => item.comparable).length || listed.length;
   const findings = data.panel.agreement?.total ?? submission.finding_count;
@@ -310,6 +303,19 @@ function AllMatchContent(props: ContentProps & { submission: FinalPanelSubmissio
     <p><Button size="sm" variant="quiet" className="btn-link" aria-expanded={show} aria-controls={tableId} onClick={() => setShow(value => !value)}>Show submissions</Button></p>
     {show && <div id={tableId}><SubmissionTable {...props} listed={listed} /></div>}
   </div>;
+}
+
+/** An open "Accept result?" confirmation counts as unsaved work (onDirtyChange). */
+function useConfirming(onDirtyChange: ContentProps["onDirtyChange"]): [boolean, (value: boolean) => void] {
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    if (!confirming) return;
+    onDirtyChange?.(true);
+    return () => onDirtyChange?.(false);
+    // Only the confirmation's open state counts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirming]);
+  return [confirming, setConfirming];
 }
 
 function useEditorRoute(props: ContentProps) {
@@ -342,8 +348,9 @@ function preselectedOf(row: DocumentRowView, data: FinalPanelData): boolean {
 }
 
 function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionView; onCompareAll: () => void }): JSX.Element {
-  const { row, data, submission, busy, onSave, onAnnounce, guidelineCurrent, now } = props;
+  const { row, data, submission, busy, onSave, onAnnounce, onDirtyChange, guidelineCurrent, now } = props;
   const id = useId();
+  const [confirming, setConfirming] = useConfirming(onDirtyChange);
   const { route, link } = useEditorRoute(props);
   const listed = listedSubmissions(data.panel.submissions ?? []);
   const triggerId = `${id}-accept`;
@@ -361,10 +368,13 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
       {consolidation && <>{", "}{link(consolidation, "Open consolidation")}</>}
     </p>
     <p className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</p>
-    {!isFinal && <div className="final-panel-actions">
+    {!isFinal && !confirming && <div className="final-panel-actions">
       <ChoiceButton id={triggerId} label="Accept result…" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
-        onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />
+        onChoose={() => setConfirming(true)} />
     </div>}
+    {!isFinal && confirming && <InlineConfirm title="Accept result?" headingLevel={4} message={acceptQuestion(submission)} confirmLabel="Accept result"
+      busy={busy !== null} onCancel={() => setConfirming(false)}
+      onConfirm={() => { if (busy === null) onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId); }} />}
     <div className="final-panel-links">
       {submission.kind === "consolidation" && compared > 1 && <Button size="sm" onClick={props.onCompareAll}>{`Compare all ${compared}…`}</Button>}
     </div>
