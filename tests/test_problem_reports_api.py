@@ -1,6 +1,5 @@
 """Authenticated report/hold handling through actual assignment routes."""
 
-import pytest
 from auth_harness import logged_in
 
 from ontocurator.assignments.service import AssignmentService
@@ -8,9 +7,6 @@ from ontocurator.assignments.service import AssignmentService
 pytest_plugins = ("test_assignment_round_open_api", "test_translation_review_task")
 
 
-@pytest.mark.skip(
-    reason="P3: an assignment opens in proposal_check from its annotation_mode"
-)
 def test_report_extension_uses_lead_reason_and_resolution_does_not_release_hold(
     check_work,
 ):

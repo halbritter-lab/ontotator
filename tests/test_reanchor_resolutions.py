@@ -36,6 +36,18 @@ def from_proposals(db):
         )
 
 
+def from_scratch(db):
+    """Annotate assignments start from scratch: a further annotator then gets a
+    scratch assignment (the text's newest set holds only pending items, so a
+    text locked "from proposals" refuses NO_PROPOSALS_ON_VERSION, P3)."""
+    with db.transaction() as conn:
+        conn.execute(
+            update(AssignmentRow)
+            .where(AssignmentRow.task == "annotate")
+            .values(annotation_mode="scratch")
+        )
+
+
 def opened(env, client=None, **extra):
     return (client or env.reviewer).post(
         "/api/v1/workspaces/open",
@@ -76,9 +88,6 @@ def test_pending_inputs_frozen_on_first_review_open(pending):
     assert again["pending_reanchor_items"] == view["pending_reanchor_items"]
 
 
-@pytest.mark.skip(
-    reason="P3: an assignment opens in proposal_check from its annotation_mode"
-)
 def test_assignment_open_preserves_typed_pending_context(pending):
     task = pending.reviewer.get("/api/v1/me/tasks").json()[0]
     response = pending.reviewer.post(
@@ -142,6 +151,7 @@ def test_legacy_first_open_initializes_once_under_lock(pending):
 
 
 def test_independent_workspace_receives_no_pending_inputs(pending):
+    from_scratch(pending.db)
     person = logged_in(
         pending.app,
         "annotator",

@@ -8,7 +8,7 @@ from sqlalchemy import delete, event, func, insert, select, update
 from t1_builders import bundle, native_unit
 from t1_fixtures import TEXT, annotation, create_project, run_import
 from test_auth_api import _app
-from test_reanchor_resolutions import from_proposals
+from test_reanchor_resolutions import from_proposals, from_scratch
 
 from ontocurator.application.workspaces import WorkspaceService
 from ontocurator.auth.audit import Actor
@@ -179,6 +179,8 @@ def test_offered_metadata_unique_matches_public_projection_without_public_permis
         ).json()
         == []
     )
+    # Bob annotates from scratch (the text's annotation starts that way).
+    from_scratch(env.db)
     scratch = logged_in(
         env.app,
         "bob",
@@ -219,6 +221,8 @@ def test_metadata_query_is_one_bounded_select_for_one_or_one_hundred_proposals(e
 
 
 def test_blind_and_empty_offers_return_no_metadata_and_issue_no_set_query(env):
+    # An annotate assignment opens only its own mode (P3): from scratch first.
+    from_scratch(env.db)
     blind = opened(env, "independent")
     assert blind.status_code == 200
     assert (
@@ -234,6 +238,7 @@ def test_blind_and_empty_offers_return_no_metadata_and_issue_no_set_query(env):
     event.listen(env.db.engine, "before_cursor_execute", capture)
     try:
         assert env.repo.workspace_proposal_sets(key, [("forged", "v", 1)]) == []
+        from_proposals(env.db)
         assert (
             env.repo.workspace_proposal_sets(
                 key.model_copy(update={"mode": "proposal_check", "scope_id": ""}), []

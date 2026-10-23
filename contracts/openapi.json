@@ -425,6 +425,49 @@
         }
       }
     },
+    "/api/v1/assignments/{assignment_id}/remove": {
+      "post": {
+        "tags": [
+          "assignments"
+        ],
+        "summary": "Remove",
+        "description": "Remove an unsubmitted annotate assignment and discard its draft.",
+        "operationId": "remove_api_v1_assignments__assignment_id__remove_post",
+        "parameters": [
+          {
+            "name": "assignment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Assignment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assignments/{assignment_id}/revoke": {
       "post": {
         "tags": [
@@ -8036,6 +8079,21 @@
             "type": "boolean",
             "title": "Lead Correction",
             "default": false
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Mode"
           }
         },
         "type": "object",
@@ -8347,6 +8405,21 @@
             "type": "boolean",
             "title": "Lead Correction",
             "default": false
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Mode"
           },
           "guideline": {
             "anyOf": [
@@ -8794,7 +8867,8 @@
               "not_in_plan",
               "already_assigned",
               "step_differs",
-              "discarded"
+              "discarded",
+              "no_proposals_on_version"
             ],
             "title": "Reason"
           }

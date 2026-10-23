@@ -120,6 +120,38 @@ def grant_roles(
     return added
 
 
+def grant_lead_self_role(
+    conn: Connection,
+    actor: Actor,
+    project_id: int,
+    project_key: str,
+    user_id: int,
+    username: str,
+    role: Role,
+    now: datetime,
+) -> list[Role]:
+    """Grant ``role`` to the acting lead who assigns themselves; the roles added.
+
+    The one self-grant (plan P3): only when ``user_id`` is the actor, the
+    actor holds ``lead`` in ``project_key`` and lacks ``role``; otherwise
+    nothing (a missing role is refused later like for anybody else). The
+    caller holds the members lock EXCLUSIVE.
+    """
+    if user_id != actor.user_id:
+        return []
+    held = set(
+        conn.execute(
+            select(ProjectMembershipRow.role).where(
+                ProjectMembershipRow.project_id == project_id,
+                ProjectMembershipRow.user_id == user_id,
+            )
+        ).scalars()
+    )
+    if "lead" not in held or role in held:
+        return []
+    return grant_roles(conn, actor, project_id, user_id, username, [role], now)
+
+
 class MembershipService:
     """Members of projects and the request access derived from them."""
 

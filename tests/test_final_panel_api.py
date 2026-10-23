@@ -564,9 +564,12 @@ def test_eligible_count_only_on_target_without_carried_moved_handed_over(rounds)
             )
         )
         conn.execute(insert(UserLanguageRow).values(user_id=uid, language="en"))
-    extra = AssignmentService(repo.db).assign(
-        Actor.cli(), "pkg-1", "doc-1", "cara", "annotate"
-    )
+    from auth_harness import harness_annotation
+
+    with harness_annotation(repo.db, "pkg-1", "doc-1"):
+        extra = AssignmentService(repo.db).assign(
+            Actor.cli(), "pkg-1", "doc-1", "cara", "annotate"
+        )
     new_key = WorkspaceKey(
         project_key="pkg-1",
         document_id="doc-1",

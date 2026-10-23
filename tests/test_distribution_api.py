@@ -15,6 +15,20 @@ from ontocurator.auth.audit import Actor
 from ontocurator.domain.errors import DomainError
 
 
+def _per_text(db, project, limit):
+    """Room for several annotators on one text (the limit holds since P3)."""
+    from sqlalchemy import update
+
+    from ontocurator.storage.tables import ProjectRow
+
+    with db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == project)
+            .values(annotations_per_text=limit)
+        )
+
+
 def test_distribution_snapshot_is_json_native_without_changing_canonical_hash():
     import hashlib
     import json
@@ -319,6 +333,7 @@ def test_http_human_edited_language_refusal_and_explicit_override(api):
 
     app, client, project = api
     app.state.accounts.set_languages(HARNESS, "alice", ["en"])
+    _per_text(app.state.repo.db, project, 2)
     url = f"/api/v1/projects/{project}/assignments"
     original = client.post(
         url + "/proposal",
@@ -457,6 +472,7 @@ def test_confirmation_mixed_rows_preserves_partial_success_and_original_audit(st
     from ontocurator.storage.tables import AuditEventRow, UserLanguageRow, UserRow
 
     db, proposals, _project, users = stored
+    _per_text(db, "p", 2)
     with db.transaction() as conn:
         outsider = conn.execute(
             insert(UserRow)

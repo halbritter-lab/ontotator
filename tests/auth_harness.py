@@ -10,7 +10,8 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -72,6 +73,55 @@ def grant(
     return True
 
 
+@contextmanager
+def harness_annotation(
+    db: Any, project: str, document_id: str, task: str = "annotate"
+) -> Iterator[None]:
+    """Test setup for one annotate assignment as the tests made them before
+    P3: through the "annotations per text" limit and from scratch (unless the
+    text's earlier work fixed the mode). Raises the limit and sets the project
+    setting to scratch for the assignment only, then restores both, so rows
+    keep the project's own values. Harness and scenario helpers only; the
+    product enforces both rules on every assign path."""
+    from sqlalchemy import select, update
+
+    from ontocurator.assignments.service import held_annotations
+    from ontocurator.storage.tables import ProjectRow
+
+    if task != "annotate":
+        yield
+        return
+    with db.transaction() as conn:
+        row = conn.execute(
+            select(
+                ProjectRow.id,
+                ProjectRow.annotations_per_text,
+                ProjectRow.tool_proposal_mode,
+            ).where(ProjectRow.project_key == project)
+        ).one()
+        held = held_annotations(conn, row.id, [document_id])[document_id]
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.id == row.id)
+            .values(
+                annotations_per_text=max(row.annotations_per_text, held + 1),
+                tool_proposal_mode="scratch",
+            )
+        )
+    try:
+        yield
+    finally:
+        with db.transaction() as conn:
+            conn.execute(
+                update(ProjectRow)
+                .where(ProjectRow.id == row.id)
+                .values(
+                    annotations_per_text=row.annotations_per_text,
+                    tool_proposal_mode=row.tool_proposal_mode,
+                )
+            )
+
+
 def ensure_assignment(
     app: FastAPI, username: str, project: str, document_id: str, task: str
 ) -> None:
@@ -92,7 +142,10 @@ def ensure_assignment(
         return
     # Synthetic users have no language preferences; this explicit override is
     # audited exactly as it is for an administrator confirming the language.
-    service.assign(HARNESS, project, document_id, username, task, confirm_language=True)
+    with harness_annotation(app.state.repo.db, project, document_id, task):
+        service.assign(
+            HARNESS, project, document_id, username, task, confirm_language=True
+        )
 
 
 def provision_assignments(
@@ -110,14 +163,17 @@ def provision_assignments(
     for document in app.state.repo.list_documents(project):
         for task in tasks:
             if (document.document_id, task) not in known:
-                service.assign(
-                    HARNESS,
-                    project,
-                    document.document_id,
-                    username,
-                    task,
-                    confirm_language=True,
-                )
+                with harness_annotation(
+                    app.state.repo.db, project, document.document_id, task
+                ):
+                    service.assign(
+                        HARNESS,
+                        project,
+                        document.document_id,
+                        username,
+                        task,
+                        confirm_language=True,
+                    )
 
 
 def log_in(client: TestClient, username: str) -> dict[str, Any]:

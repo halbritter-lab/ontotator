@@ -269,9 +269,12 @@ def create_consolidation_fixture(rounds):
 
             assigned = review_task(repo.db, "pkg-1", "doc-1", name)
         else:
-            assigned = AssignmentService(repo.db).assign(
-                Actor.cli(), "pkg-1", "doc-1", name, task
-            )
+            from auth_harness import harness_annotation
+
+            with harness_annotation(repo.db, "pkg-1", "doc-1", task):
+                assigned = AssignmentService(repo.db).assign(
+                    Actor.cli(), "pkg-1", "doc-1", name, task
+                )
         identity = Access(uid, name, False, {"pkg-1": frozenset({role})})
         actors.append((identity, Actor.user(uid, name), assigned))
     inputs = []

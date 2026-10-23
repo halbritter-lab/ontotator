@@ -38,6 +38,7 @@ def client(monkeypatch):
             project_key="server-project",
             document_id="server-doc",
             task="annotate",
+            annotation_mode="scratch",
             active_round_id=None,
         ),
     )

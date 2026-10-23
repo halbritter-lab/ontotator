@@ -9,7 +9,7 @@ T3, T17, U4).
    ``WorkRoundService.create``), then the actor and target user rows
    (``require_project_management``) and the assignment row. Project
    management authority is re-checked under these locks.
-2. Reviewer = the acting lead (role ``lead``) without the Adjudicator role: ``grant_roles``
+2. Reviewer = the acting lead (role ``lead``) without the Adjudicator role: ``grant_lead_self_role``
    adds it and audits ``project.member_add``. An additive self-grant keeps the
    session: no session is revoked, and every request re-reads the caller's
    roles (``access_for`` / ``current_access``), so the next request already
@@ -38,13 +38,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Connection, func, insert, select
+from sqlalchemy import func, insert, select
 
 from ontocurator.application.work_rounds import WorkRoundService
 from ontocurator.assignments.service import AssignmentService
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor, record_audit
-from ontocurator.authz.memberships import grant_roles
+from ontocurator.authz.memberships import grant_lead_self_role
 from ontocurator.authz.policy import Access, Action, Role, Task
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.authz.visibility import current_access, require_document
@@ -53,7 +53,7 @@ from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.work_rounds import WorkRoundView
 from ontocurator.storage.database import Database
 from ontocurator.storage.repository import _lock_id
-from ontocurator.storage.tables import ProjectMembershipRow, ProjectRow, UserRow
+from ontocurator.storage.tables import ProjectRow, UserRow
 from ontocurator.storage.workflow_tables import WorkflowCommandReceiptRow
 
 __all__ = ["ConsolidationStartService", "StartConsolidation", "StartedConsolidation"]
@@ -178,16 +178,12 @@ class ConsolidationStartService:
             ):
                 raise DomainError("WORKFLOW_REVISION_CONFLICT")
             now = self._now()
-            granted: list[Role] = []
             # Only the acting lead is granted the role (U4). A system admin
             # without the lead role is refused by ``_assign_locked`` like any
             # other reviewer without the role.
-            if (
-                target == actor.user_id
-                and "lead" in fresh.roles_in(key)
-                and not self._holds_role(conn, pid, target)
-            ):
-                granted = grant_roles(conn, actor, pid, target, reviewer, [_ROLE], now)
+            granted = grant_lead_self_role(
+                conn, actor, pid, key, target, reviewer, _ROLE, now
+            )
             assignment = self._assignments._assign_locked(
                 conn,
                 actor,
@@ -252,16 +248,3 @@ class ConsolidationStartService:
                 at=now,
             )
             return started
-
-    @staticmethod
-    def _holds_role(conn: Connection, pid: int, user_id: int) -> bool:
-        return (
-            conn.execute(
-                select(ProjectMembershipRow.role).where(
-                    ProjectMembershipRow.project_id == pid,
-                    ProjectMembershipRow.user_id == user_id,
-                    ProjectMembershipRow.role == _ROLE,
-                )
-            ).first()
-            is not None
-        )

@@ -204,6 +204,10 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   ASSIGNMENT_BATCH_STALE: "The cases or people changed. Check the new preview.",
   ASSIGNMENT_BATCH_REFUSED: "Some assignments could not be made. Nothing was assigned.",
   DISCARD_REASON_REQUIRED: "Discarding a translation requires a reason.",
+  ANNOTATIONS_PER_TEXT_REACHED: "This text already has as many annotation assignments as the project's limit (Settings, Workflow).",
+  NO_PROPOSALS_ON_VERSION: "This version has no tool proposals, but the annotation of this text started from proposals. Import or re-anchor the proposals for this version first.",
+  ANNOTATION_MODE_LOCKED: "The annotation of this text has already started this way, so it cannot change.",
+  NO_TOOL_PROPOSALS: "This text has no tool proposals, so it is annotated from scratch.",
 };
 
 export function errorMessage(error: unknown): string {
@@ -216,6 +220,10 @@ export function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.code === "CONSOLIDATION_GROUPS_OPEN" && typeof error.details === "object" && error.details !== null) {
     const count = error.details.count;
     if (typeof count === "number" && Number.isSafeInteger(count) && count > 0) return `Resolve the open groups first (${count} open).`;
+  }
+  if (error instanceof ApiError && error.code === "ANNOTATIONS_PER_TEXT_REACHED" && typeof error.details === "object" && error.details !== null) {
+    const limit = error.details.limit;
+    if (typeof limit === "number" && Number.isSafeInteger(limit) && limit > 0) return `This text already has ${limit} annotation assignments, the project's limit (Settings, Workflow).`;
   }
   const guideline = guidelineMessage(error);
   if (guideline) return guideline;

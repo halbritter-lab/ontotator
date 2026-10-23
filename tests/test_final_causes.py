@@ -32,7 +32,7 @@ pytest_plugins = (
 
 
 def _report(client, row, legacy_rounds, request_id="report-1"):
-    # The fixture's review task has two target sets; open selects one explicitly.
+    # The fixture's task has two target sets; open selects one explicitly.
     response = client.post(
         f"/api/v1/assignments/{row.id}/open",
         json={"review_round_target_set_id": legacy_rounds[0].key.target_set_id},
@@ -74,8 +74,8 @@ def _causes(app, key):
         return repo.workflow_causes_in(conn, key, pid)
 
 
-def test_open_report_and_its_hold_carry_the_report_id(round_work):
-    app, client, row, _service, legacy = round_work
+def test_open_report_and_its_hold_carry_the_report_id(check_work):
+    app, client, row, _service, legacy = check_work
     report = _report(client, row, legacy)
     causes = _causes(app, row.project_key)
     opened = next(c for c in causes if c["code"] == "OPEN_PROBLEM_REPORT")
@@ -86,9 +86,9 @@ def test_open_report_and_its_hold_carry_the_report_id(round_work):
 
 
 def test_resolved_report_with_kept_hold_becomes_task_paused_without_report(
-    round_work,
+    check_work,
 ):
-    app, client, row, _service, legacy = round_work
+    app, client, row, _service, legacy = check_work
     report = _report(client, row, legacy)
     _act(client, report, 1, "resolve")
     causes = _causes(app, row.project_key)
@@ -563,8 +563,8 @@ def _seed_round_submission(app, key, document, sid):
         )
 
 
-def test_reaffirmation_refuses_non_acknowledgeable_cause_ids(round_work):
-    app, client, row, _service, legacy = round_work
+def test_reaffirmation_refuses_non_acknowledgeable_cause_ids(check_work):
+    app, client, row, _service, legacy = check_work
     report = _report(client, row, legacy)
     _act(client, report, 1, "resolve")
     orphan = next(

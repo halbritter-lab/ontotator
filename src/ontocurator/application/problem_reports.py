@@ -327,12 +327,12 @@ class ProblemReportService:
                 raise DomainError("ROUND_KEY_MISMATCH")
             if round_id is None and assignment["task"] in {"annotate", "review"}:
                 from ontocurator.application.work_rounds import WorkRoundService
-                from ontocurator.assignments.service import MODE_FOR_TASK
+                from ontocurator.domain.annotation_modes import workspace_mode
 
                 keys = self.repo.list_workspace_keys(
                     project,
                     fresh.pseudonym,
-                    MODE_FOR_TASK[assignment["task"]],
+                    workspace_mode(assignment["task"], assignment["annotation_mode"]),
                     assignment["document_id"],
                 )
                 if assignment["last_submission_id"]:

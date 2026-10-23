@@ -124,6 +124,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assignments/{assignment_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove
+         * @description Remove an unsubmitted annotate assignment and discard its draft.
+         */
+        post: operations["remove_api_v1_assignments__assignment_id__remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assignments/{assignment_id}/revoke": {
         parameters: {
             query?: never;
@@ -2470,6 +2490,8 @@ export interface components {
              * @default false
              */
             lead_correction: boolean;
+            /** Annotation Mode */
+            annotation_mode?: ("proposals" | "scratch") | null;
         };
         /**
          * AssignmentGuidelineView
@@ -2598,6 +2620,8 @@ export interface components {
              * @default false
              */
             lead_correction: boolean;
+            /** Annotation Mode */
+            annotation_mode?: ("proposals" | "scratch") | null;
             guideline?: components["schemas"]["AssignmentGuidelineView"] | null;
             guideline_notice?: components["schemas"]["GuidelineNoticeView"] | null;
         };
@@ -2755,7 +2779,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "waiting_for_review" | "not_in_plan" | "already_assigned" | "step_differs" | "discarded";
+            reason: "waiting_for_review" | "not_in_plan" | "already_assigned" | "step_differs" | "discarded" | "no_proposals_on_version";
         };
         /** BatchTargetView */
         BatchTargetView: {
@@ -7872,6 +7896,37 @@ export interface operations {
                 "application/json": components["schemas"]["ReasonRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignmentView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_api_v1_assignments__assignment_id__remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

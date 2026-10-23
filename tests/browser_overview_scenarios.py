@@ -284,13 +284,16 @@ def assign(scenario: Scenario, document_id: str, name: str, task: str) -> int:
             return service._assign_locked(
                 conn, actor, project, document_id, target, "review", False
             ).id
-    return service.assign(
-        actor,
-        scenario.key,
-        document_id,
-        scenario.users[name],
-        task,  # type: ignore[arg-type]
-    ).id
+    from auth_harness import harness_annotation
+
+    with harness_annotation(scenario.db, scenario.key, document_id, task):
+        return service.assign(
+            actor,
+            scenario.key,
+            document_id,
+            scenario.users[name],
+            task,  # type: ignore[arg-type]
+        ).id
 
 
 def batch_assign(

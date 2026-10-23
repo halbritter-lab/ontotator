@@ -34,6 +34,7 @@ from ontocurator.authz.visibility import (
     require_document,
     visible_documents,
 )
+from ontocurator.domain.annotation_modes import workspace_mode
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.axes import AxesConfig
 from ontocurator.domain.documents import Document, EvidenceSnapshot
@@ -200,6 +201,11 @@ class ScopedRepository(Repository):
         )
         if assignment is None:
             raise AccessDenied("ASSIGNMENT_REQUIRED")
+        # An annotate assignment opens only its own mode (plan review R8).
+        if assignment.task == "annotate" and key.mode != workspace_mode(
+            assignment.task, assignment.annotation_mode
+        ):
+            raise AccessDenied("MODE_NOT_ALLOWED")
         if mutation and assignment.status == "submitted":
             raise DomainError("ASSIGNMENT_SUBMITTED")
         return assignment

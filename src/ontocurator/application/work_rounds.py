@@ -13,11 +13,12 @@ from sqlalchemy import Connection, func, insert, select, update
 
 from ontocurator.application.workflow_guards import require_task_writable
 from ontocurator.assignments.eligibility import require_annotation_gate
-from ontocurator.assignments.service import MODE_FOR_TASK, AssignmentService
+from ontocurator.assignments.service import AssignmentService
 from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.auth.authority import lock_user_authority
 from ontocurator.authz.policy import Access, Action, can, may_take
 from ontocurator.authz.visibility import current_access, require_document
+from ontocurator.domain.annotation_modes import workspace_mode
 from ontocurator.domain.annotations import AnnotationRef, AnnotationSnapshot, snapshot
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import (
@@ -445,11 +446,11 @@ class WorkRoundService:
         assignment_id = int(assignment["id"])
         if assignment["workflow_revision"] != expected_workflow_revision:
             raise DomainError("WORKFLOW_REVISION_CONFLICT")
-        if assignment["task"] not in MODE_FOR_TASK:
+        if assignment["task"] not in ("annotate", "review"):
             raise DomainError(
                 "ROUND_KIND_INVALID", "This endpoint handles annotation rounds"
             )
-        mode = MODE_FOR_TASK[assignment["task"]]
+        mode = workspace_mode(assignment["task"], assignment["annotation_mode"])
         if mode == "review" and kind in {"ordinary", "clean_restart"}:
             # D1: a review round is a consolidation; ordinary review is gone.
             raise DomainError(

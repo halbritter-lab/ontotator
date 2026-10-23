@@ -20,6 +20,7 @@ from sqlalchemy import Connection, func, or_, select
 
 from ontocurator.application import document_row_keys
 from ontocurator.application import document_row_page as page
+from ontocurator.application.annotation_modes import locked_modes
 from ontocurator.application.document_rows import RowFacts, RowQuery, load_facts
 from ontocurator.application.people import person_refs
 from ontocurator.assignments.eligibility import load_variants, required_languages
@@ -27,6 +28,7 @@ from ontocurator.assignments.service import (
     Assignment,
     AssignmentService,
     enable_source_change_review,
+    held_annotations,
     source_obligation_documents,
 )
 from ontocurator.auth.accounts import normalize_username
@@ -48,6 +50,7 @@ from ontocurator.domain.next_steps import REVIEWER_NEEDED_STATUSES
 from ontocurator.domain.work_plans import RowKey
 from ontocurator.storage import work_plan_store
 from ontocurator.storage.database import Database
+from ontocurator.storage.proposal_queries import newest_proposal_counts
 from ontocurator.storage.repository import _lock_id
 from ontocurator.storage.tables import (
     AssignmentRow,
@@ -64,6 +67,7 @@ SkipReason = Literal[
     "already_assigned",
     "step_differs",
     "discarded",
+    "no_proposals_on_version",
 ]
 Unavailable = Literal["does_not_read", "role_missing", "inactive"]
 
@@ -119,6 +123,8 @@ class _Target:
     accepted_review: bool  # D25: Review is turned on at commit
     # VD14: a source-change review; the obligation is rechecked at commit.
     source_review: bool = False
+    # NO_PROPOSALS_ON_VERSION: locked "from proposals", none on this version.
+    no_proposals: bool = False
     usernames: list[str] = field(default_factory=list)
 
 
@@ -175,6 +181,11 @@ class _Rows:
         self.acceptances = work_plan_store.acceptances(conn, pid)
         self.ctx = page.row_context(facts)
         self.rows = self.ctx.rows
+        # The one "annotations per text" count, shared with ``_assign_locked``.
+        self.held = held_annotations(conn, pid, {v.document_id for v in facts.versions})
+        # The facts of ``_annotation_mode``'s refusal, once per batch.
+        self.locked = locked_modes(conn, pid)
+        self.proposals = newest_proposal_counts(conn, pid)
         # D25 (``enable_review_for_accepted``): a version with a correction
         # derived from it never gets a new review.
         self.corrected = frozenset(
@@ -223,8 +234,15 @@ class _Rows:
         source_review: bool = False,
     ) -> _Target:
         work = self._work(version.document_id, task)
+        no_proposals = False
         if task == "annotate":
-            remaining = self.facts.annotations_per_text - len(work)
+            remaining = self.facts.annotations_per_text - self.held[version.document_id]
+            if (
+                remaining > 0
+                and self.locked.get((version.case_id, version.language)) == "proposals"
+                and not self.proposals.get(version.document_id)
+            ):
+                remaining, no_proposals = 0, True
         else:
             remaining = 0 if any(_open(item) for item in work) else 1
         return _Target(
@@ -236,6 +254,7 @@ class _Rows:
             holders=frozenset(self.username_of.get(i.user_id, "") for i in work),
             accepted_review=accepted_review,
             source_review=source_review,
+            no_proposals=no_proposals,
         )
 
     def match(
@@ -317,6 +336,8 @@ class _Rows:
             return _Match(targets, None, holders)
         if task != "translation_review" and codes & WAITING_FOR_REVIEW_STEPS:
             return _Match((), "waiting_for_review", holders)
+        if any(t.no_proposals for t in candidates):
+            return _Match((), "no_proposals_on_version", holders)
         if candidates or any(
             _open(item)
             for version in newest

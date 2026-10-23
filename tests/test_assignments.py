@@ -11,7 +11,6 @@ from pg_harness import database_for
 from sqlalchemy import delete, event, func, insert, select, update
 
 from ontocurator.assignments.service import (
-    MODE_FOR_TASK,
     TASK_FOR_MODE,
     AssignmentService,
 )
@@ -31,7 +30,6 @@ from ontocurator.storage.tables import (
 
 
 def test_task_modes() -> None:
-    assert MODE_FOR_TASK == {"annotate": "independent", "review": "review"}
     assert TASK_FOR_MODE == {
         "independent": "annotate",
         "review": "review",

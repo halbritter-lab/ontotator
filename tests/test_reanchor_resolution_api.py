@@ -7,7 +7,7 @@ from auth_harness import logged_in
 from sqlalchemy import select, update
 from t1_fixtures import annotation, unit
 from test_reanchor_job import children, corrected, execute, generated
-from test_reanchor_resolutions import from_proposals, opened
+from test_reanchor_resolutions import from_proposals, from_scratch, opened
 from test_reanchor_resolutions import pending as pending
 from test_reanchor_resolutions import runtime as runtime
 
@@ -75,6 +75,7 @@ def test_dismiss_requires_reason_and_is_private_with_receipt(pending):
         == first["view"]["key"]["annotator_id"]
     )
     assert resolve(pending, first, payload).json() == result.json()
+    from_scratch(pending.db)
     other = logged_in(
         pending.app,
         "other",
@@ -277,12 +278,14 @@ def test_stale_revision_and_mutation_reuse_do_not_change_resolution(pending):
 
 def test_foreign_workspace_and_replacement_denied(pending):
     view = opened(pending).json()
+    from_scratch(pending.db)
     other = logged_in(
         pending.app,
         "foreign",
         projects={"proj": ["lead", "annotator"]},
         assignments=[("proj", pending.output["document_id"], "annotate")],
     )
+    from_proposals(pending.db)
     payload = {"item": item(view), "outcome": "dismissed", "reason": "No match"}
     foreign = other.post(
         f"/api/v1/workspaces/{view['workspace_id']}/reanchor-resolutions",
@@ -304,6 +307,7 @@ def test_foreign_workspace_and_replacement_denied(pending):
 
 def test_independent_workspace_cannot_recreate_or_resolve(pending):
     review = opened(pending).json()
+    from_scratch(pending.db)
     person = logged_in(
         pending.app,
         "independent",

@@ -2877,6 +2877,30 @@ class Repository:
             checked_layer_ids=list(row.checked_layer_ids),
         )
 
+    @staticmethod
+    def _discard_drafts(
+        conn: Connection,
+        project_id: int,
+        document_id: str,
+        annotator_id: str,
+        mode: str,
+    ) -> int:
+        """Delete every draft of one workspace (all scopes, target sets and
+        rounds); annotations, evidence and decisions cascade. Edit events,
+        snapshots and audit stay. The number of drafts deleted."""
+        return len(
+            conn.execute(
+                delete(DraftRow)
+                .where(
+                    DraftRow.project_id == project_id,
+                    DraftRow.document_id == document_id,
+                    DraftRow.annotator_id == annotator_id,
+                    DraftRow.mode == mode,
+                )
+                .returning(DraftRow.id)
+            ).all()
+        )
+
     def _create_draft(
         self,
         conn: Connection,

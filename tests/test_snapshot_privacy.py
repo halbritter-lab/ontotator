@@ -52,9 +52,12 @@ def test_shared_document_does_not_grant_foreign_annotation_or_evidence(rounds):
             )
         )
         conn.execute(insert(UserLanguageRow).values(user_id=uid, language="en"))
-    AssignmentService(repo.db).assign(
-        Actor.cli(), "pkg-1", "doc-1", "stranger", "annotate"
-    )
+    from auth_harness import harness_annotation
+
+    with harness_annotation(repo.db, "pkg-1", "doc-1"):
+        AssignmentService(repo.db).assign(
+            Actor.cli(), "pkg-1", "doc-1", "stranger", "annotate"
+        )
     stranger = Access(uid, "stranger", False, {"pkg-1": frozenset({"annotator"})})
     with repo.db.transaction() as conn:
         for kind, identity, version in [

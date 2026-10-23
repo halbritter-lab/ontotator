@@ -10,6 +10,7 @@ draft/assignment rows; they need not serialize on this administrative mutex.
 from __future__ import annotations
 
 from builtins import list as List
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -35,6 +36,7 @@ from ontocurator.assignments.eligibility import (
 )
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor, record_audit
+from ontocurator.authz.memberships import grant_lead_self_role
 from ontocurator.authz.policy import (
     ADMINISTRATION_TASKS,
     TASK_ROLES,
@@ -45,6 +47,7 @@ from ontocurator.authz.policy import (
     may_take,
 )
 from ontocurator.authz.project_authority import require_project_management
+from ontocurator.domain.annotation_modes import AnnotationMode, workspace_mode
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import WorkspaceMode
@@ -61,10 +64,6 @@ from ontocurator.storage.tables import (
     UserRow,
 )
 
-MODE_FOR_TASK: dict[Task, WorkspaceMode] = {
-    "annotate": "independent",
-    "review": "review",
-}
 TASK_FOR_MODE: dict[WorkspaceMode, Task] = {
     "independent": "annotate",
     "review": "review",
@@ -94,6 +93,8 @@ class Assignment:
     hold_reason: str | None = None
     # FD1: the lead's own translation review of a rejected or queried version.
     lead_correction: bool = False
+    # Fixed at creation for task ``annotate`` (plan P3); None for other tasks.
+    annotation_mode: AnnotationMode | None = None
 
 
 @dataclass(frozen=True)
@@ -140,6 +141,7 @@ def _assignments() -> Select[tuple[object, ...]]:
             AssignmentRow.held,
             AssignmentRow.hold_reason,
             AssignmentRow.lead_correction,
+            AssignmentRow.annotation_mode,
             DocumentRow.external_id,
         )
         .join(ProjectRow, ProjectRow.id == AssignmentRow.project_id)
@@ -157,6 +159,54 @@ def _assignment(row: RowMapping) -> Assignment:
 
 
 ReviewReason = Literal["source_changed"]
+
+
+def held_annotations(
+    conn: Connection, project_id: int, document_ids: Iterable[str]
+) -> Counter[str]:
+    """Annotate assignments that fill a version's "annotations per text" slots:
+    not revoked, or revoked with submitted work (that submission is an
+    annotation of the version). The one count for ``_assign_locked`` and the
+    batch planner."""
+    wanted = list(document_ids)
+    if not wanted:
+        return Counter()
+    return Counter(
+        dict(
+            conn.execute(
+                select(AssignmentRow.document_id, func.count())
+                .where(
+                    AssignmentRow.project_id == project_id,
+                    AssignmentRow.document_id.in_(wanted),
+                    AssignmentRow.task == "annotate",
+                    AssignmentRow.revoked_at.is_(None)
+                    | AssignmentRow.last_submission_id.is_not(None),
+                )
+                .group_by(AssignmentRow.document_id)
+            )
+            .tuples()
+            .all()
+        )
+    )
+
+
+def _annotation_mode(
+    conn: Connection, project_id: int, document_id: str
+) -> AnnotationMode:
+    """The mode a new annotate assignment on ``document_id`` gets (plan P3)."""
+    from ontocurator.application.annotation_modes import load_text_mode
+    from ontocurator.storage.proposal_queries import newest_proposal_refs
+
+    mode = load_text_mode(conn, project_id, document_id)
+    if (
+        mode.locked
+        and mode.mode == "proposals"
+        and not newest_proposal_refs(conn, project_id, document_id)
+    ):
+        # Plan review R10: a new version of a text annotated from proposals
+        # needs its own proposals; it never switches to scratch.
+        raise DomainError("NO_PROPOSALS_ON_VERSION", {"document_id": document_id})
+    return mode.mode
 
 
 def source_obligation_documents(
@@ -257,11 +307,20 @@ class AssignmentService:
 
     @staticmethod
     def _prepare(
-        conn: Connection, actor: Actor, key: str, target: int | None = None
+        conn: Connection,
+        actor: Actor,
+        key: str,
+        target: int | None = None,
+        *,
+        exclusive_members: bool = False,
     ) -> RowMapping:
-        conn.execute(
-            select(func.pg_advisory_xact_lock_shared(_lock_id("members", key)))
+        """``exclusive_members``: a membership write follows (self-grant)."""
+        members_lock = (
+            func.pg_advisory_xact_lock
+            if exclusive_members
+            else func.pg_advisory_xact_lock_shared
         )
+        conn.execute(select(members_lock(_lock_id("members", key))))
         conn.execute(select(func.pg_advisory_xact_lock(_lock_id("project", key))))
         project = (
             conn.execute(select(ProjectRow).where(ProjectRow.project_key == key))
@@ -456,7 +515,10 @@ class AssignmentService:
         now: datetime,
         *,
         lead_correction: bool = False,
+        annotation_mode: AnnotationMode | None = None,
     ) -> Assignment:
+        if task == "annotate" and annotation_mode is None:
+            annotation_mode = _annotation_mode(conn, project["id"], document_id)
         assignment_id = conn.execute(
             insert(AssignmentRow)
             .values(
@@ -469,7 +531,7 @@ class AssignmentService:
                 created_at=now,
                 updated_at=now,
                 lead_correction=lead_correction,
-                annotation_mode="scratch" if task == "annotate" else None,
+                annotation_mode=annotation_mode if task == "annotate" else None,
             )
             .returning(AssignmentRow.id)
         ).scalar_one()
@@ -523,7 +585,32 @@ class AssignmentService:
             raise DomainError("TASK_NOT_ASSIGNABLE", {"task": "review"})
         with self.db.transaction() as conn:
             target = self._target(conn, username)
-            project = self._prepare(conn, actor, key, target)
+            # "Annotate from proposals myself" (plan P3): the acting lead.
+            myself = task == "annotate" and target == actor.user_id
+            project = self._prepare(conn, actor, key, target, exclusive_members=myself)
+            if myself:
+                grant_lead_self_role(
+                    conn,
+                    actor,
+                    project["id"],
+                    key,
+                    target,
+                    normalize_username(username),
+                    "annotator",
+                    self._now(),
+                )
+                # The lead's own work (_create audits it); a system admin
+                # who is not lead confirms the language like anybody else.
+                confirm_language = confirm_language or (
+                    conn.execute(
+                        select(ProjectMembershipRow.role).where(
+                            ProjectMembershipRow.project_id == project["id"],
+                            ProjectMembershipRow.user_id == target,
+                            ProjectMembershipRow.role == "lead",
+                        )
+                    ).first()
+                    is not None
+                )
             allow = False
             if review_reason == "source_changed":
                 # The API refuses another task at request validation.
@@ -605,6 +692,14 @@ class AssignmentService:
             return existing
         if task == "translation_review":
             self._require_no_open_lead_correction(conn, project["id"], document_id)
+        if task == "annotate":
+            # Per version on purpose (plan review R25); reassign does not count.
+            limit = int(project["annotations_per_text"])
+            held = held_annotations(conn, project["id"], [document_id])[document_id]
+            if held >= limit:
+                raise DomainError(
+                    "ANNOTATIONS_PER_TEXT_REACHED", {"limit": limit, "assigned": held}
+                )
         eligibility = self.check_assignable(
             conn,
             project,
@@ -665,7 +760,15 @@ class AssignmentService:
                 conn, actor, project["id"], [dict(old)], now, reason="reassign"
             )
             new = self._create(
-                conn, actor, project, old["document_id"], target, task, eligibility, now
+                conn,
+                actor,
+                project,
+                old["document_id"],
+                target,
+                task,
+                eligibility,
+                now,
+                annotation_mode=old["annotation_mode"],
             )
             record_audit(
                 conn,
@@ -757,6 +860,43 @@ class AssignmentService:
             revoke_assignments(
                 conn, actor, project["id"], [dict(old)], self._now(), reason=reason
             )
+            return self._get(conn, assignment_id)
+
+    def remove(self, actor: Actor, assignment_id: int) -> Assignment:
+        """Remove an unsubmitted annotate assignment and discard its draft
+        (plan P3, review R12), so assigning the person again starts empty."""
+        from ontocurator.storage.repository import Repository
+        from ontocurator.storage.workflow_tables import WorkRoundStateRow
+
+        with self.db.transaction() as conn:
+            key = self._locate(conn, assignment_id)
+            project = self._prepare(conn, actor, key)
+            old = self._locked(conn, assignment_id)
+            if old["task"] != "annotate":
+                raise DomainError("TASK_INVALID")
+            if old["status"] == "submitted" or old["last_submission_id"] is not None:
+                raise DomainError("ASSIGNMENT_SUBMITTED")
+            now = self._now()
+            revoke_assignments(
+                conn, actor, project["id"], [dict(old)], now, reason="removed"
+            )
+            pseudonym = conn.execute(
+                select(UserRow.pseudonym).where(UserRow.id == old["user_id"])
+            ).scalar_one()
+            Repository._discard_drafts(
+                conn,
+                project["id"],
+                old["document_id"],
+                pseudonym,
+                workspace_mode(old["task"], old["annotation_mode"]),
+            )
+            if old["active_round_id"] is not None:
+                # As a clean restart abandons its prior round: never rebound.
+                conn.execute(
+                    update(WorkRoundStateRow)
+                    .where(WorkRoundStateRow.round_id == old["active_round_id"])
+                    .values(state="abandoned", revision=WorkRoundStateRow.revision + 1)
+                )
             return self._get(conn, assignment_id)
 
     def list(

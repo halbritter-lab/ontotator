@@ -149,6 +149,7 @@ class BatchSkipView(BaseModel):
         "already_assigned",
         "step_differs",
         "discarded",
+        "no_proposals_on_version",
     ]
 
 

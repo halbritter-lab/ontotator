@@ -24,7 +24,6 @@ from ontocurator.assignments.confirmations import (
 )
 from ontocurator.assignments.proposals import DistributionContext, DistributionService
 from ontocurator.assignments.service import (
-    MODE_FOR_TASK,
     Assignment,
     AssignmentService,
     TaskSummary,
@@ -32,6 +31,7 @@ from ontocurator.assignments.service import (
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Action, AssignableTask, Task, can
 from ontocurator.authz.visibility import qualifying_assignment
+from ontocurator.domain.annotation_modes import workspace_mode
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.guidelines import Notice
 from ontocurator.storage.tables import AssignmentRow, ProjectRow, UserRow
@@ -116,6 +116,8 @@ class AssignmentView(BaseModel):
     active_holds: list[ActiveHoldView] = Field(default_factory=list)
     # FD1: the lead's own translation review of a rejected or queried version.
     lead_correction: bool = False
+    # Fixed when an annotate assignment is created; None for other tasks.
+    annotation_mode: Literal["proposals", "scratch"] | None = None
     # The version in force; the notice only on the owner's editable rows (G27).
     guideline: AssignmentGuidelineView | None = None
     guideline_notice: GuidelineNoticeView | None = None
@@ -480,7 +482,7 @@ def open_assignment(
     body: AssignmentOpenRequest | None = None,
 ) -> AssignmentOpenResponse:
     assignment = _owned_assignment(request, principal.user_id, assignment_id)
-    if assignment.task not in MODE_FOR_TASK or (
+    if assignment.task not in ("annotate", "review") or (
         # D1: a review task is a consolidation and opens only through its round.
         assignment.task == "review" and assignment.active_round_id is None
     ):
@@ -501,7 +503,7 @@ def open_assignment(
         OpenWorkspaceRequest(
             project_key=assignment.project_key,
             document_id=assignment.document_id,
-            mode=MODE_FOR_TASK[assignment.task],
+            mode=workspace_mode(assignment.task, assignment.annotation_mode),
             review_round_target_set_id=(
                 body.review_round_target_set_id if body is not None else None
             ),
@@ -544,6 +546,21 @@ def reopen(
                 Actor.user(principal.user_id, principal.username),
                 assignment_id,
                 body.reason,
+            )
+        ],
+    )[0]
+
+
+@router.post("/assignments/{assignment_id}/remove")
+def remove(
+    assignment_id: int, request: Request, principal: PrincipalDep
+) -> AssignmentView:
+    """Remove an unsubmitted annotate assignment and discard its draft."""
+    return _views(
+        request,
+        [
+            _service(request).remove(
+                Actor.user(principal.user_id, principal.username), assignment_id
             )
         ],
     )[0]

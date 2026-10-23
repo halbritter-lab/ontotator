@@ -166,11 +166,14 @@ def assign(scenario: Scenario, document_id: str, name: str, task: str) -> int:
         return int(
             review_task(scenario.db, scenario.key, document_id, scenario.users[name]).id
         )
-    return (
-        AssignmentService(scenario.db)
-        .assign(Actor.cli(), scenario.key, document_id, scenario.users[name], task)  # type: ignore[arg-type]
-        .id
-    )
+    from auth_harness import harness_annotation
+
+    with harness_annotation(scenario.db, scenario.key, document_id, task):
+        return (
+            AssignmentService(scenario.db)
+            .assign(Actor.cli(), scenario.key, document_id, scenario.users[name], task)  # type: ignore[arg-type]
+            .id
+        )
 
 
 def start_round(

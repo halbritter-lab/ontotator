@@ -47,7 +47,7 @@ export function splitSummary(people: readonly { person: PersonRef; first_case: s
   return `Cases in list order: ${getting.map(item => `${caseRange(item.first_case!, item.last_case!)} → ${name(item.person)}`).join(", ")}.`;
 }
 
-const skipOrder: BatchSkipView["reason"][] = ["waiting_for_review", "not_in_plan", "already_assigned", "step_differs", "discarded"];
+const skipOrder: BatchSkipView["reason"][] = ["waiting_for_review", "not_in_plan", "already_assigned", "step_differs", "discarded", "no_proposals_on_version"];
 export function skippedLines(skipped: readonly BatchSkipView[], language: string): string[] {
   return skipOrder.flatMap(reason => {
     const n = skipped.filter(item => item.reason === reason).length;
@@ -58,6 +58,7 @@ export function skippedLines(skipped: readonly BatchSkipView[], language: string
       case "already_assigned": return [`${n} already assigned`];
       case "step_differs": return [`${n} at another step`];
       case "discarded": return [`${n} with the ${language} version discarded`];
+      case "no_proposals_on_version": return [`${n} without tool proposals on the newest version: their annotation started from proposals`];
     }
   });
 }

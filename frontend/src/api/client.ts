@@ -420,6 +420,8 @@ export class ApiClient {
   async reassign(id: number, body: ReassignRequest): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reassign`, { method: "POST", body: JSON.stringify(body) }); }
   async reopenAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }); }
   async revokeAssignment(id: number, reason?: string): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/revoke`, { method: "POST", body: JSON.stringify({ reason }) }); }
+  /** Remove an unsubmitted annotate assignment; its draft is discarded (lead only). */
+  async removeAssignment(id: number): Promise<AssignmentView> { return this.request(`/api/v1/assignments/${id}/remove`, { method: "POST" }); }
   /** Counts of a move or carry to the row's newest version, without writing (lead only). */
   async previewTextChange(key: string, body: TextChangePreviewRequest): Promise<TextChangePreview> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/text-changes/preview`, { method: "POST", body: JSON.stringify(body) }); }
   /** "Move to v2": freeze the draft, continue on the target, revoke the old assignment (lead only). */

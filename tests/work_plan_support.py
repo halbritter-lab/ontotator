@@ -166,19 +166,22 @@ def assign(env: Any, document_id: str, username: str, task: str, **extra: Any) -
                 env.db, "proj", document_id, username, Actor(lead.id, "user:leader")
             ).id
         )
-    return (
-        AssignmentService(env.db)
-        .assign(
-            Actor(lead.id, "user:leader"),
-            "proj",
-            document_id,
-            username,
-            task,  # type: ignore[arg-type]
-            confirm_language=True,
-            **extra,
+    from auth_harness import harness_annotation
+
+    with harness_annotation(env.db, "proj", document_id, task):
+        return (
+            AssignmentService(env.db)
+            .assign(
+                Actor(lead.id, "user:leader"),
+                "proj",
+                document_id,
+                username,
+                task,  # type: ignore[arg-type]
+                confirm_language=True,
+                **extra,
+            )
+            .id
         )
-        .id
-    )
 
 
 def flags_of(env: Any, case: str, language: str) -> PlanFlags:
