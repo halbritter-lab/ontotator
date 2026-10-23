@@ -810,6 +810,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/documents/{doc}/layers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Layers */
+        get: operations["list_layers_api_v1_projects__key__documents__doc__layers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/documents/{doc}/reanchor-items": {
         parameters: {
             query?: never;
@@ -6955,6 +6972,33 @@ export interface components {
             /** Expected Workflow Revision */
             expected_workflow_revision: number;
         };
+        /**
+         * TextLayerEntry
+         * @description One entry of the text view's "Show" list (spec 2026-10-23 §4).
+         */
+        TextLayerEntry: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "proposals" | "submission" | "own" | "final" | "person";
+            ref: components["schemas"]["VersionRef"] | null;
+            /** Label */
+            label: string;
+            /** State */
+            state?: ("submitted" | "in_progress" | "not_started" | "accepted" | "not_accepted") | null;
+            /** Count */
+            count?: number | null;
+            /** Available */
+            available: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** TextLayers */
+        TextLayers: {
+            /** Entries */
+            entries: components["schemas"]["TextLayerEntry"][];
+        };
         /** TextWindowView */
         TextWindowView: {
             /** Start */
@@ -7454,7 +7498,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "own" | "proposals" | "stage_result" | "release" | "submission";
+            kind: "own" | "proposals" | "stage_result" | "release" | "submission" | "final";
             /** Id */
             id: string;
             /** Label */
@@ -9282,6 +9326,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionRef"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_layers_api_v1_projects__key__documents__doc__layers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TextLayers"];
                 };
             };
             /** @description Validation Error */

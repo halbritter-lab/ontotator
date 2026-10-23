@@ -2521,6 +2521,57 @@
         }
       }
     },
+    "/api/v1/projects/{key}/documents/{doc}/layers": {
+      "get": {
+        "tags": [
+          "variants"
+        ],
+        "summary": "List Layers",
+        "operationId": "list_layers_api_v1_projects__key__documents__doc__layers_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextLayers"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/documents/{doc}/reanchor-items": {
       "get": {
         "tags": [
@@ -20845,6 +20896,106 @@
         ],
         "title": "TextChangeResolutionRequest"
       },
+      "TextLayerEntry": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "submission",
+              "own",
+              "final",
+              "person"
+            ],
+            "title": "Kind"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VersionRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "submitted",
+                  "in_progress",
+                  "not_started",
+                  "accepted",
+                  "not_accepted"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "ref",
+          "label",
+          "available"
+        ],
+        "title": "TextLayerEntry",
+        "description": "One entry of the text view's \"Show\" list (spec 2026-10-23 \u00a74)."
+      },
+      "TextLayers": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/TextLayerEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "title": "TextLayers"
+      },
       "TextWindowView": {
         "properties": {
           "start": {
@@ -22313,7 +22464,8 @@
               "proposals",
               "stage_result",
               "release",
-              "submission"
+              "submission",
+              "final"
             ],
             "title": "Kind"
           },

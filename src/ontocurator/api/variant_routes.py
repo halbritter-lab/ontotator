@@ -15,7 +15,12 @@ from ontocurator.api.encoded_routes import EncodedParameterRoute
 from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.routes import get_access
 from ontocurator.authz.scoped import ScopedRepository
-from ontocurator.authz.versions import VersionRef, visible_annotation_versions
+from ontocurator.authz.versions import (
+    TextLayerEntry,
+    VersionRef,
+    text_layers,
+    visible_annotation_versions,
+)
 from ontocurator.authz.visibility import qualifying_assignment
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.documents import EvidenceSnapshot
@@ -183,6 +188,24 @@ def list_versions(
             key,
             doc,
             assignment=assignment,
+        )
+
+
+class TextLayers(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    entries: list[TextLayerEntry]
+
+
+@router.get("/documents/{doc:path}/layers")
+def list_layers(
+    key: str, doc: str, request: Request, principal: PrincipalDep
+) -> TextLayers:
+    repo = _repo(request)
+    with repo.db.snapshot() as conn:
+        return TextLayers(
+            entries=text_layers(
+                conn, repo.access, repo._require_project(conn, key), key, doc
+            )
         )
 
 

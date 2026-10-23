@@ -2088,7 +2088,7 @@ class Repository:
     ) -> dict[str, Any]:
         with self.db.transaction() as conn:
             project_id = self._require_project(conn, project_key)
-            if kind in {"own", "submission"}:
+            if kind in {"own", "submission", "final"}:
                 payload = conn.execute(
                     select(SubmissionRow.payload).where(
                         SubmissionRow.project_id == project_id,

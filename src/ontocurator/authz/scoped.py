@@ -23,7 +23,11 @@ from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.auth.authority import lock_user_authority
 from ontocurator.authz.memberships import grant_roles
 from ontocurator.authz.policy import ROLES, Access, Action, can, may_take
-from ontocurator.authz.versions import require_proposals, visible_annotation_versions
+from ontocurator.authz.versions import (
+    require_proposals,
+    text_layers,
+    visible_annotation_versions,
+)
 from ontocurator.authz.visibility import (
     DocumentFilter,
     current_access,
@@ -549,6 +553,16 @@ class ScopedRepository(Repository):
                 refs = visible_annotation_versions(
                     conn, self.access, project_id, project_key, document_id
                 )
+                if kind in {"final", "proposals"}:
+                    # Offered through the text layers (final result; newest
+                    # proposal set for annotators from proposals).
+                    refs += [
+                        entry.ref
+                        for entry in text_layers(
+                            conn, self.access, project_id, project_key, document_id
+                        )
+                        if entry.ref is not None
+                    ]
             except DomainError as error:
                 if error.code == "DOCUMENT_NOT_FOUND":
                     raise DomainError("VERSION_NOT_FOUND") from None

@@ -211,6 +211,7 @@ export type CaseDetail = components["schemas"]["CaseDetail"];
 export type VariantSummary = components["schemas"]["VariantSummary"];
 export type VariantText = components["schemas"]["VariantText"];
 export type VersionRef = components["schemas"]["VersionRef"];
+export type TextLayerEntry = components["schemas"]["TextLayerEntry"];
 export type AnnotationVersion = components["schemas"]["AnnotationVersion"];
 export type ReviewWorkspace = components["schemas"]["ReviewWorkspace"];
 export type TranslationReviewRecord = components["schemas"]["TranslationReviewRecord"];
@@ -608,6 +609,11 @@ export class ApiClient {
     const query = new URLSearchParams();
     if (assignmentId !== undefined) query.set("assignment", String(assignmentId));
     return this.request<VersionRef[]>(`/api/v1/projects/${encodeURIComponent(projectKey)}/documents/${encodeURIComponent(documentId)}/annotation-versions${query.size ? `?${query}` : ""}`, { method: "GET" });
+  }
+
+  async listTextLayers(key: string, documentId: string): Promise<TextLayerEntry[]> {
+    const body = await this.request<components["schemas"]["TextLayers"]>(`/api/v1/projects/${encodeURIComponent(key)}/documents/${encodeURIComponent(documentId)}/layers`, { method: "GET" });
+    return body.entries;
   }
 
   async finalExportPreflight(projectKey: string): Promise<FinalPreflight> {
