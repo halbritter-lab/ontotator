@@ -45,7 +45,7 @@ Integration worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/accepta
     S=/c/Users/jan-p/Development/ontocurator/.worktrees/.heavy-slots
     FREE_KB=$(powershell -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory" | tr -d '\r')
     SLOT=; [ "$FREE_KB" -ge 2500000 ] && for n in 1 2; do mkdir "$S/$n" 2>/dev/null && { echo "<WP> $(date +%H:%M)" > "$S/$n/owner"; SLOT=$n; break; }; done
-    if [ -n "$SLOT" ]; then export ONTOCURATOR_TEST_PG_URL=postgresql://postgres@127.0.0.1:$((15611 + SLOT))/postgres; <heavy command>; rc=$?; rm -rf "$S/$SLOT"; exit $rc; else echo "NO SLOT"; fi
+    if [ -n "$SLOT" ]; then export ONTOCURATOR_TEST_PG_URL=postgresql://postgres@127.0.0.1:$((15611 + SLOT))/postgres; <heavy command>; rc=$?; rm -rf "${S:?}/${SLOT:?}"; exit $rc; else echo "NO SLOT"; fi
     ```
 
     Each slot has its own native throwaway PostgreSQL cluster (slot 1 → port 15612, slot 2 → 15613; data under `C:/Users/jan-p/Development/ontocurator-testpg/`, started by the orchestrator), so parallel runs never share template databases and Docker is not needed. A Playwright run (both slots) uses slot 1's cluster. Never point `ONTOCURATOR_TEST_PG_URL` at the native test server (port 15611).
