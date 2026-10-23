@@ -4,7 +4,7 @@
 
 **Goal:** Implement [2026-10-23-proposal-check-text-card-consolidation-design.md](../specs/2026-10-23-proposal-check-text-card-consolidation-design.md) including the user decisions D1–D4 of 2026-10-23: imported tool proposals are the starting point of the annotation step of a text ("Annotate from proposals", Q1–Q3), the legacy "Annotation review" task, the `assisted` workspace mode and stored "keep both" consolidations are removed (D1), the UI uses the D2 names, one click on a Documents row opens a centered text card with the path Translation → Annotation → Finalization, Documents rows become one line, consolidation choices are made in a comparison table with one finding per group, the read-only text view gets one toolbar with a "Show" choice (non-leads never see other people's work, D3), plus the small-fixes list.
 
-**Architecture:** A new workspace mode `proposal_check` ("Annotate from proposals" in the UI) is the review screen over the newest tool proposal set of the text, owned by an ordinary **annotate** assignment, so it counts towards "annotations per text" and its submission is an annotation for Finalization without touching the comparison rules. Which way an annotate assignment works is decided once, at assignment time, from a pure rule (`domain/annotation_modes.py`): project setting `tool_proposal_mode` (`proposals` | `scratch`, default `proposals`), per-text plan override `work_plan_rows.annotation_mode`, "no proposals → from scratch", and a lock once any annotation work exists on the text (non-revoked annotate assignments, revoked ones with submitted work, and submissions; the mode is stored on `assignments.annotation_mode`). Legacy removal (D1) is one backend WP (L1) with migration 0021 that deletes the legacy rows; afterwards workspace mode `review` exists only inside consolidation rounds and task `review` is created only by "Consolidate…". The read model adds proposal count, annotation mode, assignment dates and consolidation progress to the Documents rows; the frontend replaces the row side panel with a `TextCard` dialog and reuses one `StagePath` component in the card and on the consolidation screen. Consolidation drops `keep_both`/`term_choices`/`term_parts` on server and client and marks findings that come from a tool proposal. The text view gets a layer list endpoint (with unavailable entries and reasons) and a final-result layer.
+**Architecture:** A new workspace mode `proposal_check` ("Annotate from proposals" in the UI) is the review screen over the newest tool proposal set of the text, owned by an ordinary **annotate** assignment, so it counts towards "annotations per text" and its submission is an annotation for Finalization without touching the comparison rules. Which way an annotate assignment works is decided once, at assignment time, from a pure rule (`domain/annotation_modes.py`): project setting `tool_proposal_mode` (`proposals` | `scratch`, default `proposals`), per-text plan override `work_plan_rows.annotation_mode`, "no proposals → from scratch", and a lock once any annotation work exists on the text (non-revoked annotate assignments, revoked ones with submitted work, and submissions; the mode is stored on `assignments.annotation_mode`). Legacy removal (D1) is the first backend WP (L1) with migration 0020 that deletes the legacy rows; afterwards workspace mode `review` exists only inside consolidation rounds and task `review` is created only by "Consolidate…". The read model adds proposal count, annotation mode, assignment dates and consolidation progress to the Documents rows; the frontend replaces the row side panel with a `TextCard` dialog and reuses one `StagePath` component in the card and on the consolidation screen. Consolidation drops `keep_both`/`term_choices`/`term_parts` on server and client and marks findings that come from a tool proposal. The text view gets a layer list endpoint (with unavailable entries and reasons) and a final-result layer.
 
 **Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL (pytest via testcontainers or `ONTOCURATOR_TEST_PG_URL`, pytest-xdist); React 18, TypeScript, Vitest + Testing Library, Playwright + axe-core; `openapi-typescript` for `generated.ts`. No new dependencies (the Lucide "bot" icon is vendored as SVG paths).
 
@@ -12,143 +12,132 @@
 
 **Plan decisions on spec ambiguities** (open to veto; each names the WP to change): see "Spec ambiguities resolved by this plan" at the end, which also lists how each finding of the plan review (R1–R25) was resolved. No WP waits for a confirmation.
 
-**Internal names vs UI words (D2).** Internal ids stay technical; the UI never shows them: `AnnotationMode` `"proposals"` = "from proposals", `"scratch"` = "from scratch"; workspace mode `proposal_check` = "Annotate from proposals", `independent` = "Annotate from scratch", `review` = the consolidator's workspace inside a consolidation round; task `review` = "Consolidation"; role id `adjudicator` = "Consolidator". Error codes keep their technical names (`PROPOSAL_CHECK_NOT_APPLICABLE` …); only their messages are user-facing.
+**Internal names vs UI words (D2).** Internal ids stay technical; the UI never shows them: `AnnotationMode` `"proposals"` = "from proposals", `"scratch"` = "from scratch"; workspace mode `proposal_check` = "Annotate from proposals", `independent` = "Annotate from scratch", `review` = the consolidator's workspace inside a consolidation round; task `review` = "Consolidation"; role id `adjudicator` = "Consolidator". Error codes keep their technical names (`ANNOTATION_MODE_LOCKED` …); only their messages are user-facing.
 
 ---
 
 ## Global rules (every WP; a subagent reads only this section, "Shared contracts" and its WP block)
 
-Integration worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023` (Git Bash: `/c/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023`), branch `feat/acceptance-20261023`. It already exists, created from `main` 6d8bc1b. **Base is `main` at 6d8bc1b or later.** Before the first WP the orchestrator fast-forwards it to the `main` commit that contains this revised plan: `cd /c/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023 && git merge --ff-only main` (the branch has no own commits yet; if the fast-forward fails, stop and report), then `uv sync` and `npm --prefix frontend ci` in the worktree. **WP agents never work in the integration worktree:** every WP runs in its own lane worktree branched from `feat/acceptance-20261023` (Global rule 18); the integration worktree only receives the orchestrator's merges, the post-merge checks, G1 and R1. Where a WP block writes `cd /c/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023 && …`, the WP runs the command from **its lane root** (the orchestrator names the lane path and port in the dispatch). Line references were verified on `main` 6d8bc1b; a WP re-checks each reference with `grep -n` and reports drift instead of guessing.
+Integration worktree: `C:/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023` (Git Bash: `/c/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023`), branch `feat/acceptance-20261023`. It already exists, created from `main` 6d8bc1b. **Base is `main` at 6d8bc1b or later.** Before the first WP the orchestrator fast-forwards it to the `main` commit that contains this revised plan: `cd /c/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023 && git merge --ff-only main` (the branch has no own commits yet; if the fast-forward fails, stop and report), then `uv sync` and `npm --prefix frontend ci` in the worktree. **WP agents never work in the integration worktree:** every WP runs in one of the two lane worktrees (Global rule 17); the integration worktree only receives the orchestrator's merges, the post-merge checks, G1 and R1. Where a WP block writes `cd /c/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023 && …`, the WP runs the command from **its lane root** (the orchestrator names the lane path and port in the dispatch). Line references were verified on `main` 6d8bc1b; a WP re-checks each reference with `grep -n` and reports drift instead of guessing.
 
-1. **Subagents never commit, push, `git reset`, `git checkout -- <file>`, `git stash`, `git clean` or `git merge`.** They edit the working tree of their lane. The orchestrator commits each WP in its lane after its done check with the WP's commit message, staging only the WP's owned files (`git add <files>`, never `git add -A`), and squash-merges it into the feature branch (rule 18). No AI attribution anywhere (no `Co-Authored-By`, no "Generated with").
-2. **Exclusive file ownership.** A WP writes only the files in its **Owns** list (tests included). If it needs another file it stops and reports. Shared files follow "Shared-file chains"; **no file is owned by two WPs that are unmerged at the same time** (pre-phases included, rule 19; verified in "Parallel ownership check").
-3. **Prerequisite checks first.** Run the WP's prerequisite commands; if one fails, stop and report. Never re-implement a missing prerequisite. A pre-phase (rule 19) checks only the prerequisites its wave-table row names for the pre-phase.
+1. **Subagents never commit, push, `git reset`, `git checkout -- <file>`, `git stash`, `git clean` or `git merge`.** They edit the working tree of their lane. The orchestrator commits each WP in its lane after its done check with the WP's commit message, staging only the WP's owned files (`git add <files>`, never `git add -A`), and squash-merges it into the feature branch (rule 17). No AI attribution anywhere (no `Co-Authored-By`, no "Generated with").
+2. **Exclusive file ownership.** A WP writes only the files in its **Owns** list (tests included). If it needs another file it stops and reports. Shared files follow "Shared-file chains"; **no file is owned by two WPs that are unmerged at the same time** (verified in "Parallel ownership check").
+3. **Prerequisite checks first.** Run the WP's prerequisite commands; if one fails, stop and report. Never re-implement a missing prerequisite.
 4. **Shell.** Git Bash. `rg` is not installed; use `grep -rnE`.
-5. **Machine limits (16 GB RAM; about 5 GB free once the native test server is stopped).** The orchestrator stops the native test server (`ontocurator-local`, about 1.4 GB) before W1 and starts it again only for M1. **At most four agents at once** (implementers, reviewers and fix agents all count). **At most two heavy test runs at once** across all worktrees, enforced by the heavy slots (rule 20). Heavy = any pytest touching PostgreSQL or with `-n` > 1, any Vitest run with more than one file or `--maxWorkers` > 1, Playwright, `npm --prefix frontend run build`, `scripts/check.sh` except `--only static`. Light = editing and reading, `npm --prefix frontend run typecheck`, ruff/mypy, generators, pure-Python pytest without a database, one Vitest file with `--maxWorkers=1`. **A Playwright run takes both slots** (it runs alone, one worker); G1 runs alone on the machine.
-6. **Verification.** WP agents run only checks for the modules they touched: one backend file `uv run pytest tests/<file>.py -q`; several `uv run pytest -n 4 tests/<a>.py tests/<b>.py -q`; Vitest files `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/<path>`; `npm --prefix frontend run typecheck`; `uv run ruff check . && uv run ruff format --check . && uv run mypy src`; after a regeneration `bash scripts/check.sh --only static`; or `bash scripts/check.sh --quick <paths…>`. Every heavy command of this list runs inside a heavy slot (rule 20). Batch the heavy runs: write all tests, run red once, implement, run green once, plus one regression run of the touched modules. **No WP runs the full backend, full Vitest or full Playwright suite** (exception: U9's one Vitest run); the full suites run once, in G1.
-7. **Playwright.** Each lane has its own port: lane N uses `HPO_E2E_PORT=1877<N+1>` (lane 1 → 18772 … lane 6 → 18777); the integration worktree (G1) uses 18771 (others: 18765–18768 in older worktrees). Check the port is free with `netstat -ano | grep -c ":<port> "` → `0`, else take the next free port ≥ 18778 and say so in the hand-back. Command: `HPO_E2E_PORT=<port> PLAYWRIGHT_WORKERS=1 npm --prefix frontend run test:e2e -- <spec>` (rebuilds the lane's `frontend/dist`), inside both heavy slots. Evidence (screenshots) only under `/c/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023/build/acceptance-20261023/evidence/` (absolute path, lanes are reused); no Playwright scratch in the main checkout.
+5. **Machine limits (16 GB RAM; about 5 GB free once the native test server is stopped).** The orchestrator stops the native test server (`ontocurator-local`, about 1.4 GB) before the first WP and starts it again only for M1. **Two lanes** (rule 17): at most two implementers at once (one per lane) plus at most one reviewer or fix agent. Each lane runs only the checks of its own WP (rule 6), so at most two test runs overlap. Playwright (T2, T3) runs only after the backend lane has finished (T1 merged), one run at a time; G1 runs alone on the machine.
+6. **Verification.** WP agents run only checks for the modules they touched: one backend file `uv run pytest tests/<file>.py -q`; several `uv run pytest -n 4 tests/<a>.py tests/<b>.py -q`; Vitest files `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/<path>`; `npm --prefix frontend run typecheck`; `uv run ruff check . && uv run ruff format --check . && uv run mypy src`; after a regeneration `bash scripts/check.sh --only static`; or `bash scripts/check.sh --quick <paths…>`. Batch the test runs: write all tests, run red once, implement, run green once, plus one regression run of the touched modules. **No WP runs the full backend, full Vitest or full Playwright suite** (exception: U9's one Vitest run); the full suites run once, in G1.
+7. **Playwright.** Each lane has its own port: lane N uses `HPO_E2E_PORT=1877<N+1>` (lane 1 → 18772, lane 2 → 18773); the integration worktree (G1) uses 18771 (others: 18765–18768 in older worktrees). Check the port is free with `netstat -ano | grep -c ":<port> "` → `0`, else take the next free port ≥ 18778 and say so in the hand-back. Command: `HPO_E2E_PORT=<port> PLAYWRIGHT_WORKERS=1 npm --prefix frontend run test:e2e -- <spec>` (rebuilds the lane's `frontend/dist`). Evidence (screenshots) only under `/c/Users/jan-p/Development/ontocurator/.worktrees/acceptance-20261023/build/acceptance-20261023/evidence/` (absolute path, lanes are reused); no Playwright scratch in the main checkout.
 8. **Isolated browser scenarios.** Every new or changed Playwright test builds its own fresh project through a test-only route (`/__test_proposal_check__`, `/__test_consolidation__`, `/__test_documents__`, `/__test_overview__`, …). No test writes a project another test uses.
-9. **Static gate.** `scripts/check.sh --only static` checks the lane's whole tree; in a pre-phase it may fail on references to a prerequisite that is not merged yet. A WP fixes only failures in its own Owns and reports the others. After every merge the orchestrator runs the post-merge check in the integration worktree (rule 18).
-10. **Contracts.** `contracts/openapi.json`, `frontend/src/api/generated.ts`, `contracts/admin-error-codes.json` are never hand-edited. Regenerate with `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate` and `uv run python scripts/export_admin_error_codes.py`. **Contracts token:** one holder at a time, in the order **U0 (only `request` and the `NetworkError` message) → P2 (token 1) → L1 (2) → P3 (3) → P4 contract step (4) → P5 contract step (5) → P7 (6) → P8 (7) → U2 (`errors.ts` wording sweep only)**. The token covers the chain files `contracts/openapi.json`, `frontend/src/api/generated.ts`, `contracts/admin-error-codes.json`, `src/ontocurator/domain/admin_error_codes.py`, `frontend/src/api/client.ts`, `frontend/tests/documents/fixtures.ts` and `frontend/src/admin/errors.ts`; a WP edits them only while it holds the token, in one contract step. **Taking the token:** the orchestrator syncs the WP's lane onto the feature branch that contains the previous holder's contract (rule 19), then the WP edits the chain files, regenerates and runs `npm --prefix frontend run typecheck` and `bash scripts/check.sh --only static`. **Returning it:** the orchestrator squash-merges that contract step at once, before the WP's review (rule 21). A WP whose API changes after its contract step (for example a review fix) takes the token again for a follow-up regeneration. Any WP whose API change alters `generated.ts` is a contracts writer and regenerates in the same WP. A writer also adds its `frontend/src/api/client.ts` functions, new defaults in `frontend/tests/documents/fixtures.ts`, and the minimal frontend compile fix its type change forces (files named in its block), so the tree typechecks after each writer. New error codes go into `src/ontocurator/domain/admin_error_codes.py` (sorted) and get a message in `frontend/src/admin/errors.ts` (same writer).
+9. **Static gate.** `scripts/check.sh --only static` checks the lane's whole tree. A WP fixes only failures in its own Owns and reports the others. After every merge the orchestrator runs the post-merge check in the integration worktree (rule 17).
+10. **Contracts.** `contracts/openapi.json`, `frontend/src/api/generated.ts`, `contracts/admin-error-codes.json` are never hand-edited. Regenerate with `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate` and `uv run python scripts/export_admin_error_codes.py`. **Contracts writers are backend-lane WPs and run one after another** in lane order **L1 → P2 → P3 → P4 → P7 → P8 → P5** (P1, P6 and T1 change no API). The chain files `contracts/openapi.json`, `frontend/src/api/generated.ts`, `contracts/admin-error-codes.json`, `src/ontocurator/domain/admin_error_codes.py`, `frontend/src/api/client.ts`, `frontend/tests/documents/fixtures.ts` and `frontend/src/admin/errors.ts` are edited only by these writers; the frontend lane starts after P5 is merged, when every writer is merged, and then only U0 (`request` and the `NetworkError` message) and U2 (`errors.ts` D2 wording sweep) edit `client.ts`/`errors.ts`. Any WP whose API change alters `generated.ts` is a contracts writer and regenerates in the same WP, then runs `npm --prefix frontend run typecheck` and `bash scripts/check.sh --only static`. A writer also adds its `frontend/src/api/client.ts` functions, new defaults in `frontend/tests/documents/fixtures.ts`, and the minimal frontend compile fix its type change forces (files named in its block), so the tree typechecks after each writer. New error codes go into `src/ontocurator/domain/admin_error_codes.py` (sorted) and get a message in `frontend/src/admin/errors.ts` (same writer).
 11. **API changes are additive** (new response fields have defaults) except the removals the spec and D1 mandate: P7 (`keep_both`, `term_choices`, `term_parts`), L1 (`assisted` mode, task `review` in assign/batch requests, annotation-review next steps and states).
-12. **Migration numbering.** Only P1 and L1 create migrations: P1 `0020_proposal_check.py` (`revision = "0020"`, `down_revision = "0019"`), L1 `0021_remove_legacy_workflows.py` (`revision = "0021"`, `down_revision = "0020"`). L1's lane starts after P1 is merged, so `0020` is on its base; no two lanes ever create a migration at the same time. Any other WP that finds it needs a migration stops and reports; the orchestrator assigns the next free number on the feature branch, one migration at a time, after the previous one is merged. If another branch lands `0020`/`0021` on `main` first, renumber both to the next free numbers before the merge, set `revision`/`down_revision`, update `tests/test_proposal_check_migration.py` and `tests/test_legacy_removal_migration.py` (`REVISION`, `PREVIOUS`); never renumber a migration already on `main`.
-13. **DocumentsPage token.** `frontend/src/admin/DocumentsPage.tsx` and `frontend/tests/documentsPage.test.tsx` have one writer at a time, in the order **U3 → U4 → U5** (L1 may touch `DocumentsPage.tsx` only if its compile fix requires it, before U3; U8's link buttons on this page moved to U4; U9 later). The token moves like the contracts token: sync, edit, squash-merge. Frontend WPs build components and component tests first (pre-phase) and wire the page last, after the orchestrator hands them the token.
-14. **English** for all files and UI copy; copy is verbatim from the spec or from the "Copy" table and the WP blocks. **D2 words only:** never add or keep "Annotation review", "Independent annotation", a bare "Review", "Keep both", "blind" (user-facing), "check tool proposals" or "Adjudicator" in UI copy (internal ids may keep such names). No `·` in any new or changed copy (spec F11; WP U9 removes the rest). Icons only from `frontend/src/ui/icons.tsx`. Status never by colour alone. Unavailable actions use `aria-disabled` + `aria-describedby` reason (existing `Button`), never native `disabled`. Colours only from `frontend/src/styles/tokens.css` (enforced by `frontend/tests/tokens.test.ts`); U0 is the only WP that adds tokens.
-15. **TDD.** Write the listed failing tests first, run them red, implement, run green.
-16. **Reviews.** Only WPs flagged "review: yes" (L or backend-critical) get one read-only review by the `superpowers:code-reviewer` agent, then one fix agent at effort medium. The review runs on the WP's lane (`git -C <lane> diff feat/acceptance-20261023...HEAD` after the final lane commit) before the squash merge; contract steps are merged before it (rule 10). After the final gate, one review of the whole diff by the same agent. No Codex.
-17. **Hand-back** (final message): changed/created/deleted files (subset of Owns), commands with exit status and one-line result, done checklist item by item, skipped parts and deviations, line-reference drift found, open risks, the commit message. A pre-phase ends with a hand-back headed `PRE-PHASE DONE` that lists what is left; a contract step ends with `CONTRACT READY` and the files of the contract commit.
-18. **Lanes and merges (orchestrator).** Lanes are worktrees `/c/Users/jan-p/Development/ontocurator/.worktrees/acc-lane-<N>` (N = 1…6), created on demand from the main checkout: `git worktree add .worktrees/acc-lane-<N> -b wp/<WP> feat/acceptance-20261023`, then `uv sync` and `npm --prefix frontend ci` once per lane (light; no new dependencies in this plan). A free lane is reused with `git -C <lane> switch -C wp/<WP> feat/acceptance-20261023` (only when `git -C <lane> status --short` is empty). A lane stays bound to its WP until the WP is merged, also while the WP waits at a sync point. **Merge into the feature branch** (integration worktree): `git merge --squash wp/<WP> && git commit -m "<WP commit message>"` (one commit per WP; a contract step gets its own commit `<type>(api): <WP> contract`); when the feature branch has not moved since the lane branched and the lane holds one commit, `git merge --ff-only wp/<WP>` is equivalent. A lane that continues after a merged contract step is synced at once (`git -C <lane> merge --no-edit feat/acceptance-20261023`). **Conflicts:** ownership rules them out. A conflict only in `contracts/openapi.json`, `frontend/src/api/generated.ts` or `contracts/admin-error-codes.json` (token broken, or a review changed an API) is resolved by regenerating those files in the integration worktree from the merged sources (rule 10 commands), `git add`, commit; any other conflict: `git reset --merge`, stop and report. **Post-merge check** (integration worktree, light): `npm --prefix frontend run typecheck`, `bash scripts/check.sh --only static`, and the drift check `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate && uv run python scripts/export_admin_error_codes.py && git diff --exit-code contracts frontend/src/api/generated.ts`. A red post-merge check blocks further merges until one fix agent (effort medium) repairs it on the feature branch. After R1 the lanes are removed (`git worktree remove`, `wp/*` branches deleted).
-19. **Pre-phases and sync points.** A WP marked *pre* in the wave table is dispatched before all its prerequisites are merged. In the pre-phase it edits only files of its Owns that (a) no unmerged WP owns and (b) are not token files (contracts chain of rule 10, `DocumentsPage.tsx`, `documentsPage.test.tsx`); it creates its new modules and tests, writes code against the interfaces this plan states ("Shared contracts" and the prerequisite's WP block), and runs only light checks that do not need the missing prerequisite. If a stated interface is not enough, it stops and reports instead of guessing. **Sync point:** when the prerequisite is merged, the orchestrator commits the lane's owned files (`wip(<WP>): pre-phase`), runs `git -C <lane> merge --no-edit feat/acceptance-20261023` and resumes the same agent with SendMessage (context kept). The post-phase does the rest, including all heavy runs. A WP that needs a newer merge later (P5 for P7's progress helper, U4 for P5's contract step) asks for another sync point in its hand-back.
-20. **Heavy slots.** The orchestrator creates `/c/Users/jan-p/Development/ontocurator/.worktrees/.heavy-slots`. Before a heavy run an agent takes a slot and releases it right after the run, also when the run failed:
-
-    ```bash
-    S=/c/Users/jan-p/Development/ontocurator/.worktrees/.heavy-slots
-    FREE_KB=$(powershell -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory" | tr -d '\r')
-    SLOT=; [ "$FREE_KB" -ge 2500000 ] && for n in 1 2; do mkdir "$S/$n" 2>/dev/null && { echo "<WP> $(date +%H:%M)" > "$S/$n/owner"; SLOT=$n; break; }; done
-    if [ -n "$SLOT" ]; then <heavy command>; rc=$?; rm -rf "$S/$SLOT"; exit $rc; else echo "NO SLOT"; fi
-    ```
-
-    No slot or less than 2.5 GB free: do the remaining light work first; when only heavy work is left, retry every 30 s with a background until-loop (`run_in_background`); never run a heavy command without a slot. A Playwright run takes both slots (`mkdir "$S/1" && mkdir "$S/2"`, release both). The orchestrator removes slots whose owner has handed back.
-21. **Contract-first steps.** P4 and P5 start their post-phase with their contract step (models and fields with defaults, routes as stubs, regeneration, `client.ts`, fixtures; see their blocks) and hand back `CONTRACT READY`; the orchestrator squash-merges it at once (light checks only, the WP's review covers it later) and resumes the WP. U2, U3, U4 and U5 type against that final API long before the implementations are merged. T2 starts with its `textCard` helpers in `frontend/browser/documentsHelpers.ts` as step T2a, merged at once; from then on T3 owns that file.
+12. **Migration numbering.** Only L1 and P1 create migrations: L1 `0020_remove_legacy_workflows.py` (`revision = "0020"`, `down_revision = "0019"`), P1 `0021_proposal_check.py` (`revision = "0021"`, `down_revision = "0020"`). L1 is merged before P1 starts (same lane), so `0020` is on P1's base. Any other WP that finds it needs a migration stops and reports; the orchestrator assigns the next free number on the feature branch.
+13. **English** for all files and UI copy; copy is verbatim from the spec or from the "Copy" table and the WP blocks. **D2 words only:** never add or keep "Annotation review", "Independent annotation", a bare "Review", "Keep both", "blind" (user-facing), "check tool proposals" or "Adjudicator" in UI copy (internal ids may keep such names). No `·` in any new or changed copy (spec F11; WP U9 removes the rest). Icons only from `frontend/src/ui/icons.tsx`. Status never by colour alone. Unavailable actions use `aria-disabled` + `aria-describedby` reason (existing `Button`), never native `disabled`. Colours only from `frontend/src/styles/tokens.css` (enforced by `frontend/tests/tokens.test.ts`); U0 is the only WP that adds tokens.
+14. **TDD.** Write the listed failing tests first, run them red, implement, run green.
+15. **Reviews.** Only WPs flagged "review: yes" (L-sized or backend-critical) get one read-only review by the `superpowers:code-reviewer` agent, then one fix agent at effort medium. The review runs on the WP's lane (`git -C <lane> diff feat/acceptance-20261023...HEAD` after the final lane commit) before the squash merge. After the final gate, one review of the whole diff by the same agent (G1). No Codex.
+16. **Hand-back** (final message): changed/created/deleted files (subset of Owns), commands with exit status and one-line result, done checklist item by item, skipped parts and deviations, line-reference drift found, open risks, the commit message.
+17. **Lanes and merges (orchestrator).** Two lane worktrees: **lane 1 (backend lane)** `/c/Users/jan-p/Development/ontocurator/.worktrees/acc-lane-1` runs L1, P1, P2, P3, P4, P7, P8, P5, P6, T1 one after another; **lane 2 (frontend lane)** `/c/Users/jan-p/Development/ontocurator/.worktrees/acc-lane-2` starts when P5 is merged and runs U0, U1, U2, U3, U4, U5, U6, U7, U8, U9, T2, T3 one after another. Create a lane from the main checkout with `git worktree add .worktrees/acc-lane-<N> -b wp/<WP> feat/acceptance-20261023`, then `uv sync` and `npm --prefix frontend ci` once (no new dependencies in this plan). For its next WP a lane is switched with `git -C <lane> switch -C wp/<WP> feat/acceptance-20261023` (only when `git -C <lane> status --short` is empty), so every WP starts on everything merged so far. **Merge into the feature branch** (integration worktree): `git merge --squash wp/<WP> && git commit -m "<WP commit message>"` (one commit per WP); when the feature branch has not moved since the lane branched and the lane holds one commit, `git merge --ff-only wp/<WP>` is equivalent. **Conflicts:** ownership rules them out. A conflict only in `contracts/openapi.json`, `frontend/src/api/generated.ts` or `contracts/admin-error-codes.json` (a review changed an API) is resolved by regenerating those files in the integration worktree from the merged sources (rule 10 commands), `git add`, commit; any other conflict: `git reset --merge`, stop and report. **Post-merge check** (integration worktree): `npm --prefix frontend run typecheck`, `bash scripts/check.sh --only static`, and the drift check `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate && uv run python scripts/export_admin_error_codes.py && git diff --exit-code contracts frontend/src/api/generated.ts`. A red post-merge check blocks further merges until one fix agent (effort medium) repairs it on the feature branch. After R1 the lanes are removed (`git worktree remove`, `wp/*` branches deleted).
 
 ## Work packages
 
-| WP | Title | Size | Lane | Review | Wave | Depends on (pre-phase / post-phase) |
+| WP | Title | Size | Lane | Review | Order | Depends on |
 |---|---|---|---|---|---|---|
-| P1 | Migration 0020, ORM, pure annotation-mode rule | M | heavy | yes | W1 | – |
-| U0 | Design foundations: axis tokens, bot/more icons, `StagePath`, `AssignedDate`, `AxisValue`, network errors, route params | M | light (L+) | – | W1 | – |
-| P2 | Workspace mode `proposal_check` over the newest proposal set (contracts 1) | L | heavy | yes | W1 pre, W2 | – / P1; token 1 after U0 |
-| L1 | Legacy removal (D1): annotation review task, `assisted`, keep-both data; migration 0021 (contracts 2) | L | heavy | yes | W2 pre, W3 | P1 / P2 |
-| P3 | Annotation mode on assignments, per-text limit, remove with draft discard, "Annotate from proposals myself" (contracts 3) | L | heavy | yes | W3 pre, W4 | P2 / L1 |
-| U1 | D2 names everywhere, review-of-submitted UI removed, `editor/modes.ts` (F1, F16, D1, D2) | M | light | – | W4 | L1 |
-| P7 | Consolidation server: one finding per group, keep-both removed, tool-proposal marker, progress helper (contracts 6) | M | heavy | yes | W4 pre, W6 | L1 / P3; token 6 after P5's contract step |
-| P6 | Export fields for proposal checks + docs | S | heavy | – | W4 pre, W6 | L1 / P3 (`proposal_check_support.py`) |
-| P5 | Read model: proposals, modes, dates, facet, progress, My tasks (contracts 5, contract-first) | M | heavy | yes | W4 pre, W7 | L1 / P3, P4 contract step; P7 merged before the progress part |
-| U3 | Text card (replaces RowPanel) | L | L+ | yes | W5 pre, W8 | U0, U1 / P3, P5 contract step; DocumentsPage token 1 |
-| U4 | One-line rows, row click, selection bar 2+, robot icon, filter, More menu, overflow, F2/F7/V4/V7 | L | L+ | yes | W5 pre, W9 | U1 (P5 contract via sync) / U3; DocumentsPage token 2 |
-| U6 | Consolidation table screen | L | L+ | yes | W5 pre, W8 | U0 / P7 |
-| P4 | Project setting, plan override, mode lock, new text versions (contracts 4, contract-first) | M | heavy | yes | W6 | P3 |
-| P8 | Text view layers and final-result layer (contracts 7) | M | heavy | yes | W8 | P3; token 7 after P7 |
-| U2 | Annotate from proposals in the editor, My tasks, assign dialog, Settings → Workflow, error copy, F8, V2 | M | L+ | – | W8 | U1, P3, P4, P5 contract step; `errors.ts` after P8's contract |
-| U5 | "Change plan…" / "Plan…" rework (F5) | M | L+ | – | W9 pre, W11 | U1, P4 / U4; DocumentsPage token 3 |
-| T1 | Browser scenarios (proposal check, three-person consolidation) | M | heavy | – | W10 | P5, P7, P8 |
-| U7 | Text view (replaces CaseViewer fold-out), axis colours in editor list and compare | M | L+ | – | W10 | U0, P8 |
-| U8 | Small fixes: F13, F18, V3, V4 (rest), V5, V6 (+ F8 styles) | S | heavy (one DB pytest file) | – | W11 | U2, U3, U4 |
-| U9 | Separator sweep (F11) | S | light (one full Vitest run = heavy slot) | – | W12 | U2–U8 all merged |
-| T2 | New browser specs: proposal check e2e, text card, consolidation 3 people, text view, rows | L | heavy (Playwright) | yes | W11 pre (T2a), W13 | T1 / U9 |
-| T3 | Existing browser specs on the new UI + spans-resize flake | L | heavy (Playwright) | – | W13 | U9, T2a |
-| G1 | Final gate in batches | – | heavy, alone | – | W14 | all |
-| R1 | Embedded bundle rebuild (separate commit) | XS | light | – | W15 | G1 |
-| M1 | Manual acceptance on the native test server | – | manual | – | W16 | R1 |
+| L1 | Legacy removal (D1): annotation review task, `assisted`, keep-both data; migration 0020 (contracts) | L | backend | yes | B1 | – |
+| P1 | Migration 0021, ORM, pure annotation-mode rule | M | backend | yes | B2 | L1 |
+| P2 | Workspace mode `proposal_check` over the newest proposal set (contracts) | L | backend | yes | B3 | P1 |
+| P3 | Annotation mode on assignments, per-text limit, remove with draft discard, "Annotate from proposals myself" (contracts) | L | backend | yes | B4 | P2 |
+| P4 | Project setting, plan override, mode lock, new text versions (contracts) | M | backend | – | B5 | P3 |
+| P7 | Consolidation server: one finding per group, keep-both removed, tool-proposal marker, progress helper (contracts) | M | backend | yes | B6 | P3 |
+| P8 | Text view layers and final-result layer (contracts) | M | backend | yes | B7 | P3 |
+| P5 | Read model: proposals, modes, dates, facet, progress, My tasks (contracts) | M | backend | – | B8 | P4, P7 |
+| P6 | Export fields for proposal checks + docs | S | backend | – | B9 | P3 |
+| T1 | Browser scenarios (proposal check, three-person consolidation) | M | backend | – | B10 | P5, P7, P8 |
+| U0 | Design foundations: axis tokens, bot/more icons, `StagePath`, `AssignedDate`, `AxisValue`, network errors, route params | M | frontend | – | F1 | P5 (lane start) |
+| U1 | D2 names everywhere, review-of-submitted UI removed, `editor/modes.ts` (F1, F16, D1, D2) | M | frontend | – | F2 | L1 |
+| U2 | Annotate from proposals in the editor, My tasks, assign dialog, Settings → Workflow, error copy, F8, V2 | M | frontend | – | F3 | U1, P4, P5 |
+| U3 | Text card (replaces RowPanel) | L | frontend | yes | F4 | U0, U1, P3, P5 |
+| U4 | One-line rows, row click, selection bar 2+, robot icon, filter, More menu, overflow, F2/F7/V4/V7 | L | frontend | yes | F5 | U3, P5 |
+| U5 | "Change plan…" / "Plan…" rework (F5) | M | frontend | – | F6 | U4, P4 |
+| U6 | Consolidation table screen | L | frontend | yes | F7 | U0, P7 |
+| U7 | Text view (replaces CaseViewer fold-out), axis colours in editor list and compare | M | frontend | – | F8 | U0, P8 |
+| U8 | Small fixes: F13, F18, V3, V4 (rest), V5, V6 (+ F8 styles) | S | frontend (one DB pytest file) | – | F9 | U2, U3, U4 |
+| U9 | Separator sweep (F11) | S | frontend (one full Vitest run) | – | F10 | U2–U8 |
+| T2 | New browser specs: proposal check e2e, text card, consolidation 3 people, text view, rows | L | frontend (Playwright) | yes | F11 | T1, U9 |
+| T3 | Existing browser specs on the new UI + spans-resize flake | L | frontend (Playwright) | – | F12 | T2 |
+| G1 | Final gate in batches, whole-diff review | – | integration, alone | final | G | all |
+| R1 | Embedded bundle rebuild (separate commit) | XS | integration | – | R | G1 |
+| M1 | Manual acceptance on the native test server | – | manual | – | M | R1 |
 
-25 WPs (9 backend, 10 frontend, 3 browser, gate, bundle, manual) in 16 waves.
+25 WPs (9 backend, 10 frontend, 3 browser, gate, bundle, manual) in two lanes.
 
-## Wave schedule (contract-first, lanes, pre-phases; max four agents, max two heavy runs)
+## Schedule (two lanes on one 16 GB machine)
 
-A wave starts when its trigger is merged into the feature branch. *pre* = pre-phase (rule 19), *post* = continuation after the sync point. Times are rough (S ≈ 20 min, M ≈ 40, L ≈ 75 per WP; + 15 min review and fix for "review: yes"; + 5 min merge and post-merge check), counted from the start of W1.
+The backend lane runs its WPs one after another; the frontend lane starts when P5 is merged and runs its WPs one after another. Each WP starts on the feature branch with everything merged so far, so with this order every dependency of the table above is merged when a WP starts. P7 and P8 run before P5: P5's progress part needs P7's `consolidation_progress`, and with P8 merged first every contracts writer (rule 10) is merged before the frontend lane starts, so the two lanes never share a file. Times are rough (S ≈ 20 min, M ≈ 40, L ≈ 75 per WP; + 15 min review and fix for "review: yes"; + 5 min merge and post-merge check), counted from the start of L1.
 
-| Wave | Trigger | Dispatch | Heavy runs | ≈ start |
-|---|---|---|---|---|
-| S0 | – | native test server stopped; lanes 1–3 created (`uv sync`, `npm ci`); `.heavy-slots` created | – | -0:10 |
-| W1 | start | P1 (lane 1) ‖ U0 (lane 2) ‖ P2 *pre* (lane 3; not `assignments/service.py`, no token files, no DB tests) | P1 tests; U0 Vitest files | 0:00 |
-| W2 | P1 merged | P2 *post* (sync; token 1, U0 merged) ‖ L1 *pre* (files P2 does not own, see L1 block) | P2 tests | 1:00 |
-| W3 | P2 merged | L1 *post* (sync; token 2) ‖ P3 *pre* (its new modules, `app.py`, `problem_reports.py`, `authz/versions.py`, new tests) | L1 tests | 1:55 |
-| W4 | L1 merged | P3 *post* (sync; token 3) ‖ U1 ‖ P7 *pre* ‖ P6 *pre*; P5 *pre* (non-shared read-model files) takes the first agent slot that frees | P3 tests; U1 Vitest files | 2:55 |
-| W5 | U1 merged | U3 *pre* ‖ U4 *pre* (components and component tests; no `DocumentsPage`, U4 not `stageLabels.ts`); U6 *pre* (new files only) only if an agent slot is idle | single Vitest files | 3:40 |
-| W6 | P3 merged | P4 (contract step first, token 4) ‖ P7 *post* (tool-proposal tests; contract step later, token 6) ‖ P6 *post* (heavy tests) | P7, P6, P4 tests | 3:55 |
-| W7 | P4 contract merged | P5 *post* (sync; contract step first, token 5) | P5 tests | 4:15 |
-| W8 | P5 contract merged | U3 *post* (sync; DocumentsPage token 1) ‖ U4 sync (P5 fields) ‖ P7 contract step (token 6), then U6 *post* once P7 is merged ‖ P8 (token 7 after P7) ‖ U2 (after P4 is merged; `errors.ts` last, token after P8) | P8 tests; Vitest files | 4:35 |
-| W9 | U3 merged | U4 *post* (sync; DocumentsPage token 2, `stageLabels.ts`) ‖ U5 *pre* (plan dialog pieces, not `RowActions.tsx`) | Vitest files | 5:25 |
-| W10 | P8 merged | T1 ‖ U7 | T1 fixture tests | 5:50 |
-| W11 | U4 merged | U5 *post* (sync; `RowActions.tsx`, DocumentsPage token 3) ‖ U8 (DB test in a slot); T2 *pre* once T1 is merged (specs written, T2a helpers merged at once) | U8 tests | 6:05 |
-| W12 | U2, U3, U4, U5, U6, U7, U8 merged | U9 (only `frontend/src` writer) ‖ T2 *pre* continues (`frontend/browser/` only) | U9 Vitest run (1 slot) | 6:30 |
-| W13 | U9 and T2a merged | T2 *post* ‖ T3 (separate lanes and ports; one Playwright run at a time, both slots per run; one agent edits while the other runs) | Playwright | 6:55 |
-| W14 | T2, T3 merged | G1 in the integration worktree, alone on the machine; the whole-diff review (read-only) runs alongside | G1 | 8:45 |
-| W15 | G1 green | R1 | build | 10:15 |
-| W16 | R1 committed | M1 (native test server started again) | manual | 10:25 |
+| ≈ start | Backend lane (lane 1) | Frontend lane (lane 2) |
+|---|---|---|
+| -0:10 | native test server stopped; lane 1 created | – |
+| 0:00 | L1 | – |
+| 1:35 | P1 | – |
+| 2:35 | P2 | – |
+| 4:10 | P3 | – |
+| 5:45 | P4 | – |
+| 6:30 | P7 | – |
+| 7:30 | P8 | – |
+| 8:30 | P5 | – |
+| 9:15 | P6 | lane 2 created; U0 |
+| 9:40 | T1 (done ≈ 10:25) | |
+| 10:00 | – | U1 |
+| 10:45 | – | U2 |
+| 11:30 | – | U3 |
+| 13:05 | – | U4 |
+| 14:40 | – | U5 |
+| 15:25 | – | U6 |
+| 17:00 | – | U7 |
+| 17:45 | – | U8 |
+| 18:10 | – | U9 |
+| 18:35 | – | T2 (Playwright; backend lane finished) |
+| 20:25 | – | T3 |
+| 21:55 | G1 in the integration worktree, alone on the machine; the whole-diff review (read-only) alongside | |
+| 23:25 | R1 | |
+| 23:35 | M1 (native test server started again) | |
 
-**Dispatch priority** when an agent slot frees (four agents at most): (1) the critical path: P1, P2, L1, P3, P4 contract step, P5 contract step, U1, U3, U4, U5 *post*, U8, U9, T2/T3, G1, and the reviews and fix agents of these; (2) P5 rest, P7, P8, U2, T1; (3) P6, U6, U7, U5 *pre*, T2 *pre*. A slot is never filled with work on files an unmerged WP owns.
-
-**Critical path:** P1 (1:00) → P2 *post* (0:55) → L1 *post* (1:00) → P3 *post* (1:00) → P4 contract step (0:20) → P5 contract step (0:20) → U3 *post* incl. card wiring and review (0:50) → U4 *post* incl. review (0:40) → U5 *post* ‖ U8 (0:25) → U9 (0:25) → T2 ‖ T3 (≈ 1:50: about 45 + 60 min of serial Playwright time plus T2's review) → G1 (≈ 1:30) → R1 (0:10) ≈ **10.5 h**, about **11 h** with slot contention. The pre-phases of P2, L1, P3, U3 and U4 take 30–55 min of coding off the chain each; P7, P6, P8, U2, U6, U7 and T1 run beside it with slack.
-
-**Compared with the previous schedule:** 19 waves with a strictly sequential backend chain P1 → P2 → L1 → P3 → P4 ‖ P6 → P7 → P5 → P8 (‖ U1), U3 waiting for U2, and the DocumentsPage chain, U8/U9 and both Playwright WPs in single file: ≈ 16.7 h of WP time on the critical path, ≈ **21 h** with the same review and merge allowance. New: 16 waves, ≈ **11 h** (about −48 %). Gains: P7 and P6 move beside P3 (they need L1, plus P3 only for their proposal-check tests); P8 beside P5; the contract-first steps of P4 and P5 unblock U2–U5 about 1.5 h earlier; U3 no longer waits for U2 (`editor/modes.ts` moved to U1); U4 and U5 build their components in parallel and only the `DocumentsPage` wiring is serial; U8 leaves the DocumentsPage chain; T2 and T3 overlap editing with each other's Playwright runs.
+About **23.5 h** end to end, longer than the earlier parallel schedule (≈ 11 h), in exchange for no heavy-slot mutex, no token passing, no pre-phases with sync points and no contract stubs.
 
 ## Parallel ownership check (no file owned by two unmerged WPs)
 
-- **W1** P1 ‖ U0 ‖ P2 *pre*: P1 and P2 share only `assignments/service.py` → P2 edits it after the sync. U0 is frontend only (its `client.ts`/`errors.ts` lines are the first token step, merged before P2's contract step).
-- **W2** P2 ‖ L1 *pre*: shared `domain/workspace.py`, `domain/scopes.py`, `authz/policy.py`, `application/workspaces.py`, `assignments/service.py`, `application/work_rounds.py`, `application/text_changes.py`, `storage/repository.py`, `domain/submission_labels.py`, `exchange/final_export_guide.py`, token files → L1 edits them, the existing tests and its compile fix only after the sync.
-- **W3** L1 ‖ P3 *pre*: shared `assignments/service.py`, `api/assignment_routes.py`, `application/work_rounds.py`, `authz/scoped.py`, `storage/repository.py`, token files → P3 *pre* touches only its new modules, `api/app.py`, `application/problem_reports.py`, `authz/versions.py` and its new tests.
-- **W4–W5** P3 ‖ U1 ‖ P7 *pre* ‖ P6 *pre* ‖ P5 *pre* ‖ U3 *pre* ‖ U4 *pre* ‖ U6 *pre*: P3 and P7 share only token files (P7's regeneration and frontend compile fix wait for token 6); if P3's limit breaks `tests/test_browser_consolidation_fixture.py` (P7's), P3 reports it and P7 fixes it after its sync. P5 *pre* stays off `assignments/service.py` and `api/assignment_routes.py` (P3's). U1 no longer owns `consolidation/*` (→ U6) or `CaseViewer.tsx` (→ U7). U3 *pre* and U4 *pre* start after U1 is merged; they share `stageLabels.ts`/`stageLabels.test.ts` and `DocumentsPage.tsx` → U4 edits those only in its post-phase, after U3 is merged. U6 *pre* writes new files under `consolidation/` only (P7 owns the compile-fix files until merged).
-- **W6–W8** P4 ‖ P5 ‖ P7 ‖ P6 ‖ P8 ‖ U2 ‖ U3 ‖ U4 ‖ U6: backend WPs share only token files (token order P4 → P5 → P7 → P8); `projects/service.py` (P4) ≠ `assignments/service.py` (P5); `frontend/tests/projectSettings.test.tsx` is P4's in its contract step and U2's after P4 is merged. U2 owns no CSS any more (its rules moved to U8 and U7) and takes `errors.ts` last.
-- **W9–W12** U4 ‖ U5 *pre* ‖ U2 ‖ U6 ‖ U7 ‖ T1 ‖ U8 ‖ U5 *post* ‖ U9 ‖ T2 *pre*: `RowActions.tsx` is U4's until merged, then U5's; `components.css` U4 → U8; `editor.css` U7 only; `FinalPanel.tsx` U3 → U8; `MyTasks.tsx` and `TranslationReviewScreen.tsx` U2 → U8; T1 only `tests/browser_*`, its fixture tests and `proposalCheckHelpers.ts`; U9 starts when every other `frontend/src` writer is merged; T2 *pre* writes only new specs and (T2a) `documentsHelpers.ts`.
-- **W13** T2 ‖ T3: T2 owns its five new specs; T3 the existing specs, `documentsHelpers.ts` (after T2a) and `documentsOverviewHelpers.ts`.
-- Single writer at all times: `router.ts` (U0), `styles/index.css` (U3), `contracts/*` and `generated.ts` (token), `DocumentsPage.tsx` (DocumentsPage token).
+- Within a lane WPs run one at a time, so a lane never has two unmerged WPs.
+- The lanes run side by side only from P5's merge on, while the backend lane finishes **P6** (`exchange/proposal_checks.py`, `exchange/final_export.py`, `exchange/final_export_guide.py`, `docs/scientific-workflow.md`, `tests/test_proposal_check_export.py`) and **T1** (`tests/browser_*` scenario files, its fixture tests, `frontend/browser/proposalCheckHelpers.ts`). No frontend-lane WP owns any of these: U0–U9 own only `frontend/src`, `frontend/tests`, `DESIGN.md`, `THIRD_PARTY_NOTICES.md`, `LICENSES/lucide-ISC.txt`, and U8 `src/ontocurator/api/auth_routes.py` + `tests/test_demo_logins.py`; T2 and T3 own other files under `frontend/browser/` and start after T1 is merged.
+- Single writer at all times: `router.ts` (U0), `styles/index.css` (U3), `contracts/*` and `generated.ts` (backend contracts writers, rule 10).
 
 ## Shared-file chains (one writer at a time, in this order)
 
-- `contracts/openapi.json`, `frontend/src/api/generated.ts`, `contracts/admin-error-codes.json`, `src/ontocurator/domain/admin_error_codes.py`, `frontend/src/api/client.ts`, `frontend/tests/documents/fixtures.ts`: **U0 (only `request` and the `NetworkError` class) → P2 → L1 → P3 → P4 (contract step) → P5 (contract step) → P7 → P8**.
-- `frontend/src/admin/errors.ts`: U0 (`NetworkError` message) → P2 → L1 → P3 → P4 → P5 → P7 → P8 (each only for new codes, in its contract step) → U2 (D2 wording sweep of existing messages, with the token after P8).
-- `src/ontocurator/assignments/service.py`: P1 (one line in `_create`) → P2 (`TASK_FOR_MODE`) → L1 (`assisted`, task `review` not assignable) → P3 → P5 (`TaskSummary`, `my_tasks`).
-- `src/ontocurator/application/work_rounds.py`: P2 (targets, `:150` filter) → L1 (ordinary review rounds refused, `assisted` out) → P3.
-- `src/ontocurator/application/text_changes.py`: P2 (`:414` filter) → L1 (`assisted` out) → P4 (from-proposals reasons).
-- `src/ontocurator/storage/repository.py`: P2 → L1 → P3 (draft discard) → P8.
-- `src/ontocurator/domain/workspace.py`, `domain/scopes.py`, `authz/policy.py`, `domain/submission_labels.py`, `application/workspaces.py`: P2 → L1.
+- `contracts/openapi.json`, `frontend/src/api/generated.ts`, `contracts/admin-error-codes.json`, `src/ontocurator/domain/admin_error_codes.py`, `frontend/src/api/client.ts`, `frontend/tests/documents/fixtures.ts`: **L1 → P2 → P3 → P4 → P7 → P8 → P5**, then U0 (`client.ts` `request` and the `NetworkError` class only).
+- `frontend/src/admin/errors.ts`: L1 → P3 → P4 (and P2, P7, P8, P5 only for new codes) → U0 (`NetworkError` message) → U2 (D2 wording sweep of existing messages).
+- `src/ontocurator/assignments/service.py`: L1 (`assisted`, task `review` not assignable) → P1 (one line in `_create`) → P2 (`TASK_FOR_MODE`) → P3 → P5 (`TaskSummary`, `my_tasks`).
+- `src/ontocurator/assignments/batch.py`: L1 (task `review` out) → P3 (shared held-annotation count).
+- `src/ontocurator/application/consolidation_start.py`, `src/ontocurator/authz/memberships.py`: P3 only (shared self-grant helper).
+- `src/ontocurator/application/work_rounds.py`: L1 (ordinary review rounds refused, `assisted` out) → P2 (targets, `:150` filter) → P3.
+- `src/ontocurator/application/text_changes.py`: L1 (`assisted` out) → P2 (`:414` filter) → P4 (from-proposals reasons).
+- `src/ontocurator/storage/repository.py`: L1 (only if needed) → P2 → P3 (draft discard) → P8.
+- `src/ontocurator/domain/workspace.py`, `domain/scopes.py`, `authz/policy.py`, `domain/submission_labels.py`, `application/workspaces.py`: L1 → P2.
 - `src/ontocurator/authz/versions.py`: P2 (`:152` label) → P3 (`may_read_proposals`) → P8. `src/ontocurator/authz/scoped.py`: L1 (comment) → P3 → P8.
 - `src/ontocurator/api/assignment_routes.py`: L1 (request task literal) → P3 → P5.
 - `src/ontocurator/domain/next_steps.py`, `domain/stage_cells.py`, `application/document_rows.py`: L1 (annotation-review states out) → P5.
 - `src/ontocurator/application/consolidation.py`, `api/consolidation_routes.py`: P7 (removal, `from_tool_proposal`, `consolidation_progress`) → P5 (import only, no edit).
-- `src/ontocurator/exchange/final_export_guide.py`: P2 (`submission_kind`) → L1 (legacy kinds out) → P6. `docs/scientific-workflow.md`: L1 → P6.
-- `src/ontocurator/api/work_plan_routes.py`: P4 only.
+- `src/ontocurator/exchange/final_export_guide.py`: L1 (legacy kinds out) → P2 (`submission_kind`) → P6. `docs/scientific-workflow.md`: L1 → P6.
+- `src/ontocurator/api/work_plan_routes.py`, `application/work_plans.py`, `storage/work_plan_store.py`: P4 only.
 - `tests/browser_server.py`: L1 (legacy scenarios out) → T1 (new routes). `tests/test_browser_consolidation_fixture.py`: P7 → T1.
+- `frontend/tests/session.test.tsx`, `assignmentApp.test.tsx`, `layerState.test.ts`, `caseTree.test.tsx`, `layerControls.test.tsx`, `firstRun.test.tsx`: L1 only (`assisted` out). `frontend/tests/decisionSemantics.test.ts`: L1 → U2.
 - `frontend/tests/projectSettings.test.tsx`: P4 (payload expectation) → U2.
 - `frontend/src/consolidation/*`: P7 (compile fix) → U6 (incl. U1's D2 strings in `consolidationText.ts`, `SummaryDialog.tsx`) → U9.
 - `frontend/src/app/CaseScreen.tsx`: L1 (`assisted` compile fix) → U2 → U9.
 - `frontend/src/editor/modes.ts`: U1 (create) → U2 (imports only) → U9.
-- `frontend/src/documents/nextStepLabels.ts`, `SelectionBar.tsx`, `frontend/src/admin/assignSummary.ts`, `frontend/src/app/submissionLabels.ts`: L1 (compile fix only) → U1 → U4 (`SelectionBar.tsx`) → U9. `frontend/src/documents/stageLabels.ts`: L1 (compile fix only) → U3 (receives `STAGE_TITLES`) → U4 (post-phase, one-line texts) → U9.
+- `frontend/src/documents/nextStepLabels.ts`, `SelectionBar.tsx`, `frontend/src/admin/assignSummary.ts`, `frontend/src/app/submissionLabels.ts`: L1 (compile fix only) → U1 → U4 (`SelectionBar.tsx`) → U9. `frontend/src/documents/stageLabels.ts`: L1 (compile fix only) → U3 (receives `STAGE_TITLES`) → U4 (one-line texts) → U9.
 - `frontend/src/documents/RowPanel.tsx`: L1 (compile fix only) → U1 (review button out) → U3 (deleted).
 - `frontend/src/documents/planSummary.ts`: U1 (strings) → U5 → U9. `ResolveTranslation.tsx`, `admin/UploadWorkPlan.tsx`, `admin/assignmentUI.tsx`, `ui/PlanChip.tsx`: U1 → U9.
 - `frontend/src/documents/FinalPanel.tsx`: U1 (labels) → U3 (embedding) → U8 (V5) → U9.
-- `frontend/src/documents/finalPanelText.ts`, `filterModel.ts`, `PlanChips.tsx`, `PlanDialog.tsx`: U1 (strings) → U4 / U5 → U9. `RowActions.tsx`: U1 (strings) → U4 → U5 (post-phase, `PlanPopover`) → U9.
+- `frontend/src/documents/finalPanelText.ts`, `filterModel.ts`, `PlanChips.tsx`, `PlanDialog.tsx`: U1 (strings) → U4 / U5 → U9. `RowActions.tsx`: U1 (strings) → U4 → U5 (`PlanPopover`) → U9.
 - `frontend/src/admin/AssignWorkDialog.tsx`: U1 (review rows out) → U2 (mode, dates) → U9.
 - `frontend/src/variants/ConsolidationLauncher.tsx`: U1 (role words) → U8 (V4) → U9.
 - `frontend/src/documents/RowActivity.tsx`, `StagePopover.tsx`: U3 (import of `STAGE_TITLES` from `stageLabels.ts`) → U9.
@@ -160,7 +149,7 @@ A wave starts when its trigger is merged into the feature branch. *pre* = pre-ph
 - `frontend/src/tasks/MyTasks.tsx`, `frontend/src/translation/TranslationReviewScreen.tsx`: U2 → U8 → U9.
 - `frontend/src/variants/CaseViewer.tsx`: U7 (incl. U1's `<h2>` wording) → U9.
 - `DESIGN.md`: U0 → U6.
-- `frontend/browser/documentsHelpers.ts`: T2 (T2a: adds `textCard` helpers) → T3. `documentsOverviewHelpers.ts`: T3.
+- `frontend/browser/documentsHelpers.ts`: T2 (adds `textCard` helpers) → T3. `documentsOverviewHelpers.ts`: T3.
 
 ---
 
@@ -170,22 +159,23 @@ A wave starts when its trigger is merged into the feature branch. *pre* = pre-ph
 
 | Name | Where | Meaning |
 |---|---|---|
-| `WorkspaceMode = Literal["independent", "review", "proposal_check"]` (after L1) | `domain/workspace.py`, `domain/scopes.py` | `proposal_check` = annotate from proposals; `independent` = annotate from scratch; `review` = the consolidator's workspace of a consolidation round only |
+| `WorkspaceMode = Literal["independent", "review", "proposal_check"]` (after P2) | `domain/workspace.py`, `domain/scopes.py` | `proposal_check` = annotate from proposals; `independent` = annotate from scratch; `review` = the consolidator's workspace of a consolidation round only |
 | `REVIEW_LIKE_MODES = frozenset({"review", "proposal_check"})`, `is_review_like(mode)` | `domain/scopes.py` | modes with targets and decisions |
 | `AnnotationMode = Literal["proposals", "scratch"]` | `domain/annotation_modes.py` | the way a text's annotation step works |
 | `TextMode(mode, source, locked)`; `ModeSource = Literal["no_proposals", "locked", "plan", "project"]` | same | effective mode with its reason |
 | `text_mode(*, project_mode, plan_override, proposal_count, work_modes) -> TextMode` | same | pure rule (below) |
 | `workspace_mode(task, annotation_mode) -> WorkspaceMode` | same | replaces the lookups `MODE_FOR_TASK[task]` |
-| `projects.tool_proposal_mode` (`proposals`/`scratch`, server default `proposals`, existing projects backfilled `scratch`) | migration 0020 | project setting "Texts with tool proposals" |
-| `work_plan_rows.annotation_mode` (nullable `proposals`/`scratch`) | migration 0020 | per-text override; NULL = project setting |
-| `assignments.annotation_mode` (`proposals`/`scratch` for task `annotate`, NULL otherwise; existing annotate rows backfilled `scratch`) | migration 0020 | mode fixed at assignment time |
+| `projects.tool_proposal_mode` (`proposals`/`scratch`, server default `proposals`, existing projects backfilled `scratch`) | migration 0021 | project setting "Texts with tool proposals" |
+| `work_plan_rows.annotation_mode` (nullable `proposals`/`scratch`) | migration 0021 | per-text override; NULL = project setting |
+| `assignments.annotation_mode` (`proposals`/`scratch` for task `annotate`, NULL otherwise; existing annotate rows backfilled `scratch`) | migration 0021 | mode fixed at assignment time |
 | `newest_proposal_refs(conn, project_id, document_id) -> list[AnnotationRef]`, `newest_proposal_counts(conn, project_id) -> dict[str, int]`, `newest_proposal_set(conn, project_id, document_id) -> ProposalSetRef \| None` | `storage/proposal_queries.py` (P2) | the newest tool proposal set of a document (see "Proposal targets") |
 | `TextRow(case_id, language)`, `text_row(conn, project_id, document_id) -> TextRow`, `text_documents(conn, project_id, row) -> list[str]`, `text_target_document(conn, project_id, row) -> str` | `application/text_targets.py` (P3) | **the one helper** for "the text of a document" and "the text's target document" (newest counted version); used by P3, P4, P5, P8 |
 | `load_text_mode(conn, project_id, document_id) -> TextMode` | `application/annotation_modes.py` (P3) | DB facts → `text_mode` |
+| `held_annotations(conn, project_id, document_ids) -> Counter[str]` | `assignments/service.py` (P3) | **the one count** of annotate assignments that fill a version's "annotations per text" slots (not revoked, or revoked with submitted work); used by `_assign_locked` and the batch planner |
+| `grant_lead_self_role(conn, actor, project_id, project_key, user_id, username, role, now) -> list[Role]` | `authz/memberships.py` (P3) | **the one self-grant** of a role to the acting lead (caller holds the members lock EXCLUSIVE); used by `AssignmentService.assign` (role `annotator`) and `ConsolidationStartService.start` (role `adjudicator`) |
 | `Action.OPEN_PROPOSAL_CHECK` (annotator role) | `authz/policy.py` | may open a `proposal_check` workspace |
-| error codes `ANNOTATIONS_PER_TEXT_REACHED`, `ANNOTATION_MODE_LOCKED`, `NO_TOOL_PROPOSALS`, `NO_PROPOSALS_ON_VERSION`, `PROPOSAL_CHECK_NOT_APPLICABLE` (P3/P4), `TASK_NOT_ASSIGNABLE` (L1) | | see WP blocks |
+| error codes `ANNOTATIONS_PER_TEXT_REACHED`, `ANNOTATION_MODE_LOCKED`, `NO_TOOL_PROPOSALS`, `NO_PROPOSALS_ON_VERSION` (P3/P4), `TASK_NOT_ASSIGNABLE` (L1) | | see WP blocks |
 | `POST /api/v1/assignments/{id}/remove` | P3 | remove an unsubmitted assignment and discard its draft |
-| `POST /api/v1/projects/{key}/proposal-checks/self` | P3 | "Annotate from proposals myself" |
 | `GET /api/v1/projects/{key}/documents/{doc}/layers` | P8 | text view "Show" list |
 | submission kind `"proposal_check"` | `domain/submission_labels.py`, `exchange/final_export_guide.py` | export and history kind |
 | receipt key `proposal_checks` | `exchange/final_export.py` (P6) | per-proposal decisions |
@@ -232,12 +222,54 @@ The targets of a `proposal_check` round are fixed when the round is created and 
 
 ## WP blocks
 
-### P1: Migration 0020, ORM, pure annotation-mode rule
+### L1: Legacy removal (D1): annotation review task, `assisted` mode, keep-both data (contracts writer)
+
+- **Goal:** the legacy pieces D1 removes are gone from code, API and data: the assignable task "Annotation review" (task `review` outside a consolidation, its ordinary review rounds, its read-model states and next steps), the `assisted` workspace mode, and stored "keep both" consolidations. The review **machinery** (targets, decisions, review submissions) stays: it powers consolidation and, from P2 on, "Annotate from proposals". Afterwards task `review` = the consolidator's task, created only by `ConsolidationStartService.start`; workspace mode `review` = the consolidator's workspace of a consolidation round.
+- **Spec:** "Decisions of 2026-10-23" D1; §1 Constraints (legacy removal bullet); §3 (keep both removed, stored data deleted).
+- **Owns:** `src/ontocurator/storage/migrations/versions/0020_remove_legacy_workflows.py` (create), `src/ontocurator/storage/work_purge.py` (create), `scripts/purge_annotation_work.py` (create, used in M1), `src/ontocurator/domain/workspace.py`, `src/ontocurator/domain/scopes.py`, `src/ontocurator/authz/policy.py`, `src/ontocurator/authz/scoped.py` (comment `:256` only), `src/ontocurator/application/preferences.py`, `src/ontocurator/auth/preferences.py`, `src/ontocurator/application/workspaces.py` (`assisted` branch `:252`), `src/ontocurator/assignments/service.py` (`TASK_FOR_MODE`, `MODE_FOR_TASK["review"]` use in the open path, public assign guard), `src/ontocurator/assignments/batch.py`, `src/ontocurator/assignments/eligibility.py` (docstrings only, `conflicting_tasks` unchanged), `src/ontocurator/api/assignment_routes.py` (request task literal, open path), `src/ontocurator/api/assignment_batch_routes.py`, the distribution confirmation module (`grep -rln "class DistributionConfirmationService" src`), `src/ontocurator/application/work_rounds.py`, `src/ontocurator/application/text_changes.py` (`:414` only), `src/ontocurator/storage/repository.py` (only if a review-open path needs it), `src/ontocurator/domain/next_steps.py`, `src/ontocurator/domain/stage_cells.py`, `src/ontocurator/application/document_rows.py` (annotation-review facts only), `src/ontocurator/domain/submission_labels.py`, `src/ontocurator/exchange/final_export_guide.py` (legacy kind texts), `docs/scientific-workflow.md` (remove `assisted` and annotation-review passages), `src/ontocurator/domain/admin_error_codes.py`, contracts, `frontend/src/admin/errors.ts` (`TASK_NOT_ASSIGNABLE` message), `frontend/tests/documents/fixtures.ts`, the frontend unit tests that use `assisted` (`grep -rln assisted frontend/tests` on `main` 6d8bc1b: `frontend/tests/session.test.tsx`, `assignmentApp.test.tsx`, `layerState.test.ts`, `caseTree.test.tsx`, `layerControls.test.tsx`, `firstRun.test.tsx`, `decisionSemantics.test.ts`; re-run the grep, a new hit joins this list), the minimal frontend compile fix (only lines the typecheck names, expected in `frontend/src/app/CaseScreen.tsx` (`assisted` badge branch `:2776-2787`), `frontend/src/documents/nextStepLabels.ts`, `frontend/src/documents/stageLabels.ts`, `frontend/src/documents/SelectionBar.tsx`, `frontend/src/admin/assignSummary.ts`, `frontend/src/app/submissionLabels.ts`, `frontend/src/documents/RowPanel.tsx`, `frontend/src/admin/DocumentsPage.tsx`; anything else: stop and report), `tests/browser_server.py` (legacy scenarios), `tests/layered_fixtures.py`, `tests/test_legacy_removal_migration.py` (create), `tests/test_legacy_removal.py` (create), and the existing test files that use the removed paths (fixed by the grep in Step 0; the orchestrator records the exact list).
+- **Size / lane / review:** L / backend / yes (first WP of the backend lane).
+- **Code to read:** `authz/policy.py:20-150`, `application/preferences.py`, `auth/preferences.py`, `application/workspaces.py:203-360`, `assignments/service.py:60-72, 240-620`, `assignments/batch.py:200-240`, `api/assignment_routes.py:370-520`, `api/assignment_batch_routes.py:30-60`, `application/consolidation_start.py:60-230` (the only legitimate creator of task `review`, through `_assign_locked`), `application/work_rounds.py:115-157, 440-500, 660-700`, `domain/next_steps.py:40-60, 120-200, 340-360`, `domain/stage_cells.py:60-75, 150-160, 455-475, 545-560`, `application/document_rows.py` (`annotation_reviewers`, `open_annotation_reviews`), `domain/submission_labels.py`, `storage/tables.py:310-432, 790-838`, `storage/workflow_tables.py` (all FKs), `storage/overview_tables.py`, `storage/final_tables.py`, `domain/review.py`.
+
+**Step 0 (inventory).** `grep -rlnE '"assisted"|'"'"'assisted'"'"'|task="review"|"task": "review"|open_annotation_reviews|annotation_reviewers|annotation_review_in_progress|in_review' src tests` and `grep -rlnE "assisted|annotation review" frontend/src frontend/tests frontend/browser`; write the list into the hand-back. Profile and fixture **names** such as `make_layered_package("assisted")` / `assisted-mondo-hpo/v1` are test-data names, not the mode; keep them unless the code under test changes.
+
+**Code changes:**
+- `WorkspaceMode = Literal["independent", "review"]` (both files; P2 adds `proposal_check`); `Action.OPEN_ASSISTED`, `MODE_ACTIONS["assisted"]` removed; `MODE_ORDER = ("independent",)` (direct opens offer only "from scratch"; `review` and, from P2 on, `proposal_check` are reached through assignments and rounds); `PreferenceMode` / `_MODES` lose `assisted` and `review` only if `review` preferences are no longer reachable (read the callers; keep `review` if the consolidation screen stores a preference); the `assisted` branch in `workspaces.py:252` removed; `TASK_FOR_MODE` without `assisted`.
+- Task `review` is not assignable: `AssignmentService.assign` (and the row-list POST, reassign of non-consolidation rows, batch, distribution confirmation) refuse `task == "review"` with `DomainError("TASK_NOT_ASSIGNABLE", {"task": "review"})`; request literals become `Literal["annotate", "translation_review"]` (`BatchTask`, the assign row model). `ConsolidationStartService.start` keeps calling `_assign_locked(..., "review", ...)` (no guard there). Opening a `review` assignment without an active consolidation round → `TASK_INVALID`.
+- Ordinary review rounds are gone: `WorkRoundService` refuses `kind="ordinary"` (and `clean_restart`) for mode `review` with `ROUND_KIND_INVALID`; the `mode == "review" and not sources and kind == "ordinary"` target branch (`work_rounds.py:680`) is deleted (P2 adds the `proposal_check` branch). The API `/workspaces/open` refuses mode `review` with `MODE_NOT_ALLOWED` (consolidation opens through its round route). Service-level tests that drive `WorkspaceService` with mode `review` directly (machinery tests such as `tests/test_reviews.py`, `test_review_*_regressions.py`) stay unchanged: that machinery is shared with consolidation and, from P2 on, proposal checks.
+- Read model: `open_annotation_reviews`, `annotation_reviewers`, state `in_review`, step `annotation_review_in_progress`, batch option "annotation review" removed (`next_steps.py`, `stage_cells.py`, `document_rows.py`, `batch.py`); consolidators (`facts.consolidators`) unchanged.
+- `work_rounds.py:150` and `text_changes.py:414`: `["independent"]` (P2 adds `proposal_check`).
+- `submission_labels.submission_kind`: `"review"` leaves `SubmissionKind`; a non-consolidation `review` submission can no longer exist (migration), so `mode == "review"` maps to `"consolidation"`.
+- `final_export_guide.py` and `docs/scientific-workflow.md`: drop the `assisted` and "annotation review" explanations (P6 adds the "from proposals" section later).
+
+**Data (migration 0020, D1).** Irreversible clean-up; `downgrade()` only restores nothing and documents that (no data comes back; M1 backs up the test server's database first). The purge works on whole units of work so nothing dangles; `storage/work_purge.py` holds the SQL (plain `sqlalchemy.text`/Core on table names, no ORM models, so the migration can import it and stays valid when models change) and the migration calls it once. `purge_legacy(conn) -> dict[str, int]` returns the rows deleted per table (and `user_preferences_converted`); the migration logs them in one line, `logging.getLogger("ontocurator.migrations").warning("0020 legacy purge: %s", counts)` (WARNING, so the line reaches the app's stderr log without logging setup; M1 records these counts):
+
+| Legacy data | Treatment |
+|---|---|
+| Assignments with task `review` that never had a work round of kind `consolidation` (the old "Annotation review") | **deleted** with their work (below) |
+| Drafts and submissions with `mode = 'assisted'`, and the annotate assignments bound to them | **deleted** with their work |
+| Consolidation rounds whose draft decisions (`review_decisions.payload->'consolidation'->>'action'`) or submitted decisions (`submissions.payload` decisions) contain `keep_both` or `term_choices` | **deleted** with their consolidator assignment and work; the text returns to "ready to compare" and the lead consolidates again |
+| `user_preferences` rows whose mode is `assisted` (and `review`, if `PreferenceMode` drops it) | **converted** to `independent` |
+| Audit events | kept (ids only, no FKs) |
+
+"Work" of a purged assignment or round = its `work_rounds` (and `work_round_state`, `round_inputs`, `round_workspace_bindings`, `round_submission_bindings`), drafts (`drafts` cascade to `draft_annotations`, `draft_evidence`, `review_decisions`; `draft_snapshots`), submissions, `text_change_resolutions`, `task_holds`/`task_hold_state`, `problem_reports` and their state/events, `review_obligation_resolutions`, `workflow_command_receipts` and overview rows that reference them, `final_selections` (+ `final_selection_events`) and `export_selection_snapshots` that point at a purged submission. **Closure:** a consolidation round whose inputs include a purged submission is purged too; repeat until no new ids appear. Order deletes leaf-first; derive the exact FK list with `grep -rn "ForeignKey" src/ontocurator/storage/*.py` and cover every table that references `assignments`, `work_rounds`, `drafts`, `draft_snapshots` or `submissions` (also id columns without FK: `assignments.last_submission_id`, `assignments.active_round_id`, `work_round_state.latest_submission_id`, `final_selections.submission_id`).
+
+`scripts/purge_annotation_work.py --project KEY [--case CASE --language LANG] --confirm` (M1, D4): purges every annotate assignment of the project (or one text) with its work using the same `work_purge` functions, prints a summary, refuses without `--confirm`; test `test_purge_script_removes_annotation_work_of_one_project` (another project untouched).
+
+- [ ] **Step 1: Failing tests.**
+  - `tests/test_legacy_removal_migration.py` (fixture shape, `_exec`, downgrade call and URL handling copied from `tests/test_overview_migration.py`, as P1's migration test describes; `REVISION = "0020"`, `PREVIOUS = "0019"`; seed with raw SQL at 0019: one project, two annotators, a consolidator; an ordinary review assignment with a round, draft, decision and submission; an `assisted` draft and an `assisted` submission bound to an annotate assignment; an `independent` submission and a consolidation round that took it and an `assisted` submission as inputs; a second consolidation round with a submitted `keep_both` decision and a final selection on its submission; a clean consolidation round; an `assisted` preference): `test_annotation_review_assignments_are_deleted_with_their_work`, `test_assisted_work_is_deleted`, `test_consolidations_over_deleted_inputs_are_deleted`, `test_keep_both_consolidations_and_their_final_selection_are_deleted`, `test_clean_consolidation_and_independent_work_stay`, `test_assisted_preferences_become_independent`, `test_no_reference_dangles` (for each id column above, a `NOT EXISTS` query returns no rows), `test_purge_logs_the_row_counts` (`caplog` holds one `0020 legacy purge:` record whose counts match the seeded legacy rows).
+  - `tests/test_legacy_removal.py`: `test_review_task_is_not_assignable` (single, row-list POST, batch: `TASK_NOT_ASSIGNABLE` / 422 at request validation), `test_consolidation_start_still_assigns_the_consolidator`, `test_assisted_mode_is_unknown` (`/workspaces/open` with `assisted` → 422), `test_review_mode_cannot_be_opened_directly` (`MODE_NOT_ALLOWED`), `test_ordinary_review_round_is_refused` (`ROUND_KIND_INVALID`), `test_rows_have_no_annotation_review_state` (document-rows payload never contains `in_review` or `annotation_review_in_progress`), `test_allowed_modes_offer_only_from_scratch`.
+- [ ] **Step 2:** implement; fix every test from Step 0 that used the removed paths (rewrite to a consolidation round, or delete when it only tested the removed feature; never weaken an unrelated assertion); `uv run pytest -n 4 tests/test_legacy_removal_migration.py tests/test_legacy_removal.py <the Step 0 test files> -q` → PASS; `uv run ruff check . && uv run ruff format --check . && uv run mypy src`.
+- [ ] **Step 3: Contracts.** Regenerate (`WorkspaceMode` without `assisted`, task literals of assign/batch requests without `review`, next-step and state enums without the annotation-review values, `SubmissionKind` without `review`; error code `TASK_NOT_ASSIGNABLE` with the message `This task can no longer be assigned.`); minimal frontend compile fix in the files named in Owns (delete the removed branches and options, no new UI; U1 does the wording); fixtures drop removed values; `npm --prefix frontend run typecheck`; `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/documents tests/caseScreen.test.tsx tests/session.test.tsx tests/assignmentApp.test.tsx tests/layerState.test.ts tests/caseTree.test.tsx tests/layerControls.test.tsx tests/firstRun.test.tsx tests/decisionSemantics.test.ts` for the touched files' tests (update expectations that asserted removed options; drop `assisted` cases or switch them to `independent`); `bash scripts/check.sh --only static`. Browser specs that use removed scenarios or labels (`frontend/browser/layers.spec.ts`, `reanchor.spec.ts`, `variant-admin.spec.ts`, plus Step 0 hits) are listed for T3 (not edited here).
+- **Done:** `grep -rnE '"assisted"|OPEN_ASSISTED|annotation_review_in_progress|open_annotation_reviews' src frontend/src` → empty (generated files included after regeneration); task `review` is created only in `consolidation_start.py`; the migration tests prove deletion, conversion, logged counts and no dangling references; `grep -rln assisted frontend/tests` lists no unit test that uses the mode.
+- **Commit:** `refactor(workflow): remove annotation review task, assisted mode and keep-both data`
+
+### P1: Migration 0021, ORM, pure annotation-mode rule
 
 - **Goal:** storage for the project setting, the per-text override and the per-assignment mode; the pure rule `text_mode`.
 - **Spec:** §1 Q3 and "Constraints" (mode fixed per text).
-- **Owns:** `src/ontocurator/storage/migrations/versions/0020_proposal_check.py` (create), `src/ontocurator/storage/tables.py` (`ProjectRow`, `AssignmentRow`), `src/ontocurator/storage/plan_tables.py` (`WorkPlanFlagsRow`), `src/ontocurator/assignments/service.py` (one line in `_create`, see Step 4), `src/ontocurator/domain/annotation_modes.py` (create), `tests/test_proposal_check_migration.py` (create), `tests/test_annotation_modes_domain.py` (create), and the existing tests that insert annotate rows directly (Step 4): `tests/test_projects_api.py` (`:155`), `tests/test_variants_storage.py` (`:69`), `tests/test_guideline_assignment_view.py` (`:50`), `tests/test_distribution_context.py` (`:298`, `:353`, `:457`), `tests/test_work_plan_store.py` (`:81`), `tests/test_progress_export_api.py` (`:90`), `tests/test_assignments_schema.py` (`:46`, `:106`).
-- **Size / lane / review:** M / heavy / yes.
+- **Owns:** `src/ontocurator/storage/migrations/versions/0021_proposal_check.py` (create), `src/ontocurator/storage/tables.py` (`ProjectRow`, `AssignmentRow`), `src/ontocurator/storage/plan_tables.py` (`WorkPlanFlagsRow`), `src/ontocurator/assignments/service.py` (one line in `_create`, see Step 4), `src/ontocurator/domain/annotation_modes.py` (create), `tests/test_proposal_check_migration.py` (create), `tests/test_annotation_modes_domain.py` (create), and the existing tests that insert annotate rows directly (Step 4): `tests/test_projects_api.py` (`:155`), `tests/test_variants_storage.py` (`:69`), `tests/test_guideline_assignment_view.py` (`:50`), `tests/test_distribution_context.py` (`:298`, `:353`, `:457`), `tests/test_work_plan_store.py` (`:81`), `tests/test_progress_export_api.py` (`:90`), `tests/test_assignments_schema.py` (`:46`, `:106`).
+- **Size / lane / review:** M / backend / yes.
+- **Prerequisites:** L1 merged (`ls src/ontocurator/storage/migrations/versions/0020_remove_legacy_workflows.py`).
 - **Code to read:** `storage/migrations/versions/0016_work_plans.py:140-175` (column + check pattern), `0019_documents_overview.py:1-70` (header, backfill), `tests/test_overview_migration.py:1-130` (fixture pattern, downgrade), `storage/tables.py:84-140` (`ProjectRow`), `:790-830` (`AssignmentRow`), `storage/plan_tables.py:44-64`.
 
 - [ ] **Step 1: Failing pure tests** `tests/test_annotation_modes_domain.py`:
@@ -322,7 +354,7 @@ from typing import Literal
 AnnotationMode = Literal["proposals", "scratch"]
 ANNOTATION_MODES: tuple[AnnotationMode, ...] = ("proposals", "scratch")
 ModeSource = Literal["no_proposals", "locked", "plan", "project"]
-# Mirrors domain.workspace.WorkspaceMode after the legacy removal (L1); kept
+# Mirrors domain.workspace.WorkspaceMode once P2 adds proposal_check; kept
 # local so this module stays import-free of the workspace models.
 WorkspaceModeName = Literal["independent", "review", "proposal_check"]
 
@@ -361,7 +393,7 @@ def workspace_mode(task: str, annotation_mode: AnnotationMode | None) -> Workspa
         return "review"  # the consolidator's workspace (L1: consolidation only)
     if task == "annotate":
         if annotation_mode is None:
-            raise ValueError("An annotate assignment always has a mode (migration 0020)")
+            raise ValueError("An annotate assignment always has a mode (migration 0021)")
         return "proposal_check" if annotation_mode == "proposals" else "independent"
     raise ValueError(f"Task {task!r} has no annotation workspace")
 ```
@@ -371,7 +403,7 @@ def workspace_mode(task: str, annotation_mode: AnnotationMode | None) -> Workspa
 - [ ] **Step 3: Failing migration tests** `tests/test_proposal_check_migration.py` (fixture shape, `_exec`, downgrade call and URL handling copied from `tests/test_overview_migration.py`; the fixture yields `(url, engine)` like there):
 
 ```python
-"""Migration 0020: tool proposal mode, plan override, assignment mode."""
+"""Migration 0021: tool proposal mode, plan override, assignment mode."""
 
 from __future__ import annotations
 
@@ -386,9 +418,8 @@ from sqlalchemy.exc import IntegrityError
 
 from ontocurator.storage.schema import alembic_config, upgrade
 
-# Renumbering (plan Global rule 12) only touches these two constants.
-REVISION = "0020"
-PREVIOUS = "0019"
+REVISION = "0021"
+PREVIOUS = "0020"
 S = "ontocurator"
 
 
@@ -489,8 +520,8 @@ of an annotate assignment when it is created (spec 2026-10-23 §1 Q3).
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0020"
-down_revision = "0019"
+revision = "0021"
+down_revision = "0020"
 branch_labels = None
 depends_on = None
 SCHEMA = "ontocurator"
@@ -545,15 +576,14 @@ ORM (must match exactly; `tests/test_schema.py:41` compares metadata):
 - **Done:** constraints identical in migration and ORM; existing projects `scratch`, new `proposals`; annotate rows always carry a mode; every listed test insert fixed.
 - **Commit:** `feat(workflow): store tool proposal mode, plan override and assignment mode`
 
-### P2: Workspace mode `proposal_check` (contracts writer 1)
+### P2: Workspace mode `proposal_check` (contracts writer)
 
 - **Goal:** a `proposal_check` workspace ("Annotate from proposals") behaves exactly like a review workspace over the **newest tool proposal set** of the text (targets, decisions, completeness, submission snapshots), belongs to the annotate task, counts as annotation work in every mode filter, and is labelled as such in histories and exports.
 - **Spec:** §1 Q1, Q2; "A person annotating from scratch never sees proposals… A person annotating from proposals sees only the tool proposals"; §1 "Targets".
-- **Owns:** `src/ontocurator/storage/proposal_queries.py` (create), `src/ontocurator/domain/workspace.py`, `src/ontocurator/domain/scopes.py`, `src/ontocurator/authz/policy.py`, `src/ontocurator/assignments/service.py` (only `TASK_FOR_MODE`), `src/ontocurator/application/workspaces.py`, `src/ontocurator/application/workspace_opening.py`, `src/ontocurator/application/reviews.py`, `src/ontocurator/application/submissions.py`, `src/ontocurator/application/editing.py`, `src/ontocurator/application/reanchor_resolutions.py`, `src/ontocurator/application/work_rounds.py` (sites below), `src/ontocurator/application/text_changes.py` (`:414` only), `src/ontocurator/authz/versions.py` (`:152` only), `src/ontocurator/storage/repository.py` (sites below), `src/ontocurator/api/document_projection.py`, `src/ontocurator/api/routes.py`, `src/ontocurator/domain/submission_labels.py`, `src/ontocurator/exchange/t1.py`, `src/ontocurator/exchange/final_export_guide.py` (`submission_kind` only), contracts (token 1: `contracts/openapi.json`, `frontend/src/api/generated.ts`), `tests/test_proposal_check_workspace.py` (create), `tests/test_proposal_queries.py` (create).
-- **Schedule (W1 pre, W2 post):** pre-phase during P1: every P2 file except `assignments/service.py` and the token files; new tests written, no DB test run. Post-phase after P1 is merged (sync point): `TASK_FOR_MODE`, the DB tests, Step 4 contracts (token 1).
-- **Size / lane / review:** L / heavy / yes.
+- **Owns:** `src/ontocurator/storage/proposal_queries.py` (create), `src/ontocurator/domain/workspace.py`, `src/ontocurator/domain/scopes.py`, `src/ontocurator/authz/policy.py`, `src/ontocurator/assignments/service.py` (only `TASK_FOR_MODE`), `src/ontocurator/application/workspaces.py`, `src/ontocurator/application/workspace_opening.py`, `src/ontocurator/application/reviews.py`, `src/ontocurator/application/submissions.py`, `src/ontocurator/application/editing.py`, `src/ontocurator/application/reanchor_resolutions.py`, `src/ontocurator/application/work_rounds.py` (sites below), `src/ontocurator/application/text_changes.py` (`:414` only), `src/ontocurator/authz/versions.py` (`:152` only), `src/ontocurator/storage/repository.py` (sites below), `src/ontocurator/api/document_projection.py`, `src/ontocurator/api/routes.py`, `src/ontocurator/domain/submission_labels.py`, `src/ontocurator/exchange/t1.py`, `src/ontocurator/exchange/final_export_guide.py` (`submission_kind` only), contracts (`contracts/openapi.json`, `frontend/src/api/generated.ts`), `tests/test_proposal_check_workspace.py` (create), `tests/test_proposal_queries.py` (create).
+- **Size / lane / review:** L / backend / yes.
 - **Code to read:** `application/workspaces.py:203-420` (open), `application/submissions.py:123-175, 400-460`, `application/work_rounds.py:115-157, 440-700`, `application/text_changes.py:390-420`, `storage/repository.py:368-400` (`workspace_input_snapshots`), `:1935-1990` (`list_annotations_for_document`, `_proposal_set_metadata_query`), `storage/tables.py:257-290, 733-777` (`ProposalAnnotationRow`, `ProposalSetRow`), `authz/policy.py:88-150`, `authz/versions.py:140-156`, `domain/submission_labels.py`, `exchange/t1.py:548-650`.
-- **Facts verified (plan review R7):** today an ordinary review-mode round without sources targets **every** proposal snapshot of the document on editable layers (`work_rounds.py:677-690` via `repository.list_annotations_for_document`, which joins `proposal_annotations`, i.e. only imported tool proposals, never people's work), across **all** proposal sets of that document; the legacy open path without a round does the same through `get_review_inputs` (`workspaces.py:262-357`). `ProposalAnnotationRow.proposal_set_id` names the imported T1 set (NULL for seed packages); `ProposalSetRow` is append-only with an identity `id`. A review submission's `snapshots` are confirmed/uncertain targets + `changed` replacements + added findings (`submissions.py:413-456`), so a proposal-check submission is a complete annotation layer for consolidation. Mode filters that list "annotation work" by mode: `work_rounds.py:150` (`require_independent`, handover) and `text_changes.py:414` (`_work_on_row`), both `["independent", "assisted"]`.
+- **Facts verified (plan review R7):** today an ordinary review-mode round without sources targets **every** proposal snapshot of the document on editable layers (`work_rounds.py:677-690` via `repository.list_annotations_for_document`, which joins `proposal_annotations`, i.e. only imported tool proposals, never people's work), across **all** proposal sets of that document; the legacy open path without a round does the same through `get_review_inputs` (`workspaces.py:262-357`). `ProposalAnnotationRow.proposal_set_id` names the imported T1 set (NULL for seed packages); `ProposalSetRow` is append-only with an identity `id`. A review submission's `snapshots` are confirmed/uncertain targets + `changed` replacements + added findings (`submissions.py:413-456`), so a proposal-check submission is a complete annotation layer for consolidation. Mode filters that list "annotation work" by mode: `work_rounds.py:150` (`require_independent`, handover) and `text_changes.py:414` (`_work_on_row`), both `["independent", "assisted"]` on `main`, `["independent"]` after L1.
 
 **`storage/proposal_queries.py`** (the only definition of "the newest proposal set"; plan "Proposal targets"):
 
@@ -594,7 +624,7 @@ Edit list (each `mode == "review"` that means "has targets and decisions" become
 
 | Site | Change |
 |---|---|
-| `domain/scopes.py:12`, `domain/workspace.py:14` | `WorkspaceMode = Literal["independent", "review", "assisted", "proposal_check"]` (`assisted` leaves in L1); in `scopes.py` add `REVIEW_LIKE_MODES: frozenset[str] = frozenset({"review", "proposal_check"})` and `def is_review_like(mode: str) -> bool: return mode in REVIEW_LIKE_MODES`; `build_scope` unchanged (non-independent modes get reference layers; `mode` is part of the scope hash, so the scope id differs from review) |
+| `domain/scopes.py:12`, `domain/workspace.py:14` | `WorkspaceMode = Literal["independent", "review", "proposal_check"]` (L1 already removed `assisted`); in `scopes.py` add `REVIEW_LIKE_MODES: frozenset[str] = frozenset({"review", "proposal_check"})` and `def is_review_like(mode: str) -> bool: return mode in REVIEW_LIKE_MODES`; `build_scope` unchanged (non-independent modes get reference layers; `mode` is part of the scope hash, so the scope id differs from review) |
 | `authz/policy.py` | `Action.OPEN_PROPOSAL_CHECK = "open_proposal_check"`, added to `ROLE_ACTIONS["annotator"]`; `MODE_ACTIONS["proposal_check"] = Action.OPEN_PROPOSAL_CHECK`; **`MODE_ORDER` unchanged and `application/preferences.py PreferenceMode` unchanged** (plan review R19: the mode is driven by the assignment, never chosen or remembered as a preference) |
 | `assignments/service.py:68-72` | `TASK_FOR_MODE["proposal_check"] = "annotate"` (nothing else in this file) |
 | `application/workspaces.py:211` | `key.mode == "review"` → `is_review_like(key.mode)` |
@@ -603,8 +633,8 @@ Edit list (each `mode == "review"` that means "has targets and decisions" become
 | `application/reviews.py:50` | refuse unless `is_review_like(key.mode)` |
 | `application/submissions.py:140, 369, 413` | `is_review_like(...)` |
 | `application/editing.py:525`, `application/reanchor_resolutions.py:30, 76` | `is_review_like(...)` |
-| `application/work_rounds.py:677, 680, 700` | `is_review_like(mode)`; the ordinary round without sources for `proposal_check` targets `newest_proposal_refs(...)` filtered by `scope.editable_layer_ids` (the `review` branch keeps today's code until L1 removes ordinary review rounds); **`:475` stays `mode != "review"`** (consolidation only on the consolidator's task) |
-| `application/work_rounds.py:150`, `application/text_changes.py:414` | `SubmissionRow.mode.in_(["independent", "assisted", "proposal_check"])` (plan review R9: a submitted "from proposals" annotation is annotation work for handover and text-change checks; L1 drops `assisted`) |
+| `application/work_rounds.py:677, 680, 700` | `is_review_like(mode)`; the ordinary round without sources for `proposal_check` targets `newest_proposal_refs(...)` filtered by `scope.editable_layer_ids` (L1 already deleted the ordinary `review` branch); **`:475` stays `mode != "review"`** (consolidation only on the consolidator's task) |
+| `application/work_rounds.py:150`, `application/text_changes.py:414` | `SubmissionRow.mode.in_(["independent", "proposal_check"])` (plan review R9: a submitted "from proposals" annotation is annotation work for handover and text-change checks) |
 | `authz/versions.py:152` | own-submission label by kind instead of `'review' if … else 'annotate'`: `My annotation, from proposals, {created_at}` (mode `proposal_check`), `My annotation, from scratch, {created_at}` (`independent`), `My consolidation, {created_at}` (`review`) (R9) |
 | `storage/repository.py:2041, 2360, 2425, 2941` | `is_review_like(...)` |
 | `api/document_projection.py:232, 348, 370` | `is_review_like(mode)` |
@@ -730,62 +760,19 @@ The last body: submit a proposal check as in the test above, then call `require_
 
 - [ ] **Step 2:** `uv run pytest -n 4 tests/test_proposal_check_workspace.py tests/test_proposal_queries.py -q` → FAIL. Implement `proposal_queries.py` and the edit list.
 - [ ] **Step 3:** `uv run pytest -n 4 tests/test_proposal_check_workspace.py tests/test_proposal_queries.py tests/test_reviews.py tests/test_review_validation_regressions.py tests/test_review_roundtrip_regressions.py tests/test_t1_export.py tests/test_assignment_round_open_api.py tests/test_consolidation_start_api.py tests/test_annotation_versions.py tests/test_handover*.py tests/test_text_change*.py -q` (expand globs with `ls`) and `uv run pytest -n 4 $(ls tests/test_final_export*.py) -q` → PASS; `uv run ruff check . && uv run ruff format --check . && uv run mypy src`.
-- [ ] **Step 4: Contracts (token 1).** `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate` (`WorkspaceMode` and the submission kind gain `proposal_check`; additive); `npm --prefix frontend run typecheck` → clean (an exhaustive `Record` over these unions that now fails: stop and report, the orchestrator adds the file to Owns); `bash scripts/check.sh --only static`.
-- **Done:** every site of the edit list changed or explicitly kept; targets and counts come only from `proposal_queries.py`; `review`/`independent`/`assisted` behaviour unchanged (existing tests green).
+- [ ] **Step 4: Contracts.** `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate` (`WorkspaceMode` and the submission kind gain `proposal_check`; additive); `npm --prefix frontend run typecheck` → clean (an exhaustive `Record` over these unions that now fails: stop and report, the orchestrator adds the file to Owns); `bash scripts/check.sh --only static`.
+- **Done:** every site of the edit list changed or explicitly kept; targets and counts come only from `proposal_queries.py`; `review`/`independent` behaviour unchanged (existing tests green).
 - **Commit:** `feat(workspace): annotate from proposals over the newest proposal set`
 
-### L1: Legacy removal (D1): annotation review task, `assisted` mode, keep-both data (contracts writer 2)
-
-- **Goal:** the legacy pieces D1 removes are gone from code, API and data: the assignable task "Annotation review" (task `review` outside a consolidation, its ordinary review rounds, its read-model states and next steps), the `assisted` workspace mode, and stored "keep both" consolidations. The review **machinery** (targets, decisions, review submissions) stays: it powers "Annotate from proposals" (P2) and consolidation. Afterwards task `review` = the consolidator's task, created only by `ConsolidationStartService.start`; workspace mode `review` = the consolidator's workspace of a consolidation round.
-- **Spec:** "Decisions of 2026-10-23" D1; §1 Constraints (legacy removal bullet); §3 (keep both removed, stored data deleted).
-- **Owns:** `src/ontocurator/storage/migrations/versions/0021_remove_legacy_workflows.py` (create), `src/ontocurator/storage/work_purge.py` (create), `scripts/purge_annotation_work.py` (create, used in M1), `src/ontocurator/domain/workspace.py`, `src/ontocurator/domain/scopes.py`, `src/ontocurator/authz/policy.py`, `src/ontocurator/authz/scoped.py` (comment `:256` only), `src/ontocurator/application/preferences.py`, `src/ontocurator/auth/preferences.py`, `src/ontocurator/application/workspaces.py` (`assisted` branch `:252`), `src/ontocurator/assignments/service.py` (`TASK_FOR_MODE`, `MODE_FOR_TASK["review"]` use in the open path, public assign guard), `src/ontocurator/assignments/batch.py`, `src/ontocurator/assignments/eligibility.py` (docstrings only, `conflicting_tasks` unchanged), `src/ontocurator/api/assignment_routes.py` (request task literal, open path), `src/ontocurator/api/assignment_batch_routes.py`, the distribution confirmation module (`grep -rln "class DistributionConfirmationService" src`), `src/ontocurator/application/work_rounds.py`, `src/ontocurator/application/text_changes.py` (`:414` only), `src/ontocurator/storage/repository.py` (only if a review-open path needs it), `src/ontocurator/domain/next_steps.py`, `src/ontocurator/domain/stage_cells.py`, `src/ontocurator/application/document_rows.py` (annotation-review facts only), `src/ontocurator/domain/submission_labels.py`, `src/ontocurator/exchange/final_export_guide.py` (legacy kind texts), `docs/scientific-workflow.md` (remove `assisted` and annotation-review passages), `src/ontocurator/domain/admin_error_codes.py`, contracts (token 2), `frontend/src/admin/errors.ts` (`TASK_NOT_ASSIGNABLE` message), `frontend/tests/documents/fixtures.ts`, the minimal frontend compile fix (only lines the typecheck names, expected in `frontend/src/app/CaseScreen.tsx` (`assisted` badge branch `:2776-2787`), `frontend/src/documents/nextStepLabels.ts`, `frontend/src/documents/stageLabels.ts`, `frontend/src/documents/SelectionBar.tsx`, `frontend/src/admin/assignSummary.ts`, `frontend/src/app/submissionLabels.ts`, `frontend/src/documents/RowPanel.tsx`, `frontend/src/admin/DocumentsPage.tsx`; anything else: stop and report), `tests/browser_server.py` (legacy scenarios), `tests/layered_fixtures.py`, `tests/test_legacy_removal_migration.py` (create), `tests/test_legacy_removal.py` (create), and the existing test files that use the removed paths (fixed by the grep in Step 0; the orchestrator records the exact list; during L1 only P3's pre-phase runs, and it edits no existing test file).
-- **Schedule (W2 pre, W3 post):** pre-phase during P2 (P1 is merged, so `0020` exists): only files P2 does not own: migration 0021, `storage/work_purge.py`, `scripts/purge_annotation_work.py`, both `preferences.py`, `assignments/batch.py`, `assignments/eligibility.py`, `api/assignment_routes.py`, `api/assignment_batch_routes.py`, the distribution confirmation module, `domain/next_steps.py`, `domain/stage_cells.py`, `application/document_rows.py`, `docs/scientific-workflow.md`, `tests/browser_server.py`, `tests/layered_fixtures.py` and the two new test files; no existing test file, no DB test. Post-phase after P2 is merged: the files shared with P2, the existing tests, Step 3 contracts (token 2) with the frontend compile fix.
-- **Size / lane / review:** L / heavy / yes.
-- **Code to read:** `authz/policy.py:20-150`, `application/preferences.py`, `auth/preferences.py`, `application/workspaces.py:203-360`, `assignments/service.py:60-72, 240-620`, `assignments/batch.py:200-240`, `api/assignment_routes.py:370-520`, `api/assignment_batch_routes.py:30-60`, `application/consolidation_start.py:60-230` (the only legitimate creator of task `review`, through `_assign_locked`), `application/work_rounds.py:115-157, 440-500, 660-700`, `domain/next_steps.py:40-60, 120-200, 340-360`, `domain/stage_cells.py:60-75, 150-160, 455-475, 545-560`, `application/document_rows.py` (`annotation_reviewers`, `open_annotation_reviews`), `domain/submission_labels.py`, `storage/tables.py:310-432, 790-838`, `storage/workflow_tables.py` (all FKs), `storage/overview_tables.py`, `storage/final_tables.py`, `domain/review.py`.
-
-**Step 0 (inventory).** `grep -rlnE '"assisted"|'"'"'assisted'"'"'|task="review"|"task": "review"|open_annotation_reviews|annotation_reviewers|annotation_review_in_progress|in_review' src tests` and `grep -rlnE "assisted|annotation review" frontend/src frontend/tests frontend/browser`; write the list into the hand-back. Profile and fixture **names** such as `make_layered_package("assisted")` / `assisted-mondo-hpo/v1` are test-data names, not the mode; keep them unless the code under test changes.
-
-**Code changes:**
-- `WorkspaceMode = Literal["independent", "review", "proposal_check"]` (both files); `Action.OPEN_ASSISTED`, `MODE_ACTIONS["assisted"]` removed; `MODE_ORDER = ("independent",)` (direct opens offer only "from scratch"; `proposal_check` and `review` are reached through assignments and rounds); `PreferenceMode` / `_MODES` lose `assisted` and `review` only if `review` preferences are no longer reachable (read the callers; keep `review` if the consolidation screen stores a preference); the `assisted` branch in `workspaces.py:252` removed; `TASK_FOR_MODE` without `assisted`.
-- Task `review` is not assignable: `AssignmentService.assign` (and the row-list POST, reassign of non-consolidation rows, batch, distribution confirmation) refuse `task == "review"` with `DomainError("TASK_NOT_ASSIGNABLE", {"task": "review"})`; request literals become `Literal["annotate", "translation_review"]` (`BatchTask`, the assign row model). `ConsolidationStartService.start` keeps calling `_assign_locked(..., "review", ...)` (no guard there). Opening a `review` assignment without an active consolidation round → `TASK_INVALID`.
-- Ordinary review rounds are gone: `WorkRoundService` refuses `kind="ordinary"` (and `clean_restart`) for mode `review` with `ROUND_KIND_INVALID`; the `mode == "review" and not sources and kind == "ordinary"` target branch (`work_rounds.py:680`) is deleted (P2's `proposal_check` branch stays). The API `/workspaces/open` refuses mode `review` with `MODE_NOT_ALLOWED` (consolidation opens through its round route). Service-level tests that drive `WorkspaceService` with mode `review` directly (machinery tests such as `tests/test_reviews.py`, `test_review_*_regressions.py`) stay unchanged: that machinery is shared with proposal checks and consolidation.
-- Read model: `open_annotation_reviews`, `annotation_reviewers`, state `in_review`, step `annotation_review_in_progress`, batch option "annotation review" removed (`next_steps.py`, `stage_cells.py`, `document_rows.py`, `batch.py`); consolidators (`facts.consolidators`) unchanged.
-- `work_rounds.py:150` and `text_changes.py:414`: `["independent", "proposal_check"]`.
-- `submission_labels.submission_kind`: `"review"` leaves `SubmissionKind`; a non-consolidation `review` submission can no longer exist (migration), so `mode == "review"` maps to `"consolidation"`.
-- `final_export_guide.py` and `docs/scientific-workflow.md`: drop the `assisted` and "annotation review" explanations (P6 adds the "from proposals" section later).
-
-**Data (migration 0021, D1).** Irreversible clean-up; `downgrade()` only restores nothing and documents that (no data comes back). The purge works on whole units of work so nothing dangles; `storage/work_purge.py` holds the SQL (plain `sqlalchemy.text`/Core on table names, no ORM models, so the migration can import it and stays valid when models change) and the migration calls it once:
-
-| Legacy data | Treatment |
-|---|---|
-| Assignments with task `review` that never had a work round of kind `consolidation` (the old "Annotation review") | **deleted** with their work (below) |
-| Drafts and submissions with `mode = 'assisted'`, and the annotate assignments bound to them | **deleted** with their work |
-| Consolidation rounds whose draft decisions (`review_decisions.payload->'consolidation'->>'action'`) or submitted decisions (`submissions.payload` decisions) contain `keep_both` or `term_choices` | **deleted** with their consolidator assignment and work; the text returns to "ready to compare" and the lead consolidates again |
-| `user_preferences` rows whose mode is `assisted` (and `review`, if `PreferenceMode` drops it) | **converted** to `independent` |
-| Audit events | kept (ids only, no FKs) |
-
-"Work" of a purged assignment or round = its `work_rounds` (and `work_round_state`, `round_inputs`, `round_workspace_bindings`, `round_submission_bindings`), drafts (`drafts` cascade to `draft_annotations`, `draft_evidence`, `review_decisions`; `draft_snapshots`), submissions, `text_change_resolutions`, `task_holds`/`task_hold_state`, `problem_reports` and their state/events, `review_obligation_resolutions`, `workflow_command_receipts` and overview rows that reference them, `final_selections` (+ `final_selection_events`) and `export_selection_snapshots` that point at a purged submission. **Closure:** a consolidation round whose inputs include a purged submission is purged too; repeat until no new ids appear. Order deletes leaf-first; derive the exact FK list with `grep -rn "ForeignKey" src/ontocurator/storage/*.py` and cover every table that references `assignments`, `work_rounds`, `drafts`, `draft_snapshots` or `submissions` (also id columns without FK: `assignments.last_submission_id`, `assignments.active_round_id`, `work_round_state.latest_submission_id`, `final_selections.submission_id`).
-
-`scripts/purge_annotation_work.py --project KEY [--case CASE --language LANG] --confirm` (M1, D4): purges every annotate assignment of the project (or one text) with its work using the same `work_purge` functions, prints a summary, refuses without `--confirm`; test `test_purge_script_removes_annotation_work_of_one_project` (another project untouched).
-
-- [ ] **Step 1: Failing tests.**
-  - `tests/test_legacy_removal_migration.py` (fixture as `tests/test_proposal_check_migration.py`, `REVISION = "0021"`, `PREVIOUS = "0020"`; seed with raw SQL at 0020: one project, two annotators, a consolidator; an ordinary review assignment with a round, draft, decision and submission; an `assisted` draft and an `assisted` submission bound to an annotate assignment; an `independent` submission and a consolidation round that took it and an `assisted` submission as inputs; a second consolidation round with a submitted `keep_both` decision and a final selection on its submission; a clean consolidation round; an `assisted` preference): `test_annotation_review_assignments_are_deleted_with_their_work`, `test_assisted_work_is_deleted`, `test_consolidations_over_deleted_inputs_are_deleted`, `test_keep_both_consolidations_and_their_final_selection_are_deleted`, `test_clean_consolidation_and_independent_work_stay`, `test_assisted_preferences_become_independent`, `test_no_reference_dangles` (for each id column above, a `NOT EXISTS` query returns no rows).
-  - `tests/test_legacy_removal.py`: `test_review_task_is_not_assignable` (single, row-list POST, batch: `TASK_NOT_ASSIGNABLE` / 422 at request validation), `test_consolidation_start_still_assigns_the_consolidator`, `test_assisted_mode_is_unknown` (`/workspaces/open` with `assisted` → 422), `test_review_mode_cannot_be_opened_directly` (`MODE_NOT_ALLOWED`), `test_ordinary_review_round_is_refused` (`ROUND_KIND_INVALID`), `test_rows_have_no_annotation_review_state` (document-rows payload never contains `in_review` or `annotation_review_in_progress`), `test_allowed_modes_offer_only_from_scratch`.
-- [ ] **Step 2:** implement; fix every test from Step 0 that used the removed paths (rewrite to `proposal_check`, to a consolidation round, or delete when it only tested the removed feature; never weaken an unrelated assertion); `uv run pytest -n 4 tests/test_legacy_removal_migration.py tests/test_legacy_removal.py <the Step 0 test files> -q` → PASS; `uv run ruff check . && uv run ruff format --check . && uv run mypy src`.
-- [ ] **Step 3: Contracts (token 2).** Regenerate (`WorkspaceMode` without `assisted`, task literals of assign/batch requests without `review`, next-step and state enums without the annotation-review values, `SubmissionKind` without `review`; error code `TASK_NOT_ASSIGNABLE` with the message `This task can no longer be assigned.`); minimal frontend compile fix in the files named in Owns (delete the removed branches and options, no new UI; U1 does the wording); fixtures drop removed values; `npm --prefix frontend run typecheck`; `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/documents tests/caseScreen.test.tsx` for the touched files' tests (update expectations that asserted removed options); `bash scripts/check.sh --only static`. Browser specs that use removed scenarios or labels (`frontend/browser/layers.spec.ts`, `reanchor.spec.ts`, `variant-admin.spec.ts`, plus Step 0 hits) are listed for T3 (not edited here).
-- **Done:** `grep -rnE '"assisted"|OPEN_ASSISTED|annotation_review_in_progress|open_annotation_reviews' src frontend/src` → empty (generated files included after regeneration); task `review` is created only in `consolidation_start.py`; the migration tests prove deletion, conversion and no dangling references.
-- **Commit:** `refactor(workflow): remove annotation review task, assisted mode and keep-both data`
-
-### P3: Annotation mode on assignments, per-text limit, remove with draft discard, "Annotate from proposals myself" (contracts writer 3)
+### P3: Annotation mode on assignments, per-text limit, remove with draft discard, "Annotate from proposals myself" (contracts writer)
 
 - **Goal:** an annotate assignment gets its mode from the rule and opens only the matching workspace; "annotations per text" is enforced on every assign path; an unsubmitted assignment can be removed and its draft is really discarded; the lead can annotate a text from proposals themselves; one shared helper answers "which text is this document" and "which document is the text's target".
 - **Spec:** §1 Q2, Q3, "Constraints" (lock incl. submitted work, limit per version, new versions); §2 Annotation part (chips ✕, "Annotate from proposals myself", F24); Small fixes "Annotations per text is enforced".
-- **Facts verified:** the limit is only enforced by batch assign (`assignments/batch.py:218-220, 570`); single `AssignmentService.assign` → `_assign_locked` (`service.py:572-616`) and distribution confirmations (calls `_assign_locked`) do not check it, which is how the test-server case cons-three got a third annotation (seeded through `POST /projects/{key}/assignments`). `revoke` (`service.py:743`) has no status guard; `projects/assignments.py:48 revoke_assignments` revokes "preserving submissions and drafts". **A re-assignment would resurface the old draft:** without an active round, `/assignments/{id}/open` opens the workspace by key (`project, document, annotator pseudonym, mode`), and `WorkspaceService.open` resumes an existing draft of that key (`application/workspaces.py:236-300`: `repo.open_draft(key)` for `independent`, `list_workspace_keys(...)` for review-like modes) (plan review R12). Self-consolidation grants a role under the members lock EXCLUSIVE (`application/consolidation_start.py:126-190`, `authz/memberships.py:79 grant_roles`). The text of a document and its target version are derived today in two places (`eligibility.load_variants`/`check_work_plan`, `text_changes.current_target` via `_row_target(_chain(...))`).
-- **Owns:** `src/ontocurator/application/text_targets.py` (create), `src/ontocurator/application/annotation_modes.py` (create), `src/ontocurator/application/proposal_checks.py` (create), `src/ontocurator/api/proposal_check_routes.py` (create), `src/ontocurator/api/app.py` (router include only), `src/ontocurator/assignments/service.py`, `src/ontocurator/api/assignment_routes.py`, `src/ontocurator/application/work_rounds.py` (`:447-451` only), `src/ontocurator/application/problem_reports.py` (`:330-335` only), `src/ontocurator/authz/scoped.py` (`require_workable` only), `src/ontocurator/authz/versions.py` (`may_read_proposals` only), `src/ontocurator/storage/repository.py` (`discard_drafts` helper only), `src/ontocurator/domain/admin_error_codes.py`, contracts (token 3), `frontend/src/api/client.ts` (`removeAssignment`, `checkProposalsMyself`), `frontend/src/admin/errors.ts` (messages), `frontend/tests/documents/fixtures.ts` (defaults), `tests/proposal_check_support.py` (create), `tests/test_text_targets.py` (create), `tests/test_proposal_check_assignments.py` (create), `tests/test_annotations_per_text_limit.py` (create), plus test files of existing tests that break because they relied on exceeding the limit (list them in the hand-back; expected candidates: `tests/browser_overview_scenarios.py` `assign_and_annotate`, `tests/test_browser_overview_fixture.py`).
-- **Size / lane / review:** L / heavy / yes.
-- **Code to read:** `assignments/service.py:240-620, 743-873`, `assignments/eligibility.py:27-60, 120-199` (`load_variants`, `check_work_plan`), `application/text_changes.py:259-283` (`_chain`, `current_target`), `domain/document_rows.py:110-125` (`newest`), `application/consolidation_start.py:97-230`, `application/workspaces.py:203-300`, `projects/assignments.py:48-80`, `storage/repository.py` (`open_draft`, `list_workspace_keys`, draft tables), `api/assignment_routes.py:90-130, 470-560`, `authz/scoped.py:180-205`, `authz/versions.py:35-60`, `tests/work_plan_support.py` (whole), `tests/auth_harness.py:135-160`.
-- **Prerequisites:** `grep -n "def newest_proposal_refs" src/ontocurator/storage/proposal_queries.py` (P2); `grep -c '"assisted"' src/ontocurator/domain/workspace.py` → 0 (L1); contracts token 3.
-- **Schedule (W3 pre, W4 post):** pre-phase during L1 (needs P2 merged): only the new modules (`application/text_targets.py`, `application/annotation_modes.py`, `application/proposal_checks.py`, `api/proposal_check_routes.py`), `api/app.py`, `application/problem_reports.py`, `authz/versions.py`, `tests/proposal_check_support.py` and the new test files; pure tests only. Post-phase after L1 is merged: the rest, the DB tests, Step 4 contracts (token 3). Existing tests broken by the limit that P7 owns while P7 is unmerged (`tests/test_browser_consolidation_fixture.py`) are reported, not edited; P7 fixes them after its sync.
+- **Facts verified:** the limit is only enforced by batch assign (`assignments/batch.py:218-220, 570`), whose planner counts only **non-revoked** annotate assignments (`batch.py:205-221`, `_work`); batch saves go through `_assign_locked` (`batch.py:774`), and one refusal there rolls back the whole batch (`batch.py:7`), so the planner and the guard must count the same way; single `AssignmentService.assign` → `_assign_locked` (`service.py:572-616`) and distribution confirmations (calls `_assign_locked`) do not check it, which is how the test-server case cons-three got a third annotation (seeded through `POST /projects/{key}/assignments`). `revoke` (`service.py:743`) has no status guard; `projects/assignments.py:48 revoke_assignments` revokes "preserving submissions and drafts". **A re-assignment would resurface the old draft:** without an active round, `/assignments/{id}/open` opens the workspace by key (`project, document, annotator pseudonym, mode`), and `WorkspaceService.open` resumes an existing draft of that key (`application/workspaces.py:236-300`: `repo.open_draft(key)` for `independent`, `list_workspace_keys(...)` for review-like modes) (plan review R12). Self-consolidation grants a role under the members lock EXCLUSIVE (`application/consolidation_start.py:126-190`, `authz/memberships.py:79 grant_roles`). The text of a document and its target version are derived today in two places (`eligibility.load_variants`/`check_work_plan`, `text_changes.current_target` via `_row_target(_chain(...))`).
+- **Owns:** `src/ontocurator/application/text_targets.py` (create), `src/ontocurator/application/annotation_modes.py` (create), `src/ontocurator/assignments/service.py`, `src/ontocurator/assignments/batch.py` (annotate count in `_Rows`/`_target` only), `src/ontocurator/authz/memberships.py` (`grant_lead_self_role`), `src/ontocurator/application/consolidation_start.py` (the inline self-grant replaced by `grant_lead_self_role` only), `src/ontocurator/api/assignment_routes.py`, `src/ontocurator/application/work_rounds.py` (`:447-451` only), `src/ontocurator/application/problem_reports.py` (`:330-335` only), `src/ontocurator/authz/scoped.py` (`require_workable` only), `src/ontocurator/authz/versions.py` (`may_read_proposals` only), `src/ontocurator/storage/repository.py` (`discard_drafts` helper only), `src/ontocurator/domain/admin_error_codes.py`, contracts, `frontend/src/api/client.ts` (`removeAssignment`), `frontend/src/admin/errors.ts` (messages), `frontend/tests/documents/fixtures.ts` (defaults), `tests/proposal_check_support.py` (create), `tests/test_text_targets.py` (create), `tests/test_proposal_check_assignments.py` (create), `tests/test_annotations_per_text_limit.py` (create), plus test files of existing tests that break because they relied on exceeding the limit (list them in the hand-back; expected candidates: `tests/browser_overview_scenarios.py` `assign_and_annotate`, `tests/test_browser_overview_fixture.py`).
+- **Size / lane / review:** L / backend / yes.
+- **Code to read:** `assignments/service.py:240-620, 743-873`, `assignments/batch.py:160-230, 740-800`, `assignments/eligibility.py:27-60, 120-199` (`load_variants`, `check_work_plan`), `application/text_changes.py:259-283` (`_chain`, `current_target`), `domain/document_rows.py:110-125` (`newest`), `application/consolidation_start.py:97-230`, `application/workspaces.py:203-300`, `projects/assignments.py:48-80`, `storage/repository.py` (`open_draft`, `list_workspace_keys`, draft tables), `api/assignment_routes.py:90-130, 470-560`, `authz/scoped.py:180-205`, `authz/versions.py:35-60`, `tests/work_plan_support.py` (whole), `tests/auth_harness.py:135-160`.
+- **Prerequisites:** `grep -n "def newest_proposal_refs" src/ontocurator/storage/proposal_queries.py` (P2); `grep -c '"assisted"' src/ontocurator/domain/workspace.py` → 0 (L1). Existing tests broken by the limit that P7 owns (`tests/test_browser_consolidation_fixture.py`) are reported, not edited; P7 fixes them (it runs after P3).
 
 **`application/text_targets.py`** (plan review R11: the one helper; P4, P5 and P8 import it, nobody re-derives):
 
@@ -885,32 +872,55 @@ def load_text_mode(conn: Connection, project_id: int, document_id: str) -> TextM
 - `Assignment` gains `annotation_mode: AnnotationMode | None = None`; `_assignments()` selects `AssignmentRow.annotation_mode`.
 - `MODE_FOR_TASK` is deleted; every use calls `workspace_mode(task, annotation_mode)` (`api/assignment_routes.py:483, 501`, `application/work_rounds.py:447-451` reading `assignment["annotation_mode"]`, `application/problem_reports.py:330-335`). `TASK_FOR_MODE` stays.
 - `_create(..., annotation_mode: AnnotationMode | None = None)`: for `task == "annotate"` and `annotation_mode is None` → `mode = load_text_mode(conn, project["id"], document_id)`; if `mode.locked and mode.mode == "proposals"` and the document has no proposals (`newest_proposal_refs(...) == []`) → `DomainError("NO_PROPOSALS_ON_VERSION", {"document_id": document_id})` (plan review R10: a new version of a text whose annotation started from proposals needs its own proposals); stores `mode.mode` (replaces P1's placeholder). `reassign` passes `old["annotation_mode"]`.
+- **One count for the limit** (module-level in `assignments/service.py`, used by `_assign_locked` and the batch planner, so a batch save never refuses a row its planner offered):
+
+```python
+def held_annotations(
+    conn: Connection, project_id: int, document_ids: Iterable[str]
+) -> Counter[str]:
+    """Annotate assignments that fill a version's "annotations per text" slots:
+    not revoked, or revoked with submitted work (that submission is an
+    annotation of the version). The one count for ``_assign_locked`` and the
+    batch planner."""
+    wanted = list(document_ids)
+    if not wanted:
+        return Counter()
+    return Counter(dict(conn.execute(
+        select(AssignmentRow.document_id, func.count())
+        .where(
+            AssignmentRow.project_id == project_id,
+            AssignmentRow.document_id.in_(wanted),
+            AssignmentRow.task == "annotate",
+            AssignmentRow.revoked_at.is_(None)
+            | AssignmentRow.last_submission_id.is_not(None),
+        )
+        .group_by(AssignmentRow.document_id)
+    ).tuples().all()))
+```
+
 - `_assign_locked`, after the `existing` checks and before `check_assignable`, for `task == "annotate"`:
 
 ```python
             limit = int(project["annotations_per_text"])
-            held = conn.execute(
-                select(func.count()).select_from(AssignmentRow).where(
-                    AssignmentRow.project_id == project["id"],
-                    AssignmentRow.document_id == document_id,
-                    AssignmentRow.task == "annotate",
-                    AssignmentRow.revoked_at.is_(None)
-                    | AssignmentRow.last_submission_id.is_not(None),
-                )
-            ).scalar_one()
+            held = held_annotations(conn, project["id"], [document_id])[document_id]
             if held >= limit:
                 raise DomainError(
                     "ANNOTATIONS_PER_TEXT_REACHED", {"limit": limit, "assigned": held}
                 )
 ```
 
+- Batch planner (`assignments/batch.py`): `_Rows.__init__` loads `held_annotations(conn, pid, <document ids of the rows>)` once; `_target` computes `remaining = self.facts.annotations_per_text - self.held[version.document_id]` for `annotate` instead of `len(work)` (`_work` stays for the holders and the other tasks).
+
 - **The limit is per version (`document_id`) on purpose, while the mode lock spans the whole text** (plan review R25): an annotation belongs to the version it was made on and Finalization compares annotations of one version; a new version needs its own annotations (earlier versions' work is not counted against it), but it must not switch between "from proposals" and "from scratch", because the text's results would then mix two ways of working. Revoked assignments with submitted work still count (their submission is an annotation of that version).
-- The guard sits only in `_assign_locked`, so it covers single assign, the row-list POST and distribution confirmations, and **not** `reassign` (which calls `check_assignable(check_plan=False)`, revokes the old row, then `_create`) nor consolidation start (task `review`). The manual seed of cons-three (limit 2, third annotate row) is refused from now on; that is intended (test data only, note it in M1).
+- The guard sits only in `_assign_locked`, so it covers single assign, the row-list POST, distribution confirmations and batch saves (`batch.py:774`), and **not** `reassign` (which calls `check_assignable(check_plan=False)`, revokes the old row, then `_create`) nor consolidation start (task `review`). The manual seed of cons-three (limit 2, third annotate row) is refused from now on; that is intended (test data only, note it in M1).
 - New `remove(self, actor: Actor, assignment_id: int) -> Assignment`: same locking as `revoke`; raises `ASSIGNMENT_REVOKED` when already revoked, `ASSIGNMENT_SUBMITTED` when `status == "submitted"` or `last_submission_id is not None`; else `revoke_assignments(..., reason="removed")` **and discards the draft** (R12): `repo.discard_drafts(conn, project_id, document_id, annotator_pseudonym, mode)` deletes the `drafts` rows of that workspace (children cascade: `draft_annotations`, `draft_evidence`, `review_decisions`) and, when the assignment has an `active_round_id`, appends round state `abandoned` exactly as a clean restart supersedes a round (`work_rounds.py:753`; reuse its helper) so `open` never rebinds it. Edit events and audit stay. The dialog text "Their draft is discarded." is therefore literal.
 - `authz/scoped.py` `require_workable`: after `active_for`, an annotate assignment opens **only its own mode** (plan review R8 guard): `if assignment.task == "annotate" and key.mode != workspace_mode(assignment.task, assignment.annotation_mode): raise AccessDenied("MODE_NOT_ALLOWED")`.
 - `authz/versions.py` `may_read_proposals`: also true for a qualifying `annotate` assignment with `annotation_mode == "proposals"` on the document (an annotator working from proposals may view them in the text view; an annotator working from scratch never).
 
-**"Annotate from proposals myself"** (`application/proposal_checks.py`, route `POST /api/v1/projects/{key}/proposal-checks/self`, body `{"document_id": str}`, response `{"assignment": AssignmentView, "role_granted": bool}`): copy the lock order and authority checks of `ConsolidationStartService.start` (members EXCLUSIVE, project lock, `require_project_management(..., Action.MANAGE_ASSIGNMENTS, target_user_id=actor.user_id)`, `current_access`, `require_document`); then `mode = load_text_mode(...)`; `mode.mode != "proposals"` → `DomainError("PROPOSAL_CHECK_NOT_APPLICABLE", {"source": mode.source})`; grant `["annotator"]` with `grant_roles` when the actor holds `lead` but not `annotator`; then `_assign_locked(conn, actor, project, document_id, actor.user_id, "annotate", True)` (language confirmed implicitly for the lead's own work; `_create` audits the override). A second call returns the same assignment with `role_granted: false`. The consequence under "consolidator is not an annotator" is shown by the UI (U3); the server rule itself is unchanged.
+**"Annotate from proposals myself"** (no new route, no copied locking): the UI calls the existing assign route (`POST /api/v1/projects/{key}/assignments`, the lead's own username, task `annotate`) and opens the returned task. `AssignmentService.assign` allows it when the target is the acting lead:
+- New shared helper `grant_lead_self_role(conn, actor, project_id, project_key, user_id, username, role, now) -> list[Role]` in `authz/memberships.py`: grants `role` with `grant_roles` only when `user_id == actor.user_id`, the actor holds `lead` in the project and lacks `role`; returns the roles added (empty otherwise); the caller holds the members lock EXCLUSIVE. `ConsolidationStartService.start` replaces its inline check and grant (`consolidation_start.py:182-190`, `_holds_role`) by `grant_lead_self_role(..., "adjudicator", now)`; its locks, receipt and `role_granted` stay as they are (`test_consolidation_start_api.py` stays green).
+- `AssignmentService.assign` for `task == "annotate"` and `target == actor.user_id`: `_prepare` takes the members lock EXCLUSIVE instead of SHARED (a membership write follows; add a keyword `exclusive_members: bool = False`), then `grant_lead_self_role(..., "annotator", now)` before `_assign_locked`, and `confirm_language` is implied for the lead's own work (`_create` audits the override). The mode follows the rule like for everybody else; the limit applies; a second call returns the same assignment (the existing `existing` path).
+The consequence under "consolidator is not an annotator" is shown by the UI (U3); the server rule itself is unchanged.
 
 **Routes:** `POST /api/v1/assignments/{id}/remove` (no body) → `AssignmentView`. `AssignmentView` gains `annotation_mode: Literal["proposals", "scratch"] | None = None`.
 
@@ -919,7 +929,6 @@ def load_text_mode(conn: Connection, project_id: int, document_id: str) -> TextM
 | Code | Message |
 |---|---|
 | `ANNOTATIONS_PER_TEXT_REACHED` | `This text already has {limit} annotation assignments, the project's limit (Settings, Workflow).` |
-| `PROPOSAL_CHECK_NOT_APPLICABLE` | `This text is annotated from scratch, so there are no proposals to start from.` |
 | `NO_PROPOSALS_ON_VERSION` | `This version has no tool proposals, but the annotation of this text started from proposals. Import or re-anchor the proposals for this version first.` |
 | `ANNOTATION_MODE_LOCKED` (used by P4) | `The annotation of this text has already started this way, so it cannot change.` |
 | `NO_TOOL_PROPOSALS` (used by P4) | `This text has no tool proposals, so it is annotated from scratch.` |
@@ -1019,7 +1028,7 @@ import pytest
 from proposal_check_support import BASE, assign, client, open_task, proposal_env
 from sqlalchemy import select, update
 
-from ontocurator.storage.tables import ProjectMembershipRow, ProjectRow
+from ontocurator.storage.tables import ProjectMembershipRow, ProjectRow, UserRow
 
 
 @pytest.fixture
@@ -1122,38 +1131,42 @@ def test_remove_needs_the_lead(env):
     assert response.status_code == 403
 
 
-def test_myself_grants_annotator_and_assigns(env):
-    response = env.lead.post(f"{BASE}/proposal-checks/self", json={"document_id": env.c1})
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["role_granted"] is True
-    assert body["assignment"]["task"] == "annotate"
-    assert body["assignment"]["annotation_mode"] == "proposals"
-    again = env.lead.post(f"{BASE}/proposal-checks/self", json={"document_id": env.c1}).json()
-    assert again["assignment"]["id"] == body["assignment"]["id"]
-    assert again["role_granted"] is False
+def _lead_roles(env):
     with env.db.transaction() as conn:
-        roles = set(conn.execute(select(ProjectMembershipRow.role).where(
-            ProjectMembershipRow.project_id == env.pid)).scalars())
-    assert "annotator" in roles
+        return set(conn.execute(
+            select(ProjectMembershipRow.role)
+            .join(UserRow, UserRow.id == ProjectMembershipRow.user_id)
+            .where(ProjectMembershipRow.project_id == env.pid, UserRow.username == "leader")
+        ).scalars())
+
+
+def test_myself_grants_annotator_and_assigns(env):
+    """The existing assign route, the lead's own username (plan P3 "myself")."""
+    assert "annotator" not in _lead_roles(env)
+    body = assign(env, env.c1, "leader")
+    assert body["task"] == "annotate"
+    assert body["annotation_mode"] == "proposals"
+    assert "annotator" in _lead_roles(env)
+    assert assign(env, env.c1, "leader")["id"] == body["id"]
 
 
 def test_myself_counts_towards_the_limit(env):
     assign(env, env.c1, "anno")
     assign(env, env.c1, "anno2")
-    response = env.lead.post(f"{BASE}/proposal-checks/self", json={"document_id": env.c1})
+    response = env.lead.post(f"{BASE}/assignments", json={
+        "document_id": env.c1, "username": "leader", "task": "annotate",
+        "confirm_language": True})
     assert response.json()["code"] == "ANNOTATIONS_PER_TEXT_REACHED"
 
 
-def test_myself_refused_on_a_text_from_scratch(env):
-    response = env.lead.post(f"{BASE}/proposal-checks/self", json={"document_id": env.c2})
-    assert response.json()["code"] == "PROPOSAL_CHECK_NOT_APPLICABLE"
-    assert response.json()["details"]["source"] == "no_proposals"
+def test_myself_follows_the_mode_rule(env):
+    assert assign(env, env.c2, "leader")["annotation_mode"] == "scratch"
 
 
-def test_myself_needs_the_lead(env):
-    response = client(env, "anno").post(f"{BASE}/proposal-checks/self",
-                                        json={"document_id": env.c1})
+def test_self_assign_needs_the_lead(env):
+    response = client(env, "anno").post(f"{BASE}/assignments", json={
+        "document_id": env.c1, "username": "anno", "task": "annotate",
+        "confirm_language": True})
     assert response.status_code == 403
 
 
@@ -1218,60 +1231,37 @@ def test_revoked_submitted_work_still_counts(tmp_path):
 def test_distribution_confirmation_respects_the_limit(tmp_path):
     """Calls DistributionConfirmationService.confirm with three people on c1
     (per_text=2): the third row is refused with ANNOTATIONS_PER_TEXT_REACHED."""
+
+
+def test_batch_counts_revoked_submitted_work_like_single_assign(tmp_path):
+    """per_text=1: anno submits on c1, the lead revokes it. A batch annotate
+    assign over c1 and c2 offers c1 no slot in its preview and saves c2
+    (no ANNOTATIONS_PER_TEXT_REACHED, so the batch is not rolled back)."""
 ```
 
-The bodies without code: submit with `work_plan_support.submit`, revoke through the revoke route; build the confirmation through the service as `tests/test_distribution_api.py` does (read it; copy its request shape); assert the refusal code.
+The bodies without code: submit with `work_plan_support.submit`, revoke through the revoke route; build the confirmation through the service as `tests/test_distribution_api.py` does (read it; copy its request shape); assert the refusal code; drive the batch through its preview and save routes as `tests/test_assignment_batch.py` does (read it; copy its request shape).
 
 - [ ] **Step 2:** `uv run pytest -n 4 tests/test_text_targets.py tests/test_proposal_check_assignments.py tests/test_annotations_per_text_limit.py -q` → FAIL. Implement.
 - [ ] **Step 3:** `uv run pytest -n 4 tests/test_text_targets.py tests/test_proposal_check_assignments.py tests/test_annotations_per_text_limit.py tests/test_assignments.py tests/test_assignment_batch.py tests/test_distribution_api.py tests/test_consolidation_start_api.py tests/test_assignment_round_open_api.py tests/test_browser_overview_fixture.py tests/test_browser_documents_fixture.py tests/test_browser_lead_workflow_fixture.py tests/test_problem_reports*.py tests/test_text_change*.py -q` (expand globs with `ls`) → PASS. A test that relied on more annotate assignments than the limit: raise the project's `annotations_per_text` in that test's setup (never weaken the rule); list each in the hand-back.
-- [ ] **Step 4: Contracts (token 3).** `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate && uv run python scripts/export_admin_error_codes.py`; `client.ts`: `removeAssignment(id: number): Promise<AssignmentView>` (`POST /api/v1/assignments/${id}/remove`), `checkProposalsMyself(key: string, documentId: string): Promise<{ assignment: AssignmentView; role_granted: boolean }>`; `errors.ts` messages above; `fixtures.ts` defaults (`annotation_mode: null` where `AssignmentView` objects are built); `npm --prefix frontend run typecheck`; `bash scripts/check.sh --only static`.
-- **Done:** every assign path refuses above the limit; the mode is set once at creation and the lock counts submitted work of revoked assignments; remove discards the draft; an annotate assignment opens only its own mode; `MODE_FOR_TASK` gone (`grep -rn MODE_FOR_TASK src` empty); annotators working from scratch never see proposals (test); `text_targets.py` is the only new derivation of a text's target document.
+- [ ] **Step 4: Contracts.** `uv run python scripts/export_openapi.py && npm --prefix frontend run api:generate && uv run python scripts/export_admin_error_codes.py`; `client.ts`: `removeAssignment(id: number): Promise<AssignmentView>` (`POST /api/v1/assignments/${id}/remove`); `errors.ts` messages above; `fixtures.ts` defaults (`annotation_mode: null` where `AssignmentView` objects are built); `npm --prefix frontend run typecheck`; `bash scripts/check.sh --only static`.
+- **Done:** every assign path refuses above the limit, and the batch planner and `_assign_locked` use the one count `held_annotations`; the lead's self-grant exists once (`grant_lead_self_role`, used by assign and consolidation start); the mode is set once at creation and the lock counts submitted work of revoked assignments; remove discards the draft; an annotate assignment opens only its own mode; `MODE_FOR_TASK` gone (`grep -rn MODE_FOR_TASK src` empty); annotators working from scratch never see proposals (test); `text_targets.py` is the only new derivation of a text's target document.
 - **Commit:** `feat(assignments): annotation mode on assignments, per-text limit, remove, annotate from proposals myself`
 
-### P4: Project setting, plan override, mode lock, new text versions (contracts writer 4)
+### P4: Project setting, plan override, mode lock, new text versions (contracts writer)
 
-- **Goal:** Settings → Workflow "Texts with tool proposals"; per-text (and bulk) override of the annotation mode; refusal while the mode is locked; a defined rule for new text versions when the annotation works from proposals (plan review R10).
+- **Goal:** Settings → Workflow "Texts with tool proposals"; per-text (and bulk) override of the annotation mode through the existing plan routes; refusal while the mode is locked; a defined rule for new text versions when the annotation works from proposals (plan review R10).
 - **Spec:** §1 Q3 (setting, override via "Change plan…", lock), §1 "New text versions"; §2 footer "Change plan…" content (F5) server side.
-- **Owns:** `src/ontocurator/projects/service.py`, `src/ontocurator/api/annotation_mode_views.py` (create), `src/ontocurator/application/plan_annotation_modes.py` (create), `src/ontocurator/api/work_plan_routes.py` (two routes + models), `src/ontocurator/application/text_changes.py` (from-proposals reasons; `current_target` delegates to `application/text_targets.py`), `src/ontocurator/domain/admin_error_codes.py`, contracts (token 4), `frontend/src/api/client.ts` (`setAnnotationMode`, `setAnnotationModes`, settings type), `frontend/tests/documents/fixtures.ts`, `frontend/tests/projectSettings.test.tsx` (payload expectation only), `tests/test_annotation_mode_settings_api.py` (create), `tests/test_plan_annotation_mode_api.py` (create), `tests/test_text_change_from_proposals.py` (create).
-- **Size / lane / review:** M / heavy / yes.
-- **Code to read:** `projects/service.py:50-80, 330-360` (`ProjectSettingsChange`, `ProjectSettings`, `update_settings` None-keeps pattern for `annotations_per_text`/`import_plan`), `api/project_routes.py:360-380`, `api/work_plan_routes.py:100-130, 275-300`, `application/work_plans.py:292-330` (`_lock`, audit pattern), `storage/work_plan_store.py:221-260, 420-470` (`plan_rows`, `ensure_rows`), `application/text_changes.py:160-170, 280-300, 482-502, 618-680, 867-920` (`_not_applicable`, `_require_open_annotation`, `_check_submission`, `move_to_version`, `carry`), the reason messages of `TEXT_CHANGE_NOT_APPLICABLE` (`grep -rn "not_annotation" frontend/src src/ontocurator`).
-- **Prerequisites:** `grep -n "def load_text_mode" src/ontocurator/application/annotation_modes.py` (P3 committed); `grep -n "def text_target_document" src/ontocurator/application/text_targets.py` (P3); contracts token 4.
-- **Contract-first (W6, Global rule 21):** start with Step 3 as the contract step: `tool_proposal_mode` in `ProjectSettingsChange`/`ProjectSettings` (default `"proposals"`, written by `update_settings`), `api/annotation_mode_views.py`, both routes with their request and response models whose handlers raise `HTTPException(status_code=501)` until Step 2 replaces them (registered before the PATCH route), regenerate, `client.ts`, fixtures, the `projectSettings.test.tsx` payload; checks: typecheck, `bash scripts/check.sh --only static`, `uv run pytest tests/test_projects_api.py -q` (heavy slot). Hand back `CONTRACT READY`; after the orchestrator has merged it, continue with Steps 1–2 (the tests replace the 501 stubs).
+- **Owns:** `src/ontocurator/projects/service.py`, `src/ontocurator/api/work_plan_routes.py` (models only), `src/ontocurator/application/work_plans.py` (`patch_row`, `bulk_preview`, `bulk_save`, `set_rows`, `_audit_cases`), `src/ontocurator/storage/work_plan_store.py` (read and write `annotation_mode` with the flags), `src/ontocurator/domain/work_plans.py` (only if the flags type must carry the mode), `src/ontocurator/application/text_changes.py` (from-proposals reasons; `current_target` delegates to `application/text_targets.py`), `src/ontocurator/domain/admin_error_codes.py`, contracts, `frontend/src/api/client.ts` (settings type), `frontend/tests/documents/fixtures.ts`, `frontend/tests/projectSettings.test.tsx` (payload expectation only), `tests/test_annotation_mode_settings_api.py` (create), `tests/test_plan_annotation_mode_api.py` (create), `tests/test_text_change_from_proposals.py` (create).
+- **Size / lane / review:** M / backend / –.
+- **Code to read:** `projects/service.py:50-80, 330-360` (`ProjectSettingsChange`, `ProjectSettings`, `update_settings` None-keeps pattern for `annotations_per_text`/`import_plan`), `api/project_routes.py:360-380`, `api/work_plan_routes.py:20-160, 275-300` (`PlanFlagsView`, `UndoRowView`, `PlanRowPatch` `:103`, `LanguageChangeView` `:122`, `LanguagePreviewView`, `BulkResult`), `application/work_plans.py:140-170, 292-330, 586-870` (`_audit_cases`, `_lock`, `patch_row`, `bulk_preview`, `bulk_save`, `set_rows`), `storage/work_plan_store.py:221-260, 420-470` (`plan_rows`, `ensure_rows`), `application/text_changes.py:160-170, 280-300, 482-502, 618-680, 867-920` (`_not_applicable`, `_require_open_annotation`, `_check_submission`, `move_to_version`, `carry`), the reason messages of `TEXT_CHANGE_NOT_APPLICABLE` (`grep -rn "not_annotation" frontend/src src/ontocurator`).
+- **Prerequisites:** `grep -n "def load_text_mode" src/ontocurator/application/annotation_modes.py` (P3 committed); `grep -n "def text_target_document" src/ontocurator/application/text_targets.py` (P3).
 
 **Settings:** `ProjectSettingsChange.tool_proposal_mode: AnnotationMode | None = None` (None keeps, like `annotations_per_text`); `ProjectSettings.tool_proposal_mode: AnnotationMode = "proposals"`; `update_settings` writes it (extend the name loop at `:348`). The settings audit records the change like the other workflow fields.
 
-**Shared view** `api/annotation_mode_views.py`:
-
-```python
-from typing import Literal
-
-from pydantic import BaseModel
-
-from ontocurator.domain.annotation_modes import TextMode
-
-
-class AnnotationModeView(BaseModel):
-    """The text's annotation mode as the card, plan dialog and rows show it."""
-
-    mode: Literal["proposals", "scratch"]
-    source: Literal["no_proposals", "locked", "plan", "project"]
-    locked: bool
-    override: Literal["proposals", "scratch"] | None = None
-    proposal_count: int = 0
-
-    @classmethod
-    def of(cls, mode: TextMode, override: str | None, proposal_count: int) -> "AnnotationModeView":
-        return cls(mode=mode.mode, source=mode.source, locked=mode.locked,
-                   override=override, proposal_count=proposal_count)
-```
-
-**Override service** `application/plan_annotation_modes.py`, class `PlanAnnotationModes(db, actor, access)`:
-- `set_one(key, case_id, language, mode: AnnotationMode | None) -> AnnotationModeView`: project lock exclusive (as `WorkPlanService._lock(conn, key, exclusive=True)`), lead only (`MANAGE_ASSIGNMENTS`, as `WorkPlanService`), `store.ensure_rows` for the row; `TextMode` of the row's target document (`text_target_document`, never a second derivation) via `load_text_mode`; refuse `ANNOTATION_MODE_LOCKED` when `locked` and the requested effective mode differs from the locked one (setting the same mode or clearing the override while locked is allowed and stored, it only matters after an unlock); refuse `NO_TOOL_PROPOSALS` when `mode == "proposals"` and the text has no proposals; write `WorkPlanFlagsRow.annotation_mode`; audit `plan.annotation_mode` with `{case_id, language, from, to}`; return the new view.
-- `set_many(key, rows: list[RowKey], mode) -> {"changed": [RowRef], "locked": [RowRef], "no_proposals": [RowRef]}`: same rules per row, skipping refused rows instead of failing (the bulk dialog shows the counts).
-
-**Routes** (`api/work_plan_routes.py`):
-- `PUT /api/v1/projects/{key}/work-plans/{case_id:path}/{language}/annotation-mode`, body `{"mode": "proposals" | "scratch" | null}` (`extra="forbid"`) → `AnnotationModeView`. Register it **before** the PATCH `/{case_id:path}/{language}` route so the path converter does not swallow `/annotation-mode` (verify with a test).
-- `PUT /api/v1/projects/{key}/work-plans/annotation-modes`, body `{"rows": [RowRefView], "mode": "proposals" | "scratch" | null}` (max `MAX_SELECTED_ROWS`) → `{"changed": [...], "locked": [...], "no_proposals": [...]}`.
+**Override in the existing plan routes** (no new route, no new module): the mode travels with the flags, so the existing lock (`_lock(conn, key, exclusive=True)`), lead check, row revision, Undo, audit and bulk preview apply unchanged, and **a save is atomic** (flags and mode in one transaction; a refusal saves nothing).
+- Models (`api/work_plan_routes.py`): `PlanRowPatch.annotation_mode: Literal["proposals", "scratch", "project"] | None = None` (None keeps; `"project"` clears the override); `LanguageChangeView.annotation_mode: Literal["keep", "proposals", "scratch", "project"] = "keep"`; `PlanFlagsView.annotation_mode: Literal["proposals", "scratch"] | None = None` (the stored override); `UndoRowView.annotation_mode: Literal["proposals", "scratch"] | None = None` (exact restore value; Undo views always carry it); `LanguagePreviewView.mode_locked: int = 0`, `mode_no_proposals: int = 0`; `BulkResult.mode_locked: list[RowRefView] = []`, `mode_no_proposals: list[RowRefView] = []`.
+- Rule per row (one function in `application/work_plans.py`, used by all four paths): `TextMode` of the row's target document (`text_target_document`, never a second derivation) via `load_text_mode`; **refused** with `ANNOTATION_MODE_LOCKED` when `locked` and the requested effective mode differs from the locked one (setting the same mode or `"project"` while locked is allowed and stored, it only matters after an unlock); **refused** with `NO_TOOL_PROPOSALS` when the request is `"proposals"` and the text has no proposals; else write `WorkPlanFlagsRow.annotation_mode`. A mode change counts as a row change (revision bump, Undo row, `_audit_cases` records `annotation_mode` beside the flags).
+- `patch_row`: a refusal raises (the whole PATCH, flags included, rolls back). `bulk_preview` counts refused rows per language in `mode_locked` / `mode_no_proposals`; `bulk_save` and `set_rows` (bulk Undo) skip the mode of refused rows (their flags are still saved) and list them in `mode_locked` / `mode_no_proposals` (the bulk dialog reports the counts).
 
 **New text versions (R10; spec §1 "New text versions").** The lock spans the text, every version needs its own annotations (P3: limit per version), and "from proposals" work is never moved or carried to another version (A6), because its decisions refer to the proposals of its own version:
 - `move_to_version` of an open annotate assignment with `annotation_mode == "proposals"` → `_not_applicable("from_proposals")` (new reason; message `Annotation from proposals stays on its version. Remove the assignment and assign the new version; its draft is discarded.`).
@@ -1313,67 +1303,84 @@ def test_invalid_value_is_refused(tmp_path):
 
 ```python
 from proposal_check_support import BASE, assign, client, proposal_env
+from work_plan_support import revision_of
 
-URL = f"{BASE}/work-plans/c1/en/annotation-mode"
+
+def patch(env, mode, case="c1", user=None, **flags):
+    who = env.lead if user is None else client(env, user)
+    return who.patch(f"{BASE}/work-plans/{case}/en", json={
+        "annotation_mode": mode, "expected_revision": revision_of(env, case)} | flags)
 
 
 def test_override_scratch_then_assignment_is_scratch(tmp_path):
     env = proposal_env(tmp_path)
-    response = env.lead.put(URL, json={"mode": "scratch"})
+    response = patch(env, "scratch")
     assert response.status_code == 200, response.text
-    assert response.json() == {"mode": "scratch", "source": "plan", "locked": False,
-                               "override": "scratch", "proposal_count": 3}
+    assert response.json()["flags"]["annotation_mode"] == "scratch"
     assert assign(env, env.c1, "anno")["annotation_mode"] == "scratch"
 
 
-def test_clearing_the_override_returns_to_the_project_setting(tmp_path):
+def test_project_returns_to_the_project_setting(tmp_path):
     env = proposal_env(tmp_path)
-    env.lead.put(URL, json={"mode": "scratch"})
-    body = env.lead.put(URL, json={"mode": None}).json()
-    assert (body["mode"], body["source"], body["override"]) == ("proposals", "project", None)
+    patch(env, "scratch")
+    assert patch(env, "project").json()["flags"]["annotation_mode"] is None
+    assert assign(env, env.c1, "anno")["annotation_mode"] == "proposals"
 
 
 def test_change_is_refused_while_locked(tmp_path):
     env = proposal_env(tmp_path)
     assign(env, env.c1, "anno")
-    response = env.lead.put(URL, json={"mode": "scratch"})
-    assert response.json()["code"] == "ANNOTATION_MODE_LOCKED"
-    same = env.lead.put(URL, json={"mode": "proposals"})
-    assert same.status_code == 200 and same.json()["locked"] is True
+    assert patch(env, "scratch").json()["code"] == "ANNOTATION_MODE_LOCKED"
+    assert patch(env, "proposals").status_code == 200
 
 
-def test_check_is_refused_without_proposals(tmp_path):
-    env = proposal_env(tmp_path)
-    response = env.lead.put(f"{BASE}/work-plans/c2/en/annotation-mode", json={"mode": "proposals"})
-    assert response.json()["code"] == "NO_TOOL_PROPOSALS"
-
-
-def test_bulk_skips_locked_and_proposal_free_rows(tmp_path):
+def test_a_refused_mode_saves_no_flags(tmp_path):
+    """Flags and mode are one PATCH, one transaction (atomic save)."""
     env = proposal_env(tmp_path)
     assign(env, env.c1, "anno")
-    body = env.lead.put(f"{BASE}/work-plans/annotation-modes", json={
-        "rows": [{"case_id": "c1", "language": "en"}, {"case_id": "c2", "language": "en"}],
-        "mode": "scratch"}).json()
-    assert body["locked"] == [{"case_id": "c1", "language": "en"}]
-    assert body["changed"] == [{"case_id": "c2", "language": "en"}]
-    assert body["no_proposals"] == []
+    before = revision_of(env, "c1")
+    assert patch(env, "scratch", review=True).json()["code"] == "ANNOTATION_MODE_LOCKED"
+    assert revision_of(env, "c1") == before
+
+
+def test_proposals_refused_without_proposals(tmp_path):
+    env = proposal_env(tmp_path)
+    assert patch(env, "proposals", case="c2").json()["code"] == "NO_TOOL_PROPOSALS"
+
+
+def test_undo_restores_the_previous_mode(tmp_path):
+    env = proposal_env(tmp_path)
+    undo = patch(env, "scratch").json()["undo"]
+    restored = env.lead.put(f"{BASE}/work-plans/rows", json={
+        "rows": undo["rows"], "expected_revisions": undo["revisions"], "undo": True})
+    assert restored.status_code == 200, restored.text
+    assert assign(env, env.c1, "anno")["annotation_mode"] == "proposals"
+
+
+def test_bulk_preview_and_save_skip_locked_rows(tmp_path):
+    env = proposal_env(tmp_path)
+    assign(env, env.c1, "anno")
+    body = {"rows": [{"case_id": "c1", "language": "en"}, {"case_id": "c2", "language": "en"}],
+            "languages": {"en": {"annotation_mode": "scratch"}}}
+    preview = env.lead.post(f"{BASE}/work-plans/bulk/preview", json=body).json()
+    assert preview["languages"][0]["mode_locked"] == 1
+    saved = env.lead.put(f"{BASE}/work-plans/bulk",
+                         json=body | {"expected_revisions": preview["revisions"]})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["mode_locked"] == [{"case_id": "c1", "language": "en"}]
+    assert saved.json()["mode_no_proposals"] == []
 
 
 def test_override_is_lead_only(tmp_path):
     env = proposal_env(tmp_path)
-    assert client(env, "anno").put(URL, json={"mode": "scratch"}).status_code == 403
-
-
-def test_override_route_does_not_clash_with_the_plan_patch(tmp_path):
-    env = proposal_env(tmp_path)
-    assert env.lead.put(URL, json={"mode": "scratch"}).status_code == 200
-    rows = env.lead.get(f"{BASE}/document-rows").json()
-    assert rows  # the plan of c1-en is still readable
+    assert patch(env, "scratch", user="anno").status_code == 403
 ```
 
+(Adapt the bulk request shape to `BulkPlanRequest` and its `languages` key for the rows' language, and the Undo request to `PlanRowsSet`; keep the assertions' meaning.)
+
 - [ ] **Step 2:** `uv run pytest -n 4 tests/test_annotation_mode_settings_api.py tests/test_plan_annotation_mode_api.py tests/test_text_change_from_proposals.py -q` → FAIL; implement; → PASS. Then `uv run pytest -n 4 tests/test_projects_settings*.py tests/test_work_plan*.py tests/test_text_change*.py -q` (expand with `ls`).
-- [ ] **Step 3: Contracts (token 4).** Regenerate; `client.ts`: `setAnnotationMode(key, caseId, language, mode: "proposals" | "scratch" | null): Promise<AnnotationModeView>`, `setAnnotationModes(key, rows: RowRef[], mode): Promise<{ changed: RowRef[]; locked: RowRef[]; no_proposals: RowRef[] }>`; settings type gains `tool_proposal_mode`; `frontend/tests/projectSettings.test.tsx:472-501` expects the unchanged payload (the field is added to the form in U2, not here, so only typing changes); `npm --prefix frontend run typecheck`; `bash scripts/check.sh --only static`.
-- **Done:** setting, single and bulk override work; lock refusal tested; new-version rule tested for open and submitted work from proposals; error codes catalogued.
+- [ ] **Step 3: Contracts.** Regenerate; `client.ts`: no new function (the plan PATCH and bulk calls send the new fields through their generated types); settings type gains `tool_proposal_mode`; `frontend/tests/projectSettings.test.tsx:472-501` expects the unchanged payload (the field is added to the form in U2, not here, so only typing changes); `fixtures.ts` defaults for the new plan fields; `npm --prefix frontend run typecheck`; `bash scripts/check.sh --only static`.
+- **Done:** setting, single and bulk override work through the existing plan routes (one transaction with the flags; lock, revision, Undo, audit and bulk preview reused); lock refusal and the atomic save tested; new-version rule tested for open and submitted work from proposals; error codes catalogued.
 - **Commit:** `feat(workflow): tool proposal setting and per-text annotation mode`
 
 ### P6: Export fields for annotation from proposals
@@ -1382,8 +1389,8 @@ def test_override_route_does_not_clash_with_the_plan_patch(tmp_path):
 - **Spec:** §1 "Export", §1 "Targets"; Goal 1 ("tool precision can be measured from the export").
 - **Facts verified:** `receipt.json` already carries `review_decisions` (`exchange/final_export.py:175`) as raw `ReviewDecision` dumps without the proposal URN; the T1 bundles map `confirmed`→method `adopted` with the proposal URN in `source_refs` and `changed`→`edited` (`exchange/t1.py:611-650`, extended to proposal checks by P2); `index.csv` column `submission_kind` (P2 adds `proposal_check`); proposal URN: `exchange/t1.py:463 _proposal_ref(annotation_id, project)`.
 - **Owns:** `src/ontocurator/exchange/proposal_checks.py` (create), `src/ontocurator/exchange/final_export.py`, `src/ontocurator/exchange/final_export_guide.py` (README text), `docs/scientific-workflow.md` (new section "Annotation from proposals in the export"; after L1's removals), `tests/test_proposal_check_export.py` (create).
-- **Size / lane / review:** S / heavy / –.
-- **Prerequisites:** `grep -n "def newest_proposal_set" src/ontocurator/storage/proposal_queries.py` (P2); L1 committed (`docs/scientific-workflow.md`, `final_export_guide.py` chain); P3 committed for the heavy tests (`tests/proposal_check_support.py`, `open_task`, annotation from proposals). **Schedule (W4 pre, W6 post):** pre-phase after L1 is merged: `exchange/proposal_checks.py`, receipt, README and docs text, the pure tests; post-phase after P3 is merged: the two heavy tests and the export regression run.
+- **Size / lane / review:** S / backend / –.
+- **Prerequisites:** `grep -n "def newest_proposal_set" src/ontocurator/storage/proposal_queries.py` (P2); L1 committed (`docs/scientific-workflow.md`, `final_export_guide.py` chain); P3 committed (`tests/proposal_check_support.py`, `open_task`, annotation from proposals).
 - **Code to read:** `storage/proposal_queries.py` (P2), `exchange/final_export.py:100-200`, `exchange/final_export_guide.py:200-260` (README lines), `exchange/t1.py:455-470, 600-650`, one existing final-export test (`ls tests | grep -i final_export`) for the build pattern.
 
 `exchange/proposal_checks.py`:
@@ -1457,15 +1464,14 @@ def proposal_check_record(
 - **Done:** additive receipt key and README/docs text; existing exports byte-identical for projects without proposal checks (existing tests green).
 - **Commit:** `feat(export): per-proposal decisions of proposal checks`
 
-### P7: Consolidation server: one finding per group, tool-proposal marker (contracts writer 6)
+### P7: Consolidation server: one finding per group, tool-proposal marker (contracts writer)
 
 - **Goal:** a group resolves to exactly one finding; `keep_both`, `term_choices` and `term_parts` leave the API and the code (no read path: L1's migration deleted the stored keep-both consolidations, D1); each member says whether its finding comes from a tool proposal (robot icon, D2); a progress helper for the read model.
 - **Spec:** §3 ("One group = … exactly one finding. Keep both and any split off are removed"; "The server rules stay consistent with the UI: one term per group; a choice is required for every disagreeing field; Keep both and term_choices are removed from the API (with tests)"; "findings that originate from a tool proposal carry the robot icon").
-- **Facts verified:** keep-both code: `application/consolidation_resolve.py:9-25` (docstring), `:181-191` (`ResolveCommand.action`/`term_choices`), `:519-560` (`_plans`), `:233-239` (`cons_ids`); `domain/agreement.py:85-91` (`TermPart`), `:94-110` (`Group.term_parts`), `:342-349`; `application/consolidation.py:477-482` (serialisation); `api/consolidation_routes.py:53-57, 70, 74, 161`; `domain/review.py:10` (`ConsolidationAction`). "Split off" exists nowhere in code. Stored decisions with `keep_both` are gone after migration 0021 (L1), so no read compatibility is needed (plan review R14 moot). A member finding comes from a tool proposal when its annotation id (any version) is a `proposal_annotations` row of the project, or when it is the `replacement` of a decision whose target is one (a corrected proposal) in the member's source submission.
-- **Owns:** `src/ontocurator/application/consolidation_resolve.py`, `src/ontocurator/application/consolidation.py`, `src/ontocurator/domain/agreement.py`, `src/ontocurator/api/consolidation_routes.py`, `src/ontocurator/domain/review.py` (`ConsolidationAction`), contracts (token 6), `frontend/src/api/client.ts` (`ConsolidationResolvePayload` without `term_choices`), `frontend/tests/consolidation/fixtures.ts`, `frontend/tests/consolidationEditor.test.tsx` (fixture field only), `tests/test_consolidation_relevant_differences.py`, `tests/test_consolidation_resolve_api.py`, `tests/test_consolidation_resolve_validation.py`, `tests/test_consolidation_submit_gating.py`, `tests/test_agreement_groups.py`, `tests/test_browser_consolidation_fixture.py`, `tests/test_consolidation_progress.py` (create), `tests/test_consolidation_tool_proposals.py` (create), plus the frontend compile-fix files of Step 4.
-- **Size / lane / review:** M / heavy / yes.
-- **Prerequisites:** contracts token 6 (after P5's contract step); L1 committed (`grep -n "keep_both" src/ontocurator/storage/migrations/versions/0021_remove_legacy_workflows.py` finds the purge); P3 committed for the post-phase (`grep -n "def proposal_env" tests/proposal_check_support.py`).
-- **Schedule (W4 pre, W6 post):** pre-phase after L1 is merged: the backend code and tests of Steps 1–2, except running `tests/test_consolidation_tool_proposals.py` (needs P3's `tests/proposal_check_support.py` and annotation from proposals). Post-phase after P3 is merged: that test, the fix of `tests/test_browser_consolidation_fixture.py` if P3's limit broke it, then Steps 3–4 with token 6 (regeneration and the frontend compile fix).
+- **Facts verified:** keep-both code: `application/consolidation_resolve.py:9-25` (docstring), `:181-191` (`ResolveCommand.action`/`term_choices`), `:519-560` (`_plans`), `:233-239` (`cons_ids`); `domain/agreement.py:85-91` (`TermPart`), `:94-110` (`Group.term_parts`), `:342-349`; `application/consolidation.py:477-482` (serialisation); `api/consolidation_routes.py:53-57, 70, 74, 161`; `domain/review.py:10` (`ConsolidationAction`). "Split off" exists nowhere in code. Stored decisions with `keep_both` are gone after migration 0020 (L1), so no read compatibility is needed (plan review R14 moot). A member finding comes from a tool proposal when its annotation id (any version) is a `proposal_annotations` row of the project, or when it is the `replacement` of a decision whose target is one (a corrected proposal) in the member's source submission.
+- **Owns:** `src/ontocurator/application/consolidation_resolve.py`, `src/ontocurator/application/consolidation.py`, `src/ontocurator/domain/agreement.py`, `src/ontocurator/api/consolidation_routes.py`, `src/ontocurator/domain/review.py` (`ConsolidationAction`), contracts, `frontend/src/api/client.ts` (`ConsolidationResolvePayload` without `term_choices`), `frontend/tests/consolidation/fixtures.ts`, `frontend/tests/consolidationEditor.test.tsx` (fixture field only), `tests/test_consolidation_relevant_differences.py`, `tests/test_consolidation_resolve_api.py`, `tests/test_consolidation_resolve_validation.py`, `tests/test_consolidation_submit_gating.py`, `tests/test_agreement_groups.py`, `tests/test_browser_consolidation_fixture.py`, `tests/test_consolidation_progress.py` (create), `tests/test_consolidation_tool_proposals.py` (create), plus the frontend compile-fix files of Step 4.
+- **Size / lane / review:** M / backend / yes.
+- **Prerequisites:** L1 committed (`grep -n "keep_both" src/ontocurator/storage/work_purge.py` finds the purge); P3 committed (`grep -n "def proposal_env" tests/proposal_check_support.py`). Also fix `tests/test_browser_consolidation_fixture.py` if P3's limit broke it (P3's hand-back says so).
 
 Changes:
 - `ResolveCommand.action: Literal["keep", "choose", "leave_out"]`; field `term_choices` removed. Before `ResolveCommand.model_validate`, `resolve()` refuses legacy payloads with a clear message: `if envelope.payload.get("action") == "keep_both" or "term_choices" in envelope.payload: raise _invalid("Keep both is no longer offered: choose one finding and add a second finding on the text")`.
@@ -1527,21 +1533,38 @@ def test_choose_on_term_differs_writes_one_finding(cons):
   Remove or rewrite every keep-both test listed under "Facts verified" (`grep -rn "keep_both\|term_choices\|term_parts" tests` must end empty except `test_keep_both_is_refused`, `test_term_choices_are_refused`, comments, and the unrelated test name `tests/test_translation_registry.py:174 test_two_translation_uploads_at_once_keep_both_languages`): `test_keep_both_with_three_people_asks_the_values_within_one_term` → delete; `test_term_choices_go_with_keep_both_only` → delete (covered above); `test_keep_both_on_term_differs_writes_two_annotations` → replace by `test_choose_on_term_differs_writes_one_finding`; the `("term_differs", "keep_both")` parametrisations → `("term_differs", "choose")`; `test_term_parts_name_the_decisions_within_one_term` → delete; `term_parts == {}` asserts → delete the line.
   `tests/test_consolidation_tool_proposals.py` (`proposal_env` from `tests/proposal_check_support.py`, two "from proposals" submissions through the API as in P6, consolidation started as in `tests/test_consolidation_start_api.py`): `test_confirmed_proposals_are_marked` (members whose finding is a confirmed proposal: `from_tool_proposal is True`), `test_corrected_proposals_are_marked`, `test_added_findings_are_not_marked`, `test_work_from_scratch_is_not_marked` (the three-person scenario of `build_round`: all `False`).
 - [ ] **Step 2:** `uv run pytest -n 4 tests/test_consolidation_resolve_validation.py tests/test_consolidation_resolve_api.py tests/test_consolidation_relevant_differences.py tests/test_consolidation_submit_gating.py tests/test_agreement_groups.py tests/test_consolidation_progress.py tests/test_consolidation_tool_proposals.py tests/test_browser_consolidation_fixture.py tests/test_consolidation_read_api.py tests/test_consolidation_auto_take_over.py -q` → FAIL first, then PASS after the changes.
-- [ ] **Step 3: Contracts (token 6).** Regenerate; `client.ts` `ConsolidationResolvePayload.action: "keep" | "choose" | "leave_out"`, no `term_choices`; frontend fixtures drop `term_parts`, add `from_tool_proposal: false` to members.
+- [ ] **Step 3: Contracts.** Regenerate; `client.ts` `ConsolidationResolvePayload.action: "keep" | "choose" | "leave_out"`, no `term_choices`; frontend fixtures drop `term_parts`, add `from_tool_proposal: false` to members.
 - [ ] **Step 4: Minimal frontend compile fix** (the screen is rewritten in U6; here only remove what no longer exists, so the tree stays green): in `frontend/src/consolidation/groupModel.ts` delete `KEEP_BOTH` (`:45`), `keepBothAsks` (`:158`), the `keepBoth` parameter and the "Keep both" Term option of `rowsOf` (`:166-199`), `keepsBoth` (`:207`), `keepBothChoices` (`:264`) and the keep-both branch of `resolvePayload` (`:273-279`), the "kept both" summaries (`:287`, `:297-299`, no replacement label); in `GroupCard.tsx` delete the keep-both hint (`:244`) and its option wiring; in `consolidationText.ts` delete the keep-both count (`:71`). Tests: delete `groupCard.test.tsx` "offers one term, keep both or another term when terms differ" (`:74`) and "asks the values that differ within one term before keeping both (three people)" (`:173`), `model.test.ts` "asks the values within one term when both terms are kept (three people)" (`:119`); add `model.test.ts` `it("never offers keep both", …)` asserting no row option label contains `"both"` for the term-differs fixture group. These files join this WP's Owns (`frontend/src/consolidation/groupModel.ts`, `GroupCard.tsx`, `consolidationText.ts`, `frontend/tests/consolidation/groupCard.test.tsx`, `model.test.ts`). Run `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/consolidation`, `npm --prefix frontend run typecheck`, `bash scripts/check.sh --only static`.
-- **Done:** `grep -rn "keep_both\|term_choices\|term_parts\|TermPart" src frontend/src` shows only the legacy-payload refusal in `consolidation_resolve.py`, migration 0021 and `storage/work_purge.py`; `grep -rn "keep_both\|term_choices\|term_parts" tests` shows only the two refusal tests, L1's migration test and `tests/test_translation_registry.py:174` (unrelated name).
+- **Done:** `grep -rn "keep_both\|term_choices\|term_parts\|TermPart" src frontend/src` shows only the legacy-payload refusal in `consolidation_resolve.py`, migration 0020 and `storage/work_purge.py`; `grep -rn "keep_both\|term_choices\|term_parts" tests` shows only the two refusal tests, L1's migration test and `tests/test_translation_registry.py:174` (unrelated name).
 - **Commit:** `feat(consolidation): one finding per group, keep both removed, tool-proposal marker`
 
-### P5: Read model: proposals, modes, assignment dates, filter, progress, My tasks (contracts writer 5)
+### P5: Read model: proposals, modes, assignment dates, filter, progress, My tasks (contracts writer)
 
 - **Goal:** one Documents request gives the card and the one-line rows everything: proposal count, annotation mode, assignment dates with assigner, consolidation progress; filter "With tool proposals / Without"; My tasks carries mode and date.
 - **Spec:** §2 (path states, chips with dates, "Every assignment shown anywhere … carries its assignment date"), §2b (robot icon, filter), §1 (assign dialog and card show the mode).
 - **Facts verified:** no proposal count and no assignment date in the row payload (`api/document_row_routes.py:100-116 WorkItemView`, `application/document_rows.py:557-588 _assignments` does not select `created_at`); `TaskSummary` (`assignments/service.py:100`) has only `updated_at`; facets in `application/document_row_facets.py` (`FacetGroup`, `facet_values`); filters parsed in `api/document_row_routes.py:520-579 _filters`; row dict built in `application/document_row_page.py:482-570`.
-- **Owns:** `src/ontocurator/domain/document_rows.py` (`AssignmentFact`), `src/ontocurator/application/document_rows.py`, `src/ontocurator/application/document_row_page.py`, `src/ontocurator/application/document_row_facets.py`, `src/ontocurator/api/document_row_routes.py`, `src/ontocurator/assignments/service.py` (`TaskSummary`, `my_tasks`), `src/ontocurator/api/assignment_routes.py` (`TaskSummaryView`), contracts (token 5), `frontend/src/api/client.ts` (query param `proposals`), `frontend/tests/documents/fixtures.ts` (defaults), `tests/test_document_rows_proposals.py` (create), `tests/test_my_tasks_dates.py` (create).
-- **Size / lane / review:** M / heavy / yes.
+- **Owns:** `src/ontocurator/domain/document_rows.py` (`AssignmentFact`), `src/ontocurator/application/document_rows.py`, `src/ontocurator/application/document_row_page.py`, `src/ontocurator/application/document_row_facets.py`, `src/ontocurator/api/document_row_routes.py`, `src/ontocurator/assignments/service.py` (`TaskSummary`, `my_tasks`), `src/ontocurator/api/assignment_routes.py` (`TaskSummaryView`), contracts, `frontend/src/api/client.ts` (query param `proposals`), `frontend/tests/documents/fixtures.ts` (defaults), `tests/test_document_rows_proposals.py` (create), `tests/test_my_tasks_dates.py` (create).
+- **Size / lane / review:** M / backend / –.
 - **Code to read:** `application/document_rows.py:100-130 (RowQuery), 260-310 (RowFacts), 557-620, 900-1020 (load_facts)`, `application/document_row_page.py:380-570, 1140-1170`, `api/document_row_routes.py:95-330, 520-600`, `api/person_views.py` (person references), `application/consolidation.py:548-580` (`_draft`, read without creating), `assignments/service.py:787-873` (`my_tasks`).
-- **Prerequisites:** `grep -n "class AnnotationModeView" src/ontocurator/api/annotation_mode_views.py` (P4); `grep -n "def text_target_document" src/ontocurator/application/text_targets.py` (P3); `grep -n "def newest_proposal_counts" src/ontocurator/storage/proposal_queries.py` (P2); contracts token 5; for the progress part `grep -n "def consolidation_progress" src/ontocurator/application/consolidation.py` (P7).
-- **Schedule (W4 pre, W7 post, contract-first, Global rule 21):** pre-phase after L1 is merged: the tests and the read-model files P3 does not own (`domain/document_rows.py`, `application/document_rows.py`, `document_row_page.py`, `document_row_facets.py`, `api/document_row_routes.py`), coded against the P3/P4 names in "Shared contracts" and their blocks; not `assignments/service.py` or `api/assignment_routes.py`. Post-phase after P3 and P4's contract step are merged: **Step 3 first** as the contract step: every field of the table below with its default (filled in Step 2), `ConsolidationProgressView`, the `proposals` query parameter accepted, the `TaskSummaryView` fields, regenerate, `client.ts`, fixtures, typecheck + static; hand back `CONTRACT READY`. After the merge, Steps 1–2 fill the fields. The `consolidation_progress` part needs P7 merged; if it is not yet, do the rest first and ask for a sync point.
+- **Prerequisites:** P4 merged (`grep -n "annotation_mode" src/ontocurator/api/work_plan_routes.py`); `grep -n "def text_target_document" src/ontocurator/application/text_targets.py` (P3); `grep -n "def newest_proposal_counts" src/ontocurator/storage/proposal_queries.py` (P2); `grep -n "def consolidation_progress" src/ontocurator/application/consolidation.py` (P7).
+
+**`AnnotationModeView`** (in `api/document_row_routes.py`; the card, plan dialog and rows read it):
+
+```python
+class AnnotationModeView(BaseModel):
+    """The text's annotation mode as the card, plan dialog and rows show it."""
+
+    mode: Literal["proposals", "scratch"]
+    source: Literal["no_proposals", "locked", "plan", "project"]
+    locked: bool
+    override: Literal["proposals", "scratch"] | None = None
+    proposal_count: int = 0
+
+    @classmethod
+    def of(cls, mode: TextMode, override: str | None, proposal_count: int) -> "AnnotationModeView":
+        return cls(mode=mode.mode, source=mode.source, locked=mode.locked,
+                   override=override, proposal_count=proposal_count)
+```
 
 Additions (all with defaults; additive):
 
@@ -1609,19 +1632,18 @@ def test_consolidation_progress_only_while_consolidating(tmp_path):
 
   `tests/test_my_tasks_dates.py`: `test_my_tasks_show_mode_and_assignment_date` (assign c1 and c2 to `anno`; `GET /api/v1/me/tasks` as `anno`: c1 `annotation_mode == "proposals"`, c2 `"scratch"`, both `assigned_at` set; a translation review task has `annotation_mode is None`).
 - [ ] **Step 2:** `uv run pytest -n 4 tests/test_document_rows_proposals.py tests/test_my_tasks_dates.py -q` → FAIL; implement; → PASS. Then the read-model regression set: `uv run pytest -n 4 tests/test_document_rows*.py tests/test_final_panel_api.py tests/test_browser_documents_fixture*.py tests/test_browser_overview_fixture.py -q` (expand globs).
-- [ ] **Step 3: Contracts (token 5).** Regenerate; `client.ts`: `DocumentRowsQuery.proposals?: ("with" | "without")[]` serialised like the other facet lists; `fixtures.ts` defaults `proposal_count: 0`, `annotation_mode: null`, `consolidation_progress: null`, work item `assigned_at: null`, `assigned_by: null`, `annotation_mode: null`; typecheck; `bash scripts/check.sh --only static`.
+- [ ] **Step 3: Contracts.** Regenerate; `client.ts`: `DocumentRowsQuery.proposals?: ("with" | "without")[]` serialised like the other facet lists; `fixtures.ts` defaults `proposal_count: 0`, `annotation_mode: null`, `consolidation_progress: null`, work item `assigned_at: null`, `assigned_by: null`, `annotation_mode: null`; typecheck; `bash scripts/check.sh --only static`.
 - **Done:** all fields additive with defaults; progress computed only for shown rows (one query per shown consolidating row, none otherwise).
 - **Commit:** `feat(documents): proposals, annotation mode, assignment dates in rows and tasks`
 
-### P8: Text view layers and the final-result layer (contracts writer 7)
+### P8: Text view layers and the final-result layer (contracts writer)
 
 - **Goal:** the text view's "Show" list comes from the server, including entries the viewer may not see (greyed, with the reason) and the final result.
 - **Spec:** §4 (incl. D3: non-leads never see other people's work, not even greyed).
 - **Facts verified:** `authz/versions.py:105-208` emits only `own`, `submission` (lead: `EXPORT_ALL_WORK`) and `proposals` (`may_read_proposals`); `stage_result`/`release` are never emitted; no final-result layer exists (the final selection is a badge in `CaseViewer.tsx:203-212`); `GET /documents/{doc}/annotation-versions/{kind}/{id}` re-lists refs and 404s an unlisted one (`authz/scoped.py:537`, payloads `storage/repository.py:2086-2110`). Final selections: `storage/final_tables.py:12 FinalSelectionRow(case_id, language, document_id, submission_id, selected_at, actor_id)`.
-- **Owns:** `src/ontocurator/authz/versions.py`, `src/ontocurator/authz/scoped.py` (`get_annotation_version` only), `src/ontocurator/storage/repository.py` (`:2086-2110` payload of kind `final`), `src/ontocurator/api/variant_routes.py`, contracts (token 7), `frontend/src/api/client.ts` (`listTextLayers`), `tests/test_text_layers_api.py` (create).
-- **Size / lane / review:** M / heavy / yes.
-- **Prerequisites:** contracts token 7; `application/text_targets.py` (P3), `storage/proposal_queries.py` (P2).
-- **Schedule (W8):** starts once P3 is merged and an agent slot is free; implementation and tests first, Step 3 when token 7 is free (after P7's contract step).
+- **Owns:** `src/ontocurator/authz/versions.py`, `src/ontocurator/authz/scoped.py` (`get_annotation_version` only), `src/ontocurator/storage/repository.py` (`:2086-2110` payload of kind `final`), `src/ontocurator/api/variant_routes.py`, contracts, `frontend/src/api/client.ts` (`listTextLayers`), `tests/test_text_layers_api.py` (create).
+- **Size / lane / review:** M / backend / yes.
+- **Prerequisites:** `application/text_targets.py` (P3), `storage/proposal_queries.py` (P2).
 
 Model and rule (in `authz/versions.py`):
 
@@ -1652,7 +1674,7 @@ class TextLayerEntry(BaseModel):
   - `test_annotator_from_proposals_sees_proposals_and_only_own_work`.
   - `test_unlisted_final_ref_is_not_found` (an annotator requesting `annotation-versions/final/<id>` gets 404 `VERSION_NOT_FOUND`).
 - [ ] **Step 2:** `uv run pytest -n 4 tests/test_text_layers_api.py tests/test_case_api.py tests/test_annotation_versions.py -q` → FAIL, implement, PASS.
-- [ ] **Step 3: Contracts (token 7).** Regenerate; `client.ts`: `listTextLayers(key: string, documentId: string): Promise<TextLayerEntry[]>`; typecheck; `bash scripts/check.sh --only static`.
+- [ ] **Step 3: Contracts.** Regenerate; `client.ts`: `listTextLayers(key: string, documentId: string): Promise<TextLayerEntry[]>`; typecheck; `bash scripts/check.sh --only static`.
 - **Done:** non-leads never get entries for other people's work (D3, tests); final layer only through the listed ref; "Accepted on version {n}" uses `text_target_document`/`text_documents` (R11).
 - **Commit:** `feat(viewer): text layers with reasons and the final-result layer`
 
@@ -1661,7 +1683,7 @@ class TextLayerEntry(BaseModel):
 - **Goal:** shared pieces the card, rows, consolidation and text view use: axis value tokens (variant B), `AxisValue`, `IconBot` and `IconMore`, `StagePath`, `AssignedDate`, a "More" option of `MenuButton`, the network-error message (F14), and the route parameters the text card and the text view share (moved here from U7 so U3 and U7 can run in parallel, plan review R4).
 - **Spec:** §3 "Axis values use fixed colours defined once … design tokens … Colour is never the only signal"; §2b robot icon (ISC licence noted); §2 path colours; §2 "Every assignment … carries its assignment date"; §2 "a labelled More button (with ⋯ icon), never a bare +n"; Small fixes F14.
 - **Owns:** `frontend/src/styles/tokens.css` (axis aliases), `frontend/tests/tokens.test.ts` (axis contrast test), `frontend/src/ui/AxisValue.tsx` (create), `frontend/src/ui/icons.tsx` (`IconBot`, `IconMore`), `frontend/src/ui/StagePath.tsx` (create), `frontend/src/ui/AssignedDate.tsx` (create), `frontend/src/app/assignedDate.ts` (create), `frontend/src/ui/MenuButton.tsx` (`icon` prop), `frontend/src/ui/index.ts` (exports), `frontend/src/styles/components.css` (styles of the new ui pieces only), `frontend/src/api/client.ts` (`request` function only: network errors), `frontend/src/admin/errors.ts` (`NetworkError` message only), `frontend/src/app/router.ts` (params below), `frontend/tests/router.test.ts`, `DESIGN.md` (sections "Axis values", "Stage path", "More menu"), `THIRD_PARTY_NOTICES.md` (section "Lucide icons"), `LICENSES/lucide-ISC.txt` (create), tests `frontend/tests/ui/axisValue.test.tsx`, `frontend/tests/ui/stagePath.test.tsx`, `frontend/tests/ui/assignedDate.test.ts`, `frontend/tests/ui/menuButtonMore.test.tsx`, `frontend/tests/apiNetworkError.test.ts` (all create).
-- **Size / lane / review:** M / light (L+ for the final tokens/ui run) / –.
+- **Size / lane / review:** M / frontend / –.
 - **Code to read:** `frontend/src/app/router.ts:110-245` (`projectCase`, Documents panel params), `frontend/src/ui/icons.tsx` (whole: 16×16 viewBox, stroke 1.5), `frontend/src/ui/MenuButton.tsx`, `frontend/tests/tokens.test.ts` (helpers `token`, `contrast`, `below`, `cross`), `frontend/src/api/client.ts:690-735` (`request`), `frontend/src/admin/errors.ts:200-230`, `DESIGN.md:152-190, 334-345`, `THIRD_PARTY_NOTICES.md` (section pattern of `## hpo-span-annotator`).
 
 **Tokens** (aliases of existing colours only, so no new colour values; append to `tokens.css` in a block commented "Axis values (spec 2026-10-23 §3, variant B)"):
@@ -1797,8 +1819,8 @@ with `export class NetworkError extends Error { constructor(readonly cause: unkn
 
 - **Goal:** the same D2 names everywhere before the bigger UI WPs build on them, and the frontend remains of the removed "Annotation review" task (D1) are gone.
 - **Spec:** "Decisions of 2026-10-23" D1, D2; §1 "Every place that says just Review for the translation review says Translation review (F1)"; §3 "The final action is called Accept result… everywhere (F16)"; §2 "no Annotate only style labels without context".
-- **Owns:** `frontend/src/app/labels.ts`, `frontend/src/app/submissionLabels.ts`, `frontend/src/tasks/ProblemReportDetail.tsx` (task map only), `frontend/src/admin/assignSummary.ts`, `frontend/src/admin/assignmentUI.tsx`, `frontend/src/admin/AssignWorkDialog.tsx` (review rows only), `frontend/src/documents/historyLines.ts`, `frontend/src/documents/labels.ts`, `frontend/src/documents/nextStepLabels.ts`, `frontend/src/documents/finalPanelText.ts`, `frontend/src/documents/FinalPanel.tsx` (labels only), `frontend/src/documents/RowPanel.tsx` (the "Assign annotation review…" button and `canAssignAnnotationReview` only; the file is deleted in U3), `frontend/src/documents/ResolveTranslation.tsx` (strings), `frontend/src/documents/planSummary.ts` (strings), `frontend/src/documents/SelectionBar.tsx` (labels and the removed action), `frontend/src/documents/filterModel.ts` (labels only), `frontend/src/documents/PlanChips.tsx` and `frontend/src/ui/PlanChip.tsx` and `frontend/src/documents/PlanDialog.tsx` and `frontend/src/documents/RowActions.tsx` and `frontend/src/admin/UploadWorkPlan.tsx` (the word "Review" only), `frontend/src/variants/ConsolidationLauncher.tsx` (role words only), `frontend/src/editor/modes.ts` (create; code in the U2 block, moved here so U3 need not wait for U2), `frontend/tests/editorModes.test.ts` (create; cases in U2's Step 1), and the unit tests asserting these strings except those under `frontend/tests/consolidation/` and `frontend/tests/leadConsolidation.test.tsx` (U6's) (find them with the grep below; list them in the hand-back). Never `client.ts`, `errors.ts`, `generated.ts` or `frontend/tests/documents/fixtures.ts` (token files, Global rule 10).
-- **Size / lane / review:** M / light / –.
+- **Owns:** `frontend/src/app/labels.ts`, `frontend/src/app/submissionLabels.ts`, `frontend/src/tasks/ProblemReportDetail.tsx` (task map only), `frontend/src/admin/assignSummary.ts`, `frontend/src/admin/assignmentUI.tsx`, `frontend/src/admin/AssignWorkDialog.tsx` (review rows only), `frontend/src/documents/historyLines.ts`, `frontend/src/documents/labels.ts`, `frontend/src/documents/nextStepLabels.ts`, `frontend/src/documents/finalPanelText.ts`, `frontend/src/documents/FinalPanel.tsx` (labels only), `frontend/src/documents/RowPanel.tsx` (the "Assign annotation review…" button and `canAssignAnnotationReview` only; the file is deleted in U3), `frontend/src/documents/ResolveTranslation.tsx` (strings), `frontend/src/documents/planSummary.ts` (strings), `frontend/src/documents/SelectionBar.tsx` (labels and the removed action), `frontend/src/documents/filterModel.ts` (labels only), `frontend/src/documents/PlanChips.tsx` and `frontend/src/ui/PlanChip.tsx` and `frontend/src/documents/PlanDialog.tsx` and `frontend/src/documents/RowActions.tsx` and `frontend/src/admin/UploadWorkPlan.tsx` (the word "Review" only), `frontend/src/variants/ConsolidationLauncher.tsx` (role words only), `frontend/src/editor/modes.ts` (create; code in the U2 block, moved here so U3 need not wait for U2), `frontend/tests/editorModes.test.ts` (create; cases in U2's Step 1), and the unit tests asserting these strings except those under `frontend/tests/consolidation/` and `frontend/tests/leadConsolidation.test.tsx` (U6's) (find them with the grep below; list them in the hand-back). Never `client.ts`, `errors.ts`, `generated.ts` or `frontend/tests/documents/fixtures.ts` (contracts files, Global rule 10).
+- **Size / lane / review:** M / frontend / –.
 - **Prerequisites:** L1 committed (`grep -c "annotation_review_in_progress" frontend/src/api/generated.ts` → 0).
 - **Moved (schedule revision):** the D2 strings of `consolidation/consolidationText.ts` and `consolidation/SummaryDialog.tsx` in the table below are applied by U6, the `<h2>Review</h2>` of `variants/CaseViewer.tsx` by U7; U1's Step 3 grep may still list those files.
 
@@ -1838,10 +1860,10 @@ The stage column titles (`Review` in `DocumentsTable.tsx`, `RowCells.tsx`, `Stag
 
 - **Goal:** the annotator works through proposals in the existing review screen; My tasks, the assign dialog and Settings show the mode in D2 words; the editor badges, the project rule and every error message use D2 words; the task opens calmly; the editor header shows the language flag.
 - **Spec:** §1 Q1 (J/K, 1–4/0), Q3 (assign dialog shows the mode; Settings → Workflow), §2 "Every assignment shown anywhere (… My tasks, history, assign dialog holders) carries its assignment date"; Small fixes F8, V2; D2 (badges, roles, error copy).
-- **Owns:** `frontend/src/app/CaseScreen.tsx`, `frontend/src/editor/decisionSemantics.ts`, `frontend/src/variants/SubmissionHistory.tsx` (mode → kind), `frontend/src/tasks/MyTasks.tsx`, `frontend/src/tasks/TaskEditor.tsx` (loading state), `frontend/src/translation/TranslationReviewScreen.tsx:90` (loading state), `frontend/src/admin/AssignWorkDialog.tsx`, `frontend/src/admin/projectFields.tsx`, `frontend/src/admin/ProjectSettingsPage.tsx` (workflow radio group, rule checkbox label), `frontend/src/admin/errors.ts` (D2 wording of existing messages; last step, with the contracts token after P8), tests `frontend/tests/proposalCheckScreen.test.tsx` (create), `frontend/tests/myTasks.test.tsx`, `frontend/tests/assignWorkDialog.test.tsx`, `frontend/tests/projectSettings.test.tsx`, `frontend/tests/taskLoading.test.tsx` (create).
-- **Size / lane / review:** M / L+ / –.
+- **Owns:** `frontend/src/app/CaseScreen.tsx`, `frontend/src/editor/decisionSemantics.ts`, `frontend/src/variants/SubmissionHistory.tsx` (mode → kind), `frontend/src/tasks/MyTasks.tsx`, `frontend/src/tasks/TaskEditor.tsx` (loading state), `frontend/src/translation/TranslationReviewScreen.tsx:90` (loading state), `frontend/src/admin/AssignWorkDialog.tsx`, `frontend/src/admin/projectFields.tsx`, `frontend/src/admin/ProjectSettingsPage.tsx` (workflow radio group, rule checkbox label), `frontend/src/admin/errors.ts` (D2 wording of existing messages), tests `frontend/tests/proposalCheckScreen.test.tsx` (create), `frontend/tests/myTasks.test.tsx`, `frontend/tests/assignWorkDialog.test.tsx`, `frontend/tests/projectSettings.test.tsx`, `frontend/tests/taskLoading.test.tsx` (create).
+- **Size / lane / review:** M / frontend / –.
 - **Code to read:** `CaseScreen.tsx` lines from `grep -n 'mode === "review"\|mode !== "review"' frontend/src/app/CaseScreen.tsx` — **the grep is the source of truth** (18 matches on `main` 6d8bc1b: 294, 554, 598, 913, 1093, 1746, 2252, 2333, 2383, 2481, 2653, 2655, 2686, 2776, 2783, 2923, 3269, 3447; plan review R21); `FinalPanel.tsx:267` is **not** a site (it compares `panelMode`, not a workspace mode, R2), `editor/decisionSemantics.ts`, `tasks/MyTasks.tsx`, `admin/AssignWorkDialog.tsx:180-240`, `admin/projectFields.tsx:80-123`, `tasks/TaskEditor.tsx:30-130`, `styles/components.css:610-625` (reading density first child), `tests/caseScreen.test.tsx` (how a review view is rendered in tests).
-- **Prerequisites:** `grep -n "proposal_check" frontend/src/api/generated.ts` (P2 contracts), `grep -c '"assisted"' frontend/src/api/generated.ts` → 0 (L1), `grep -n "assigned_at" frontend/src/api/generated.ts` (P5 contract step), `grep -n "export function annotationTaskName" frontend/src/editor/modes.ts` (U1), P4 committed (`projectSettings.test.tsx`, `setAnnotationMode`); the `errors.ts` sweep is the last step and takes the contracts token after P8's contract step (sync point).
+- **Prerequisites:** `grep -n "proposal_check" frontend/src/api/generated.ts` (P2 contracts), `grep -c '"assisted"' frontend/src/api/generated.ts` → 0 (L1), `grep -n "assigned_at" frontend/src/api/generated.ts` (P5), `grep -n "export function annotationTaskName" frontend/src/editor/modes.ts` (U1), P4 committed (`grep -n "tool_proposal_mode" frontend/src/api/generated.ts`).
 - **Moved (schedule revision):** `editor/modes.ts` and `editorModes.test.ts` are created by U1 (code and cases below stay the reference); the F8 CSS (`.task-loading`, the reading-density rule) and the removal of `.badge-assisted` in `components.css` are U8's; the removal of `.app-title .badge-assisted` in `editor.css` is U7's. U2's Done greps run without `--include=*.css`.
 
 `editor/modes.ts` (created by U1):
@@ -1896,8 +1918,8 @@ export function annotationTaskName(mode: "proposals" | "scratch" | null | undefi
 - **Spec:** §3 (all bullets, incl. the robot icon on findings from a tool proposal, D2), F9, F10, F11, F12, F15, F16, F17.
 - **Facts verified:** `GroupCard.tsx` (305 lines: chips `:61-75` with " · differs", `Comparison` `:78-111`, "Whole finding" chips `:232-241`, action buttons `:248-256`), `GroupList.tsx` puts auto-kept groups in their own `<section aria-label="Kept automatically">` (`:58-64`), `groupModel.ts` builds rows/choices/payload, `ConsolidationScreen.tsx:263` header "Consolidate case-0107 · en v1". After P7 no keep-both code remains.
 - **Owns:** `frontend/src/consolidation/*` (all files), `frontend/tests/consolidation/*`, `frontend/tests/leadConsolidation.test.tsx` (strings only), `DESIGN.md` (section "Consolidation view" `:334-345` rewritten).
-- **Size / lane / review:** L / L+ / yes.
-- **Prerequisites:** `grep -c "term_parts\|keep_both" frontend/src/consolidation/*.ts*` → 0 (P7); `grep -n "export function StagePath" frontend/src/ui/StagePath.tsx` and `grep -n "export function AxisValue" frontend/src/ui/AxisValue.tsx` (U0). **Schedule (W5 pre, W8 post):** pre-phase only if an agent slot is idle, after U0 is merged: new files under `frontend/src/consolidation/` and new tests only; post-phase after P7 is merged. U6 also applies U1's D2 strings for `consolidationText.ts` and `SummaryDialog.tsx` (U1 label table) and their assertions in `frontend/tests/consolidation/*` and `leadConsolidation.test.tsx`.
+- **Size / lane / review:** L / frontend / yes.
+- **Prerequisites:** `grep -c "term_parts\|keep_both" frontend/src/consolidation/*.ts*` → 0 (P7); `grep -n "export function StagePath" frontend/src/ui/StagePath.tsx` and `grep -n "export function AxisValue" frontend/src/ui/AxisValue.tsx` (U0). U6 also applies U1's D2 strings for `consolidationText.ts` and `SummaryDialog.tsx` (U1 label table) and their assertions in `frontend/tests/consolidation/*` and `leadConsolidation.test.tsx`.
 
 Structure (files after this WP):
 
@@ -1959,11 +1981,11 @@ Copy (`consolidationText.ts`, verbatim): `{n} fields to decide`, `1 field to dec
 
 - **Goal:** one click on a row opens a centered card with the path and the selected segment's details and actions; the old panel, its tabs and the stage strip go away.
 - **Spec:** §2 (all bullets), V1, F4, F6, F17, F20, F21, F22, F24.
-- **Owns:** `frontend/src/documents/textCard/` (create: `TextCard.tsx`, `cardModel.ts`, `TranslationPart.tsx`, `AnnotationPart.tsx`, `FinalizationPart.tsx`, `AssignmentChip.tsx`, `RemoveAssignmentDialog.tsx`, `CardFooter.tsx`, `textCard.css`), `frontend/src/documents/RowPanel.tsx` (delete), `frontend/src/documents/StageStrip.tsx` (delete), `frontend/src/documents/StagePopover.tsx` (**kept**: `DocumentCards.tsx:20` (U4's) imports it; only its `STAGE_TITLES` import changes and "Open full details" opens the card), `frontend/src/documents/stageLabels.ts` (receives `STAGE_TITLES` from `StageStrip.tsx:11`, renamed to the path names `Translation`/`Annotation`/`Finalization`), `frontend/src/documents/StageActions.tsx` (create: `StageActions`/`StageActionsProps` moved out of `RowPanel.tsx:354-400`, without the review-of-submitted option, because `admin/DocumentsPage.tsx:34` imports them for the cards view), `frontend/src/styles/screens/documents-panel.css` (delete; card styles in `textCard.css`, imported by `TextCard.tsx`), `frontend/src/styles/index.css` (remove the `documents-panel.css` import; the only `index.css` writer of wave 10, R4), `frontend/src/documents/RowActivity.tsx` (reused as History; dates via `AssignedDate`; `STAGE_TITLES` from `stageLabels.ts`), `frontend/src/documents/TextVersions.tsx` (reused in the Translation part), `frontend/src/documents/FinalPanel.tsx` (embedding only), `frontend/src/admin/DocumentsPage.tsx` + `frontend/tests/documentsPage.test.tsx` (**DocumentsPage token 1**: panel wiring → card wiring), tests `frontend/tests/documents/textCard.test.tsx`, `frontend/tests/documents/cardModel.test.ts`, `frontend/tests/documents/assignmentChip.test.tsx` (create); delete `frontend/tests/documents/rowPanel.test.tsx`, `rowPanelReports.test.tsx` (their still-valid cases move to `textCard.test.tsx`); `frontend/tests/documents/stagePopover.test.tsx` and `stageLabels.test.ts` (import paths and titles only).
-- **Size / lane / review:** L / L+ / yes.
+- **Owns:** `frontend/src/documents/textCard/` (create: `TextCard.tsx`, `cardModel.ts`, `TranslationPart.tsx`, `AnnotationPart.tsx`, `FinalizationPart.tsx`, `AssignmentChip.tsx`, `RemoveAssignmentDialog.tsx`, `CardFooter.tsx`, `textCard.css`), `frontend/src/documents/RowPanel.tsx` (delete), `frontend/src/documents/StageStrip.tsx` (delete), `frontend/src/documents/StagePopover.tsx` (**kept**: `DocumentCards.tsx:20` (U4's) imports it; only its `STAGE_TITLES` import changes and "Open full details" opens the card), `frontend/src/documents/stageLabels.ts` (receives `STAGE_TITLES` from `StageStrip.tsx:11`, renamed to the path names `Translation`/`Annotation`/`Finalization`), `frontend/src/documents/StageActions.tsx` (create: `StageActions`/`StageActionsProps` moved out of `RowPanel.tsx:354-400`, without the review-of-submitted option, because `admin/DocumentsPage.tsx:34` imports them for the cards view), `frontend/src/styles/screens/documents-panel.css` (delete; card styles in `textCard.css`, imported by `TextCard.tsx`), `frontend/src/styles/index.css` (remove the `documents-panel.css` import; the only `index.css` writer, R4), `frontend/src/documents/RowActivity.tsx` (reused as History; dates via `AssignedDate`; `STAGE_TITLES` from `stageLabels.ts`), `frontend/src/documents/TextVersions.tsx` (reused in the Translation part), `frontend/src/documents/FinalPanel.tsx` (embedding only), `frontend/src/admin/DocumentsPage.tsx` + `frontend/tests/documentsPage.test.tsx` (panel wiring → card wiring), tests `frontend/tests/documents/textCard.test.tsx`, `frontend/tests/documents/cardModel.test.ts`, `frontend/tests/documents/assignmentChip.test.tsx` (create); delete `frontend/tests/documents/rowPanel.test.tsx`, `rowPanelReports.test.tsx` (their still-valid cases move to `textCard.test.tsx`); `frontend/tests/documents/stagePopover.test.tsx` and `stageLabels.test.ts` (import paths and titles only).
+- **Size / lane / review:** L / frontend / yes.
 - **Importers of deleted files (R5, verified on `main` 6d8bc1b):** `admin/DocumentsPage.tsx:34` imports `RowPanel, StageActions, RowPanelTarget, StageActionsProps` from `RowPanel`; `documents/RowActivity.tsx:15` and `documents/StagePopover.tsx:15` import `STAGE_TITLES` from `StageStrip`; `documents/DocumentCards.tsx:20` imports `StagePopover`. U3 relocates before deleting: `StageActions` → `documents/StageActions.tsx`, `STAGE_TITLES` → `stageLabels.ts`; `StagePopover` stays, so `DocumentCards.tsx` needs no edit. After U3, `grep -rn 'from "\./RowPanel"\|from "\./StageStrip"\|documents/RowPanel\|documents/StageStrip' frontend/src frontend/tests` → empty.
 - **Code to read:** `RowPanel.tsx` (whole: props, J/K, focus return, narrow sheet), `admin/DocumentsPage.tsx:500-640` (panel route params, `DecisionBlock` wiring, `onAssign`, `rowExtras`), `documents/stageLabels.ts:181-230` (`stageText`, `waitingOnText`), `documents/RowActivity.tsx`, `documents/TextVersions.tsx`, `ui/Dialog.tsx` (`variant="center"`, `size="lg"`, `returnFocus`), `ui/ConfirmDialog.tsx`.
-- **Prerequisites:** pre-phase (W5): U0 and U1 merged; post-phase (W8): P3 merged and P5's contract step merged (`removeAssignment`, `checkProposalsMyself`, `assigned_at`, `annotation_mode`, `proposal_count`, `consolidation_progress`); DocumentsPage token 1 for the wiring step. U3 does not wait for U2: the mode line uses `annotationTaskName` from `editor/modes.ts` (U1).
+- **Prerequisites:** U0, U1, P3 and P5 merged (`removeAssignment`, `assigned_at`, `annotation_mode`, `proposal_count`, `consolidation_progress`). The mode line uses `annotationTaskName` from `editor/modes.ts` (U1).
 
 `cardModel.ts` (pure):
 
@@ -2053,7 +2075,7 @@ export interface TextCardProps {
 - **CardFooter:** `History ({n})`, `Text details`, `Change plan…` (`onChangePlan`). No tabs.
 - **Narrow (V1):** below 700 px the Dialog is a full-width sheet (`.text-card` media query: `inset: 0; width: 100%; max-height: 100dvh; border-radius: 0`); all text wraps at word boundaries (`overflow-wrap: anywhere` is **not** used; `word-break: normal; overflow-wrap: break-word` on long ids only).
 
-DocumentsPage wiring (token 1): replace `<RowPanel …>` by `<TextCard …>` with the same route params (`panel`, `panel_stage` mapped `review→translation`, `annotation→annotation`, `final→finalization` and back; `panel_tab` `activity|versions|details` → `view` `path|path|details`, new value `history`); `onStep` uses the current page order; closing keeps the selection; `onCheckMyself` → `api.checkProposalsMyself` then `onNavigate({ name: "task", assignmentId })`; `rowExtras` and the side-panel non-modal behaviour are removed (the card is modal). The `+n` menu and row actions stay until U4.
+DocumentsPage wiring: replace `<RowPanel …>` by `<TextCard …>` with the same route params (`panel`, `panel_stage` mapped `review→translation`, `annotation→annotation`, `final→finalization` and back; `panel_tab` `activity|versions|details` → `view` `path|path|details`, new value `history`); `onStep` uses the current page order; closing keeps the selection; `onCheckMyself` → the existing assign call `api.createAssignments` (the lead's own username, task `annotate`, `confirm_language: true`; P3 grants the annotator role) then `onNavigate({ name: "task", assignmentId })` with the returned assignment; `rowExtras` and the side-panel non-modal behaviour are removed (the card is modal). The `+n` menu and row actions stay until U4.
 
 - [ ] **Step 1: Failing tests.**
   - `cardModel.test.ts`: one test per state-table line (fixtures via the builders in `tests/documents/fixtures.ts` + a local `cardFixtures.ts`): e.g. `native text reads source text and done`, `machine translation without review reads not reviewed, optional`, `annotation 1 of 2 assigned with 17 proposals is now`, `2 of 2 submitted is done and finalization is ready to compare`, `consolidating shows 2 of 3 groups open`, `accepted shows the date`; `defaultSegment picks the segment that needs work now`.
@@ -2068,8 +2090,8 @@ DocumentsPage wiring (token 1): replace `<RowPanel …>` by `<TextCard …>` wit
 
 - **Goal:** one toolbar, a language-and-version dropdown, a "Show" dropdown with greyed entries and reasons, read-only findings on the right with the axis colours, "Compare" as a second column.
 - **Spec:** §4 (incl. D3: no entries for other people's work for non-leads, not even greyed); Small fixes V8 (language as plain text with flag).
-- **Owns:** `frontend/src/variants/CaseViewer.tsx`, `frontend/src/variants/TextViewToolbar.tsx` (create), `frontend/src/variants/ShowSelect.tsx` (create), `frontend/src/variants/VersionSelect.tsx` (create), `frontend/src/variants/LayerFindings.tsx` (create), `frontend/src/variants/useTextLayers.ts` (create), `frontend/src/variants/ComparePane.tsx` (axis values via `AxisValue`), `frontend/src/editor/FindingRow.tsx` (`:46-48` axis values via `AxisValue`; spec §3 "used everywhere axis values appear"), `frontend/tests/findingRow.test.tsx`, `frontend/tests/comparePane.test.tsx`, `frontend/src/variants/textView.css` (create; imported by `CaseViewer.tsx`, so `styles/index.css` stays U3's in this wave, R4), `frontend/src/styles/screens/editor.css` (remove the dead `.case-version-controls` viewer rules and `.app-title .badge-assisted`, moved from U2), tests `frontend/tests/textView.test.tsx` (create), `frontend/tests/caseViewer.test.tsx`, `frontend/tests/caseCompareRoute.test.tsx`. The route params `show`/`compare_show` come from U0's `router.ts` (read only). `VariantSelectors.tsx` stays (the editor still uses it, `CaseScreen.tsx:2734-2742`).
-- **Size / lane / review:** M / L+ / –.
+- **Owns:** `frontend/src/variants/CaseViewer.tsx`, `frontend/src/variants/TextViewToolbar.tsx` (create), `frontend/src/variants/ShowSelect.tsx` (create), `frontend/src/variants/VersionSelect.tsx` (create), `frontend/src/variants/LayerFindings.tsx` (create), `frontend/src/variants/useTextLayers.ts` (create), `frontend/src/variants/ComparePane.tsx` (axis values via `AxisValue`), `frontend/src/editor/FindingRow.tsx` (`:46-48` axis values via `AxisValue`; spec §3 "used everywhere axis values appear"), `frontend/tests/findingRow.test.tsx`, `frontend/tests/comparePane.test.tsx`, `frontend/src/variants/textView.css` (create; imported by `CaseViewer.tsx`, so `styles/index.css` stays U3's, R4), `frontend/src/styles/screens/editor.css` (remove the dead `.case-version-controls` viewer rules and `.app-title .badge-assisted`, moved from U2), tests `frontend/tests/textView.test.tsx` (create), `frontend/tests/caseViewer.test.tsx`, `frontend/tests/caseCompareRoute.test.tsx`. The route params `show`/`compare_show` come from U0's `router.ts` (read only). `VariantSelectors.tsx` stays (the editor still uses it, `CaseScreen.tsx:2734-2742`).
+- **Size / lane / review:** M / frontend / –.
 - **Code to read:** `variants/CaseViewer.tsx` (whole), `variants/VariantSelectors.tsx`, `variants/versionState.ts:36-90`, `variants/useCaseVersions.ts`, `variants/ComparePane.tsx`, `variants/ReadOnlyAnnotationView.tsx`, `app/router.ts:110-245`.
 - **Prerequisites:** `grep -n "listTextLayers" frontend/src/api/client.ts` (P8); `grep -n "compare_show" frontend/src/app/router.ts` (U0). U7 also replaces `CaseViewer.tsx`'s `<h2>Review</h2>` with D2 wording (moved from U1).
 
@@ -2093,9 +2115,9 @@ The left/middle uses `ReadOnlyAnnotationView` with the chosen layer (`text` → 
 - **Goal:** about 16 texts per 1280×900 screen; one click selects and opens the card, a second click deselects; the bar only for bulk work; tool proposals visible before anyone is assigned.
 - **Spec:** §2b (all bullets), §2 "Row click toggles the selection", "Bottom selection bar … only when 2 or more", "Documents table row actions: … labelled More"; Small fixes F2/V8, F7, V4 (table links), V7, "Documents page … Fix the overflow".
 - **Facts verified:** the "never deselects" rule is `documents/DocumentsTable.tsx:68-80` (`openAndSelect` with mode `"select"`), wired at `:138, :140-144, :152-156, :206`; selection modes in `documents/useTextSelection.ts:70-82`; `SelectionBar` shows for `keys.size > 0 || undoState` (`SelectionBar.tsx:176`); "+n" `MenuButton` at `RowActions.tsx:139-145`; language rendered as a link-styled button (`RowCells.tsx:324-330`, `documents-table.css:61-64`); `Open`/`Open my task` stack (`RowCells.tsx:260-275`, `documents-table.css:55`); `.shell-main` has no `position: relative` while rows contain many `position: absolute` `.visually-hidden` spans (`components.css:522, 616`), the likely cause of the 3990 px document height.
-- **Owns:** `frontend/src/documents/DocumentsTable.tsx`, `RowCells.tsx`, `RowActions.tsx`, `SelectionBar.tsx`, `useTextSelection.ts`, `DocumentCards.tsx`, `filterModel.ts`, `FilterPopover.tsx`, `stageLabels.ts` (one-line texts), `frontend/src/ui/spaceActivates.ts` (create), `frontend/src/styles/screens/documents-table.css`, `documents-cards.css`, `selection.css`, `frontend/src/styles/components.css` (`.shell-main` rule only), `frontend/src/admin/DocumentsPage.tsx` + `frontend/tests/documentsPage.test.tsx` (**DocumentsPage token 2**: columns, skeleton header `:72`, row click, bar), tests `frontend/tests/documents/documentsTable.test.tsx`, `rowActions.test.tsx`, `selectionBar.test.tsx`, `documentCards.test.tsx`, `filterModel.test.ts`, `filterPopover.test.tsx`, `useTextSelection.test.ts`, `stageLabels.test.ts`, `a11y.test.tsx`, `frontend/tests/documents/rowClick.test.tsx` (create).
-- **Size / lane / review:** L / L+ / yes.
-- **Prerequisites / schedule (W5 pre, W9 post):** pre-phase: U1 merged; components and component tests only, not `stageLabels.ts`, `stageLabels.test.ts`, `DocumentsPage.tsx`, `documentsPage.test.tsx` or tests that render `DocumentsPage`; ask for a sync point once P5's contract step is merged (robot icon, `proposals` facet types). Post-phase: U3 merged; DocumentsPage token 2 and `stageLabels.ts`. **V4 (moved from U8):** the link-styled buttons at `DocumentsPage.tsx:123-124` use `onSpaceActivate`; test in `documentsPage.test.tsx`.
+- **Owns:** `frontend/src/documents/DocumentsTable.tsx`, `RowCells.tsx`, `RowActions.tsx`, `SelectionBar.tsx`, `useTextSelection.ts`, `DocumentCards.tsx`, `filterModel.ts`, `FilterPopover.tsx`, `stageLabels.ts` (one-line texts), `frontend/src/ui/spaceActivates.ts` (create), `frontend/src/styles/screens/documents-table.css`, `documents-cards.css`, `selection.css`, `frontend/src/styles/components.css` (`.shell-main` rule only), `frontend/src/admin/DocumentsPage.tsx` + `frontend/tests/documentsPage.test.tsx` (columns, skeleton header `:72`, row click, bar), tests `frontend/tests/documents/documentsTable.test.tsx`, `rowActions.test.tsx`, `selectionBar.test.tsx`, `documentCards.test.tsx`, `filterModel.test.ts`, `filterPopover.test.tsx`, `useTextSelection.test.ts`, `stageLabels.test.ts`, `a11y.test.tsx`, `frontend/tests/documents/rowClick.test.tsx` (create).
+- **Size / lane / review:** L / frontend / yes.
+- **Prerequisites:** U3 and P5 merged (robot icon, `proposals` facet types). **V4 (moved from U8):** the link-styled buttons at `DocumentsPage.tsx:123-124` use `onSpaceActivate`; test in `documentsPage.test.tsx`.
 
 Columns (`DocumentsTable.tsx`): `[checkbox] Text | Translation | Annotation | Finalization | Waiting on | Next step | Last activity` (headers visible except the checkbox column, whose header is the "select all on page" checkbox as today).
 - **Text:** `<button className="documents-text-name">` (plain text style, not a link: `color: var(--text)`, no underline; focus ring kept) with `LanguageFlag` + language code; `aria-label={`Open text card, ${case} ${language}`}`; NEW and version marker badges stay after it.
@@ -2148,10 +2170,10 @@ Selection bar: shown when `selection.keys.size >= 2 || undoState`; labels review
 
 - **Goal:** the plan dialogs list the text's steps in words with an explanation each, including the annotation mode.
 - **Spec:** §2 footer "Change plan…" (and bulk "Plan…") reworked (F5); §1 Q3 (override per text, mixing modes not offered, lock reason).
-- **Owns:** `frontend/src/documents/PlanSteps.tsx` (create), `frontend/src/documents/PlanDialog.tsx`, `frontend/src/documents/PlanChips.tsx`, `frontend/src/documents/RowActions.tsx` (`PlanPopover` → opens the dialog), `frontend/src/documents/planSummary.ts`, `frontend/src/styles/screens/work-plan.css`, `frontend/src/admin/DocumentsPage.tsx` + `frontend/tests/documentsPage.test.tsx` (**DocumentsPage token 3**), tests `frontend/tests/documents/planSteps.test.tsx` (create), `planDialog.test.tsx`, `planChips.test.tsx`, `planSummary.test.ts`.
-- **Prerequisites / schedule (W9 pre, W11 post):** pre-phase: U1 and P4 merged (`grep -n "setAnnotationMode" frontend/src/api/client.ts`): `PlanSteps.tsx`, `PlanDialog.tsx`, `PlanChips.tsx`, `planSummary.ts`, `work-plan.css` and their tests; post-phase after U4 is merged: `RowActions.tsx` (`PlanPopover`) and DocumentsPage token 3.
-- **Size / lane / review:** M / L+ / –.
-- **Code to read:** `PlanDialog.tsx`, `PlanChips.tsx` (`usePlanSaves`, `PlanSaves`), `planSummary.ts`, `api/client.ts` (`patchWorkPlan`, `bulkPlan…`, `setAnnotationMode`, `setAnnotationModes`).
+- **Owns:** `frontend/src/documents/PlanSteps.tsx` (create), `frontend/src/documents/PlanDialog.tsx`, `frontend/src/documents/PlanChips.tsx`, `frontend/src/documents/RowActions.tsx` (`PlanPopover` → opens the dialog), `frontend/src/documents/planSummary.ts`, `frontend/src/styles/screens/work-plan.css`, `frontend/src/admin/DocumentsPage.tsx` + `frontend/tests/documentsPage.test.tsx`, tests `frontend/tests/documents/planSteps.test.tsx` (create), `planDialog.test.tsx`, `planChips.test.tsx`, `planSummary.test.ts`.
+- **Prerequisites:** U4 and P4 merged (`grep -n "mode_locked" frontend/src/api/generated.ts`).
+- **Size / lane / review:** M / frontend / –.
+- **Code to read:** `PlanDialog.tsx`, `PlanChips.tsx` (`usePlanSaves`, `PlanSaves`), `planSummary.ts`, `api/client.ts` (`patchWorkPlan`, `bulkPlan…`), the generated `PlanRowPatch`, `LanguageChangeView`, `LanguagePreviewView`, `BulkResult` (P4's `annotation_mode`, `mode_locked`, `mode_no_proposals`).
 
 `PlanSteps.tsx` (one text):
 
@@ -2167,11 +2189,11 @@ Renders two `<fieldset>`s:
 1. `Translation review` (only for translations): radios `On` / `Off`; help `On: a person reviews the machine translation before annotation.` / `Off: the translation is annotated as it is.`
 2. `Annotation`: radios `Off (not annotated)`, `Annotate from proposals`, `Annotate from scratch`; help `Annotate from proposals: each annotator confirms, rejects or corrects the {n} tool proposals and adds the findings the tool missed.` / `Annotate from scratch: annotators start from the plain text and do not see the proposals.`; `Annotate from proposals` is unavailable (`aria-disabled` + reason) when `proposal_count === 0` (reason `This text has no tool proposals, so it is annotated from scratch.`); both mode radios are unavailable while `annotation_mode.locked` (reason = lock reason), except the current mode; when the text follows the project setting, the matching option shows `(project setting)`.
 
-Single text ("Change plan…" from the card): `Dialog` size `md`, title `Plan for {case} {language}`, `PlanSteps`, footer `Cancel` / `Save`; Save sends the flags through the existing row PATCH and, when the mode changed, `api.setAnnotationMode(key, case, language, mode === "project" ? null : mode)`; errors show inline (`ANNOTATION_MODE_LOCKED`, `NO_TOOL_PROPOSALS` messages from `errors.ts`). The two calls are not atomic: when the flags PATCH succeeded and the mode call fails, the dialog stays open and says inline `The steps were saved. The annotation mode was not changed: {message}` (R23), the flags are not sent again on the next Save (only the mode), and the rows are reloaded so the table shows the saved flags. The large frame with lone pills is gone (`PlanPopover` in the row is removed; plan changes happen in the card or the bulk dialog).
+Single text ("Change plan…" from the card): `Dialog` size `md`, title `Plan for {case} {language}`, `PlanSteps`, footer `Cancel` / `Save`; Save sends the flags and, when it changed, `annotation_mode` (`"project"` when the text follows the project setting) in **one** existing row PATCH (P4: one transaction, so nothing is half saved); a refusal shows inline (`ANNOTATION_MODE_LOCKED`, `NO_TOOL_PROPOSALS` messages from `errors.ts`) and the dialog stays open with the user's choices. The large frame with lone pills is gone (`PlanPopover` in the row is removed; plan changes happen in the card or the bulk dialog).
 
-Bulk "Plan…" (`PlanDialog.tsx`): per language a block with the same two fieldsets in tri-state form (`Keep`, then the options), plus a summary line from `planSummary.ts` (`Will change: {n} texts`); after `setAnnotationModes` the toast reports `{changed} texts changed; {locked} kept their mode because the annotation has started; {no_proposals} have no tool proposals.` (parts with 0 omitted).
+Bulk "Plan…" (`PlanDialog.tsx`): per language a block with the same two fieldsets in tri-state form (`Keep`, then the options), plus a summary line from `planSummary.ts` (`Will change: {n} texts`); the mode goes as `LanguageChangeView.annotation_mode` through the existing bulk preview and save (P4); the preview line and, after saving, the toast report `{changed} texts changed; {locked} kept their mode because the annotation has started; {no_proposals} have no tool proposals.` from `mode_locked` / `mode_no_proposals` (parts with 0 omitted).
 
-- [ ] **Step 1: Failing tests** (`planSteps.test.tsx`): `lists translation review and annotation in words with an explanation`, `from proposals is unavailable without proposals with the reason`, `mode is unavailable while locked with the reason`, `the project setting is marked`, `the source text has no translation review step`; `planDialog.test.tsx`: `bulk sets the annotation mode and reports locked texts`, `no lone pills` (no element with class `plan-chip` in the dialog); `documentsPage.test.tsx`: `Change plan… from the card saves flags and mode`, `when the mode fails after the flags were saved, the dialog says the steps were saved` (R23).
+- [ ] **Step 1: Failing tests** (`planSteps.test.tsx`): `lists translation review and annotation in words with an explanation`, `from proposals is unavailable without proposals with the reason`, `mode is unavailable while locked with the reason`, `the project setting is marked`, `the source text has no translation review step`; `planDialog.test.tsx`: `bulk sets the annotation mode and reports locked texts`, `no lone pills` (no element with class `plan-chip` in the dialog); `documentsPage.test.tsx`: `Change plan… from the card saves flags and mode in one request`, `a refused mode shows the reason and keeps the dialog open`.
 - [ ] **Step 2:** implement; `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1 tests/documents/planSteps.test.tsx tests/documents/planDialog.test.tsx tests/documents/planChips.test.tsx tests/documents/planSummary.test.ts tests/documentsPage.test.tsx` → PASS; typecheck.
 - **Commit:** `feat(documents): plan dialogs list the steps in words, with the annotation mode`
 
@@ -2180,7 +2202,7 @@ Bulk "Plan…" (`PlanDialog.tsx`): per language a block with the same two fields
 - **Goal:** the remaining small fixes of the spec list.
 - **Spec:** Small fixes F13, F18, V3, V4 (remaining links), V5, V6.
 - **Owns:** `frontend/src/ui/Toast.tsx`, `frontend/src/styles/components.css` (toast `:811-842, 865`, `.shell-page` `:631`, and U2's F8 rules: `.task-loading`, the reading-density rule `:619`, `.badge-assisted` removed; see U2 F8), `src/ontocurator/api/auth_routes.py` (`demo_logins`), `tests/test_demo_logins.py`, `frontend/src/app/LoginScreen.tsx`, `frontend/tests/loginDemoAccounts.test.tsx`, `frontend/src/translation/TranslationReviewScreen.tsx` (`:552-580` labels), `frontend/src/documents/FinalPanel.tsx` (`:311`, `:427` buttons), `frontend/src/tasks/MyTasks.tsx`, `frontend/src/documents/DocumentsTabs.tsx`, `frontend/src/variants/ConsolidationLauncher.tsx`, `frontend/src/variants/TranslationCorrectionAction.tsx`, tests `frontend/tests/toast.test.tsx`, `frontend/tests/translationReviewLabels.test.tsx` (create), `frontend/tests/linkButtons.test.tsx` (create), `frontend/tests/documents/finalPanel.test.tsx` (V5 only).
-- **Size / lane / review:** S / heavy (runs `tests/test_demo_logins.py` against PostgreSQL in one heavy slot, R22) / –.
+- **Size / lane / review:** S / frontend (also runs `tests/test_demo_logins.py` against PostgreSQL, R22) / –.
 - **Prerequisites:** U2, U3 and U4 merged (`grep -n "export function onSpaceActivate" frontend/src/ui/spaceActivates.ts`).
 
 Items:
@@ -2198,8 +2220,8 @@ Items:
 - **Goal:** no `·` anywhere in the UI.
 - **Spec:** Small fixes F11.
 - **Facts verified:** 390 occurrences in 86 files under `frontend/src` (`grep -rc "·" --include=*.ts --include=*.tsx --include=*.css frontend/src`), top: `finalPanelText.ts` 22, `RowCells.tsx` 13, `nextStepLabels.ts` 10, `GroupCard.tsx`/`groupModel.ts`/`consolidationText.ts` (should be 0 after U6), `CaseScreen.tsx` 9, `editor/rounds/roundLabels.ts` 8, `admin/UploadPreview.tsx` 8, `problems/labels.ts` 7; CSS `content: "·"` in 6 stylesheets.
-- **Owns:** every frontend file with a `·` (the grep list), their unit tests; **U9 runs in W12 as the only writer under `frontend/src`** (T2's pre-phase writes only `frontend/browser/`; its one full Vitest run uses a heavy slot, R22).
-- **Size / lane / review:** S (mechanical, many files) / light / –.
+- **Owns:** every frontend file with a `·` (the grep list), their unit tests; **U9 runs after every other `frontend/src` writer is merged** (R22).
+- **Size / lane / review:** S (mechanical, many files) / frontend / –.
 
 Replacement rules (apply by meaning, not blindly):
 1. Name and language (`case-109 · de`, `rowName`) → `case-109 de`.
@@ -2211,7 +2233,7 @@ Replacement rules (apply by meaning, not blindly):
 
 - [ ] **Step 1:** update the unit tests' expected strings first (`grep -rln "·" frontend/tests`), run them red.
 - [ ] **Step 2:** apply the rules; `grep -rn "·" frontend/src --include=*.ts --include=*.tsx --include=*.css` → empty (or comments only, listed in the hand-back).
-- [ ] **Step 3:** this WP may run the full Vitest suite once (heavy slot): `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1` → PASS; typecheck.
+- [ ] **Step 3:** this WP may run the full Vitest suite once: `npm --prefix frontend test -- --maxWorkers=4 --minWorkers=1` → PASS; typecheck.
 - **Done:** grep empty; browser spec strings with `·` listed for T3.
 - **Commit:** `fix(ui): no middle-dot separators`
 
@@ -2220,7 +2242,7 @@ Replacement rules (apply by meaning, not blindly):
 - **Goal:** isolated, fresh projects for the new browser specs.
 - **Owns:** `tests/browser_proposal_check_scenarios.py` (create), `tests/browser_consolidation_scenarios.py` (three-person variant), `tests/browser_server.py` (register the new route only; after L1's legacy clean-up), `tests/test_browser_proposal_check_fixture.py` (create), `tests/test_browser_consolidation_fixture.py` (three-person test), `frontend/browser/proposalCheckHelpers.ts` (create).
 - **Prerequisites:** P5, P7 and P8 merged (fixture tests read `proposal_count` and modes; three-person consolidation without keep-both; `tests/test_browser_consolidation_fixture.py` after P7).
-- **Size / lane / review:** M / heavy / –.
+- **Size / lane / review:** M / backend / –.
 - **Code to read:** `tests/browser_lead_workflow_scenarios.py:40-260` (`lead_project`, `person`, `import_units`, `batch_assign`), `tests/browser_consolidation_scenarios.py` (whole, `FINDINGS`, `build`, route registration), `tests/browser_review_flow_scenarios.py` (submitting through real services), `tests/browser_server.py:1330-1380` (registration order), `tests/t1_fixtures.py:128-200` (`annotation`, `unit`).
 
 `POST /__test_proposal_check__?scenario=NAME` builds `lead-proposal-check-{uuid8}` through the real services (`lead_project(app, "proposal-check", import_plan="review_and_annotate_translations", rule_on=False)`, `person` for `tom` "Tom Reis", `mia` "Mia Berg", `ali` "Ali Kaya" as annotators — extend `PEOPLE` locally, do not edit the lead workflow module), sets `annotations_per_text=2`, `tool_proposal_mode="proposals"`, imports native `en` texts with tool proposals (`native_unit(case, "en", TEXT, case_id=case, annotations=[annotation(...) ×3])`, text and spans like `tests/proposal_check_support.py`) and returns `{project, users: {lead, tom, mia, ali}, display_names, cases: {name: document_id}, assignments: {name: id}, submissions: {name: id}}`:
@@ -2241,9 +2263,9 @@ Replacement rules (apply by meaning, not blindly):
 ### T2: New browser specs
 
 - **Goal:** the spec's "Testing › Browser specs" list, end to end in a real browser.
-- **Owns:** `frontend/browser/proposal-check.spec.ts`, `text-card.spec.ts`, `consolidation-three.spec.ts`, `text-view.spec.ts`, `documents-rows.spec.ts` (all create), `frontend/browser/documentsHelpers.ts` (step T2a, first and merged at once: add `textCard` helpers next to the panel helpers; afterwards the file is T3's, which also removes the old ones; further helper needs go through the orchestrator to T3).
-- **Size / lane / review:** L / Playwright (alone) / yes.
-- **Prerequisites:** pre-phase (W11–W12): T1 merged (spec writing, T2a); Playwright runs (W13): U9 merged. Port: Global rule 7 (lane port); runs alongside T3, one Playwright run at a time (both heavy slots).
+- **Owns:** `frontend/browser/proposal-check.spec.ts`, `text-card.spec.ts`, `consolidation-three.spec.ts`, `text-view.spec.ts`, `documents-rows.spec.ts` (all create), `frontend/browser/documentsHelpers.ts` (adds `textCard` helpers next to the panel helpers; T3 later removes the old ones).
+- **Size / lane / review:** L / frontend (Playwright) / yes.
+- **Prerequisites:** T1 and U9 merged; the backend lane has finished (Global rule 5). Port: Global rule 7 (lane port); one Playwright run at a time.
 
 Specs (each test builds its own scenario; `test.use({ viewport: { width: 1280, height: 900 } })`):
 - `proposal-check.spec.ts` — `the lead assigns two annotations from proposals, both work with J/K and 1–4, compare, consolidate and accept`: FRESH; lead opens Documents, the EN100024 row shows the robot icon with `3 tool proposals available; the annotation starts from them`; row click opens the card (Annotation segment current, `Annotation, from proposals`, `3 proposals`); `+ Person` → assign Tom; the robot icon is gone; Tom logs in, My tasks shows `Annotation, from proposals` and `assigned today`; opens the task: badge `Annotate from proposals`, J/K walk the three proposals, `1` confirms, `2` rejects, correcting one via the editor's change flow (as `review-flow.spec.ts` does), Submit; the lead assigns Mia the same way and she annotates from proposals too; lead: Finalization `ready to compare`, `Compare results…`, `Consolidate…` (lead self-consolidation), choose in the table, Submit, `Accept result…`; Finalization reads `accepted {date}`. Second test `an annotator working from scratch never sees proposals`: EN100031 (override `scratch`) assigned to Ali; Ali's editor shows `Annotate from scratch` and no proposals; the text view's Show list has `Tool proposals (3)` greyed with `Hidden while you annotate from scratch`.
@@ -2259,8 +2281,8 @@ Specs (each test builds its own scenario; `test.use({ viewport: { width: 1280, h
 
 - **Goal:** the existing suite passes on the new UI; the two flaky drag tests are stable.
 - **Owns:** every file under `frontend/browser/` that fails or references removed UI (expected: `documentsHelpers.ts`, `documentsOverviewHelpers.ts`, `documents-table.spec.ts`, `documents-decisions.spec.ts`, `documents-a11y.spec.ts`, `documents-overview.spec.ts`, `documents-overview-a11y.spec.ts`, `documents-walkthrough.spec.ts`, `admin.spec.ts`, `lead-workflow.spec.ts`, `lead-workflow-a11y.spec.ts`, `consolidation.spec.ts`, `consolidation-a11y.spec.ts`, `final-workflow.spec.ts`, `problem-reports-lead.spec.ts`, `translation-review.spec.ts`, `variant-admin.spec.ts`, `guidelines.spec.ts`, `editor-layout.spec.ts`, `review-flow.spec.ts`, `spans-resize.spec.ts`, `variants.spec.ts`, `compare.spec.ts`, and the specs L1 listed for its removed scenarios: `layers.spec.ts`, `reanchor.spec.ts`, `variant-admin.spec.ts`). Specs that only tested the removed annotation review task or the `assisted` mode are deleted (list them in the hand-back).
-- **Size / lane / review:** L / Playwright (alone) / –.
-- **Prerequisites:** U9 and T2a merged; runs alongside T2 in its own lane, one Playwright run at a time (both heavy slots per run).
+- **Size / lane / review:** L / frontend (Playwright) / –.
+- **Prerequisites:** T2 merged; one Playwright run at a time.
 
 Mapping (old → new):
 
@@ -2300,8 +2322,8 @@ HPO_E2E_PORT=18771 CHECK_PLAYWRIGHT_WORKERS=2 bash scripts/check.sh --only brows
 Each must end with its phase's success line. On a failure: one fix agent (effort medium), rerun only that phase; finally `HPO_E2E_PORT=18771 bash scripts/check.sh` once (expected last line `All local checks passed.`). If the browser phase is too heavy at two workers, run `PLAYWRIGHT_WORKERS=1` with the spec list in four batches (`ls frontend/browser/*.spec.ts`, split alphabetically).
 
 - [ ] `git status --short` shows only committed WP files.
-- [ ] Migration number still free on `main` (`git fetch && git ls-tree --name-only origin/main src/ontocurator/storage/migrations/versions/ | tail -2`); renumber per Global rule 12 if needed.
-- [ ] Plan review: one `superpowers:code-reviewer` over `git diff main...feat/acceptance-20261023` with this checklist: annotators working from scratch never see proposals and non-leads never see other people's work, not even greyed (workspace, text view, layers; D3); the mode is fixed once (submitted work of revoked assignments included) and "from proposals" never mixes with "from scratch" on one text; targets, counts and precision use the newest proposal set; remove discards the draft; every assign path enforces annotations per text, reassign does not double count; a proposal check counts as one annotation and is consolidated unchanged; `keep_both`/`term_choices`/`term_parts`, the `assisted` mode and the assignable annotation review task gone from code and API; migration 0021 leaves no dangling reference; exports of projects without proposal checks unchanged; copy verbatim with D2 words only; no `·`; `aria-disabled` instead of `disabled`; colours only via tokens.
+- [ ] Migration numbers 0020 and 0021 still free on `main` (`git fetch && git ls-tree --name-only origin/main src/ontocurator/storage/migrations/versions/ | tail -2`); if not, stop and report.
+- [ ] Plan review: one `superpowers:code-reviewer` over `git diff main...feat/acceptance-20261023` with this checklist: annotators working from scratch never see proposals and non-leads never see other people's work, not even greyed (workspace, text view, layers; D3); the mode is fixed once (submitted work of revoked assignments included) and "from proposals" never mixes with "from scratch" on one text; targets, counts and precision use the newest proposal set; remove discards the draft; every assign path enforces annotations per text, reassign does not double count; a proposal check counts as one annotation and is consolidated unchanged; `keep_both`/`term_choices`/`term_parts`, the `assisted` mode and the assignable annotation review task gone from code and API; migration 0020 leaves no dangling reference and logs its counts; the batch planner and `_assign_locked` share one count; the lead's self-grant exists once; exports of projects without proposal checks unchanged; copy verbatim with D2 words only; no `·`; `aria-disabled` instead of `disabled`; colours only via tokens.
 
 ### R1: Embedded bundle rebuild (separate commit)
 
@@ -2323,7 +2345,8 @@ git commit -m "build: update embedded frontend bundle"
 
 Outside the repository: `C:/Users/jan-p/Development/ontocurator-local/config.ps1` (not in git). Before the run:
 - [ ] `config.ps1` `Start-App`: readiness deadline `(Get-Date).AddMinutes(5)` (`:96`) → `AddMinutes(12)` and the message at `:105` → `"App not ready after 12 minutes; see logs\app-$Port.err.log"` (first start migrates and warms ontologies). Show the diff to the user; it is their local tool.
-- [ ] Install the branch build into the native server as the previous acceptance runs did (`docs/operations/t5-interim-acceptance.md`; the earlier session notes in `.worktrees/manual-20261021/build/t5-acceptance/`), start it, wait for `App ready.`. Migrations 0020 and 0021 run on start: 0021 deletes the test server's legacy annotation-review assignments, `assisted` work and keep-both consolidations (D1; test data). Note in the findings file what the migration removed (row counts from the purge log or a before/after `SELECT count(*)`).
+- [ ] **Back up the test server's database before installing the branch** (migration 0020 deletes data irreversibly on app start; its `downgrade()` restores nothing). With the app stopped: `pg_dump --format=custom --file "<acceptance build folder>/ontocurator-before-0020.dump" "<database URL from config.ps1, driver suffix such as +psycopg removed>"`; check it with `pg_restore --list <file> | head` (non-empty). Restore if needed, app stopped: `pg_restore --clean --if-exists --dbname "<URL>" <file>`.
+- [ ] Install the branch build into the native server as the previous acceptance runs did (`docs/operations/t5-interim-acceptance.md`; the earlier session notes in `.worktrees/manual-20261021/build/t5-acceptance/`), start it, wait for `App ready.`. Migrations 0020 and 0021 run on start: 0020 deletes the test server's legacy annotation-review assignments, `assisted` work and keep-both consolidations (D1; test data). Copy the row counts it logs (`0020 legacy purge: …` in `logs\app-$Port.err.log`) into the findings file.
 - [ ] Project **e3c-proposals** (D4): its existing annotation assignments are test data. Remove them with their work so the texts are no longer locked: `uv run python scripts/purge_annotation_work.py --project e3c-proposals --confirm` (L1; run against the test server's database URL from `config.ps1`, with the app stopped). Check in Documents that no text of the project has annotation work left.
 - [ ] Project **e3c-proposals**: Settings → Workflow → `Texts with tool proposals` = `Annotate from proposals` (existing projects were migrated to `Annotate from scratch`). Save. Every text with proposals now reads `Annotation, from proposals` in its card.
 - [ ] Note: the earlier seed of **cons-three** (third annotation above the limit 2) is now refused if reseeded; existing data stays.
@@ -2332,7 +2355,7 @@ Protocol (record findings as `FINDINGS-<date>.md` in the acceptance build folder
 1. Documents (lead, `demo-lead`): one-line rows, robot icon on texts with proposals, filter `With tool proposals`, page does not scroll beyond the table, 768 px window.
 2. Row click: card opens on the right segment; second click deselects; name click; bar only with two texts; ‹ ›; Esc; narrow window sheet.
 3. Card: Translation (version, origin, automatic check, reviewer chips with dates, Compare with source, versions, Request correction…), Annotation (`Annotation, from proposals`, proposals, View proposals, + Person, ✕ remove with the exact dialog and an empty draft after re-assigning, `Annotate from proposals myself` with the consolidator-rule hint), Finalization (waiting / ready to compare / consolidating n of m / ready to accept / accepted date).
-4. Change plan… on one text (annotation mode, lock reason after assigning; the "steps were saved" message if the mode fails) and bulk Plan… (locked texts reported).
+4. Change plan… on one text (annotation mode, lock reason after assigning; a refused mode saves nothing) and bulk Plan… (locked texts reported).
 5. Annotate from proposals as `demo-annotator` (`Tom Reis (demo-annotator), Annotator` on the login screen): J/K, 1–4/0, correct a span and a term, add a missed finding, submit; second annotation from proposals as `demo-annotator2`.
 6. Compare results…, Consolidate… (comparison table, ✓, Take …'s finding, result line, Not taken, robot icon on findings from tool proposals), Accept result….
 7. Text view: Show list (greyed entries with reasons for the lead; an annotator sees no other people's work), Compare column, final result layer.
@@ -2348,7 +2371,7 @@ Protocol (record findings as `FINDINGS-<date>.md` in the acceptance build folder
 2. **Mode lock = oldest annotation work, stored per assignment.** The mode is written on each annotate assignment at creation; the text is locked while annotation work exists on any version: non-revoked annotate assignments, revoked ones with submitted work, and annotation submissions. Removing all unsubmitted assignments unlocks it; submitted work never does. Changing the project setting is never refused; it simply does not affect locked texts. [P1, P3, P4]
 3. **Annotation from proposals is its own workspace mode on the annotate task** (`proposal_check`, annotator role), not the consolidator's task, so it counts as an annotation and is consolidated without changing the comparison rules. [P2, P3]
 4. **"Uncertain" stays a fourth decision.** The review screen offers it (key 4); the export records it as `uncertain` beside `confirmed`, `rejected`, `corrected`; it is left out of precision. [P6]
-5. **"Annotate from proposals myself"** implies the language confirmation for the lead's own work, counts towards the limit, is refused on texts annotated from scratch (`PROPOSAL_CHECK_NOT_APPLICABLE`); with "the consolidator is not an annotator" on, the button says beforehand that the lead cannot consolidate this text afterwards, and the later self-consolidation is refused by the existing rule. [P3, U3]
+5. **"Annotate from proposals myself"** is the ordinary assign route with the lead's own username (the role grant shared with self-consolidation); it implies the language confirmation for the lead's own work, counts towards the limit and is offered only on texts annotated from proposals (U3); with "the consolidator is not an annotator" on, the button says beforehand that the lead cannot consolidate this text afterwards, and the later self-consolidation is refused by the existing rule. [P3, U3]
 6. **No moving or carrying of work from proposals to a new text version** (its decisions refer to the proposals of its own version); move and carry are refused with their own reason `from_proposals`; the new version is assigned anew and needs its own proposals while the text is locked "from proposals" (`NO_PROPOSALS_ON_VERSION`). [P2, P3, P4]
 7. **Text view and other people's work (D3, spec §4):** non-leads never get entries for other people's work, not even greyed; greyed entries with reasons are shown only for layers the viewer is entitled to know about (tool proposals while annotating from scratch; for the lead: people who have not submitted and the not yet accepted final result). [P8, U7]
 8. **Remove (✕)** is offered on Annotation-part chips; the endpoint refuses submitted work for any task; "Their draft is discarded" is literal: the draft rows of that workspace are deleted and an active round is abandoned, so a re-assignment of the same person starts empty (edit events and audit stay). [P3, U3]
@@ -2374,15 +2397,15 @@ Protocol (record findings as `FINDINGS-<date>.md` in the acceptance build folder
 | R3 | P1's constraint breaks direct annotate inserts in tests | P1 keeps NOT NULL for annotate rows and owns/fixes the ten listed inserts; reason in P1 Step 4 (no second spelling of "from scratch"; no server default can be task-specific). |
 | R4 | U3 ‖ U7 conflict on route params and `index.css` | `show`/`compare_show`/`panel_tab=history` moved to U0; `router.ts` U0 only; `index.css` U3 only; U7 imports `variants/textView.css` from its component. |
 | R5 | U3 deletes files still imported | U3 moves `StageActions` to `documents/StageActions.tsx`, `STAGE_TITLES` to `stageLabels.ts`, keeps `StagePopover`; owns `RowActivity.tsx`, `StagePopover.tsx`, `stageLabels.ts`; Done grep over importers. |
-| R6 | P2 changes the API contract | P2 is contracts writer 1 and regenerates; token order U0 → P2 → L1 → P3 → P4 → P7 → P5 → P8 (schedule revision: U0 → P2 → L1 → P3 → P4 → P5 → P7 → P8, contract-first steps of P4 and P5). |
+| R6 | P2 changes the API contract | P2 is a contracts writer and regenerates; contracts writers run one after another in the backend lane: L1 → P2 → P3 → P4 → P7 → P8 → P5 (Global rule 10). |
 | R7 | What drives a proposal-check round's targets | Mostly moot by D1 (ordinary review gone); stated precisely in "Proposal targets" and P2 "Facts verified": newest proposal set of the assignment's document, editable layers, fixed at round creation. |
 | R8 | `assisted` might open for an annotate assignment | Moot by D1 (`assisted` removed in L1); guard kept: `require_workable` lets an annotate assignment open only its own mode; parametrised test in P3. |
-| R9 | Mode filters and own label | P2 adds `proposal_check` to `work_rounds.py:150` and `text_changes.py:414` (L1 drops `assisted`) and gives `authz/versions.py:152` labels per kind; handover test in P2. |
+| R9 | Mode filters and own label | P2 adds `proposal_check` to `work_rounds.py:150` and `text_changes.py:414` (L1 already dropped `assisted`) and gives `authz/versions.py:152` labels per kind; handover test in P2. |
 | R10 | New text versions under "from proposals" | Rule in spec §1 and P3/P4: move/carry refused with reason `from_proposals`; assigning a version without proposals while locked "from proposals" → `NO_PROPOSALS_ON_VERSION`; tests for open and submitted work. |
 | R11 | One helper for "the text's target document" | `application/text_targets.py` (P3), moved from the existing derivation; used by P3, P4, P5, P8; equality tests in P3 and P5. |
 | R12 | Remove must discard the draft | `remove` deletes the workspace's drafts and abandons an active round; test `test_remove_discards_the_draft`. |
 | R13 | e3c-proposals existing work | Handled by D4: M1 purges its annotation work with L1's `scripts/purge_annotation_work.py`, then switches the setting. |
-| R14 | Reading stored keep-both marks | Moot by D1: migration 0021 deletes keep-both consolidations; P7 has no read path. |
+| R14 | Reading stored keep-both marks | Moot by D1: migration 0020 deletes keep-both consolidations; P7 has no read path. |
 | R15 | Greyed entries for other people's work | Handled by D3 (spec §4 changed); P8, U7, T2 test that non-leads get no such entries. |
 | R16 | "Myself" consequence under the consolidator rule | U3 shows the hint from `page.adjudicator_not_annotator`; Copy table; U3 and T2 tests. |
 | R17 | P2 profile lookup | `ctx["repo"].get_task_profile("pkg-rev-1")` in `test_scope_differs_from_review`. |
@@ -2390,8 +2413,8 @@ Protocol (record findings as `FINDINGS-<date>.md` in the acceptance build folder
 | R19 | `proposal_check` in `MODE_ORDER`/`PreferenceMode` | Left out (P2 test asserts it); L1 sets `MODE_ORDER = ("independent",)`. |
 | R20 | Multiple proposal sets | Newest set only (targets, counts, precision); documented in `docs/scientific-workflow.md` by P6; `proposal_set` in the receipt. |
 | R21 | CaseScreen site list | U2 uses the grep as source of truth (18 matches listed). |
-| R22 | Wave notes for U8/U9 | U8 takes one heavy slot for its DB test; U9 runs in W12 as the only `frontend/src` writer (schedule revision). |
-| R23 | Mode save fails after the flags PATCH | U5 says inline `The steps were saved. The annotation mode was not changed: {message}`; test. |
+| R22 | Wave notes for U8/U9 | U8 runs its one DB test in the frontend lane; U9 runs after every other `frontend/src` writer is merged. |
+| R23 | Mode save fails after the flags PATCH | Moot: P4 carries the mode in the existing row PATCH, so flags and mode are saved in one transaction or not at all (`test_a_refused_mode_saves_no_flags`); U5 shows the refusal inline. |
 | R24 | Base and worktree | Global rules: base `main` 6d8bc1b or later; worktree `.worktrees/acceptance-20261023`, branch `feat/acceptance-20261023`, fast-forwarded to the `main` commit with this plan before the first WP. |
 | R25 | Limit per version vs lock per text | Stated and justified in P3 and spec §1. |
 
@@ -2460,10 +2483,10 @@ Protocol (record findings as `FINDINGS-<date>.md` in the acceptance build folder
 | Manual acceptance on the native server with e3c-proposals | M1 |
 | Out of scope (modifiers, family member, user management) | not touched |
 
-Gaps found and fixed during the reviews: (1) the fixed axis colours must appear "everywhere axis values appear (editor, consolidation, text view, compare)": U7 also owns `editor/FindingRow.tsx` and `variants/ComparePane.tsx` with tests; the editor's radio options (`AnnotationPanel.tsx:337-350`) stay neutral (controls, not values). (2) P1 and P2 both need `assignments/service.py` and P1's check constraint affects every test that creates annotate assignments, so P2 runs after P1. (3) P7 removes API fields the consolidation UI uses; P7 therefore also does the minimal frontend compile fix; L1 does the same for its removals. (4) The annotations-per-text bypass is fixed in P3 together with the mode wiring, because both edit `_assign_locked`. (5) L1 runs after P2 because the review-machinery tests it touches stay valid only once `proposal_check` exists, and both edit the mode literals; it runs before P3 so P3 builds on the reduced task set. (6) The legacy purge needs the same closure in the migration and in M1's clean-up of e3c-proposals, so it lives once in `storage/work_purge.py`.
+Gaps found and fixed during the reviews: (1) the fixed axis colours must appear "everywhere axis values appear (editor, consolidation, text view, compare)": U7 also owns `editor/FindingRow.tsx` and `variants/ComparePane.tsx` with tests; the editor's radio options (`AnnotationPanel.tsx:337-350`) stay neutral (controls, not values). (2) P1 and P2 both need `assignments/service.py` and P1's check constraint affects every test that creates annotate assignments, so P2 runs after P1. (3) P7 removes API fields the consolidation UI uses; P7 therefore also does the minimal frontend compile fix; L1 does the same for its removals. (4) The annotations-per-text bypass is fixed in P3 together with the mode wiring, because both edit `_assign_locked`. (5) L1 runs first, so P1–P3 build on the reduced task and mode set and write each site once (no `assisted`, no "until L1" branches); the review-machinery tests L1 keeps stay valid because the machinery is shared with consolidation. (7) The batch planner and `_assign_locked` share one count of held annotations (`held_annotations`), so a batch save is never rolled back by a refusal its planner did not foresee; the lead's self-grant exists once (`grant_lead_self_role`) for self-assignment and self-consolidation. (6) The legacy purge needs the same closure in the migration and in M1's clean-up of e3c-proposals, so it lives once in `storage/work_purge.py`.
 
 Placeholder scan: no "TBD"/"TODO"/"similar to"; WP blocks that adapt to a verified-but-unread signature say which `grep` to run and keep the assertion's meaning fixed; test bodies given only as descriptions name their inputs and expected codes.
 
-Type consistency: `AnnotationMode = "proposals" | "scratch"`, `TextMode`, `text_mode(..., work_modes=...)`, `workspace_mode` (P1) are used with the same names in P3, P4, P5; `newest_proposal_refs`/`newest_proposal_counts`/`newest_proposal_set`/`ProposalSetRef` (P2) in P3, P5, P6, P8; `TextRow`/`text_row`/`text_documents`/`text_target_document` (P3) in P4, P5, P8; `AnnotationModeView` (P4) in P5; `consolidation_progress` and `from_tool_proposal` (P7) in P5 and U6; `TextLayerEntry` (P8) in U7; `StagePath`/`PathSegment`/`PathTone` (U0) in U3 and U6; `assignedText`/`AssignedDate` (U0) in U2, U3; `isReviewLike` (U1, `editor/modes.ts`) frontend, `is_review_like` (P2) backend; `rowClick` (U4); `PlanSteps` (U5); `StageActions` (U3, moved).
+Type consistency: `AnnotationMode = "proposals" | "scratch"`, `TextMode`, `text_mode(..., work_modes=...)`, `workspace_mode` (P1) are used with the same names in P3, P4, P5; `newest_proposal_refs`/`newest_proposal_counts`/`newest_proposal_set`/`ProposalSetRef` (P2) in P3, P5, P6, P8; `TextRow`/`text_row`/`text_documents`/`text_target_document` (P3) in P4, P5, P8; `held_annotations`, `grant_lead_self_role` (P3); `AnnotationModeView` (P5); `consolidation_progress` and `from_tool_proposal` (P7) in P5 and U6; `TextLayerEntry` (P8) in U7; `StagePath`/`PathSegment`/`PathTone` (U0) in U3 and U6; `assignedText`/`AssignedDate` (U0) in U2, U3; `isReviewLike` (U1, `editor/modes.ts`) frontend, `is_review_like` (P2) backend; `rowClick` (U4); `PlanSteps` (U5); `StageActions` (U3, moved).
 
-Parallel file overlap: see "Parallel ownership check" (schedule revision of 2026-10-23: lanes, pre-phases, contract-first steps of P4 and P5; every set of WPs that are unmerged at the same time has disjoint Owns).
+Parallel file overlap: see "Parallel ownership check" (two lanes, each sequential; they overlap only while P6 and T1 finish, with disjoint Owns).
