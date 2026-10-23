@@ -15,9 +15,8 @@ from collections import defaultdict
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from fastapi import HTTPException
 from sqlalchemy import Connection, RowMapping, func, insert, select, update
 
 from ontocurator.application.final_causes import latest_review_decisions
@@ -26,6 +25,7 @@ from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.policy import Access, Action
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain import document_rows as rules
+from ontocurator.domain.annotation_modes import AnnotationMode
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.work_plans import (
     OFF,
@@ -152,8 +152,12 @@ def _audit_cases(
     withdrawn: Sequence[OpenTask] = (),
     accepted: Mapping[str, str] | None = None,
     now: datetime | None = None,
+    old_modes: Mapping[RowKey, str | None] | None = None,
+    new_modes: Mapping[RowKey, str | None] | None = None,
 ) -> None:
-    """One ``work_plan.update`` per case: old/new flags, withdrawn, acceptances."""
+    """One ``work_plan.update`` per case: old/new flags (and the annotation-mode
+    override of rows whose override changed), withdrawn, acceptances."""
+    old_modes, new_modes = old_modes or {}, new_modes or {}
     by_case: dict[str, list[RowKey]] = defaultdict(list)
     for key in sorted(new, key=_row_order):
         by_case[key.case_id].append(key)
@@ -174,6 +178,16 @@ def _audit_cases(
                         "old": _flags(old.get(key, OFF)),
                         "new": _flags(new[key]),
                     }
+                    | (
+                        {
+                            "annotation_mode": {
+                                "old": old_modes.get(key),
+                                "new": new_modes[key],
+                            }
+                        }
+                        if key in new_modes
+                        else {}
+                    )
                     for key in keys
                 ],
                 "withdrawn": [
@@ -274,6 +288,82 @@ def turn_review_on(
         _audit_cases(conn, actor, project_id, current, new, revisions)
 
 
+_MODE_REFUSALS = {
+    "ANNOTATION_MODE_LOCKED": "mode_locked",
+    "NO_TOOL_PROPOSALS": "mode_no_proposals",
+}
+
+
+def _override(requested: str) -> AnnotationMode | None:
+    """A requested mode as stored: ``"project"`` clears the override."""
+    return None if requested == "project" else cast(AnnotationMode, requested)
+
+
+def _mode_refusal(
+    conn: Connection, pid: int, key: RowKey, mode: AnnotationMode | None
+) -> str | None:
+    """The refusal of a row's new override (plan P4), or None to store it.
+
+    ``ANNOTATION_MODE_LOCKED`` when the text's annotation has started in
+    another mode; ``NO_TOOL_PROPOSALS`` for "proposals" on a text without
+    proposals. Following the project (None) or the locked mode is always
+    stored: it only matters after an unlock.
+    """
+    if mode is None:
+        return None
+    # Imported here: text_targets builds on this module.
+    from ontocurator.application.annotation_modes import load_text_mode
+    from ontocurator.application.text_targets import TextRow, text_target_document
+
+    try:
+        target = text_target_document(conn, pid, TextRow(key.case_id, key.language))
+    except DomainError as error:
+        if error.code != "NOT_IN_WORK_PLAN":
+            raise
+        return None  # every version discarded: there is no text to annotate
+    text = load_text_mode(conn, pid, target)
+    if text.locked:
+        return None if text.mode == mode else "ANNOTATION_MODE_LOCKED"
+    if mode == "proposals" and text.source == "no_proposals":
+        return "NO_TOOL_PROPOSALS"
+    return None
+
+
+@dataclass
+class _Modes:
+    """The override changes of one save: allowed (``new``) and refused rows."""
+
+    new: dict[RowKey, AnnotationMode | None] = field(default_factory=dict)
+    refused: dict[str, list[RowKey]] = field(default_factory=dict)
+
+    def refs(self) -> dict[str, list[dict[str, str]]]:
+        return {
+            name: [_ref(k) for k in self.refused.get(code, [])]
+            for code, name in _MODE_REFUSALS.items()
+        }
+
+
+def _mode_changes(
+    conn: Connection, pid: int, requested: Mapping[RowKey, AnnotationMode | None]
+) -> _Modes:
+    """Rows whose stored override differs from the request, judged by the
+    rule (one function for the row PATCH, bulk preview, bulk save and Undo)."""
+    stored = store.plan_modes(conn, pid, requested)
+    modes = _Modes()
+    for key in sorted(requested, key=_row_order):
+        mode = requested[key]
+        if mode == stored.get(key):
+            continue
+        # shortcut: a few queries per changed row; batch them if bulk mode
+        # saves over thousands of texts get slow.
+        code = _mode_refusal(conn, pid, key, mode)
+        if code is None:
+            modes.new[key] = mode
+        else:
+            modes.refused.setdefault(code, []).append(key)
+    return modes
+
+
 @dataclass
 class _Plan:
     """One evaluated change set of a project."""
@@ -288,6 +378,8 @@ class _Plan:
     invalid: list[Invalid] = field(default_factory=list)
     # Row-level selection (VD21): selected texts the change does not reach.
     skipped: list[RowKey] = field(default_factory=list)
+    # Annotation-mode overrides; their rows are in ``new`` (flags kept).
+    modes: _Modes = field(default_factory=_Modes)
 
 
 class WorkPlanService:
@@ -532,6 +624,7 @@ class WorkPlanService:
             restored = {k: plan.revisions[k.case_id] + 1 for k in result.restored}
         _materialise(conn, plan.pid, plan.current, plan.new)
         was_undecided = store.undecided(conn, plan.pid, plan.new)
+        old_modes = store.plan_modes(conn, plan.pid, plan.new)
         revisions = _write(
             conn,
             self.actor,
@@ -541,6 +634,7 @@ class WorkPlanService:
             restored=restored,
             decided=decided or {},
         )
+        store.write_modes(conn, plan.pid, plan.modes.new)
         _audit_cases(
             conn,
             self.actor,
@@ -551,6 +645,8 @@ class WorkPlanService:
             withdrawn=result.withdrawn,
             accepted=accepted,
             now=now,
+            old_modes=old_modes,
+            new_modes=plan.modes.new,
         )
         return {
             "revisions": revisions,
@@ -561,6 +657,7 @@ class WorkPlanService:
                         **_flags(plan.current.get(k, OFF)),
                         "restored_revision": previous.get(k),
                         "decided": k not in was_undecided,
+                        "annotation_mode": old_modes.get(k),
                     }
                     for k in sorted(plan.new, key=_row_order)
                 ],
@@ -587,7 +684,6 @@ class WorkPlanService:
     def patch_row(
         self, key: str, case_id: str, language: str, change: PlanRowPatch
     ) -> dict[str, Any]:
-        _mode_not_implemented([change.annotation_mode])
         row_key = RowKey(case_id, language)
         with self.db.transaction() as conn:
             project = self._lock(conn, key, exclusive=True)
@@ -610,11 +706,23 @@ class WorkPlanService:
                 and _needs_acceptance(row, new)
                 else frozenset()
             )
-            if (
-                new == old
-                and not accepting
-                and not store.undecided(conn, pid, [row_key])
-            ):
+            stored = store.plan_modes(conn, pid, [row_key]).get(row_key)
+            modes = _mode_changes(
+                conn,
+                pid,
+                {}
+                if change.annotation_mode is None
+                else {row_key: _override(change.annotation_mode)},
+            )
+            for code in modes.refused:
+                # The whole PATCH, flags included, saves nothing.
+                raise DomainError(code, _ref(row_key))
+            flags_change = (
+                new != old
+                or bool(accepting)
+                or bool(store.undecided(conn, pid, [row_key]))
+            )
+            if not flags_change and not modes.new:
                 # Nothing to write: no revision bump, no audit, empty Undo.
                 return {
                     "case_id": case_id,
@@ -623,6 +731,7 @@ class WorkPlanService:
                         **_flags(new),
                         "review_applicable": not row.is_source,
                         "discarded": row.discarded,
+                        "annotation_mode": stored,
                     },
                     "revision": revisions[case_id],
                     "undo": {"rows": [], "revisions": {case_id: revisions[case_id]}},
@@ -637,9 +746,14 @@ class WorkPlanService:
                 {row_key: new},
                 revisions,
                 accepting,
+                modes=modes,
             )
+            # A mode-only change keeps the flags: they are not judged again.
             plan.invalid = validate(
-                plan.new, versions, rule_on=plan.rule_on, accepting=accepting
+                plan.new if flags_change else {},
+                versions,
+                rule_on=plan.rule_on,
+                accepting=accepting,
             )
             self._require_valid(plan)
             result = self._consequences(conn, plan, lock=True)
@@ -663,6 +777,7 @@ class WorkPlanService:
                     **_flags(new),
                     "review_applicable": not after.is_source,
                     "discarded": after.discarded,
+                    "annotation_mode": modes.new.get(row_key, stored),
                 },
                 "revision": applied["revisions"][case_id],
                 "undo": applied["undo"],
@@ -732,10 +847,24 @@ class WorkPlanService:
             skipped=skipped,
         )
         plan.invalid = validate(new, versions, rule_on=rule_on, accepting=accepting)
+        requested: dict[RowKey, AnnotationMode | None] = {}
+        for row_key, row in versions.items():
+            item = request.languages.get(SOURCE_KEY if row.is_source else row.language)
+            # As ``merge``: rows of the selected cases, never fully discarded.
+            if (
+                item is not None
+                and item.annotation_mode != "keep"
+                and row_key.case_id in plan.revisions
+                and not row.discarded
+            ):
+                requested[row_key] = _override(item.annotation_mode)
+        plan.modes = _mode_changes(conn, pid, requested)
+        for row_key in plan.modes.new:
+            # A mode-only change still writes the row (revision, Undo, audit).
+            new.setdefault(row_key, current.get(row_key, OFF))
         return plan
 
     def bulk_preview(self, key: str, request: BulkPlanRequest) -> dict[str, Any]:
-        _mode_not_implemented(c.annotation_mode for c in request.languages.values())
         with self.db.transaction() as conn:
             project = self._lock(conn, key, exclusive=False)
             plan = self._bulk_plan(conn, project, request)
@@ -758,6 +887,10 @@ class WorkPlanService:
                 plan.versions.items(), key=lambda item: _row_order(item[0])
             ):
                 groups[SOURCE_KEY if row.is_source else row.language].append(row_key)
+            refused = {
+                name: set(plan.modes.refused.get(code, []))
+                for code, name in _MODE_REFUSALS.items()
+            }
             languages = []
             for group in sorted(groups, key=lambda g: (g != SOURCE_KEY, g)):
                 keys = groups[group]
@@ -791,6 +924,10 @@ class WorkPlanService:
                         "not_acceptable": len(blocked),
                         "in_review": sum(k in in_review for k in blocked),
                         "marked_in_package": sum(r.marked_in_package for r in rows),
+                        **{
+                            name: sum(k in rows_refused for k in keys)
+                            for name, rows_refused in refused.items()
+                        },
                     }
                 )
             to_assign = {
@@ -819,7 +956,6 @@ class WorkPlanService:
             }
 
     def bulk_save(self, key: str, request: BulkPlanRequest) -> dict[str, Any]:
-        _mode_not_implemented(c.annotation_mode for c in request.languages.values())
         with self.db.transaction() as conn:
             project = self._lock(conn, key, exclusive=True)
             plan = self._bulk_plan(conn, project, request)
@@ -839,6 +975,7 @@ class WorkPlanService:
                     "undo": {"rows": [], "revisions": {}},
                     "withdrawn": [],
                     "skipped_rows": skipped_rows,
+                    **plan.modes.refs(),
                 }
             result = self._consequences(conn, plan, lock=True)
             self._require_confirmed(
@@ -859,6 +996,7 @@ class WorkPlanService:
                 "undo": applied["undo"],
                 "withdrawn": applied["withdrawn"],
                 "skipped_rows": skipped_rows,
+                **plan.modes.refs(),
             }
 
     def set_rows(self, key: str, request: PlanRowsSet) -> dict[str, Any]:
@@ -884,6 +1022,17 @@ class WorkPlanService:
                 store.effective_plan(conn, pid, cases),
                 {k: PlanFlags(r.review, r.annotate) for k, r in rows.items()},
                 revisions,
+                # Only rows that name their override set it (Undo views
+                # always do; a plain "decide" call keeps the stored one).
+                modes=_mode_changes(
+                    conn,
+                    pid,
+                    {
+                        k: r.annotation_mode
+                        for k, r in rows.items()
+                        if "annotation_mode" in r.model_fields_set
+                    },
+                ),
             )
             # An Undo restores an earlier state exactly; only the source rule holds.
             plan.invalid = validate(
@@ -915,6 +1064,7 @@ class WorkPlanService:
                 "revisions": applied["revisions"],
                 "undo": applied["undo"],
                 "withdrawn": applied["withdrawn"],
+                **plan.modes.refs(),
             }
 
     # --- reads ------------------------------------------------------------- #
@@ -1149,9 +1299,3 @@ class WorkPlanService:
                 "revision": revision,
                 "withdrawn": self._withdrawn_views(conn, key, result.withdrawn),
             }
-
-
-def _mode_not_implemented(modes: Iterable[str | None]) -> None:
-    # Contract step (plan P4): the annotation-mode override is not built yet.
-    if any(mode not in (None, "keep") for mode in modes):
-        raise HTTPException(status_code=501)

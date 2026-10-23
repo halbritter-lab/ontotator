@@ -142,6 +142,7 @@ def test_patch_without_consequences_saves_and_returns_undo(env):
             "annotate": False,
             "restored_revision": None,
             "decided": True,
+            "annotation_mode": None,
         }
     ]
     assert result["undo"]["revisions"] == {"c1": 3}
@@ -412,6 +413,7 @@ def test_rows_set_restores_exact_flags_for_undo(env):
             "annotate": False,
             "restored_revision": None,
             "decided": True,
+            "annotation_mode": None,
         }
     ]
     restored = service(env).set_rows(

@@ -154,6 +154,7 @@ def test_bulk_preview_then_put_round_trip(case_env):
             "annotate": True,
             "restored_revision": None,
             "decided": True,
+            "annotation_mode": None,
         }
     ]
     assert [w["assignment_id"] for w in result["withdrawn"]] == [
@@ -235,6 +236,7 @@ def test_lookup_and_discard_routes(case_env):
         "review_applicable": True,
         "discarded": True,
         "decided": True,
+        "annotation_mode": None,
     }
     again = env.lead.post(url, json={"reason": "Wrong language", "confirm": True})
     assert again.status_code == 409, again.text

@@ -161,6 +161,22 @@ def _not_applicable(reason: str) -> DomainError:
     return DomainError("TEXT_CHANGE_NOT_APPLICABLE", {"reason": reason})
 
 
+def _from_proposals(step: Literal["move", "carry"]) -> DomainError:
+    """Work from proposals stays on its version (plan P4, A6): its decisions
+    refer to the proposals of that version. ``step`` picks the message."""
+    return DomainError(
+        "TEXT_CHANGE_NOT_APPLICABLE", {"reason": "from_proposals", "step": step}
+    )
+
+
+def _require_carryable(submission: Submission) -> None:
+    """Only annotation from scratch is carried to a new version."""
+    if submission.origin_key.mode == "proposal_check":
+        raise _from_proposals("carry")
+    if submission.origin_key.mode != "independent":
+        raise _not_applicable("not_annotation")
+
+
 class TextChangeService:
     def __init__(self, db: Database, repo: Repository) -> None:
         self.db = db
@@ -296,6 +312,8 @@ class TextChangeService:
         frozen into a snapshot; moving it would lose the draft (``not_open``).
         """
         TextChangeService._require_open_annotation(assignment)
+        if assignment["annotation_mode"] == "proposals":
+            raise _from_proposals("move")
         if assignment["active_round_id"] is None and assignment["status"] != "open":
             raise _not_applicable("not_open")
 
@@ -492,8 +510,7 @@ class TextChangeService:
         Shared by ``carry`` and ``preview``: an annotation submission that is
         its round's current result, on a task that is not held.
         """
-        if submission.origin_key.mode != "independent":
-            raise _not_applicable("not_annotation")
+        _require_carryable(submission)
         source_assignment = self._source_state(conn, key, pid, submission_id)
         if source_assignment is not None:
             require_task_writable(conn, source_assignment)
@@ -830,6 +847,12 @@ class TextChangeService:
             if old["workflow_revision"] != expected_workflow_revision:
                 raise DomainError("WORKFLOW_REVISION_CONFLICT")
             self._require_open_annotation(old)
+            if (
+                resolution == "finish_then_carry"
+                and old["annotation_mode"] == "proposals"
+            ):
+                # The finished work would be carried later: refused now.
+                raise _from_proposals("carry")
             require_task_writable(conn, assignment_id)
             source, target = self._check_target(
                 conn, key, pid, old["document_id"], target_document_id
@@ -1187,8 +1210,7 @@ def _auto_carry(
     ).one_or_none()
     if decided_by is None:
         return
-    if submission.origin_key.mode != "independent":
-        raise _not_applicable("not_annotation")
+    _require_carryable(submission)
     service = TextChangeService(repo.db, repo)
     from_id = submission.origin_key.document_id
     # The newest version now, also when the text changed again since.

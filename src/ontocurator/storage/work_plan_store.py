@@ -56,10 +56,12 @@ __all__ = [
     "language_versions",
     "open_reports",
     "open_tasks",
+    "plan_modes",
     "plan_rows",
     "project_revisions",
     "restored",
     "revisions",
+    "write_modes",
     "write_rows",
 ]
 
@@ -233,6 +235,48 @@ def plan_rows(
     return {
         _key(row): PlanFlags(row.review, row.annotate) for row in conn.execute(query)
     }
+
+
+def plan_modes(
+    conn: Connection, project_id: int, keys: Iterable[RowKey]
+) -> dict[RowKey, str | None]:
+    """Stored annotation-mode overrides of ``keys`` (rows without one: absent)."""
+    keys = list(keys)
+    if not keys:
+        return {}
+    return {
+        _key(row): row.annotation_mode
+        for row in conn.execute(
+            select(
+                WorkPlanFlagsRow.case_id,
+                WorkPlanFlagsRow.language,
+                WorkPlanFlagsRow.annotation_mode,
+            ).where(
+                WorkPlanFlagsRow.project_id == project_id,
+                _in_keys(WorkPlanFlagsRow.case_id, WorkPlanFlagsRow.language, keys),
+            )
+        )
+    }
+
+
+def write_modes(
+    conn: Connection, project_id: int, modes: Mapping[RowKey, str | None]
+) -> None:
+    """Set the override of existing rows (None = follow the project setting).
+
+    Callers write the rows' flags first (``write_rows`` bumps the revision).
+    """
+    # shortcut: one UPDATE per row; batch it if bulk mode saves get slow.
+    for key, mode in modes.items():
+        conn.execute(
+            update(WorkPlanFlagsRow)
+            .where(
+                WorkPlanFlagsRow.project_id == project_id,
+                WorkPlanFlagsRow.case_id == key.case_id,
+                WorkPlanFlagsRow.language == key.language,
+            )
+            .values(annotation_mode=mode)
+        )
 
 
 def effective_plan(
