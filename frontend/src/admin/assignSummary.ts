@@ -7,14 +7,13 @@
 import type { BatchPersonView, BatchSkipView } from "../api/client";
 import { textLabel, type PersonRef } from "../app/identity";
 
-export type AssignTask = "translation_review" | "annotate" | "review";
+export type AssignTask = "translation_review" | "annotate";
 
 const nouns: Record<AssignTask, [string, string]> = {
   translation_review: ["translation review", "translation reviews"],
   annotate: ["annotation", "annotations"],
-  review: ["annotation review", "annotation reviews"],
 };
-const stepNames: Record<AssignTask, string> = { translation_review: "Translation review", annotate: "Annotation", review: "Annotation review" };
+const stepNames: Record<AssignTask, string> = { translation_review: "Translation review", annotate: "Annotation" };
 
 export const taskNoun = (task: AssignTask, count: number): string => `${count} ${nouns[task][count === 1 ? 0 : 1]}`;
 export const stepName = (task: AssignTask): string => stepNames[task];
@@ -65,7 +64,6 @@ export function skippedLines(skipped: readonly BatchSkipView[], language: string
 
 export function needsPeopleMessage(n: number, task: AssignTask): string {
   if (task === "annotate") return `Choose at least ${n} annotators for ${n} annotations per text.`;
-  if (task === "review") return `Choose at least ${n} reviewers for ${n} reviews per text.`;
   return `Choose at least ${n} reviewers for ${n} translation reviews per text.`;
 }
 
@@ -73,7 +71,7 @@ export function needsPeopleMessage(n: number, task: AssignTask): string {
 export function memberReason(member: Pick<BatchPersonView, "unavailable" | "already_assigned" | "reads">, task: AssignTask, language: string): string | null {
   switch (member.unavailable) {
     case "inactive": return "Account inactive";
-    case "role_missing": return task === "review" ? "Not an adjudicator in this project" : "Not an annotator in this project";
+    case "role_missing": return "Not an annotator in this project";
     case "does_not_read": return member.reads.includes(language) ? "does not read the source language" : `does not read ${language}`;
   }
   if (member.already_assigned > 0) return `Already ${task === "annotate" ? "annotating" : "reviewing"} ${member.already_assigned} of these cases`;

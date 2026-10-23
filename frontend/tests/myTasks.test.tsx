@@ -32,7 +32,7 @@ describe("My tasks component", () => {
     render(<MyTasks projects={[]} onNavigate={onNavigate} />);
     const rows = await screen.findAllByTestId("task-row");
     expect(rows.map(row => within(row).getByText(/^doc-/).textContent)).toEqual(["doc-4 · de", "doc-2 · de", "doc-3 · de", "doc-1 · de"]);
-    expect(within(rows[1]).getByText("Review")).toBeDefined();
+    expect(within(rows[1]).getByText("Consolidation")).toBeDefined();
     expect(within(rows[0]).getByText("Annotation")).toBeDefined();
     expect(within(rows[0]).getByText("Reopened")).toBeDefined();
     expect(rows[0].querySelector("time")?.getAttribute("datetime")).toBe(tasks[0].updated_at);

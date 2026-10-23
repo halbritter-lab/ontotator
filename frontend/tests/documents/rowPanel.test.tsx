@@ -319,7 +319,7 @@ describe("stage strip and Activity", () => {
 describe("tabs Activity · Versions (n) · Details", () => {
   it("switches tabs by click and arrows; Versions shows Text versions, Details the plan and technical details", async () => {
     rowData["case-107:de"] = historyData();
-    renderPanel([historyRow()], "case-107:de", { planRevision: 4, plan: <button type="button">Review</button> });
+    renderPanel([historyRow()], "case-107:de", { planRevision: 4, plan: <button type="button">Translation review</button> });
     const tabs = within(panel()).getByRole("tablist", { name: "Details of case-107 · de" });
     expect(within(tabs).getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Activity", "Versions (2)", "Details"]);
     fireEvent.click(within(tabs).getByRole("tab", { name: "Versions (2)" }));
@@ -331,7 +331,7 @@ describe("tabs Activity · Versions (n) · Details", () => {
     expect(navigations.at(-1)?.tab).toBe("details");
     expect(document.activeElement).toBe(within(tabs).getByRole("tab", { name: "Details" }));
     const details = within(panel()).getByRole("tabpanel", { name: "Details" });
-    expect(within(within(details).getByRole("group", { name: "Plan" })).getByRole("button", { name: "Review" })).toBeTruthy();
+    expect(within(within(details).getByRole("group", { name: "Plan" })).getByRole("button", { name: "Translation review" })).toBeTruthy();
     expect(within(details).getByText("Plan revision").nextElementSibling!.textContent).toBe("4");
     for (const value of ["case-107-de", "case-107-de-v2", "s-a", "s-b"]) expect(details.textContent).toContain(value);
     expect(within(details).getByRole("heading", { name: "Problem reports (1)" })).toBeTruthy();
@@ -636,7 +636,7 @@ describe("page", () => {
     renderDocuments({});
     fireEvent.click(await screen.findByRole("button", { name: "Details, case-107 · de" }));
     const aside = await screen.findByRole("complementary", { name: "Details, case-107 · de" });
-    fireEvent.click(await within(aside).findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await within(aside).findByRole("button", { name: "Accept result…" }));
     const none = await within(aside).findByText("No more final results to decide.");
     fireEvent.click(within(none.parentElement as HTMLElement).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
@@ -652,7 +652,7 @@ describe("page", () => {
     const aside = await screen.findByRole("complementary", { name: "Details, case-107 · de" });
     const block = await within(aside).findByRole("region", { name: "Final result" });
     expect(await within(block).findByRole("button", { name: "Consolidate…" })).toBeTruthy();
-    expect(within(block).queryByRole("button", { name: /as final/ })).toBeNull();
+    expect(within(block).queryByRole("button", { name: /Accept result/ })).toBeNull();
     expect(within(block).queryByRole("table")).toBeNull();
     fireEvent.keyDown(document.body, { key: "j" });
     await waitFor(() => expect(aside.getAttribute("aria-label")).toBe("Details, case-108 · de"));

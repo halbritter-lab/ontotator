@@ -35,7 +35,7 @@ function StateText({ value }: { value: TriState | "mixed" }): JSX.Element {
 const taskNames: Record<string, [string, string]> = {
   translation_review: ["open translation review", "open translation reviews"],
   annotate: ["open annotation", "open annotations"],
-  review: ["open annotation review", "open annotation reviews"],
+  review: ["open consolidation", "open consolidations"],
 };
 
 /** Warning lines per language (spec "Editing after work started"). */
@@ -208,14 +208,14 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
       {!preview && previewError === undefined && <p className="field-hint">{CHECKING}</p>}
       {previewError !== undefined && <><ErrorNotice error={previewError} /><Button size="sm" onClick={() => setReload(value => value + 1)}>Retry</Button></>}
       {preview && <div className="work-plan-table-scroll"><table className="data-table density-compact work-plan-table">
-        <thead><tr><th scope="col">Language</th><th scope="col">In selection</th><th scope="col">Review</th><th scope="col">Annotate</th></tr></thead>
+        <thead><tr><th scope="col">Language</th><th scope="col">In selection</th><th scope="col">Translation review</th><th scope="col">Annotate</th></tr></thead>
         <tbody>{languages.map(language => {
           const count = language.cases_in_selection === totalCases ? String(language.cases_in_selection) : `${language.cases_in_selection} of ${totalCases}`;
           const cell = (flag: Flag) => {
-            const column = flag === "review" ? "Review" : "Annotate";
+            const column = flag === "review" ? "Translation review" : "Annotate";
             if (flag === "review" && language.key === SOURCE_KEY) return <td className="work-plan-none" data-label={column}>–</td>;
             const counts = flag === "review" ? language.review : language.annotate;
-            const name = `${flag === "review" ? "Review" : "Annotate"}, ${language.key === SOURCE_KEY ? languageName(language) : language.key}`;
+            const name = `${flag === "review" ? "Translation review" : "Annotate"}, ${language.key === SOURCE_KEY ? languageName(language) : language.key}`;
             if (confirming) return <td data-label={column}><StateText value={shown(language, flag)} /></td>;
             if (single) {
               const value = effective(language, flag);

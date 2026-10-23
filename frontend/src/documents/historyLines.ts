@@ -44,7 +44,7 @@ function timeText(iso: string, now: Date): string {
 const SUBMISSION_PREFIX: Readonly<Record<RowSubmissionView["kind"], string>> = {
   annotation: "Annotation", carry_forward: "Annotation", consolidation: "Consolidation",
 };
-const workPrefix = (item: WorkItem) => (item.task === "review" ? "Annotation review" : "Annotation");
+const workPrefix = (item: WorkItem) => (item.task === "review" ? "Consolidation" : "Annotation");
 const who = (item: WorkItem) => personLabel(item.author_label, item.is_me, item.person);
 
 /** U14: "4 kept automatically (all matched)" on a consolidation that took matching findings over; else nothing. */

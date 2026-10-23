@@ -15,7 +15,8 @@ export function memberOptionLabel(member: Member): string {
 }
 /** The document fields task-language and review checks need (a `DocumentSummary` satisfies it). */
 export type TaskDocument = Pick<DocumentSummary, "document_id" | "language" | "translation_status">;
-export const eligibleMembers = (members: Member[], task: Task | "review") => members.filter(member => member.roles.includes(task === "review" ? "adjudicator" : "annotator"));
+/** Annotators; the task argument is kept for callers (D1: consolidators are chosen in "Consolidate…" only). */
+export const eligibleMembers = (members: Member[], _task: string) => members.filter(member => member.roles.includes("annotator"));
 export function useCaseVariants(key: string, supplied?: readonly CaseSummary[] | null) {
   const [loaded, setLoaded] = useState<CaseSummary[] | null>(null);
   const [error, setError] = useState<unknown>();

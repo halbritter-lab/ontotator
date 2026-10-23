@@ -119,7 +119,7 @@ describe("current state panel", () => {
     });
     const panel = within(stateSection());
     expect(panel.getByText("None paused now")).toBeTruthy();
-    await waitFor(() => expect(stateSection().textContent).toMatch(/Annotation · Round 1 · ann-0003 · /));
+    await waitFor(() => expect(stateSection().textContent).toMatch(/Annotation, from scratch · Round 1 · ann-0003 · /));
     expect(screen.getByText("Nothing is paused by this report. The report is open until you close it.")).toBeTruthy();
   });
 });

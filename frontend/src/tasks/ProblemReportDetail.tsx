@@ -15,7 +15,7 @@ import { useLeadReport } from "../problems/useLeadReport";
 import { Button, EmptyState, IconChevronLeft, InlineMessage } from "../ui";
 import { refKey } from "../variants/versionState";
 
-const TASK_TYPES = { annotate: "Annotation", review: "Review", translation_review: "Translation review" } as const;
+const TASK_TYPES = { annotate: "Annotation", review: "Consolidation", translation_review: "Translation review" } as const;
 /** Actions that settle the row the lead came from (Documents shows it as decided). */
 const DECIDING: readonly Intent[] = ["close", "release", "restart"];
 

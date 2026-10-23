@@ -33,7 +33,7 @@ export const STATUS_OPTIONS: readonly (readonly [NonNullable<DocumentRowsQuery["
 ];
 const TRANSLATION_STATUS_LABELS: Readonly<Record<string, string>> = { ...translationStatusLabels, accepted_without_review: "Accepted without review" };
 export const PLAN_LABELS: Readonly<Record<string, string>> = {
-  review: "Review", annotate: "Annotate", review_and_annotate: "Review and annotate", not_in_plan: "Not planned", not_decided: "Not decided",
+  review: "Translation review", annotate: "Annotate", review_and_annotate: "Translation review and annotation", not_in_plan: "Not planned", not_decided: "Not decided",
 };
 export const STAGE_LABELS: Readonly<Record<string, string>> = { translation_review: "Translation review", annotation: "Annotation", final: "Final result", done: "Done" };
 /** Popover footer "Order" (VD10); the headers also set the descending `-case` and `-activity`. */
@@ -48,9 +48,9 @@ export const FLAGGED_UNCLEAR = "Flagged: guidelines unclear";
 
 const option = (param: FacetParam, label: string, ...values: string[]): FacetOption => ({ id: `${param}-${values[0]}`, label, param, values });
 
-/** The static groups (Review, Annotation, Final, Origin, Plan) with their route values (spec "Filter popover"; one column each). */
+/** The static groups (Translation review, Annotation, Final, Origin, Plan) with their route values (spec "Filter popover"; one column each). */
 export const FACET_GROUPS: readonly FacetGroup[] = [
-  { id: "review", legend: "Review", options: [
+  { id: "review", legend: "Translation review", options: [
     option("review_state", "Unassigned", "unassigned"),
     option("review_state", "Check failed", "check_failed"),
     option("review_state", "In progress", "in_progress", "re_review"),
@@ -89,7 +89,7 @@ const STATE_VALUES: Readonly<Record<"review_state" | "annotation_state" | "final
   final_state: {},
 };
 const PARAM_PREFIX: Readonly<Record<FacetParam, string>> = {
-  language: "Language", review_state: "Review", annotation_state: "Annotation", final_state: "Final", origin: "Origin", plan: "Plan", waiting_on: "Waiting on",
+  language: "Language", review_state: "Translation review", annotation_state: "Annotation", final_state: "Final", origin: "Origin", plan: "Plan", waiting_on: "Waiting on",
   flags: "",
 };
 

@@ -39,7 +39,7 @@ describe("documents labels", () => {
     const item = (over: Partial<WorkItemLike>): WorkItemLike => ({ author_label: "ann-0004", is_me: false, task: "annotate", status: "in_progress", held: false, round_ordinal: 3, version: 1, ...over });
     expect(workText([item({})])).toBe("ann-0004 annotating (Round 3)");
     expect(workText([item({ is_me: true, round_ordinal: null })])).toBe("ann-0004 (you) annotating");
-    expect(workText([item({ task: "review", status: "open" })])).toBe("Annotation review open");
+    expect(workText([item({ task: "review", status: "open" })])).toBe("Consolidation open");
     expect(workText([item({ task: "translation_review", status: "open", version: 3 })])).toBe("Translation review open (v3)");
     expect(workText([item({ status: "reopened" })])).toBe("Reopened");
     expect(workText([item({ status: "submitted" }), item({ author_label: "ann-0005" })])).toBe("ann-0004 submitted; ann-0005 annotating (Round 3)");

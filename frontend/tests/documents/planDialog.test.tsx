@@ -47,7 +47,7 @@ describe("PlanDialog", () => {
     expect(await screen.findByRole("dialog", { name: "Work plan · 20 cases" })).toBeTruthy();
     const table = await screen.findByRole("table");
     const headers = within(table).getAllByRole("columnheader").map(item => item.textContent);
-    expect(headers).toEqual(["Language", "In selection", "Review", "Annotate"]);
+    expect(headers).toEqual(["Language", "In selection", "Translation review", "Annotate"]);
     const rows = within(table).getAllByRole("row").slice(1).map(row => Array.from(row.querySelectorAll("th,td")).map(item => item.textContent));
     expect(rows[0].slice(0, 3)).toEqual(["Source (en)", "20", "–"]);
     expect(rows[1].slice(0, 2)).toEqual(["de · MT", "20"]);
@@ -59,26 +59,26 @@ describe("PlanDialog", () => {
     renderDialog();
     const table = await screen.findByRole("table");
     const labels = within(table).getAllByRole("row").slice(1).map(row => Array.from(row.querySelectorAll("td")).map(item => item.getAttribute("data-label")));
-    expect(labels.every(row => row.join("|") === "In selection|Review|Annotate")).toBe(true);
+    expect(labels.every(row => row.join("|") === "In selection|Translation review|Annotate")).toBe(true);
   });
 
   it("cycles cells and shows mixed with its title", async () => {
     renderDialog();
-    const review = await cell("Review, de, keep");
+    const review = await cell("Translation review, de, keep");
     fireEvent.click(review);
-    expect(review.getAttribute("aria-label")).toBe("Review, de, on");
+    expect(review.getAttribute("aria-label")).toBe("Translation review, de, on");
     fireEvent.click(review);
-    expect(review.getAttribute("aria-label")).toBe("Review, de, off");
+    expect(review.getAttribute("aria-label")).toBe("Translation review, de, off");
     fireEvent.click(review);
-    expect(review.getAttribute("aria-label")).toBe("Review, de, keep");
-    const mixed = await cell("Review, es, mixed");
+    expect(review.getAttribute("aria-label")).toBe("Translation review, de, keep");
+    const mixed = await cell("Translation review, es, mixed");
     expect(mixed.getAttribute("title")).toBe("12 on, 8 off");
     expect(mixed.textContent).toBe("mixed");
   });
 
   it("keeps Save unavailable with a reason while everything is keep", async () => {
     const { onSaved } = renderDialog();
-    await cell("Review, de, keep");
+    await cell("Translation review, de, keep");
     expect(save().getAttribute("aria-disabled")).toBe("true");
     expect(save().hasAttribute("disabled")).toBe(false);
     expect(description(save())).toContain("Nothing to change yet.");
@@ -90,23 +90,23 @@ describe("PlanDialog", () => {
   it("previews and shows the Will change summary as a live region", async () => {
     renderDialog();
     vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ to_assign: { translation_review: 20, annotate: 20 }, changes: 40 }));
-    fireEvent.click(await cell("Review, de, keep"));
+    fireEvent.click(await cell("Translation review, de, keep"));
     fireEvent.click(await cell("Annotate, de, keep"));
     await waitFor(() => expect(lastPreviewBody()).toEqual({ case_ids: caseIds, languages: { de: { review: "on", annotate: "on" } } }));
-    const summary = await screen.findByText(/de in 20 cases → review, then annotate after the review is accepted\./);
+    const summary = await screen.findByText(/de in 20 cases → translation review, then annotate after the review is accepted\./);
     const region = summary.closest("[aria-live]")!;
     expect(region.getAttribute("aria-live")).toBe("polite");
     expect(region.textContent).toContain("Will change:");
     expect(region.textContent).toContain("20 translation reviews and 20 annotations become \"to assign\".");
-    expect((await cell("Review, de, on")).getAttribute("aria-describedby")).toContain(region.id);
+    expect((await cell("Translation review, de, on")).getAttribute("aria-describedby")).toContain(region.id);
     expect(save().getAttribute("aria-disabled")).toBeNull();
   });
 
   it("switches to the in-dialog confirmation when work is affected", async () => {
     const { onSaved } = renderDialog();
     vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ consequences: withdrawing, changes: 18 }));
-    fireEvent.click(await cell("Review, fr, keep"));
-    fireEvent.click(await cell("Review, fr, on"));
+    fireEvent.click(await cell("Translation review, fr, keep"));
+    fireEvent.click(await cell("Translation review, fr, on"));
     await waitFor(() => expect(lastPreviewBody().languages).toEqual({ fr: { review: "off" } }));
     await waitFor(() => expect(save().getAttribute("aria-disabled")).toBeNull());
     fireEvent.click(save());
@@ -117,7 +117,7 @@ describe("PlanDialog", () => {
     const confirm = screen.getByRole("checkbox", { name: /I understand — withdraw the open tasks/ });
     expect(save().getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(await cell("Review, fr, off")).toBeTruthy();
+    expect(await cell("Translation review, fr, off")).toBeTruthy();
     fireEvent.click(save());
     fireEvent.click(await screen.findByRole("checkbox", { name: /I understand — withdraw the open tasks/ }));
     expect(confirm.isConnected).toBe(false);
@@ -157,12 +157,12 @@ describe("PlanDialog", () => {
   it("reports the saved result with an undo payload and keeps the selection", async () => {
     const { onSaved, onClose } = renderDialog();
     vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ changes: 40 }));
-    fireEvent.click(await cell("Review, de, keep"));
+    fireEvent.click(await cell("Translation review, de, keep"));
     fireEvent.click(await cell("Annotate, de, keep"));
     await waitFor(() => expect(lastPreviewBody().languages).toEqual({ de: { review: "on", annotate: "on" } }));
     await waitFor(() => expect(save().getAttribute("aria-disabled")).toBeNull());
     fireEvent.click(save());
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(result, "Plan saved for 20 cases · de: review + annotate"));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(result, "Plan saved for 20 cases · de: translation review and annotation"));
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -179,7 +179,7 @@ describe("PlanDialog", () => {
   it("shows the current values instead of keep for a single case and toggles on and off", async () => {
     vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ cases: 1, languages: [lang("source", 1, null, [0, 1]), lang("de", 1, [1, 0], [0, 1])] }));
     renderDialog({ caseIds: ["case-0101"] });
-    const review = await cell("Review, de, on");
+    const review = await cell("Translation review, de, on");
     expect(review.textContent).toBe("on");
     expect(review.querySelector("svg")).toBeTruthy();
     const annotate = await cell("Annotate, de, off");
@@ -190,7 +190,7 @@ describe("PlanDialog", () => {
     expect(annotate.getAttribute("aria-label")).toBe("Annotate, de, off");
     fireEvent.click(annotate);
     fireEvent.click(review);
-    expect(review.getAttribute("aria-label")).toBe("Review, de, off");
+    expect(review.getAttribute("aria-label")).toBe("Translation review, de, off");
     await waitFor(() => expect(lastPreviewBody().languages).toEqual({ source: { annotate: "off" }, de: { review: "off", annotate: "on" } }));
     expect(screen.queryByRole("button", { name: /keep$/ })).toBeNull();
   });
@@ -198,7 +198,7 @@ describe("PlanDialog", () => {
   it("renders the confirmation table as read-only text", async () => {
     renderDialog();
     vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ consequences: withdrawing, changes: 18 }));
-    fireEvent.click(await cell("Review, de, keep"));
+    fireEvent.click(await cell("Translation review, de, keep"));
     await waitFor(() => expect(lastPreviewBody().languages).toEqual({ de: { review: "on" } }));
     await waitFor(() => expect(save().getAttribute("aria-disabled")).toBeNull());
     fireEvent.click(save());
@@ -231,7 +231,7 @@ describe("PlanDialog", () => {
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "Vendor" } });
     expect(save().getAttribute("aria-disabled")).toBe("true");
     vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ changes: 18, languages: [lang("fr", 18, [0, 18], [0, 18])] }));
-    fireEvent.click(await cell("Review, fr, keep"));
+    fireEvent.click(await cell("Translation review, fr, keep"));
     await waitFor(() => expect(lastPreviewBody().languages).toEqual({ fr: { review: "on", annotate: "on" } }));
     await waitFor(() => expect(save().getAttribute("aria-disabled")).toBeNull());
   });

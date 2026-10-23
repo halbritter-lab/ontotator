@@ -54,12 +54,12 @@ it("toggles and saves with one click and shows the undo toast", async () => {
   const row = fr();
   vi.mocked(api.patchWorkPlan).mockResolvedValue(result(row, { review: false, annotate: true }, 4));
   render(<Harness rows={[row]} />);
-  expect(chip("Review, case-0101 · fr").getAttribute("aria-pressed")).toBe("true");
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  expect(chip("Translation review, case-0101 · fr").getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "fr", { review: false, expected_revision: 3, confirm: false });
-  const toast = await screen.findByText("fr of case-0101: Review off");
+  const toast = await screen.findByText("fr of case-0101: Translation review off");
   expect(within(toast.closest(".ui-toast") as HTMLElement).getByRole("button", { name: "Undo" })).toBeTruthy();
-  expect(chip("Review, case-0101 · fr").getAttribute("aria-pressed")).toBe("false");
+  expect(chip("Translation review, case-0101 · fr").getAttribute("aria-pressed")).toBe("false");
   expect(onChanged).toHaveBeenCalled();
 });
 
@@ -69,7 +69,7 @@ it("adds the withdrawn-task note to the toast", async () => {
     withdrawn: [{ assignment_id: 9, case_id: "case-0101", language: "fr", task: "translation_review", person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } }],
   }));
   render(<Harness rows={[row]} />);
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   expect(await screen.findByText("Undo restores the plan, not withdrawn tasks.")).toBeTruthy();
 });
 
@@ -79,7 +79,7 @@ it("undo restores the previous flags with the returned revision", async () => {
   vi.mocked(api.patchWorkPlan).mockResolvedValue(saved);
   vi.mocked(api.setWorkPlanRows).mockResolvedValue(bulk({ "case-0101": 5 }));
   render(<Harness rows={[row]} />);
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   const undoButton = await screen.findByRole("button", { name: "Undo" });
   act(() => { undoButton.focus(); });
   fireEvent.click(undoButton);
@@ -88,12 +88,12 @@ it("undo restores the previous flags with the returned revision", async () => {
     rows: [{ case_id: "case-0101", language: "fr", review: true, annotate: true, restored_revision: null }],
     expected_revisions: { "case-0101": 4 }, undo: true, confirm: false,
   }));
-  await waitFor(() => expect(chip("Review, case-0101 · fr").getAttribute("aria-pressed")).toBe("true"));
+  await waitFor(() => expect(chip("Translation review, case-0101 · fr").getAttribute("aria-pressed")).toBe("true"));
   expect(live().textContent).toBe("Plan change undone.");
-  await waitFor(() => expect(document.activeElement).toBe(chip("Review, case-0101 · fr")));
+  await waitFor(() => expect(document.activeElement).toBe(chip("Translation review, case-0101 · fr")));
   // The next save uses the revision returned by the undo.
   vi.mocked(api.patchWorkPlan).mockResolvedValue(result(row, { review: false, annotate: true }, 6));
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-0101", "fr", { review: false, expected_revision: 5, confirm: false }));
 });
 
@@ -105,7 +105,7 @@ it("undo after an intervening assignment shows the message and the normal confir
   const consequences = { withdrawn: [{ assignment_id: 9, case_id: "case-0101", language: "fr", task: "translation_review", person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } }], finals_leaving: [], restored: [], open_reports: [] };
   vi.mocked(api.setWorkPlanRows).mockRejectedValueOnce(new ApiError(409, "confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences)).mockResolvedValue(bulk({ "case-0101": 6 }));
   render(<Harness rows={[{ ...row, plan_row: { ...row.plan_row!, review: false } }]} />);
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
   expect(await screen.findByText("Since your change, work was assigned: 1 open translation review (Ana Weber, ann-0004) would be withdrawn.")).toBeTruthy();
   const box = screen.getByRole("group", { name: "Undo the plan change" });
@@ -115,7 +115,7 @@ it("undo after an intervening assignment shows the message and the normal confir
   fireEvent.click(undoAnyway);
   await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenLastCalledWith("p", expect.objectContaining({ undo: true, confirm: true })));
   await waitFor(() => expect(screen.queryByRole("group", { name: "Undo the plan change" })).toBeNull());
-  await waitFor(() => expect(document.activeElement).toBe(chip("Review, case-0101 · fr")));
+  await waitFor(() => expect(document.activeElement).toBe(chip("Translation review, case-0101 · fr")));
 });
 
 it("serialises two quick toggles on one case and sends the revision of the first response", async () => {
@@ -126,10 +126,10 @@ it("serialises two quick toggles on one case and sends the revision of the first
     .mockImplementationOnce(() => new Promise(done => { resolveFirst = done; }))
     .mockResolvedValueOnce(result(rowDe, { review: true, annotate: false }, 5));
   render(<Harness rows={[rowFr, rowDe]} />);
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   fireEvent.click(chip("Annotate, case-0101 · de"));
   expect(api.patchWorkPlan).toHaveBeenCalledTimes(1);
-  expect(chip("Review, case-0101 · fr").getAttribute("aria-disabled")).toBe("true");
+  expect(chip("Translation review, case-0101 · fr").getAttribute("aria-disabled")).toBe("true");
   expect(chip("Annotate, case-0101 · de").getAttribute("aria-disabled")).toBe("true");
   await act(async () => { resolveFirst(result(rowFr, { review: false, annotate: true }, 4)); });
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledTimes(2));
@@ -181,7 +181,7 @@ it("offers the external-review acceptance for an invalid combination", async () 
     .mockRejectedValueOnce(new ApiError(422, "invalid", "WORK_PLAN_INVALID", { reason: "annotate_not_accepted", rows: [{ case_id: "case-0101", language: "fr" }] }))
     .mockResolvedValueOnce(result(row, { review: false, annotate: true }, 4));
   render(<Harness rows={[row]} />);
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   const box = await screen.findByRole("group", { name: "Annotate without review" });
   expect(within(box).getByText("This translation was reviewed outside Ontocurator — accept it as it is")).toBeTruthy();
   const accept = within(box).getByRole("button", { name: "Accept and annotate" });
@@ -194,7 +194,7 @@ it("offers the external-review acceptance for an invalid combination", async () 
     review: false, expected_revision: 3, confirm: false, accept_external_review: { reason: "Reviewed by the clinic" },
   }));
   await waitFor(() => expect(screen.queryByRole("group", { name: "Annotate without review" })).toBeNull());
-  await waitFor(() => expect(document.activeElement).toBe(chip("Review, case-0101 · fr")));
+  await waitFor(() => expect(document.activeElement).toBe(chip("Translation review, case-0101 · fr")));
 });
 
 it("keeps focus while saving and shows an inline error with Retry", async () => {
@@ -202,7 +202,7 @@ it("keeps focus while saving and shows an inline error with Retry", async () => 
   let fail!: (error: unknown) => void;
   vi.mocked(api.patchWorkPlan).mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; })).mockResolvedValueOnce(result(row, { review: false, annotate: true }, 4));
   render(<Harness rows={[row]} />);
-  const review = chip("Review, case-0101 · fr");
+  const review = chip("Translation review, case-0101 · fr");
   review.focus();
   fireEvent.click(review);
   expect(document.activeElement).toBe(review);
@@ -217,7 +217,7 @@ it("keeps focus while saving and shows an inline error with Retry", async () => 
   fireEvent.click(within(screen.getByTestId("case-0101:fr")).getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledTimes(2));
   expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-0101", "fr", { review: false, expected_revision: 3, confirm: false });
-  expect(await screen.findByText("fr of case-0101: Review off")).toBeTruthy();
+  expect(await screen.findByText("fr of case-0101: Translation review off")).toBeTruthy();
 });
 
 it("reloads after a stale revision with the message", async () => {
@@ -225,17 +225,17 @@ it("reloads after a stale revision with the message", async () => {
   vi.mocked(api.patchWorkPlan).mockRejectedValueOnce(new ApiError(409, "changed", "WORK_PLAN_CHANGED", { cases: [{ case_id: "case-0101", revision: 7 }] }))
     .mockResolvedValueOnce(result(row, { review: false, annotate: true }, 8));
   render(<Harness rows={[row]} />);
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   expect(await screen.findByText("This plan changed. Reloaded the current plan.")).toBeTruthy();
   expect(onChanged).toHaveBeenCalled();
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-0101", "fr", { review: false, expected_revision: 7, confirm: false }));
 });
 
 it("shows only Annotate on the source row", () => {
   render(<Harness rows={[en()]} />);
   expect(chip("Annotate, case-0101 · en").getAttribute("aria-pressed")).toBe("true");
-  expect(screen.queryByRole("button", { name: "Review, case-0101 · en" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Translation review, case-0101 · en" })).toBeNull();
 });
 
 it("sends a queued second save after a 409 confirmation and the confirmed save with the latest revision", async () => {
@@ -270,9 +270,9 @@ it("keeps a chip busy while a second request for it is queued", async () => {
     .mockImplementationOnce(() => new Promise(() => {}));
   render(<Harness rows={[row]} />);
   fireEvent.click(chip("Annotate, case-0101 · fr"));
-  fireEvent.click(chip("Review, case-0101 · fr"));
+  fireEvent.click(chip("Translation review, case-0101 · fr"));
   await act(async () => { resolveFirst(result(row, { review: true, annotate: false }, 4)); });
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledTimes(2));
-  expect(chip("Review, case-0101 · fr").getAttribute("aria-disabled")).toBe("true");
+  expect(chip("Translation review, case-0101 · fr").getAttribute("aria-disabled")).toBe("true");
   expect(chip("Annotate, case-0101 · fr").getAttribute("aria-disabled")).toBeNull();
 });

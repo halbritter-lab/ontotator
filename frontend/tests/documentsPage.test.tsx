@@ -159,7 +159,7 @@ it("tabs, search, Filter popover and chips replace the filter selects (VD9)", as
   await waitFor(() => expect(live().textContent).toBe("2 texts shown"));
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p", { plan: "review", step: "choose_final", sort: "import", final: "none", owner: "me", stage: "final", review_state: ["accepted", "check_failed"], waiting_on: "me" });
   expect(within(filterTools()).getAllByRole("button", { name: /^Remove filter / }).map(chip => chip.textContent)).toEqual([
-    "Review: Accepted", "Review: Check failed", "Plan: Review", "Waiting on: You", "Step: Choose final result", "Stage: Final result", "Owner: You", "Final result: None",
+    "Translation review: Accepted", "Translation review: Check failed", "Plan: Translation review", "Waiting on: You", "Step: Choose final result", "Stage: Final result", "Owner: You", "Final result: None",
   ]);
   // Only text and case checkboxes select inside the table; no old "Assign …".
   expect(within(screen.getByRole("table", { name: "Documents" })).getAllByRole("checkbox").every(box => box.getAttribute("aria-label")?.startsWith("Select "))).toBe(true);
@@ -294,7 +294,7 @@ describe("exact filters from Progress links", () => {
     await loaded();
     const chips = within(filterTools()).getAllByRole("button", { name: /^Remove filter / });
     expect(chips.map(chip => chip.textContent)).toEqual([
-      "Plan: Annotate", "Plan: Review and annotate", "Step: Resolve rejected translation", "Step: Resolve queried translation",
+      "Plan: Annotate", "Plan: Translation review and annotation", "Step: Resolve rejected translation", "Step: Resolve queried translation",
       "Stage: Final result", "Stage: Done", "Not paused", "Final result: Has a final result",
     ]);
     expect(screen.queryByText(/Also filtered/)).toBeNull();
@@ -434,16 +434,16 @@ describe("case selection", () => {
     vi.spyOn(api, "setWorkPlanRows").mockResolvedValue({ changed_rows: 1, revisions: { "case-0101": 4 }, undo: { rows: [], revisions: {} }, withdrawn: [] });
     // The plan chips of an in-plan row are in the row panel's Details (VD2).
     renderPage({ query: { panel: "case-0101:fr", panel_tab: "details" } });
-    fireEvent.click(await screen.findByRole("button", { name: "Review, case-0101 · fr" }));
-    await screen.findByText("fr of case-0101: Review off");
+    fireEvent.click(await screen.findByRole("button", { name: "Translation review, case-0101 · fr" }));
+    await screen.findByText("fr of case-0101: Translation review off");
     const box = caseBox("case-0101");
     box.focus();
     fireEvent.keyDown(box, { key: "z", ctrlKey: true });
     await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(1));
     expect(api.setWorkPlanRows).toHaveBeenLastCalledWith("p", expect.objectContaining({ undo: true }));
-    await waitFor(() => expect(screen.queryByText("fr of case-0101: Review off")).toBeNull());
-    fireEvent.click(await screen.findByRole("button", { name: /^Review, case-0101 · fr/ }));
-    await screen.findByText(/fr of case-0101: Review/);
+    await waitFor(() => expect(screen.queryByText("fr of case-0101: Translation review off")).toBeNull());
+    fireEvent.click(await screen.findByRole("button", { name: /^Translation review, case-0101 · fr/ }));
+    await screen.findByText(/fr of case-0101: Translation review/);
     caseBox("case-0101").focus();
     fireEvent.keyDown(caseBox("case-0101"), { key: "z", metaKey: true });
     await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(2));
@@ -596,7 +596,7 @@ it("renders the new table with stage columns", async () => {
   const decision = rowHeader("case-107 · de").closest("tr")!;
   expect(decision.className).toContain("data-table-row--decision");
   expect(within(decision).getByText("Your choice")).toBeTruthy();
-  expect(within(decision).getByRole("button", { name: "Accept as final…, case-107 · de" })).toBeTruthy();
+  expect(within(decision).getByRole("button", { name: "Accept result…, case-107 · de" })).toBeTruthy();
   const running = rowHeader("case-106 · de").closest("tr")!;
   expect(running.textContent).toContain("1 of 2 submitted");
   expect(running.textContent).toContain("waiting: Tom Reis");
@@ -1001,7 +1001,7 @@ describe("row actions", () => {
     fireEvent.click(action);
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", panel: "case-0042:en" }, { replace: true });
     const panel = await rowPanel("case-0042 · en");
-    expect(await within(panel).findByText("Accept Ana Weber’s annotation as final?")).toBeTruthy();
+    expect(await within(panel).findByText("Accept Ana Weber’s annotation as the result?")).toBeTruthy();
     // The heading has focus; the page stays usable (non-modal, nothing inert) and the row is the active row.
     expect(document.activeElement).toBe(within(panel).getByRole("heading", { level: 2 }));
     expect(document.querySelector("[inert]")).toBeNull();
@@ -1065,7 +1065,7 @@ describe("row actions", () => {
     const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], categories: [],
       final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1" }) };
     mockRows(page([group("case-0042", [done])]));
-    fireEvent.click(await within(again).findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await within(again).findByRole("button", { name: "Accept result…" }));
     expect(await within(again).findByText("No more final results to decide.")).toBeTruthy();
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -1129,7 +1129,7 @@ describe("row actions", () => {
     const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], matches_decision: false, retained: true, categories: [],
       final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1" }) };
     mockRows(page([group("case-0042", [done]), group("case-0099", [second])]));
-    fireEvent.click(await within(panel).findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await within(panel).findByRole("button", { name: "Accept result…" }));
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-0042-en", submission_id: "case-0042-s1", expected_revision: 0, acknowledged_cause_ids: [] });
     // The same frame (not remounted) shows the next row at once.
     await waitFor(() => expect(within(panel).getByRole("heading", { level: 2 }).textContent).toBe("case-0099 · de v1"));
@@ -1154,7 +1154,7 @@ describe("row actions", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 · en" }));
     const panel = await rowPanel("case-0042 · en");
     mockRows(page([group("case-0042", [{ ...first, next_step: stepOf("done"), steps: [stepOf("done")], categories: [] }]), group("case-0390", [report])]));
-    fireEvent.click(await within(panel).findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await within(panel).findByRole("button", { name: "Accept result…" }));
     fireEvent.click(await within(panel).findByRole("button", { name: "Next decision: case-0390 · de (problem report)" }));
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectProblemReport", key: "p", reportId: "report-0390", section: "decide", documents: { segment: "decision" } }, undefined);
   });
@@ -1169,9 +1169,9 @@ describe("plan chips on the page", () => {
       undo: { rows: [], revisions: { "case-0101": 3 } }, withdrawn: [], accepted_document_ids: [],
     } as PlanRowResult);
     renderPage({ query: { panel: "case-0101:fr", panel_tab: "details" } });
-    fireEvent.click(await screen.findByRole("button", { name: "Review, case-0101 · fr" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Translation review, case-0101 · fr" }));
     expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "fr", { review: false, expected_revision: 2, confirm: false });
-    const message = await screen.findByText("fr of case-0101: Review off");
+    const message = await screen.findByText("fr of case-0101: Translation review off");
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
     const table = screen.getByRole("table", { name: "Documents" });
     const region = message.closest(".ui-toast-region")!;
@@ -1246,10 +1246,10 @@ describe("lead review fixes", () => {
     renderPage({ query: { panel: "case-1:de", panel_tab: "details" } });
     fireEvent.click(await screen.findByRole("button", { name: "Assign review or accept…, case-1 · de" }));
     const box = screen.getByRole("group", { name: "Translation not accepted, case-1 · de" });
-    fireEvent.click(within(box).getByRole("button", { name: "Turn Review on" }));
+    fireEvent.click(within(box).getByRole("button", { name: "Turn translation review on" }));
     expect(live().textContent).toBe("Saving…");
     expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-1", "de", { review: true, expected_revision: 2, confirm: false });
-    await waitFor(() => expect(live().textContent).toBe("Review on for case-1 · de. Next: Assign translation review."));
+    await waitFor(() => expect(live().textContent).toBe("Translation review on for case-1 · de. Next: Assign reviewer…"));
     await waitFor(() => expect(screen.queryByRole("group", { name: "Translation not accepted, case-1 · de" })).toBeNull());
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole("button", { name: "Annotate, case-1 · de" }));
@@ -1263,10 +1263,10 @@ describe("lead review fixes", () => {
       .mockImplementation(() => new Promise(() => {}));
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Assign review or accept…, case-1 · de" }));
-    fireEvent.click(screen.getByRole("button", { name: "Turn Review on" }));
+    fireEvent.click(screen.getByRole("button", { name: "Turn translation review on" }));
     expect(await screen.findByText("This plan changed. Reloaded the current plan.")).toBeTruthy();
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
-    fireEvent.click(screen.getByRole("button", { name: "Turn Review on" }));
+    fireEvent.click(screen.getByRole("button", { name: "Turn translation review on" }));
     expect(api.patchWorkPlan).toHaveBeenLastCalledWith("p", "case-1", "de", { review: true, expected_revision: 8, confirm: false });
   });
 
@@ -1278,12 +1278,12 @@ describe("lead review fixes", () => {
     vi.spyOn(api, "patchWorkPlan").mockRejectedValueOnce(new ApiError(409, "confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences))
       .mockResolvedValueOnce(planResult("case-1", "de", { review: false, annotate: false }, 3));
     renderPage({ query: { panel: "case-1:de", panel_tab: "details" } });
-    fireEvent.click(await screen.findByRole("button", { name: "Review, case-1 · de" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Translation review, case-1 · de" }));
     const box = await screen.findByRole("group", { name: "Change the plan of case-1 · de" });
     mockRows(page([group("case-1", [en, notInPlanRow("case-1", "de")], { plan_revision: 3 })]));
     fireEvent.click(within(box).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Details, case-1 · de" }).closest("tr")!.className).toContain("documents-row--not-in-plan"));
-    await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Review, case-1 · de"));
+    await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Translation review, case-1 · de"));
   });
 });
 

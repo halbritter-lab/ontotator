@@ -1,9 +1,9 @@
 /**
  * Decision block of the row panel (acceptance fixes WP-A, WP-B; documents overview spec "Final-result panel",
- * V6, V9 display, VD16, VD17): "Accept as final…", "Compare results…" and "Review changes…" open the
- * panel with this block on top; it decides (Use as final, Accept as final, Keep, Use the newer result)
- * and then moves the panel to the next final decision of the list. Full agreement (W1) is one "Accept as
- * final"; "Consolidate…" exists only with at least two eligible submissions on one text.
+ * V6, V9 display, VD16, VD17): "Accept result…", "Compare results…" and "Review changes…" open the
+ * panel with this block on top; it decides (Use as final, Accept result, Keep, Use the newer result)
+ * and then moves the panel to the next final decision of the list. Full agreement (W1) is one "Accept
+ * result…"; "Consolidate…" exists only with at least two eligible submissions on one text.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { api, type WorkRoundView, type DocumentRowView, type DocumentRowsPage, type FinalPanelSubmissionView, type NextStepView, type RowItemView } from "../api/client";
@@ -50,8 +50,6 @@ export interface DecisionBlockProps {
   onNavigate: (route: Route) => void;
   /** "Next decision: … (kind)": closes the panel and runs that row's action. */
   onRowAction?: (row: DocumentRowView, step: NextStepView) => void;
-  /** "Assign annotation review…". */
-  onAssign?: (row: DocumentRowView) => void;
   /** "Carry to v2…" with the final's submission, to the corrected version `targetDocumentId`. */
   onCarry?: (row: DocumentRowView, targetDocumentId: string) => void;
   /** A consolidation was started from the block. */
@@ -278,7 +276,7 @@ function PanelContent(props: ContentProps): JSX.Element {
   return <CompareContent {...props} />;
 }
 
-/** W1: "All findings match (2 of 2)", one primary "Accept as final" with a confirmation; the table under "Show submissions". */
+/** W1: "All findings match (2 of 2)", one primary "Accept result…" with a confirmation; the table under "Show submissions". */
 function AllMatchContent(props: ContentProps & { submission: FinalPanelSubmissionView }): JSX.Element {
   const { row, data, submission, busy, onSave, onAnnounce, onDirtyChange } = props;
   const id = useId();
@@ -300,10 +298,10 @@ function AllMatchContent(props: ContentProps & { submission: FinalPanelSubmissio
   return <div className="final-panel-match">
     <p className="final-panel-question">{allMatchText(compared, findings)}</p>
     {!confirming && <div className="final-panel-actions">
-      <ChoiceButton id={triggerId} label="Accept as final" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
+      <ChoiceButton id={triggerId} label="Accept result…" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
         onChoose={() => setConfirming(true)} />
     </div>}
-    {confirming && <InlineConfirm title="Accept as final?" headingLevel={4} message={allMatchQuestion(compared)} confirmLabel="Accept as final"
+    {confirming && <InlineConfirm title="Accept result?" headingLevel={4} message={allMatchQuestion(compared)} confirmLabel="Accept result"
       busy={busy !== null} onCancel={() => setConfirming(false)}
       onConfirm={() => { if (busy === null) onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId); }}>
       <p>{link(route(submission.document_id, submission.submission_id), "Open result")}</p>
@@ -343,7 +341,7 @@ function preselectedOf(row: DocumentRowView, data: FinalPanelData): boolean {
 }
 
 function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionView; onCompareAll: () => void }): JSX.Element {
-  const { row, data, submission, busy, onSave, onAnnounce, onAssign, guidelineCurrent, now } = props;
+  const { row, data, submission, busy, onSave, onAnnounce, guidelineCurrent, now } = props;
   const id = useId();
   const { route, link } = useEditorRoute(props);
   const listed = listedSubmissions(data.panel.submissions ?? []);
@@ -363,11 +361,10 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
     </p>
     <p className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</p>
     {!isFinal && <div className="final-panel-actions">
-      <ChoiceButton id={triggerId} label="Accept as final" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
+      <ChoiceButton id={triggerId} label="Accept result…" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
         onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />
     </div>}
     <div className="final-panel-links">
-      {onAssign && <Button size="sm" onClick={() => onAssign(row)}>Assign annotation review…</Button>}
       {submission.kind === "consolidation" && compared > 1 && <Button size="sm" onClick={props.onCompareAll}>{`Compare all ${compared}…`}</Button>}
     </div>
     <Consolidate {...props} listed={listed} primary={false} />
@@ -375,7 +372,7 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
 }
 
 function DecidedContent(props: ContentProps & { onChange: () => void }): JSX.Element {
-  const { row, data, onAssign, guidelineCurrent, now } = props;
+  const { row, data, guidelineCurrent, now } = props;
   const { route, link } = useEditorRoute(props);
   const final = (data.panel.submissions ?? []).find(item => item.submission_id === row.final?.submission_id) ?? null;
   const listed = listedSubmissions(data.panel.submissions ?? []);
@@ -390,9 +387,6 @@ function DecidedContent(props: ContentProps & { onChange: () => void }): JSX.Ele
     </>}
     {listed.length > 1 && <div className="final-panel-actions">
       <Button size="sm" onClick={props.onChange}>Change final…</Button>
-    </div>}
-    {onAssign && <div className="final-panel-links">
-      <Button size="sm" onClick={() => onAssign(row)}>Assign annotation review…</Button>
     </div>}
   </div>;
 }

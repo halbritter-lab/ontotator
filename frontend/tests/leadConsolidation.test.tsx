@@ -33,20 +33,20 @@ async function openForm(extra: Partial<Parameters<typeof ConsolidationLauncher>[
   await screen.findByLabelText('Consolidation reviewer');
 }
 
-it('lists You (Mia Kühn) first, then the members with the Adjudicator role', async () => {
+it('lists You (Mia Kühn) first, then the members with the Consolidator role', async () => {
   await openForm();
   expect(options()).toEqual(['Choose a reviewer', 'You (Mia Kühn)', 'Luc Martin (ann-0004)', 'Rita Rev (rev-0009)']);
-  expect(screen.queryByText(/No member has the Adjudicator role yet/)).toBeNull();
+  expect(screen.queryByText(/No member has the Consolidator role yet/)).toBeNull();
 });
 
-it('choosing yourself says that you get the Adjudicator role, and starts with one request', async () => {
+it('choosing yourself says that you get the Consolidator role, and starts with one request', async () => {
   const create = vi.spyOn(api, 'createAssignments');
   const startRound = vi.spyOn(api, 'startWorkRound');
   const onStarted = vi.fn();
   vi.mocked(api.startConsolidation).mockResolvedValue(started(true));
   await openForm({ onStarted });
   fireEvent.change(reviewerSelect(), { target: { value: 'lead' } });
-  expect(screen.getByText('You will get the Adjudicator role for this project.')).toBeTruthy();
+  expect(screen.getByText('You will get the Consolidator role for this project.')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Start consolidation' }));
   await screen.findByText(/Consolidation assigned to you/);
   expect(api.startConsolidation).toHaveBeenCalledTimes(1);
@@ -64,7 +64,7 @@ it('says nothing about the role when you already hold it', async () => {
   vi.mocked(api.listMembers).mockResolvedValue([{ ...lead, roles: ['lead', 'adjudicator'] }, luc]);
   await openForm();
   fireEvent.change(reviewerSelect(), { target: { value: 'lead' } });
-  expect(screen.queryByText('You will get the Adjudicator role for this project.')).toBeNull();
+  expect(screen.queryByText('You will get the Consolidator role for this project.')).toBeNull();
 });
 
 it('disables people who annotated this text with the reason, while the project keeps adjudication separate', async () => {
@@ -85,8 +85,8 @@ it('explains a project without adjudicators and links Settings → Members', asy
   vi.mocked(api.listMembers).mockResolvedValue([lead, reader]);
   await openForm();
   expect(options()).toEqual(['Choose a reviewer', 'You (Mia Kühn)']);
-  const note = screen.getByText(/No member has the Adjudicator role yet\. Give it in/);
-  expect(note.textContent).toBe('No member has the Adjudicator role yet. Give it in Settings → Members.');
+  const note = screen.getByText(/No member has the Consolidator role yet\. Give it in/);
+  expect(note.textContent).toBe('No member has the Consolidator role yet. Give it in Settings → Members.');
   expect(within(note).getByRole('link', { name: 'Settings → Members' }).getAttribute('href')).toBe('#/projects/p/settings/members');
 });
 

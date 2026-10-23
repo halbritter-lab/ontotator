@@ -3,7 +3,7 @@
  * cases selected", the common next step,
  * "{k} not shown with these filters" (from the selection summary with the current filters) and
  * "Clear selection"; primary "Assign…" (the page's only primary button) and the plan actions
- * "Review + annotate translations", "Annotate only" (one click when no existing work is affected)
+ * "Translation review and annotation", "Annotation only, no translation review" (one click when no existing work is affected)
  * and "Plan…". Every plan save keeps the selection and shows an Undo toast (D22). The summary and
  * the quick plan actions send the selected texts (`rows`); the plan dialog still edits whole cases.
  * The bar floats at the bottom of the viewport over the content (`useFloatingBar`): its arrival never moves the
@@ -52,7 +52,6 @@ export const SUMMARY_DELAY_MS = 150;
 const ASSIGN_STEP: Readonly<Record<string, string>> = {
   translation_review: "Assign translation review",
   annotate: "Assign annotation",
-  review: "Assign annotation review",
 };
 
 /** "next step: Assign translation review (de)". */
@@ -189,8 +188,8 @@ export function SelectionBar({
         <div className="selection-bar-actions">
           <Button variant="primary" onClick={onAssign}>Assign…</Button>
           <Button loading={busy === "review_and_annotate_translations"} aria-disabled={busy ? true : undefined}
-            onClick={() => { void quick("review_and_annotate_translations"); }}>Review + annotate translations</Button>
-          <Button loading={busy === "annotate_only"} aria-disabled={busy ? true : undefined} onClick={() => { void quick("annotate_only"); }}>Annotate only</Button>
+            onClick={() => { void quick("review_and_annotate_translations"); }}>Translation review and annotation</Button>
+          <Button loading={busy === "annotate_only"} aria-disabled={busy ? true : undefined} onClick={() => { void quick("annotate_only"); }}>Annotation only, no translation review</Button>
           <Button aria-disabled={busy ? true : undefined} onClick={() => { if (!busy) setPlan({ caseIds }); }}>Plan…</Button>
           <Button onClick={onClear}>Clear selection</Button>
         </div>

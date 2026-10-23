@@ -13,7 +13,7 @@ describe("filter model", () => {
     ["Language select → Language facet (repeatable)", { language: "de,fr" }, { language: ["de", "fr"] }, ["Language: de", "Language: fr"]],
     ["one language stays one value", { language: "de" }, { language: "de" }, ["Language: de"]],
     ["Next step → chip", { step: "choose_final" }, { step: "choose_final" }, ["Step: Choose final result"]],
-    ["Plan → route parameter and chip", { plan: "review,not_decided" }, { plan: ["review", "not_decided"] }, ["Plan: Review", "Plan: Not decided"]],
+    ["Plan → route parameter and chip", { plan: "review,not_decided" }, { plan: ["review", "not_decided"] }, ["Plan: Translation review", "Plan: Not decided"]],
     ["Case ID → search field (no chip)", { q: "case-104 de" }, { q: "case-104 de" }, []],
     ["Final result none → route parameter and chip", { final: "none" }, { final: "none" }, ["Final result: None"]],
     ["Final result any", { final: "any" }, { final: "any" }, ["Final result: Has a final result"]],
@@ -26,7 +26,7 @@ describe("filter model", () => {
     ["Stage → chip", { stage: "final" }, { stage: "final" }, ["Stage: Final result"]],
     ["Owner → chip", { owner: "me" }, { owner: "me" }, ["Owner: You"]],
     ["Paused → chip", { paused: "yes" }, { paused: "yes" }, ["Paused tasks"]],
-    ["Review facet", { review_state: "in_progress,re_review,check_failed" }, { review_state: ["in_progress", "re_review", "check_failed"] }, ["Review: In progress", "Review: Check failed"]],
+    ["Review facet", { review_state: "in_progress,re_review,check_failed" }, { review_state: ["in_progress", "re_review", "check_failed"] }, ["Translation review: In progress", "Translation review: Check failed"]],
     ["Annotation facet", { annotation_state: "old_text_open" }, { annotation_state: "old_text_open" }, ["Annotation: On old text"]],
     ["Final facet", { final_state: "none,after_annotation,after_review,choose" }, { final_state: ["none", "after_annotation", "after_review", "choose"] }, ["Final: No final yet"]],
     ["Waiting on facet", { waiting_on: "me,ann-0001" }, { waiting_on: ["me", "ann-0001"] }, ["Waiting on: You", "Waiting on: ann-0001"]],
@@ -105,12 +105,12 @@ describe("filter model", () => {
 
   it("builds the Language and Waiting on groups from the facet counts and the route", () => {
     const groups = facetGroups({ language: { de: 8, en: 3 }, waiting_on: { "ann-0002": 1, me: 2 } }, { language: "fr", waiting_on: "ann-0009" }, new Set(["en"]));
-    expect(groups.map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan", "Flags", "Waiting on"]);
+    expect(groups.map(group => group.legend)).toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags", "Waiting on"]);
     expect(groups[0].options.map(option => option.label)).toEqual(["de", "en (source)", "fr"]);
     expect(groups[7].options.map(option => option.label)).toEqual(["You", "ann-0002", "ann-0009"]);
     const named = facetGroups({ waiting_on: { "ann-0002": 1 } }, {}, new Set(), new Map([["ann-0002", "Ana Weber"]]));
     expect(named.at(-1)!.options.map(option => option.label)).toEqual(["Ana Weber"]);
     expect(chipsOf({ waiting_on: "ann-0002" }, new Map([["ann-0002", "Ana Weber"]])).map(chip => chip.label)).toEqual(["Waiting on: Ana Weber"]);
-    expect(facetGroups({}, {}, new Set()).map(group => group.legend)).toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan", "Flags"]);
+    expect(facetGroups({}, {}, new Set()).map(group => group.legend)).toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags"]);
   });
 });

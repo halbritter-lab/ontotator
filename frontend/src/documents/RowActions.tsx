@@ -71,7 +71,7 @@ export function PlanChoices({ row, groupRevision, saves }: { row: DocumentRowVie
     <span className="cell-secondary">Not decided yet</span>
   </div>;
   return <div className="documents-plan-choices" data-plan-row={`${row.case_id}:${row.language}`}>
-    {reviewApplicable && choice("review", "Review", "Don't review")}
+    {reviewApplicable && choice("review", "Translation review", "No translation review")}
     {choice("annotate", "Annotate", "Don't annotate")}
   </div>;
 }

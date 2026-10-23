@@ -43,7 +43,6 @@ describe("assign summary", () => {
 
   it("asks for enough people for n annotations", () => {
     expect(needsPeopleMessage(2, "annotate")).toBe("Choose at least 2 annotators for 2 annotations per text.");
-    expect(needsPeopleMessage(2, "review")).toBe("Choose at least 2 reviewers for 2 reviews per text.");
   });
 
   it("labels steps, reasons, partial targets and results", () => {
@@ -52,7 +51,6 @@ describe("assign summary", () => {
     expect(memberReason({ unavailable: "does_not_read", already_assigned: 0, reads: ["en"] }, "annotate", "de")).toBe("does not read de");
     expect(memberReason({ unavailable: "does_not_read", already_assigned: 0, reads: ["de"] }, "translation_review", "de")).toBe("does not read the source language");
     expect(memberReason({ unavailable: "role_missing", already_assigned: 0, reads: ["de"] }, "annotate", "de")).toBe("Not an annotator in this project");
-    expect(memberReason({ unavailable: "role_missing", already_assigned: 0, reads: ["de"] }, "review", "de")).toBe("Not an adjudicator in this project");
     expect(memberReason({ unavailable: null, already_assigned: 3, reads: ["de"] }, "annotate", "de")).toBe("Already annotating 3 of these cases");
     expect(memberReason({ unavailable: null, already_assigned: 0, reads: ["de"] }, "annotate", "de")).toBeNull();
     expect(partlyAssignedLines([{ case_id: "case-0101", language: "de", remaining: 1 }, { case_id: "case-0102", language: "de", remaining: 2 }], 2)).toEqual(["case-0101 · de: 1 of 2 assigned"]);

@@ -25,15 +25,15 @@ interface Props {
   onStarted?: (round: WorkRoundView, started: ConsolidationStarted) => void;
 }
 
-/** Who consolidates: the lead themselves (`self`), and whether they just got the Adjudicator role. */
+/** Who consolidates: the lead themselves (`self`), and whether they just got the Consolidator role. */
 export interface ConsolidationStarted { self: boolean; roleGranted: boolean }
 
-/** One entry of the reviewer list: the lead ("You") first, then the members with the Adjudicator role. */
+/** One entry of the reviewer list: the lead ("You") first, then the members with the Consolidator role. */
 interface Candidate { username: string; label: string; member: Member | null; self: boolean; reason: string | null }
 
 /**
  * Consolidation launcher (acceptance fixes WP-B, U4, T3): select the inputs and a consolidator, then one
- * `POST /projects/{key}/consolidations`. The lead may choose themselves and gets the Adjudicator role then.
+ * `POST /projects/{key}/consolidations`. The lead may choose themselves and gets the Consolidator role then.
  */
 export function ConsolidationLauncher(props: Props): JSX.Element {
   return <ConsolidationContent key={JSON.stringify([props.projectKey, props.documentId, props.username])} {...props} />;
@@ -76,7 +76,7 @@ function ConsolidationContent(props: Props): JSX.Element {
   const candidates = current ? candidatesOf(current.members, current.assignments, props) : [];
   const chosen = candidates.find(row => row.username === reviewer && row.reason === null);
   const missingLanguage = !!chosen?.member && !chosen.member.languages.includes(language);
-  const noAdjudicator = current != null && !current.members.some(member => member.roles.includes('adjudicator'));
+  const noConsolidator = current != null && !current.members.some(member => member.roles.includes('adjudicator'));
   const getsRole = !!chosen?.self && !chosen.member?.roles.includes('adjudicator');
   /** Why Start is unavailable, shown inline (never a silent disabled button). */
   const missing = selectedIds.length < 2 ? 'Select at least two submissions.'
@@ -136,8 +136,8 @@ function ConsolidationContent(props: Props): JSX.Element {
           {row.reason ? `${row.label} — ${row.reason}` : row.label}
         </option>)}
       </Select>
-      {getsRole && <p className="cell-secondary">You will get the Adjudicator role for this project.</p>}
-      {noAdjudicator && <p className="cell-secondary">No member has the Adjudicator role yet. Give it in <a href={membersHref}>Settings → Members</a>.</p>}
+      {getsRole && <p className="cell-secondary">You will get the Consolidator role for this project.</p>}
+      {noConsolidator && <p className="cell-secondary">No member has the Consolidator role yet. Give it in <a href={membersHref}>Settings → Members</a>.</p>}
       {missingLanguage && <Checkbox id={`${fieldId}-language`} label={`Assign this reviewer despite missing ${language} in their profile`} checked={confirmLanguage} disabled={busy} onChange={event => setConfirmLanguage(event.target.checked)} />}
       <Textarea id={`${fieldId}-reason`} label="Consolidation reason (optional)" value={reason} disabled={busy} onChange={event => setReason(event.target.value)} />
       {error != null && <><ErrorNotice error={error} /><Button disabled={busy} onClick={() => { setError(undefined); setAttempt(value => value + 1); }}>Reload reviewer tasks</Button></>}
@@ -147,7 +147,7 @@ function ConsolidationContent(props: Props): JSX.Element {
     </>}
     {created && <InlineMessage tone="success">
       {created.self ? 'Consolidation assigned to you.' : `Consolidation assigned to ${created.name}.`}
-      {created.roleGranted && ' You now have the Adjudicator role for this project.'}
+      {created.roleGranted && ' You now have the Consolidator role for this project.'}
       {created.self && <> <a className="btn btn-secondary btn-sm" href={`#/tasks/${created.round.assignment_id}`}>Open my consolidation task</a></>}
     </InlineMessage>}
   </section>;

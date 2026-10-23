@@ -46,12 +46,12 @@ export function changedChoices(choices: PlanChoices): PlanChoices {
 }
 
 function effect(review: TriState, annotate: TriState, ruleOn: boolean): string {
-  if (review === "on" && annotate === "on") return ruleOn ? "review, then annotate after the review is accepted" : "review and annotate in parallel";
+  if (review === "on" && annotate === "on") return ruleOn ? "translation review, then annotate after the review is accepted" : "translation review and annotation in parallel";
   if (review === "off" && annotate === "off") return "not in plan";
   const parts: string[] = [];
-  if (review === "on") parts.push("review");
+  if (review === "on") parts.push("translation review");
   if (annotate === "on") parts.push("annotate");
-  if (review === "off") parts.push("review off");
+  if (review === "off") parts.push("translation review off");
   if (annotate === "off") parts.push("annotate off");
   return parts.join(", ");
 }
@@ -87,13 +87,13 @@ export function describePlanChange(input: { choices: PlanChoices; languages: rea
   return sentences.join(" ");
 }
 
-/** Toast line after a save: "Plan saved for 20 cases · de: review + annotate". */
+/** Toast line after a save: "Plan saved for 20 cases · de: translation review and annotation". */
 export function savedSummary(caseCount: number, choices: PlanChoices): string {
   const active = changedChoices(choices);
   const parts = Object.keys(active).sort(compareKeys).map(key => {
     const { review, annotate } = active[key];
-    const on = [review === "on" && "review", annotate === "on" && "annotate"].filter(Boolean).join(" + ");
-    const off = [review === "off" && "review off", annotate === "off" && "annotate off"].filter(Boolean);
+    const on = review === "on" && annotate === "on" ? "translation review and annotation" : review === "on" ? "translation review" : annotate === "on" ? "annotate" : "";
+    const off = [review === "off" && "translation review off", annotate === "off" && "annotate off"].filter(Boolean);
     return `${key}: ${[on, ...off].filter(Boolean).join(", ")}`;
   });
   return [`Plan saved for ${plural(caseCount, "case")}`, ...parts].join(" · ");

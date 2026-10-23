@@ -12,7 +12,7 @@ it("is a toggle button named with its row and shows the check icon only when pre
   rerender(<PlanChip kind="review" pressed name="Review, case-0101 · fr" onToggle={onToggle} />);
   expect(chip.getAttribute("aria-pressed")).toBe("true");
   expect(chip.querySelector("svg")).not.toBeNull();
-  expect(chip.textContent).toContain("Review");
+  expect(chip.textContent).toContain("Translation review");
 });
 it("keeps focus while busy, ignores clicks and renders no status region of its own", () => {
   const onToggle = vi.fn();

@@ -4,13 +4,13 @@
  */
 import { personLabel as identityLabel, type PersonRef } from "./identity";
 
-export type SubmissionKind = "annotation" | "review" | "consolidation" | "carry_forward";
+export type SubmissionKind = "annotation" | "proposal_check" | "consolidation" | "carry_forward";
 
 export const kindLabels: Readonly<Record<SubmissionKind, string>> = {
-  annotation: "Annotation",
-  review: "Review",
+  annotation: "Annotation, from scratch",
+  proposal_check: "Annotation, from proposals",
   consolidation: "Consolidation",
-  carry_forward: "Carry-forward",
+  carry_forward: "Carried annotation",
 };
 
 /** Short month names, shared with the guideline day labels. */

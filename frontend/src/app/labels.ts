@@ -13,7 +13,7 @@ export function labelFor(labels: Readonly<Record<string, string>>, code: string)
 
 export const taskLabels: Readonly<Record<"annotate" | "review" | "translation_review", string>> = {
   annotate: "Annotation",
-  review: "Review",
+  review: "Consolidation",
   translation_review: "Translation review",
 };
 
@@ -33,7 +33,7 @@ export const assignmentStatusLabels: Readonly<Record<"unassigned" | "open" | "in
 export const roleLabels: Readonly<Record<"lead" | "annotator" | "adjudicator", string>> = {
   lead: "Project lead",
   annotator: "Annotator",
-  adjudicator: "Adjudicator",
+  adjudicator: "Consolidator",
 };
 
 export const jobStatusLabels: Readonly<Record<"queued" | "running" | "succeeded" | "failed", string>> = {

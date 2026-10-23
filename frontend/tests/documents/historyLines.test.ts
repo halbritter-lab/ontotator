@@ -71,7 +71,7 @@ describe("historyLines", () => {
       "Review: Ana Weber (ann-0003) · Accepted with corrections · v1 → v2",
       "Review: Accepted: reviewed outside Ontocurator · Checked",
       "Consolidation: Ana Weber (ann-0003) · 3 findings · v2 · 09:00",
-      "Annotation review: Ana Weber (ann-0003) · Open · Paused",
+      "Consolidation: Ana Weber (ann-0003) · Open · Paused",
       "Annotation: Luc Martin (ann-0005) · moved to v2",
       "Task paused: ann-0003",
     ]);

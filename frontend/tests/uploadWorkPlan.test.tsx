@@ -44,20 +44,20 @@ describe("UploadWorkPlan", () => {
     const onChange = renderPlan();
     const section = screen.getByRole("region", { name: "Work plan" });
     const table = within(section).getByRole("table");
-    expect(within(table).getAllByRole("columnheader").map(item => item.textContent)).toEqual(["Language", "Versions in bundle", "Review", "Annotate"]);
+    expect(within(table).getAllByRole("columnheader").map(item => item.textContent)).toEqual(["Language", "Versions in bundle", "Translation review", "Annotate"]);
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map(row => row.querySelector("th,td")!.textContent)).toEqual(["Sources (50)", "de · MT (50)", "fr · MT (30)"]);
     expect(rows[0].textContent).toContain("–");
     expect(rows[0].textContent).toContain("if no translation");
     expect(within(rows[0]).getByRole("button", { name: "Annotate, Sources" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Review, de" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Translation review, de" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Annotate, fr" }).getAttribute("aria-pressed")).toBe("true");
     expect(last(onChange)).toEqual({ plan: { plan_languages: {}, plan_cases: [] }, blockedReason: null });
   });
 
   it("changes a whole language row with one chip click", () => {
     const onChange = renderPlan(workPlan({ setting: "nothing", languages: workPlan().languages.map(item => ({ ...item, review: item.review === null ? null : false, annotate: false, source_rule: null })) }));
-    const review = screen.getByRole("button", { name: "Review, de" });
+    const review = screen.getByRole("button", { name: "Translation review, de" });
     expect(review.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(review);
     expect(review.getAttribute("aria-pressed")).toBe("true");
@@ -75,8 +75,8 @@ describe("UploadWorkPlan", () => {
     fireEvent.click(chip);
     expect(chip.getAttribute("aria-pressed")).toBe("false");
     expect(last(onChange).plan.plan_cases).toEqual([{ case_id: "case-0002", language: "de", review: true, annotate: false }]);
-    fireEvent.click(screen.getByRole("button", { name: "Review, de" }));
-    expect(screen.getByRole("button", { name: "Review, case-0001 · de" }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Translation review, de" }));
+    expect(screen.getByRole("button", { name: "Translation review, case-0001 · de" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("lists new language versions of existing cases with the default and keeps existing rows", () => {
@@ -89,12 +89,12 @@ describe("UploadWorkPlan", () => {
     const existing = screen.getByText("case-0007 · de").closest("tr")!;
     expect(existing.textContent).toContain("keeps its plan");
     expect(within(existing).queryAllByRole("button")).toEqual([]);
-    expect(screen.getByRole("button", { name: "Review, case-0007 · fr" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Translation review, case-0007 · fr" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("asks for the acceptance only while the rule is on", () => {
     renderPlan(workPlan(), { ruleOn: false });
-    fireEvent.click(screen.getByRole("button", { name: "Review, fr" }));
+    fireEvent.click(screen.getByRole("button", { name: "Translation review, fr" }));
     expect(screen.queryByRole("checkbox", { name: /reviewed outside Ontocurator/ })).toBeNull();
   });
 });
@@ -116,7 +116,7 @@ describe("UploadPanel with a work plan", () => {
     fireEvent.submit(screen.getByRole("button", { name: "Check" }).closest("form")!);
     const importButton = await screen.findByRole("button", { name: "Import 50 cases" });
     expect(importButton.getAttribute("aria-disabled")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Review, fr" }));
+    fireEvent.click(screen.getByRole("button", { name: "Translation review, fr" }));
     expect(screen.getByText("fr: 12 of 30 translations are not marked as reviewed in the package. Annotation needs an accepted translation.")).toBeTruthy();
     expect(screen.getByText(/18 already marked as reviewed in the package metadata need nothing\./)).toBeTruthy();
     expect(importButton.getAttribute("aria-disabled")).toBe("true");

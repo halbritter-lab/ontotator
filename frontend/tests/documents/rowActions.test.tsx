@@ -83,9 +83,9 @@ it("plan popover saves on chip click with Undo toast", async () => {
   expect(button.getAttribute("aria-expanded")).toBe("true");
   const popover = screen.getByRole("dialog", { name: "Plan, case-101 · de" });
   // Undecided: each flag is a pair of options, neither pressed.
-  const reviewGroup = within(popover).getByRole("group", { name: "Review, case-101 · de" });
-  const review = within(reviewGroup).getByRole("button", { name: "Review" });
-  expect(within(reviewGroup).getByRole("button", { name: "Don't review" }).getAttribute("aria-pressed")).toBe("false");
+  const reviewGroup = within(popover).getByRole("group", { name: "Translation review, case-101 · de" });
+  const review = within(reviewGroup).getByRole("button", { name: "Translation review" });
+  expect(within(reviewGroup).getByRole("button", { name: "No translation review" }).getAttribute("aria-pressed")).toBe("false");
   expect(review.getAttribute("aria-pressed")).toBe("false");
   expect(within(reviewGroup).getByText("Not decided yet")).toBeTruthy();
   expect(document.activeElement).toBe(review);
@@ -98,9 +98,9 @@ it("plan popover saves on chip click with Undo toast", async () => {
   expect(document.activeElement).toBe(button);
 });
 
-it("Accept as final… when the final has one submission to choose (final.state choose, submitted 1), Compare results… otherwise", () => {
+it("Accept result… when the final has one submission to choose (final.state choose, submitted 1), Compare results… otherwise", () => {
   render(<Harness row={scenario7a()} />);
-  expect(screen.getByRole("button", { name: "Accept as final…, case-107 · de" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Accept result…, case-107 · de" })).toBeTruthy();
   cleanup();
   render(<Harness row={scenario7b()} />);
   expect(screen.getByRole("button", { name: "Compare results…, case-107 · en" })).toBeTruthy();
@@ -121,7 +121,7 @@ it("plan popover stays open when a save moves the row into the plan; closing foc
   expect(button.getAttribute("aria-controls")).toBe("documents-row-case-101-de-plan");
   expect(document.getElementById("documents-row-case-101-de-plan")).not.toBeNull();
   expect(popover.contains(document.getElementById("documents-row-case-101-de-plan"))).toBe(true);
-  fireEvent.click(within(within(popover).getByRole("group", { name: "Review, case-101 · de" })).getByRole("button", { name: "Review" }));
+  fireEvent.click(within(within(popover).getByRole("group", { name: "Translation review, case-101 · de" })).getByRole("button", { name: "Translation review" }));
   expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
   // The reload: the row is in the plan now, its first lead step is no longer "Plan…".
   rerender(<Harness row={stagedRow("case-101", "de", { steps: [stepOf("assign_translation_review")] })} />);

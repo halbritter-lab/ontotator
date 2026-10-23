@@ -14,19 +14,19 @@ import type { Route } from "../app/router";
 
 /**
  * Toast after the panel started a consolidation: the lead consolidating themselves gets "Open consolidation"
- * (their new task) and, when it was just granted, the Adjudicator role sentence.
+ * (their new task) and, when it was just granted, the Consolidator role sentence.
  */
 export function consolidationStartedToast(name: string, assignmentId: number, started: ConsolidationStarted): { message: string; actionLabel?: string; route?: Route } {
   const message = `Consolidation started for ${name}.`;
   if (!started.self) return { message };
   return {
-    message: started.roleGranted ? `${message} You now have the Adjudicator role for this project.` : message,
+    message: started.roleGranted ? `${message} You now have the Consolidator role for this project.` : message,
     actionLabel: "Open consolidation",
     route: { name: "task", assignmentId },
   };
 }
 
-/** Panel actions of a row: "Accept as final…" / "Compare results…" and "Review changes…". */
+/** Panel actions of a row: "Accept result…" / "Compare results…" and "Review changes…". */
 export const PANEL_ACTIONS: ReadonlySet<string> = new Set(["choose_final", "review_changes"]);
 
 /** "Final result · case-107 · de" (the panel's `h2`). */
@@ -88,10 +88,10 @@ export function decidedLine(submission: Pick<FinalPanelSubmissionView, "kind" | 
   return `Final · ${submission.kind === "consolidation" ? "Consolidation" : "Annotation"} · ${submission.is_me ? "You" : personName(submission)}`;
 }
 
-/** "Accept Ana Weber’s annotation as final?" / "Accept this consolidation as final?" (under "Consolidated by …"). */
+/** "Accept Ana Weber’s annotation as the result?" / "Accept this consolidation as the result?" (under "Consolidated by …"). */
 export function acceptQuestion(submission: FinalPanelSubmissionView): string {
-  if (submission.kind === "consolidation") return submission.is_me ? "Accept your consolidation as final?" : "Accept this consolidation as final?";
-  return submission.is_me ? "Accept your annotation as final?" : `Accept ${personName(submission)}’s annotation as final?`;
+  if (submission.kind === "consolidation") return submission.is_me ? "Accept your consolidation as the result?" : "Accept this consolidation as the result?";
+  return submission.is_me ? "Accept your annotation as the result?" : `Accept ${personName(submission)}’s annotation as the result?`;
 }
 
 /** "Round 1 · 3 findings · submitted 20 Oct, 12:01 · on de v1" (the compact choice's line, without the link). */

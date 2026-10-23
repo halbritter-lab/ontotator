@@ -117,16 +117,16 @@ it("discards with a required reason and shows consequences", async () => {
   await waitFor(() => expect(props.onDone).toHaveBeenCalledWith("The de translation of case-0101 was discarded.", { caseId: "case-0101", revision: 4 }));
 });
 
-it("Assign review or accept… offers Turn Review on or the external-review acceptance", async () => {
+it("Assign review or accept… offers Turn translation review on or the external-review acceptance", async () => {
   const row = notAccepted();
   const saved = { case_id: "case-0101", language: "de", flags: { review: true, annotate: true, review_applicable: true, discarded: false }, revision: 4,
     undo: { rows: [], revisions: {} }, withdrawn: [], accepted_document_ids: [] } as PlanRowResult;
   vi.mocked(api.patchWorkPlan).mockResolvedValue(saved);
   const props = renderResolve({ mode: "not_accepted", row });
   const box = screen.getByRole("group", { name: "Translation not accepted, case-0101 · de" });
-  fireEvent.click(within(box).getByRole("button", { name: "Turn Review on" }));
+  fireEvent.click(within(box).getByRole("button", { name: "Turn translation review on" }));
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "de", { review: true, expected_revision: 3, confirm: false }));
-  await waitFor(() => expect(props.onDone).toHaveBeenCalledWith("Review on for case-0101 · de. Next: Assign translation review.", { caseId: "case-0101", revision: 4 }));
+  await waitFor(() => expect(props.onDone).toHaveBeenCalledWith("Translation review on for case-0101 · de. Next: Assign reviewer…", { caseId: "case-0101", revision: 4 }));
 
   cleanup();
   vi.mocked(api.patchWorkPlan).mockClear();
@@ -160,7 +160,7 @@ it("announces Saving… through the page and has no status region of its own", a
   let finish!: (value: PlanRowResult) => void;
   vi.mocked(api.patchWorkPlan).mockImplementation(() => new Promise(done => { finish = done; }));
   const props = renderResolve({ mode: "not_accepted", row: notAccepted() });
-  fireEvent.click(screen.getByRole("button", { name: "Turn Review on" }));
+  fireEvent.click(screen.getByRole("button", { name: "Turn translation review on" }));
   expect(props.onAnnounce).toHaveBeenLastCalledWith("Saving…");
   expect(document.querySelector("[role='status']")).toBeNull();
   await act(async () => {
@@ -173,7 +173,7 @@ it("announces Saving… through the page and has no status region of its own", a
 it("reports a plan changed elsewhere with the current revisions and the message", async () => {
   vi.mocked(api.patchWorkPlan).mockRejectedValueOnce(new ApiError(409, "changed", "WORK_PLAN_CHANGED", { cases: [{ case_id: "case-0101", revision: 7 }] }));
   const props = renderResolve({ mode: "not_accepted", row: notAccepted() });
-  fireEvent.click(screen.getByRole("button", { name: "Turn Review on" }));
+  fireEvent.click(screen.getByRole("button", { name: "Turn translation review on" }));
   expect(await screen.findByText("This plan changed. Reloaded the current plan.")).toBeTruthy();
   expect(props.onChanged).toHaveBeenCalledWith("case-0101", 7);
   expect(props.onAnnounce).toHaveBeenLastCalledWith("");

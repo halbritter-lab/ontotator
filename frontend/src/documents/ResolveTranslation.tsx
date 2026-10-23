@@ -4,7 +4,7 @@
  * - `resolve` (rule 4, D5): exactly "Assign a new review…", "Correct the translation…" (the lead's own
  *   correction, F1; "Continue your correction" while the lead holds one) and
  *   "Discard the {language} translation…" (reason required, consequences confirmed inline).
- * - `not_accepted` (rule 4a, D24): "Turn Review on" or the external-review acceptance with a reason.
+ * - `not_accepted` (rule 4a, D24): "Turn translation review on" or the external-review acceptance with a reason.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type ConsequencesView, type DocumentRowView } from "../api/client";
@@ -174,7 +174,7 @@ function NotAcceptedOptions(props: ResolveTranslationProps): JSX.Element {
       const result = kind === "review"
         ? await api.patchWorkPlan(projectKey, row.case_id, row.language, { review: true, expected_revision: revision, confirm: false })
         : await api.patchWorkPlan(projectKey, row.case_id, row.language, { annotate: true, expected_revision: revision, confirm: false, accept_external_review: { reason: reason.trim() } });
-      onDone(kind === "review" ? `Review on for ${name}. Next: Assign translation review.` : `${name} accepted as reviewed outside Ontocurator.`,
+      onDone(kind === "review" ? `Translation review on for ${name}. Next: Assign reviewer…` : `${name} accepted as reviewed outside Ontocurator.`,
         { caseId: result.case_id, revision: result.revision });
     } catch (failure: unknown) {
       onAnnounce("");
@@ -187,7 +187,7 @@ function NotAcceptedOptions(props: ResolveTranslationProps): JSX.Element {
     <Heading id={`${id}-title`} ref={heading} tabIndex={-1} className="inline-confirm-title">{`${stepLabel("translation_not_accepted")}, ${name}`}</Heading>
     <p>Annotation needs an accepted translation.</p>
     <div className="documents-resolve-actions">
-      <Button size="sm" aria-disabled={busy || undefined} onClick={() => { void save("review"); }}>Turn Review on</Button>
+      <Button size="sm" aria-disabled={busy || undefined} onClick={() => { void save("review"); }}>Turn translation review on</Button>
     </div>
     <p>{ACCEPT_EXTERNAL_LABEL}</p>
     <Textarea id={`${id}-reason`} label="Reason" required maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} />

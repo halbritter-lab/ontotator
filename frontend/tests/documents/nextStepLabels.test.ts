@@ -62,18 +62,18 @@ describe("next step labels", () => {
     expect(secondaryLine(step({ code: "decide_report", detail: { kind: "report", excerpt, reporter: { pseudonym: "ann-0005", display_name: "Ben Roth", is_me: false }, task_paused: true } }), plain))
       .toBe(`“${excerpt.slice(0, 60)}…” · Ben Roth (ann-0005) · task paused`);
     const withFinal = row({ case_id: "case-0101", language: "de", final: final({ case_id: "case-0101", language: "de", document_id: "d", submission_id: "s", round_ordinal: 1, author_label: "ann-0004", author: { pseudonym: "ann-0004", display_name: "Annotator", is_me: false } }) });
-    expect(secondaryLine(step({ code: "done", kind: "done", detail: { kind: "final", version: 1, round_ordinal: 1, task_paused: false } }), withFinal)).toBe("Final: Annotation · Round 1 · Annotator (ann-0004)");
+    expect(secondaryLine(step({ code: "done", kind: "done", detail: { kind: "final", version: 1, round_ordinal: 1, task_paused: false } }), withFinal)).toBe("Final: Annotation, from scratch · Round 1 · Annotator (ann-0004)");
     expect(secondaryLine(step({ code: "translation_accepted", kind: "done", detail: { kind: "review_only", version: 1, task_paused: false } }), plain)).toBe("Review only · not annotated");
     expect(secondaryLine(step({ code: "waiting_for_translation_review", kind: "in_progress", detail: { kind: "waiting", version: 2, origin: "correction", translation_status: "ready_for_review", task_paused: false } }), plain))
       .toBe("v2 correction · waiting for review");
     expect(secondaryLine(step({ code: "assign_annotation", kind: "assign", assigned: 1, target: 2, detail: null }), plain)).toBe("1 of 2 assigned");
   });
 
-  it("names Choose final as Accept as final… for one submission and Compare results… otherwise (V6, VD16)", () => {
+  it("names Choose final as Accept result… for one submission and Compare results… otherwise (V6, VD16)", () => {
     const choose = stepOf("choose_final");
     const one = row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 1 }) }) });
     const two = row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 2 }) }) });
-    expect(rowActionLabel(choose, one)).toBe("Accept as final…");
+    expect(rowActionLabel(choose, one)).toBe("Accept result…");
     expect(rowActionLabel(choose, two)).toBe("Compare results…");
     expect(rowActionLabel(stepOf("assign_annotation"), one)).toBe("Assign annotation…");
   });
@@ -83,7 +83,7 @@ describe("next step labels", () => {
     // A consolidation of all submissions: two submitted, yet the panel accepts the consolidation.
     const consolidated = row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 2, label_rule: "accept" }) }) });
     const single = row({ case_id: "c", language: "de", stages: stages({ final: stageCell("choose", "decision", { submitted: 1, label_rule: "compare" }) }) });
-    expect(rowActionLabel(choose, consolidated)).toBe("Accept as final…");
+    expect(rowActionLabel(choose, consolidated)).toBe("Accept result…");
     expect(rowActionLabel(choose, single)).toBe("Compare results…");
   });
 

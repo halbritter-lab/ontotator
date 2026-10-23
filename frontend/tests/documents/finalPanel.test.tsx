@@ -62,14 +62,14 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("choose", () => {
-  it("accept: Accept Ana Weber’s annotation as final? with Round line and Accept as final", async () => {
+  it("accept: Accept Ana Weber’s annotation as the result? with Round line and Accept result…", async () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de", { guideline_version: 2 });
     const onNavigate = vi.fn();
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]), { onNavigate });
     // No dialog of its own: a region inside the row panel, headed "Final result".
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(within(block()).getByRole("heading", { level: 3, name: "Final result" })).toBeTruthy();
-    expect(await screen.findByText("Accept Ana Weber’s annotation as final?")).toBeTruthy();
+    expect(await screen.findByText("Accept Ana Weber’s annotation as the result?")).toBeTruthy();
     const line = screen.getByText(`Round 1 · 3 findings · submitted ${time("2026-10-20T12:01:00Z")} · on de v1`, { exact: false });
     fireEvent.click(within(line).getByRole("link", { name: "Open in editor" }));
     expect(onNavigate).toHaveBeenCalledWith({
@@ -78,7 +78,7 @@ describe("choose", () => {
     });
     // Guidelines are on main: the panel's submission rows carry the guideline label.
     expect(await screen.findByText("Guidelines v2 (current: v3)")).toBeTruthy();
-    const accept = screen.getByRole("button", { name: "Accept as final" });
+    const accept = screen.getByRole("button", { name: "Accept result…" });
     expect(accept.classList.contains("btn-primary")).toBe(true);
     // The row panel closes itself; the block has no Cancel.
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
@@ -87,13 +87,11 @@ describe("choose", () => {
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-107-de", submission_id: "case-107-s1", expected_revision: 0, acknowledged_cause_ids: [] });
   });
 
-  it("offers Assign annotation review…", async () => {
+  it("one submission: nothing to consolidate, no annotation review to assign (D1)", async () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
-    const onAssign = vi.fn();
-    renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]), { onAssign });
-    fireEvent.click(await screen.findByRole("button", { name: "Assign annotation review…" }));
-    expect(onAssign).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "de" }));
-    // One submission: nothing to consolidate.
+    renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
+    await screen.findByRole("button", { name: "Accept result…" });
+    expect(screen.queryByRole("button", { name: /annotation review/i })).toBeNull();
     expect(screen.queryByRole("button", { name: "Consolidate…" })).toBeNull();
   });
 
@@ -108,15 +106,15 @@ describe("choose", () => {
     const onNavigate = vi.fn();
     renderPanel("case-108:de", page([group("case-108", [chooseRow("case-108", "de")])]), { onNavigate });
     expect(await screen.findByText("Consolidated by Luc Martin")).toBeTruthy();
-    expect(screen.getByText("Accept this consolidation as final?")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Accept as final" }).classList.contains("btn-primary")).toBe(true);
+    expect(screen.getByText("Accept this consolidation as the result?")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Accept result…" }).classList.contains("btn-primary")).toBe(true);
     expect(screen.queryByText(/All findings match/)).toBeNull();
     const open = screen.getByRole("link", { name: "Open consolidation" });
     expect(open.getAttribute("href")).toBe(`#/projects/p/consolidations/c-r3?documents_panel=${encodeURIComponent("case-108:de")}`);
     fireEvent.click(open);
     expect(onNavigate).toHaveBeenCalledWith({ name: "projectConsolidation", key: "p", roundId: "c-r3", documents: { panel: "case-108:de" } });
     fireEvent.click(screen.getByRole("button", { name: "Compare all 3…" }));
-    expect(screen.queryByText("Accept this consolidation as final?")).toBeNull();
+    expect(screen.queryByText("Accept this consolidation as the result?")).toBeNull();
     const table = screen.getByRole("table", { name: "Submissions, case-108 · de" });
     expect(within(table).getAllByRole("row")).toHaveLength(4);
     expect(within(table).getByRole("rowheader", { name: /Consolidated by Luc Martin/ })).toBeTruthy();
@@ -264,7 +262,7 @@ describe("decided", () => {
     panels[rowKey("case-120", "de")] = { ...comparePanel("case-120", "de"), label_rule: "accept", accept_submission_id: "case-120-s1" };
     renderPanel("case-120:de", page([group("case-120", [decidedRow("case-120")])]));
     expect(await screen.findByText("Final · Annotation · Ana Weber")).toBeTruthy();
-    expect(screen.queryByText(/as final\?/)).toBeNull();
+    expect(screen.queryByText(/as the result\?/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Change final…" }));
     const table = screen.getByRole("table", { name: "Submissions, case-120 · de" });
     const tomRow = within(table).getAllByRole("row").find(entry => entry.textContent?.includes("Tom Reis"))!;
@@ -384,36 +382,36 @@ describe("full agreement (W1)", () => {
     });
   };
 
-  it("All findings match (2 of 2): one primary Accept as final, a confirmation with Open result first, then the earliest eligible submission", async () => {
+  it("All findings match (2 of 2): one primary Accept result…, a confirmation with Open result first, then the earliest eligible submission", async () => {
     panels[rowKey("case-140", "de")] = matchPanel("case-140", 2, 2);
     const onNavigate = vi.fn();
     const onDirtyChange = vi.fn();
     renderPanel("case-140:de", page([group("case-140", [chooseRow("case-140", "de")])]), { onNavigate, onDirtyChange });
     expect(await screen.findByText("All findings match (2 of 2)")).toBeTruthy();
-    const accept = screen.getByRole("button", { name: "Accept as final" });
+    const accept = screen.getByRole("button", { name: "Accept result…" });
     expect(accept.classList.contains("btn-primary")).toBe(true);
     // The per-submission table waits under "Show submissions"; no Consolidate… with nothing to resolve.
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("button", { name: "Consolidate…" })).toBeNull();
     fireEvent.click(accept);
     expect(api.selectFinalResult).not.toHaveBeenCalled();
-    const confirm = screen.getByRole("group", { name: "Accept as final?" });
+    const confirm = screen.getByRole("group", { name: "Accept result?" });
     expect(within(confirm).getByText("Both submissions contain the same findings. Accept them as the final result?")).toBeTruthy();
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
     const controls = [...confirm.querySelectorAll("a, button")].map(element => element.textContent);
-    expect(controls.indexOf("Open result")).toBeLessThan(controls.indexOf("Accept as final"));
+    expect(controls.indexOf("Open result")).toBeLessThan(controls.indexOf("Accept result"));
     fireEvent.click(within(confirm).getByRole("link", { name: "Open result" }));
     expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ name: "projectCase", annotations: refKey({ kind: "submission", id: "case-140-s1" }) }));
-    fireEvent.click(within(confirm).getByRole("button", { name: "Accept as final" }));
+    fireEvent.click(within(confirm).getByRole("button", { name: "Accept result" }));
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-140-de", submission_id: "case-140-s1", expected_revision: 0, acknowledged_cause_ids: [] });
   });
 
   it("Cancel closes the confirmation; Show submissions lists the table", async () => {
     panels[rowKey("case-141", "de")] = matchPanel("case-141", 2, 2);
     renderPanel("case-141:de", page([group("case-141", [chooseRow("case-141", "de")])]));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("group", { name: "Accept as final?" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Accept result?" })).toBeNull();
     const show = screen.getByRole("button", { name: "Show submissions" });
     expect(show.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(show);
@@ -430,7 +428,7 @@ describe("full agreement (W1)", () => {
     panels[rowKey("case-143", "de")] = matchPanel("case-143", 3, 4);
     renderPanel("case-143:de", page([group("case-143", [chooseRow("case-143", "de")])]));
     expect(await screen.findByText("All findings match (4 of 4)")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Accept as final" }));
+    fireEvent.click(screen.getByRole("button", { name: "Accept result…" }));
     expect(screen.getByText("All 3 submissions contain the same findings. Accept them as the final result?")).toBeTruthy();
     cleanup();
     panels[rowKey("case-144", "de")] = matchPanel("case-144", 3, 0);
@@ -451,7 +449,7 @@ describe("Consolidate… (findings 7, 8)", () => {
   it("is secondary when a submission is preselected", async () => {
     panels[rowKey("case-151", "de")] = { ...comparePanel("case-151", "de"), label_rule: "accept", accept_submission_id: "case-151-s1" };
     renderPanel("case-151:de", page([group("case-151", [chooseRow("case-151", "de")])]));
-    await screen.findByText("Accept Ana Weber’s annotation as final?");
+    await screen.findByText("Accept Ana Weber’s annotation as the result?");
     const consolidate = screen.getByRole("button", { name: "Consolidate…" });
     expect(consolidate.classList.contains("btn-primary")).toBe(false);
     expect(consolidate.classList.contains("btn-quiet")).toBe(false);
@@ -468,7 +466,7 @@ describe("after a decision", () => {
     renderPanel("case-107:de", page([group("case-107", [first]), group("case-108", [between]), group("case-109", [next])], { bar: bar({ total: 3, missing_final: 1 }) }));
     const decided = { ...first, next_step: null, steps: [], categories: [] };
     afterDecision = page([group("case-107", [decided]), group("case-108", [between]), group("case-109", [next])], { bar: bar({ total: 2, missing_final: 0 }) });
-    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
     await waitFor(() => expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Final result · case-109 · de"));
     expect(screen.getByText("Final result saved for case-107 · de.")).toBeTruthy();
     expect(screen.getByText("Needs your decision: 3 → 2 · Final result missing: 1 → 0")).toBeTruthy();
@@ -484,7 +482,7 @@ describe("after a decision", () => {
     const onRowAction = vi.fn();
     renderPanel("case-107:de", page([group("case-107", [first]), group("case-109", [report])]), { onRowAction });
     afterDecision = page([group("case-107", [{ ...first, next_step: null, steps: [] }]), group("case-109", [report])]);
-    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
     expect(await screen.findByText("No more final results to decide.")).toBeTruthy();
     expect(screen.getByText("Final result saved for case-107 · de.")).toBeTruthy();
     await waitFor(() => expect(liveRegion().textContent).toBe("Final result saved. No more final results to decide."));
@@ -508,10 +506,10 @@ describe("after a decision", () => {
       </>;
     }
     render(<Switcher />);
-    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
     expect(await screen.findByText("No more final results to decide.")).toBeTruthy();
     fireEvent.click(screen.getByText("Show case-108"));
-    expect(await screen.findByText("Accept Ana Weber’s annotation as final?")).toBeTruthy();
+    expect(await screen.findByText("Accept Ana Weber’s annotation as the result?")).toBeTruthy();
     expect(screen.queryByText("No more final results to decide.")).toBeNull();
   });
 
@@ -519,7 +517,7 @@ describe("after a decision", () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     const initial = page([group("case-107", [chooseRow("case-107", "de")])]);
     const { rerender } = renderPanel("case-107:de", initial);
-    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
     await waitFor(() => expect(api.selectFinalResult).toHaveBeenCalled());
     rerender(<Harness initialKey="case-107:de" initialPage={initial} refreshError={new Error("offline")} />);
     expect(await screen.findByText("Final result saved for case-107 · de. The list could not be refreshed.")).toBeTruthy();
@@ -532,7 +530,7 @@ describe("failures", () => {
     const onReload = vi.fn();
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]), { onReload });
     vi.mocked(api.selectFinalResult).mockRejectedValue(new ConflictError("conflict", "REVISION_CONFLICT", { current_revision: 1 }));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe("This final result changed.Review again");
     const calls = vi.mocked(api.finalPanel).mock.calls.length;
@@ -546,7 +544,7 @@ describe("failures", () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
     vi.mocked(api.selectFinalResult).mockRejectedValue(new ConflictError("own", "OWN_RESULT_NOT_SELECTABLE"));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
     expect((await screen.findByRole("alert")).textContent).toContain(`${OWN_REASON} Nothing was saved.`);
   });
 
@@ -554,13 +552,13 @@ describe("failures", () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     renderPanel("case-107:de", page([group("case-107", [chooseRow("case-107", "de")])]));
     vi.mocked(api.selectFinalResult).mockRejectedValueOnce(new ApiError(500, "boom"));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept as final" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept result…" }));
     expect(await screen.findByText("Could not save. Nothing changed.")).toBeTruthy();
     vi.mocked(api.selectFinalResult).mockRejectedValueOnce(new AuthError("expired", undefined, "NOT_AUTHENTICATED", 401));
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByText("Your session ended. Nothing was saved. Sign in and confirm again.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Accept as final" }).getAttribute("aria-busy")).toBeNull();
+    expect(screen.getByRole("button", { name: "Accept result…" }).getAttribute("aria-busy")).toBeNull();
     expect(api.selectFinalResult).toHaveBeenCalledTimes(2);
   });
 
@@ -580,7 +578,7 @@ describe("failures", () => {
     panels[rowKey("case-107", "de")] = acceptPanel("case-107", "de");
     renderPanel("case-107:de", page([group("case-200", [chooseRow("case-200", "de")])]));
     expect(await screen.findByText("case-107 · de is not in this list.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Accept as final" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Accept result…" })).toBeNull();
   });
 
   it("shows Loading submissions… and a load error with Review again", async () => {
@@ -617,7 +615,7 @@ describe("panel text", () => {
 describe("consolidationStartedToast", () => {
   it("offers Open consolidation and names the new role when the lead consolidates", () => {
     expect(consolidationStartedToast("case-112 · de", 9, { self: true, roleGranted: true })).toEqual({
-      message: "Consolidation started for case-112 · de. You now have the Adjudicator role for this project.",
+      message: "Consolidation started for case-112 · de. You now have the Consolidator role for this project.",
       actionLabel: "Open consolidation",
       route: { name: "task", assignmentId: 9 },
     });

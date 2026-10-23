@@ -25,7 +25,7 @@ export const ACCEPTANCE_RECORDED = "The acceptance is recorded with your name, t
 const TASK_NAMES: Readonly<Record<string, [string, string]>> = {
   translation_review: ["open translation review", "open translation reviews"],
   annotate: ["open annotation", "open annotations"],
-  review: ["open annotation review", "open annotation reviews"],
+  review: ["open consolidation", "open consolidations"],
 };
 
 /** "Ana Weber, ann-0004" (consequence lines put the person in parentheses). */
@@ -115,7 +115,7 @@ export interface PlanSaves {
 }
 
 const keyOf = (row: Pick<DocumentRowView, "case_id" | "language">): string => `${row.case_id}:${row.language}`;
-const flagName = (flag: PlanFlag): string => (flag === "review" ? "Review" : "Annotate");
+const flagName = (flag: PlanFlag): string => (flag === "review" ? "Translation review" : "Annotate");
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Plan saves of one page: per-case queue, latest revisions, local flags until the rows refetch, inline notices. */
@@ -361,14 +361,14 @@ export interface PlanChipsProps {
   size?: "table" | "card";
 }
 
-/** "Review" and "Annotate" chips of one language row; the source (and rows without Review) only "Annotate". */
+/** "Translation review" and "Annotate" chips of one language row; the source (and rows without translation review) only "Annotate". */
 export function PlanChips({ row, groupRevision, saves, size = "table" }: PlanChipsProps): JSX.Element {
   const name = textLabel(row);
   if (row.plan_row?.discarded) return <span className="documents-plan-chips documents-plan-discarded">Discarded</span>;
   const flags = saves.flagsOf(row, groupRevision);
   const reviewApplicable = row.plan_row?.review_applicable ?? !row.is_source;
   return <span className="documents-plan-chips" data-plan-row={`${row.case_id}:${row.language}`}>
-    {reviewApplicable && <PlanChip kind="review" size={size} pressed={flags.review} name={`Review, ${name}`} busy={saves.isBusy(row, "review")}
+    {reviewApplicable && <PlanChip kind="review" size={size} pressed={flags.review} name={`${flagName("review")}, ${name}`} busy={saves.isBusy(row, "review")}
       onToggle={() => saves.toggle(row, "review", groupRevision)} />}
     <PlanChip kind="annotate" size={size} pressed={flags.annotate} name={`Annotate, ${name}`} busy={saves.isBusy(row, "annotate")}
       onToggle={() => saves.toggle(row, "annotate", groupRevision)} />
@@ -380,7 +380,7 @@ function focusChip(row: Pick<DocumentRowView, "case_id" | "language">, flag: Pla
   const key = `${row.case_id}:${row.language}`;
   const container = Array.from(document.querySelectorAll("[data-plan-row]")).find(element => element.getAttribute("data-plan-row") === key);
   const chips = container ? Array.from(container.querySelectorAll<HTMLButtonElement>("button.ui-plan-chip")) : [];
-  const target = (flag ? chips.find(chip => chip.getAttribute("aria-label")?.startsWith(flag === "review" ? "Review," : "Annotate,")) : undefined) ?? chips[0];
+  const target = (flag ? chips.find(chip => chip.getAttribute("aria-label")?.startsWith(`${flagName(flag)},`)) : undefined) ?? chips[0];
   target?.focus();
   return target !== undefined;
 }

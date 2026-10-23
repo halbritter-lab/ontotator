@@ -90,7 +90,7 @@ describe("tabs, popover, panel, dialogs", () => {
         <DocumentsTabs bar={bar({ needs_decision: 3, all: 14 })} query={{}} projectKey="p" panelId="documents-panel" onNavigate={vi.fn()} />
         <div id="documents-panel" role="tabpanel" aria-labelledby="documents-panel-tab-all">table</div>
         <FilterPopover query={{}} bar={bar({ shown: 14, facets: { language: { de: 8 } } })} sourceLanguages={new Set(["en"])} onChange={vi.fn()} onClearAll={vi.fn()} />
-        <button ref={anchor} type="button" onClick={() => setPanel(true)}>Accept as final…, case-107 · de</button>
+        <button ref={anchor} type="button" onClick={() => setPanel(true)}>Accept result…, case-107 · de</button>
         <MenuButton label="1 more action for case-107 · de" buttonLabel="+1" items={[{ id: "a", label: "Decide on report…", onSelect: vi.fn() }]} />
         <Popover open={false} anchorRef={anchor} label="Plan" onClose={vi.fn()}>plan</Popover>
         {panel && <RowPanel projectKey="p" rowKey="case-107:de" row={row} rows={[row]} query={{}} returnFocusRef={anchor}
@@ -120,7 +120,7 @@ describe("tabs, popover, panel, dialogs", () => {
     const more = screen.getByRole("button", { name: "1 more action for case-107 · de" });
     expect(more.getAttribute("aria-haspopup")).toBe("menu");
 
-    const trigger = screen.getByRole("button", { name: "Accept as final…, case-107 · de" });
+    const trigger = screen.getByRole("button", { name: "Accept result…, case-107 · de" });
     trigger.focus();
     fireEvent.click(trigger);
     // The row panel is a non-modal labelled aside: no dialog role, nothing inert; the heading takes focus on open.

@@ -277,7 +277,7 @@ describe("cells", () => {
     const de = cellsOf("case-107 · de");
     expect(de[4].textContent).toBe("● Your choice1 submission");
     expect(de[5].querySelector("strong")!.textContent).toBe("You");
-    const action = within(de[6]).getByRole("button", { name: "Accept as final…, case-107 · de" });
+    const action = within(de[6]).getByRole("button", { name: "Accept result…, case-107 · de" });
     fireEvent.click(action);
     expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "de" }), expect.objectContaining({ code: "choose_final" }));
     expect(cellsOf("case-107 · en")[2].textContent).toBe("— source");

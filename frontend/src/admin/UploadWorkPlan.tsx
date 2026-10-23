@@ -107,7 +107,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
   return <section className="detail-section work-plan-upload" aria-labelledby={`${ids}-heading`}>
     <h3 id={`${ids}-heading`}>Work plan</h3>
     <div className="work-plan-table-scroll"><table className="data-table density-compact work-plan-table">
-      <thead><tr><th scope="col">Language</th><th scope="col">Versions in bundle</th><th scope="col">Review</th><th scope="col">Annotate</th></tr></thead>
+      <thead><tr><th scope="col">Language</th><th scope="col">Versions in bundle</th><th scope="col">Translation review</th><th scope="col">Annotate</th></tr></thead>
       <tbody>{workPlan.languages.map(language => {
         const flags = languageFlags(language);
         const name = language.key === SOURCE ? "Sources" : language.key;
@@ -115,7 +115,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
         return <tr key={language.key}>
           <th scope="row">{languageLabel(language)} ({language.rows})</th>
           <td className="work-plan-count">{language.versions}</td>
-          <td>{language.key === SOURCE ? <span className="work-plan-none">–</span> : <PlanChip kind="review" pressed={!!flags.review} name={`Review, ${name}`} busy={disabled} onToggle={() => toggleLanguage(language, "review")} />}</td>
+          <td>{language.key === SOURCE ? <span className="work-plan-none">–</span> : <PlanChip kind="review" pressed={!!flags.review} name={`Translation review, ${name}`} busy={disabled} onToggle={() => toggleLanguage(language, "review")} />}</td>
           <td><PlanChip kind="annotate" pressed={flags.annotate} name={`Annotate, ${name}`} busy={disabled} onToggle={() => toggleLanguage(language, "annotate")} />{conditional && <span className="work-plan-note"> if no translation</span>}</td>
         </tr>;
       })}</tbody>
@@ -126,7 +126,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
       return <div key={languageKey} className="work-plan-acceptance" role="group" aria-label={`Acceptance, ${languageKey}`}>
         <p className="work-plan-acceptance-title">{languageKey}: {count} of {language?.rows ?? count} translations are not marked as reviewed in the package. Annotation needs an accepted translation.</p>
         {canAccept ? <Checkbox id={`${ids}-accept-${languageKey}`} label="These translations were reviewed outside Ontocurator — accept them as they are" checked={!!accept[languageKey]} disabled={disabled} onChange={event => setAccept(current => ({ ...current, [languageKey]: event.target.checked }))} />
-          : <p>Turn Review on for {languageKey}, or ask a project lead to accept them.</p>}
+          : <p>Turn translation review on for {languageKey}, or ask a project lead to accept them.</p>}
         {!!language?.marked_in_package && <p className="field-hint">{language.marked_in_package} already marked as reviewed in the package metadata need nothing.</p>}
         {canAccept && <p className="field-hint">The acceptance is recorded with your name, the reason and the time.</p>}
       </div>;
@@ -134,14 +134,14 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
     {acceptLanguages.length > 0 && <Textarea id={`${ids}-reason`} label="Reason" required maxLength={2000} value={reason} disabled={disabled} onChange={event => setReason(event.target.value)} />}
     <details className="work-plan-cases" open={casesOpen}><summary onClick={event => { event.preventDefault(); setCasesOpen(open => !open); }}>Adjust per case…</summary>
       {casesOpen && <div className="work-plan-table-scroll"><table className="data-table density-compact work-plan-table">
-        <thead><tr><th scope="col">Text</th><th scope="col">Review</th><th scope="col">Annotate</th></tr></thead>
+        <thead><tr><th scope="col">Text</th><th scope="col">Translation review</th><th scope="col">Annotate</th></tr></thead>
         <tbody>{workPlan.cases.map(item => {
           const label = `${item.case_id} · ${item.language}`;
           if (!item.new_row) return <tr key={rowKey(item)}><th scope="row">{label}</th><td colSpan={2} className="field-hint">keeps its plan</td></tr>;
           const flags = caseFlags(item);
           return <tr key={rowKey(item)}>
             <th scope="row">{label}</th>
-            <td>{item.review === null ? <span className="work-plan-none">–</span> : <PlanChip kind="review" pressed={!!flags.review} name={`Review, ${label}`} busy={disabled} onToggle={() => toggleCase(item, "review")} />}</td>
+            <td>{item.review === null ? <span className="work-plan-none">–</span> : <PlanChip kind="review" pressed={!!flags.review} name={`Translation review, ${label}`} busy={disabled} onToggle={() => toggleCase(item, "review")} />}</td>
             <td><PlanChip kind="annotate" pressed={flags.annotate} name={`Annotate, ${label}`} busy={disabled} onToggle={() => toggleCase(item, "annotate")} /></td>
           </tr>;
         })}</tbody>

@@ -233,7 +233,7 @@ it("commits the chosen plan with the upload", async () => {
   fireEvent.submit(screen.getByRole("button", { name: "Check" }).closest("form")!);
   fireEvent.click(await screen.findByRole("button", { name: "Annotate, de" }));
   fireEvent.click(screen.getByText("Adjust per case…"));
-  fireEvent.click(screen.getByRole("button", { name: "Review, case-1 · de" }));
+  fireEvent.click(screen.getByRole("button", { name: "Translation review, case-1 · de" }));
   fireEvent.click(screen.getByRole("button", { name: "Import 1 text" }));
   await waitFor(() => expect(api.commitUpload).toHaveBeenCalledWith("p", 7, "real-plan", undefined, {
     plan_languages: { de: { review: true, annotate: false } },

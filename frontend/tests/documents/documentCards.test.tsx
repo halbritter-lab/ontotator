@@ -172,7 +172,7 @@ describe("cards", () => {
 
   it("a stage line opens the stage popover with its admin actions; Open full details opens the sheet filtered to the stage", () => {
     const onOpenPanel = vi.fn();
-    const stageActions = vi.fn((_row: DocumentRowView, stage: StageName) => (stage === "annotation" ? <button type="button">Assign annotation review…</button> : null));
+    const stageActions = vi.fn((_row: DocumentRowView, stage: StageName) => (stage === "annotation" ? <button type="button">Reassign…</button> : null));
     renderCards(page([case106()]), { onOpenPanel, stageActions });
     const de = cardOf("case-106 · de");
     const stageButton = within(de).getByRole("button", { name: "Annotation: 0 of 2 assigned. Show history, case-106 · de" });
@@ -185,7 +185,7 @@ describe("cards", () => {
     expect(stageButton.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(stageButton.getAttribute("aria-controls") ?? "")).not.toBeNull();
     expect(stageActions).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-106", language: "de" }), "annotation");
-    expect(within(dialog).getByRole("button", { name: "Assign annotation review…" })).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Reassign…" })).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Open full details" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-106", language: "de" }), { stage: "annotation", opener: stageButton });

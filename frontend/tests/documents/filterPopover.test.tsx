@@ -46,9 +46,9 @@ it("four fieldsets with counts, muted zero facets stay checkable when checked", 
   expect(button.getAttribute("aria-expanded")).toBe("true");
   const dialog = screen.getByRole("dialog", { name: "Filter" });
   expect(button.getAttribute("aria-controls")).toBe(dialog.querySelector("[id]")!.id);
-  // Language, Review, Annotation, Final, Origin, Plan, Flags; Waiting on when someone has open work.
+  // Language, Translation review, Annotation, Final, Origin, Plan, Flags; Waiting on when someone has open work.
   expect(within(dialog).getAllByRole("group").map(group => group.querySelector("legend")!.textContent))
-    .toEqual(["Language", "Review", "Annotation", "Final", "Origin", "Plan", "Flags", "Waiting on", "Order"]);
+    .toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags", "Waiting on", "Order"]);
   // X5: the flags facet with its count.
   expect(within(dialog).getByRole("checkbox", { name: /^Flagged: guidelines unclear, / })).toBeTruthy();
   // Focus moves to the first checkbox.

@@ -72,7 +72,7 @@ it("sends rows to selection-summary and bulk plan", async () => {
   render(<Harness initial={["case-0101:en", "case-0101:de", "case-0102:de"]} />);
   const selected = [{ case_id: "case-0101", language: "en" }, { case_id: "case-0101", language: "de" }, { case_id: "case-0102", language: "de" }];
   await waitFor(() => expect(api.selectionSummary).toHaveBeenCalledWith("p", { rows: selected }, filters));
-  fireEvent.click(within(bar()).getByRole("button", { name: "Annotate only" }));
+  fireEvent.click(within(bar()).getByRole("button", { name: "Annotation only, no translation review" }));
   expect(api.saveWorkPlans).toHaveBeenCalledWith("p", { rows: selected, preset: "annotate_only", confirm: false });
   // The saved message counts the cases of the selected texts.
   expect(await screen.findByText(/^Plan saved for 2 cases/)).toBeTruthy();
@@ -81,8 +81,8 @@ it("sends rows to selection-summary and bulk plan", async () => {
 it("bulk Undo after an intervening assignment shows the message and the normal confirmation", async () => {
   const onChanged = vi.fn();
   render(<Harness onChanged={onChanged} />);
-  fireEvent.click(within(bar()).getByRole("button", { name: "Review + annotate translations" }));
-  await screen.findByText("Plan saved for 20 cases · de: review + annotate");
+  fireEvent.click(within(bar()).getByRole("button", { name: "Translation review and annotation" }));
+  await screen.findByText("Plan saved for 20 cases · de: translation review and annotation");
   const consequences: ConsequencesView = { ...noConsequences, withdrawn: [{ assignment_id: 4, case_id: "case-0101", language: "de", task: "translation_review", person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } }] };
   vi.mocked(api.setWorkPlanRows).mockRejectedValueOnce(new ApiError(409, "confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences as never));
   fireEvent.click(screen.getByRole("button", { name: "Undo" }));
@@ -104,17 +104,17 @@ it("has Assign… as the page's only primary button", async () => {
   const primary = [...bar().querySelectorAll(".btn-primary")].map(button => button.textContent);
   expect(primary).toEqual(["Assign…"]);
   expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(
-    ["Assign…", "Review + annotate translations", "Annotate only", "Plan…", "Clear selection"]);
+    ["Assign…", "Translation review and annotation", "Annotation only, no translation review", "Plan…", "Clear selection"]);
   fireEvent.click(within(bar()).getByRole("button", { name: "Assign…" }));
   expect(onAssign).toHaveBeenCalledOnce();
 });
 
-it("Review + annotate translations saves at once without a dialog when nothing is affected", async () => {
+it("Translation review and annotation saves at once without a dialog when nothing is affected", async () => {
   const onRevisions = vi.fn();
   render(<Harness onRevisions={onRevisions} />);
-  fireEvent.click(within(bar()).getByRole("button", { name: "Review + annotate translations" }));
+  fireEvent.click(within(bar()).getByRole("button", { name: "Translation review and annotation" }));
   expect(api.saveWorkPlans).toHaveBeenCalledWith("p", { rows, preset: "review_and_annotate_translations", confirm: false });
-  const toast = await screen.findByText("Plan saved for 20 cases · de: review + annotate");
+  const toast = await screen.findByText("Plan saved for 20 cases · de: translation review and annotation");
   expect(toast.closest(".ui-toast")?.querySelector("button")?.textContent).toBe("Undo");
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(onRevisions).toHaveBeenCalledWith({ "case-0101": 2 });
@@ -122,16 +122,16 @@ it("Review + annotate translations saves at once without a dialog when nothing i
   expect(within(bar()).getByText("20 texts in 20 cases selected")).toBeTruthy();
   // Withdrawn tasks: the toast notes that Undo does not restore them.
   vi.mocked(api.saveWorkPlans).mockResolvedValueOnce({ ...result, withdrawn: [{ assignment_id: 1, case_id: "case-0101", language: "de", task: "annotate", person: { pseudonym: "ann-0004", is_me: false } }] });
-  fireEvent.click(within(bar()).getByRole("button", { name: "Annotate only" }));
+  fireEvent.click(within(bar()).getByRole("button", { name: "Annotation only, no translation review" }));
   expect(await screen.findByText("Undo restores the plan, not withdrawn tasks.")).toBeTruthy();
   expect(screen.getByText("Plan saved for 20 cases · de: annotate")).toBeTruthy();
 });
 
-it("Annotate only opens the plan dialog with the acceptance section when translations are not accepted and the rule is on", async () => {
+it("Annotation only, no translation review opens the plan dialog with the acceptance section when translations are not accepted and the rule is on", async () => {
   vi.mocked(api.saveWorkPlans).mockRejectedValueOnce(new ApiError(409, "invalid", "WORK_PLAN_INVALID", { reason: "annotate_not_accepted", rows: [] } as never));
   vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ languages: [lang("source", 20), lang("de", 20, { not_accepted: 12, marked_in_package: 8 })] }));
   render(<Harness />);
-  fireEvent.click(within(bar()).getByRole("button", { name: "Annotate only" }));
+  fireEvent.click(within(bar()).getByRole("button", { name: "Annotation only, no translation review" }));
   const dialog = await screen.findByRole("dialog", { name: "Work plan · 20 cases" });
   expect(api.previewWorkPlans).toHaveBeenCalledWith("p", { rows, preset: "annotate_only", confirm: false });
   expect(await within(dialog).findByText("de: 12 of 20 translations are not marked as reviewed in the package. Annotation needs an accepted translation.")).toBeTruthy();
@@ -143,13 +143,13 @@ it("opens the plan dialog for Plan… and keeps the selection after save", async
   render(<Harness />);
   fireEvent.click(within(bar()).getByRole("button", { name: "Plan…" }));
   const dialog = await screen.findByRole("dialog", { name: "Work plan · 20 cases" });
-  fireEvent.click(await within(dialog).findByRole("button", { name: "Review, de, keep" }));
+  fireEvent.click(await within(dialog).findByRole("button", { name: "Translation review, de, keep" }));
   fireEvent.click(within(dialog).getByRole("button", { name: "Annotate, de, keep" }));
   const save = within(dialog).getByRole("button", { name: "Save for 20 cases" });
   await waitFor(() => expect(save.getAttribute("aria-disabled")).toBeNull());
   await act(async () => { fireEvent.click(save); });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  expect(await screen.findByText("Plan saved for 20 cases · de: review + annotate")).toBeTruthy();
+  expect(await screen.findByText("Plan saved for 20 cases · de: translation review and annotation")).toBeTruthy();
   expect(within(bar()).getByText("20 texts in 20 cases selected")).toBeTruthy();
 });
 

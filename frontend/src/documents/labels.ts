@@ -104,14 +104,14 @@ function workItemText(item: WorkItemLike): string {
   if (item.status === "reopened") return "Reopened";
   const person = personLabel(item.author_label, item.is_me);
   if (item.status === "submitted") return `${person} submitted`;
-  if (item.task === "review") return "Annotation review open";
+  if (item.task === "review") return "Consolidation open";
   if (item.task === "translation_review") return `Translation review open (v${item.version})`;
   return item.round_ordinal == null ? `${person} annotating` : `${person} annotating (Round ${item.round_ordinal})`;
 }
 
 /**
  * Work column text aggregated over all versions of the row, per "Work wording":
- * "ann-0004 annotating (Round 3)", "Annotation review open", "Translation review open (v3)", "Reopened";
+ * "ann-0004 annotating (Round 3)", "Consolidation open", "Translation review open (v3)", "Reopened";
  * more than two assignees become counts ("2 of 3 submitted"). The "Paused" badge is rendered separately (`held`).
  */
 export function workText(work: readonly WorkItemLike[]): string {

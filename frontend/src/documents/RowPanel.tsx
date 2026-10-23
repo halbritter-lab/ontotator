@@ -88,7 +88,7 @@ export interface RowPanelProps {
   plan?: ReactNode;
   /** Current plan revision of the case (Details). */
   planRevision?: number;
-  /** Assign dialog for this row ("Assign annotation review…", D25 "Assign a new review…"). */
+  /** Assign dialog for this row (D25 "Assign a new review…"). */
   onAssign?: (row: DocumentRowView, task: AssignTaskKind, options?: { newReviewOfAccepted?: boolean }) => void;
   /** "Request correction…" (D26); offered when `canRequestCorrection` says so. */
   onRequestCorrection?: (row: DocumentRowView) => void;
@@ -103,11 +103,6 @@ export interface RowPanelProps {
   /** Pseudonym of the signed-in lead ("Final: chosen by you"). */
   me?: string | null;
   now?: Date;
-}
-
-/** A submitted annotation on the current text can get an annotation review ("Assign annotation review…"). */
-export function canAssignAnnotationReview(row: DocumentRowView): boolean {
-  return row.work.some(item => item.task === "annotate" && item.status === "submitted" && item.moved_to_version == null);
 }
 
 /** D25: a new review of a translation the lead (or the import override) accepted without one. */
@@ -357,7 +352,7 @@ export type StageActionsProps = Pick<RowPanelProps, "stage" | "onAssign" | "onRe
 
 /**
  * Admin actions of the filtered stage, or of every stage: Annotation "Reassign…" (one direct button per open
- * task, S3), "Assign annotation review…"; Review "Request correction…", "Assign a new review…"; Final
+ * task, S3); Review "Request correction…", "Assign a new review…"; Final
  * "Change final…" of a decided row. Also the actions of the cards' stage popover.
  */
 export function StageActions({ row, stage, onAssign, onRequestCorrection, canRequestCorrection, onChangeFinal, canChangeFinal, textVersionTools }: StageActionsProps): JSX.Element | null {

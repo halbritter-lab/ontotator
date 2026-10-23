@@ -14,9 +14,9 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe("project members", () => {
   it("renders actual metadata and saves role toggles, including empty removal", async () => {
     render(<MembersSection projectKey="p/key" isSystemAdmin={false} />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Adjudicator" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Consolidator" }));
     expect(api.setMemberRoles).toHaveBeenCalledWith("p/key", "alice", ["annotator", "adjudicator"], false);
-    await waitFor(() => expect((screen.getByRole("checkbox", { name: "alice: Adjudicator" }) as HTMLInputElement).checked).toBe(true));
+    await waitFor(() => expect((screen.getByRole("checkbox", { name: "alice: Consolidator" }) as HTMLInputElement).checked).toBe(true));
     expect(screen.getByText("Alice (ann-1)")).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Username" })).toBeDefined();
     fireEvent.click(screen.getByRole("checkbox", { name: "lead: Project lead" }));
@@ -73,7 +73,7 @@ describe("project members", () => {
     const pending = deferred<typeof members[0]>();
     vi.mocked(api.setMemberRoles).mockReturnValue(pending.promise);
     const view = render(<MembersSection projectKey="p" isSystemAdmin={false} />);
-    const checkbox = await screen.findByRole("checkbox", { name: "alice: Adjudicator" });
+    const checkbox = await screen.findByRole("checkbox", { name: "alice: Consolidator" });
     fireEvent.click(checkbox); fireEvent.click(checkbox);
     expect(api.setMemberRoles).toHaveBeenCalledTimes(1);
     view.unmount();
