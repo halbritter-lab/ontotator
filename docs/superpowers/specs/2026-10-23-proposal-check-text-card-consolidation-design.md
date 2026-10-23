@@ -82,15 +82,23 @@ currently shown below. On open, the segment that needs work now is shown.
 
 Below the path: the selected segment's details and its own actions.
 - **Translation:** version and origin ("Version 1, machine translation from English"),
-  automatic check result, reviewer chips, "Assign reviewer…", "Compare with source", the
+  automatic check result, reviewer chips (with state and "assigned <date>"), "Assign reviewer…", "Compare with source", the
   version list (moved here from the footer), "Request correction…".
 - **Annotation:** mode ("check tool proposals" / "blind"), number of proposals with "View
   proposals", one chip per assigned person with state (not started / in progress /
-  submitted), "+ Person", and on each chip an ✕ that removes the assignment after a
+  submitted) and the date it was assigned ("assigned 23 Oct"), "+ Person", and on each chip an ✕ that removes the assignment after a
   confirmation dialog ("Remove Tom Reis from the annotation of EN100024? Their draft is
   discarded." Cancel / Remove). Submitted work cannot be removed this way.
 - **Finalization:** "Compare results…", "Consolidate…", "Accept result…", final result
   with "Open result".
+
+Every assignment shown anywhere (card chips, My tasks, history, assign dialog holders)
+carries its assignment date.
+
+Documents table row actions: the overflow button labelled "+1" / "+n" is replaced. With
+the text card as the place to act, the table row keeps one primary action (e.g. "Open my
+task" or "Open") and the rest live in the card; if an overflow menu remains anywhere, it
+is a labelled "More" button (with "⋯" icon), never a bare "+n".
 
 Footer: "History (n)", "Text details", "Change plan…". "Change plan…" (and the bulk
 "Plan…") is reworked (F5): instead of a large frame with lone pills it lists the text's
