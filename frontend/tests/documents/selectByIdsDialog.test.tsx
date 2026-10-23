@@ -32,11 +32,11 @@ it("looks up pasted ids live and shows found and unknown", async () => {
   expect(within(dialog).getByText("Paste case IDs, one per line or separated by commas.")).toBeTruthy();
   paste(idsOf(20).join("\n"));
   expect(within(dialog).getByText("Looking up…", { selector: "[role=status]" })).toBeTruthy();
-  expect(await within(dialog).findByText("20 found · 0 unknown")).toBeTruthy();
+  expect(await within(dialog).findByText("20 found, 0 unknown")).toBeTruthy();
   expect(api.lookupCaseIds).toHaveBeenCalledWith("p", idsOf(20));
   const unknown = Array.from({ length: 23 }, (_, index) => `missing-${index}`);
   paste([...idsOf(2), ...unknown].join(", "));
-  expect(await within(dialog).findByText("2 found · 23 unknown")).toBeTruthy();
+  expect(await within(dialog).findByText("2 found, 23 unknown")).toBeTruthy();
   expect(within(dialog).getByText(`Unknown: ${unknown.slice(0, 20).join(", ")} and 3 more`)).toBeTruthy();
   const writeText = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
@@ -48,7 +48,7 @@ it("looks up pasted ids live and shows found and unknown", async () => {
 it("replaces the selection by default and can add instead", async () => {
   const { dialog, paste, onSelect } = renderDialog(["c1", "c2", "c3", "c4", "c5"]);
   paste("case-0001 case-0002");
-  await within(dialog).findByText("2 found · 0 unknown");
+  await within(dialog).findByText("2 found, 0 unknown");
   expect(within(dialog).getByText("This replaces the current selection of 5 cases.")).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Select 2" }));
   // Every text of the found cases (VD4), looked up through the row keys.
@@ -63,7 +63,7 @@ it("replaces the selection by default and can add instead", async () => {
 it("caps at 2000 with Select the first 2000", async () => {
   const { dialog, paste, onSelect } = renderDialog();
   paste(idsOf(2500).join("\n"));
-  await within(dialog).findByText("2500 found · 0 unknown");
+  await within(dialog).findByText("2500 found, 0 unknown");
   expect(within(dialog).getByText("Selection is limited to 2000 cases.")).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "Select the first 2000" }));
   await waitFor(() => expect(onSelect).toHaveBeenCalledWith(keysOf(idsOf(2000)), "replace"));
@@ -72,7 +72,7 @@ it("caps at 2000 with Select the first 2000", async () => {
   // Adding beyond 2000 likewise.
   const second = renderDialog(idsOf(1990, 100));
   second.paste(idsOf(20, 2100).join("\n"));
-  await within(second.dialog).findByText("20 found · 0 unknown");
+  await within(second.dialog).findByText("20 found, 0 unknown");
   expect(within(second.dialog).getByRole("button", { name: "Select 20" })).toBeTruthy();
   fireEvent.click(within(second.dialog).getByLabelText("Add to the current selection instead"));
   expect(within(second.dialog).getByRole("button", { name: "Select the first 2000" })).toBeTruthy();
@@ -84,7 +84,7 @@ it("keeps Select unavailable with a reason when nothing is found", async () => {
   const select = within(dialog).getByRole("button", { name: "Select 0" });
   expect(select.getAttribute("aria-disabled")).toBe("true");
   paste(Array.from({ length: 20 }, (_, index) => `nope-${index}`).join("\n"));
-  await within(dialog).findByText("0 found · 20 unknown");
+  await within(dialog).findByText("0 found, 20 unknown");
   expect(select.getAttribute("aria-disabled")).toBe("true");
   const reason = document.getElementById(select.getAttribute("aria-describedby")!);
   expect(reason?.textContent).toBe("None of these case IDs exist in this project.");
@@ -95,14 +95,14 @@ it("keeps Select unavailable with a reason when nothing is found", async () => {
   paste("case-0001");
   const retry = await within(dialog).findByRole("button", { name: "Retry" });
   fireEvent.click(retry);
-  await waitFor(() => expect(within(dialog).getByText("1 found · 0 unknown")).toBeTruthy());
+  await waitFor(() => expect(within(dialog).getByText("1 found, 0 unknown")).toBeTruthy());
 });
 
 it("shows an error when the texts of the found cases cannot be loaded", async () => {
   vi.mocked(api.documentRowKeys).mockRejectedValueOnce(new Error("offline"));
   const { dialog, paste, onSelect } = renderDialog();
   paste("case-0001");
-  await within(dialog).findByText("1 found · 0 unknown");
+  await within(dialog).findByText("1 found, 0 unknown");
   fireEvent.click(within(dialog).getByRole("button", { name: "Select 1" }));
   expect(await within(dialog).findByText(/offline/)).toBeTruthy();
   expect(onSelect).not.toHaveBeenCalled();

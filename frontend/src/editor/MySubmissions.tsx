@@ -9,8 +9,8 @@ import { fromHistoryDetail, type HistoricalSubmissionView } from "./historicalSu
 
 const findings = (count: number) => `${count} ${count === 1 ? "finding" : "findings"}`;
 const roundOf = (row: AssignmentSubmissionView) => (row.round_ordinal ? `Round ${row.round_ordinal}` : "Initial submission");
-/** "Round 1 · 19 Oct, 00:16"; also the dialog heading. */
-const submissionName = (row: AssignmentSubmissionView) => `${roundOf(row)} · ${formatTime(row.recorded_at)}`;
+/** "Round 1, 19 Oct, 00:16"; also the dialog heading. */
+const submissionName = (row: AssignmentSubmissionView) => `${roundOf(row)}, ${formatTime(row.recorded_at)}`;
 const byTime = (a: AssignmentSubmissionView, b: AssignmentSubmissionView) =>
   (a.round_ordinal ?? 0) - (b.round_ordinal ?? 0) || Date.parse(a.recorded_at) - Date.parse(b.recorded_at);
 
@@ -18,7 +18,7 @@ const byTime = (a: AssignmentSubmissionView, b: AssignmentSubmissionView) =>
 export function MySubmissions({ assignmentId, projectKey, currentRound, documentId, documentText, termLabel, reloadKey }: {
   assignmentId: number;
   projectKey: string;
-  /** The round open in the editor; adds "Round n · not submitted yet" while it has no submission. */
+  /** The round open in the editor; adds "Round n, not submitted yet" while it has no submission. */
   currentRound?: { roundId: string; ordinal: number };
   /** Open text, for quotes of submissions on the same text version. */
   documentId: string;
@@ -65,11 +65,11 @@ export function MySubmissions({ assignmentId, projectKey, currentRound, document
         {rows.length === 0 && !pending && <p>No submissions yet.</p>}
         {(rows.length > 0 || pending) && <ul className="my-submissions">
           {rows.map(row => <li key={row.submission_id}>
-            <span>{`${submissionName(row)} · ${findings(row.finding_count)}`}</span>{" "}
+            <span>{`${submissionName(row)}, ${findings(row.finding_count)}`}</span>{" "}
             <Button type="button" variant="secondary" size="sm" loading={opening === row.submission_id}
               aria-label={`View ${submissionName(row)}`} onClick={() => { if (!opening) void view(row); }}>View</Button>
           </li>)}
-          {pending && <li style={{ color: "var(--text-muted)" }}>{`Round ${currentRound.ordinal} · not submitted yet`}</li>}
+          {pending && <li style={{ color: "var(--text-muted)" }}>{`Round ${currentRound.ordinal}, not submitted yet`}</li>}
         </ul>}
         {viewError != null && <ErrorNotice error={viewError} />}
       </>}

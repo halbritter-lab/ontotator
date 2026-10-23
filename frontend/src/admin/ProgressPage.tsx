@@ -84,9 +84,9 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
     {lede && !empty && <p className="progress-lede">
       {ledeSentence(lede)}{" "}
       <RouteLink route={documents({ segment: "decision" })} onNavigate={onNavigate}>{countLabel(lede.needs_decision, "needs your decision", "need your decision")}</RouteLink>
-      {" · "}
+      {", "}
       <RouteLink route={documents({ segment: "assign" })} onNavigate={onNavigate}>{`${lede.to_assign} to assign`}</RouteLink>
-      {updatedAt && <>{" · "}<span className="muted">updated {updatedFormat.format(updatedAt)}</span></>}
+      {updatedAt && <>{", "}<span className="muted">updated {updatedFormat.format(updatedAt)}</span></>}
     </p>}
     {progress && <Toolbar label="Progress actions"><Button disabled={loading} onClick={() => setRevision(value => value + 1)}>Refresh progress</Button></Toolbar>}
     {loading && !progress && <div role="status" className="progress-loading">

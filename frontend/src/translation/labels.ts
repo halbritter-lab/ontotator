@@ -67,7 +67,7 @@ export function rationaleHint(decision: ReviewDecisionCode | undefined, clinical
   return "Optional.";
 }
 
-export const decisionKeyHint = "Ctrl + Enter submits · 1–4 choose a decision outside the text";
+export const decisionKeyHint = "Ctrl + Enter submits, 1–4 choose a decision outside the text";
 
 /** What submitting each decision will do, for the confirmation dialog. */
 export const decisionConsequences: Readonly<Record<ReviewDecisionCode, string>> = {

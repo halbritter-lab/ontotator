@@ -154,8 +154,8 @@ describe("carried findings in the findings list", () => {
 
   it("names the round in the toolbar badge with the full identity in the title", () => {
     const carried = finding("carried");
-    setup({ annotations: [carried], inputs: [input("input-1", carried)], props: { roundBadge: "Round 3 · continued from Round 2", roundTitle: "Round 3, continued from Round 2 submission (19 Oct, 00:57)" } });
-    const badge = screen.getByText("Round 3 · continued from Round 2");
+    setup({ annotations: [carried], inputs: [input("input-1", carried)], props: { roundBadge: "Round 3, continued from Round 2", roundTitle: "Round 3, continued from Round 2 submission (19 Oct, 00:57)" } });
+    const badge = screen.getByText("Round 3, continued from Round 2");
     expect(badge.getAttribute("title")).toBe("Round 3, continued from Round 2 submission (19 Oct, 00:57)");
     cleanup();
     setup({ annotations: [carried], inputs: [input("input-1", carried)] });

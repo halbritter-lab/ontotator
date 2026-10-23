@@ -61,7 +61,7 @@ export function GuidelineReader({ projectKey, version, currentVersion, headingLe
       : document === null ? <InlineMessage tone="info">Loading guidelines…</InlineMessage>
       : withdrawn ? <p className="guideline-reader-withdrawn">v{version} was withdrawn by the project lead.</p>
       : <>
-        <p className="guideline-reader-meta">{[`Published ${formatGuidelineDay(document.created_at)}`, document.change_note].filter(Boolean).join(" · ")}</p>
+        <p className="guideline-reader-meta">{[`Published ${formatGuidelineDay(document.created_at)}`, document.change_note].filter(Boolean).join(", ")}</p>
         {currentVersion !== null && currentVersion !== version && <InlineMessage tone="info">This is v{version}. The current version is v{currentVersion}.</InlineMessage>}
         <GuidelineDocument kind={document.kind} body={document.body!} headingOffset={headingLevel - 1} />
       </>}

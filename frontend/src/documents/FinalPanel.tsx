@@ -183,7 +183,7 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
   } else if (!page || (!state.data && state.loading)) {
     content = <p className="cell-secondary">Loading submissions…</p>;
   } else if (!row) {
-    content = <p>{`${caseId} · ${language} is not in this list.`}</p>;
+    content = <p>{`${caseId} ${language} is not in this list.`}</p>;
   } else if (!state.data) {
     content = <InlineMessage tone="error">Could not load submissions. <Button size="sm" onClick={reviewAgain}>Review again</Button></InlineMessage>;
   } else if (optionalOnly) {
@@ -356,9 +356,9 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
     {submission.kind === "consolidation" && <p className="final-panel-consolidated"><strong>{submissionName(submission)}</strong></p>}
     <p className="final-panel-question">{acceptQuestion(submission)}</p>
     <p className="cell-secondary">
-      {submissionLine(submission, row.language, row.parallel_roots, now)}{" · "}
+      {submissionLine(submission, row.language, row.parallel_roots, now)}{", "}
       {link(route(submission.document_id, submission.submission_id), "Open in editor")}
-      {consolidation && <>{" · "}{link(consolidation, "Open consolidation")}</>}
+      {consolidation && <>{", "}{link(consolidation, "Open consolidation")}</>}
     </p>
     <p className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</p>
     {!isFinal && <div className="final-panel-actions">
@@ -381,7 +381,7 @@ function DecidedContent(props: ContentProps & { onChange: () => void }): JSX.Ele
     <p className="final-panel-question">{final ? decidedLine(final) : "Final result chosen"}</p>
     {final && <>
       <p className="cell-secondary">
-        {submissionLine(final, row.language, row.parallel_roots, now)}{" · "}
+        {submissionLine(final, row.language, row.parallel_roots, now)}{", "}
         {link(route(final.document_id, final.submission_id), "Open in editor")}
       </p>
       <p className="cell-secondary">{submissionGuidelineLabel(final.guideline_version, final.guideline_withdrawn, guidelineCurrent)}</p>
@@ -403,7 +403,7 @@ function compareGroups(listed: readonly FinalPanelSubmissionView[], parallel: bo
     others.set(name, [...(others.get(name) ?? []), item]);
   }
   return [{ label: null, items: current }, ...[...others].map(([name, items]) => ({
-    label: items.every(item => item.version < newest) ? `On ${name} (old text)` : `On ${name} · not compared`, items,
+    label: items.every(item => item.version < newest) ? `On ${name} (old text)` : `On ${name}, not compared`, items,
   }))];
 }
 
@@ -427,7 +427,7 @@ function CompareContent(props: ContentProps): JSX.Element {
   </div>;
 }
 
-/** Submission · Findings · Only here, with "Open in editor" and "Use as final" per submission. */
+/** Submission, Findings, Only here, with "Open in editor" and "Use as final" per submission. */
 function SubmissionTable(props: ContentProps & { listed: FinalPanelSubmissionView[] }): JSX.Element {
   const { row, data, listed, busy, onSave, onAnnounce, guidelineCurrent, now } = props;
   const id = useId();
@@ -530,7 +530,7 @@ function ReviewContent(props: ContentProps): JSX.Element {
       <p>{textChangedLine(finalName, correctedName)}</p>
       <p className="cell-secondary">
         {corrected.document_id && link(route(corrected.document_id), "Show changes", undefined, true)}
-        {data.panel.changed_passages != null && <>{" · "}{changedPassagesText(data.panel.changed_passages)}</>}
+        {data.panel.changed_passages != null && <>{", "}{changedPassagesText(data.panel.changed_passages)}</>}
       </p>
     </div>}
     <div className="final-panel-actions">

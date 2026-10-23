@@ -37,7 +37,7 @@ export function WorkRoundsDialog({ assignment, onClose, onCreate, onOpen, onRelo
   const sources = data?.sources ?? noSources;
   const control = useRoundStart(assignment, sources, onCreate);
   const available = data !== null && carryAvailability(assignment, data.rounds, data.sources, data.untouchedRoundId).kind === "available";
-  const title = documentLabel ? `Work rounds · ${documentLabel.textId} · ${documentLabel.language}` : "Work rounds";
+  const title = documentLabel ? `Work rounds: ${documentLabel.textId} ${documentLabel.language}` : "Work rounds";
   // No preselection: the source stays a deliberate choice. Until then the button stays focusable and names why.
   const reasonId = `${useId()}-continue-reason`;
   const chosen = sources.some(value => value.submission_id === control.source);

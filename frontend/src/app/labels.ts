@@ -17,9 +17,9 @@ export const taskLabels: Readonly<Record<"annotate" | "review" | "translation_re
   translation_review: "Translation review",
 };
 
-/** Breadcrumb name of a task: "failed-translation · Translation review (de)"; the document id when there is no external id. */
+/** Breadcrumb name of a task: "failed-translation, Translation review (de)"; the document id when there is no external id. */
 export function taskCrumbLabel(task: { external_id?: string | null; document_id: string; task: string; language: string }): string {
-  return `${task.external_id || task.document_id} · ${labelFor(taskLabels, task.task)} (${task.language})`;
+  return `${task.external_id || task.document_id}, ${labelFor(taskLabels, task.task)} (${task.language})`;
 }
 
 export const assignmentStatusLabels: Readonly<Record<"unassigned" | "open" | "in_progress" | "submitted" | "reopened", string>> = {
@@ -31,7 +31,7 @@ export const assignmentStatusLabels: Readonly<Record<"unassigned" | "open" | "in
 };
 
 export const roleLabels: Readonly<Record<"lead" | "annotator" | "adjudicator", string>> = {
-  lead: "Project lead",
+  lead: "Lead",
   annotator: "Annotator",
   adjudicator: "Consolidator",
 };

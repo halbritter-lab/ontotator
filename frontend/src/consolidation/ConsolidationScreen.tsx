@@ -25,6 +25,7 @@ import { TextPane, type AddedFinding, type TextRange } from "./TextPane";
 import { useConsolidation, type AxisWarning } from "./useConsolidation";
 import "./consolidation.css";
 import { LanguageText } from "../ui/LanguageTag";
+import { onSpaceActivate } from "../ui/spaceActivates";
 
 export interface ConsolidationScreenProps {
   projectKey: string;
@@ -249,7 +250,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   return <section className="cons-screen" aria-labelledby="cons-title">
     <header className="cons-header">
       <div className="cons-heading">
-        {readOnly && props.back && <a className="cons-back btn btn-secondary btn-sm" href={routeHref(props.back)} onClick={event => {
+        {readOnly && props.back && <a className="cons-back btn btn-secondary btn-sm" href={routeHref(props.back)} onKeyDown={onSpaceActivate} onClick={event => {
           if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); navigate(props.back!);
         }}>Back to documents</a>}

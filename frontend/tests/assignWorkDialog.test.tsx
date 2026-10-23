@@ -60,15 +60,15 @@ async function waitForPreviewOf(usernames: string[]) { await waitFor(() => expec
 
 it("preselects the task from the plan and lets several steps be chosen", async () => {
   const view = render(<AssignWorkDialog {...casesProps()} />);
-  expect(await screen.findByText("Translation review · de · 20 versions")).toBeDefined();
+  expect(await screen.findByText("Translation review, de, 20 versions")).toBeDefined();
   expect(screen.getByText("from the plan")).toBeDefined();
-  expect(screen.getByRole("dialog", { name: "Assign · 20 cases" })).toBeDefined();
+  expect(screen.getByRole("dialog", { name: "Assign 20 cases" })).toBeDefined();
   view.unmount();
   vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "fr", versions: 12, cases: 12 }, { task: "translation_review", language: "de", versions: 20, cases: 20 }]));
   render(<AssignWorkDialog {...casesProps()} />);
   const select = await screen.findByRole("combobox", { name: "Task" });
-  expect((select as HTMLSelectElement).selectedOptions[0].textContent).toBe("Translation review · de · 20 versions");
-  expect(screen.getByRole("option", { name: "Annotation · fr · 12 versions" })).toBeDefined();
+  expect((select as HTMLSelectElement).selectedOptions[0].textContent).toBe("Translation review, de, 20 versions");
+  expect(screen.getByRole("option", { name: "Annotation, fr, 12 versions" })).toBeDefined();
   await ready();
   fireEvent.change(select, { target: { value: "annotate:fr" } });
   await waitFor(() => expect(lastPreview()).toMatchObject({ task: "annotate", language: "fr" }));
@@ -172,10 +172,10 @@ it("keeps the dialog open listing refused cases by text and person", async () =>
   fireEvent.click(radio(/Ana Weber/)); await waitForPreviewOf(["ana"]);
   fireEvent.click(screen.getByRole("button", { name: "Assign 20" }));
   const list = await screen.findByRole("list", { name: "Refused assignments" });
-  expect(list.textContent).toContain("case-0101 · de — Ana Weber (ann-0004)");
+  expect(list.textContent).toContain("case-0101 de — Ana Weber (ann-0004)");
   expect(screen.getByText(/Nothing was assigned/)).toBeDefined();
   expect(props.onAssigned).not.toHaveBeenCalled();
-  expect(screen.getByRole("dialog", { name: "Assign · 20 cases" })).toBeDefined();
+  expect(screen.getByRole("dialog", { name: "Assign 20 cases" })).toBeDefined();
 });
 
 it("reloads the preview after ASSIGNMENT_BATCH_STALE", async () => {
@@ -204,7 +204,7 @@ it("row mode shows context, Currently and Change task", async () => {
   const onAssigned = vi.fn();
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={onAssigned} />);
   expect(screen.getByRole("dialog", { name: "Assign annotation" })).toBeDefined();
-  expect(screen.getByText("case-0101 · de")).toBeDefined();
+  expect(screen.getByText("case-0101 de")).toBeDefined();
   await ready();
   expect(screen.getByText(/Currently: Ana Weber \(ann-0004\)/)).toBeDefined();
   expect(screen.getByText("1 of 2 annotators assigned")).toBeDefined();
@@ -287,7 +287,7 @@ it("shows remaining assignments for versions already partly assigned", async () 
   vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 1, cases: 1 }]));
   perText = 2; remainingOf = () => 1;
   render(<AssignWorkDialog {...casesProps()} caseIds={["case-0101"]} />); await ready();
-  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("case-0101 · de: 1 of 2 assigned");
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("case-0101 de: 1 of 2 assigned");
   fireEvent.click(radio(/Ana Weber/)); await waitForPreviewOf(["ana"]);
   expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("Ana Weber gets 1 annotation (de).");
 });

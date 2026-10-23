@@ -258,7 +258,7 @@ describe("shell identity and task count", () => {
     const { rerender } = render(<Shell {...props({ projects: [project("led", true)], route: { name: "projectDocuments", key: "led" } })} />);
     const identity = screen.getByTestId("current-user");
     expect(identity.querySelector(".current-user-name")?.textContent).toBe("Alex (a1)");
-    expect(identity.querySelector(".cell-secondary")?.textContent).toBe("Project lead");
+    expect(identity.querySelector(".cell-secondary")?.textContent).toBe("Lead");
     expect(identity.textContent).not.toContain("alex");
     rerender(<Shell {...props({ user: { ...user, is_system_admin: true }, projects: [] })} />);
     expect(identity.querySelector(".cell-secondary")?.textContent).toBe("System administrator");

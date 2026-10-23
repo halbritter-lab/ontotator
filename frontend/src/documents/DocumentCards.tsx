@@ -1,7 +1,7 @@
 /**
  * Narrow-viewport Documents list (documents overview "Narrow"): one case card per case (case
- * checkbox + "case-107 · en source + 1 translation"), one `<article>` per text with its checkbox,
- * heading "{case · language}" with version marker and NEW, the three stage lines, "Waiting on: …",
+ * checkbox + "case-107, en source + 1 translation"), one `<article>` per text with its checkbox,
+ * heading "{case language}" with version marker and NEW, the three stage lines, "Waiting on: …",
  * the next step full width with the "More" menu, "Open" and "Details" (the way into the text card's
  * sheet, acceptance fixes X19). Like the text name in the table, "Details" opens the card and leaves the
  * selection as it is. Rows outside the plan are muted articles; nothing collapses (VD1). Card and
@@ -13,7 +13,6 @@ import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import type { GroupSelectMode } from "../ui/DataTable";
 import { caseHeaderText, type TableSelection } from "./DocumentsTable";
-import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
 import { documentsGroupId, documentsRowId, LastActivityCell, NewBadge, RowOpenLinks, rowIsNew, rowKeyOf, rowName, rowNeedsDecision, ShortId, VersionMarker, type OpenTextCard } from "./RowCells";
 import { StagePopover } from "./StagePopover";
@@ -38,7 +37,6 @@ export interface DocumentCardsProps {
   rowBadge?: (row: DocumentRowView) => ReactNode;
   onAction?: (row: DocumentRowView, step: NextStepView) => void;
   /** Plan saves for the "Plan…" popover (VD2). */
-  planSaves?: PlanSaves;
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
@@ -71,7 +69,7 @@ interface StageLineProps {
 }
 
 /**
- * "Review: ✓ Accepted · unchanged": the stage title labels the line; the glyph is decorative, the tone colours
+ * "Review: ✓ Accepted, unchanged": the stage title labels the line; the glyph is decorative, the tone colours
  * the status. With the row panel the status is a button (dotted underline) that opens the stage popover.
  */
 function StageLine({ row, stage, title, sourceLanguage, projectKey, onOpenPanel, stageActions, me }: StageLineProps): JSX.Element {
@@ -99,8 +97,8 @@ function StageLine({ row, stage, title, sourceLanguage, projectKey, onOpenPanel,
           aria-describedby={describedBy || undefined} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? contentId : undefined}
           onClick={() => setOpen(value => !value)}>{status}</button>
         : status}
-      {text.detail ? <span id={detailId} className="document-card-stage-detail">{` · ${text.detail}`}</span> : null}
-      {flagged > 0 ? <span id={flagId} className="document-card-stage-detail documents-stage-flagged">{` · ${flagged} flagged`}</span> : null}
+      {text.detail ? <span id={detailId} className="document-card-stage-detail">{`, ${text.detail}`}</span> : null}
+      {flagged > 0 ? <span id={flagId} className="document-card-stage-detail documents-stage-flagged">{`, ${flagged} flagged`}</span> : null}
     </p>
     {/* After the line: the popover is a `div` (a sheet `Dialog` below 700 px), never inside the `p`. */}
     {open && <StagePopover row={row} stage={stage} projectKey={projectKey} anchorRef={anchor} contentId={contentId} me={me}
@@ -117,7 +115,7 @@ function WaitingOnLine({ row }: { row: DocumentRowView }): JSX.Element {
   return <span className="documents-waiting-on">Waiting on: {value}</span>;
 }
 
-function DocumentCard({ row, group, projectKey, query, active: current, onOpenPanel, stageActions, me, renderRowNotice, rowBadge, onAction, planSaves, onNavigate, select }: DocumentCardProps): JSX.Element {
+function DocumentCard({ row, group, projectKey, query, active: current, onOpenPanel, stageActions, me, renderRowNotice, rowBadge, onAction, onNavigate, select }: DocumentCardProps): JSX.Element {
   const headingId = documentsRowId(row.case_id, row.language, "header");
   const name = rowName(row);
   const badge = rowBadge?.(row);
@@ -132,7 +130,7 @@ function DocumentCard({ row, group, projectKey, query, active: current, onOpenPa
         {select && <input type="checkbox" className="document-card-select checkbox-target" aria-label={`Select ${name}`} checked={select.checked}
           onChange={() => undefined} onClick={event => select.onSelect(selectModeOf(event))} />}
         <h4 id={headingId} tabIndex={-1} className="document-card-title">
-          <span aria-hidden="true"><ShortId value={row.case_id} />{" · "}<LanguageFlag code={row.language} />{row.language}</span>
+          <span aria-hidden="true"><ShortId value={row.case_id} />{" "}<LanguageFlag code={row.language} />{row.language}</span>
           <span className="visually-hidden">{name}</span>
         </h4>
         {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
@@ -147,7 +145,7 @@ function DocumentCard({ row, group, projectKey, query, active: current, onOpenPa
         <WaitingOnLine row={row} />
         <span className="document-card-activity"><LastActivityCell iso={row.last_activity_at} /></span>
       </div>
-      <RowActionCell row={row} onAction={onAction} onNavigate={onNavigate} plan={planSaves ? { saves: planSaves, groupRevision: group.plan_revision } : undefined} block />
+      <RowActionCell row={row} onAction={onAction} onNavigate={onNavigate} block />
       <div className="document-card-line document-card-actions">
         <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
         {onOpenPanel && <button type="button" id={documentsRowId(row.case_id, row.language, "details")} className="documents-details-button target-min"

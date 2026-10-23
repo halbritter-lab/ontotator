@@ -11,7 +11,7 @@ import "./carried-inspector.css";
 export interface LinkCandidate {
   annotationId: string;
   version: string;
-  /** Full option label, e.g. "Seizure · “Krampfanfälle werden …”" or "Seizure · no text span". */
+  /** Full option label, e.g. "Seizure, “Krampfanfälle werden …”" or "Seizure, no text span". */
   label: string;
   technicalId: string;
 }

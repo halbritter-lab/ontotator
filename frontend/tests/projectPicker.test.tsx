@@ -63,10 +63,10 @@ it("shows name, key, roles and destination, the current one marked, each with a 
   await open(trigger);
   const [first, reader] = options();
   expect(first.textContent).toContain("First study");
-  expect(first.textContent).toContain("first · Project lead · opens Documents");
+  expect(first.textContent).toContain("first, Lead, opens Documents");
   expect(first.textContent).toContain("Current");
   expect(first.querySelector("svg")).not.toBeNull();
-  expect(reader.textContent).toContain("reader · Annotator · opens My tasks");
+  expect(reader.textContent).toContain("reader, Annotator, opens My tasks");
   expect(reader.textContent).not.toContain("Current");
   const link = within(reader).getByRole("link");
   expect(link.getAttribute("href")).toBe(routeHref({ name: "tasks", project: "reader" }));

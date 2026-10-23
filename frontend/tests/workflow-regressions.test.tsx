@@ -414,7 +414,7 @@ it("exposes an immutable historical submission", () => {
    targets: view.targets,
  }];
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
- fireEvent.click(screen.getByRole("button", { name: "Submission 1 · Date unavailable" }));
+ fireEvent.click(screen.getByRole("button", { name: "Submission 1, Date unavailable" }));
  const historical = screen.getByRole("dialog", { name: /Historical submission/ });
  fireEvent.click(within(historical).getByText("Technical details"));
  expect(within(historical).getByText("historical")).toBeDefined();

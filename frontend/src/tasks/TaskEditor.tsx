@@ -13,6 +13,7 @@ import { TaskProblemActions } from "./TaskProblemActions";
 import { TaskGuidelines } from "./TaskGuidelines";
 import { roundBadge as roundBadgeOf, roundIdentity } from "../editor/rounds/roundLabels";
 import { ConsolidationScreen } from "../consolidation/ConsolidationScreen";
+import { onSpaceActivate } from "../ui/spaceActivates";
 
 interface TaskEditorProps {
   assignmentId: number;
@@ -116,7 +117,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
     return () => { active.current = false; generation.current++; taskGeneration.current++; };
   }, [assignmentId]);
   const back = () => onNavigate(MY_TASKS);
-  const backLink = <a href={routeHref(MY_TASKS)} className="btn btn-secondary" onClick={event => {
+  const backLink = <a href={routeHref(MY_TASKS)} className="btn btn-secondary" onKeyDown={onSpaceActivate} onClick={event => {
     if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); back();
   }}>Back to my tasks</a>;

@@ -14,9 +14,9 @@ describe("documents labels", () => {
     expect(middleEllipsis("short", 12)).toBe("short");
   });
   it("version_text_for_single_chain_and_parallel_roots", () => {
-    expect(versionText({ version: 3, origin: "correction", derivedVersion: 2, status: "ready_for_review", decision: null, chainName: "DeepL v3", parallel: false })).toBe("v3 · Correction of v2 · Ready for review");
-    expect(versionText({ version: 1, origin: "machine_translation", derivedVersion: null, status: "reviewed", decision: "rejected", chainName: "DeepL v3", parallel: true })).toBe("DeepL v3 v1 · Machine translation · Rejected in review");
-    expect(versionText({ version: 1, origin: "native", derivedVersion: null, status: null, decision: null, chainName: "Source", parallel: false })).toBe("v1 · Native");
+    expect(versionText({ version: 3, origin: "correction", derivedVersion: 2, status: "ready_for_review", decision: null, chainName: "DeepL v3", parallel: false })).toBe("v3, Correction of v2, Ready for review");
+    expect(versionText({ version: 1, origin: "machine_translation", derivedVersion: null, status: "reviewed", decision: "rejected", chainName: "DeepL v3", parallel: true })).toBe("DeepL v3 v1, Machine translation, Rejected in review");
+    expect(versionText({ version: 1, origin: "native", derivedVersion: null, status: null, decision: null, chainName: "Source", parallel: false })).toBe("v1, Native");
   });
   it("status_badge_text", () => {
     expect(statusBadgeText("reviewed", "rejected", false)).toBe("Rejected in review");

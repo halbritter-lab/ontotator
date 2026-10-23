@@ -48,7 +48,7 @@ const failedChecks = (task: Pick<TaskSummary, "task" | "failed_check_count">): n
 
 const projectLabel = (name: string, key: string): string => name === key ? name : `${name} (${key})`;
 
-/** Text label "case-0101 · de"; servers without a case ID fall back to the document's external or internal ID. */
+/** Text label "case-0101 de"; servers without a case ID fall back to the document's external or internal ID. */
 export const taskText = (task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language">): string =>
   textLabel({ case_id: task.case_id ?? task.external_id ?? task.document_id, language: task.language });
 
@@ -132,7 +132,7 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
     return <a href={routeHref(route)} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault(); onNavigate(route);
-    }}>{`Project guidelines v${guidelineVersions.get(key)}${guidelineLinks.length > 1 ? ` · ${name}` : ""}`}</a>;
+    }}>{`Project guidelines v${guidelineVersions.get(key)}${guidelineLinks.length > 1 ? `, ${name}` : ""}`}</a>;
   };
   const columns: Column<TaskSummary>[] = [
     { id: "text", header: "Text", cell: task => <LanguageText text={taskText(task)} code={task.language} /> },

@@ -22,6 +22,7 @@ import { ShowSelect } from './ShowSelect';
 import { LayerFindings } from './LayerFindings';
 import { layerKey, legacyLayerKey, refForLayer, useTextLayers } from './useTextLayers';
 import './textView.css';
+import { onSpaceActivate } from '../ui/spaceActivates';
 
 export interface CaseViewerProps {
   projectKey: string; caseId: string; variant?: string;
@@ -36,7 +37,7 @@ export interface CaseViewerProps {
 }
 export const variantDescription = (variant: CaseDetail['variants'][number]) => {
   const origin = { native: 'Native', machine_translation: 'Machine translation', human_translation: 'Human translation', correction: 'Corrected' }[variant.origin];
-  return [origin, variant.translation_status?.replaceAll('_', ' ')].filter(Boolean).join(' · ');
+  return [origin, variant.translation_status?.replaceAll('_', ' ')].filter(Boolean).join(', ');
 };
 
 /** Display only: follow actual readable metadata, never infer lineage from IDs. */
@@ -57,10 +58,10 @@ export function VariantDetails({ detail, documentId }: { detail: CaseDetail; doc
   const source = detail.variants.find(row => row.document_id === ancestor.derived_from && row.case_id === current.case_id);
   return <details className="variant-details"><summary>Translation details</summary>
     <div className="variant-metadata-groups">
-      <section><h2>Source</h2>{source ? <dl><dt>Source variant</dt><dd>{source.external_id} · <LanguageFlag code={source.language} />{source.language} · v{source.version}</dd></dl> : <p>Source text unavailable.</p>}</section>
+      <section><h2>Source</h2>{source ? <dl><dt>Source variant</dt><dd>{source.external_id}, <LanguageFlag code={source.language} />{source.language}, v{source.version}</dd></dl> : <p>Source text unavailable.</p>}</section>
       <section><h2>Translation</h2><dl><dt>Provider</dt><dd>{run.provider}</dd>
         {run.model && <><dt>Model</dt><dd>{run.model}</dd></>}
-        <dt>Text</dt><dd><LanguageFlag code={current.language} />{current.language} · v{current.version}</dd></dl>
+        <dt>Text</dt><dd><LanguageFlag code={current.language} />{current.language}, v{current.version}</dd></dl>
       </section>
       <section><h2>Translation review</h2><dl><dt>Translation status</dt><dd>{current.translation_status?.replaceAll('_', ' ') ?? 'Not recorded'}</dd>
         {current.status_reason && <><dt>Reason</dt><dd>{current.status_reason}</dd></>}
@@ -72,7 +73,7 @@ export function VariantDetails({ detail, documentId }: { detail: CaseDetail; doc
       <dt>Document ID</dt><dd>{current.document_id}</dd>
       <dt>Text hash</dt><dd>{current.text_sha256}</dd>
     </dl><h2>{ancestor === current ? 'Translation-run checks' : 'Inherited translation-run checks'}</h2>
-      <ul>{(run.checks ?? []).map((check, index) => <li key={index}>{check.code}: {check.passed ? 'passed' : 'failed'}{check.detail ? ` · ${check.detail}` : ''}</li>)}</ul>
+      <ul>{(run.checks ?? []).map((check, index) => <li key={index}>{check.code}: {check.passed ? 'passed' : 'failed'}{check.detail ? `, ${check.detail}` : ''}</li>)}</ul>
     </details>
   </details>;
 }
@@ -186,7 +187,7 @@ export function CaseViewer({ projectKey, caseId, variant, show, annotations, com
       {access.allowed && <Button ref={compareButton} size="sm" aria-expanded={compareOpen} onClick={() => compareOpen ? closeComparison() : setCompareIdentity(identity)}>Compare</Button>}
       <SubmissionHistory projectKey={projectKey} caseId={caseId} documentId={current.document_id} language={current.language} version={current.version}
         username={username} canManage={access.canManage} onNavigate={onNavigate} documents={documents} />
-      {supported.map((task, index) => <a key={task.assignment_id} href={routeHref({ name: 'task', assignmentId: task.assignment_id })} className="btn btn-secondary btn-sm"
+      {supported.map((task, index) => <a key={task.assignment_id} href={routeHref({ name: 'task', assignmentId: task.assignment_id })} className="btn btn-secondary btn-sm" onKeyDown={onSpaceActivate}
         onClick={event => { if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return; event.preventDefault(); onNavigate({ name: 'task', assignmentId: task.assignment_id }); }}>
         {supported.length === 1 ? 'Open my task' : `Open my ${task.task === 'annotate' ? 'annotation' : task.task === 'translation_review' ? 'translation review' : 'consolidation'} task${supported.filter(row => row.task === task.task).length > 1 ? ` (${index + 1})` : ''}`}
       </a>)}

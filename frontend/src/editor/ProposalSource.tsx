@@ -84,7 +84,7 @@ export function useProposalMetadata(source?: EditorProposal) {
   const tool = source ? matchingTool(source, metadata) : undefined;
   const label = toolLabel(tool);
   const duplicate = !!label && context?.proposals.some(other => other.proposal_set_id != null && other.proposal_set_id !== source?.proposal_set_id && other.document_id === source?.document_id && toolLabel(matchingTool(other, context.cache.entries.get(other.proposal_set_id))) === label);
-  return {metadata, tool, label: label ? `${label}${duplicate && text(tool?.run_id) ? ` · ${tool?.run_id}` : ""}` : undefined};
+  return {metadata, tool, label: label ? `${label}${duplicate && text(tool?.run_id) ? `, ${tool?.run_id}` : ""}` : undefined};
 }
 
 export function ProposalSource({source}: {source?: EditorProposal | null}) {
@@ -98,7 +98,7 @@ export function ProposalSource({source}: {source?: EditorProposal | null}) {
       {name && <><dt>Tool</dt><dd>{name}</dd></>}
       {text(tool?.model) && <><dt>Model</dt><dd>{text(tool?.model)}</dd></>}
       {text(tool?.run_id) && <><dt>Run</dt><dd>{text(tool?.run_id)}</dd></>}
-      <dt>Imported</dt><dd><time dateTime={metadata.imported_at}>{new Date(metadata.imported_at).toLocaleString()}</time>{metadata.imported_by_pseudonym && <> · <span>{metadata.imported_by_pseudonym}</span></>}</dd>
+      <dt>Imported</dt><dd><time dateTime={metadata.imported_at}>{new Date(metadata.imported_at).toLocaleString()}</time>{metadata.imported_by_pseudonym && <>, <span>{metadata.imported_by_pseudonym}</span></>}</dd>
       <dt>Set</dt><dd>{metadata.annotation_set_id}</dd>
       {metadata.bundle_id && <><dt>Bundle</dt><dd>{metadata.bundle_id}</dd></>}
     </dl>

@@ -36,8 +36,8 @@ describe("unconfirmedRows", () => {
     expect(rows[1].values.map(value => value.axisId)).toEqual(["assertion", "experiencer", "temporality"]);
     expect(rows[1]).toEqual(expect.objectContaining({ term: "Term a", termId: "HP:a", quote: "quoted", listKey: "annotation:a", evidenceId: "ev-1",
       confirmableAxisIds: ["assertion", "experiencer", "temporality"], reason: null }));
-    expect(valuesLine(rows[1], label)).toBe("Assertion: Present · Experiencer: Patient · Temporality: Current");
-    expect(valuesLine(rows[0], label)).toBe("Experiencer: Patient · Temporality: Not specified");
+    expect(valuesLine(rows[1], label)).toBe("Assertion: Present, Experiencer: Patient, Temporality: Current");
+    expect(valuesLine(rows[0], label)).toBe("Experiencer: Patient, Temporality: Not specified");
   });
 
   it("an empty-only row cannot be confirmed in one click", () => {

@@ -87,6 +87,6 @@ it("labels people in the identity format with open tasks and accepts a preset ta
   expect((await screen.findByLabelText("Task") as HTMLSelectElement).value).toBe("annotate");
   await waitFor(() => expect(screen.getByRole("button", { name: "Propose" })).toHaveProperty("disabled", false));
   fireEvent.click(screen.getByRole("button", { name: "Propose" })); await screen.findByText("Proposal #123");
-  expect(screen.getAllByRole("option", { name: "Bob (B) — en, de · 3 open tasks" }).length).toBeGreaterThan(0);
+  expect(screen.getAllByRole("option", { name: "Bob (B) — en, de, 3 open tasks" }).length).toBeGreaterThan(0);
   expect(screen.queryByText(/\(bob\)/)).toBeNull();
 });

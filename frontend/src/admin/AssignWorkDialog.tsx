@@ -186,7 +186,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     inputs.current.get(target)?.focus();
   };
 
-  const title = props.mode === "cases" ? `Assign · ${plural(props.caseIds.length, "case")}`
+  const title = props.mode === "cases" ? `Assign ${plural(props.caseIds.length, "case")}`
     : props.newReviewOfAccepted && task === "translation_review" ? "Assign a new review"
     : sourceChanged ? "Assign review after source change" : `Assign ${(task ? stepName(task) : "task").toLowerCase()}`;
 
@@ -276,9 +276,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
                 onClick={event => { if (off || atLimit || busy) event.preventDefault(); }}
                 onChange={event => { if (!off && !atLimit) choose(person.username, event.target.checked); }}
                 onKeyDown={event => rove(event, person.username)} />
-              <label htmlFor={inputId}>{personLabel(person.person)}{why && <span id={whyId} className="assign-reason"> · {why}</span>}</label>
+              <label htmlFor={inputId}>{personLabel(person.person)}{why && <span id={whyId} className="assign-reason">, {why}</span>}</label>
             </span></td>
-            <td className="assign-reads"><span className="assign-narrow-label">Reads </span>{person.reads.length ? person.reads.map((item, at) => <span key={item}>{at > 0 && " · "}{item === language ? <strong>{item}</strong> : item}</span>) : "None listed"}</td>
+            <td className="assign-reads"><span className="assign-narrow-label">Reads </span>{person.reads.length ? person.reads.map((item, at) => <span key={item}>{at > 0 && ", "}{item === language ? <strong>{item}</strong> : item}</span>) : "None listed"}</td>
             <td className="assign-open"><span className="assign-narrow-label">Open </span>{person.open_before}</td>
             {split && !isRow && <td className="assign-gets">{person.gets > 0 ? <strong>{person.gets}</strong> : "–"}</td>}
           </tr>;

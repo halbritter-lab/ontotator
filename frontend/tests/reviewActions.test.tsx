@@ -235,7 +235,7 @@ describe("ReviewActions", () => {
     const { rerender } = render(
       <ReviewActions target={sampleTarget} currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />
     );
-    expect(screen.getByLabelText("AI-generated: model-a · automated")).toBeDefined();
+    expect(screen.getByLabelText("AI-generated: model-a, automated")).toBeDefined();
     expect(screen.getByText(/Method: automated/)).toBeDefined();
 
     rerender(

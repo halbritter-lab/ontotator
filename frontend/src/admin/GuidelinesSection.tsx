@@ -166,7 +166,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
     {loadError !== undefined && <><ErrorNotice error={loadError} /><Button onClick={reload}>Try again</Button></>}
     {listing === null ? loadError === undefined && <InlineMessage tone="info">Loading guidelines…</InlineMessage> : <>
       {current ? <div className="guidelines-current">
-        <p className="guidelines-current-facts">{`v${current.version} · ${current.filename ?? "—"} · ${formatSize(current.size_bytes)} · published ${published(current)}`}</p>
+        <p className="guidelines-current-facts">{`v${current.version}, ${current.filename ?? "—"}, ${formatSize(current.size_bytes)}, published ${published(current)}`}</p>
         {current.change_note && <p className="guidelines-current-note">{current.change_note}</p>}
         {current.reach && <p>Seen by {current.reach.opened} of {current.reach.members} task members</p>}
         {notSeen.length > 0 && <div className="guidelines-not-seen">
@@ -200,7 +200,7 @@ function GuidelinesEditor({ projectKey }: { projectKey: string }): JSX.Element {
             </div>
             {publishError !== undefined && <ErrorNotice error={publishError} />}
           </div>
-          <p className="guidelines-file-facts">{`${chosen.file.name} · ${formatSize(chosen.file.size)}`}</p>
+          <p className="guidelines-file-facts">{`${chosen.file.name}, ${formatSize(chosen.file.size)}`}</p>
           <div className="guidelines-facts">
             <p><strong>Will be published as v{nextVersion}.</strong></p>
             <p>Annotators and reviewers see a notice the next time they open a task.</p>

@@ -47,8 +47,8 @@ function ExportFailure({ result, error }: { result: Record<string, unknown> | nu
   const causeDetails = record(cause.details);
   return <InlineMessage tone="error">
     <p>{ERROR_MESSAGES.EXPORT_UNRESOLVED_INVALID}</p>
-    <p>Document: {String(details.document_id)} · Submission: {String(details.submission_id)}</p>
-    <p>Finding: {String(details.annotation_id)} · Version: {String(details.version)}</p>
+    <p>Document: {String(details.document_id)}, Submission: {String(details.submission_id)}</p>
+    <p>Finding: {String(details.annotation_id)}, Version: {String(details.version)}</p>
     <p>{exportFailureReasons[cause.code] || ERROR_MESSAGES[cause.code] || "The finding does not meet the project profile."} ({cause.code})</p>
     {typeof cause.details === "string" && <p>{cause.details}</p>}
     {typeof causeDetails?.term_id === "string" && <p>Term: {causeDetails.term_id}</p>}

@@ -41,8 +41,8 @@ export function TextDetails({ row, data, plan, planRevision, reportRoute, onRout
     {reports.length > 0 && <section aria-labelledby={`${id}-reports`}>
       <h3 id={`${id}-reports`} className="text-card-subheading">{`Problem reports (${reports.length})`}</h3>
       <ul className="row-activity-lines">{reports.map(report => <li key={report.report_id}>
-        {report.title}{" · "}{personOf(report.reporter_label)}{" · "}<Time iso={report.created_at} now={now} />
-        {" · "}Report: {REPORT_STATE_TEXT[report.state]}{" · "}Paused tasks: {report.active_hold_count}{" · "}
+        {report.title}{", "}{personOf(report.reporter_label)}{", "}<Time iso={report.created_at} now={now} />
+        {", "}Report: {REPORT_STATE_TEXT[report.state]}{", "}Paused tasks: {report.active_hold_count}{", "}
         <RouteLink route={reportRoute(report.report_id)} onNavigate={onRoute}>Open report</RouteLink>
       </li>)}</ul>
     </section>}

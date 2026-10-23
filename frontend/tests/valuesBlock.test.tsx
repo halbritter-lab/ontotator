@@ -66,7 +66,7 @@ describe("Values block", () => {
       expect(segment.querySelector('input[type="radio"]')).not.toBeNull();
     }
     expect(within(field).getAllByRole("radio").map(radio => (radio as HTMLInputElement).value)).toEqual(["", "current", "historical", "future"]);
-    const present = screen.getByRole("radio", { name: "Present · default" }) as HTMLInputElement;
+    const present = screen.getByRole("radio", { name: "Present (default)" }) as HTMLInputElement;
     expect(present.checked).toBe(true);
     expect(present.closest(".axis-option")!.classList.contains("is-default")).toBe(true);
     // A confirmed value is a plain choice.
@@ -75,14 +75,14 @@ describe("Values block", () => {
     expect(current.closest(".axis-option")!.classList.contains("is-default")).toBe(false);
   });
 
-  it("shows the Default tag in the label cell and keeps ' · default' in the radio's accessible name", () => {
+  it("shows the Default tag in the label cell and keeps ' (default)' in the radio's accessible name", () => {
     const { container } = render(<AnnotationPanel {...props({}, ["assertion", "experiencer"])} />);
-    expect(screen.getByRole("radio", { name: "Present · default" })).toBeDefined();
+    expect(screen.getByRole("radio", { name: "Present (default)" })).toBeDefined();
     const assertion = container.querySelector<HTMLElement>('[data-axis-field="assertion"]')!;
     expect(assertion.querySelector(".axis-legend .axis-default-tag")!.textContent).toBe("Default");
     const segment = assertion.querySelector<HTMLElement>(".axis-option.is-default")!;
     const hidden = segment.querySelector(".visually-hidden")!;
-    expect(hidden.textContent).toBe(" · default");
+    expect(hidden.textContent).toBe(" (default)");
     expect(Array.from(segment.querySelectorAll("span:not(.visually-hidden)")).map(span => span.textContent)).toEqual(["Present"]);
     expect(container.querySelector('[data-axis-field="temporality"] .axis-default-tag')).toBeNull();
     expect(container.querySelectorAll(".axis-default-tag")).toHaveLength(2);
@@ -110,7 +110,7 @@ describe("Values block", () => {
   it("click on the checked default confirms that axis", () => {
     const onConfirmDefaults = vi.fn(), onUpdateAxes = vi.fn();
     render(<AnnotationPanel {...props({ onConfirmDefaults, onUpdateAxes })} />);
-    fireEvent.click(screen.getByRole("radio", { name: "Present · default" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Present (default)" }));
     expect(onConfirmDefaults).toHaveBeenCalledTimes(1);
     expect(onConfirmDefaults).toHaveBeenCalledWith(["assertion"],
       { assertion: "present", experiencer: "patient", temporality: "current" }, { moveFocus: false });
@@ -120,7 +120,7 @@ describe("Values block", () => {
   it("Space on the checked default confirms that axis once", () => {
     const onConfirmDefaults = vi.fn();
     render(<AnnotationPanel {...props({ onConfirmDefaults })} />);
-    const patient = screen.getByRole("radio", { name: "Patient · default" });
+    const patient = screen.getByRole("radio", { name: "Patient (default)" });
     fireEvent.keyDown(patient, { key: " " });
     // A click the browser synthesises for the same key press does not confirm twice.
     fireEvent.click(patient, { detail: 0 });
@@ -133,12 +133,12 @@ describe("Values block", () => {
     let settle!: () => void;
     const onConfirmDefaults = vi.fn(() => new Promise<void>(resolve => { settle = resolve; }));
     render(<AnnotationPanel {...props({ onConfirmDefaults })} />);
-    const patient = screen.getByRole("radio", { name: "Patient · default" });
+    const patient = screen.getByRole("radio", { name: "Patient (default)" });
     fireEvent.keyDown(patient, { key: " " });
     fireEvent.keyDown(patient, { key: " ", repeat: true });
     fireEvent.keyDown(patient, { key: " ", repeat: true });
     expect(onConfirmDefaults).toHaveBeenCalledTimes(1);
-    const present = screen.getByRole("radio", { name: "Present · default" });
+    const present = screen.getByRole("radio", { name: "Present (default)" });
     fireEvent.click(present, { detail: 1 });
     fireEvent.click(present, { detail: 2 });
     expect(onConfirmDefaults).toHaveBeenCalledTimes(2);
@@ -160,7 +160,7 @@ describe("Values block", () => {
   it("no click handler when read-only or the default is unavailable", () => {
     const onConfirmDefaults = vi.fn();
     const { unmount } = render(<AnnotationPanel {...props({ onConfirmDefaults, readOnly: true })} />);
-    fireEvent.click(screen.getByRole("radio", { name: "Present · default" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Present (default)" }));
     expect(onConfirmDefaults).not.toHaveBeenCalled();
     unmount();
     // A defaulted value that is no longer among the options is not a confirmable default.
@@ -203,13 +203,13 @@ describe("Values block", () => {
     expect(container.querySelector("select")).toBeNull();
   });
 
-  it("keeps the Select with ' · default' for more than four options and shows the Default tag", () => {
+  it("keeps the Select with ' (default)' for more than four options and shows the Default tag", () => {
     const config = axesConfig.map(axis => axis.id === "experiencer"
       ? { ...axis, options: ["patient", "family_member", "other", "unknown"] } : axis);
     const { container } = render(<AnnotationPanel {...props({ axesConfig: config }, ["experiencer"])} />);
     const field = container.querySelector<HTMLElement>('[data-axis-field="experiencer"]')!;
     expect(field.querySelector(".axis-options")).toBeNull();
-    expect(within(field).getByRole("option", { name: "Patient · default" })).toBeDefined();
+    expect(within(field).getByRole("option", { name: "Patient (default)" })).toBeDefined();
     expect(field.querySelector(".axis-legend .axis-default-tag")!.textContent).toBe("Default");
   });
 
@@ -221,7 +221,7 @@ describe("Values block", () => {
     expect(within(field).getAllByRole("radio").some(radio => (radio as HTMLInputElement).checked)).toBe(false);
     expect(field.querySelector("legend")!.textContent).toContain("(required)");
     expect(field.querySelector(".axis-default-tag")).toBeNull();
-    expect(field.textContent).not.toContain(" · default");
+    expect(field.textContent).not.toContain("(default)");
   });
 
   it("Confirm defaults (n) calls onConfirmDefaults with every defaulted axis that has an available value", () => {
@@ -247,7 +247,7 @@ describe("Values block", () => {
     vi.useFakeTimers();
     const onUpdateAxes = vi.fn();
     render(<AnnotationPanel {...props({ onUpdateAxes })} />);
-    const present = screen.getByRole("radio", { name: "Present · default" });
+    const present = screen.getByRole("radio", { name: "Present (default)" });
     fireEvent.keyDown(present, { key: "ArrowRight" });
     fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
     fireEvent.keyDown(screen.getByRole("radio", { name: "Absent" }), { key: "ArrowRight" });
@@ -270,7 +270,7 @@ describe("Values block", () => {
     const onUpdateAxes = vi.fn(), axesFlushRef = { current: null as (() => void) | null };
     const { container, unmount } = render(<AnnotationPanel {...props({ onUpdateAxes, axesFlushRef })} />);
     expect(container.querySelector("[data-values-section]")!.getAttribute("aria-keyshortcuts")).toBe("v");
-    fireEvent.keyDown(screen.getByRole("radio", { name: "Present · default" }), { key: "ArrowRight" });
+    fireEvent.keyDown(screen.getByRole("radio", { name: "Present (default)" }), { key: "ArrowRight" });
     fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
     expect(onUpdateAxes).not.toHaveBeenCalled();
     act(() => { axesFlushRef.current!(); });
@@ -285,7 +285,7 @@ describe("Values block", () => {
     render(<AnnotationPanel {...props({ onUpdateAxes })} />);
     fireEvent.click(screen.getByRole("radio", { name: "Absent" }));
     expect(onUpdateAxes).toHaveBeenCalledTimes(1);
-    const present = await screen.findByRole("radio", { name: "Present · default" }) as HTMLInputElement;
+    const present = await screen.findByRole("radio", { name: "Present (default)" }) as HTMLInputElement;
     expect(present.checked).toBe(true);
   });
 
@@ -358,14 +358,14 @@ describe("Values block layout", () => {
   it("writes data-values-layout on the section and keeps selection and focus when it changes", () => {
     const { container } = render(<AnnotationPanel {...props({}, ["assertion", "experiencer"])} />);
     expect(layoutOf(container)).toBe("row");
-    const present = screen.getByRole("radio", { name: "Present · default" }) as HTMLInputElement;
+    const present = screen.getByRole("radio", { name: "Present (default)" }) as HTMLInputElement;
     present.focus();
     // Widest control: four segments of 40 px plus 5 px outline and separators = 165 px.
     resize(260);
     expect(layoutOf(container)).toBe("stacked");
     resize(100);
     expect(layoutOf(container)).toBe("boxes");
-    expect((screen.getByRole("radio", { name: "Present · default" }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("radio", { name: "Present (default)" }) as HTMLInputElement).checked).toBe(true);
     expect(document.activeElement).toBe(present);
     expect((screen.getByRole("radio", { name: "Current" }) as HTMLInputElement).checked).toBe(true);
   });
@@ -392,7 +392,7 @@ describe("Values block layout", () => {
     expect(container.querySelector('[data-axis-field="temporality"] .axis-default-tag')).toBeNull();
     expect(container.querySelectorAll(".axis-default-tag")).toHaveLength(2);
     expect(container.querySelector(".axis-default-suffix")).toBeNull();
-    expect(screen.getByRole("radio", { name: "Present · default" })).toBeDefined();
+    expect(screen.getByRole("radio", { name: "Present (default)" })).toBeDefined();
   });
 
   it("re-measures when the selection changes, so a value that turns bold is measured bold", () => {

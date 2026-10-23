@@ -22,12 +22,12 @@ describe("problem report labels", () => {
     const now = new Date("2026-10-19T12:00:00Z");
     expect(reportStateFact(report(), now)).toBe("Open");
     const closed = reportStateFact(report({ state: "resolved", state_changed_by_label: "ann-0002", state_changed_at: "2026-10-19T01:31:00Z" }), now);
-    expect(closed).toMatch(/^Closed by ann-0002 · 19 Oct, \d\d:31$/);
-    expect(reportStateFact(report({ state: "withdrawn", state_changed_by_label: "ann-0004", state_changed_at: "2026-10-19T01:31:00Z" }), now)).toMatch(/^Withdrawn by you · /);
+    expect(closed).toMatch(/^Closed by ann-0002, 19 Oct, \d\d:31$/);
+    expect(reportStateFact(report({ state: "withdrawn", state_changed_by_label: "ann-0004", state_changed_at: "2026-10-19T01:31:00Z" }), now)).toMatch(/^Withdrawn by you, /);
     expect(reportStateFact(report({ state: "resolved", viewer_is_lead: true, viewer_label: "lead-0002", state_changed_by_label: "lead-0002", state_changed_at: null }), now)).toBe("Closed by lead-0002 (you)");
   });
   it("task_label", () => {
-    expect(taskLabel(hold())).toBe("Task 4 · ann-0004 · accepted-translation · de");
+    expect(taskLabel(hold())).toBe("Task 4, ann-0004, accepted-translation de");
     expect(taskRef(hold())).toBe("Task 4 (ann-0004)");
   });
   it("your_task_fact_for_each_release_path", () => {
@@ -77,7 +77,7 @@ describe("problem report labels", () => {
   it("toolbar_entry_states", () => {
     expect(toolbarEntry([], false)).toEqual({ badge: null, paused: false, accessibleSuffix: "Report a problem with this task" });
     expect(toolbarEntry([report({ holds: [hold({ active: false })] })], false)).toEqual({ badge: "1 open", paused: false, accessibleSuffix: "1 open report" });
-    expect(toolbarEntry([report()], true)).toEqual({ badge: "Paused · 1 open", paused: true, accessibleSuffix: "Task paused, 1 open report" });
+    expect(toolbarEntry([report()], true)).toEqual({ badge: "Paused, 1 open", paused: true, accessibleSuffix: "Task paused, 1 open report" });
     expect(toolbarEntry(null, true).accessibleSuffix).toBe("Task paused");
   });
   it("intent_availability", () => {
@@ -124,6 +124,6 @@ describe("problem report labels", () => {
 it("names the final result's author with display name and pseudonym for leads", () => {
   const base = { case_id: "accepted-translation", language: "de", document_id: "d", submission_id: "s", revision: 1, selected_at: T, updated_at: T,
     selected_by: "lead-0002", kind: "annotation" as const, round_ordinal: 2, author_label: "ann-0004", is_mine: false, recorded_at: null };
-  expect(finalResultLabel({ ...base, author: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } } as FinalSelectionSummary)).toBe("Round 2 · Ana Weber (ann-0004)");
-  expect(finalResultLabel(base as FinalSelectionSummary)).toBe("Round 2 · ann-0004");
+  expect(finalResultLabel({ ...base, author: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } } as FinalSelectionSummary)).toBe("Round 2, Ana Weber (ann-0004)");
+  expect(finalResultLabel(base as FinalSelectionSummary)).toBe("Round 2, ann-0004");
 });

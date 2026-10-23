@@ -8,7 +8,7 @@ describe("workflow labels", () => {
     expect(taskLabels).toEqual({ annotate: "Annotation", review: "Consolidation", translation_review: "Translation review" });
     expect(assignmentStatusLabels.in_progress).toBe("In progress");
     expect(assignmentStatusLabels.submitted).toBe("Submitted");
-    expect(roleLabels.lead).toBe("Project lead");
+    expect(roleLabels.lead).toBe("Lead");
     expect(jobStatusLabels.succeeded).toBe("Finished");
     expect(uploadStatusLabels.ready).toBe("Ready to import");
     expect(uploadKindLabels.t1).toBe("Ontospan bundle (T1)");
@@ -53,9 +53,9 @@ describe("my task actions", () => {
   });
 
   it("names a task for the breadcrumb", () => {
-    expect(taskCrumbLabel({ external_id: "failed-translation", document_id: "d", task: "translation_review", language: "de" })).toBe("failed-translation · Translation review (de)");
-    expect(taskCrumbLabel({ external_id: "accepted-translation", document_id: "d", task: "annotate", language: "de" })).toBe("accepted-translation · Annotation (de)");
-    expect(taskCrumbLabel({ external_id: null, document_id: "doc-7", task: "review", language: "en" })).toBe("doc-7 · Consolidation (en)");
-    expect(taskCrumbLabel({ external_id: "", document_id: "doc-7", task: "review", language: "en" })).toBe("doc-7 · Consolidation (en)");
+    expect(taskCrumbLabel({ external_id: "failed-translation", document_id: "d", task: "translation_review", language: "de" })).toBe("failed-translation, Translation review (de)");
+    expect(taskCrumbLabel({ external_id: "accepted-translation", document_id: "d", task: "annotate", language: "de" })).toBe("accepted-translation, Annotation (de)");
+    expect(taskCrumbLabel({ external_id: null, document_id: "doc-7", task: "review", language: "en" })).toBe("doc-7, Consolidation (en)");
+    expect(taskCrumbLabel({ external_id: "", document_id: "doc-7", task: "review", language: "en" })).toBe("doc-7, Consolidation (en)");
   });
 });

@@ -3,7 +3,7 @@ import { IconCheck } from "./icons";
 export interface PlanChipProps {
   kind: "review" | "annotate";
   pressed: boolean;
-  /** Accessible name including the row, e.g. "Translation review, case-0101 · fr". */
+  /** Accessible name including the row, e.g. "Translation review, case-0101 fr". */
   name: string;
   /** While saving the chip keeps focus (aria-disabled) and ignores clicks; the page announces "Saving…". */
   busy?: boolean;

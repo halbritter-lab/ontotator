@@ -240,7 +240,7 @@ describe("carried finding inspector", () => {
     await screen.findByRole("button", { name: "Seizure, carried, not on this text, check needed" });
     fireEvent.click(row(container, "input:input-failed"));
     fireEvent.click(within(section()).getByRole("button", { name: "Link to an existing finding…" }));
-    expect(within(section()).getByRole("radio", { name: "Seizure · no text span" })).toBeDefined();
+    expect(within(section()).getByRole("radio", { name: "Seizure, no text span" })).toBeDefined();
     await act(async () => { fireEvent.click(within(section()).getByRole("button", { name: "Link and mark as checked" })); });
     await waitFor(() => expect(resolve).toHaveBeenCalledTimes(1));
     expect(payloadOf(resolve)).toEqual({ input_id: "input-failed", outcome: "completed", annotation_ref: { annotation_id: "other", version: "v1" } });

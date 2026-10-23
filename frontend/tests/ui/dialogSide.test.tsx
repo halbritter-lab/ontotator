@@ -16,8 +16,8 @@ function Example({ variant }: { variant?: "center" | "side" }) {
     <header><a href="#/home">Home</a></header>
     <main>
       <button onClick={() => setOpen(true)}>Accept result…</button>
-      <Dialog open={open} variant={variant} title="Final result · case-107 · de" onClose={() => setOpen(false)} footer={<button>Accept</button>}>
-        <p>Round 1 · Ana Weber</p>
+      <Dialog open={open} variant={variant} title="Final result, case-107 de" onClose={() => setOpen(false)} footer={<button>Accept</button>}>
+        <p>Round 1, Ana Weber</p>
       </Dialog>
     </main>
   </>;
@@ -28,12 +28,12 @@ it("side variant: aria-modal, inert background, heading focus, Escape returns fo
   render(<Example variant="side" />);
   const trigger = screen.getByRole("button", { name: "Accept result…" });
   await user.click(trigger);
-  const dialog = screen.getByRole("dialog", { name: "Final result · case-107 · de" });
+  const dialog = screen.getByRole("dialog", { name: "Final result, case-107 de" });
   expect(dialog.getAttribute("aria-modal")).toBe("true");
   expect(dialog.className).toContain("ui-dialog--side");
   expect(dialog.className).not.toContain("ui-dialog--md");
   expect(dialog.parentElement?.className).toContain("modal-overlay--side");
-  const heading = screen.getByRole("heading", { name: "Final result · case-107 · de" });
+  const heading = screen.getByRole("heading", { name: "Final result, case-107 de" });
   expect(document.activeElement).toBe(heading);
   expect(heading.getAttribute("tabindex")).toBe("-1");
   expect(document.querySelector("header")?.hasAttribute("inert")).toBe(true);

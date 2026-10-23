@@ -74,7 +74,7 @@ describe("submit dialog open items", () => {
   it("lists every open item with its own Go to and keeps Submit focusable with the reason", async () => {
     const submit = vi.spyOn(api, "submitWorkspace");
     setup();
-    const dialog = await openDialog(/Finish & Submit · 2 open/);
+    const dialog = await openDialog(/Finish & Submit \(2 open\)/);
     // Defaulted values leave the generic list for the "Unconfirmed values" section.
     expect(within(dialog).getByText("1 carried finding still needs a check")).toBeDefined();
     expect(within(dialog).getByRole("button", { name: "Go to first unchecked" })).toBeDefined();
@@ -96,7 +96,7 @@ describe("submit dialog open items", () => {
 
   it("names the unchecked text confirmation as the reason when nothing else blocks", async () => {
     setup([openFinding()]);
-    const dialog = await openDialog(/Finish & Submit · 1 open/);
+    const dialog = await openDialog(/Finish & Submit \(1 open\)/);
     const confirm = within(dialog).getByRole("button", { name: "Submit case" });
     expect(document.getElementById(confirm.getAttribute("aria-describedby")!)?.textContent)
       .toBe("Confirm that the entire text was checked before submitting.");
@@ -154,8 +154,8 @@ describe("submit dialog open items", () => {
   it("lists every unconfirmed finding in its section, without the five-item limit", async () => {
     const many = Array.from({ length: 8 }, (_, index) => finding(`open-${index}`, { assertion: "present", temporality: null }, ["temporality"]));
     setup(many);
-    const dialog = await openDialog(/Finish & Submit · 8 open/);
-    expect(within(dialog).getByRole("heading", { name: "Unconfirmed values · 8 findings" })).toBeDefined();
+    const dialog = await openDialog(/Finish & Submit \(8 open\)/);
+    expect(within(dialog).getByRole("heading", { name: "Unconfirmed values (8 findings)" })).toBeDefined();
     expect(goToButtons(dialog)).toHaveLength(8);
     expect(within(dialog).queryByText(/more$/)).toBeNull();
     // Only empty values: nothing to confirm in one click.
@@ -167,7 +167,7 @@ describe("submit dialog open items", () => {
 describe("toolbar open count", () => {
   it("shows the count and Next open item before the dialog was opened and drops both when resolved", async () => {
     const { container, view } = setup([carriedFinding(), openFinding()]);
-    expect(screen.getByRole("button", { name: /Finish & Submit · 2 open/ })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Finish & Submit \(2 open\)/ })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Next open item" }));
     expect(pressed(container)).toEqual(["annotation:carried"]);
     await waitFor(() => expect((document.activeElement as HTMLElement).textContent).toContain("Mark as checked"));
@@ -182,7 +182,7 @@ describe("toolbar open count", () => {
       ({ ...view.draft, revision, annotations, round_input_resolutions: resolutions as never });
     vi.spyOn(api, "applyCommand").mockResolvedValue(draft(1, [carriedFinding(), chosen]));
     await act(async () => { fireEvent.click(screen.getByRole("radio", { name: "Current" })); });
-    await waitFor(() => expect(screen.getByRole("button", { name: /Finish & Submit · 1 open/ })).toBeDefined());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Finish & Submit \(1 open\)/ })).toBeDefined());
     const dialog = await openDialog();
     expect(goToButtons(dialog)).toHaveLength(1);
     fireEvent.click(goToButtons(dialog)[0]);
@@ -229,7 +229,7 @@ describe("Unconfirmed values section", () => {
 
   it("lists one row per finding with term, quote, values and its actions", () => {
     render(<SubmitCaseDialog {...dialogProps()} />);
-    expect(screen.getByRole("heading", { level: 3, name: "Unconfirmed values · 3 findings" })).toBeDefined();
+    expect(screen.getByRole("heading", { level: 3, name: "Unconfirmed values (3 findings)" })).toBeDefined();
     expect(screen.getByText("These values were filled in from defaults or are empty. Confirm them here, or go to the finding to change them.")).toBeDefined();
     expect(screen.getByText("\u201cConfirm all\u201d confirms the default values shown below for all listed findings.")).toBeDefined();
     const header = section().querySelector<HTMLElement>(".unconfirmed-values__header")!;
@@ -241,7 +241,7 @@ describe("Unconfirmed values section", () => {
     expect(first.getByText("Hypotonia")).toBeDefined();
     expect(first.getByText("HP:h")).toBeDefined();
     expect(first.getByText("the quoted mark")).toBeDefined();
-    expect(first.getByText("Assertion: Present · Experiencer: Patient")).toBeDefined();
+    expect(first.getByText("Assertion: Present, Experiencer: Patient")).toBeDefined();
     expect(first.getByRole("button", { name: "Confirm values of Hypotonia" }).className).toContain("btn-secondary");
     expect(first.getByRole("button", { name: "Go to Hypotonia" }).className).toContain("btn-secondary");
   });
@@ -249,7 +249,7 @@ describe("Unconfirmed values section", () => {
   it("names one finding in the singular and keeps defaulted items out of the generic list", () => {
     const items = [{ key: "defaulted:h", kind: "defaulted" as const, blocking: false, term: "Hypotonia", line: "Default values: confirm them or choose values.", listKey: "annotation:h", focus: "[data-axis-field]" }];
     render(<SubmitCaseDialog {...dialogProps({ items, unconfirmed: threeRows().slice(0, 1) })} />);
-    expect(screen.getByRole("heading", { level: 3, name: "Unconfirmed values · 1 finding" })).toBeDefined();
+    expect(screen.getByRole("heading", { level: 3, name: "Unconfirmed values (1 finding)" })).toBeDefined();
     expect(screen.queryByText(/defaulted axis values/)).toBeNull();
     expect(document.querySelector("[data-open-item]")).toBeNull();
   });

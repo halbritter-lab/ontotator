@@ -17,7 +17,7 @@ export interface AppShellProps {
   nav?: ReactNode;
   navLabel?: string;
   density?: "reading" | "compact";
-  /** Muted second line under the user's identity, e.g. "Project lead". */
+  /** Muted second line under the user's identity, e.g. "Lead". */
   role?: string;
   children: ReactNode;
 }

@@ -11,7 +11,7 @@ function renderPanel(row = rejectedRow("case-0101", "de", { version: 2 })) {
   render(<LeadCorrectionPanel {...props} />);
   return props;
 }
-const panel = () => screen.getByRole("group", { name: "Correct the translation, case-0101 · de" });
+const panel = () => screen.getByRole("group", { name: "Correct the translation, case-0101 de" });
 const open = () => within(panel()).getByRole("button", { name: "Open translation review" });
 
 beforeEach(() => {
@@ -24,7 +24,7 @@ it("explains v{n} → v{n+1} and opens the translation review", async () => {
   vi.mocked(api.startLeadCorrection).mockResolvedValue(assignment(41));
   const props = renderPanel();
   expect(within(panel()).getByText("You review v2 yourself and submit it as Accepted with corrections. The corrected text becomes v3 and counts as accepted.")).toBeTruthy();
-  await waitFor(() => expect(document.activeElement).toBe(within(panel()).getByRole("heading", { name: "Correct the translation, case-0101 · de" })));
+  await waitFor(() => expect(document.activeElement).toBe(within(panel()).getByRole("heading", { name: "Correct the translation, case-0101 de" })));
   expect(within(panel()).queryByRole("checkbox")).toBeNull();
   fireEvent.click(open());
   await waitFor(() => expect(api.startLeadCorrection).toHaveBeenCalledWith("p", "case-0101-de", { expected_text_sha256: "sha-v2", confirm_language: false }));

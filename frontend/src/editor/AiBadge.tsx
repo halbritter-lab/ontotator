@@ -10,7 +10,7 @@ export function AiBadge({ provenance, source }: { provenance: Provenance | null;
   // Upstream tool metadata never changes the current annotation's authorship.
   const origin = provenance;
   if (origin?.actor.kind !== "tool") return null;
-  const description = `AI-generated: ${origin.actor.actor_id} · ${origin.method}`;
+  const description = `AI-generated: ${origin.actor.actor_id}, ${origin.method}`;
   return (
     <span className="badge badge-ai" title={label ?? description} aria-label={label ? `AI-generated: ${label}` : description}>
       AI

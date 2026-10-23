@@ -109,7 +109,7 @@ describe("in the table", () => {
 
   it("the checkbox keeps its own behaviour and never opens the card", () => {
     const { onOpenPanel, current } = renderTable();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select case-120 · de" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select case-120 de" }));
     expect(current.select).toHaveBeenCalledTimes(1);
     expect(current.select).toHaveBeenCalledWith("case-120:de", "toggle", order);
     expect(onOpenPanel).not.toHaveBeenCalled();

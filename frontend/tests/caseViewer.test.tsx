@@ -123,7 +123,7 @@ it('labels correction-run checks as inherited from the actual translation ancest
   expect(screen.getByText('Inherited translation-run checks')).toBeTruthy();
   expect(screen.getByText('Test provider')).toBeTruthy();
   expect(screen.getByText('numbers: failed')).toBeTruthy();
-  expect(screen.getByText('source · en · v1')).toBeTruthy();
+  expect(screen.getByText('source, en, v1')).toBeTruthy();
 });
 it('clears task-list failure after a successful explicit retry', async () => {
   const { CaseViewer } = await import('../src/variants/CaseViewer');
@@ -248,7 +248,7 @@ it('lets an annotator open an old own submission from the history as an own ref,
 it('opens a deep-linked comparison with that right side and keeps annotations when it closes', async () => {
   vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
   const { CaseViewer } = await import('../src/variants/CaseViewer');
-  const linked = { ...ownRef, kind: 'submission' as const, id: 'sub-2', label: 'ann-0002 · submission' };
+  const linked = { ...ownRef, kind: 'submission' as const, id: 'sub-2', label: 'ann-0002, submission' };
   vi.mocked(api.listTextLayers).mockResolvedValue([{ kind: 'submission', ref: linked, label: 'Reader B, submitted 16 Oct', state: 'submitted', available: true },
     { kind: 'own', ref: ownRef, label: ownRef.label, state: 'submitted', available: true }]);
   const onNavigate = vi.fn();
@@ -276,8 +276,8 @@ it('restores the full documents query on the back link, including open rows, pag
 
 it('shows a lead the read-only check states of a submitted carry-forward submission', async () => {
   const { CaseViewer } = await import('../src/variants/CaseViewer');
-  const carriedRef = { ...ownRef, kind: 'submission' as const, id: 'sub-carried', label: 'ann-0002 · submission' };
-  const plainRef = { ...ownRef, kind: 'submission' as const, id: 'sub-plain', label: 'ann-0003 · submission' };
+  const carriedRef = { ...ownRef, kind: 'submission' as const, id: 'sub-carried', label: 'ann-0002, submission' };
+  const plainRef = { ...ownRef, kind: 'submission' as const, id: 'sub-plain', label: 'ann-0003, submission' };
   vi.mocked(api.listAnnotationVersions).mockResolvedValue([ownRef, carriedRef, plainRef]);
   const snapshot = historical.annotations[0];
   const other = { ...snapshot, annotation: { ...snapshot.annotation, annotation_id: 'gone', term_id: 'HP:gone' } };

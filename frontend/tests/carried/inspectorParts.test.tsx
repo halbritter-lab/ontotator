@@ -101,7 +101,7 @@ describe("CarriedSection", () => {
     await act(async () => { check.resolve(); await check.promise; });
     rerender(section({ state: stateOf("checked"), onMarkChecked, onNextUnchecked: onNext }));
     expect(document.activeElement?.hasAttribute("data-carried-collapsed")).toBe(true);
-    expect(document.activeElement?.textContent).toContain("Checked · Carried from Round 2");
+    expect(document.activeElement?.textContent).toContain("Checked, Carried from Round 2");
     expect(screen.queryByRole("button", { name: "Mark as checked" })).toBeNull();
     expect(screen.getByRole("button", { name: "Show original evidence" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Next unchecked/ }));
@@ -255,8 +255,8 @@ const original = {
 };
 
 const candidates = [
-  { annotationId: "own", version: "v3", label: "Seizure · “Krampfanfälle werden …”", technicalId: "own" },
-  { annotationId: "other", version: "v1", label: "Seizure · no text span", technicalId: "other" },
+  { annotationId: "own", version: "v3", label: "Seizure, “Krampfanfälle werden …”", technicalId: "own" },
+  { annotationId: "other", version: "v1", label: "Seizure, no text span", technicalId: "other" },
 ];
 
 function panel(overrides: Partial<Parameters<typeof ExceptionPanel>[0]> = {}) {
@@ -305,11 +305,11 @@ describe("ExceptionPanel", () => {
     render(panel({ onLink }));
     await user.click(screen.getByRole("button", { name: "Link to an existing finding…" }));
     const group = screen.getByRole("group", { name: "Link to an existing finding" });
-    expect(within(group).getByRole("radio", { name: "Seizure · “Krampfanfälle werden …”" })).toBeTruthy();
-    expect(within(group).getByRole("radio", { name: "Seizure · no text span" })).toBeTruthy();
+    expect(within(group).getByRole("radio", { name: "Seizure, “Krampfanfälle werden …”" })).toBeTruthy();
+    expect(within(group).getByRole("radio", { name: "Seizure, no text span" })).toBeTruthy();
     expect(within(group).getAllByText("Technical details")).toHaveLength(2);
     expect(screen.queryByRole("combobox")).toBeNull();
-    await user.click(within(group).getByRole("radio", { name: "Seizure · “Krampfanfälle werden …”" }));
+    await user.click(within(group).getByRole("radio", { name: "Seizure, “Krampfanfälle werden …”" }));
     await user.click(screen.getByRole("button", { name: "Link and mark as checked" }));
     expect(onLink).toHaveBeenCalledWith("own");
     // Linked: the chooser closes and focus returns to its trigger, never to the body.
@@ -324,11 +324,11 @@ describe("ExceptionPanel", () => {
     const onLink = vi.fn().mockResolvedValue(false);
     render(panel({ onLink }));
     await user.click(screen.getByRole("button", { name: "Link to an existing finding…" }));
-    await user.click(screen.getByRole("radio", { name: "Seizure · no text span" }));
+    await user.click(screen.getByRole("radio", { name: "Seizure, no text span" }));
     await user.click(screen.getByRole("button", { name: "Link and mark as checked" }));
     expect(onLink).toHaveBeenCalledWith("other");
     const group = screen.getByRole("group", { name: "Link to an existing finding" });
-    expect(within(group).getByRole("radio", { name: "Seizure · no text span" })).toHaveProperty("checked", true);
+    expect(within(group).getByRole("radio", { name: "Seizure, no text span" })).toHaveProperty("checked", true);
   });
 
   it("link_cancel_returns_focus_to_the_trigger", async () => {

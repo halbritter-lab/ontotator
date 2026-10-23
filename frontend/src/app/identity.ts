@@ -5,7 +5,7 @@
  * without a display name (other people for non-lead callers, former members)
  * the pseudonym alone. The username is never part of these labels.
  *
- * Texts: "{case ID} · {language}", with a version only where it matters.
+ * Texts: "{case ID} {language}", with a version only where it matters.
  */
 
 export interface PersonRef {
@@ -27,7 +27,7 @@ export function textLabel(
   text: { case_id: string; language: string; version?: number | null },
   options?: { withVersion?: boolean },
 ): string {
-  const base = `${text.case_id} · ${text.language}`;
+  const base = `${text.case_id} ${text.language}`;
   if (options?.withVersion && text.version != null) return `${base} v${text.version}`;
   return base;
 }

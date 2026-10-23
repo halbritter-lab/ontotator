@@ -76,7 +76,7 @@ describe("SearchPanel", () => {
       expect(options()).toHaveLength(3);
       expect(activeId(input)).toBe(options()[1].id);
       expect(options()[1].getAttribute("aria-selected")).toBe("true");
-      expect(document.querySelector(".search-hint")!.textContent).toBe("2 terms · ↓↑ choose · Enter add · Esc cancel");
+      expect(document.querySelector(".search-hint")!.textContent).toBe("2 terms, ↓↑ choose, Enter add, Esc cancel");
     } finally {
       vi.useRealTimers();
     }
@@ -419,7 +419,7 @@ describe("SearchPanel", () => {
     expect(input.selectionEnd).toBe("Krampfanfall".length);
     await waitFor(() => expect(options()).toHaveLength(3));
     const hintLine = () => document.querySelector(".search-hint")!.textContent!;
-    expect(hintLine()).toBe(`${hint}2 terms · ↓↑ choose · Enter add · Esc cancel`);
+    expect(hintLine()).toBe(`${hint}2 terms, ↓↑ choose, Enter add, Esc cancel`);
     expect(screen.getByText(hint)).toBeDefined();
     fireEvent.change(input, { target: { value: "Fieberkrampf" } });
     await waitFor(() => expect(hintLine()).toBe(

@@ -283,7 +283,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           ) : expanded ? (
             canAssign ? (
               <>
-                {termCount(usableCount)} · <Kbd>↓</Kbd><Kbd>↑</Kbd> choose · <Kbd>Enter</Kbd> add · <Kbd>Esc</Kbd> cancel
+                {termCount(usableCount)}, <Kbd>↓</Kbd><Kbd>↑</Kbd> choose, <Kbd>Enter</Kbd> add, <Kbd>Esc</Kbd> cancel
               </>
             ) : (
               termCount(candidates.length)

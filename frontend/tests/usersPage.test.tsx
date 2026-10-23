@@ -32,7 +32,7 @@ describe("users administration", () => {
   it("lists server fields and filters by username or display name", async () => {
     render(<UsersPage currentUser={currentUser} />); await load();
     const table = within(screen.getByRole("table", { name: "Users" }));
-    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("study-one: Project lead, Annotator")).toBeTruthy();
+    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("study-one: Lead, Annotator")).toBeTruthy();
     expect(table.getByText("en")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "SMITH" } }); expect(table.queryByText("Root")).toBeNull();
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "root" } }); expect(table.queryByText("Alex Smith")).toBeNull();

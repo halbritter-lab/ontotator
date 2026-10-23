@@ -40,7 +40,7 @@ it("lists every project with roles, decisions, open tasks and actions", async ()
 
   const [name1, roles1, decision1, open1, action1] = cells(rowOf("Project p1"));
   expect(name1.textContent).toContain("p1");
-  expect(roles1.textContent).toBe("Project lead, Annotator");
+  expect(roles1.textContent).toBe("Lead, Annotator");
   expect(decision1.textContent).toContain("4 documents need your decision");
   expect(open1.textContent).toBe("1");
   expect(within(action1 as HTMLElement).getByRole("link", { name: "Open" }).getAttribute("href")).toBe("#/projects/p1/documents");

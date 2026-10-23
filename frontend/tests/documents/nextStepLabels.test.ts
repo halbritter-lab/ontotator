@@ -54,18 +54,18 @@ describe("next step labels", () => {
   it("labels the secondary line per detail kind", () => {
     const plain = row({ case_id: "case-0101", language: "de" });
     expect(secondaryLine(step({ code: "assign_translation_review", detail: { kind: "version", version: 1, origin: "machine_translation", translation_status: "ready_for_review", task_paused: false } }), plain))
-      .toBe("v1 machine translation · ready for review");
-    expect(secondaryLine(step({ code: "assign_annotation", detail: { kind: "source_ready", task_paused: false } }), plain)).toBe("Source text · ready to annotate");
+      .toBe("v1 machine translation, ready for review");
+    expect(secondaryLine(step({ code: "assign_annotation", detail: { kind: "source_ready", task_paused: false } }), plain)).toBe("Source text, ready to annotate");
     expect(secondaryLine(step({ code: "choose_final", detail: { kind: "annotations_submitted", submitted: 2, total: 2, task_paused: false } }), plain)).toBe("2 of 2 annotations submitted");
-    expect(secondaryLine(step({ code: "annotation_in_progress", detail: { kind: "round", round_ordinal: 1, task_paused: false } }), plain)).toBe("Round 1 · in progress");
+    expect(secondaryLine(step({ code: "annotation_in_progress", detail: { kind: "round", round_ordinal: 1, task_paused: false } }), plain)).toBe("Round 1, in progress");
     const excerpt = "The translation drops the negation in the second sentence and the dosage line.";
     expect(secondaryLine(step({ code: "decide_report", detail: { kind: "report", excerpt, reporter: { pseudonym: "ann-0005", display_name: "Ben Roth", is_me: false }, task_paused: true } }), plain))
-      .toBe(`“${excerpt.slice(0, 60)}…” · Ben Roth (ann-0005) · task paused`);
+      .toBe(`“${excerpt.slice(0, 60)}…”, Ben Roth (ann-0005), task paused`);
     const withFinal = row({ case_id: "case-0101", language: "de", final: final({ case_id: "case-0101", language: "de", document_id: "d", submission_id: "s", round_ordinal: 1, author_label: "ann-0004", author: { pseudonym: "ann-0004", display_name: "Annotator", is_me: false } }) });
-    expect(secondaryLine(step({ code: "done", kind: "done", detail: { kind: "final", version: 1, round_ordinal: 1, task_paused: false } }), withFinal)).toBe("Final: Annotation, from scratch · Round 1 · Annotator (ann-0004)");
-    expect(secondaryLine(step({ code: "translation_accepted", kind: "done", detail: { kind: "review_only", version: 1, task_paused: false } }), plain)).toBe("Review only · not annotated");
+    expect(secondaryLine(step({ code: "done", kind: "done", detail: { kind: "final", version: 1, round_ordinal: 1, task_paused: false } }), withFinal)).toBe("Final: Annotation, from scratch, Round 1, Annotator (ann-0004)");
+    expect(secondaryLine(step({ code: "translation_accepted", kind: "done", detail: { kind: "review_only", version: 1, task_paused: false } }), plain)).toBe("Review only, not annotated");
     expect(secondaryLine(step({ code: "waiting_for_translation_review", kind: "in_progress", detail: { kind: "waiting", version: 2, origin: "correction", translation_status: "ready_for_review", task_paused: false } }), plain))
-      .toBe("v2 correction · waiting for review");
+      .toBe("v2 correction, waiting for review");
     expect(secondaryLine(step({ code: "assign_annotation", kind: "assign", assigned: 1, target: 2, detail: null }), plain)).toBe("1 of 2 assigned");
   });
 
@@ -99,8 +99,8 @@ describe("next step labels", () => {
     expect(rowActionLabel(handleTom, one)).toBe("Handle text change…");
     expect(rowActionLabel(carry, one)).toBe("Carry to v3…");
     const several = { ...one, steps: [handleTom, handleLuc], work: [...one.work, work({ assignment_id: 2, document_id: "d1", person: luc })] };
-    expect(rowActionLabel(handleTom, several)).toBe("Handle text change… · Tom Reis");
-    expect(rowActionLabel(handleLuc, several)).toBe("Handle text change… · Luc Martin");
+    expect(rowActionLabel(handleTom, several)).toBe("Handle text change…, Tom Reis");
+    expect(rowActionLabel(handleLuc, several)).toBe("Handle text change…, Luc Martin");
   });
 
   it("lists the lead-owned steps with an action in server order", () => {

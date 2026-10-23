@@ -68,11 +68,11 @@ export function personLabel(pseudonym: string, isMe: boolean, person?: PersonRef
 
 /**
  * "Round 1 (lead-0002, you)"; a submission without a round is "Initial submission (...)"; `name` replaces the
- * round part (e.g. "Consolidation"). With a display name "Round 1 · Ana Weber (ann-0004)". Never nested parentheses.
+ * round part (e.g. "Consolidation"). With a display name "Round 1, Ana Weber (ann-0004)". Never nested parentheses.
  */
 export function roundCell(input: { ordinal: number | null; author: string; isMe: boolean; person?: PersonRef | null; name?: string }): string {
   const round = input.name ?? (input.ordinal == null ? "Initial submission" : `Round ${input.ordinal}`);
-  if (hasDisplayName(input.person)) return `${round} · ${personLabel(input.author, input.isMe, input.person)}`;
+  if (hasDisplayName(input.person)) return `${round}, ${personLabel(input.author, input.isMe, input.person)}`;
   return `${round} (${input.author}${input.isMe ? ", you" : ""})`;
 }
 
@@ -97,7 +97,7 @@ export interface SubmissionLabelOptions extends FormatTimeOptions {
 }
 
 /**
- * "{kind} · {Round n | Initial submission} · {author} · {language} {version} · {time}".
+ * "{kind}, {Round n | Initial submission}, {author}, {language} {version}, {time}".
  * Consolidations omit the round. IDs are never part of a label.
  */
 export function submissionLabel(input: SubmissionLabelInput, options: SubmissionLabelOptions = {}): string {
@@ -108,5 +108,5 @@ export function submissionLabel(input: SubmissionLabelInput, options: Submission
   const version = [withLanguage ? input.language : "", input.version ?? ""].filter(Boolean).join(" ");
   if (version) parts.push(version);
   parts.push(formatTime(input.recordedAt, timeOptions));
-  return parts.join(" · ");
+  return parts.join(", ");
 }

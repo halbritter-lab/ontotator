@@ -46,7 +46,7 @@ it("keeps the same focused ID input while a controlled parent applies every type
     return <DocumentsPage projectKey="p/key" canManage query={query} onNavigate={route => { if (route.name === "projectDocuments") setQuery(route); }} />;
   }
   const user = userEvent.setup(); render(<ControlledDocuments />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
   const input = screen.getByLabelText("Case ID or text");
   await user.type(input, "abc");
   expect(screen.getByLabelText("Case ID or text")).toBe(input);
@@ -58,17 +58,17 @@ it("keeps the same focused ID input while a controlled parent applies every type
 
 it("assigns the selected cases from the selection bar and refreshes rows and inventories after success", async () => {
   render(<DocumentsPage projectKey="p/key" canManage query={{ language: "en" }} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
   fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 text)" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
-  const dialog = await screen.findByRole("dialog", { name: "Assign · 1 case" });
+  const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
   expect(api.selectionSummary).toHaveBeenCalledWith("p/key", ["z/doc"], { language: "en" });
   fireEvent.click(await within(dialog).findByRole("radio", { name: /Alice/ }));
   const assign = within(dialog).getByRole("button", { name: "Assign 1" });
   await waitFor(() => expect(assign.getAttribute("aria-disabled")).toBeNull());
   fireEvent.click(assign);
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Assign · 1 case" })).toBeNull());
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Assign 1 case" })).toBeNull());
   expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ task: "annotate", language: "en", case_ids: ["z/doc"], mode: "one", usernames: ["alice"], sort: "case", filters: { language: "en" } }));
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
   expect(api.listAssignments).toHaveBeenCalledTimes(2);
@@ -89,18 +89,18 @@ it("wires actual assignment IDs through the Text versions actions and refreshes 
 it("closes an open assign dialog on project change and ignores its pending mutation", async () => {
   const pending = deferred<Awaited<ReturnType<typeof api.commitAssignmentBatch>>>(); vi.mocked(api.commitAssignmentBatch).mockReturnValue(pending.promise);
   const view = render(<DocumentsPage projectKey="p/key" canManage query={{}} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
   fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (1 text)" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
-  const dialog = await screen.findByRole("dialog", { name: "Assign · 1 case" });
+  const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
   fireEvent.click(await within(dialog).findByRole("radio", { name: /Alice/ }));
   const assign = within(dialog).getByRole("button", { name: "Assign 1" });
   await waitFor(() => expect(assign.getAttribute("aria-disabled")).toBeNull());
   fireEvent.click(assign);
   view.rerender(<DocumentsPage projectKey="other" canManage query={{}} onNavigate={vi.fn()} />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
   await act(async () => { pending.resolve({ created: [assignment] }); });
-  expect(screen.queryByRole("dialog", { name: "Assign · 1 case" })).toBeNull();
+  expect(screen.queryByRole("dialog", { name: "Assign 1 case" })).toBeNull();
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
   expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
 });

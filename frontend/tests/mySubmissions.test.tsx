@@ -55,13 +55,13 @@ describe("My submissions", () => {
     const list = vi.spyOn(api, "listAssignmentSubmissions").mockResolvedValue(rows);
     renderAssignmentCase();
     expect(within(mine()).getByRole("heading", { name: "My submissions" })).toBeDefined();
-    const first = await within(mine()).findByText(`Round 1 · ${formatTime(round1At)} · 1 finding`);
+    const first = await within(mine()).findByText(`Round 1, ${formatTime(round1At)}, 1 finding`);
     const items = within(mine()).getAllByRole("listitem").map(item => item.textContent);
     expect(items[0]).toContain(first.textContent);
-    expect(items[1]).toContain(`Round 2 · ${formatTime(round2At)} · 2 findings`);
-    expect(items[2]).toBe("Round 3 · not submitted yet");
-    expect(within(mine()).getByRole("button", { name: `View Round 1 · ${formatTime(round1At)}` })).toBeDefined();
-    expect(within(mine()).getByRole("button", { name: `View Round 2 · ${formatTime(round2At)}` })).toBeDefined();
+    expect(items[1]).toContain(`Round 2, ${formatTime(round2At)}, 2 findings`);
+    expect(items[2]).toBe("Round 3, not submitted yet");
+    expect(within(mine()).getByRole("button", { name: `View Round 1, ${formatTime(round1At)}` })).toBeDefined();
+    expect(within(mine()).getByRole("button", { name: `View Round 2, ${formatTime(round2At)}` })).toBeDefined();
     expect(screen.queryByText("No previous submissions yet.")).toBeNull();
     expect(screen.queryByRole("region", { name: "Submission history" })).toBeNull();
     expect(list).toHaveBeenCalledWith(7);
@@ -70,7 +70,7 @@ describe("My submissions", () => {
   it("omits the not-submitted line once the current round has a submission", async () => {
     vi.spyOn(api, "listAssignmentSubmissions").mockResolvedValue([...rows, row("sub-3", 3, at(19, 1, 30), 0)]);
     renderAssignmentCase();
-    await within(mine()).findByRole("button", { name: `View Round 3 · ${formatTime(at(19, 1, 30))}` });
+    await within(mine()).findByRole("button", { name: `View Round 3, ${formatTime(at(19, 1, 30))}` });
     expect(within(mine()).queryByText(/not submitted yet/)).toBeNull();
   });
 
@@ -79,7 +79,7 @@ describe("My submissions", () => {
     renderAssignmentCase();
     expect(await within(mine()).findByText("Your submissions could not be loaded.")).toBeDefined();
     fireEvent.click(within(mine()).getByRole("button", { name: "Retry" }));
-    await within(mine()).findByRole("button", { name: `View Round 1 · ${formatTime(round1At)}` });
+    await within(mine()).findByRole("button", { name: `View Round 1, ${formatTime(round1At)}` });
     expect(list).toHaveBeenCalledTimes(2);
   });
 
@@ -87,17 +87,17 @@ describe("My submissions", () => {
     vi.spyOn(api, "listAssignmentSubmissions").mockResolvedValue(rows);
     const history = vi.spyOn(api, "getSubmissionHistory").mockImplementation(async (_project, _doc, id) => detail(id, id === "sub-2"));
     renderAssignmentCase();
-    fireEvent.click(await within(mine()).findByRole("button", { name: `View Round 1 · ${formatTime(round1At)}` }));
+    fireEvent.click(await within(mine()).findByRole("button", { name: `View Round 1, ${formatTime(round1At)}` }));
     let dialog = await screen.findByRole("dialog", { name: "Historical submission" });
     expect(history).toHaveBeenCalledWith("pkg", "doc", "sub-1");
-    expect(within(dialog).getByRole("heading", { name: `Round 1 · ${formatTime(round1At)}` })).toBeDefined();
+    expect(within(dialog).getByRole("heading", { name: `Round 1, ${formatTime(round1At)}` })).toBeDefined();
     expect(within(dialog).queryByRole("region", { name: "Carried findings" })).toBeNull();
     fireEvent.click(within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog", { name: "Historical submission" })).toBeNull();
 
-    fireEvent.click(within(mine()).getByRole("button", { name: `View Round 2 · ${formatTime(round2At)}` }));
+    fireEvent.click(within(mine()).getByRole("button", { name: `View Round 2, ${formatTime(round2At)}` }));
     dialog = await screen.findByRole("dialog", { name: "Historical submission" });
-    expect(within(dialog).getByRole("heading", { name: `Round 2 · ${formatTime(round2At)}` })).toBeDefined();
+    expect(within(dialog).getByRole("heading", { name: `Round 2, ${formatTime(round2At)}` })).toBeDefined();
     const carried = within(dialog).getByRole("region", { name: "Carried findings" });
     expect(within(carried).getByText("Dismissed")).toBeDefined();
     expect(within(carried).getByText("Dismissal reason: Not in this text")).toBeDefined();
@@ -112,9 +112,9 @@ describe("My submissions", () => {
     const list = vi.spyOn(api, "listAssignmentSubmissions");
     render(<CaseScreen view={view} workspaceId="ws-raw" onClose={vi.fn()} />);
     expect(screen.queryByRole("region", { name: "My submissions" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Submission 1 · 17 Oct 2026, 09:05" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submission 1, 17 Oct 2026, 09:05" }));
     const dialog = screen.getByRole("dialog", { name: "Historical submission" });
-    expect(within(dialog).getByRole("heading", { name: "Submission 1 · 17 Oct 2026, 09:05" })).toBeDefined();
+    expect(within(dialog).getByRole("heading", { name: "Submission 1, 17 Oct 2026, 09:05" })).toBeDefined();
     fireEvent.click(within(dialog).getByText("Technical details"));
     expect(within(dialog).getByText("raw-1")).toBeDefined();
     expect(list).not.toHaveBeenCalled();
@@ -129,7 +129,7 @@ describe("My submissions", () => {
     vi.spyOn(api, "submitWorkspace").mockResolvedValue(submitted);
     render(<CaseScreen view={view} workspaceId="ws-submit" onClose={vi.fn()} roundOrdinal={3}
       versionContext={{ canBrowseVersions: false, username: "alice", assignmentId: 7, onNavigate: vi.fn() }} />);
-    await within(mine()).findByText("Round 3 · not submitted yet");
+    await within(mine()).findByText("Round 3, not submitted yet");
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const confirm = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(within(confirm).getByRole("checkbox", { name: /Entire text checked/ }));
@@ -137,7 +137,7 @@ describe("My submissions", () => {
     const receipt = await screen.findByRole("dialog", { name: "Case submitted" });
     fireEvent.click(within(receipt).getByRole("button", { name: "View submitted result" }));
     const dialog = screen.getByRole("dialog", { name: "Historical submission" });
-    expect(within(dialog).getByRole("heading", { name: `Round 3 · ${formatTime(at(19, 2, 5))}` })).toBeDefined();
+    expect(within(dialog).getByRole("heading", { name: `Round 3, ${formatTime(at(19, 2, 5))}` })).toBeDefined();
     fireEvent.click(within(dialog).getByText("Technical details"));
     expect(within(dialog).getByText("fresh-submission")).toBeDefined();
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
@@ -168,12 +168,12 @@ describe("TaskEditor round identity wiring", () => {
     vi.spyOn(api, "getVariantText").mockResolvedValue({ document_id: "doc", text: "Patient has seizures.", text_sha256: "text" } as never);
     const { container } = render(<TaskEditor assignmentId={1} user={{ username: "alice", display_name: "Alice", pseudonym: "alice", is_system_admin: false, csrf_token: "csrf" }}
       onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
-    const badge = await screen.findByText("Round 3 · continued from Round 2");
-    expect(badge.getAttribute("title")).toBe(`Round 3 · continued from Round 2 submission (${formatTime(round2At)}) · de v1`);
-    expect(await within(mine()).findByText("Round 3 · not submitted yet")).toBeDefined();
+    const badge = await screen.findByText("Round 3, continued from Round 2");
+    expect(badge.getAttribute("title")).toBe(`Round 3, continued from Round 2 submission (${formatTime(round2At)}), de v1`);
+    expect(await within(mine()).findByText("Round 3, not submitted yet")).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "Work rounds" }));
-    const rounds = await screen.findByRole("dialog", { name: "Work rounds · doc · de" });
+    const rounds = await screen.findByRole("dialog", { name: "Work rounds: doc de" });
     await within(rounds).findByText("You are here");
     fireEvent.click(within(rounds.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
 

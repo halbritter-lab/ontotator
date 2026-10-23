@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, type TaskSummary } from "../src/api/client";
 import { DocumentsTabs } from "../src/documents/DocumentsTabs";
+import { NotFound } from "../src/app/NotFound";
 import { MyTasks } from "../src/tasks/MyTasks";
 import { bar } from "./documents/fixtures";
 import { guidelineListing } from "./projectFixtures";
@@ -32,5 +33,12 @@ describe("Space activates a link-styled Open button", () => {
     const link = screen.getByRole("link", { name: "Export final results…" });
     expect(pressSpace(link)).toBe(false);
     expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it("on the not-found page", () => {
+    const onNavigate = vi.fn();
+    render(<NotFound onNavigate={onNavigate} />);
+    expect(pressSpace(screen.getByRole("link", { name: "My tasks" }))).toBe(false);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", status: "all" });
   });
 });

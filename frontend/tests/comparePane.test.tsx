@@ -210,7 +210,7 @@ it('restores coupling numbers after a late annotation payload replaces vendor ma
 });
 
 it('preselects a deep-linked right side and falls back to Text only when the ref is not offered', async () => {
-  const linked = { ...ownRef, kind: 'submission' as const, id: 'sub-2', label: 'ann-0002 · submission' };
+  const linked = { ...ownRef, kind: 'submission' as const, id: 'sub-2', label: 'ann-0002, submission' };
   vi.mocked(api.listAnnotationVersions).mockResolvedValue([ownRef, linked]);
   const mounted = render(<ComparePane {...props} initialRight={{ documentId: 'target', refKey: refKey(linked) }} />);
   await screen.findByText('HP:old');

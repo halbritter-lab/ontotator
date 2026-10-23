@@ -17,7 +17,7 @@
 .assign-segments .segment[data-checked] { background: var(--accent-light); font-weight: var(--weight-strong); text-decoration: underline; border-bottom-color: currentColor; }
 .assign-segments .segment:has(input:focus-visible) { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }
 
-/* Members table: Person · Reads · Open tasks (+ Gets). */
+/* Members table: Person, Reads, Open tasks (+ Gets). */
 .assign-members { width: 100%; border-collapse: collapse; font-size: var(--size-sm); }
 .assign-members th, .assign-members td { text-align: left; vertical-align: middle; padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--border); }
 .assign-members th { color: var(--text-muted); font-weight: var(--weight-strong); }

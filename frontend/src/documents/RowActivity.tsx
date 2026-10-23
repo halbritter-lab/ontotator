@@ -58,7 +58,7 @@ export function RowActivity({ row, projectKey, submissions, stage, onStage, repo
       ? <ul className="row-activity-lines" aria-label="Activity">{lines.map(line => <li key={line.key} className="row-activity-line">
         <span className="row-activity-tag">{STAGE_TITLES[line.stage]}</span><span className="visually-hidden">{lineParts(line).separator}</span>
         <span className="row-activity-text">{lineParts(line).body}</span>
-        {line.reportId && <>{" · "}<RouteLink route={reportRoute(line.reportId)} onNavigate={onNavigate}>Open report</RouteLink></>}
+        {line.reportId && <>{", "}<RouteLink route={reportRoute(line.reportId)} onNavigate={onNavigate}>Open report</RouteLink></>}
         {reason && line.key === `work-${reason.assignment_id}` && <ReviewReason record={reason} />}
       </li>)}</ul>
       : <p className="row-activity-empty">{emptyActivityText(stage)}</p>}

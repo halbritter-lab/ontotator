@@ -37,7 +37,7 @@ export function versionsOf(detail: CaseVariants, language: string): VariantOptio
   const variants = variantsInOrder(detail, language);
   const baseLabels = variants.map(row => [
     `v${row.version}`, originLabels[row.origin], row.translation_status?.replaceAll('_', ' '),
-  ].filter(Boolean).join(' · '));
+  ].filter(Boolean).join(', '));
   const counts = (labels: readonly string[]) => {
     const result = new Map<string, number>();
     for (const label of labels) result.set(label, (result.get(label) ?? 0) + 1);
@@ -45,7 +45,7 @@ export function versionsOf(detail: CaseVariants, language: string): VariantOptio
   };
   const baseCounts = counts(baseLabels);
   const labels = baseLabels.map((label, index) =>
-    baseCounts.get(label)! > 1 ? `${label} · ${variants[index].external_id}` : label);
+    baseCounts.get(label)! > 1 ? `${label}, ${variants[index].external_id}` : label);
   const labelCounts = counts(labels);
   const finalLabels = labels.map((label, index) =>
     labelCounts.get(label)! > 1 ? `${label} (${variants[index].document_id})` : label);

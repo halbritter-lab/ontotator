@@ -906,7 +906,7 @@ it("normalises a stored legacy query draft to an implied clinical change once on
 it("shows the key hint line in the rail footer", async () => {
   setup();
   await screen.findByRole("textbox", { name: "Translation (de)" });
-  const hint = screen.getByText("Ctrl + Enter submits · 1–4 choose a decision outside the text");
+  const hint = screen.getByText("Ctrl + Enter submits, 1–4 choose a decision outside the text");
   expect(hint.closest(".translation-decision-footer")).not.toBeNull();
 });
 

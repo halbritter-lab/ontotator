@@ -7,7 +7,7 @@ import { plural } from "../app/labels";
 export const RELOADED_MESSAGE = "The text or the task changed. Reloaded.";
 export const CHECKING = "Checking…";
 
-export const handleTitle = (text: string): string => `Handle text change · ${text}`;
+export const handleTitle = (text: string): string => `Handle text change: ${text}`;
 export const openWorkLine = (person: string, from: string, to: string): string => `${person} has an open annotation on ${from}. The text is now ${to}.`;
 export const moveLabel = (to: string): string => `Move to ${to}`;
 export const moveDescription = (person: string): string =>
@@ -25,9 +25,9 @@ export const finishingMessage = (person: string, from: string, to: string): stri
   `${person} finishes on ${from}. The result is carried to ${to} when they submit.`;
 export const withdrawnMessage = (person: string, to: string): string => `${person}’s task is withdrawn. ${to} needs a new annotation.`;
 
-export const carryTitle = (to: string, text: string): string => `Carry to ${to} · ${text}`;
+export const carryTitle = (to: string, text: string): string => `Carry to ${to}: ${text}`;
 export function submittedLine(person: string, from: string, round: number | null, findings: number | null): string {
-  const facts = [round ? `Round ${round}` : null, findings != null ? plural(findings, "finding") : null].filter(Boolean).join(" · ");
+  const facts = [round ? `Round ${round}` : null, findings != null ? plural(findings, "finding") : null].filter(Boolean).join(", ");
   return `${person} submitted on ${from}${facts ? ` (${facts})` : ""}.`;
 }
 export const authorLabel = (person: string): string => `${person} (author)`;

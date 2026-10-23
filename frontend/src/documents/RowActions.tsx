@@ -10,15 +10,12 @@ import { Button } from "../ui/Button";
 import { IconMore } from "../ui/icons";
 import { MenuButton, type MenuItem } from "../ui/MenuButton";
 import { leadSteps, rowActionLabel } from "./nextStepLabels";
-import type { PlanSaves } from "./PlanChips";
 import { documentsRowId, RouteLink, rowName } from "./RowCells";
 import { isUndecided } from "./stageLabels";
 
 export interface RowActionCellProps {
   row: DocumentRowView;
   onAction?: (row: DocumentRowView, step: NextStepView) => void;
-  // shortcut: unused since U5 removed the row plan popover; DocumentsTable/DocumentCards still pass it, drop it there in U9.
-  plan?: { groupRevision: number; saves: PlanSaves };
   /** Full-width button (narrow cards). */
   block?: boolean;
   /** In-app navigation of "Open my task". */

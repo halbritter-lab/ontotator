@@ -46,13 +46,13 @@ export function versionName(version: number, chainName: string, parallel: boolea
   return parallel ? `${chainName} v${version}` : `v${version}`;
 }
 
-/** "v3 · Correction of v2 · Ready for review"; "DeepL v3 v1 · Machine translation · Rejected in review". */
+/** "v3, Correction of v2, Ready for review"; "DeepL v3 v1, Machine translation, Rejected in review". */
 export function versionText(input: VersionTextInput): string {
   const origin = input.origin === "correction" && input.derivedVersion != null
     ? `Correction of ${versionName(input.derivedVersion, input.chainName, input.parallel)}`
     : labelFor(originLabels, input.origin);
   const badge = statusBadgeText(input.status, input.decision, input.acceptedWithoutReview ?? false);
-  return [versionName(input.version, input.chainName, input.parallel), origin, badge].filter(Boolean).join(" · ");
+  return [versionName(input.version, input.chainName, input.parallel), origin, badge].filter(Boolean).join(", ");
 }
 
 export type DecisionCategory = "report-or-pause" | "confirm-final" | "translation" | "missing-final";

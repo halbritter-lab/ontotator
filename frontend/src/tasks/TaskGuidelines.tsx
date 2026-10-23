@@ -3,6 +3,7 @@ import { api, type AssignmentView, type GuidelineNotice } from "../api/client";
 import { routeHref } from "../app/router";
 import { GuidelineReader } from "../guidelines/GuidelineReader";
 import { Button, Drawer, IconBook, InlineMessage } from "../ui";
+import { onSpaceActivate } from "../ui/spaceActivates";
 
 export interface TaskGuidelinesProps {
   assignment: AssignmentView;
@@ -107,7 +108,7 @@ export function TaskGuidelines({ assignment, readOnly, children, onRefresh }: Ta
   const version = drawer.version;
   const drawerPart = version !== null && <Drawer open={drawer.open} title={`Guidelines v${version}`} onClose={closeDrawer} returnFocusRef={returnFocus}
     footer={<>
-      <a className="btn btn-secondary" href={routeHref({ name: "projectGuidelines", key: projectKey })} target="_blank" rel="noopener noreferrer">All versions</a>
+      <a className="btn btn-secondary" href={routeHref({ name: "projectGuidelines", key: projectKey })} onKeyDown={onSpaceActivate} target="_blank" rel="noopener noreferrer">All versions</a>
       <Button onClick={closeDrawer}>Close</Button>
     </>}>
     {/* Remounted when the version in force changes or a focus reload runs, so a withdrawal of the shown version replaces its text. */}

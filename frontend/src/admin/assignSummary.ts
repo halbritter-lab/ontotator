@@ -18,9 +18,9 @@ const stepNames: Record<AssignTask, string> = { translation_review: "Translation
 export const taskNoun = (task: AssignTask, count: number): string => `${count} ${nouns[task][count === 1 ? 0 : 1]}`;
 export const stepName = (task: AssignTask): string => stepNames[task];
 
-/** "Translation review · de · 20 versions" */
+/** "Translation review, de, 20 versions" */
 export function stepLabel(task: AssignTask, language: string, versions: number): string {
-  return `${stepNames[task]} · ${language} · ${versions} ${versions === 1 ? "version" : "versions"}`;
+  return `${stepNames[task]}, ${language}, ${versions} ${versions === 1 ? "version" : "versions"}`;
 }
 
 /** Display name, else pseudonym (sentences; tables use `personLabel`). */
@@ -82,7 +82,7 @@ export function memberReason(member: Pick<BatchPersonView, "unavailable" | "alre
 /** Only `role_missing` and `inactive` make a member unavailable (aria-disabled). */
 export const memberUnavailable = (member: Pick<BatchPersonView, "unavailable">): boolean => member.unavailable === "role_missing" || member.unavailable === "inactive";
 
-/** Targets that already hold some of their assignments: "case-0101 · de: 1 of 2 assigned". */
+/** Targets that already hold some of their assignments: "case-0101, de: 1 of 2 assigned". */
 export function partlyAssignedLines(targets: readonly { case_id: string; language: string; remaining: number }[], perText: number): string[] {
   const partial = targets.filter(target => target.remaining > 0 && target.remaining < perText);
   if (partial.length <= 3) return partial.map(target => `${textLabel(target)}: ${perText - target.remaining} of ${perText} assigned`);

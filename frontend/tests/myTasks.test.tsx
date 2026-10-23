@@ -31,7 +31,7 @@ describe("My tasks component", () => {
     const onNavigate = vi.fn();
     render(<MyTasks projects={[]} onNavigate={onNavigate} />);
     const rows = await screen.findAllByTestId("task-row");
-    expect(rows.map(row => within(row).getByText(/^doc-/).textContent)).toEqual(["doc-4 · de", "doc-2 · de", "doc-3 · de", "doc-1 · de"]);
+    expect(rows.map(row => within(row).getByText(/^doc-/).textContent)).toEqual(["doc-4 de", "doc-2 de", "doc-3 de", "doc-1 de"]);
     expect(within(rows[1]).getByText("Consolidation")).toBeDefined();
     expect(within(rows[0]).getByText("Annotation")).toBeDefined();
     expect(within(rows[0]).getByText("Reopened")).toBeDefined();
@@ -134,8 +134,8 @@ describe("My tasks component", () => {
     expect((within(select).getByRole("option", { name: "Research (q)" }) as HTMLOptionElement).value).toBe("q");
     expect(within(rows[0]).getByText("Research (p)")).toBeDefined();
     expect(within(rows[1]).getByText("Research (q)")).toBeDefined();
-    expect(rows[0].getAttribute("aria-label")).toBe("Research (p): shared-doc · de");
-    expect(rows[1].getAttribute("aria-label")).toBe("Research (q): shared-doc · de");
+    expect(rows[0].getAttribute("aria-label")).toBe("Research (p): shared-doc de");
+    expect(rows[1].getAttribute("aria-label")).toBe("Research (q): shared-doc de");
     fireEvent.change(select, { target: { value: "q" } });
     expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q" });
     fireEvent.click(within(rows[1]).getByRole("link", { name: /^(Start|Continue|View)$/ }));
@@ -217,7 +217,7 @@ describe("My tasks component", () => {
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     vi.mocked(api.listMyTasks).mockResolvedValue([task(8, "open")]);
     fireEvent(document, new Event("visibilitychange"));
-    expect(await screen.findByText("doc-8 · de")).toBeDefined();
+    expect(await screen.findByText("doc-8 de")).toBeDefined();
     expect(api.listMyTasks).toHaveBeenCalledTimes(2);
   });
 
@@ -229,9 +229,9 @@ describe("My tasks component", () => {
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
     fireEvent(document, new Event("visibilitychange"));
     await act(async () => { newer.resolve([task(9, "open")]); });
-    expect(await screen.findByText("doc-9 · de")).toBeDefined();
+    expect(await screen.findByText("doc-9 de")).toBeDefined();
     await act(async () => { older.resolve(tasks); });
-    expect(screen.queryByText("doc-4 · de")).toBeNull();
+    expect(screen.queryByText("doc-4 de")).toBeNull();
   });
 
   it("ignores stale errors and removes refresh subscriptions on unmount", async () => {
@@ -283,7 +283,7 @@ describe("My tasks component", () => {
     await screen.findAllByTestId("task-row");
     vi.mocked(api.listMyTasks).mockResolvedValue([task(8, "open")]);
     act(() => { notifySessionRestored(); });
-    expect(await screen.findByText("doc-8 · de")).toBeDefined();
+    expect(await screen.findByText("doc-8 de")).toBeDefined();
   });
   it("adds a failed-check line with an icon to translation review rows and to their accessible name", async () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([
@@ -295,9 +295,9 @@ describe("My tasks component", () => {
     const rows = await screen.findAllByTestId("task-row");
     const line = within(rows[0]).getByText("1 automatic check failed");
     expect(line.closest(".task-check-flag")?.querySelector("svg")).not.toBeNull();
-    expect(rows[0].getAttribute("aria-label")).toBe("Project P (p): doc-7 · de, 1 automatic check failed");
+    expect(rows[0].getAttribute("aria-label")).toBe("Project P (p): doc-7 de, 1 automatic check failed");
     expect(within(rows[1]).queryByText(/automatic check/)).toBeNull();
-    expect(rows[1].getAttribute("aria-label")).toBe("Project P (p): doc-8 · de");
+    expect(rows[1].getAttribute("aria-label")).toBe("Project P (p): doc-8 de");
     expect(within(rows[2]).queryByText(/automatic check/)).toBeNull();
   });
   it("pluralises the failed-check line", async () => {
@@ -320,11 +320,11 @@ describe("My tasks text label", () => {
     const table = screen.getByRole("table", { name: "My tasks" });
     expect(within(table).getAllByRole("columnheader").map(header => header.textContent)).toEqual(
       ["Text", "Project", "Task", "Status", "Assigned", "Last change", "Action"]);
-    expect(within(rows[0]).getByText("case-0101 · de")).toBeDefined();
+    expect(within(rows[0]).getByText("case-0101 de")).toBeDefined();
     expect(within(rows[0]).queryByText("EXT-5")).toBeNull();
-    expect(rows[0].getAttribute("aria-label")).toBe("Project P (p): case-0101 · de");
+    expect(rows[0].getAttribute("aria-label")).toBe("Project P (p): case-0101 de");
     // Older servers without a case ID fall back to the external ID.
-    expect(within(rows[1]).getByText("EXT-6 · de")).toBeDefined();
+    expect(within(rows[1]).getByText("EXT-6 de")).toBeDefined();
   });
 
   it("offers Go to Documents to a lead with no tasks", async () => {
@@ -408,14 +408,14 @@ describe("My tasks status tabs", () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue([...tasks, { ...task(5, "open"), held: true }]);
     const view = render(<MyTasks status="submitted" projects={[]} onNavigate={vi.fn()} />);
     await screen.findAllByTestId("task-row");
-    expect(rowTexts()).toEqual(["doc-1 · de"]);
+    expect(rowTexts()).toEqual(["doc-1 de"]);
     expect(screen.getByRole("tab", { name: "Submitted, 1" }).getAttribute("aria-selected")).toBe("true");
     view.rerender(<MyTasks status="todo" projects={[]} onNavigate={vi.fn()} />);
-    expect(rowTexts()).toEqual(["doc-4 · de", "doc-2 · de", "doc-3 · de", "doc-5 · de"]);
+    expect(rowTexts()).toEqual(["doc-4 de", "doc-2 de", "doc-3 de", "doc-5 de"]);
     view.rerender(<MyTasks status="paused" projects={[]} onNavigate={vi.fn()} />);
-    expect(rowTexts()).toEqual(["doc-5 · de"]);
+    expect(rowTexts()).toEqual(["doc-5 de"]);
     view.rerender(<MyTasks status="all" project="p" projects={[]} onNavigate={vi.fn()} />);
-    expect(rowTexts()).toEqual(["doc-4 · de", "doc-3 · de", "doc-1 · de", "doc-5 · de"]);
+    expect(rowTexts()).toEqual(["doc-4 de", "doc-3 de", "doc-1 de", "doc-5 de"]);
     expect(tabNames()).toEqual(["To do, 3", "Paused, 1", "Submitted, 1", "All, 4"]);
     expect(api.listMyTasks).toHaveBeenCalledTimes(1);
   });
@@ -491,7 +491,7 @@ describe("My tasks guideline links", () => {
     await screen.findAllByTestId("task-row");
     const links = await screen.findAllByRole("link", { name: /^Project guidelines/ });
     // Ordered as the project filter options; R has no version in force (its current one is withdrawn).
-    expect(links.map(link => link.textContent)).toEqual(["Project guidelines v3 · Project P", "Project guidelines v1 · Project Q"]);
+    expect(links.map(link => link.textContent)).toEqual(["Project guidelines v3, Project P", "Project guidelines v1, Project Q"]);
     expect(links.map(link => link.getAttribute("href"))).toEqual(["#/projects/p/guidelines", "#/projects/q/guidelines"]);
     expect(vi.mocked(api.listGuidelines).mock.calls.map(([key]) => key).sort()).toEqual(["p", "q", "r"]);
     fireEvent.click(links[0]);

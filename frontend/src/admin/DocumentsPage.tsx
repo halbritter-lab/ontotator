@@ -754,11 +754,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     } else if (page.groups.length === 0) {
       body = emptyState(page.bar);
     } else if (narrow) {
-      body = <DocumentCards page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} onOpenPanel={onOpenPanel} activeKey={panelKey} planSaves={planSaves}
+      body = <DocumentCards page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} onOpenPanel={onOpenPanel} activeKey={panelKey}
         renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
         stageActions={(row, stage) => <StageActions {...stageActionProps} row={row} stage={stage} />} me={currentUser?.pseudonym ?? null} />;
     } else {
-      body = <DocumentsTable page={page} selection={tableSelection} planSaves={planSaves}
+      body = <DocumentsTable page={page} selection={tableSelection}
         onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
         sort={request.sort} onSort={(next: HeaderSort) => changeFilter({ sort: next === "case" ? undefined : next })} />;
     }
@@ -768,7 +768,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }} />;
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
-      {rows.error != null && <InlineMessage tone="error">Could not refresh · <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
+      {rows.error != null && <InlineMessage tone="error">Could not refresh. <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
       <div className="documents-selection-tools">
         {page.groups.length > 0 && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
           aria-busy={selectingAll || undefined} onChange={() => { void toggleAll(); }} />}
@@ -817,7 +817,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     {assignDialog && <AssignWorkDialog {...assignDialog} />}
     {textChangeDialog}
     {planDialog}
-    {correctionFor && textVersionTools && <Dialog open title={`Request translation correction · ${rowName(correctionFor.row)}`} size="md"
+    {correctionFor && textVersionTools && <Dialog open title={`Request translation correction: ${rowName(correctionFor.row)}`} size="md"
       onClose={closeCorrection} footer={<Button onClick={closeCorrection}>Close</Button>}
       returnFocus={() => rowElement(rowKeyOf(correctionFor.row), "action") ?? rowElement(rowKeyOf(correctionFor.row), "header")}>
       <TranslationCorrectionAction projectKey={projectKey} variant={correctionFor.variant} username={textVersionTools.username}
@@ -852,9 +852,9 @@ function ReviewHistory({ projectKey, documentId, onClose }: { projectKey: string
     {error !== undefined && <ErrorNotice error={error} />}{records === null && error === undefined && <p role="status">Loading reviews …</p>}
     {records?.length === 0 && <p>No one has reviewed this translation yet.</p>}
     {records && <ol className="review-history">{records.map(record => <li key={record.id}>
-      <p><strong>{labelFor(decisionLabels, record.decision)}</strong> by {record.reviewer_pseudonym} · <time dateTime={record.created_at}>{formatDateTime(record.created_at)}</time></p>
+      <p><strong>{labelFor(decisionLabels, record.decision)}</strong> by {record.reviewer_pseudonym}, <time dateTime={record.created_at}>{formatDateTime(record.created_at)}</time></p>
       <p className="cell-secondary review-guideline">{submissionGuidelineLabel(record.guideline_version, record.guideline_withdrawn, null)}</p>
-      <p className="cell-secondary">{[record.reviewer_qualification, record.reviewer_languages.length ? `reads ${record.reviewer_languages.join(", ")}` : ""].filter(Boolean).join(" · ")}</p>
+      <p className="cell-secondary">{[record.reviewer_qualification, record.reviewer_languages.length ? `reads ${record.reviewer_languages.join(", ")}` : ""].filter(Boolean).join(", ")}</p>
       <p>{record.status_before === record.status_after ? `Translation status stayed ${labelFor(translationStatusLabels, record.status_after)}.` : `Translation status changed from ${labelFor(translationStatusLabels, record.status_before)} to ${labelFor(translationStatusLabels, record.status_after)}.`}</p>
       <p>{record.clinical_change ? "Clinical change" : "No clinical change"}{record.categories.length ? `: ${record.categories.map(category => labelFor(categoryLabels, category)).join(", ")}` : ""}</p>
       {record.rationale && <p>{record.rationale}</p>}{record.created_variant_id && <p>Created variant: {record.created_variant_id}</p>}

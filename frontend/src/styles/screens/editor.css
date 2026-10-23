@@ -2053,7 +2053,7 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   color: var(--text-muted);
   font-weight: 400;
 }
-/* Unconfirmed default: second line of the label cell (the segment keeps " · default" for screen readers). */
+/* Unconfirmed default: second line of the label cell (the segment keeps " (default)" for screen readers). */
 .values-section .axis-default-tag {
   display: block;
   font-size: var(--size-xs);

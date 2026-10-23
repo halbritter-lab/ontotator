@@ -53,8 +53,8 @@ const bar = () => screen.getByRole("region", { name: "Selection" });
 it("shows count, common next step, hidden count and Clear selection", async () => {
   render(<Harness />);
   expect(within(bar()).getByText("20 texts in 20 cases selected")).toBeTruthy();
-  expect(await within(bar()).findByText("· next step: Assign translation review (de)")).toBeTruthy();
-  expect(within(bar()).getByText("· 3 not shown with these filters")).toBeTruthy();
+  expect(await within(bar()).findByText(", next step: Assign translation review (de)")).toBeTruthy();
+  expect(within(bar()).getByText(", 3 not shown with these filters")).toBeTruthy();
   expect(api.selectionSummary).toHaveBeenCalledWith("p", { rows }, filters);
   fireEvent.click(within(bar()).getByRole("button", { name: "Clear selection" }));
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
@@ -98,7 +98,7 @@ it("bulk Undo after an intervening assignment shows the message and the normal c
   const onChanged = vi.fn();
   render(<Harness onChanged={onChanged} />);
   fireEvent.click(within(bar()).getByRole("button", { name: "Translation review and annotation" }));
-  await screen.findByText("Plan saved for 20 cases · de: translation review and annotation");
+  await screen.findByText("Plan saved for 20 cases, de: translation review and annotation");
   const consequences: ConsequencesView = { ...noConsequences, withdrawn: [{ assignment_id: 4, case_id: "case-0101", language: "de", task: "translation_review", person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } }] };
   vi.mocked(api.setWorkPlanRows).mockRejectedValueOnce(new ApiError(409, "confirm", "WORK_PLAN_CONFIRMATION_REQUIRED", consequences as never));
   fireEvent.click(screen.getByRole("button", { name: "Undo" }));
@@ -130,7 +130,7 @@ it("Translation review and annotation saves at once without a dialog when nothin
   render(<Harness onRevisions={onRevisions} />);
   fireEvent.click(within(bar()).getByRole("button", { name: "Translation review and annotation" }));
   expect(api.saveWorkPlans).toHaveBeenCalledWith("p", { rows, preset: "review_and_annotate_translations", confirm: false });
-  const toast = await screen.findByText("Plan saved for 20 cases · de: translation review and annotation");
+  const toast = await screen.findByText("Plan saved for 20 cases, de: translation review and annotation");
   expect(toast.closest(".ui-toast")?.querySelector("button")?.textContent).toBe("Undo");
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(onRevisions).toHaveBeenCalledWith({ "case-0101": 2 });
@@ -140,7 +140,7 @@ it("Translation review and annotation saves at once without a dialog when nothin
   vi.mocked(api.saveWorkPlans).mockResolvedValueOnce({ ...result, withdrawn: [{ assignment_id: 1, case_id: "case-0101", language: "de", task: "annotate", person: { pseudonym: "ann-0004", is_me: false } }] });
   fireEvent.click(within(bar()).getByRole("button", { name: "Annotation only, no translation review" }));
   expect(await screen.findByText("Undo restores the plan, not withdrawn tasks.")).toBeTruthy();
-  expect(screen.getByText("Plan saved for 20 cases · de: annotate")).toBeTruthy();
+  expect(screen.getByText("Plan saved for 20 cases, de: annotate")).toBeTruthy();
 });
 
 it("Annotation only, no translation review opens the plan dialog with the acceptance section when translations are not accepted and the rule is on", async () => {
@@ -148,7 +148,7 @@ it("Annotation only, no translation review opens the plan dialog with the accept
   vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ languages: [lang("source", 20), lang("de", 20, { not_accepted: 12, marked_in_package: 8 })] }));
   render(<Harness />);
   fireEvent.click(within(bar()).getByRole("button", { name: "Annotation only, no translation review" }));
-  const dialog = await screen.findByRole("dialog", { name: "Work plan · 20 cases" });
+  const dialog = await screen.findByRole("dialog", { name: "Work plan: 20 cases" });
   expect(api.previewWorkPlans).toHaveBeenCalledWith("p", { rows, preset: "annotate_only", confirm: false });
   expect(await within(dialog).findByText("de: 12 of 20 translations are not marked as reviewed in the package. Annotation needs an accepted translation.")).toBeTruthy();
   expect(within(dialog).getByLabelText("These translations were reviewed outside Ontocurator — accept them as they are")).toBeTruthy();
@@ -159,7 +159,7 @@ it("Annotation only, no translation review opens the plan dialog with the accept
 it("opens the plan dialog for Plan… and keeps the selection after save", async () => {
   render(<Harness />);
   fireEvent.click(within(bar()).getByRole("button", { name: "Plan…" }));
-  const dialog = await screen.findByRole("dialog", { name: "Work plan · 20 cases" });
+  const dialog = await screen.findByRole("dialog", { name: "Work plan: 20 cases" });
   const de = await within(dialog).findByRole("region", { name: /^de In selection/ });
   fireEvent.click(within(within(de).getByRole("group", { name: "Translation review" })).getByRole("radio", { name: "On" }));
   fireEvent.click(within(within(de).getByRole("group", { name: "Annotation" })).getByRole("radio", { name: "Annotate from scratch" }));

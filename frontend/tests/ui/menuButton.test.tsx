@@ -9,12 +9,12 @@ const setup = () => {
   const resolve = vi.fn(); const carry = vi.fn(); const review = vi.fn(); const escapeShortcut = vi.fn();
   function Host() {
     useShortcut("Escape", () => { escapeShortcut(); });
-    return <><MenuButton label="2 more actions for case-107 · de" buttonLabel="+2"
+    return <><MenuButton label="2 more actions for case-107 de" buttonLabel="+2"
       items={[{ id: "resolve", label: "Resolve…", onSelect: resolve }, { id: "carry", label: "Carry to v2…", onSelect: carry }, { id: "review", label: "Review changes…", onSelect: review }]} />
       <button>Outside</button></>;
   }
   render(<Host />);
-  return { resolve, carry, review, escapeShortcut, button: screen.getByRole("button", { name: "2 more actions for case-107 · de" }) };
+  return { resolve, carry, review, escapeShortcut, button: screen.getByRole("button", { name: "2 more actions for case-107 de" }) };
 };
 const item = (name: string) => screen.getByRole("menuitem", { name });
 
@@ -27,7 +27,7 @@ it("aria-haspopup, arrow keys, Escape", async () => {
   expect(screen.queryByRole("menu")).toBeNull();
 
   await user.click(button);
-  const menu = screen.getByRole("menu", { name: "2 more actions for case-107 · de" });
+  const menu = screen.getByRole("menu", { name: "2 more actions for case-107 de" });
   expect(button.getAttribute("aria-expanded")).toBe("true");
   expect(button.getAttribute("aria-controls")).toBe(menu.id);
   expect(document.activeElement).toBe(item("Resolve…"));

@@ -47,7 +47,7 @@ function chainNameOf(row: DocumentRowView, documentId: string | null): string {
   return row.versions.find(version => version.document_id === documentId)?.chain_name ?? "";
 }
 
-/** "Round 2 (ann-0004)", "Consolidation (ann-0004)"; with a display name "Round 2 · Ana Weber (ann-0004)". */
+/** "Round 2 (ann-0004)", "Consolidation (ann-0004)"; with a display name "Round 2, Ana Weber (ann-0004)". */
 function roundLabelOf(round: RowRoundView): string {
   const name = round.round_ordinal != null ? undefined : roundName({ round_ordinal: null, round_id: round.round_id, kind: round.kind });
   return roundCell({ ordinal: round.round_ordinal, author: round.author_label, isMe: round.is_me, person: round.author, name });
@@ -81,7 +81,7 @@ function causeSegments(row: DocumentRowView, data: RowSubmissions | null, item: 
     case "SELECTED_NEWER_RESULT": {
       const newer = submissions.find(entry => entry.submission_id === suffix(item.cause_id, item.code));
       const subject = newer
-        ? [roundName(newer), personLabel(newer.author_label, newer.is_me, newer.author), submissionVersion(newer.version, newer.chain_name, row.parallel_roots)].join(" · ")
+        ? [roundName(newer), personLabel(newer.author_label, newer.is_me, newer.author), submissionVersion(newer.version, newer.chain_name, row.parallel_roots)].join(", ")
         : "A newer result";
       const selectedAt = row.final?.selected_at;
       return { segments: selectedAt

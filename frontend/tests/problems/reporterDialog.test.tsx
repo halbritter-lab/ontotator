@@ -53,7 +53,7 @@ describe("reporter toolbar entry", () => {
     setup({ reports: [report()], assignment: pausedTask() });
     const button = await screen.findByRole("button", { name: "Report problem Task paused, 1 open report" });
     const badge = button.querySelector(".problem-badge")!;
-    expect(badge.textContent).toBe("Paused · 1 open");
+    expect(badge.textContent).toBe("Paused, 1 open");
     expect(badge.querySelector("svg")).not.toBeNull();
   });
 

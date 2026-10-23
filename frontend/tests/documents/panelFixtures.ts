@@ -58,7 +58,7 @@ export function acceptPanel(caseId: string, language: string, overrides: Partial
   return finalPanel({ submissions: [only], label_rule: "accept", accept_submission_id: only.submission_id });
 }
 
-/** Ana (5 findings, 1 only here) and Tom (4, 0): "4 of 6 findings match · 1 differs in context only". */
+/** Ana (5 findings, 1 only here) and Tom (4, 0): "4 of 6 findings match, 1 differs in context only". */
 export function comparePanel(caseId: string, language: string): FinalPanelView {
   return finalPanel({
     submissions: [anaSubmission(caseId, language, { finding_count: 5, only_here: 1 }), tomSubmission(caseId, language, { only_here: 0 })],

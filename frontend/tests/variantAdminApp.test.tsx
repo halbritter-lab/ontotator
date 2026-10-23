@@ -135,7 +135,7 @@ it("uses the refreshed current role after an existing settings save reloads proj
 it("retains controlled variant filters through real App navigation", async () => {
   window.history.replaceState(null, "", "#/projects/p%2Fkey/documents?origin=correction&translation_status=accepted&status=submitted");
   render(<App user={lead} />);
-  await screen.findByRole("link", { name: "Open in editor, z/doc · en" });
+  await screen.findByRole("link", { name: "Open in editor, z/doc en" });
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { origin: "correction", translation_status: "accepted", status: "submitted" });
   const prefix = screen.getByLabelText("Case ID or text"); prefix.focus();
   fireEvent.change(prefix, { target: { value: "ID +/ß" } });

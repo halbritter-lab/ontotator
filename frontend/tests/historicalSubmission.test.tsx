@@ -44,8 +44,8 @@ describe("historical submission adapters", () => {
   });
 
   it("maps a carry-forward history detail with read-only check states", () => {
-    const view = fromHistoryDetail(carryDetail, "Round 3 · 19 Oct, 00:57", value => `Term ${value.annotation.term_id}`);
-    expect(view).toMatchObject({ submissionId: "sub-carried", heading: "Round 3 · 19 Oct, 00:57", documentId: "target", checkedLayerIds: ["phenotype"] });
+    const view = fromHistoryDetail(carryDetail, "Round 3, 19 Oct, 00:57", value => `Term ${value.annotation.term_id}`);
+    expect(view).toMatchObject({ submissionId: "sub-carried", heading: "Round 3, 19 Oct, 00:57", documentId: "target", checkedLayerIds: ["phenotype"] });
     expect(view.annotations).toEqual([snapshot]);
     expect(view.evidence).toEqual([evidence]);
     expect(view.carried?.items).toEqual([
@@ -67,10 +67,10 @@ describe("historical submission adapters", () => {
 describe("HistoricalSubmissionDialog", () => {
   it("renders the view with its heading, quotes, footer Close and header close", () => {
     const onClose = vi.fn();
-    render(<HistoricalSubmissionDialog view={fromSubmission(submission, "Round 1 · 19 Oct, 00:16")} documentText="Patient seizures." currentDocumentId="target"
+    render(<HistoricalSubmissionDialog view={fromSubmission(submission, "Round 1, 19 Oct, 00:16")} documentText="Patient seizures." currentDocumentId="target"
       projectKey="pkg" termLabel={() => "Seizure"} onClose={onClose} />);
     const dialog = screen.getByRole("dialog", { name: "Historical submission" });
-    expect(within(dialog).getByRole("heading", { name: "Round 1 · 19 Oct, 00:16" })).toBeDefined();
+    expect(within(dialog).getByRole("heading", { name: "Round 1, 19 Oct, 00:16" })).toBeDefined();
     expect(within(dialog).getByText("Seizure")).toBeDefined();
     expect(within(dialog).getByText("sei")).toBeDefined();
     fireEvent.click(within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));

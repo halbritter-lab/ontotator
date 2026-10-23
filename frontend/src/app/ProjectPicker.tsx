@@ -16,7 +16,7 @@ export function projectDestination(project: ProjectSummary): Route {
 
 const ROLE_ORDER = ["lead", "adjudicator", "annotator"] as const;
 
-/** "Project lead, Annotator": the user's roles in one project, lead first. */
+/** "Lead, Annotator": the user's roles in one project, lead first. */
 export function projectRoles(project: ProjectSummary): string {
   return ROLE_ORDER.filter(role => project.roles.includes(role)).map(role => roleLabels[role]).join(", ");
 }
@@ -117,7 +117,7 @@ export function ProjectSwitcher({ projects, current, route, onNavigate, onChoose
               <a tabIndex={-1} href={routeHref(projectDestination(item))} className="project-switcher-option__link"
                 onClick={event => { if (!plainClick(event)) return; event.preventDefault(); choose(item); }}>
                 <span className="project-switcher-option__name">{item.name}</span>
-                <span className="project-switcher-option__meta">{[item.project_key, roles, opens].filter(Boolean).join(" · ")}</span>
+                <span className="project-switcher-option__meta">{[item.project_key, roles, opens].filter(Boolean).join(", ")}</span>
                 {isCurrent && <span className="project-switcher-option__current"><span aria-hidden="true"><IconCheck /></span> Current</span>}
               </a>
             </li>;

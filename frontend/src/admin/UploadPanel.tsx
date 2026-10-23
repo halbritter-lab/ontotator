@@ -169,19 +169,19 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
     {stale && (files.length ? <Button disabled={busy} onClick={() => { void check(); }}>Check again</Button> : <p>Select the original files to check again.</p>)}
     {operation?.stage === "commit" && busy && <InlineMessage tone="info">Importing …</InlineMessage>}
     {imported && <InlineMessage tone="success">{imported}</InlineMessage>}
-    {view && <><p>Upload {view.id} · {labelFor(uploadStatusLabels, view.status)}</p>{view.preview && <UploadPreview plan={view.preview} workPlan={view.status === "ready" ? { ruleOn: annotateAcceptedOnly, canAccept: canOverrideTranslationStatus, acceptedRows, disabled: busy || stale, onChange: result => setWorkPlanDraft({ identity: overrideIdentity, result }) } : undefined} />}
+    {view && <><p>Upload {view.id}, {labelFor(uploadStatusLabels, view.status)}</p>{view.preview && <UploadPreview plan={view.preview} workPlan={view.status === "ready" ? { ruleOn: annotateAcceptedOnly, canAccept: canOverrideTranslationStatus, acceptedRows, disabled: busy || stale, onChange: result => setWorkPlanDraft({ identity: overrideIdentity, result }) } : undefined} />}
       {canOverrideTranslationStatus && view.status === "ready" && view.preview?.variants?.some(item => item.status !== null) && <fieldset disabled={busy || stale}><legend>Accept without review</legend>
         <p>Explicitly accept a translation without review. A reason is required for every selected variant.</p>
         {view.preview.variants.filter(item => item.status !== null).map(item => {
           const identity = JSON.stringify([item.external_id, item.language, item.version]);
           const selected = overrides[identity];
           const id = `override-${encodeURIComponent(identity)}`;
-          return <div key={identity}><Checkbox id={id} label={`Accept without review: ${item.external_id} · ${item.language} · v${item.version}`} checked={!!selected} onChange={event => setOverrides(current => {
+          return <div key={identity}><Checkbox id={id} label={`Accept without review: ${item.external_id}, ${item.language}, v${item.version}`} checked={!!selected} onChange={event => setOverrides(current => {
             const next = { ...current };
             if (event.target.checked) next[identity] = { external_id: item.external_id, language: item.language, version: item.version, reason: "" };
             else delete next[identity];
             return next;
-          })} />{selected && <TextInput id={`${id}-reason`} label={`Reason: ${item.external_id} · ${item.language} · v${item.version}`} required value={selected.reason} onChange={event => setOverrides(current => ({ ...current, [identity]: { ...selected, reason: event.target.value } }))} />}</div>;
+          })} />{selected && <TextInput id={`${id}-reason`} label={`Reason: ${item.external_id}, ${item.language}, v${item.version}`} required value={selected.reason} onChange={event => setOverrides(current => ({ ...current, [identity]: { ...selected, reason: event.target.value } }))} />}</div>;
         })}
       </fieldset>}
       {view.status === "previewing" && <><InlineMessage tone="info">Checking …</InlineMessage>{view.preview_job_id == null && <Button disabled={busy} onClick={() => { void resume(view.id); }}>Refresh status</Button>}</>}
@@ -189,7 +189,7 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
       {planBlocked && <p id={importReasonId} className="field-hint">{planBlocked}</p>}
     </>}
     <section className="detail-section"><h3>Recent uploads</h3>{listError !== undefined && <ErrorNotice error={listError} />}<Button disabled={busy} onClick={() => { void refreshList(lifetime.current); }}>Refresh uploads</Button>
-      {uploads.length ? <ul>{uploads.map(item => <li key={item.id}>Upload {item.id} · {labelFor(uploadKindLabels, item.kind)} · {labelFor(uploadStatusLabels, item.status)} · {item.files.map(file => file.filename).join(", ")} <Button size="sm" disabled={busy} onClick={() => { void resume(item.id); }}>Resume upload {item.id}</Button></li>)}</ul> : <p>No retained uploads.</p>}
+      {uploads.length ? <ul>{uploads.map(item => <li key={item.id}>Upload {item.id}, {labelFor(uploadKindLabels, item.kind)}, {labelFor(uploadStatusLabels, item.status)}, {item.files.map(file => file.filename).join(", ")} <Button size="sm" disabled={busy} onClick={() => { void resume(item.id); }}>Resume upload {item.id}</Button></li>)}</ul> : <p>No retained uploads.</p>}
     </section>
   </section>;
 }

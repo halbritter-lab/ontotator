@@ -43,7 +43,7 @@ export function RoundInputEvidenceDialog({ projectKey, input, onClose, labelFor,
   const quotes = text === null ? [] : evidence.map(value => quoteSegments(text, value.mention.segments)).filter(Boolean);
   const textView = text === null ? null : <ReadOnlyAnnotationView text={text} annotations={[snapshot]} evidence={snapshot.evidence} labelFor={labelFor} />;
   return <Dialog open title={`Original finding from ${name ?? "an earlier round"}`} onClose={onClose} size="lg" footer={<Button onClick={onClose}>Close original evidence</Button>}>
-    <p className="round-evidence__meta">{meta.map((part, index) => <span key={index}>{index > 0 && " · "}{part}</span>)}</p>
+    <p className="round-evidence__meta">{meta.map((part, index) => <span key={index}>{index > 0 && ", "}{part}</span>)}</p>
     <ul className="round-evidence__facts">
       <li className="round-evidence__term">{labelFor(annotation.layer_id, annotation.term_id) ?? annotation.term_id}</li>
       {Object.entries(annotation.axes_values ?? {}).map(([axis, value]) => <li key={axis}>{`${axisName(axis)}: ${axisOptionLabel(value)}`}</li>)}

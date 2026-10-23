@@ -185,8 +185,8 @@ export function SelectionBar({
       {keys.size >= MIN_TEXTS && <div className="selection-bar-line">
         <p className="selection-bar-summary">
           <strong>{`${plural(keys.size, "text")} in ${plural(caseIds.length, "case")} selected`}</strong>
-          {current?.common && <span className="selection-bar-step"> · {commonStepText(current.common)}</span>}
-          {current && current.not_shown > 0 && <span className="selection-bar-hidden"> · {current.not_shown} not shown with these filters</span>}
+          {current?.common && <span className="selection-bar-step">, {commonStepText(current.common)}</span>}
+          {current && current.not_shown > 0 && <span className="selection-bar-hidden">, {current.not_shown} not shown with these filters</span>}
         </p>
         <div className="selection-bar-actions">
           <Button variant="primary" onClick={onAssign}>Assign…</Button>

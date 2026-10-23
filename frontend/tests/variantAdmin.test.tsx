@@ -56,16 +56,16 @@ it("sends actual override tuples while preserving the legacy omitted body and tr
 it("shows the server-owned override label and sends controlled filters without remounting the ID input", async () => {
   const navigate = vi.fn();
   const view = render(<DocumentsPage projectKey="p" canManage query={{ ...openTarget, origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
-  await screen.findByRole("link", { name: `Open in editor, ${target.case_id} · ${target.language}` });
+  await screen.findByRole("link", { name: `Open in editor, ${target.case_id}, ${target.language}` });
   // The row panel's Text versions labels the server-owned flag, not the descriptive status reason.
-  expect((await within(screen.getByRole("complementary", { name: `Details, ${target.case_id} · ${target.language}` })).findAllByText(/Accepted without review/)).length).toBeGreaterThan(0);
+  expect((await within(screen.getByRole("complementary", { name: `Details, ${target.case_id}, ${target.language}` })).findAllByText(/Accepted without review/)).length).toBeGreaterThan(0);
   expect(api.listDocumentRows).toHaveBeenCalledWith("p", { origin: "machine_translation", translation_status: "accepted" });
   const prefix = screen.getByLabelText("Case ID or text"); prefix.focus();
   fireEvent.change(prefix, { target: { value: "abc" } });
   fireEvent.keyDown(prefix, { key: "Enter" });
   expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({ origin: "machine_translation", translation_status: "accepted", q: "abc" }));
   view.rerender(<DocumentsPage projectKey="p" canManage query={{ ...openTarget, q: "abc", origin: "machine_translation", translation_status: "accepted" }} onNavigate={navigate} />);
-  await screen.findByRole("link", { name: `Open in editor, ${target.case_id} · ${target.language}` });
+  await screen.findByRole("link", { name: `Open in editor, ${target.case_id}, ${target.language}` });
   expect(screen.getByLabelText("Case ID or text")).toBe(prefix);
   expect(document.activeElement).toBe(prefix);
   expect(api.getProjectSettings).toHaveBeenCalledTimes(1);
@@ -160,7 +160,7 @@ it("does not infer manual acceptance from a descriptive reason", async () => {
   render(<DocumentsPage projectKey="p" canManage query={openTarget} onNavigate={vi.fn()} />);
   // The row panel's Text versions shows the version's status badge.
   expect((await screen.findAllByText("Accepted", { selector: ".status-pill" })).length).toBeGreaterThan(0);
-  expect(within(screen.getByRole("complementary", { name: `Details, ${target.case_id} · ${target.language}` })).queryByText(/Accepted without review/)).toBeNull();
+  expect(within(screen.getByRole("complementary", { name: `Details, ${target.case_id}, ${target.language}` })).queryByText(/Accepted without review/)).toBeNull();
 });
 
 it("shows ordered readonly reviewer snapshots, rationale and created variant", async () => {
@@ -174,8 +174,8 @@ it("shows ordered readonly reviewer snapshots, rationale and created variant", a
   render(<DocumentsPage projectKey="p" canManage query={openTarget} onNavigate={vi.fn()} />);
   fireEvent.click(await screen.findByRole("button", { name: "Translation reviews for v1" }));
   const history = within(screen.getByRole("dialog", { name: `Translation reviews: ${target.document_id}` }));
-  expect((await history.findByText(/by Original pseudonym/)).textContent).toMatch(/^Accepted with corrections by Original pseudonym · \d{1,2} Oct 2026, \d{2}:\d{2}$/);
-  expect(history.getByText("Original qualification · reads en, de")).toBeTruthy();
+  expect((await history.findByText(/by Original pseudonym/)).textContent).toMatch(/^Accepted with corrections by Original pseudonym, \d{1,2} Oct 2026, \d{2}:\d{2}$/);
+  expect(history.getByText("Original qualification, reads en, de")).toBeTruthy();
   expect(history.getByText("Translation status changed from Ready for review to Reviewed.")).toBeTruthy();
   expect(history.getByText("Clinical change: Number or unit")).toBeTruthy();
   expect(history.queryByText(/ready_for_review|→/)).toBeNull();
@@ -200,7 +200,7 @@ it("resets explicit override choices when a different persisted upload has the s
   fireEvent.click(await screen.findByLabelText(/^Accept without review:/));
   fireEvent.change(screen.getByLabelText(/^Reason:/), { target: { value: "Specific to first upload" } });
   fireEvent.click(screen.getByRole("button", { name: "Resume upload 8" }));
-  await screen.findByText("Upload 8 · Ready to import");
+  await screen.findByText("Upload 8, Ready to import");
   expect(screen.queryByLabelText(/^Reason:/)).toBeNull();
   expect((screen.getByLabelText(/^Accept without review:/) as HTMLInputElement).checked).toBe(false);
 });
@@ -218,7 +218,7 @@ it("keeps original File identity for stale Check again and does not carry its ov
   fireEvent.change(screen.getByLabelText(/^Reason:/), { target: { value: "Initial reason" } });
   fireEvent.click(screen.getByRole("button", { name: "Import" }));
   fireEvent.click(await screen.findByRole("button", { name: "Check again" }));
-  await screen.findByText("Upload 8 · Ready to import");
+  await screen.findByText("Upload 8, Ready to import");
   expect(vi.mocked(api.createUpload).mock.calls[1][2][0]).toBe(file);
   expect(screen.queryByLabelText(/^Reason:/)).toBeNull();
   expect(api.commitUpload).toHaveBeenCalledTimes(1);
@@ -264,10 +264,10 @@ it("binds document state to actual user identity before accepting late replies",
   // The first user's rows request goes out once the visit is recorded.
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(1));
   view.rerender(<DocumentsPage projectKey="p" canManage currentUser={{ username: "second", pseudonym: "S" }} query={{}} onNavigate={vi.fn()} />);
-  const link = await screen.findByRole("link", { name: `Open in editor, ${target.case_id} · ${target.language}` });
+  const link = await screen.findByRole("link", { name: `Open in editor, ${target.case_id}, ${target.language}` });
   expect(link.getAttribute("href")).toContain("new-user-document");
   await act(async () => old.resolve(targetPage({ document_id: "old-user-document" })));
-  expect(screen.getByRole("link", { name: `Open in editor, ${target.case_id} · ${target.language}` }).getAttribute("href")).not.toContain("old-user-document");
+  expect(screen.getByRole("link", { name: `Open in editor, ${target.case_id}, ${target.language}` }).getAttribute("href")).not.toContain("old-user-document");
 });
 
 it("renders exact preview variant lineage and every failed code", () => {

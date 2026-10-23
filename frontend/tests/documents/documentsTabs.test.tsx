@@ -14,7 +14,7 @@ function renderTabs(query: ProjectDocumentsQuery, overrides: Partial<DocumentsTa
   return { onNavigate };
 }
 
-it("Needs your decision (3) · To assign (2) · In progress (4) · Done (5) · All (14)", () => {
+it("Needs your decision (3), To assign (2), In progress (4), Done (5), All (14)", () => {
   const { onNavigate } = renderTabs({ segment: "assign", language: "de", page: "2", panel: "c:de", select: "x" });
   const list = screen.getByRole("tablist", { name: "Documents views" });
   const tabs = screen.getAllByRole("tab");
@@ -61,7 +61,7 @@ it("tab empty states with Show all texts", () => {
   expect(screen.queryByRole("link", { name: "Show all texts" })).toBeNull();
 });
 
-it("Updated 10:42 · Refresh and Export final results… when finals > 0", () => {
+it("Updated 10:42, Refresh and Export final results… when finals > 0", () => {
   const onRefresh = vi.fn();
   renderTabs({}, { updatedAt: new Date(2026, 9, 21, 10, 42), onRefresh, bar: { ...counts, finals: 2 } });
   expect(screen.getByText("Updated 10:42")).toBeTruthy();

@@ -22,7 +22,7 @@ function renderRounds(rounds: WorkRoundView[], sources: typeof source[], handler
 it("starts a continued round from one deliberately selected immutable own submission", async () => {
   const create = vi.fn().mockResolvedValue(undefined);
   renderRounds([round], [source], { onCreate: create });
-  const option = await screen.findByRole("radio", { name: /Earlier submission · .* · en v1 · 0 findings/ });
+  const option = await screen.findByRole("radio", { name: /Earlier submission, .*, en v1, 0 findings/ });
   const button = screen.getByRole("button", { name: "Continue from this submission" });
   // No preselection: the button stays focusable, names why it is unavailable and starts nothing.
   expect(option).toHaveProperty("checked", false);

@@ -50,7 +50,7 @@ const choose = async (language: string, step: "Translation review" | "Annotation
 describe("PlanDialog", () => {
   it("lists each language as a block with its count and the steps in words; the source has no translation review", async () => {
     renderDialog();
-    expect(await screen.findByRole("dialog", { name: "Work plan · 20 cases" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Work plan: 20 cases" })).toBeTruthy();
     expect((await region("Source (en)")).textContent).toContain("In selection: 20");
     expect((await region("fr")).textContent).toContain("In selection: 18 of 20");
     expect(within(await region("Source (en)")).queryByRole("group", { name: "Translation review" })).toBeNull();
@@ -120,7 +120,7 @@ describe("PlanDialog", () => {
     fireEvent.click(save());
     const warning = await screen.findByText(/fr has work in 2 of these cases\./);
     expect(warning.closest(".work-plan-warning")!.textContent).toContain("1 open translation review will be withdrawn (Ana Weber (ann-0004)).");
-    expect(warning.closest(".work-plan-warning")!.textContent).toContain("1 final result (case-0108 · fr) stays in history but is no longer exported.");
+    expect(warning.closest(".work-plan-warning")!.textContent).toContain("1 final result (case-0108 fr) stays in history but is no longer exported.");
     expect(screen.queryAllByRole("radio")).toEqual([]);
     expect(api.saveWorkPlans).not.toHaveBeenCalled();
     const confirm = screen.getByRole("checkbox", { name: /I understand — withdraw the open tasks/ });
@@ -180,7 +180,7 @@ describe("PlanDialog", () => {
     await waitFor(() => expect(lastPreviewBody().languages).toEqual({ fr: { annotate: "off" } }));
     await waitFor(() => expect(save().getAttribute("aria-disabled")).toBeNull());
     fireEvent.click(save());
-    expect(await screen.findByText(/1 open problem report \(case-0108 · fr, task paused\) stays open under Problem reports\./)).toBeTruthy();
+    expect(await screen.findByText(/1 open problem report \(case-0108 fr, task paused\) stays open under Problem reports\./)).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "I understand" })).toBeTruthy();
   });
 

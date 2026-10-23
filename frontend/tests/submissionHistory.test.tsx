@@ -99,8 +99,8 @@ it('labels history entries with the text label', async () => {
   vi.mocked(api.listDocumentRows).mockResolvedValue(page([group('case-0101', [row({ case_id: 'case-0101', language: 'de' })])]));
   render(<SubmissionHistory {...base} caseId="case-0101" canManage />);
   const table = await openHistory();
-  expect(within(table).getByRole('cell', { name: 'case-0101 · de v1' })).toBeTruthy();
-  expect(within(table).getByRole('cell', { name: 'case-0101 · de v2' })).toBeTruthy();
+  expect(within(table).getByRole('cell', { name: 'case-0101 de v1' })).toBeTruthy();
+  expect(within(table).getByRole('cell', { name: 'case-0101 de v2' })).toBeTruthy();
 });
 
 it('shows Guidelines v2 (current: v3)', async () => {

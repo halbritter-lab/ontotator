@@ -960,7 +960,7 @@ export class ApiClient {
     return this.request(`/api/v1/rounds/${encodeURIComponent(roundId)}/inputs`, { method: "GET" });
   }
 
-  /** Assign the consolidator and start the consolidation round in one step (lead only); choosing yourself grants the Adjudicator role. */
+  /** Assign the consolidator and start the consolidation round in one step (lead only); choosing yourself grants the Consolidator role. */
   async startConsolidation(key: string, body: StartConsolidationRequest): Promise<StartConsolidationResponse> {
     return this.request(`/api/v1/projects/${encodeURIComponent(key)}/consolidations`, { method: "POST", body: JSON.stringify(body) });
   }

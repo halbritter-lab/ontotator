@@ -1,8 +1,8 @@
 /**
  * Activity lines of the row panel (acceptance fixes WP-A): one line per review, submission or open
  * task, then pauses and the final choice, oldest first, each with its stage, e.g.
- * "Review: Ana Weber (ann-0003) · Accepted unchanged · 20 Oct, 22:09",
- * "Annotation: Tom Reis (ann-0004) · Round 1 · 1 finding · 22:15", "Final: chosen by you · 20 Oct, 22:20"; a consolidation
+ * "Review: Ana Weber (ann-0003), Accepted unchanged, 20 Oct, 22:09",
+ * "Annotation: Tom Reis (ann-0004), Round 1, 1 finding, 22:15", "Final: chosen by you, 20 Oct, 22:20"; a consolidation
  * adds "4 kept automatically (all matched)" (U14).
  */
 import type { DocumentRowView, RowSubmissionView } from "../api/client";
@@ -31,7 +31,7 @@ export interface HistoryOptions {
 
 type WorkItem = DocumentRowView["work"][number];
 
-const join = (...parts: (string | null | undefined | false)[]): string => parts.filter(Boolean).join(" · ");
+const join = (...parts: (string | null | undefined | false)[]): string => parts.filter(Boolean).join(", ");
 
 /** "22:15" on the day of `now`, else "20 Oct, 22:09" (the stage cells' rule). */
 function timeText(iso: string, now: Date): string {

@@ -51,8 +51,8 @@ describe("table", () => {
       expect(label.getAttribute("scope")).toBe("rowgroup");
       expect(label.getAttribute("colspan")).toBe("7");
     }
-    // Text cells are row headers named "{case} · {language}"; stage cells are plain cells.
-    const de = within(bodies[0]).getAllByRole("rowheader").find(element => element.getAttribute("scope") === "row" && element.textContent?.startsWith("case-107 · de"))!;
+    // Text cells are row headers named "{case}, {language}"; stage cells are plain cells.
+    const de = within(bodies[0]).getAllByRole("rowheader").find(element => element.getAttribute("scope") === "row" && element.textContent?.startsWith("case-107 de"))!;
     expect(de).toBeTruthy();
     expect(de.textContent).toContain("Needs your decision");
     const rowCells = [...de.closest("tr")!.children];
@@ -66,9 +66,9 @@ describe("table", () => {
   it("row checkbox names and mixed group checkbox", () => {
     render(<DocumentsTable page={view()} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
       sort="case" onSort={vi.fn()} />);
-    expect(screen.getByRole("checkbox", { name: "Select case-107 · de" })).toHaveProperty("checked", true);
+    expect(screen.getByRole("checkbox", { name: "Select case-107 de" })).toHaveProperty("checked", true);
     // The not-planned en source is folded into the case line: no row, no checkbox; the case checkbox covers it.
-    expect(screen.queryByRole("checkbox", { name: "Select case-107 · en" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "Select case-107 en" })).toBeNull();
     const caseBox = screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" }) as HTMLInputElement;
     expect(caseBox.indeterminate).toBe(true);
     expect(screen.getByRole("checkbox", { name: "Select case-108 (1 text)" })).toHaveProperty("indeterminate", false);
@@ -106,8 +106,8 @@ describe("tabs, popover, card, dialogs", () => {
         <DocumentsTabs bar={bar({ needs_decision: 3, all: 14 })} query={{}} projectKey="p" panelId="documents-panel" onNavigate={vi.fn()} />
         <div id="documents-panel" role="tabpanel" aria-labelledby="documents-panel-tab-all">table</div>
         <FilterPopover query={{}} bar={bar({ shown: 14, facets: { language: { de: 8 } } })} sourceLanguages={new Set(["en"])} onChange={vi.fn()} onClearAll={vi.fn()} />
-        <button ref={anchor} type="button" onClick={() => setPanel(true)}>Accept result…, case-107 · de</button>
-        <MenuButton label="1 more action for case-107 · de" buttonLabel="+1" items={[{ id: "a", label: "Decide on report…", onSelect: vi.fn() }]} />
+        <button ref={anchor} type="button" onClick={() => setPanel(true)}>Accept result…, case-107 de</button>
+        <MenuButton label="1 more action for case-107 de" buttonLabel="+1" items={[{ id: "a", label: "Decide on report…", onSelect: vi.fn() }]} />
         <Popover open={false} anchorRef={anchor} label="Plan" onClose={vi.fn()}>plan</Popover>
         {panel && <TextCard projectKey="p" row={row} rows={[row]} query={{}} canManage onSegment={vi.fn()} onView={vi.fn()} onStep={vi.fn()}
           onNavigate={vi.fn()} onAssign={vi.fn()} onChangePlan={vi.fn()} onCheckMyself={vi.fn()} onChanged={vi.fn()} onClose={() => setPanel(false)}
@@ -134,10 +134,10 @@ describe("tabs, popover, card, dialogs", () => {
     fireEvent.keyDown(popover, { key: "Escape" });
     expect(document.activeElement).toBe(filter);
 
-    const more = screen.getByRole("button", { name: "1 more action for case-107 · de" });
+    const more = screen.getByRole("button", { name: "1 more action for case-107 de" });
     expect(more.getAttribute("aria-haspopup")).toBe("menu");
 
-    const trigger = screen.getByRole("button", { name: "Accept result…, case-107 · de" });
+    const trigger = screen.getByRole("button", { name: "Accept result…, case-107 de" });
     trigger.focus();
     fireEvent.click(trigger);
     // The text card is a modal dialog named "{case} {language}" with the text path; focus starts inside and returns to the opener.

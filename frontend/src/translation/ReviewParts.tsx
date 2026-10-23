@@ -55,7 +55,7 @@ export function ChecksSummary({ failed, all }: { failed: readonly unknown[]; all
         </section>)}
         <div className="translation-checks-all-line">
           <span>{allChecksLine(passed, failedCount)}</span>
-          {every.length > 0 && <><span aria-hidden="true">·</span><details className="translation-checks-all">
+          {every.length > 0 && <><details className="translation-checks-all">
             <summary>Show all checks</summary>
             <ul className="translation-check-list">{every.map((check, index) => <li key={index}>
               <StatusBadge tone={check.passed ? "success" : "warning"}>{check.passed ? "Passed" : "Failed"}</StatusBadge>{" "}

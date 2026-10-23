@@ -44,8 +44,8 @@ const NOTE_LABELS: Readonly<Record<string, string>> = {
 /** `"{case}:{language}"`: the row key used in `query.panel`. */
 export const rowKeyOf = (row: Pick<DocumentRowView, "case_id" | "language">): string => `${row.case_id}:${row.language}`;
 
-/** "{text ID} · {language}" as used in accessible names. */
-export const rowName = (row: Pick<DocumentRowView, "case_id" | "language">): string => `${row.case_id} · ${row.language}`;
+/** "{text ID} {language}" as used in accessible names. */
+export const rowName = (row: Pick<DocumentRowView, "case_id" | "language">): string => `${row.case_id} ${row.language}`;
 
 export function noteLabel(code: string): string {
   return NOTE_LABELS[code] ?? "Other note";
@@ -128,7 +128,7 @@ function versionOf(row: DocumentRowView, documentId: string | null): DocumentVer
   return documentId == null ? undefined : row.versions.find(entry => entry.document_id === documentId);
 }
 
-/** "v3 · Correction of v2 · Ready for review" for one version of the row. */
+/** "v3, Correction of v2, Ready for review" for one version of the row. */
 export function versionLabel(row: DocumentRowView, entry: DocumentVersionView): string {
   return versionText({
     version: entry.version,
@@ -142,10 +142,10 @@ export function versionLabel(row: DocumentRowView, entry: DocumentVersionView): 
   });
 }
 
-/** Short form for the "Matched:" line: "v1 · Check failed". */
+/** Short form for the "Matched:" line: "v1, Check failed". */
 function matchedLabel(row: DocumentRowView, entry: DocumentVersionView): string {
   const badge = statusBadgeText(entry.translation_status, entry.latest_review_decision, entry.accepted_without_review);
-  return [versionName(entry.version, entry.chain_name, row.parallel_roots), badge].filter(Boolean).join(" · ");
+  return [versionName(entry.version, entry.chain_name, row.parallel_roots), badge].filter(Boolean).join(", ");
 }
 
 /** Chain names of the row's roots, in version order. */
@@ -201,8 +201,8 @@ export interface FinalLabelOptions {
 
 /**
  * Label of a final result from its summary, the one fallback for every place without the loaded
- * submission. Final column: "Annotation · Round 2 · ann-0004 · 18 Oct, 10:00 · v1" (no language;
- * the version marker follows when needed). `withLanguage`: "Annotation · Round 2 · ann-0004 · de v1 · 18 Oct, 10:00".
+ * submission. Final column: "Annotation, Round 2, ann-0004, 18 Oct, 10:00, v1" (no language;
+ * the version marker follows when needed). `withLanguage`: "Annotation, Round 2, ann-0004, de v1, 18 Oct, 10:00".
  * Without `recorded_at` the time is omitted, never invented; an unknown author reads "Unknown".
  */
 export function finalLabel(row: DocumentRowView, final: FinalSelectionSummary, options: FinalLabelOptions = {}): string {
@@ -218,8 +218,8 @@ export function finalLabel(row: DocumentRowView, final: FinalSelectionSummary, o
   const base = final.recorded_at
     ? submissionLabel({ kind, ordinal: final.round_ordinal, author, isMe: final.is_mine, language, version: labelVersion, recordedAt: final.recorded_at }, { withLanguage })
     : [kindLabels[kind] ?? kind, kind === "consolidation" ? null : final.round_ordinal == null ? "Initial submission" : `Round ${final.round_ordinal}`,
-      personLabel(author, final.is_mine), withLanguage ? [language, labelVersion].filter(Boolean).join(" ") : null].filter(Boolean).join(" · ");
-  return marker ? `${base} · ${marker}` : base;
+      personLabel(author, final.is_mine), withLanguage ? [language, labelVersion].filter(Boolean).join(" ") : null].filter(Boolean).join(", ");
+  return marker ? `${base}, ${marker}` : base;
 }
 
 export function FinalCell({ row }: { row: DocumentRowView }): JSX.Element {
@@ -317,7 +317,7 @@ export interface RowHeaderCellProps {
 export function RowHeaderCell({ row, badge, onOpenCard }: RowHeaderCellProps): JSX.Element {
   const active = isActiveRow(row);
   const nameId = documentsRowId(row.case_id, row.language, "header");
-  const nameContent = <><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language"><LanguageFlag code={row.language} />{row.language}</span></>;
+  const nameContent = <><span className="visually-hidden">{`${row.case_id} `}</span><span className="documents-language"><LanguageFlag code={row.language} />{row.language}</span></>;
   return (
     <span className="documents-row-header documents-text-cell">
       {onOpenCard

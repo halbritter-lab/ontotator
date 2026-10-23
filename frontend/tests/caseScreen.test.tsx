@@ -345,7 +345,7 @@ describe("CaseScreen integration", () => {
       const update = vi.spyOn(api, "applyCommand");
       render(<CaseScreen view={view} workspaceId="resend" onClose={vi.fn()} />);
       const dialog = await openSubmit();
-      expect(within(dialog).getByRole("heading", { name: "Unconfirmed values · 1 finding" })).toBeDefined();
+      expect(within(dialog).getByRole("heading", { name: "Unconfirmed values (1 finding)" })).toBeDefined();
       submitTicked(dialog, 1);
       await screen.findByRole("dialog", { name: "Case submitted" });
       expect(submit).toHaveBeenCalledTimes(2);
@@ -367,7 +367,7 @@ describe("CaseScreen integration", () => {
       expect(submit).toHaveBeenCalledTimes(1);
       const box = within(dialog).getByRole("checkbox", { name: "Submit with 2 unconfirmed values" }) as HTMLInputElement;
       expect(box.checked).toBe(false);
-      expect(within(dialog).getByText("Betroffene Person (Experiencer): Patient · Zeitlicher Bezug (Temporality): Current")).toBeDefined();
+      expect(within(dialog).getByText("Betroffene Person (Experiencer): Patient, Zeitlicher Bezug (Temporality): Current")).toBeDefined();
     });
 
     it("sends no acknowledgement when no rows remain", async () => {
@@ -1457,7 +1457,7 @@ describe("CaseScreen integration", () => {
           const layout = () => rendered.container.querySelector(".app-layout")!;
           expect(layout().classList.contains("mobile-pane-text")).toBe(true);
           const bar = rendered.container.querySelector<HTMLElement>(".pending-bar")!;
-          expect(bar.textContent).toContain("New finding “The” · Choose term");
+          expect(bar.textContent).toContain("New finding “The”Choose term");
           expect(within(bar).getByRole("button", { name: "Discard" })).toBeDefined();
           expect(document.activeElement).not.toBe(screen.getByRole("combobox", { name: "Search term" }));
           fireEvent.click(within(bar).getByRole("button", { name: "Choose term" }));
@@ -1572,7 +1572,7 @@ describe("CaseScreen integration", () => {
         const apply = loopServer(view);
         render(<CaseScreen view={view} workspaceId="ws-click-default" onClose={vi.fn()} />);
         selectFinding("finding-a");
-        const present = screen.getByRole("radio", { name: "Present · default" });
+        const present = screen.getByRole("radio", { name: "Present (default)" });
         present.focus();
         fireEvent.click(present);
         await waitFor(() => expect(setAxesCalls(apply)).toHaveLength(1));
@@ -1671,18 +1671,18 @@ describe("CaseScreen integration", () => {
     view.submissions = [{ ...base, submission_id: "sub-exact-first" },
       { ...base, submission_id: "sub-exact-second", snapshots: [second] }];
     render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Submission 1 · 17 Oct 2026, 09:05" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Submission 1, 17 Oct 2026, 09:05" })).toBeDefined();
     expect(screen.queryByRole("button", { name: /sub-exact-second/ })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Submission 1 · 17 Oct 2026, 09:05" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submission 1, 17 Oct 2026, 09:05" }));
     const firstDialog = screen.getByRole("dialog", { name: "Historical submission" });
     expect(within(firstDialog).getByText(/First historical note/).textContent).toBe("First historical note\n<em>literal</em>");
     expect(firstDialog.querySelector("em")).toBeNull();
     expect(within(firstDialog).queryByText("Current draft note")).toBeNull();
     fireEvent.click(within(firstDialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));
-    fireEvent.click(screen.getByRole("button", { name: "Submission 2 · 17 Oct 2026, 09:05" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submission 2, 17 Oct 2026, 09:05" }));
     const dialog = screen.getByRole("dialog", { name: "Historical submission" });
     expect(within(dialog).getByText("Second historical note")).toBeDefined();
-    expect(within(dialog).getByRole("heading", { name: "Submission 2 · 17 Oct 2026, 09:05" })).toBeDefined();
+    expect(within(dialog).getByRole("heading", { name: "Submission 2, 17 Oct 2026, 09:05" })).toBeDefined();
     fireEvent.click(within(dialog).getByText("Technical details"));
     expect(within(dialog).getByText("sub-exact-second")).toBeDefined();
     expect(within(dialog).queryByText("sub-exact-first")).toBeNull();
@@ -1713,7 +1713,7 @@ describe("CaseScreen integration", () => {
     const receipt = await screen.findByRole("dialog", { name: "Case submitted" });
     fireEvent.click(within(receipt).getByRole("button", { name: "Stay in case" }));
     expect(screen.queryByText("No previous submissions yet.")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Submission 1 · 18 Oct 2026, 09:05" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submission 1, 18 Oct 2026, 09:05" }));
     const history = screen.getByRole("dialog", { name: "Historical submission" });
     expect(within(history).getByText("Exact submitted clinical note")).toBeDefined();
     expect(within(history).getByText("fresh-exact-submission")).toBeDefined();
@@ -1917,7 +1917,7 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }));
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
-    expect(within(dialog).getByRole("heading", { name: "Unconfirmed values · 1 finding" })).toBeDefined();
+    expect(within(dialog).getByRole("heading", { name: "Unconfirmed values (1 finding)" })).toBeDefined();
     fireEvent.click(within(dialog.querySelector<HTMLElement>("[data-unconfirmed-row]")!).getByRole("button", { name: /^Go to / }));
     await waitFor(() => expect((document.activeElement as HTMLElement).closest('[data-axis-field="assertion"]')).not.toBeNull());
     expect((screen.getByRole("checkbox", { name: /Visibility for Phänotyp/i }) as HTMLInputElement).checked).toBe(true);

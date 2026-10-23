@@ -35,7 +35,7 @@ it("blocks duplicate mutations and ignores completion for a replaced assignment 
 it("lists other members in the identity format with open tasks", () => {
   render(<AssignmentActions assignment={assignment} members={members.map(member => ({ ...member, open_tasks: { translation_review: 0, annotate: 1, review: 0 } }))} onChanged={vi.fn()} />);
   fireEvent.click(screen.getByText("Assignment actions")); fireEvent.click(screen.getByRole("button", { name: "Reassign …" }));
-  expect(screen.getByRole("option", { name: "Bob (B) — en, de · 1 open task" })).toBeDefined();
+  expect(screen.getByRole("option", { name: "Bob (B) — en, de, 1 open task" })).toBeDefined();
 });
 it("offers no reassign for a consolidation task", () => {
   render(<><AssignmentActions assignment={{ ...assignment, task: "review" }} members={members} onChanged={vi.fn()} directReassign /><AssignmentActions assignment={{ ...assignment, id: 4, task: "review" }} members={members} onChanged={vi.fn()} /></>);

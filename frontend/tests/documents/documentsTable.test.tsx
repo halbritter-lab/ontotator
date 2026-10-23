@@ -33,7 +33,7 @@ function renderTable(view: DocumentRowsPage, overrides: Partial<DocumentsTablePr
   return { ...result, props };
 }
 
-/** The text row header (`th scope="row"`) whose text starts with "{case} · {language}" (the group label is a rowheader too). */
+/** The text row header (`th scope="row"`) whose text starts with "{case}, {language}" (the group label is a rowheader too). */
 const header = (name: string) => {
   const found = screen.getAllByRole("rowheader").filter(element => element.getAttribute("scope") === "row" && (element.textContent ?? "").startsWith(name));
   expect(found).toHaveLength(1);
@@ -61,7 +61,7 @@ describe("structure", () => {
     expect(headers.map(cell => cell.textContent)).toEqual(["Select", "Text", "Translation", "Annotation", "Finalization", "Waiting on", "Next step", "Last activity"]);
     expect(headers[0].querySelector(".visually-hidden")?.textContent).toBe("Select");
     expect(headers[6].querySelector(".visually-hidden")).toBeNull();
-    expect(cellsOf("case-107 · de")).toHaveLength(8);
+    expect(cellsOf("case-107 de")).toHaveLength(8);
   });
 
   it("a not-planned source is folded into the case line", () => {
@@ -74,7 +74,7 @@ describe("structure", () => {
     expect(label.querySelector(".documents-group-meta")!.textContent).toBe("source en (native), 1 translation");
     expect(label.textContent).not.toContain("·");
     expect(screen.getAllByRole("rowheader").filter(element => element.getAttribute("scope") === "row")).toHaveLength(1);
-    expect(screen.queryByRole("checkbox", { name: "Select case-107 · en" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "Select case-107 en" })).toBeNull();
     // The case checkbox covers the folded source too (shown rows first); the range order covers the shown rows only.
     fireEvent.click(box, { shiftKey: true });
     expect(props.selection!.selectCase).toHaveBeenCalledWith(["case-107:de", "case-107:en"], "range", ["case-107:de"]);
@@ -104,14 +104,14 @@ describe("structure", () => {
   it("a planned native text stays a row", () => {
     const native = stagedRow("EN100017", "en", { overrides: { is_source: true } });
     renderTable(page([group("EN100017", [native])]));
-    expect(header("EN100017 · en")).toBeTruthy();
+    expect(header("EN100017 en")).toBeTruthy();
     const label = screen.getByRole("checkbox", { name: "Select EN100017 (1 text)" }).closest("tr")!.querySelector("th")!;
     expect(label.querySelector(".documents-group-meta")).toBeNull();
     // A case whose only row is a not-planned source keeps that row.
     cleanup();
     renderTable(page([group("case-9", [notInPlanRow("case-9", "fr", { is_source: true })])]));
-    expect(header("case-9 · fr")).toBeTruthy();
-    expect(caseHeaderText(group("case-9", [row({ case_id: "case-9", language: "fr", is_source: true })]))).toBe("case-9 · fr source");
+    expect(header("case-9 fr")).toBeTruthy();
+    expect(caseHeaderText(group("case-9", [row({ case_id: "case-9", language: "fr", is_source: true })]))).toBe("case-9, fr source");
   });
 
   it("group checkbox is mixed when one of two texts is selected", () => {
@@ -120,7 +120,7 @@ describe("structure", () => {
     const box = screen.getByRole("checkbox", { name: "Select case-130 (2 texts)" }) as HTMLInputElement;
     expect(box.indeterminate).toBe(true);
     expect(box.checked).toBe(false);
-    expect((within(rowOf("case-130 · de")).getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
+    expect((within(rowOf("case-130 de")).getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
   });
 
   it("decision rows get the edge class and hidden text Needs your decision", () => {
@@ -129,15 +129,15 @@ describe("structure", () => {
       plan_row: { review: false, annotate: false, review_applicable: true, discarded: false, decided: false },
     });
     renderTable(page([case107(), group("case-101", [undecided])]));
-    expect(rowOf("case-107 · de").className).toContain("data-table-row--decision");
-    expect(within(header("case-107 · de")).getByText("Needs your decision").className).toBe("visually-hidden");
-    expect(rowOf("case-101 · de").className).toContain("data-table-row--decision");
+    expect(rowOf("case-107 de").className).toContain("data-table-row--decision");
+    expect(within(header("case-107 de")).getByText("Needs your decision").className).toBe("visually-hidden");
+    expect(rowOf("case-101 de").className).toContain("data-table-row--decision");
   });
 
   it("NEW badge with accessible text New since your last visit", () => {
     const fresh = { ...scenario7a(), new: true } as DocumentRowView;
     renderTable(page([case107(fresh)]));
-    const th = header("case-107 · de");
+    const th = header("case-107 de");
     expect(within(th).getByText("NEW").getAttribute("aria-hidden")).toBe("true");
     expect(within(th).getByText("New since your last visit").className).toBe("visually-hidden");
   });
@@ -149,9 +149,9 @@ describe("structure", () => {
       notInPlanRow("case-101", "fr"),
     ], { not_in_plan_languages: ["en", "fr"] });
     renderTable(page([view]));
-    expect(rowOf("case-101 · fr").className).toContain("documents-row--not-in-plan");
-    expect(rowOf("case-101 · de").className).not.toContain("documents-row--not-in-plan");
-    expect(cellsOf("case-101 · fr")[2].querySelector(".stage-cell--muted")).not.toBeNull();
+    expect(rowOf("case-101 fr").className).toContain("documents-row--not-in-plan");
+    expect(rowOf("case-101 de").className).not.toContain("documents-row--not-in-plan");
+    expect(cellsOf("case-101 fr")[2].querySelector(".stage-cell--muted")).not.toBeNull();
   });
 
   it("Text and Last activity headers sort via onSort with aria-sort", () => {
@@ -175,7 +175,7 @@ describe("structure", () => {
 
   it("Last activity shows only the time", () => {
     renderTable(page([case107()]));
-    const last = cellsOf("case-107 · de")[7];
+    const last = cellsOf("case-107 de")[7];
     expect(last.querySelector("time")!.getAttribute("title")).toBe(fullTimestamp("2026-10-19T08:15:00Z"));
     expect(last.querySelector("time")!.textContent).toBe(formatTime("2026-10-19T08:15:00Z"));
     expect(last.querySelector("button")).toBeNull();
@@ -183,7 +183,7 @@ describe("structure", () => {
 
   it("marks only the active row (aria-current, highlight class), never with opacity or inert", () => {
     const { container } = renderTable(page([case107()]), { activeKey: "case-107:de" });
-    const active = rowOf("case-107 · de");
+    const active = rowOf("case-107 de");
     expect(active.getAttribute("aria-current")).toBe("true");
     expect(active.classList.contains("documents-row--active")).toBe(true);
     expect(container.querySelector("[inert]")).toBeNull();
@@ -194,7 +194,7 @@ describe("structure", () => {
 describe("text cell", () => {
   it("the language is plain text with a flag in a button that opens the card", () => {
     const { props } = renderTable(page([case107()]));
-    const th = header("case-107 · de");
+    const th = header("case-107 de");
     const name = within(th).getByRole("button", { name: "Open text card, case-107 de" });
     expect(name.id).toBe("documents-row-case-107-de-header");
     expect(name.className).toContain("documents-text-name");
@@ -210,7 +210,7 @@ describe("text cell", () => {
     view.rows[1] = { ...view.rows[1], own_open_assignment_id: 41 };
     renderTable(page([view]));
     expect(screen.queryByRole("link", { name: /^Open in editor/ })).toBeNull();
-    expect(within(header("case-107 · de")).queryByRole("link")).toBeNull();
+    expect(within(header("case-107 de")).queryByRole("link")).toBeNull();
   });
 });
 
@@ -226,24 +226,24 @@ describe("cells", () => {
     });
     renderTable(page([group("case-106", [progress])]));
     for (const index of [2, 3, 4]) {
-      const status = cellsOf("case-106 · de")[index].querySelector<HTMLElement>(".documents-status")!;
+      const status = cellsOf("case-106 de")[index].querySelector<HTMLElement>(".documents-status")!;
       expect(status).not.toBeNull();
       expect(status.querySelector("button, br, p, div")).toBeNull();
       const visible = (status.textContent ?? "").replace(/^\S+\s/, "");
       expect(status.getAttribute("title")).toBe(visible);
     }
     // The card's short states (cardModel), the "who" in grey.
-    expect(cellsOf("case-106 · de")[2].querySelector(".documents-status")!.getAttribute("title")).toBe("accepted");
-    expect(cellsOf("case-106 · de")[3].querySelector(".documents-status")!.getAttribute("title")).toBe("1 of 2 submitted (Tom Reis)");
-    expect(cellsOf("case-106 · de")[3].querySelector(".documents-status-who")!.textContent).toBe(" (Tom Reis)");
-    expect(cellsOf("case-106 · de")[4].querySelector(".documents-status")!.getAttribute("title")).toBe("waiting");
-    expect(cellsOf("case-106 · de")[3].querySelector(".stage-cell-symbol")!.getAttribute("aria-hidden")).toBe("true");
+    expect(cellsOf("case-106 de")[2].querySelector(".documents-status")!.getAttribute("title")).toBe("accepted");
+    expect(cellsOf("case-106 de")[3].querySelector(".documents-status")!.getAttribute("title")).toBe("1 of 2 submitted (Tom Reis)");
+    expect(cellsOf("case-106 de")[3].querySelector(".documents-status-who")!.textContent).toBe(" (Tom Reis)");
+    expect(cellsOf("case-106 de")[4].querySelector(".documents-status")!.getAttribute("title")).toBe("waiting");
+    expect(cellsOf("case-106 de")[3].querySelector(".stage-cell-symbol")!.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("Waiting on keeps the full list", () => {
     const steps = [stepOf("annotation_in_progress", { owner: { kind: "people", person: null, count: 2, people: [ana, tom] } })];
     renderTable(page([group("case-106", [stagedRow("case-106", "de", { steps })])]));
-    const waiting = cellsOf("case-106 · de")[5];
+    const waiting = cellsOf("case-106 de")[5];
     expect(within(waiting).getByText("Ana Weber, Tom Reis").getAttribute("aria-hidden")).toBe("true");
     expect(waiting.querySelector("[title]")!.getAttribute("title")).toBe("Ana Weber (ann-0003), Tom Reis (ann-0004)");
   });
@@ -252,10 +252,10 @@ describe("cells", () => {
     const steps = [stepOf("decide_report"), stepOf("assign_annotation"), stepOf("choose_final")];
     const busy = stagedRow("case-109", "de", { steps });
     const { props } = renderTable(page([case107(), group("case-109", [busy])]));
-    const action = within(cellsOf("case-107 · de")[6]).getByRole("button", { name: "Accept result…, case-107 · de" });
+    const action = within(cellsOf("case-107 de")[6]).getByRole("button", { name: "Accept result…, case-107 de" });
     fireEvent.click(action);
     expect(props.onAction).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "de" }), expect.objectContaining({ code: "choose_final" }));
-    const next = cellsOf("case-109 · de")[6];
+    const next = cellsOf("case-109 de")[6];
     expect(within(next).getAllByRole("button").filter(button => button.getAttribute("aria-haspopup") !== "menu")).toHaveLength(1);
     expect(next.textContent).not.toMatch(/\+\d/);
   });
@@ -263,14 +263,14 @@ describe("cells", () => {
   it("the robot icon shows while nobody is assigned and names the proposals", () => {
     const fresh = withProposals(stagedRow("case-140", "de", { stages: { annotation: cell("unassigned", "waiting") } }), 17);
     renderTable(page([group("case-140", [fresh, withProposals(stagedRow("case-140", "fr"), 0)])]));
-    const bot = cellsOf("case-140 · de")[3].querySelector(".documents-bot")!;
+    const bot = cellsOf("case-140 de")[3].querySelector(".documents-bot")!;
     const text = "17 tool proposals available; the annotation starts from them";
     expect(bot.getAttribute("role")).toBe("img");
     expect(bot.getAttribute("title")).toBe(text);
     expect(bot.getAttribute("aria-label")).toBe(text);
     expect(bot.querySelector("svg")).not.toBeNull();
     expect(screen.getByRole("img", { name: text })).toBe(bot);
-    expect(cellsOf("case-140 · fr")[3].querySelector(".documents-bot")).toBeNull();
+    expect(cellsOf("case-140 fr")[3].querySelector(".documents-bot")).toBeNull();
   });
 
   it("the robot icon is gone once someone is assigned", () => {
@@ -281,8 +281,8 @@ describe("cells", () => {
       overrides: { work: [work({ assignment_id: 8, document_id: "case-141-fr", task: "translation_review" })] },
     }), 5);
     renderTable(page([group("case-141", [assigned, reviewing])]));
-    expect(cellsOf("case-141 · de")[3].querySelector(".documents-bot")).toBeNull();
-    expect(cellsOf("case-141 · fr")[3].querySelector(".documents-bot")).not.toBeNull();
+    expect(cellsOf("case-141 de")[3].querySelector(".documents-bot")).toBeNull();
+    expect(cellsOf("case-141 fr")[3].querySelector(".documents-bot")).not.toBeNull();
   });
 
   it("no robot icon on a text annotated from scratch or outside the plan", () => {
@@ -290,9 +290,9 @@ describe("cells", () => {
     const muted = withProposals(notInPlanRow("case-142", "fr"), 9);
     const proposals = { ...withProposals(stagedRow("case-142", "it"), 9), annotation_mode: { mode: "proposals" } } as DocumentRowView;
     renderTable(page([group("case-142", [scratch, muted, proposals])]));
-    expect(cellsOf("case-142 · de")[3].querySelector(".documents-bot")).toBeNull();
-    expect(cellsOf("case-142 · fr")[3].querySelector(".documents-bot")).toBeNull();
-    expect(cellsOf("case-142 · it")[3].querySelector(".documents-bot")).not.toBeNull();
+    expect(cellsOf("case-142 de")[3].querySelector(".documents-bot")).toBeNull();
+    expect(cellsOf("case-142 fr")[3].querySelector(".documents-bot")).toBeNull();
+    expect(cellsOf("case-142 it")[3].querySelector(".documents-bot")).not.toBeNull();
   });
 
   it("a source-changed Translation cell reads Source changed; the version marker stays", () => {
@@ -303,8 +303,8 @@ describe("cells", () => {
     });
     const en = notInPlanRow("case-115", "en", { is_source: true });
     renderTable(page([group("case-115", [en, de])]));
-    expect(cellsOf("case-115 · de")[2].querySelector(".documents-status")!.getAttribute("title")).toBe("Source changed");
-    expect(within(header("case-115 · de")).getByText("v2 corrected").className).toBe("documents-version-marker");
+    expect(cellsOf("case-115 de")[2].querySelector(".documents-status")!.getAttribute("title")).toBe("Source changed");
+    expect(within(header("case-115 de")).getByText("v2 corrected").className).toBe("documents-version-marker");
   });
 
   it("middle-truncates long IDs in the group row with the full value in title", () => {
@@ -320,7 +320,7 @@ describe("cells", () => {
       rowBadge: entry => (entry.language === "de" ? <span className="badge">Resolved</span> : null),
       renderRowNotice: entry => (entry.language === "de" ? <p>notice de</p> : null),
     });
-    expect(within(header("case-107 · de")).getByText("Resolved")).toBeTruthy();
-    expect(screen.getByText("notice de").closest("tr")!.previousElementSibling).toBe(rowOf("case-107 · de"));
+    expect(within(header("case-107 de")).getByText("Resolved")).toBeTruthy();
+    expect(screen.getByText("notice de").closest("tr")!.previousElementSibling).toBe(rowOf("case-107 de"));
   });
 });

@@ -126,10 +126,10 @@ export function ReanchorPanel({ items, labelFor, onContext, resolutions=[], anno
       const label = labelFor(item.layer_id,item.term_id);
       const resolution=currentReanchorResolution(item,resolutions,annotations);
       return <li key={reanchorKey(item)} data-reanchor-item={reanchorKey(item)} data-reanchor-pending={!resolution}>
-        <Button variant="quiet" onClick={() => onContext(item.new_context)}>{label && label !== item.term_id ? `${label} (${item.term_id})` : item.term_id} · {item.layer_id}</Button>
+        <Button variant="quiet" onClick={() => onContext(item.new_context)}>{label && label !== item.term_id ? `${label} (${item.term_id})` : item.term_id}, {item.layer_id}</Button>
         <p>{Object.prototype.hasOwnProperty.call(reasons, item.reason) ? reasons[item.reason] : `Unknown reason: ${item.reason}`}</p>
         {item.axes_values && <p aria-label="Original clinical axes">{Object.entries(item.axes_values).map(([axis,value],axisIndex)=><span key={axis}>
-          {axisIndex>0 && ' · '}<span>{axis}: {value ?? 'Not specified'}{item.axes_defaulted?.includes(axis) ? ' (defaulted)' : ''}</span>
+          {axisIndex>0 && ', '}<span>{axis}: {value ?? 'Not specified'}{item.axes_defaulted?.includes(axis) ? ' (defaulted)' : ''}</span>
         </span>)}</p>}
         <p>Current context</p><div className="reanchor-context" data-current-context>{validWindow(item.new_context) ? item.new_context.text : 'New context is unavailable.'}</div>
         <details><summary>Original context and text changes</summary>
@@ -147,7 +147,7 @@ export function ReanchorPanel({ items, labelFor, onContext, resolutions=[], anno
   };
   return <section ref={root} className="reanchor-panel detail-section" aria-label="Needs review after the text change">
     <details open><summary><h3>Needs review after the text change ({items.length})</h3></summary>
-    {(onRecreate || onDismiss || resolutions.length>0) && <p role="status">{pending} pending · {items.length-pending} resolved</p>}
+    {(onRecreate || onDismiss || resolutions.length>0) && <p role="status">{pending} pending, {items.length-pending} resolved</p>}
     <ol>{items.filter(item=>!currentReanchorResolution(item,resolutions,annotations)).map(row)}</ol>
     {pending < items.length && <details className="reanchor-completed"><summary>Completed text-change reviews ({items.length-pending})</summary>
       <ol>{items.filter(item=>!!currentReanchorResolution(item,resolutions,annotations)).map(row)}</ol>

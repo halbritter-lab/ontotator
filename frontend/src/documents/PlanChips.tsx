@@ -37,7 +37,7 @@ function withdrawnParts(consequences: ConsequencesView, drafts: boolean): { noun
   for (const task of Object.keys(TASK_NAMES)) {
     const items = consequences.withdrawn.filter(item => item.task === task);
     if (!items.length) continue;
-    const people = [...new Set(items.map(item => personText(item.person)))].join(" · ");
+    const people = [...new Set(items.map(item => personText(item.person)))].join(", ");
     const [one, many] = TASK_NAMES[task];
     const kept = drafts && task !== "translation_review" ? (items.length === 1 ? "; draft kept" : "; drafts kept") : "";
     parts.push({ noun: `${items.length} ${items.length === 1 ? one : many}`, people: `(${people}${kept})` });
@@ -54,10 +54,10 @@ export function withdrawnSummary(consequences: ConsequencesView): string {
 export function consequenceLines(consequences: ConsequencesView): string[] {
   const lines = withdrawnParts(consequences, true).map(part => `${part.noun} will be withdrawn ${part.people}.`);
   const finals = consequences.finals_leaving;
-  if (finals.length) lines.push(`${plural(finals.length, "final result")} (${finals.map(item => textLabel(item)).join(" · ")}) ${finals.length === 1 ? "stays" : "stay"} in history but ${finals.length === 1 ? "is" : "are"} no longer exported.`);
+  if (finals.length) lines.push(`${plural(finals.length, "final result")} (${finals.map(item => textLabel(item)).join(", ")}) ${finals.length === 1 ? "stays" : "stay"} in history but ${finals.length === 1 ? "is" : "are"} no longer exported.`);
   for (const item of consequences.restored) lines.push(`${item.language} of ${item.case_id} returns to the plan. Its earlier final result needs your confirmation.`);
   const reports = consequences.open_reports ?? [];
-  if (reports.length) lines.push(`${plural(reports.length, "open problem report")} (${reports.map(item => `${textLabel(item)}${item.held ? ", task paused" : ""}`).join(" · ")}) ${reports.length === 1 ? "stays" : "stay"} open under Problem reports.`);
+  if (reports.length) lines.push(`${plural(reports.length, "open problem report")} (${reports.map(item => `${textLabel(item)}${item.held ? ", task paused" : ""}`).join(", ")}) ${reports.length === 1 ? "stays" : "stay"} open under Problem reports.`);
   return lines;
 }
 

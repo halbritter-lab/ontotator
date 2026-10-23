@@ -13,10 +13,10 @@ it("formats people for leads and others", () => {
   expect(personLabel(undefined, { fallback: "Former member" })).toBe("Former member");
 });
 
-it("formats texts as case · language with an optional version", () => {
-  expect(textLabel({ case_id: "case-0101", language: "de" })).toBe("case-0101 · de");
+it("formats texts as case, language with an optional version", () => {
+  expect(textLabel({ case_id: "case-0101", language: "de" })).toBe("case-0101 de");
   expect(textLabel({ case_id: "case-0101", language: "de", version: 2 }, { withVersion: true })).toBe(
-    "case-0101 · de v2",
+    "case-0101 de v2",
   );
-  expect(textLabel({ case_id: "case-0101", language: "de", version: 1 })).toBe("case-0101 · de");
+  expect(textLabel({ case_id: "case-0101", language: "de", version: 1 })).toBe("case-0101 de");
 });

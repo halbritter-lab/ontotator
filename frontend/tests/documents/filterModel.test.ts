@@ -17,7 +17,7 @@ describe("filter model", () => {
     ["Case ID → search field (no chip)", { q: "case-104 de" }, { q: "case-104 de" }, []],
     ["Final result none → route parameter and chip", { final: "none" }, { final: "none" }, ["Final result: None"]],
     ["Final result any", { final: "any" }, { final: "any" }, ["Final result: Has a final result"]],
-    ["Origin → Final · Origin facet", { origin: "machine_translation,native" }, { origin: ["machine_translation", "native"] }, ["Origin: Machine translation", "Origin: Source"]],
+    ["Origin → Final, Origin facet", { origin: "machine_translation,native" }, { origin: ["machine_translation", "native"] }, ["Origin: Machine translation", "Origin: Source"]],
     ["Translation status → chip", { translation_status: "accepted_without_review" }, { translation_status: "accepted_without_review" }, ["Translation status: Accepted without review"]],
     ["Status → chip", { status: "submitted" }, { status: "submitted" }, ["Assignment status: Submitted"]],
     ["Sort → header and popover footer (no chip)", { sort: "-activity" }, { sort: "-activity" }, []],

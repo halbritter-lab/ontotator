@@ -12,11 +12,11 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("GuidelineReader", () => {
-  it("renders the meta line Published {date} · {change note}", async () => {
+  it("renders the meta line Published {date}, {change note}", async () => {
     vi.spyOn(api, "getGuideline").mockResolvedValue(guidelineDocument(guidelineSummary(3, { change_note: "Negations are now annotated." })));
     render(<GuidelineReader projectKey="p/key" version={3} currentVersion={3} />);
     expect(await screen.findByRole("heading", { level: 2, name: "Guidelines v3" })).toBeDefined();
-    expect(screen.getByText("Published 13 Oct · Negations are now annotated.")).toBeDefined();
+    expect(screen.getByText("Published 13 Oct, Negations are now annotated.")).toBeDefined();
     expect(await screen.findByRole("heading", { level: 3, name: "Guide v3" })).toBeDefined();
     expect(screen.queryByText(/The current version is/)).toBeNull();
     expect(api.getGuideline).toHaveBeenCalledWith("p/key", 3);

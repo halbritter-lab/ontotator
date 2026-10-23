@@ -37,7 +37,7 @@ it("deduplicates inflight detail and badge requests, then successful rerenders",
 it("distinguishes duplicate tool labels in the document by their actual run", async () => {
   vi.spyOn(api, "getProposalSet").mockImplementation(async (_project, id) => metadata(id));
   render(show([proposal(1), proposal(2)]));
-  await waitFor(() => expect(screen.getAllByText("AI").map(e => e.title)).toEqual(["Phentrieve 1.4 · run-1", "Phentrieve 1.4 · run-2"]));
+  await waitFor(() => expect(screen.getAllByText("AI").map(e => e.title)).toEqual(["Phentrieve 1.4, run-1", "Phentrieve 1.4, run-2"]));
 });
 
 it("keeps human imports human and omits absent optional fields", async () => {

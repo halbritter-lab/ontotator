@@ -8,7 +8,7 @@ afterEach(cleanup);
 function Harness(props: { busy?: boolean; outcome?: InlineConfirmOutcome | null; onCancel?: () => void; onConfirm?: () => void }) {
   return <>
     <button>Outside</button>
-    <InlineConfirm title="Keep final result" message="Keep Annotation · Round 1 · ann-0004 as the final result for c · de?" confirmLabel="Keep as final"
+    <InlineConfirm title="Keep final result" message="Keep Annotation, Round 1, ann-0004 as the final result for c, de?" confirmLabel="Keep as final"
       busy={props.busy} outcome={props.outcome ?? null} onCancel={props.onCancel ?? vi.fn()} onConfirm={props.onConfirm ?? vi.fn()}>
       <input type="checkbox" aria-label="I reviewed these changes and keep this exact result" />
     </InlineConfirm>

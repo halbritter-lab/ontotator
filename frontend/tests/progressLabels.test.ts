@@ -12,9 +12,9 @@ const stages: ProgressStagesView = {
 describe("progress labels", () => {
   it("builds the lede", () => {
     expect(ledeSentence({ cases: 50, translations_to_review: 50, versions_to_annotate: 50, not_in_plan: 100, needs_decision: 0, to_assign: 0 }))
-      .toBe("50 cases · 50 translations to review · 50 language versions to annotate (100 not in plan).");
+      .toBe("50 cases, 50 translations to review, 50 language versions to annotate (100 not in plan).");
     expect(ledeSentence({ cases: 1, translations_to_review: 1, versions_to_annotate: 1, not_in_plan: 0, needs_decision: 0, to_assign: 0 }))
-      .toBe("1 case · 1 translation to review · 1 language version to annotate (0 not in plan).");
+      .toBe("1 case, 1 translation to review, 1 language version to annotate (0 not in plan).");
   });
 
   it("builds done sentences", () => {
@@ -59,14 +59,14 @@ describe("progress labels", () => {
     expect(cards.map(card => card.done)).toEqual(["2 of 7 accepted", "2 of 11 fully submitted", "1 of 11 final"]);
     expect(cards.map(card => card.scope)).toEqual([
       "7 translations selected for review",
-      "11 language versions selected · 2 annotations per text",
+      "11 language versions selected, 2 annotations per text",
       "11 language versions selected for annotation",
     ]);
     expect(cards[0].rows.map(row => [row.label, row.count])).toEqual([
       ["To assign", 3],
       ["In review", 2],
       ["Check failed, with reviewer", 1],
-      ["Rejected or queried · your decision", 0],
+      ["Rejected or queried, your decision", 0],
       ["Accepted", 2],
     ]);
     expect(cards[1].rows.map(row => [row.label, row.count])).toEqual([
@@ -78,13 +78,13 @@ describe("progress labels", () => {
     ]);
     expect(cards[2].rows.map(row => [row.label, row.count])).toEqual([
       ["Not ready (work open)", 9],
-      ["To choose · your decision", 1],
-      ["To confirm · your decision", 0],
+      ["To choose, your decision", 1],
+      ["To confirm, your decision", 0],
       ["Final", 1],
     ]);
     expect(cards[2].footer).toBe("(1 final, 10 would be omitted)");
     expect(cards[1].scope).toContain("2 annotations per text");
-    expect(stageCards(stages, 1)[1].scope).toBe("11 language versions selected · 1 annotation per text");
+    expect(stageCards(stages, 1)[1].scope).toBe("11 language versions selected, 1 annotation per text");
     expect(stageCards(stages, null)[1].scope).toBe("11 language versions selected");
   });
 });

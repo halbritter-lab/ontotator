@@ -126,10 +126,10 @@ describe("group_selection", () => {
 describe("row_selection_edges_and_server_sort", () => {
   type Row = { id: string; group: string; name: string; n: number };
   const rows: Row[] = [{ id: "a-de", group: "A", name: "de", n: 2 }, { id: "a-fr", group: "A", name: "fr", n: 1 }, { id: "b-de", group: "B", name: "de", n: 3 }];
-  const columns: Column<Row>[] = [{ id: "name", header: "Text", cell: r => `${r.group} · ${r.name}`, rowHeader: true }, { id: "n", header: "N", cell: r => r.n, sortValue: r => r.n }];
+  const columns: Column<Row>[] = [{ id: "name", header: "Text", cell: r => `${r.group}, ${r.name}`, rowHeader: true }, { id: "n", header: "N", cell: r => r.n, sortValue: r => r.n }];
   const groups = [{ key: "A", header: <span>Case A</span>, rows: rows.slice(0, 2), expanded: true }, { key: "B", header: <span>Case B</span>, rows: rows.slice(2), expanded: true }];
   const rowSelection = (onSelect = vi.fn(), selected: (row: Row) => boolean = (row) => row.id === "a-de") =>
-    ({ selected, onSelect, label: (row: Row) => `Select ${row.group} · ${row.name}` });
+    ({ selected, onSelect, label: (row: Row) => `Select ${row.group}, ${row.name}` });
   const groupSelection = (state: (key: string) => "all" | "some" | "none" = () => "none") =>
     ({ selected: (key: string) => state(key) === "all", onSelect: vi.fn(), checkboxLabel: (key: string) => `Select ${key}`, state });
 
@@ -146,16 +146,16 @@ describe("row_selection_edges_and_server_sort", () => {
       expect(first.tagName).toBe("TD");
       expect(first.querySelector("input[type=checkbox].data-table-row-select.checkbox-target")).not.toBeNull();
     }
-    const box = screen.getByRole("checkbox", { name: "Select A · de" }) as HTMLInputElement;
+    const box = screen.getByRole("checkbox", { name: "Select A, de" }) as HTMLInputElement;
     expect(box.checked).toBe(true);
-    expect((screen.getByRole("checkbox", { name: "Select A · fr" }) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByRole("checkbox", { name: "Select A, fr" }) as HTMLInputElement).checked).toBe(false);
   });
   it("reports click modes for row checkboxes", () => {
     const onSelect = vi.fn();
     render(<DataTable label="T" columns={columns} rows={rows} rowKey={r => r.id} rowSelection={rowSelection(onSelect)} />);
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select A · fr" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select B · de" }), { shiftKey: true });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select A · de" }), { ctrlKey: true });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select A, fr" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select B, de" }), { shiftKey: true });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select A, de" }), { ctrlKey: true });
     expect(onSelect.mock.calls).toEqual([[rows[1], "toggle"], [rows[2], "range"], [rows[0], "toggle-keep-anchor"]]);
   });
   it("custom selectionHeader replaces the hidden Select header", () => {
@@ -199,27 +199,27 @@ describe("row_selection_edges_and_server_sort", () => {
     // From a case checkbox the next box is its first row, not the next case.
     box("Select A").focus();
     fireEvent.keyDown(box("Select A"), { key: "ArrowDown", shiftKey: true });
-    expect(document.activeElement).toBe(box("Select A · de"));
+    expect(document.activeElement).toBe(box("Select A, de"));
     expect(onSelect).toHaveBeenLastCalledWith(rows[0], "select");
-    fireEvent.keyDown(box("Select A · de"), { key: "ArrowDown", shiftKey: true });
-    expect(document.activeElement).toBe(box("Select A · fr"));
+    fireEvent.keyDown(box("Select A, de"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select A, fr"));
     expect(onSelect).toHaveBeenLastCalledWith(rows[1], "select");
     // Row checkboxes walk the rows (the next case's first row).
-    fireEvent.keyDown(box("Select A · fr"), { key: "ArrowDown", shiftKey: true });
-    expect(document.activeElement).toBe(box("Select B · de"));
+    fireEvent.keyDown(box("Select A, fr"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select B, de"));
     expect(onSelect).toHaveBeenLastCalledWith(rows[2], "select");
-    fireEvent.keyDown(box("Select B · de"), { key: "ArrowUp", shiftKey: true });
-    expect(document.activeElement).toBe(box("Select A · fr"));
+    fireEvent.keyDown(box("Select B, de"), { key: "ArrowUp", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select A, fr"));
     // A case checkbox steps up to the row above it.
     box("Select B").focus();
     fireEvent.keyDown(box("Select B"), { key: "ArrowUp", shiftKey: true });
-    expect(document.activeElement).toBe(box("Select A · fr"));
+    expect(document.activeElement).toBe(box("Select A, fr"));
     expect(onGroup).not.toHaveBeenCalled();
     onSelect.mockClear();
-    fireEvent.keyDown(box("Select A · fr"), { key: "ArrowDown" });
-    box("Select B · de").focus();
-    fireEvent.keyDown(box("Select B · de"), { key: "ArrowDown", shiftKey: true });
-    expect(document.activeElement).toBe(box("Select B · de"));
+    fireEvent.keyDown(box("Select A, fr"), { key: "ArrowDown" });
+    box("Select B, de").focus();
+    fireEvent.keyDown(box("Select B, de"), { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(box("Select B, de"));
     expect(onSelect).not.toHaveBeenCalled();
   });
   it("server-driven sort sets aria-sort and calls onSort without reordering", () => {
@@ -233,7 +233,7 @@ describe("row_selection_edges_and_server_sort", () => {
     fireEvent.click(n);
     fireEvent.click(text);
     expect(onSort.mock.calls).toEqual([["n"], ["name"]]);
-    expect([...container.querySelectorAll("th[scope=row]")].map((th) => th.textContent)).toEqual(["A · de", "A · fr", "B · de"]);
+    expect([...container.querySelectorAll("th[scope=row]")].map((th) => th.textContent)).toEqual(["A, de", "A, fr", "B, de"]);
     expect(n.closest("th")?.getAttribute("aria-sort")).toBe("descending");
   });
   it("rowEdge decision adds the class", () => {
@@ -252,6 +252,6 @@ describe("row_selection_edges_and_server_sort", () => {
     const { container } = render(<DataTable label="T" columns={columns} rows={[]} rowKey={r => r.id}
       groups={[{ ...groups[0], headerProps: { className: "custom" } }, { ...groups[1], expanded: false }]}
       groupSelection={{ selected: (key) => key === "A", onSelect: vi.fn(), checkboxLabel: (key) => `Select ${key}` }} />);
-    expect(container.innerHTML).toMatchInlineSnapshot(`"<div class="data-table-scroll"><table class="data-table density-compact"><caption class="visually-hidden">T</caption><thead><tr><th scope="col" style="text-align: start;">Text</th><th scope="col" style="text-align: start;" aria-sort="none"><button class="data-table-sort" type="button">N<svg class="data-table-sort-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5"></path></svg></button></th></tr></thead><tbody><tr class="data-table-group custom"><th scope="rowgroup" colspan="2"><input type="checkbox" class="data-table-group-select checkbox-target" data-group-key="A" aria-label="Select A" checked=""><span>Case A</span></th></tr><tr class=""><th scope="row" style="text-align: start;">A · de</th><td style="text-align: start;">2</td></tr><tr class=""><th scope="row" style="text-align: start;">A · fr</th><td style="text-align: start;">1</td></tr></tbody><tbody><tr class="data-table-group"><th scope="rowgroup" colspan="2"><input type="checkbox" class="data-table-group-select checkbox-target" data-group-key="B" aria-label="Select B"><span>Case B</span></th></tr></tbody></table></div>"`);
+    expect(container.innerHTML).toMatchInlineSnapshot(`"<div class="data-table-scroll"><table class="data-table density-compact"><caption class="visually-hidden">T</caption><thead><tr><th scope="col" style="text-align: start;">Text</th><th scope="col" style="text-align: start;" aria-sort="none"><button class="data-table-sort" type="button">N<svg class="data-table-sort-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.5"></path></svg></button></th></tr></thead><tbody><tr class="data-table-group custom"><th scope="rowgroup" colspan="2"><input type="checkbox" class="data-table-group-select checkbox-target" data-group-key="A" aria-label="Select A" checked=""><span>Case A</span></th></tr><tr class=""><th scope="row" style="text-align: start;">A, de</th><td style="text-align: start;">2</td></tr><tr class=""><th scope="row" style="text-align: start;">A, fr</th><td style="text-align: start;">1</td></tr></tbody><tbody><tr class="data-table-group"><th scope="rowgroup" colspan="2"><input type="checkbox" class="data-table-group-select checkbox-target" data-group-key="B" aria-label="Select B"><span>Case B</span></th></tr></tbody></table></div>"`);
   });
 });

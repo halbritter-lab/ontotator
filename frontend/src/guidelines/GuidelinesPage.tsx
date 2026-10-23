@@ -48,7 +48,7 @@ function GuidelinesView({ projectKey, version, canManage, onNavigate }: Guidelin
     item.change_note,
     item.version === current ? "current" : null,
     canManage && item.reach ? `Seen by ${item.reach.opened} of ${item.reach.members} task members` : null,
-  ].filter(Boolean).map(part => ` · ${part}`).join("");
+  ].filter(Boolean).map(part => `, ${part}`).join("");
 
   return <section className="guidelines-settings" aria-labelledby={headingId}>
     <h1 id={headingId}>Project guidelines</h1>
@@ -62,7 +62,7 @@ function GuidelinesView({ projectKey, version, canManage, onNavigate }: Guidelin
           <h2 id={versionsId}>Versions</h2>
           <ul aria-labelledby={versionsId}>
             {listing.versions.map(item => <li key={item.version}>
-              {item.withdrawn ? `v${item.version} · Withdrawn ${formatGuidelineDay(item.withdrawn.at)}` : <>{versionLink(item)}{facts(item)}</>}
+              {item.withdrawn ? `v${item.version}, Withdrawn ${formatGuidelineDay(item.withdrawn.at)}` : <>{versionLink(item)}{facts(item)}</>}
             </li>)}
           </ul>
         </div>

@@ -151,7 +151,7 @@ export function CarryDialog(props: CarryDialogProps): JSX.Element {
                     aria-disabled={person.has_work || busy ? "true" : undefined} aria-describedby={person.has_work ? mutedId : undefined}
                     onClick={event => { if (person.has_work || busy) event.preventDefault(); }}
                     onChange={() => { if (!person.has_work && !busy) { setUsername(person.username); reset(); } }} />
-                  <label htmlFor={personId}>{person.display_name}{person.has_work && <span className="assign-reason"> · <span id={mutedId}>{ALREADY_ANNOTATING}</span></span>}</label>
+                  <label htmlFor={personId}>{person.display_name}{person.has_work && <span className="assign-reason">, <span id={mutedId}>{ALREADY_ANNOTATING}</span></span>}</label>
                 </div>;
               })}
             </fieldset>}

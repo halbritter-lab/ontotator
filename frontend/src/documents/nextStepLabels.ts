@@ -70,7 +70,7 @@ export const STEP_FILTER_GROUPS: readonly (readonly [string, readonly StepCode[]
 export const stepLabel = (code: StepCode): string => STEP_LABELS[code] ?? code;
 export const actionLabel = (action: RowAction): string => ACTION_LABELS[action] ?? action;
 
-/** "Annotation · Round 1 · Annotator (ann-0004)" of the row's final result. */
+/** "Annotation, Round 1, Annotator (ann-0004)" of the row's final result. */
 function finalText(row: DocumentRowView, detail: StepDetailView): string | null {
   const final = row.final;
   if (!final) return null;
@@ -78,7 +78,7 @@ function finalText(row: DocumentRowView, detail: StepDetailView): string | null 
   const ordinal = final.round_ordinal ?? detail.round_ordinal ?? null;
   const round = kind === "consolidation" ? null : ordinal == null ? "Initial submission" : `Round ${ordinal}`;
   const author = personLabel(final.author ?? (final.author_label ? { pseudonym: final.author_label, is_me: final.is_mine } : null), { fallback: "Unknown" });
-  return ["Final: " + (kindLabels[kind] ?? kind), round, author].filter(Boolean).join(" · ");
+  return ["Final: " + (kindLabels[kind] ?? kind), round, author].filter(Boolean).join(", ");
 }
 
 const ORIGIN_TEXT: Readonly<Record<string, string>> = {
@@ -110,25 +110,25 @@ function detailText(row: DocumentRowView, detail: StepDetailView): string | null
   switch (detail.kind) {
     case "version": {
       const status = detail.translation_status ? STATUS_TEXT[detail.translation_status] : null;
-      return [versionText(detail), status].filter(Boolean).join(" · ") || null;
+      return [versionText(detail), status].filter(Boolean).join(", ") || null;
     }
     case "waiting":
-      return [versionText(detail), "waiting for review"].filter(Boolean).join(" · ");
+      return [versionText(detail), "waiting for review"].filter(Boolean).join(", ");
     case "source_ready":
-      return "Source text · ready to annotate";
+      return "Source text, ready to annotate";
     case "annotations_submitted": {
       const total = detail.total ?? 0;
       return `${detail.submitted ?? 0} of ${total} ${total === 1 ? "annotation" : "annotations"} submitted`;
     }
     case "round":
-      return detail.round_ordinal != null ? `Round ${detail.round_ordinal} · in progress` : "In progress";
+      return detail.round_ordinal != null ? `Round ${detail.round_ordinal}, in progress` : "In progress";
     case "report":
       return [detail.excerpt ? `“${cut(detail.excerpt)}”` : null, detail.reporter ? personLabel(detail.reporter) : null, detail.task_paused ? "task paused" : null]
-        .filter(Boolean).join(" · ") || null;
+        .filter(Boolean).join(", ") || null;
     case "final":
       return finalText(row, detail);
     case "review_only":
-      return "Review only · not annotated";
+      return "Review only, not annotated";
     default:
       return null;
   }
@@ -138,7 +138,7 @@ function detailText(row: DocumentRowView, detail: StepDetailView): string | null
 export function secondaryLine(step: NextStepView, row: DocumentRowView): string {
   const assigned = step.target != null && step.target > 1 ? `${step.assigned ?? 0} of ${step.target} assigned` : null;
   const detail = step.detail ? detailText(row, step.detail) : null;
-  return [assigned, detail].filter(Boolean).join(" · ");
+  return [assigned, detail].filter(Boolean).join(", ");
 }
 
 /**
@@ -158,7 +158,7 @@ export function rowActionLabel(step: NextStepView, row: Pick<DocumentRowView, "s
     // Several old-version items on one row: one entry per person, in the server's order (spec V5).
     const same = row.steps || row.next_step ? leadSteps({ steps: row.steps, next_step: row.next_step ?? null }).filter(other => other.action === step.action) : [];
     const item = row.work?.find(entry => entry.assignment_id === step.assignment_id);
-    return same.length > 1 && item ? `${base} · ${item.person?.display_name?.trim() || item.person?.pseudonym || item.author_label}` : base;
+    return same.length > 1 && item ? `${base}, ${item.person?.display_name?.trim() || item.person?.pseudonym || item.author_label}` : base;
   }
   return step.action ? actionLabel(step.action) : "";
 }

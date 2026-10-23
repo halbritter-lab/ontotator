@@ -1,7 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, type DocumentRowView, type NextStepView } from "../../src/api/client";
-import { usePlanSaves } from "../../src/documents/PlanChips";
 import { RowActionCell } from "../../src/documents/RowActions";
 import { Toast, useToast } from "../../src/ui/Toast";
 import { notInPlanRow, stepOf } from "./fixtures";
@@ -10,10 +9,9 @@ import { scenario7a, scenario7b, stagedRow } from "./tableFixtures";
 const onAction = vi.fn();
 
 function Harness({ row }: { row: DocumentRowView }) {
-  const { toast, show, dismiss } = useToast();
-  const saves = usePlanSaves({ projectKey: "p", onAnnounce: vi.fn(), onChanged: vi.fn(), showToast: show });
+  const { toast, dismiss } = useToast();
   return <>
-    <RowActionCell row={row} onAction={onAction} plan={{ groupRevision: 3, saves }} />
+    <RowActionCell row={row} onAction={onAction} />
     <Toast toast={toast} onDismiss={dismiss} />
   </>;
 }
@@ -30,7 +28,7 @@ it("one next-step button", () => {
   const steps: NextStepView[] = [stepOf("decide_report"), stepOf("annotation_in_progress")];
   const target = stagedRow("case-109", "de", { steps });
   render(<Harness row={target} />);
-  const first = screen.getByRole("button", { name: "Decide on report…, case-109 · de" });
+  const first = screen.getByRole("button", { name: "Decide on report…, case-109 de" });
   expect(first.textContent).toBe("Decide on report…");
   expect(first.id).toBe("documents-row-case-109-de-action");
   fireEvent.click(first);
@@ -47,7 +45,7 @@ it("More menu when several actions remain", () => {
   const steps: NextStepView[] = [stepOf("decide_report"), stepOf("assign_annotation"), stepOf("choose_final")];
   const target = stagedRow("case-109", "de", { steps });
   render(<Harness row={target} />);
-  expect(screen.getByRole("button", { name: "Decide on report…, case-109 · de" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Decide on report…, case-109 de" })).toBeTruthy();
   const more = screen.getByRole("button", { name: "More actions, case-109 de" });
   expect(more.textContent).toBe("More");
   expect(more.querySelector("svg")).not.toBeNull();
@@ -77,7 +75,7 @@ it("Open my task is the viewer's next step; Space activates it like a button", (
 it("an undecided row's plan step runs onAction (the card); no row plan popover; nothing on not-in-plan or done rows", () => {
   const target = undecided();
   render(<Harness row={target} />);
-  const step = screen.getByRole("button", { name: "Plan…, case-101 · de" });
+  const step = screen.getByRole("button", { name: "Plan…, case-101 de" });
   expect(step.getAttribute("aria-haspopup")).toBeNull();
   fireEvent.click(step);
   expect(onAction).toHaveBeenLastCalledWith(target, stepOf("decide_plan"));
@@ -92,8 +90,8 @@ it("an undecided row's plan step runs onAction (the card); no row plan popover; 
 
 it("Accept result… when the final has one submission to choose (final.state choose, submitted 1), Compare results… otherwise", () => {
   render(<Harness row={scenario7a()} />);
-  expect(screen.getByRole("button", { name: "Accept result…, case-107 · de" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Accept result…, case-107 de" })).toBeTruthy();
   cleanup();
   render(<Harness row={scenario7b()} />);
-  expect(screen.getByRole("button", { name: "Compare results…, case-107 · en" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Compare results…, case-107 en" })).toBeTruthy();
 });

@@ -27,16 +27,16 @@ function versionText(language: string | null | undefined, version: number | null
   return [language ?? "", version != null ? `v${version}` : ""].filter(Boolean).join(" ");
 }
 
-/** "Round 3 · continued from Round 2 submission (19 Oct, 00:57) · de v1" and its variants. */
+/** "Round 3, continued from Round 2 submission (19 Oct, 00:57), de v1" and its variants. */
 export function roundIdentity(round: RoundFacts, options: FormatTimeOptions = {}): string {
   const title = roundTitle(round.round_ordinal);
   const version = versionText(round.document_language, round.document_version);
-  const withVersion = (start: string) => [title, start, version].filter(Boolean).join(" · ");
+  const withVersion = (start: string) => [title, start, version].filter(Boolean).join(", ");
   switch (round.kind) {
     case "clean_restart":
-      return `${title} · restarted empty after agreement with the lead`;
+      return `${title}, restarted empty after agreement with the lead`;
     case "consolidation":
-      return `${title} · consolidation of ${plural(round.input_submission_ids?.length ?? 0, "submission", "submissions")}`;
+      return `${title}, consolidation of ${plural(round.input_submission_ids?.length ?? 0, "submission", "submissions")}`;
     case "carry_forward": {
       const source = round.source_round_ordinal ? `Round ${round.source_round_ordinal} submission` : "an earlier submission";
       const time = round.source_submission_recorded_at ? ` (${formatTime(round.source_submission_recorded_at, options)})` : "";
@@ -99,14 +99,14 @@ export interface CarrySourceFacts {
   finding_count: number;
 }
 
-/** "Continue from" option: "Round 2 submission · 19 Oct, 00:57 · de v1 · 1 finding". */
+/** "Continue from" option: "Round 2 submission, 19 Oct, 00:57, de v1, 1 finding". */
 export function sourceOptionLabel(source: CarrySourceFacts, options: FormatTimeOptions = {}): string {
   return [
     source.round_ordinal ? `Round ${source.round_ordinal} submission` : "Earlier submission",
     source.recorded_at ? formatTime(source.recorded_at, options) : "",
     versionText(source.language, source.version),
     plural(source.finding_count, "finding", "findings"),
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(", ");
 }
 
 /** Starting point in the Work rounds table: "from Round 2 submission", "restarted empty", … */
@@ -121,8 +121,8 @@ export function roundStartingPoint(round: Pick<RoundFacts, "kind" | "source_roun
   }
 }
 
-/** Short toolbar badge of a carry-forward round ("Round 3 · continued from Round 2"); undefined otherwise. */
+/** Short toolbar badge of a carry-forward round ("Round 3, continued from Round 2"); undefined otherwise. */
 export function roundBadge(round: Pick<RoundFacts, "kind" | "round_ordinal" | "source_round_ordinal"> | null | undefined): string | undefined {
   if (round?.kind !== "carry_forward" || !round.round_ordinal) return undefined;
-  return `Round ${round.round_ordinal} · continued from ${round.source_round_ordinal ? `Round ${round.source_round_ordinal}` : "an earlier submission"}`;
+  return `Round ${round.round_ordinal}, continued from ${round.source_round_ordinal ? `Round ${round.source_round_ordinal}` : "an earlier submission"}`;
 }

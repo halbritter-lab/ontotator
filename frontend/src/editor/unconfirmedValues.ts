@@ -119,9 +119,9 @@ export function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean
   return true;
 }
 
-/** "Assertion: Present · Experiencer: Patient"; an empty value reads "{Axis}: Not specified". */
+/** "Assertion: Present, Experiencer: Patient"; an empty value reads "{Axis}: Not specified". */
 export function valuesLine(row: UnconfirmedRow, optionLabel: (value: string | null) => string): string {
-  return row.values.map(value => `${value.axisLabel}: ${value.value === null ? "Not specified" : optionLabel(value.value)}`).join(" · ");
+  return row.values.map(value => `${value.axisLabel}: ${value.value === null ? "Not specified" : optionLabel(value.value)}`).join(", ");
 }
 
 /** Number of (finding, axis) pairs: the n of "Submit with {n} unconfirmed values". */

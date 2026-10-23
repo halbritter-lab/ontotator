@@ -35,7 +35,7 @@ export interface StagePopoverProps {
   now?: Date;
 }
 
-/** "Annotation: Tom Reis (ann-0004) · Round 1 · …" without the stage word the popover title already names. */
+/** "Annotation: Tom Reis (ann-0004), Round 1, …" without the stage word the popover title already names. */
 const lineText = (text: string, title: string): string => (text.startsWith(`${title}: `) ? text.slice(title.length + 2) : text);
 
 export function StagePopover({ row, stage, projectKey, anchorRef, onClose, onOpenDetails, actions, contentId, me, now }: StagePopoverProps): JSX.Element {

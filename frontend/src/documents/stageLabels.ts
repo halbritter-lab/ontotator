@@ -69,7 +69,7 @@ function timeText(iso: string): string {
   return formatTime(date);
 }
 
-const join = (...parts: (string | null | undefined | false)[]): string => parts.filter(Boolean).join(" · ");
+const join = (...parts: (string | null | undefined | false)[]): string => parts.filter(Boolean).join(", ");
 const version = (value: number | null | undefined): string | null => (value == null ? null : `v${value}`);
 const quoted = (value: string | null | undefined): string | null => (value ? `“${value}”` : null);
 
@@ -149,7 +149,7 @@ function annotationText(cell: StageCellView): StageText {
   }
 }
 
-/** "Round 1 · Ana Weber" / "Consolidation · Luc Martin" (+ " · v1" when not on the newest version). */
+/** "Round 1, Ana Weber" / "Consolidation, Luc Martin" (+ ", v1" when not on the newest version). */
 function finalKindText(cell: StageCellView): string {
   const detail = cell.detail;
   const people = names(detail.people);
@@ -169,7 +169,7 @@ function finalText(cell: StageCellView): StageText {
       return { symbol: "●", word: "Your choice", detail: join(plural(count, "submission"), match) };
     }
     case "confirm":
-      return { symbol: "⚠", word: "Check changes", detail: [...new Set((detail.causes ?? []).map(code => FINAL_CAUSE_TEXT[code] ?? "changed"))].join(" · ") };
+      return { symbol: "⚠", word: "Check changes", detail: [...new Set((detail.causes ?? []).map(code => FINAL_CAUSE_TEXT[code] ?? "changed"))].join(", ") };
     case "old_text": return { symbol: "⚠", word: "Final is on old text", detail: finalKindText(cell) };
     case "may_be_outdated": return { symbol: "⚠", word: "may be outdated", detail: "source changed" };
     case "final": return { symbol: "✓", word: "Final", detail: detail.note === "not_exported" ? "not exported" : finalKindText(cell) };

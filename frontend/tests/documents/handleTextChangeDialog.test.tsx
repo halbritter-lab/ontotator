@@ -18,11 +18,11 @@ function setup(options: { held?: boolean } = {}) {
   render(<HandleTextChangeDialog projectKey="demo" row={row} step={step} {...props} />);
   return props;
 }
-const dialog = () => screen.getByRole("dialog", { name: "Handle text change · case-112 · de" });
+const dialog = () => screen.getByRole("dialog", { name: "Handle text change: case-112 de" });
 const apply = () => within(dialog()).getByRole("button", { name: "Apply" });
 
 describe("HandleTextChangeDialog", () => {
-  it("title Handle text change · case-112 · de and the three options with Move to v2 preselected", async () => {
+  it("title Handle text change: case-112 de and the three options with Move to v2 preselected", async () => {
     setup();
     expect(within(dialog()).getByText("Tom Reis has an open annotation on v1. The text is now v2.")).toBeDefined();
     const move = screen.getByRole("radio", { name: "Move to v2" }) as HTMLInputElement;

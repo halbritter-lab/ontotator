@@ -63,15 +63,15 @@ function consequenceGroups(consequences: ConsequencesView): { language: string; 
     for (const task of ["translation_review", "annotate", "review"]) {
       const items = consequences.withdrawn.filter(item => item.language === language && item.task === task);
       if (!items.length) continue;
-      const people = [...new Set(items.map(item => personLabel(item.person)))].join(" · ");
+      const people = [...new Set(items.map(item => personLabel(item.person)))].join(", ");
       const [one, many] = taskNames[task];
       lines.push(`${items.length} ${items.length === 1 ? one : many} will be withdrawn (${people}${task === "translation_review" ? "" : items.length === 1 ? "; draft kept" : "; drafts kept"}).`);
     }
     const finals = consequences.finals_leaving.filter(item => item.language === language);
-    if (finals.length) lines.push(`${plural(finals.length, "final result")} (${finals.map(item => textLabel(item)).join(" · ")}) ${finals.length === 1 ? "stays" : "stay"} in history but ${finals.length === 1 ? "is" : "are"} no longer exported.`);
+    if (finals.length) lines.push(`${plural(finals.length, "final result")} (${finals.map(item => textLabel(item)).join(", ")}) ${finals.length === 1 ? "stays" : "stay"} in history but ${finals.length === 1 ? "is" : "are"} no longer exported.`);
     for (const item of consequences.restored.filter(row => row.language === language)) lines.push(`${item.language} of ${item.case_id} returns to the plan. Its earlier final result needs your confirmation.`);
     const reports = (consequences.open_reports ?? []).filter(item => item.language === language);
-    if (reports.length) lines.push(`${plural(reports.length, "open problem report")} (${reports.map(item => `${textLabel(item)}${item.held ? ", task paused" : ""}`).join(" · ")}) ${reports.length === 1 ? "stays" : "stay"} open under Problem reports.`);
+    if (reports.length) lines.push(`${plural(reports.length, "open problem report")} (${reports.map(item => `${textLabel(item)}${item.held ? ", task paused" : ""}`).join(", ")}) ${reports.length === 1 ? "stays" : "stay"} open under Problem reports.`);
     return { language, cases: cases.get(language)?.size ?? 0, lines };
   });
 }
@@ -177,7 +177,7 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
   const confirming = step.kind === "confirm";
   const groups = confirming ? consequenceGroups(step.consequences) : [];
   const withdrawing = confirming && step.consequences.withdrawn.length > 0;
-  const title = `Work plan · ${plural(caseIds.length, "case")}`;
+  const title = `Work plan: ${plural(caseIds.length, "case")}`;
 
   const footer = <>
     <span id={reasonId} className="work-plan-save-reason" hidden={!blocked || blocked === summary}>{blocked}</span>

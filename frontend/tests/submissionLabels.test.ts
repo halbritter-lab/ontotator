@@ -29,11 +29,11 @@ describe("shared submission labels", () => {
   });
   it("submission_label_variants", () => {
     const base = { kind: "annotation" as const, ordinal: 2, author: "ann-0004", isMe: false, language: "de", version: "v1", recordedAt: "2026-10-19T00:57:00" };
-    expect(submissionLabel(base, { now })).toBe("Annotation, from scratch · Round 2 · ann-0004 · de v1 · 19 Oct, 00:57");
-    expect(submissionLabel({ ...base, kind: "consolidation", author: "lead-0002", recordedAt: "2026-10-18T10:00:00" }, { now })).toBe("Consolidation · lead-0002 · de v1 · 18 Oct, 10:00");
-    expect(submissionLabel({ ...base, ordinal: null }, { now, withLanguage: false })).toBe("Annotation, from scratch · Initial submission · ann-0004 · v1 · 19 Oct, 00:57");
-    expect(submissionLabel({ ...base, isMe: true, kind: "proposal_check" }, { now })).toBe("Annotation, from proposals · Round 2 · ann-0004 (you) · de v1 · 19 Oct, 00:57");
-    expect(submissionLabel({ ...base, version: null, recordedAt: "2026-10-18T10:00:00" }, { now, withLanguage: false })).toBe("Annotation, from scratch · Round 2 · ann-0004 · 18 Oct, 10:00");
+    expect(submissionLabel(base, { now })).toBe("Annotation, from scratch, Round 2, ann-0004, de v1, 19 Oct, 00:57");
+    expect(submissionLabel({ ...base, kind: "consolidation", author: "lead-0002", recordedAt: "2026-10-18T10:00:00" }, { now })).toBe("Consolidation, lead-0002, de v1, 18 Oct, 10:00");
+    expect(submissionLabel({ ...base, ordinal: null }, { now, withLanguage: false })).toBe("Annotation, from scratch, Initial submission, ann-0004, v1, 19 Oct, 00:57");
+    expect(submissionLabel({ ...base, isMe: true, kind: "proposal_check" }, { now })).toBe("Annotation, from proposals, Round 2, ann-0004 (you), de v1, 19 Oct, 00:57");
+    expect(submissionLabel({ ...base, version: null, recordedAt: "2026-10-18T10:00:00" }, { now, withLanguage: false })).toBe("Annotation, from scratch, Round 2, ann-0004, 18 Oct, 10:00");
   });
   it("kind_labels", () => {
     expect(kindLabels).toEqual({ annotation: "Annotation, from scratch", proposal_check: "Annotation, from proposals", consolidation: "Consolidation", carry_forward: "Carried annotation" });
@@ -47,9 +47,9 @@ it("uses the display name and pseudonym when a person ref carries a display name
   expect(personLabel("ann-0004", false, { pseudonym: "ann-0004", display_name: null, is_me: false })).toBe("ann-0004");
   expect(personLabel("ann-0002", true, { pseudonym: "ann-0002", display_name: null, is_me: true })).toBe("ann-0002 (you)");
   expect(personLabel("ann-0004", false, null)).toBe("ann-0004");
-  expect(roundCell({ ordinal: 3, author: "ann-0004", isMe: false, person: ana })).toBe("Round 3 · Ana Weber (ann-0004)");
-  expect(roundCell({ ordinal: null, author: "ann-0004", isMe: false, person: ana })).toBe("Initial submission · Ana Weber (ann-0004)");
+  expect(roundCell({ ordinal: 3, author: "ann-0004", isMe: false, person: ana })).toBe("Round 3, Ana Weber (ann-0004)");
+  expect(roundCell({ ordinal: null, author: "ann-0004", isMe: false, person: ana })).toBe("Initial submission, Ana Weber (ann-0004)");
   expect(roundCell({ ordinal: null, author: "ann-0004", isMe: false, name: "Consolidation" })).toBe("Consolidation (ann-0004)");
   const base = { kind: "annotation" as const, ordinal: 2, author: "ann-0004", isMe: false, language: "de", version: "v1", recordedAt: "2026-10-19T00:57:00" };
-  expect(submissionLabel({ ...base, person: ana }, { now })).toBe("Annotation, from scratch · Round 2 · Ana Weber (ann-0004) · de v1 · 19 Oct, 00:57");
+  expect(submissionLabel({ ...base, person: ana }, { now })).toBe("Annotation, from scratch, Round 2, Ana Weber (ann-0004), de v1, 19 Oct, 00:57");
 });

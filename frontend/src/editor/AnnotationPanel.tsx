@@ -356,7 +356,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                             }}
                             onChange={() => updateAxis(option.value)}
                             onClick={confirmsDefault ? event => confirmDefaultClick(event, axis.id) : undefined} />
-                          <span>{option.label}</span>{isDefault && <span className="visually-hidden"> · default</span>}
+                          <span>{option.label}</span>{isDefault && <span className="visually-hidden"> (default)</span>}
                         </label>
                       );
                     })}
@@ -367,7 +367,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     {axis.allow_empty && <option value="">Not specified</option>}
                     {!axis.allow_empty && <option value="" disabled>Please select</option>}
                     {unavailable && <option value={val} disabled>{unavailableLabel}</option>}
-                    {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}{unconfirmed && option === val ? " · default" : ""}</option>)}
+                    {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}{unconfirmed && option === val ? " (default)" : ""}</option>)}
                   </Select>
                 )}
               </fieldset>

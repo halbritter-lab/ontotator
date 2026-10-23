@@ -36,7 +36,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it("offers exactly three options", () => {
   const props = renderResolve();
-  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 de" });
   expect(within(box).getAllByRole("button").map(button => button.textContent)).toEqual([
     "Assign a new review…", "Correct the translation…", "Discard the de translation…", "Cancel",
   ]);
@@ -50,8 +50,8 @@ it("Correct the translation… opens the panel", async () => {
   vi.spyOn(api, "startLeadCorrection").mockResolvedValue({ id: 41 } as AssignmentView);
   const props = renderResolve();
   fireEvent.click(screen.getByRole("button", { name: "Correct the translation…" }));
-  expect(screen.queryByRole("group", { name: "Resolve rejected translation, case-0101 · de" })).toBeNull();
-  const panel = screen.getByRole("group", { name: "Correct the translation, case-0101 · de" });
+  expect(screen.queryByRole("group", { name: "Resolve rejected translation, case-0101 de" })).toBeNull();
+  const panel = screen.getByRole("group", { name: "Correct the translation, case-0101 de" });
   expect(within(panel).getByText(/You review v1 yourself/)).toBeTruthy();
   expect(props.onNavigate).not.toHaveBeenCalled();
   fireEvent.click(within(panel).getByRole("button", { name: "Open translation review" }));
@@ -62,8 +62,8 @@ it("Correct the translation… opens the panel", async () => {
   cleanup();
   renderResolve();
   fireEvent.click(screen.getByRole("button", { name: "Correct the translation…" }));
-  fireEvent.click(within(screen.getByRole("group", { name: "Correct the translation, case-0101 · de" })).getByRole("button", { name: "Cancel" }));
-  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  fireEvent.click(within(screen.getByRole("group", { name: "Correct the translation, case-0101 de" })).getByRole("button", { name: "Cancel" }));
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 de" });
   await waitFor(() => expect(document.activeElement).toBe(within(box).getByRole("button", { name: "Correct the translation…" })));
 });
 
@@ -71,7 +71,7 @@ it("reads Continue your correction while the lead holds one", () => {
   vi.spyOn(api, "startLeadCorrection");
   const held = rejectedRow("case-0101", "de", { correcting: true });
   const props = renderResolve({ row: { ...held, next_step: stepOf("resolve_rejected", { document_id: "case-0101-de" }) } });
-  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 de" });
   expect(within(box).queryByRole("button", { name: "Correct the translation…" })).toBeNull();
   fireEvent.click(within(box).getByRole("button", { name: "Continue your correction" }));
   expect(props.onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 41 });
@@ -82,7 +82,7 @@ it("an ordinary open review of the lead (also an annotator) is not their correct
   const held = rejectedRow("case-0101", "de", { correcting: true });
   const row = { ...held, next_step: stepOf("resolve_rejected", { document_id: "case-0101-de" }), work: held.work.map(item => ({ ...item, lead_correction: false })) };
   renderResolve({ row });
-  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 de" });
   expect(within(box).queryByRole("button", { name: "Continue your correction" })).toBeNull();
   expect(within(box).getByRole("button", { name: "Correct the translation…" })).toBeTruthy();
 });
@@ -123,15 +123,15 @@ it("Assign review or accept… offers Turn translation review on or the external
     undo: { rows: [], revisions: {} }, withdrawn: [], accepted_document_ids: [] } as PlanRowResult;
   vi.mocked(api.patchWorkPlan).mockResolvedValue(saved);
   const props = renderResolve({ mode: "not_accepted", row });
-  const box = screen.getByRole("group", { name: "Translation not accepted, case-0101 · de" });
+  const box = screen.getByRole("group", { name: "Translation not accepted, case-0101 de" });
   fireEvent.click(within(box).getByRole("button", { name: "Turn translation review on" }));
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "de", { review: true, expected_revision: 3, confirm: false }));
-  await waitFor(() => expect(props.onDone).toHaveBeenCalledWith("Translation review on for case-0101 · de. Next: Assign reviewer…", { caseId: "case-0101", revision: 4 }));
+  await waitFor(() => expect(props.onDone).toHaveBeenCalledWith("Translation review on for case-0101 de. Next: Assign reviewer…", { caseId: "case-0101", revision: 4 }));
 
   cleanup();
   vi.mocked(api.patchWorkPlan).mockClear();
   const second = renderResolve({ mode: "not_accepted", row });
-  const again = screen.getByRole("group", { name: "Translation not accepted, case-0101 · de" });
+  const again = screen.getByRole("group", { name: "Translation not accepted, case-0101 de" });
   expect(within(again).getByText("This translation was reviewed outside Ontocurator — accept it as it is")).toBeTruthy();
   const accept = within(again).getByRole("button", { name: "Accept and annotate" });
   expect(accept.getAttribute("aria-disabled")).toBe("true");
@@ -142,7 +142,7 @@ it("Assign review or accept… offers Turn translation review on or the external
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "de", {
     annotate: true, expected_revision: 3, confirm: false, accept_external_review: { reason: "Clinic review" },
   }));
-  await waitFor(() => expect(second.onDone).toHaveBeenCalledWith("case-0101 · de accepted as reviewed outside Ontocurator.", { caseId: "case-0101", revision: 4 }));
+  await waitFor(() => expect(second.onDone).toHaveBeenCalledWith("case-0101 de accepted as reviewed outside Ontocurator.", { caseId: "case-0101", revision: 4 }));
 });
 
 it("Cancel in the discard step returns to the three options with focus on Discard", async () => {
@@ -151,7 +151,7 @@ it("Cancel in the discard step returns to the three options with focus on Discar
   const confirm = screen.getByRole("group", { name: "Discard the de translation of case-0101" });
   fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
   expect(props.onCancel).not.toHaveBeenCalled();
-  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  const box = screen.getByRole("group", { name: "Resolve rejected translation, case-0101 de" });
   expect(within(box).getAllByRole("button")).toHaveLength(4);
   await waitFor(() => expect(document.activeElement).toBe(within(box).getByRole("button", { name: "Discard the de translation…" })));
 });
@@ -188,33 +188,33 @@ it("Resolve… renders inline under the row with the lead-correction option", as
   const { container } = render(<div className="documents-row-notice-slot"><ResolveTranslation mode="resolve" row={rejected()} projectKey="p" revision={3}
     onAssignReview={vi.fn()} onNavigate={vi.fn()} onDone={vi.fn()} onChanged={vi.fn()} onAnnounce={vi.fn()} onCancel={vi.fn()} /></div>);
   const slot = container.firstElementChild as HTMLElement;
-  const box = within(slot).getByRole("group", { name: "Resolve rejected translation, case-0101 · de" });
+  const box = within(slot).getByRole("group", { name: "Resolve rejected translation, case-0101 de" });
   // No stage block or expansion around it: the options are the panel itself.
   expect(box.closest(".stage-block, .expanded-row")).toBeNull();
   fireEvent.click(within(box).getByRole("button", { name: "Correct the translation…" }));
   // F1: the lead-correction panel replaces the options in the same inline place.
-  const panel = within(slot).getByRole("group", { name: "Correct the translation, case-0101 · de" });
-  await waitFor(() => expect(document.activeElement).toBe(within(panel).getByRole("heading", { name: "Correct the translation, case-0101 · de" })));
+  const panel = within(slot).getByRole("group", { name: "Correct the translation, case-0101 de" });
+  await waitFor(() => expect(document.activeElement).toBe(within(panel).getByRole("heading", { name: "Correct the translation, case-0101 de" })));
 });
 
 it("focus goes to the inline panel heading (F5)", async () => {
   renderResolve();
-  const heading = screen.getByRole("heading", { name: "Resolve rejected translation, case-0101 · de" });
+  const heading = screen.getByRole("heading", { name: "Resolve rejected translation, case-0101 de" });
   await waitFor(() => expect(document.activeElement).toBe(heading));
   expect(heading.getAttribute("tabindex")).toBe("-1");
   cleanup();
   renderResolve({ mode: "not_accepted", row: notAccepted() });
-  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Translation not accepted, case-0101 · de" })));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Translation not accepted, case-0101 de" })));
 });
 
 it("heads the options at level 3 under the table and at level 5 in a card (heading order)", () => {
   renderResolve();
-  expect(screen.getByRole("heading", { level: 3, name: "Resolve rejected translation, case-0101 · de" })).toBeTruthy();
+  expect(screen.getByRole("heading", { level: 3, name: "Resolve rejected translation, case-0101 de" })).toBeTruthy();
   cleanup();
   renderResolve({ headingLevel: 5 });
-  expect(screen.getByRole("heading", { level: 5, name: "Resolve rejected translation, case-0101 · de" })).toBeTruthy();
+  expect(screen.getByRole("heading", { level: 5, name: "Resolve rejected translation, case-0101 de" })).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Correct the translation…" }));
-  expect(screen.getByRole("heading", { level: 5, name: "Correct the translation, case-0101 · de" })).toBeTruthy();
+  expect(screen.getByRole("heading", { level: 5, name: "Correct the translation, case-0101 de" })).toBeTruthy();
 });
 
 it("quotes the reviewer's reason and categories above the options, named by the review's work item", async () => {

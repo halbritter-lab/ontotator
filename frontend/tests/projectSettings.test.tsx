@@ -100,7 +100,7 @@ describe("settings section addresses", () => {
     render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} section="guideline" />);
     const section = await screen.findByRole("region", { name: "Guidelines" });
     expect(within(section).getByRole("heading", { level: 2, name: "Guidelines" })).toBeDefined();
-    expect(await within(section).findByText(/^v1 · guide-v1\.md/)).toBeDefined();
+    expect(await within(section).findByText(/^v1, guide-v1\.md/)).toBeDefined();
     expect(within(section).getByLabelText("Guideline file (.md or .txt, up to 256 KB)")).toBeDefined();
     expect(api.listGuidelines).toHaveBeenCalledWith(settings.project_key);
     expect(within(section).getAllByRole("heading", { level: 2, name: "Guidelines" })).toHaveLength(1);

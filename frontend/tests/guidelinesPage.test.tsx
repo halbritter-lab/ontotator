@@ -27,9 +27,9 @@ describe("GuidelinesPage", () => {
     expect(screen.queryByText(/The current version is/)).toBeNull();
     const items = within(versionList()).getAllByRole("listitem");
     expect(items.map(item => item.textContent)).toEqual([
-      "v3 · Published 13 Oct · Change 3 · current",
-      "v2 · Published 12 Oct · Change 2",
-      "v1 · Published 11 Oct · Change 1",
+      "v3, Published 13 Oct, Change 3, current",
+      "v2, Published 12 Oct, Change 2",
+      "v1, Published 11 Oct, Change 1",
     ]);
     expect(within(items[0]).getByRole("link", { name: "v3" }).getAttribute("aria-current")).toBe("page");
     expect(within(items[1]).getByRole("link", { name: "v2" }).getAttribute("href")).toBe("#/projects/p%2Fkey/guidelines/v2");
@@ -41,15 +41,15 @@ describe("GuidelinesPage", () => {
     vi.spyOn(api, "listGuidelines").mockResolvedValue(three());
     render(<GuidelinesPage projectKey="p/key" canManage onNavigate={vi.fn()} />);
     const items = await within(await screen.findByRole("list", { name: "Versions" })).findAllByRole("listitem");
-    expect(items[0].textContent).toBe("v3 · Published 13 Oct · Change 3 · current · Seen by 4 of 6 task members");
+    expect(items[0].textContent).toBe("v3, Published 13 Oct, Change 3, current, Seen by 4 of 6 task members");
   });
 
-  it("lists withdrawn versions as v4 · Withdrawn 21 Oct without text", async () => {
+  it("lists withdrawn versions as v4, Withdrawn 21 Oct without text", async () => {
     vi.spyOn(api, "listGuidelines").mockResolvedValue(guidelineListing([withdrawnGuideline(4, "Confidential reason"), guidelineSummary(3)]));
     render(<GuidelinesPage projectKey="p/key" canManage onNavigate={vi.fn()} />);
     expect(await screen.findByText("No guideline is in force.")).toBeDefined();
     const items = within(versionList()).getAllByRole("listitem");
-    expect(items.map(item => item.textContent)).toEqual(["v4 · Withdrawn 21 Oct", "v3 · Published 13 Oct · Change 3 · Seen by 4 of 6 task members"]);
+    expect(items.map(item => item.textContent)).toEqual(["v4, Withdrawn 21 Oct", "v3, Published 13 Oct, Change 3, Seen by 4 of 6 task members"]);
     expect(within(items[0]).queryByRole("link")).toBeNull();
     expect(screen.queryByText(/Confidential reason/)).toBeNull();
     expect(screen.queryByRole("heading", { level: 2, name: /^Guidelines v/ })).toBeNull();

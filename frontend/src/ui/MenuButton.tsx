@@ -7,7 +7,7 @@ export interface MenuItem {
   onSelect: () => void;
 }
 export interface MenuButtonProps {
-  /** Accessible name of the button and the menu, e.g. "2 more actions for case-107 · de". */
+  /** Accessible name of the button and the menu, e.g. "2 more actions for case-107 de". */
   label: string;
   items: MenuItem[];
   /** Visible button text, e.g. "More". */

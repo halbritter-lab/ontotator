@@ -19,8 +19,8 @@ describe("project members", () => {
     await waitFor(() => expect((screen.getByRole("checkbox", { name: "alice: Consolidator" }) as HTMLInputElement).checked).toBe(true));
     expect(screen.getByText("Alice (ann-1)")).toBeDefined();
     expect(screen.getByRole("columnheader", { name: "Username" })).toBeDefined();
-    fireEvent.click(screen.getByRole("checkbox", { name: "lead: Project lead" }));
-    await waitFor(() => expect(screen.queryByRole("checkbox", { name: "lead: Project lead" })).toBeNull());
+    fireEvent.click(screen.getByRole("checkbox", { name: "lead: Lead" }));
+    await waitFor(() => expect(screen.queryByRole("checkbox", { name: "lead: Lead" })).toBeNull());
     expect(api.setMemberRoles).toHaveBeenLastCalledWith("p/key", "lead", [], false);
     expect(api.adminListUsers).not.toHaveBeenCalled();
   });
@@ -28,9 +28,9 @@ describe("project members", () => {
   it("shows LAST_LEAD inline without optimistically removing the role", async () => {
     vi.mocked(api.setMemberRoles).mockRejectedValue(new ApiError(409, "Cannot remove", "LAST_LEAD"));
     render(<MembersSection projectKey="p" isSystemAdmin={false} />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "lead: Project lead" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "lead: Lead" }));
     expect(await screen.findByRole("alert")).toBeDefined();
-    expect((screen.getByRole("checkbox", { name: "lead: Project lead" }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: "lead: Lead" }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("confirms all actual affected assignment details before resending with revocation", async () => {

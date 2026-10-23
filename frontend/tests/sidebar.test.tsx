@@ -113,7 +113,7 @@ describe("AI badge in the sidebar", () => {
   it("replaces the '• tool' text of a tool proposal and leaves human proposals unmarked", () => {
     const { container } = renderCase(reviewView());
     const toolItem = itemFor(container, "HP:0001");
-    expect(within(toolItem).getByLabelText("AI-generated: pheno-nlp · llm-v2")).toBeDefined();
+    expect(within(toolItem).getByLabelText("AI-generated: pheno-nlp, llm-v2")).toBeDefined();
     expect(toolItem.textContent).not.toContain("• tool");
 
     const humanItem = itemFor(container, "HP:0002");
@@ -129,7 +129,7 @@ describe("AI badge in the sidebar", () => {
     fireEvent.click(reference);
     const details = screen.getByLabelText("Reference details");
     expect(within(details).getByText("AI")).toBeDefined();
-    expect(details.textContent).toContain("pheno-nlp · llm-v2");
+    expect(details.textContent).toContain("pheno-nlp, llm-v2");
   });
 
   it("does not mark a curated annotation that was adopted from a tool proposal", () => {

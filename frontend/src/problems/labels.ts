@@ -63,24 +63,24 @@ function personInText(r: ProblemReportView, label: string, ref?: Ref): string {
   return label === r.viewer_label ? "you" : label;
 }
 
-/** "Open" | "Closed by ann-0002 · 19 Oct, 01:31" | "Withdrawn by you · …". */
+/** "Open" | "Closed by ann-0002, 19 Oct, 01:31" | "Withdrawn by you, …". */
 export function reportStateFact(r: ProblemReportView, now?: Date): string {
   const { text } = reportStateBadge(r);
   if (r.state === "open") return text;
   const by = r.state_changed_by_label ? ` by ${personInText(r, r.state_changed_by_label, r.state_changed_by)}` : "";
-  const at = r.state_changed_at ? ` · ${formatTime(r.state_changed_at, { now })}` : "";
+  const at = r.state_changed_at ? `, ${formatTime(r.state_changed_at, { now })}` : "";
   return `${text}${by}${at}`;
 }
 
-/** "Task 4 · ann-0004 · accepted-translation · de"; with a display name (leads) "Task 4 · Ana Weber (ann-0004) · …". */
+/** "Task 4, ann-0004, accepted-translation, de"; with a display name (leads) "Task 4, Ana Weber (ann-0004), …". */
 export function taskLabel(t: TaskIdentity & { case_id: string; language: string }): string {
-  return `Task ${t.assignment_id} · ${ownerName(t)} · ${textLabel(t)}`;
+  return `Task ${t.assignment_id}, ${ownerName(t)}, ${textLabel(t)}`;
 }
 
-/** Running-text reference: "Task 4 (ann-0004)"; with a display name "Task 4 · Ana Weber (ann-0004)" (never nested parentheses). */
+/** Running-text reference: "Task 4 (ann-0004)"; with a display name "Task 4, Ana Weber (ann-0004)" (never nested parentheses). */
 export function taskRef(t: TaskIdentity): string {
   const name = ownerName(t);
-  return name === t.owner_label ? `Task ${t.assignment_id} (${t.owner_label})` : `Task ${t.assignment_id} · ${name}`;
+  return name === t.owner_label ? `Task ${t.assignment_id} (${t.owner_label})` : `Task ${t.assignment_id}, ${name}`;
 }
 
 export type TaskFactKind = "paused" | "repaused" | "resumed" | "restarted" | "withdrawn" | "unknown-release";
@@ -204,7 +204,7 @@ export function toolbarEntry(reports: ProblemReportView[] | null, held: boolean)
   const openText = `${open} open`;
   const openReports = `${open} open ${plural(open, "report", "reports")}`;
   if (held) {
-    return { badge: open ? `Paused · ${openText}` : "Paused", paused: true, accessibleSuffix: open ? `Task paused, ${openReports}` : "Task paused" };
+    return { badge: open ? `Paused, ${openText}` : "Paused", paused: true, accessibleSuffix: open ? `Task paused, ${openReports}` : "Task paused" };
   }
   if (open) return { badge: openText, paused: false, accessibleSuffix: openReports };
   return { badge: null, paused: false, accessibleSuffix: "Report a problem with this task" };

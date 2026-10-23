@@ -213,11 +213,11 @@ it("counts distinct refused proposals per set while retaining every violated rul
     ],
   };
   render(<UploadPreview plan={{ ...plan, proposal_sets: [proposalSet] }} />);
-  expect(screen.getByText(/0 proposed · 2 refused/)).toBeTruthy();
+  expect(screen.getByText(/0 proposed, 2 refused/)).toBeTruthy();
   expect(screen.getByText("Refusal rules (3)")).toBeTruthy();
-  expect(screen.getByText("first: discontinuous_mention · reason: Multiple spans")).toBeTruthy();
-  expect(screen.getByText("first: hidden_axis_value · axis: certainty")).toBeTruthy();
-  expect(screen.getByText("second: axis_not_chosen · axis: temporality")).toBeTruthy();
+  expect(screen.getByText("first: discontinuous_mention, reason: Multiple spans")).toBeTruthy();
+  expect(screen.getByText("first: hidden_axis_value, axis: certainty")).toBeTruthy();
+  expect(screen.getByText("second: axis_not_chosen, axis: temporality")).toBeTruthy();
 });
 it("commits the chosen plan with the upload", async () => {
   const workPlan: NonNullable<ImportPlan["work_plan"]> = {
@@ -233,7 +233,7 @@ it("commits the chosen plan with the upload", async () => {
   fireEvent.submit(screen.getByRole("button", { name: "Check" }).closest("form")!);
   fireEvent.click(await screen.findByRole("button", { name: "Annotate, de" }));
   fireEvent.click(screen.getByText("Adjust per case…"));
-  fireEvent.click(screen.getByRole("button", { name: "Translation review, case-1 · de" }));
+  fireEvent.click(screen.getByRole("button", { name: "Translation review, case-1 de" }));
   fireEvent.click(screen.getByRole("button", { name: "Import 1 text" }));
   await waitFor(() => expect(api.commitUpload).toHaveBeenCalledWith("p", 7, "real-plan", undefined, {
     plan_languages: { de: { review: true, annotate: false } },

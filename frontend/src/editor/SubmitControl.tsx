@@ -30,7 +30,7 @@ export function SubmitControl({ onSubmit, disabled, pending, openCount = null, o
         title={pending ? "Saving changes before submitting" : "Finish and submit case"}
       >
         <IconCheck />
-        {open ? `Finish & Submit · ${openCount} open` : "Finish & Submit Case"}
+        {open ? `Finish & Submit (${openCount} open)` : "Finish & Submit Case"}
       </Button>
     </>
   );

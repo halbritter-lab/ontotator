@@ -51,9 +51,9 @@ it('shows stale or deleted replacements as pending and preserves exact item iden
     replacement:{annotation_id:replacement.annotation.annotation_id,version:replacement.version},reviewer_id:'alice'}];
   const props={items:[pending,item({proposal_set_id:5})],resolutions,labelFor:()=>null,onContext:()=>{},onRecreate:vi.fn()};
   const mounted=render(<ReanchorPanel {...props} annotations={[replacement]}/>);
-  expect(screen.getByText('1 pending · 1 resolved')).toBeTruthy();expect(screen.getByText('Re-created')).toBeTruthy();
+  expect(screen.getByText('1 pending, 1 resolved')).toBeTruthy();expect(screen.getByText('Re-created')).toBeTruthy();
   mounted.rerender(<ReanchorPanel {...props} annotations={[{...replacement,version:'edited'}]}/>);
-  expect(screen.getByText('2 pending · 0 resolved')).toBeTruthy();expect(screen.queryByText('Re-created')).toBeNull();
+  expect(screen.getByText('2 pending, 0 resolved')).toBeTruthy();expect(screen.queryByText('Re-created')).toBeNull();
   mounted.rerender(<ReanchorPanel {...props} annotations={[]}/>);
   expect(screen.getAllByRole('button',{name:'Re-create here'})).toHaveLength(2);
   fireEvent.click(screen.getAllByRole('button',{name:'Re-create here'})[1]);expect(props.onRecreate).toHaveBeenCalledWith(item({proposal_set_id:5}));
@@ -125,7 +125,7 @@ it('keeps overlapping cues and discontiguous mentions at nonzero absolute contex
 
 it('keeps the term ID beside the resolved label and provides a native collapsible pending section',()=>{
   const mounted=render(<ReanchorPanel items={[item()]} labelFor={()=> 'Finding'} onContext={()=>{}}/>);
-  expect(screen.getByRole('button',{name:'Finding (HP:1) · hpo'})).toBeTruthy();
+  expect(screen.getByRole('button',{name:'Finding (HP:1), hpo'})).toBeTruthy();
   const details=mounted.container.querySelector('details')!;
   expect(details.open).toBe(true);
   fireEvent.click(mounted.container.querySelector('summary')!);

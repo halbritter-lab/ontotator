@@ -6,14 +6,14 @@ const now = new Date("2026-10-19T12:00:00");
 const r = (o: Partial<any>): RoundFacts => ({ round_id: "r", kind: "ordinary", state: "editable", round_ordinal: 1, document_language: "de", document_version: 1, input_count: 0, submission_count: 0, predecessor_round_id: null, ...o });
 describe("round labels", () => {
   it("identity_lines", () => {
-    expect(roundIdentity(r({}), { now })).toBe("Round 1 · started empty · de v1");
-    expect(roundIdentity(r({ kind: "carry_forward", round_ordinal: 3, source_round_ordinal: 2, source_submission_recorded_at: "2026-10-19T00:57:00" }), { now })).toBe("Round 3 · continued from Round 2 submission (19 Oct, 00:57) · de v1");
-    expect(roundIdentity(r({ kind: "clean_restart", round_ordinal: 4 }), { now })).toBe("Round 4 · restarted empty after agreement with the lead");
-    expect(roundIdentity(r({ kind: "consolidation", round_ordinal: 2, input_submission_ids: ["a", "b"] }), { now })).toBe("Round 2 · consolidation of 2 submissions");
+    expect(roundIdentity(r({}), { now })).toBe("Round 1, started empty, de v1");
+    expect(roundIdentity(r({ kind: "carry_forward", round_ordinal: 3, source_round_ordinal: 2, source_submission_recorded_at: "2026-10-19T00:57:00" }), { now })).toBe("Round 3, continued from Round 2 submission (19 Oct, 00:57), de v1");
+    expect(roundIdentity(r({ kind: "clean_restart", round_ordinal: 4 }), { now })).toBe("Round 4, restarted empty after agreement with the lead");
+    expect(roundIdentity(r({ kind: "consolidation", round_ordinal: 2, input_submission_ids: ["a", "b"] }), { now })).toBe("Round 2, consolidation of 2 submissions");
   });
   it("text_change_and_handover_rounds", () => {
-    expect(roundIdentity(r({ kind: "text_change", document_version: 2 }), { now })).toBe("Round 1 · carried after text change · de v2");
-    expect(roundIdentity(r({ kind: "handover", document_version: 2 }), { now })).toBe("Round 1 · handed over from another annotator · de v2");
+    expect(roundIdentity(r({ kind: "text_change", document_version: 2 }), { now })).toBe("Round 1, carried after text change, de v2");
+    expect(roundIdentity(r({ kind: "handover", document_version: 2 }), { now })).toBe("Round 1, handed over from another annotator, de v2");
     expect(roundStartingPoint(r({ kind: "text_change" }))).toBe("carried after text change");
     expect(roundStartingPoint(r({ kind: "handover" }))).toBe("handed over");
     expect(roundBadge(r({ kind: "handover", round_ordinal: 2 }))).toBeUndefined();
@@ -38,7 +38,7 @@ describe("round labels", () => {
     expect(carryUnavailableReason({ held: false, openRoundOrdinal: null, sourceCount: 2 })).toBeNull();
   });
   it("source_option_label", () => {
-    expect(sourceOptionLabel({ round_ordinal: 2, recorded_at: "2026-10-19T00:57:00", language: "de", version: 1, finding_count: 1 }, { now })).toBe("Round 2 submission · 19 Oct, 00:57 · de v1 · 1 finding");
-    expect(sourceOptionLabel({ round_ordinal: 2, recorded_at: null, language: "de", version: 1, finding_count: 2 }, { now })).toBe("Round 2 submission · de v1 · 2 findings");
+    expect(sourceOptionLabel({ round_ordinal: 2, recorded_at: "2026-10-19T00:57:00", language: "de", version: 1, finding_count: 1 }, { now })).toBe("Round 2 submission, 19 Oct, 00:57, de v1, 1 finding");
+    expect(sourceOptionLabel({ round_ordinal: 2, recorded_at: null, language: "de", version: 1, finding_count: 2 }, { now })).toBe("Round 2 submission, de v1, 2 findings");
   });
 });

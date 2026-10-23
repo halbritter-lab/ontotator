@@ -67,7 +67,7 @@ export function HistoricalSubmissionDialog({ view, documentText, currentDocument
                 {axesVal && Object.keys(axesVal).length > 0
                   ? Object.entries(axesVal)
                       .map(([k, v]) => `${k}: ${v ?? "Not specified"}`)
-                      .join(" · ")
+                      .join(", ")
                   : "No axes"}
               </p>
               {typeof text === "string" && evidenceOf(view, snap).map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>
@@ -79,14 +79,14 @@ export function HistoricalSubmissionDialog({ view, documentText, currentDocument
         })}
         {view.carried && <CarriedChecksReadOnly items={view.carried.items} />}
         {view.decisions.map(decision => <p className="annotation-note-history" key={refKey(decision.target)}>
-          {decision.target.annotation_id} ({decision.target.version}): {decision.outcome === "uncertain" ? "Unresolved" : decision.outcome} · Reviewer note: {decision.note || "No reviewer note."}
+          {decision.target.annotation_id} ({decision.target.version}): {decision.outcome === "uncertain" ? "Unresolved" : decision.outcome}, Reviewer note: {decision.note || "No reviewer note."}
         </p>)}
         {view.reanchorInputs.length > 0 && <section aria-label="Re-anchor review history">
           <h3>Findings reviewed after text correction</h3>
           {view.reanchorInputs.map(item=>{
             const resolution=view.reanchorResolutions.find(value=>reanchorKey(value.item)===reanchorKey(item));
             return <p key={reanchorKey(item)}>{item.source_ref.annotation_id} ({item.source_ref.version}): {resolution ?
-              `${resolution.outcome === "dismissed" ? "Dismissed" : "Re-created"} by ${resolution.reviewer_id}${resolution.reason ? `: ${resolution.reason}` : ""}${resolution.replacement ? ` · Replacement: ${resolution.replacement.annotation_id} (${resolution.replacement.version})` : ""}` : "Pending"}</p>;
+              `${resolution.outcome === "dismissed" ? "Dismissed" : "Re-created"} by ${resolution.reviewer_id}${resolution.reason ? `: ${resolution.reason}` : ""}${resolution.replacement ? `, Replacement: ${resolution.replacement.annotation_id} (${resolution.replacement.version})` : ""}` : "Pending"}</p>;
           })}
         </section>}
     </Dialog>

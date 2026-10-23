@@ -50,10 +50,10 @@ it("names the View link with the full submission label and adds round suffixes",
   const { submissions } = scenarioS0();
   const data = submissions["synthetic-accepted:de"];
   renderTable({ rows: data.submissions, rounds: data.rounds });
-  const link = screen.getByRole("link", { name: `View Annotation, from scratch · Round 1 · ann-0004 · de v1 · ${time("2026-10-18T10:00:00Z")}` });
-  expect(link.textContent).toBe("Round 1 · superseded");
+  const link = screen.getByRole("link", { name: `View Annotation, from scratch, Round 1, ann-0004, de v1, ${time("2026-10-18T10:00:00Z")}` });
+  expect(link.textContent).toBe("Round 1, superseded");
   expect(link.getAttribute("href")).toBe(routeHref(leadView(data.submissions[0])));
-  expect(screen.getByRole("link", { name: /^View Annotation, from scratch · Initial submission · ann-0003/ }).textContent).toBe("Initial submission");
+  expect(screen.getByRole("link", { name: /^View Annotation, from scratch, Initial submission, ann-0003/ }).textContent).toBe("Initial submission");
 });
 
 it("marks latest and earlier submissions of a round with several submissions", () => {
@@ -62,7 +62,7 @@ it("marks latest and earlier submissions of a round with several submissions", (
     submission({ submission_id: "r1-b", document_id: "d", round_id: "r1", round_ordinal: 2, is_latest_in_round: true, recorded_at: "2026-10-18T11:00:00Z" }),
   ];
   renderTable({ rows });
-  expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual(["Round 2 · earlier submission", "Round 2 · latest"]);
+  expect(screen.getAllByRole("link").map(link => link.textContent)).toEqual(["Round 2, earlier submission", "Round 2, latest"]);
 });
 
 it("collapses more than 10 rows to the newest 10 and keeps the Final row", () => {
@@ -83,7 +83,7 @@ it("lists unsubmitted rounds as muted last lines without counting them", () => {
   const data = submissions["synthetic-accepted:de"];
   const { container } = renderTable({ rows: data.submissions, rounds: data.rounds });
   const pending = container.querySelector(".submissions-pending")!;
-  expect(pending.textContent).toBe("Round 3 · ann-0004 · in progress, not submitted yet");
+  expect(pending.textContent).toBe("Round 3, ann-0004, in progress, not submitted yet");
   expect(bodyRows()).toHaveLength(2);
 });
 
@@ -91,7 +91,7 @@ it("shows consolidation rows without a round number", () => {
   const { submissions } = scenarioS5();
   const data = submissions["case-0377:en"];
   renderTable({ rows: data.submissions, rounds: data.rounds, language: "en" });
-  expect(screen.getByRole("link", { name: /^View Consolidation · lead-0002 \(you\) · en v1 · / }).textContent).toBe("Consolidation");
+  expect(screen.getByRole("link", { name: /^View Consolidation, lead-0002 \(you\), en v1, / }).textContent).toBe("Consolidation");
 });
 
 it("works read-only with a caller-supplied viewRoute and no Actions column", () => {
@@ -119,7 +119,7 @@ it("passes the label id to actions and renders confirmations as a full-width row
   });
   const button = screen.getByRole("button", { name: "Act" });
   const description = document.getElementById(button.getAttribute("aria-describedby")!)!;
-  expect(description.textContent).toBe(`Annotation, from scratch · Initial submission · ann-0001 · de v1 · ${time("2026-10-18T10:00:00Z")}`);
+  expect(description.textContent).toBe(`Annotation, from scratch, Initial submission, ann-0001, de v1, ${time("2026-10-18T10:00:00Z")}`);
   const confirmRow = screen.getByText("Confirm a").closest("tr")!;
   expect(confirmRow.className).toBe("data-table-expanded");
   expect(confirmRow.querySelector("td")!.getAttribute("colspan")).toBe("7");
@@ -152,7 +152,7 @@ it("shows the author as display name and pseudonym for leads", () => {
   const [first, second] = bodyRows();
   expect(within(first).getByRole("cell", { name: "Ana Weber (ann-0004)" })).toBeTruthy();
   expect(within(second).getByRole("cell", { name: "ann-0005" })).toBeTruthy();
-  expect(screen.getByText("Round 3 · Ben Ito (ann-0006) · in progress, not submitted yet")).toBeTruthy();
+  expect(screen.getByText("Round 3, Ben Ito (ann-0006), in progress, not submitted yet")).toBeTruthy();
   expect(first.querySelector("[hidden]")!.textContent).toContain("Ana Weber (ann-0004)");
 });
 

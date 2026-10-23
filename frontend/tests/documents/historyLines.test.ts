@@ -8,7 +8,7 @@ const ana = { pseudonym: "ann-0003", display_name: "Ana Weber", is_me: false };
 const tom = { pseudonym: "ann-0004", display_name: "Tom Reis", is_me: false };
 const luc = { pseudonym: "ann-0005", display_name: "Luc Martin", is_me: false };
 
-/** case-201 · de: Ana accepted v1 unchanged, Tom submitted Round 1, Luc annotates, the lead chose the final. */
+/** case-201 de: Ana accepted v1 unchanged, Tom submitted Round 1, Luc annotates, the lead chose the final. */
 function walkthroughRow() {
   return row({
     case_id: "case-201", language: "de",
@@ -28,10 +28,10 @@ describe("historyLines", () => {
   it("writes one line per stage as the spec examples", () => {
     const lines = historyLines(walkthroughRow(), [tomSubmission], { me: "lead-0002", now });
     expect(lines.map(line => line.text)).toEqual([
-      "Review: Ana Weber (ann-0003) · Accepted unchanged · 20 Oct, 22:09",
-      "Annotation: Tom Reis (ann-0004) · Round 1 · 1 finding · 22:15",
-      "Annotation: Luc Martin (ann-0005) · Round 1 · In progress",
-      "Final: chosen by you · 20 Oct, 22:20",
+      "Review: Ana Weber (ann-0003), Accepted unchanged, 20 Oct, 22:09",
+      "Annotation: Tom Reis (ann-0004), Round 1, 1 finding, 22:15",
+      "Annotation: Luc Martin (ann-0005), Round 1, In progress",
+      "Final: chosen by you, 20 Oct, 22:20",
     ]);
   });
 
@@ -43,10 +43,10 @@ describe("historyLines", () => {
   it("names another lead and falls back to the work items while submissions load", () => {
     const lines = historyLines(walkthroughRow(), null, { me: "lead-0009", now });
     expect(lines.map(line => line.text)).toEqual([
-      "Review: Ana Weber (ann-0003) · Accepted unchanged · 20 Oct, 22:09",
-      "Annotation: Tom Reis (ann-0004) · Round 1 · Submitted",
-      "Annotation: Luc Martin (ann-0005) · Round 1 · In progress",
-      "Final: chosen by lead-0002 · 20 Oct, 22:20",
+      "Review: Ana Weber (ann-0003), Accepted unchanged, 20 Oct, 22:09",
+      "Annotation: Tom Reis (ann-0004), Round 1, Submitted",
+      "Annotation: Luc Martin (ann-0005), Round 1, In progress",
+      "Final: chosen by lead-0002, 20 Oct, 22:20",
     ]);
   });
 
@@ -68,11 +68,11 @@ describe("historyLines", () => {
     const consolidation = submission({ submission_id: "s-c", document_id: "c-de-v2", version: 2, kind: "consolidation", author_label: "ann-0003", author: ana, round_ordinal: null, finding_count: 3, recorded_at: "2026-10-21T09:00:00" });
     const lines = historyLines(target, [consolidation], { now });
     expect(lines.map(line => line.text)).toEqual([
-      "Review: Ana Weber (ann-0003) · Accepted with corrections · v1 → v2",
-      "Review: Accepted: reviewed outside Ontocurator · Checked",
-      "Consolidation: Ana Weber (ann-0003) · 3 findings · v2 · 09:00",
-      "Consolidation: Ana Weber (ann-0003) · Open · Paused",
-      "Annotation: Luc Martin (ann-0005) · moved to v2",
+      "Review: Ana Weber (ann-0003), Accepted with corrections, v1 → v2",
+      "Review: Accepted: reviewed outside Ontocurator, Checked",
+      "Consolidation: Ana Weber (ann-0003), 3 findings, v2, 09:00",
+      "Consolidation: Ana Weber (ann-0003), Open, Paused",
+      "Annotation: Luc Martin (ann-0005), moved to v2",
       "Task paused: ann-0003",
     ]);
     expect(lines.at(-1)?.reportId).toBe("rep-3");
@@ -86,7 +86,7 @@ describe("historyLines", () => {
     const consolidation = (kept: number) => submission({ submission_id: `c-${kept}`, document_id: "case-201-de", author_label: "rev-0005", author: luc,
       kind: "consolidation", round_ordinal: null, finding_count: 6, recorded_at: "2026-10-21T22:30:00", kept_automatically: kept });
     const four = historyLines(walkthroughRow(), [consolidation(4)], { now }).find(line => line.key === "submission-c-4")!;
-    expect(four.text).toBe("Consolidation: Luc Martin (ann-0005) · 6 findings · 4 kept automatically (all matched) · 22:30");
+    expect(four.text).toBe("Consolidation: Luc Martin (ann-0005), 6 findings, 4 kept automatically (all matched), 22:30");
     const none = historyLines(walkthroughRow(), [consolidation(0)], { now }).find(line => line.key === "submission-c-0")!;
     expect(none.text).not.toContain("kept automatically");
   });

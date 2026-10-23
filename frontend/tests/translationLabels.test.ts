@@ -68,7 +68,7 @@ describe("translation review labels", () => {
       query: "Clinically relevant change: yes, always for a query.",
       rejected: "Clinically relevant change: yes, always for a rejection.",
     });
-    expect(decisionKeyHint).toBe("Ctrl + Enter submits · 1–4 choose a decision outside the text");
+    expect(decisionKeyHint).toBe("Ctrl + Enter submits, 1–4 choose a decision outside the text");
   });
   it("selects the rationale hint", () => {
     expect(rationaleHint("accepted_unchanged", false, 0)).toBe("Optional.");

@@ -67,25 +67,25 @@ export function isDiscarded(row: Pick<DocumentRowView, "plan_row">, version: Doc
 const dateOnly = (iso: string, now?: Date) => formatTime(iso, { now }).split(", ")[0];
 
 /**
- * "Accepted: reviewed outside Ontocurator · Project lead (ann-0002) · 20 Oct, 11:40 · {reason}",
- * "Accepted: marked as reviewed in the package · R. Roe, 1 Oct".
+ * "Accepted: reviewed outside Ontocurator, Project lead (ann-0002), 20 Oct, 11:40, {reason}",
+ * "Accepted: marked as reviewed in the package, R. Roe, 1 Oct".
  */
 export function acceptanceLabel(acceptance: VersionAcceptance, now?: Date): string {
   if (acceptance.source === "package") {
     const given = [acceptance.reviewer?.trim(), acceptance.reviewed_at ? dateOnly(acceptance.reviewed_at, now) : null].filter(Boolean).join(", ");
-    return ["Accepted: marked as reviewed in the package", given].filter(Boolean).join(" · ");
+    return ["Accepted: marked as reviewed in the package", given].filter(Boolean).join(", ");
   }
   const what = acceptance.source === "lead" ? "Accepted: reviewed outside Ontocurator" : "Accepted: without review at import";
   return [what, acceptance.accepted_by ? identityLabel(acceptance.accepted_by) : null, acceptance.accepted_at ? formatTime(acceptance.accepted_at, { now }) : null,
-    acceptance.reason?.trim()].filter(Boolean).join(" · ");
+    acceptance.reason?.trim()].filter(Boolean).join(", ");
 }
 
-/** "Discarded · Project lead (ann-0002) · 19 Oct, 08:00 · {reason}"; "Discarded" without a record. */
+/** "Discarded, Project lead (ann-0002), 19 Oct, 08:00, {reason}"; "Discarded" without a record. */
 export function discardLabel(version: DocumentVersionView, now?: Date): string {
   const record = (version as DocumentVersionView & VersionRecords).discarded;
   if (!record) return "Discarded";
   return ["Discarded", record.discarded_by ? identityLabel(record.discarded_by) : null, record.discarded_at ? formatTime(record.discarded_at, { now }) : null,
-    record.reason?.trim()].filter(Boolean).join(" · ");
+    record.reason?.trim()].filter(Boolean).join(", ");
 }
 
 function badgeTone(version: DocumentVersionView): StatusTone {
@@ -155,7 +155,7 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
             const moved = item.moved_to_version ?? null;
             const assignment = moved == null ? tools?.assignments.find(entry => entry.id === item.assignment_id && entry.document_id === version.document_id && !entry.revoked_at) : undefined;
             return <li key={item.assignment_id}>
-              <span>{personLabel(item.author_label, item.is_me, item.person)} · {labelFor(taskLabels, item.task)} · {moved != null ? `moved to v${moved}` : labelFor(assignmentStatusLabels, item.status)}</span>
+              <span>{personLabel(item.author_label, item.is_me, item.person)}, {labelFor(taskLabels, item.task)}, {moved != null ? `moved to v${moved}` : labelFor(assignmentStatusLabels, item.status)}</span>
               {item.held && <> <StatusBadge tone="warning">Paused</StatusBadge></>}
               {assignment && tools && <AssignmentActions assignment={assignment} members={tools.members} onChanged={tools.onAssignmentsChanged} />}
             </li>;

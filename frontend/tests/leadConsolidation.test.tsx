@@ -5,7 +5,7 @@ import { ConsolidationLauncher } from '../src/variants/ConsolidationLauncher';
 import { assignment } from './assignmentFixtures';
 
 const rows = ['first', 'second'].map((submission_id, index) => ({ submission_id, document_id: 'target',
-  author_label: `Reader ${index + 1}`, label: `Reader ${index + 1} · Round 1`, created_at: '2026-10-18T12:00:00Z', mode: 'independent', guideline_withdrawn: false }));
+  author_label: `Reader ${index + 1}`, label: `Reader ${index + 1}, Round 1`, created_at: '2026-10-18T12:00:00Z', mode: 'independent', guideline_withdrawn: false }));
 const lead: Member = { username: 'lead', display_name: 'Mia Kühn', pseudonym: 'lead-0002', roles: ['lead'], languages: ['de'] };
 const luc: Member = { username: 'luc', display_name: 'Luc Martin', pseudonym: 'ann-0004', roles: ['adjudicator', 'annotator'], languages: ['de'] };
 const rita: Member = { username: 'rita', display_name: 'Rita Rev', pseudonym: 'rev-0009', roles: ['adjudicator'], languages: ['fr'] };
@@ -107,8 +107,8 @@ it('requires at least two selected inputs and a reviewer', async () => {
   const view = render(<ConsolidationLauncher {...props} defaultOpen />);
   await screen.findByLabelText('Consolidation reviewer');
   expect(screen.getByText('Select at least two submissions.')).toBeTruthy();
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 1 · Round 1' }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 2 · Round 1' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 1, Round 1' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Reader 2, Round 1' }));
   expect(screen.getByText('Choose a reviewer.')).toBeTruthy();
   view.rerender(<ConsolidationLauncher {...props} rows={[rows[0]]} defaultOpen />);
   fireEvent.change(reviewerSelect(), { target: { value: 'luc' } });
@@ -123,8 +123,8 @@ it('keeps the inputs after a refusal and words a stale input', async () => {
   fireEvent.change(reviewerSelect(), { target: { value: 'luc' } });
   fireEvent.click(screen.getByRole('button', { name: 'Start consolidation' }));
   await screen.findByText(/Selected submissions are no longer current/);
-  expect(screen.getByRole('checkbox', { name: 'Reader 1 · Round 1' })).toHaveProperty('checked', true);
-  expect(screen.getByRole('checkbox', { name: 'Reader 2 · Round 1' })).toHaveProperty('checked', true);
+  expect(screen.getByRole('checkbox', { name: 'Reader 1, Round 1' })).toHaveProperty('checked', true);
+  expect(screen.getByRole('checkbox', { name: 'Reader 2, Round 1' })).toHaveProperty('checked', true);
 });
 
 it('opens behind Consolidate results without defaultOpen and lists only inputs on this text', async () => {

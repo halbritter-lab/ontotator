@@ -21,8 +21,8 @@ export interface DocumentsTabsProps {
 const updatedFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
 
 /**
- * Tabs "Needs your decision · To assign · In progress · Done · All" with counts (V4; counts ignore
- * facets and search), "Updated 10:42 · Refresh" and "Export final results…" (when the project has a
+ * Tabs "Needs your decision, To assign, In progress, Done, All" with counts (V4; counts ignore
+ * facets and search), "Updated 10:42, Refresh" and "Export final results…" (when the project has a
  * final result, `bar.finals`). Without `segment` the page shows All (VD7). A tab change keeps the
  * facets, search and order and drops page, open rows and selection.
  */

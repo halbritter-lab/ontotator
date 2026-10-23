@@ -387,7 +387,7 @@ export function scenarioS2(): DocumentsScenario {
 /**
  * S3 `case-0211`: de chain v1 MT accepted (final on v1 Round 2), v2 correction accepted,
  * v3 correction ready for review with an open translation review.
- * Final shows "· v1"; SELECTED_TEXT_CORRECTED for v2 and v3; waiting line for the review of v3.
+ * Final shows ", v1"; SELECTED_TEXT_CORRECTED for v2 and v3; waiting line for the review of v3.
  */
 export function scenarioS3(): DocumentsScenario {
   const caseId = "case-0211";

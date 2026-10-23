@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { routeHref, type ProjectDocumentsQuery, type Route } from '../app/router';
 import { LanguageTag } from '../ui';
+import { onSpaceActivate } from '../ui/spaceActivates';
 
 export interface TextViewToolbarProps {
   projectKey: string; caseId: string; language: string;
@@ -11,7 +12,7 @@ export interface TextViewToolbarProps {
 
 /** The text view's one toolbar (spec §4): Documents, case id with language, the selects, Compare, Text card. */
 export function TextViewToolbar({ projectKey, caseId, language, documents, onNavigate, children }: TextViewToolbarProps): JSX.Element {
-  const link = (route: Route, text: ReactNode, className = 'btn btn-secondary btn-sm') => <a className={className} href={routeHref(route)} onClick={(event: MouseEvent) => {
+  const link = (route: Route, text: ReactNode, className = 'btn btn-secondary btn-sm') => <a className={className} href={routeHref(route)} onKeyDown={onSpaceActivate} onClick={(event: MouseEvent) => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(route);
   }}>{text}</a>;

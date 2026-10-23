@@ -8,7 +8,7 @@ import { formatDateTime } from '../app/labels';
 import { onSpaceActivate } from '../ui/spaceActivates';
 import { notifyFinalSelectionChanged } from './finalSelectionState';
 
-/** An input submission; `label` is its visible name ("Ana Weber · Round 1 · 21 Oct, 11:25"), never a code. */
+/** An input submission; `label` is its visible name ("Ana Weber, Round 1, 21 Oct, 11:25"), never a code. */
 export type ConsolidationInput = SubmissionHistorySummary & { label?: string };
 
 interface Props {
@@ -127,7 +127,7 @@ function ConsolidationContent(props: Props): JSX.Element {
     {!current && loadError == null && <InlineMessage tone="info">Loading reviewers and tasks…</InlineMessage>}
     {current && !created && <>
       <fieldset disabled={busy}><legend>Submissions to merge</legend>{eligibleRows.map(row => <Checkbox key={row.submission_id}
-        id={`${fieldId}-${encodeURIComponent(row.submission_id)}`} label={row.label ?? `${row.author_label} · ${formatDateTime(row.created_at)}`}
+        id={`${fieldId}-${encodeURIComponent(row.submission_id)}`} label={row.label ?? `${row.author_label}, ${formatDateTime(row.created_at)}`}
         data-submission-id={row.submission_id} checked={selected.has(row.submission_id)} onChange={event => setSelected(previous => {
           const next = new Set(previous); if (event.target.checked) next.add(row.submission_id); else next.delete(row.submission_id); return next;
         })} />)}</fieldset>

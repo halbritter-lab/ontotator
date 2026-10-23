@@ -8,7 +8,7 @@ import { testUser } from './session';
 import { caseDetail, historical, ownRef } from './variantFixtures';
 
 const project: ProjectSummary = { project_key: 'pkg', name: 'Project', can_manage: true, document_count: 1, description: null, roles: ['lead'], allowed_modes: ['independent'] };
-const linked = { ...ownRef, kind: 'submission' as const, id: 'sub-2', label: 'ann-0002 · submission' };
+const linked = { ...ownRef, kind: 'submission' as const, id: 'sub-2', label: 'ann-0002, submission' };
 
 beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));

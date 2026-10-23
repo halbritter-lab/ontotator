@@ -28,17 +28,17 @@ describe("Review cell", () => {
     expect(text("review", cell("in_progress", "running", { people: [ana], assigned: 1, total: 2 }))).toEqual(["◐ 1 of 2 versions in review", "Ana Weber"]);
   });
   it("re_review", () => {
-    expect(text("review", cell("re_review", "running", { people: [ana], note: "new_review", reason: "Dosis prüfen" }))).toEqual(["◐ Re-review in progress", "Ana Weber · reason: “Dosis prüfen”"]);
-    expect(text("review", cell("re_review", "running", { people: [ana], note: "source_changed" }))).toEqual(["◐ Re-review in progress", "Ana Weber · source changed"]);
+    expect(text("review", cell("re_review", "running", { people: [ana], note: "new_review", reason: "Dosis prüfen" }))).toEqual(["◐ Re-review in progress", "Ana Weber, reason: “Dosis prüfen”"]);
+    expect(text("review", cell("re_review", "running", { people: [ana], note: "source_changed" }))).toEqual(["◐ Re-review in progress", "Ana Weber, source changed"]);
   });
   it("paused", () => expect(text("review", cell("paused", "decision", { people: [tom], excerpt: "Satz 3 unvollständig…" }))).toEqual(["⏸ Paused", "Tom Reis: “Satz 3 unvollständig…”"]));
-  it("rejected", () => expect(text("review", cell("rejected", "rejected", { people: [ana], at: at(10, 40) }))).toEqual(["✕ Rejected", "Ana Weber · 10:40"]));
-  it("query", () => expect(text("review", cell("query", "decision", { people: [luc], at: at(10, 51) }))).toEqual(["? Query", "Luc Martin · 10:51"]));
+  it("rejected", () => expect(text("review", cell("rejected", "rejected", { people: [ana], at: at(10, 40) }))).toEqual(["✕ Rejected", "Ana Weber, 10:40"]));
+  it("query", () => expect(text("review", cell("query", "decision", { people: [luc], at: at(10, 51) }))).toEqual(["? Query", "Luc Martin, 10:51"]));
   it("not_accepted", () => expect(text("review", cell("not_accepted", "decision", { note: "review_off" }))).toEqual(["⚠ Not accepted", "Review off"]));
   it("source_changed", () => expect(text("review", cell("source_changed", "decision", { from_version: 1 }), de, "en")).toEqual(["⚠ Source changed", "translation from en v1"]));
   it("accepted", () => {
     expect(text("review", cell("accepted", "done", { note: "unchanged" }))).toEqual(["✓ Accepted", "unchanged"]);
-    expect(text("review", cell("accepted", "done", { note: "with_corrections", people: [ana], from_version: 1, version: 2 }))).toEqual(["✓ Accepted", "with corrections · v1 → v2 · Ana Weber"]);
+    expect(text("review", cell("accepted", "done", { note: "with_corrections", people: [ana], from_version: 1, version: 2 }))).toEqual(["✓ Accepted", "with corrections, v1 → v2, Ana Weber"]);
     expect(text("review", cell("accepted", "done", { note: "in_package" }))).toEqual(["✓ Accepted", "in package"]);
     expect(text("review", cell("accepted", "done", { note: "outside" }))).toEqual(["✓ Accepted", "outside Ontocurator"]);
   });
@@ -66,19 +66,19 @@ describe("Annotation cell", () => {
   it("partly_assigned", () => expect(text("annotation", cell("partly_assigned", "todo", { people: [tom], assigned: 1, target: 2 }))).toEqual(["○ 1 of 2 assigned", "Tom Reis working"]));
   it("in_progress", () => {
     expect(text("annotation", cell("in_progress", "running", { people: [tom], submitted: 1, total: 2 }))).toEqual(["◐ 1 of 2 submitted", "waiting: Tom Reis"]);
-    expect(text("annotation", cell("in_progress", "running", { people: [ana], round_ordinal: 2 }))).toEqual(["◐ In progress", "Ana Weber · Round 2"]);
-    expect(text("annotation", cell("in_progress", "running", { people: [tom], note: "may_change", version: 1 }))).toEqual(["◐ In progress", "Tom Reis · v1 · may change"]);
+    expect(text("annotation", cell("in_progress", "running", { people: [ana], round_ordinal: 2 }))).toEqual(["◐ In progress", "Ana Weber, Round 2"]);
+    expect(text("annotation", cell("in_progress", "running", { people: [tom], note: "may_change", version: 1 }))).toEqual(["◐ In progress", "Tom Reis, v1, may change"]);
   });
   it("paused", () => expect(text("annotation", cell("paused", "decision", { people: [tom], excerpt: "Satz 3 unvollständig…" }))).toEqual(["⏸ Paused", "Tom Reis: “Satz 3 unvollständig…”"]));
   it("consolidating", () => expect(text("annotation", cell("consolidating", "running", { people: [luc] }))).toEqual(["◐ Consolidating", "Luc Martin"]));
   it("old_text_open", () => expect(text("annotation", cell("old_text_open", "decision", { people: [tom], from_version: 1, version: 2 }))).toEqual(["⚠ In progress on old text", "Tom Reis works on v1"]));
   it("old_text_submitted", () => expect(text("annotation", cell("old_text_submitted", "decision", { people: [ana], from_version: 1, version: 2, note: "v2_not_annotated" })))
-    .toEqual(["⚠ Submitted on v1", "Ana Weber · v2 not annotated"]));
+    .toEqual(["⚠ Submitted on v1", "Ana Weber, v2 not annotated"]));
   it("finishing_on_old", () => expect(text("annotation", cell("finishing_on_old", "running", { people: [tom], from_version: 1, version: 2, note: "carried_on_submit" })))
-    .toEqual(["◐ Finishing on v1", "Tom Reis · carried to v2 on submit"]));
+    .toEqual(["◐ Finishing on v1", "Tom Reis, carried to v2 on submit"]));
   it("submitted", () => {
     expect(text("annotation", cell("submitted", "done", { people: [ana, tom], submitted: 2, total: 2 }))).toEqual(["✓ 2 of 2 submitted", "Ana Weber, Tom Reis"]);
-    expect(text("annotation", cell("submitted", "done", { people: [ana], findings: 3, version: 1 }))).toEqual(["✓ submitted", "Ana Weber · 3 findings"]);
+    expect(text("annotation", cell("submitted", "done", { people: [ana], findings: 3, version: 1 }))).toEqual(["✓ submitted", "Ana Weber, 3 findings"]);
   });
 });
 
@@ -89,16 +89,16 @@ describe("Final cell", () => {
   it("choose", () => {
     expect(text("final", cell("choose", "decision", { submitted: 1 }))).toEqual(["● Your choice", "1 submission"]);
   });
-  it("Final choose with matching shows '2 submissions · 4 of 6 match'", () => {
-    expect(text("final", cell("choose", "decision", { submitted: 2, matching: 4, compared: 6 }))).toEqual(["● Your choice", "2 submissions · 4 of 6 match"]);
+  it("Final choose with matching shows '2 submissions, 4 of 6 match'", () => {
+    expect(text("final", cell("choose", "decision", { submitted: 2, matching: 4, compared: 6 }))).toEqual(["● Your choice", "2 submissions, 4 of 6 match"]);
   });
-  it("confirm", () => expect(text("final", cell("confirm", "decision", { causes: ["SELECTED_NEWER_RESULT", "PLAN_RESTORED"] }))).toEqual(["⚠ Check changes", "newer result · returned to plan"]));
-  it("old_text", () => expect(text("final", cell("old_text", "decision", { people: [ana], round_ordinal: 1, note: "round", version: 1 }))).toEqual(["⚠ Final is on old text", "Round 1 · Ana Weber · v1"]));
+  it("confirm", () => expect(text("final", cell("confirm", "decision", { causes: ["SELECTED_NEWER_RESULT", "PLAN_RESTORED"] }))).toEqual(["⚠ Check changes", "newer result, returned to plan"]));
+  it("old_text", () => expect(text("final", cell("old_text", "decision", { people: [ana], round_ordinal: 1, note: "round", version: 1 }))).toEqual(["⚠ Final is on old text", "Round 1, Ana Weber, v1"]));
   it("may_be_outdated", () => expect(text("final", cell("may_be_outdated", "waiting", { note: "source_changed", from_version: 1 }))).toEqual(["⚠ may be outdated", "source changed"]));
   it("final", () => {
-    expect(text("final", cell("final", "done", { people: [ana], round_ordinal: 1, note: "round" }))).toEqual(["✓ Final", "Round 1 · Ana Weber"]);
-    expect(text("final", cell("final", "done", { people: [luc], note: "consolidation" }))).toEqual(["✓ Final", "Consolidation · Luc Martin"]);
-    expect(text("final", cell("final", "done", { people: [ana], round_ordinal: 1, note: "round", version: 1 }))).toEqual(["✓ Final", "Round 1 · Ana Weber · v1"]);
+    expect(text("final", cell("final", "done", { people: [ana], round_ordinal: 1, note: "round" }))).toEqual(["✓ Final", "Round 1, Ana Weber"]);
+    expect(text("final", cell("final", "done", { people: [luc], note: "consolidation" }))).toEqual(["✓ Final", "Consolidation, Luc Martin"]);
+    expect(text("final", cell("final", "done", { people: [ana], round_ordinal: 1, note: "round", version: 1 }))).toEqual(["✓ Final", "Round 1, Ana Weber, v1"]);
     expect(text("final", cell("final", "done", { people: [ana], round_ordinal: 1, note: "not_exported" }))).toEqual(["✓ Final", "not exported"]);
   });
 });

@@ -124,7 +124,7 @@ export function ReporterReportCard({ report, assignment, confirm, onConfirmChang
         {report.state === "resolved" && report.resolution && <><br />Outcome: {report.resolution}</>}
         {withdrawn && <><br />Reason: {withdrawn}</>}
       </dd></div>
-      <div><dt>Your task</dt><dd>{fact.text}{fact.at && <>{fact.kind === "paused" ? " " : " · "}<Time iso={fact.at} /></>}</dd></div>
+      <div><dt>Your task</dt><dd>{fact.text}{fact.at && <>{fact.kind === "paused" ? " " : ", "}<Time iso={fact.at} /></>}</dd></div>
     </dl>
     {message && <InlineMessage tone="success">{message}</InlineMessage>}
     {(paused || report.withdrawable) && !confirm && <div className="reporter-report-actions">

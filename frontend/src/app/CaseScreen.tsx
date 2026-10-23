@@ -108,6 +108,7 @@ import { adjacentCase, orderTasks } from "./caseOrder";
 import type { RouteLeaveGuard } from "./router";
 import { isReviewLike, modeBadge } from "../editor/modes";
 import { LanguageTag } from "../ui/LanguageTag";
+import { onSpaceActivate } from "../ui/spaceActivates";
 
 const refKey = (r: { annotation_id: string; version: string }) => JSON.stringify([r.annotation_id, r.version]);
 
@@ -190,7 +191,7 @@ export interface CaseScreenProps {
   roundKind?: import("../api/client").WorkRoundView["kind"];
   /** Whether the task's round is still active; an inactive consolidation round offers no "Back to consolidation". */
   roundActive?: boolean;
-  /** Toolbar badge of a carry-forward round, e.g. "Round 3 · continued from Round 2". */
+  /** Toolbar badge of a carry-forward round, e.g. "Round 3, continued from Round 2". */
   roundBadge?: string;
   /** Full round identity, shown as the badge's title. */
   roundTitle?: string;
@@ -1365,7 +1366,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         const quote = evidence ? quoteSegments(view.document.text, evidence.mention.segments, 40) : "";
         return {
           annotationId: snapshot.annotation.annotation_id, version: snapshot.version, technicalId: snapshot.annotation.annotation_id,
-          label: quote ? `${term} · “${quote}”` : `${term} · no text span`,
+          label: quote ? `${term}, “${quote}”` : `${term}, no text span`,
         };
       });
   };
@@ -2780,7 +2781,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           >
             {roundKind === "consolidation" ? modeBadge("review").label : roundKind === "text_change" ? TEXT_CHANGE_ORIGIN : isCarryKind(roundKind) ? roundBadge ?? "Review carried findings" : badge.label}
           </span>
-          {consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })}>Back to consolidation</a> : null}
+          {consolidationAssignmentId ? <a className="btn btn-secondary btn-sm" href={routeHref({ name: "task", assignmentId: consolidationAssignmentId })} onKeyDown={onSpaceActivate}>Back to consolidation</a> : null}
           {/* The display name has a bounded width (full text in the title), so the header
               does not need another line; the pseudonym is never shortened. */}
           <span
@@ -3027,7 +3028,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 aria-pressed={sourceKey(s) === selectedSourceId} onClick={() => selectSource(sourceKey(s))}>
                 <TermName termId={s.annotation.term_id} label={termLabel(s.annotation.layer_id, s.annotation.term_id)} />
                 <span className="doc-meta">
-                  {view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label} · Read-only{" "}
+                  {view.layers?.find(l => l.layer_id === s.annotation.layer_id)?.label}, Read-only{" "}
                   <AiBadge provenance={s.annotation.provenance} source={s} />
                 </span>
               </button>)}
@@ -3147,7 +3148,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         )}
         {panesLayout && pendingIsMarkedSpan && !readOnly && mobilePane === "text" && (
           <div className="pending-bar" role="group" aria-label="New finding">
-            <span className="pending-bar__text">New finding “{quoteSegments(view.document.text, pendingAnnotation!.segments, 40)}” · </span>
+            <span className="pending-bar__text">New finding “{quoteSegments(view.document.text, pendingAnnotation!.segments, 40)}”</span>
             <Button type="button" variant="primary" size="sm" onClick={chooseTerm}>Choose term</Button>
             <Button type="button" variant="secondary" size="sm" onClick={discardPending}>Discard</Button>
           </div>
@@ -3168,10 +3169,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               <ProposalSource source={selectedSource} />
               <div className="detail-section">
                 <h2><TermName termId={selectedSource.annotation.term_id} label={termLabel(selectedSource.annotation.layer_id, selectedSource.annotation.term_id)} /></h2>
-                <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label} · Read-only</p>
+                <p>{view.layers?.find(l => l.layer_id === selectedSource.annotation.layer_id)?.label}, Read-only</p>
                 <p>
                   <AiBadge provenance={selectedSource.annotation.provenance} source={selectedSource} />{" "}
-                  {selectedSource.annotation.provenance.actor.actor_id} · {selectedSource.annotation.provenance.method}
+                  {selectedSource.annotation.provenance.actor.actor_id}, {selectedSource.annotation.provenance.method}
                 </p>
                 {Object.entries(selectedSource.annotation.axes_values ?? {}).map(([axis, value]) => <p key={axis}>{axis}: {value ?? "Not specified"}</p>)}
                 <h3>Mentions ({selectedSource.evidence.length})</h3>
@@ -3202,9 +3203,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     {pendingAnnotation.carriedInput ? "Save this finding with the original term and values. Then check it and mark it as checked." : pendingAnnotation.reanchorItem ? "Save this finding, check its evidence and values, then complete the text-change review." : "Select a term from the ontology for the new finding."}
                   </p>}
                 {pendingAnnotation.reanchorItem && <>
-                  <p><TermName termId={savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id} label={termLabel(pendingAnnotation.layerId,savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id)} /> · {pendingAnnotation.layerId}</p>
+                  <p><TermName termId={savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id} label={termLabel(pendingAnnotation.layerId,savedPendingReanchor?.annotation.term_id ?? pendingAnnotation.reanchorItem.term_id)} />, {pendingAnnotation.layerId}</p>
                   <p>Finding type: {view.layers?.find(layer=>layer.layer_id===pendingAnnotation.layerId)?.annotation_types.find(type=>type.type_id===pendingAnnotation.typeId)?.label ?? pendingAnnotation.typeId}</p>
-                  {!savedPendingReanchor && pendingAnnotation.reanchorItem.axes_values && <p>Original clinical context: {Object.entries(pendingAnnotation.reanchorItem.axes_values).map(([axis, value]) => `${axis}: ${value ?? "Not specified"}${pendingAnnotation.reanchorItem!.axes_defaulted?.includes(axis) ? " (defaulted)" : ""}`).join(" · ")}. These values will be carried over; you can edit them after saving.</p>}
+                  {!savedPendingReanchor && pendingAnnotation.reanchorItem.axes_values && <p>Original clinical context: {Object.entries(pendingAnnotation.reanchorItem.axes_values).map(([axis, value]) => `${axis}: ${value ?? "Not specified"}${pendingAnnotation.reanchorItem!.axes_defaulted?.includes(axis) ? " (defaulted)" : ""}`).join(", ")}. These values will be carried over; you can edit them after saving.</p>}
                   {savedPendingReanchor && <p>The replacement is saved. Link its saved version to finish reviewing this item.</p>}
                   <Button variant="secondary" disabled={readOnly || queueState === "saving"} onClick={()=>{void createPendingAnnotation(pendingAnnotation.reanchorItem!.term_id);}}>Save re-created finding</Button>
                   {!savedPendingReanchor && <p>Or select a different term below.</p>}
@@ -3394,7 +3395,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         sourceName={originalRoundInput.source_round_ordinal ? roundName(originalRoundInput.source_round_ordinal) : undefined} />}
       {historySubmission && <HistoricalSubmissionDialog view={fromSubmission(historySubmission,
         // Assignment editors name the submission by its round, as My submissions does.
-        versionContext?.assignmentId !== undefined && roundOrdinal ? `Round ${roundOrdinal} · ${formatTime(historySubmission.created_at)}`
+        versionContext?.assignmentId !== undefined && roundOrdinal ? `Round ${roundOrdinal}, ${formatTime(historySubmission.created_at)}`
           : submissionHistoryLabel(historySubmission.created_at, submissions.findIndex(s => s.submission_id === historySubmission.submission_id) + 1))}
         documentText={view.document.text} currentDocumentId={view.document.document_id} projectKey={view.key.project_key}
         termLabel={termLabel} onClose={() => setHistorySubmission(null)} />}

@@ -52,7 +52,7 @@ export function planReport(head: string, locked: number, noProposals: number): s
   return `${parts.join("; ")}.`;
 }
 
-/** Toast line after a quick action: "Plan saved for 20 cases · de: translation review and annotation". */
+/** Toast line after a quick action: "Plan saved for 20 cases, de: translation review and annotation". */
 export function savedSummary(caseCount: number, choices: PlanChoices): string {
   const active = changedChoices(choices);
   const parts = Object.keys(active).sort(compareKeys).map(key => {
@@ -61,5 +61,5 @@ export function savedSummary(caseCount: number, choices: PlanChoices): string {
     const off = [review === "off" && "translation review off", annotate === "off" && "annotate off"].filter(Boolean);
     return `${key}: ${[on, ...off].filter(Boolean).join(", ")}`;
   });
-  return [`Plan saved for ${plural(caseCount, "case")}`, ...parts].join(" · ");
+  return [`Plan saved for ${plural(caseCount, "case")}`, ...parts].join(", ");
 }

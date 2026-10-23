@@ -5,7 +5,7 @@ import { StatusBadge } from "../ui";
 import { leadSummary, reportStateBadge, reportStateFact, taskLabel } from "./labels";
 import "./problems.css";
 
-/** "Annotation · Round 2 · Ana Weber (ann-0004) · 18 Oct, 10:00" (leads; else the pseudonym): the row's final result without language. */
+/** "Annotation, Round 2, Ana Weber (ann-0004), 18 Oct, 10:00" (leads; else the pseudonym): the row's final result without language. */
 export function finalResultLabel(final: FinalSelectionSummary | null): string {
   if (!final) return "None";
   const kind = final.kind ?? "annotation";
@@ -14,7 +14,7 @@ export function finalResultLabel(final: FinalSelectionSummary | null): string {
     return submissionLabel({ kind, ordinal: final.round_ordinal, author, isMe: final.is_mine, language: final.language, version: null, recordedAt: final.recorded_at, person: final.author }, { withLanguage: false });
   }
   return [kind === "consolidation" ? null : final.round_ordinal == null ? "Initial submission" : `Round ${final.round_ordinal}`, personLabel(author, final.is_mine, final.author)]
-    .filter(Boolean).join(" · ");
+    .filter(Boolean).join(", ");
 }
 
 export type ReportLink = (reportId: string, text: string) => JSX.Element;
@@ -25,7 +25,7 @@ function eventOf(report: ProblemReportView, eventId: string | null | undefined) 
 
 function ReleasedHold({ report, hold }: { report: ProblemReportView; hold: ReportHoldView }): JSX.Element {
   const by = hold.released_by_label;
-  const at = hold.released_at ? <> · <Time iso={hold.released_at} /></> : null;
+  const at = hold.released_at ? <>, <Time iso={hold.released_at} /></> : null;
   const event = eventOf(report, hold.release_event_id);
   if (hold.release_action === "restart") {
     const ordinal = event?.round_ordinal;
@@ -36,7 +36,7 @@ function ReleasedHold({ report, hold }: { report: ProblemReportView; hold: Repor
     if (by === report.reporter_label) {
       const reason = event?.reason;
       // "by reporter (ann-0004)"; with a display name "by reporter Ana Weber (ann-0004)" (no nested parentheses).
-      return <><StatusBadge tone="neutral">Resumed</StatusBadge> by reporter {name === by ? `(${by})` : name}{at}{reason ? <> · "{reason}"</> : null}</>;
+      return <><StatusBadge tone="neutral">Resumed</StatusBadge> by reporter {name === by ? `(${by})` : name}{at}{reason ? <>, "{reason}"</> : null}</>;
     }
     return <><StatusBadge tone="neutral">Resumed</StatusBadge> by {name}{at}</>;
   }

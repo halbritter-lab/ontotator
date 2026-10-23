@@ -11,7 +11,6 @@ import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, DocumentRows
 import type { Route } from "../app/router";
 import { plural } from "../app/labels";
 import { DataTable, type Column, type DataTableGroup, type DataTableSort, type GroupSelectMode } from "../ui/DataTable";
-import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
 import {
   documentsGroupId,
@@ -28,12 +27,12 @@ import {
 } from "./RowCells";
 import { isActiveRow } from "./stageLabels";
 
-/** Narrow cards' case heading: "case-0101 · en source + 2 translations"; without the source row in view "case-0101 · 3 languages". */
+/** Narrow cards' case heading: "case-0101, en source + 2 translations"; without the source row in view "case-0101, 3 languages". */
 export function caseHeaderText(group: Pick<DocumentGroupView, "case_id" | "rows" | "language_count">): string {
   const source = group.rows.find(row => row.is_source);
-  if (!source) return `${group.case_id} · ${plural(group.language_count, "language")}`;
+  if (!source) return `${group.case_id}, ${plural(group.language_count, "language")}`;
   const translations = group.language_count - 1;
-  return `${group.case_id} · ${source.language} source${translations > 0 ? ` + ${plural(translations, "translation")}` : ""}`;
+  return `${group.case_id}, ${source.language} source${translations > 0 ? ` + ${plural(translations, "translation")}` : ""}`;
 }
 
 /** The source row the case line stands for: not planned, and the case shows other rows (spec §2b). */
@@ -123,7 +122,6 @@ export interface DocumentsTableProps {
   /** A lead action of the row (the next-step button or a "More" menu item). */
   onAction?: (row: DocumentRowView, step: NextStepView) => void;
   /** Plan saves for the "Plan…" popover (VD2). */
-  planSaves?: PlanSaves;
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
@@ -135,7 +133,7 @@ export interface DocumentsTableProps {
 }
 
 export function DocumentsTable({
-  page, onOpenPanel, activeKey = null, renderRowNotice, rowBadge, onAction, planSaves, onNavigate, busy, empty, selection, sort, onSort,
+  page, onOpenPanel, activeKey = null, renderRowNotice, rowBadge, onAction, onNavigate, busy, empty, selection, sort, onSort,
 }: DocumentsTableProps): JSX.Element {
   // Folded source rows are not rendered: they are not part of the range order; the case checkbox and the case line's
   // "source en (native)" button cover them.
@@ -174,8 +172,7 @@ export function DocumentsTable({
     {
       id: "action",
       header: "Next step",
-      cell: row => <RowActionCell row={row} onAction={onAction} onNavigate={onNavigate}
-        plan={planSaves ? { saves: planSaves, groupRevision: groupOf.get(row.case_id)?.plan_revision ?? 1 } : undefined} />,
+      cell: row => <RowActionCell row={row} onAction={onAction} onNavigate={onNavigate} />,
     },
     {
       id: "activity",

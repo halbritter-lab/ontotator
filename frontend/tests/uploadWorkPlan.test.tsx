@@ -46,7 +46,7 @@ describe("UploadWorkPlan", () => {
     const table = within(section).getByRole("table");
     expect(within(table).getAllByRole("columnheader").map(item => item.textContent)).toEqual(["Language", "Versions in bundle", "Translation review", "Annotate"]);
     const rows = within(table).getAllByRole("row").slice(1);
-    expect(rows.map(row => row.querySelector("th,td")!.textContent)).toEqual(["Sources (50)", "de · MT (50)", "fr · MT (30)"]);
+    expect(rows.map(row => row.querySelector("th,td")!.textContent)).toEqual(["Sources (50)", "de MT (50)", "fr MT (30)"]);
     expect(rows[0].textContent).toContain("–");
     expect(rows[0].textContent).toContain("if no translation");
     expect(within(rows[0]).getByRole("button", { name: "Annotate, Sources" }).getAttribute("aria-pressed")).toBe("true");
@@ -70,13 +70,13 @@ describe("UploadWorkPlan", () => {
     const onChange = renderPlan();
     const disclosure = screen.getByText("Adjust per case…");
     fireEvent.click(disclosure);
-    const chip = within(disclosure.closest("details")!).getByRole("button", { name: "Annotate, case-0002 · de" });
+    const chip = within(disclosure.closest("details")!).getByRole("button", { name: "Annotate, case-0002 de" });
     expect(chip.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(chip);
     expect(chip.getAttribute("aria-pressed")).toBe("false");
     expect(last(onChange).plan.plan_cases).toEqual([{ case_id: "case-0002", language: "de", review: true, annotate: false }]);
     fireEvent.click(screen.getByRole("button", { name: "Translation review, de" }));
-    expect(screen.getByRole("button", { name: "Translation review, case-0001 · de" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Translation review, case-0001 de" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("lists new language versions of existing cases with the default and keeps existing rows", () => {
@@ -86,10 +86,10 @@ describe("UploadWorkPlan", () => {
     }));
     expect(screen.getByText("1 language version already in the project keeps its plan.")).toBeTruthy();
     fireEvent.click(screen.getByText("Adjust per case…"));
-    const existing = screen.getByText("case-0007 · de").closest("tr")!;
+    const existing = screen.getByText("case-0007 de").closest("tr")!;
     expect(existing.textContent).toContain("keeps its plan");
     expect(within(existing).queryAllByRole("button")).toEqual([]);
-    expect(screen.getByRole("button", { name: "Translation review, case-0007 · fr" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Translation review, case-0007 fr" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("asks for the acceptance only while the rule is on", () => {

@@ -8,10 +8,10 @@ import { reviewLanguages } from "./variantMetadata";
 import { personLabel } from "../app/identity";
 
 export type Task = AssignRequest["task"];
-/** Member select label: identity format, languages and open-task count ("Ana Weber (ann-0004) — en, de · 3 open tasks"). */
+/** Member select label: identity format, languages and open-task count ("Ana Weber (ann-0004) — en, de, 3 open tasks"). */
 export function memberOptionLabel(member: Member): string {
   const open = member.open_tasks ? member.open_tasks.translation_review + member.open_tasks.annotate + member.open_tasks.review : null;
-  return `${personLabel(member)} — ${member.languages.join(", ") || "No languages listed"}${open === null ? "" : ` · ${open} open task${open === 1 ? "" : "s"}`}`;
+  return `${personLabel(member)} — ${member.languages.join(", ") || "No languages listed"}${open === null ? "" : `, ${open} open task${open === 1 ? "" : "s"}`}`;
 }
 /** The document fields task-language and review checks need (a `DocumentSummary` satisfies it). */
 export type TaskDocument = Pick<DocumentSummary, "document_id" | "language" | "translation_status">;

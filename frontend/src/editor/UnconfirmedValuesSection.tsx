@@ -113,7 +113,7 @@ export function UnconfirmedValuesSection({
   return <>
     <section className="unconfirmed-values" aria-labelledby={headingId} data-unconfirmed-values>
       <div className="unconfirmed-values__header">
-        <h3 id={headingId}>Unconfirmed values · {findings}</h3>
+        <h3 id={headingId}>Unconfirmed values ({findings})</h3>
         {confirmable.length > 0 && (
           <Button ref={confirmAllButton} type="button" variant="secondary" size="sm"
             aria-disabled={unavailable || running ? true : undefined}

@@ -57,7 +57,7 @@ it("renders the lede with links to the bar segments", async () => {
   const navigate = vi.fn();
   render(<ProgressPage projectKey="p" onNavigate={navigate} />);
   await pipeline();
-  expect(screen.getByText("10 cases · 5 translations to review · 11 language versions to annotate (6 not in plan).", { exact: false })).toBeTruthy();
+  expect(screen.getByText("10 cases, 5 translations to review, 11 language versions to annotate (6 not in plan).", { exact: false })).toBeTruthy();
   const decision = screen.getByRole("link", { name: "2 need your decision" });
   expect(decision.getAttribute("href")).toBe("#/projects/p/documents?segment=decision");
   expect(screen.getByRole("link", { name: "6 to assign" }).getAttribute("href")).toBe("#/projects/p/documents?segment=assign");
@@ -80,7 +80,7 @@ it("renders three stage cards as an ordered list with decorative arrows", async 
   arrows.forEach(arrow => expect(arrow.getAttribute("aria-hidden")).toBe("true"));
   expect(within(card("Translation review")).getByText("7 translations selected for review")).toBeTruthy();
   expect(within(card("Translation review")).getByText("2 of 7", { exact: false }).closest("p")?.textContent).toBe("2 of 7 accepted");
-  expect(within(card("Annotation")).getByText("11 language versions selected · 1 annotation per text")).toBeTruthy();
+  expect(within(card("Annotation")).getByText("11 language versions selected, 1 annotation per text")).toBeTruthy();
   expect(within(card("Annotation")).getByText("2 of 11", { exact: false }).closest("p")?.textContent).toBe("2 of 11 fully submitted");
   expect(within(card("Final result")).getByText("1 of 11", { exact: false }).closest("p")?.textContent).toBe("1 of 11 final");
   for (const meter of list.querySelectorAll(".progress-meter")) expect(meter.getAttribute("aria-hidden")).toBe("true");
@@ -95,19 +95,19 @@ it("links every count to the server's query", async () => {
   expect(href("Translation review", "To assign: 3")).toBe(`#/projects/p/documents?step=assign_translation_review&${review}`);
   expect(href("Translation review", "Check failed, with reviewer: 1"))
     .toBe(`#/projects/p/documents?translation_status=automatic_check_failed&step=translation_review_in_progress&${review}`);
-  expect(href("Translation review", "Rejected or queried · your decision: 0")).toBe(`#/projects/p/documents?step=resolve_rejected,resolve_queried&${review}`);
+  expect(href("Translation review", "Rejected or queried, your decision: 0")).toBe(`#/projects/p/documents?step=resolve_rejected,resolve_queried&${review}`);
   expect(href("Translation review", "Accepted: 2")).toBe(`#/projects/p/documents?translation_status=accepted&${review}`);
   expect(href("Annotation", "Waiting for translation review: 4")).toBe(`#/projects/p/documents?step=translation_review_in_progress,waiting_for_translation_review&${annotate}`);
   expect(href("Annotation", "In progress: 1")).toBe(`#/projects/p/documents?step=annotation_in_progress,consolidation_in_progress&${annotate}&paused=no`);
   expect(href("Annotation", "Paused by a problem report: 1")).toBe(`#/projects/p/documents?${annotate}&paused=yes`);
   expect(href("Annotation", "Submitted: 2")).toBe(`#/projects/p/documents?stage=final,done&${annotate}&paused=no`);
   expect(href("Final result", "Not ready (work open): 9")).toBe(`#/projects/p/documents?stage=translation_review,annotation&${annotate}`);
-  expect(href("Final result", "To choose · your decision: 1")).toBe(`#/projects/p/documents?step=choose_final&${annotate}`);
+  expect(href("Final result", "To choose, your decision: 1")).toBe(`#/projects/p/documents?step=choose_final&${annotate}`);
   expect(href("Final result", "Final: 1")).toBe(`#/projects/p/documents?final=any&${annotate}`);
   const exportLink = within(card("Final result")).getByRole("link", { name: "Export final results…" });
   expect(exportLink.getAttribute("href")).toBe("#/projects/p/export");
   expect(exportLink.parentElement?.textContent).toContain("(1 final, 10 would be omitted)");
-  fireEvent.click(within(card("Translation review")).getByRole("link", { name: "Rejected or queried · your decision: 0" }));
+  fireEvent.click(within(card("Translation review")).getByRole("link", { name: "Rejected or queried, your decision: 0" }));
   expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", plan: "review,review_and_annotate", step: "resolve_rejected,resolve_queried" });
   fireEvent.click(exportLink);
   expect(navigate).toHaveBeenCalledWith({ name: "projectExport", key: "p" });
@@ -125,7 +125,7 @@ it("shows a count without a server query as text", async () => {
 it("mutes zero counts", async () => {
   render(<ProgressPage projectKey="p" onNavigate={vi.fn()} />);
   await pipeline();
-  const zero = within(card("Translation review")).getByRole("link", { name: "Rejected or queried · your decision: 0" });
+  const zero = within(card("Translation review")).getByRole("link", { name: "Rejected or queried, your decision: 0" });
   expect(zero.closest("li")?.className).toContain("progress-count--zero");
   const nonZero = within(card("Translation review")).getByRole("link", { name: "Accepted: 2" });
   expect(nonZero.closest("li")?.className).not.toContain("progress-count--zero");

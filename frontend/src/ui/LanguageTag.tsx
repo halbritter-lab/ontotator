@@ -53,7 +53,7 @@ export function LanguageTag({ code, children, className }: { code: string; child
 }
 
 /**
- * Text that names a language, e.g. "case-0101 · de": the flag goes in before the last whole
+ * Text that names a language, e.g. "case-0101 de": the flag goes in before the last whole
  * occurrence of the code. The text content stays exactly the text (the flag adds none), and the
  * text stays in the parent element (no wrapper), so text matchers that read an element's own
  * text nodes still find it.

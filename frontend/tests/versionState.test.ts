@@ -46,7 +46,7 @@ describe('language and immutable variant identity', () => {
   ] as const)('labels %s with its actual status', (origin, label) => {
     const [option] = versionsOf(detail(variant('id', 'de', 2, { origin, translation_status: 'ready_for_review' })), 'de');
     expect(option).toMatchObject({ documentId: 'id', version: 2, origin, status: 'ready_for_review' });
-    expect(option.label).toBe(`v2 · ${label} · ready for review`);
+    expect(option.label).toBe(`v2, ${label}, ready for review`);
   });
 
   it('distinguishes equal-version runs with external IDs and internal IDs where still needed', () => {

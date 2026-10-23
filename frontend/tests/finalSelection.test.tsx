@@ -78,7 +78,7 @@ it("shows the preflight with a summary without moving focus", async () => {
   const heading = await screen.findByRole("heading", { name: "Export preflight" });
   expect(document.activeElement).not.toBe(heading);
   expect(screen.getByRole("region", { name: "Export preflight" })).toBeDefined();
-  expect(screen.getByText("1 selected results · 1 warnings · 1 omitted")).toBeDefined();
+  expect(screen.getByText("1 selected results, 1 warnings, 1 omitted")).toBeDefined();
   expect(screen.getByRole("group", { name: "Final export actions" })).toBeDefined();
 });
 

@@ -30,7 +30,7 @@ const footer = () => within(dialog().querySelector<HTMLElement>(":scope > .modal
 describe("Work rounds dialog", () => {
   it("names the text and explains rounds in one sentence", async () => {
     renderDialog();
-    expect(screen.getByRole("dialog", { name: "Work rounds · case-12 · de" })).toBeDefined();
+    expect(screen.getByRole("dialog", { name: "Work rounds: case-12 de" })).toBeDefined();
     expect(await screen.findByText("Each round keeps its starting point and its submissions. Starting a round does not change the final result.")).toBeDefined();
   });
 
@@ -66,7 +66,7 @@ describe("Work rounds dialog", () => {
     const group = await screen.findByRole("radiogroup", { name: "Continue from" });
     expect(screen.getByText("The round you continue from stays in the history. Every carried finding must be checked again; carried values are not confirmed.")).toBeDefined();
     const primary = footer().getByRole("button", { name: "Continue from this submission" });
-    fireEvent.click(within(group).getByRole("radio", { name: "Round 2 submission · 19 Oct, 00:57 · de v1 · 1 finding" }));
+    fireEvent.click(within(group).getByRole("radio", { name: "Round 2 submission, 19 Oct, 00:57, de v1, 1 finding" }));
     expect(screen.getByText("Round 2 stays in the history. Every carried finding must be checked again; carried values are not confirmed.")).toBeDefined();
     fireEvent.click(primary);
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith({ request_id: expect.any(String), expected_workflow_revision: 5, kind: "carry_forward", source_submission_ids: ["sub-2"] }));
@@ -200,7 +200,7 @@ describe("Original evidence dialog", () => {
     vi.spyOn(api, "getVariantText").mockResolvedValue({ document_id: "target", text: "Had seizure today.", text_sha256: "hash" });
     render(<RoundInputEvidenceDialog projectKey="p" input={input()} onClose={vi.fn()} labelFor={labelFor} sourceName="Round 2" />);
     const box = screen.getByRole("dialog", { name: "Original finding from Round 2" });
-    expect(box.querySelector(".round-evidence__meta")!.textContent).toBe("Submitted 19 Oct, 00:57 · de v1 · ann-0004");
+    expect(box.querySelector(".round-evidence__meta")!.textContent).toBe("Submitted 19 Oct, 00:57, de v1, ann-0004");
     expect(screen.getByText("Seizure")).toBeDefined();
     expect(screen.getByText("Assertion: Present")).toBeDefined();
     expect(screen.getByText("Note: Seen twice")).toBeDefined();
@@ -236,7 +236,7 @@ describe("Original evidence dialog", () => {
     const drafted = input({ source_submission_id: null, source_draft_snapshot_id: 4, source_round_ordinal: null, source_recorded_at: null });
     render(<RoundInputEvidenceDialog projectKey="p" input={drafted} onClose={vi.fn()} labelFor={labelFor} />);
     const box = screen.getByRole("dialog", { name: "Original finding from an earlier round" });
-    expect(box.querySelector(".round-evidence__meta")!.textContent).toBe("Draft before the text change · de v1 · ann-0004");
+    expect(box.querySelector(".round-evidence__meta")!.textContent).toBe("Draft before the text change, de v1, ann-0004");
     const details = screen.getByText("Technical details").closest("details")!;
     expect(details.textContent).toContain("SourceDraft before the text change");
     expect(details.textContent).not.toContain("Submission");

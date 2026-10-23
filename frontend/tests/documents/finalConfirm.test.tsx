@@ -28,5 +28,5 @@ it("builds Use, Replace and Keep payloads from the row's state", () => {
 it("labels a final result without a recorded time without inventing one", () => {
   const target = row({ case_id: "c", language: "de", versions: [version({ document_id: "c-de" })],
     final: final({ case_id: "c", language: "de", document_id: "c-de", submission_id: "s1", recorded_at: null, selected_at: "2026-10-18T10:05:00Z", updated_at: "2026-10-18T10:05:00Z" }) });
-  expect(currentFinalLabel(target, null)).toBe("Annotation, from scratch · Round 1 · ann-0001 · de v1");
+  expect(currentFinalLabel(target, null)).toBe("Annotation, from scratch, Round 1, ann-0001, de v1");
 });

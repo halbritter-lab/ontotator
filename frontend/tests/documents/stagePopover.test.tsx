@@ -48,7 +48,7 @@ describe("StagePopover", () => {
   it("lists the stage's 3 newest events, newest first, and no other stage", async () => {
     render(<Harness stage="annotation" />);
     openPopover();
-    const dialog = screen.getByRole("dialog", { name: "Annotation activity, case-108 · de" });
+    const dialog = screen.getByRole("dialog", { name: "Annotation activity, case-108 de" });
     expect(within(dialog).getByText("Loading activity…")).toBeTruthy();
     const list = await within(dialog).findByRole("list", { name: "Latest annotation activity" });
     const items = within(list).getAllByRole("listitem").map(entry => entry.textContent ?? "");
@@ -64,7 +64,7 @@ describe("StagePopover", () => {
     const onOpenDetails = vi.fn();
     render(<Harness stage="review" onOpenDetails={onOpenDetails} actions={<button type="button">Request correction…</button>} />);
     openPopover();
-    const dialog = screen.getByRole("dialog", { name: "Translation activity, case-108 · de" });
+    const dialog = screen.getByRole("dialog", { name: "Translation activity, case-108 de" });
     // Review lines need no submissions.
     expect(within(dialog).getAllByRole("listitem")[0].textContent).toContain("Ana Weber");
     expect(api.getRowSubmissions).not.toHaveBeenCalled();
@@ -77,7 +77,7 @@ describe("StagePopover", () => {
   it("says when the stage has no activity yet", () => {
     render(<Harness stage="final" />);
     openPopover();
-    const dialog = screen.getByRole("dialog", { name: "Finalization activity, case-108 · de" });
+    const dialog = screen.getByRole("dialog", { name: "Finalization activity, case-108 de" });
     expect(within(dialog).getByText("No finalization activity yet.")).toBeTruthy();
     expect(within(dialog).queryByRole("list")).toBeNull();
   });
@@ -85,7 +85,7 @@ describe("StagePopover", () => {
   it("Escape closes it and returns focus to the stage cell", () => {
     render(<Harness stage="review" />);
     openPopover();
-    const dialog = screen.getByRole("dialog", { name: "Translation activity, case-108 · de" });
+    const dialog = screen.getByRole("dialog", { name: "Translation activity, case-108 de" });
     expect(dialog.contains(document.activeElement)).toBe(true);
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();

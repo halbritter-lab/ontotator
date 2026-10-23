@@ -583,7 +583,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
               {/* The heading names the column; the picker keeps its full name for assistive technology only. */}
               <div className="translation-column-controls">
               <select id="review-comparison" className="form-select" aria-label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
-                {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} · {row.variant.language}</option>)}</select>
+                {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} {row.variant.language}</option>)}</select>
               </div>
             </div>
             <TextView key={comparisonId} ref={setComparisonElement} text={comparison.text} label="Comparison" lang={comparison.variant.language} />
@@ -640,7 +640,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           {!readOnly && saveState === "error" && <Button onClick={() => { void retrySave(); }}>Retry save</Button>}
           {earlier.length > 0 && <section className="review-history" aria-labelledby="review-history-heading">
             <h2 id="review-history-heading" className="translation-section-title">Previous reviews</h2>
-            {earlier.map(value => <details key={value.id}><summary>{decisionLabels[value.decision]} · {formatReviewDate(value.created_at)}</summary>
+            {earlier.map(value => <details key={value.id}><summary>{decisionLabels[value.decision]}, {formatReviewDate(value.created_at)}</summary>
               <ReviewSummary record={value} heading="Review details" />
               <h3 className="review-history-label">Proposed text</h3>
               <p className="review-history-text">{value.proposed_text}</p></details>)}

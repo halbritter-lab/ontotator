@@ -235,7 +235,7 @@ export function CarriedSection({
         <div className="carried-collapsed">
           <p ref={collapsed} tabIndex={-1} data-carried-collapsed="" className="carried-collapsed__line">
             <IconCheck />
-            <span>Checked · <OriginLine origin={origin} recordedAt={recordedAt} /></span>
+            <span>Checked, <OriginLine origin={origin} recordedAt={recordedAt} /></span>
           </p>
           <div className="carried-collapsed__actions">
             {showOriginal}

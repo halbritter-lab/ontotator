@@ -53,7 +53,7 @@ describe("lead report page structure", () => {
     expect(back.getAttribute("href")).toBe(routeHref({ name: "projectDocuments", key: "p", ...documents }));
     fireEvent.click(back);
     expect(navigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p", ...documents });
-    expect(screen.getByText("accepted-translation · de · Task 4 (ann-0004) · Annotation · Round 2", { exact: false })).toBeTruthy();
+    expect(screen.getByText("accepted-translation de, Task 4 (ann-0004), Annotation, Round 2", { exact: false })).toBeTruthy();
     expect(screen.getByText("Technical details")).toBeTruthy();
   });
 
@@ -100,11 +100,11 @@ describe("current state panel", () => {
     }) });
     const panel = within(stateSection());
     const items = panel.getAllByRole("listitem").map(li => li.textContent);
-    expect(items[0]).toContain("Task 10 · ann-0008 · accepted-translation · de");
+    expect(items[0]).toContain("Task 10, ann-0008, accepted-translation de");
     expect(items[0]).toMatch(/Paused since/);
     expect(items[0]).toContain("Also paused by another report");
-    expect(items[1]).toMatch(/Resumed by reporter \(ann-0004\) · .* · "upsi"/);
-    expect(items[2]).toMatch(/Resumed by lead-0002 \(you\) · /);
+    expect(items[1]).toMatch(/Resumed by reporter \(ann-0004\), .*, "upsi"/);
+    expect(items[2]).toMatch(/Resumed by lead-0002 \(you\), /);
     expect(items[3]).toMatch(/Restarted Round 3 started empty/);
     expect(items[4]).toContain("Released (no record of who released it)");
     expect(panel.getByRole("link", { name: "Open report" }).getAttribute("href")).toBe(routeHref({ name: "projectProblemReport", key: "p", reportId: "r2" }));
@@ -119,7 +119,7 @@ describe("current state panel", () => {
     });
     const panel = within(stateSection());
     expect(panel.getByText("None paused now")).toBeTruthy();
-    await waitFor(() => expect(stateSection().textContent).toMatch(/Annotation, from scratch · Round 1 · ann-0003 · /));
+    await waitFor(() => expect(stateSection().textContent).toMatch(/Annotation, from scratch, Round 1, ann-0003, /));
     expect(screen.getByText("Nothing is paused by this report. The report is open until you close it.")).toBeTruthy();
   });
 });
@@ -351,18 +351,18 @@ describe("display names for leads", () => {
       ] }),
       candidates: [candidate({ owner: BEN })],
     });
-    expect(screen.getByText("accepted-translation · de · Task 4 · Ana Weber (ann-0004) · Annotation · Round 2", { exact: false })).toBeTruthy();
+    expect(screen.getByText("accepted-translation de, Task 4, Ana Weber (ann-0004), Annotation, Round 2", { exact: false })).toBeTruthy();
     expect(screen.getByText(/^Reported by Ana Weber \(ann-0004\)/)).toBeTruthy();
     const items = within(stateSection()).getAllByRole("listitem").map(li => li.textContent);
-    expect(items[0]).toContain("Task 4 · Ana Weber (ann-0004) · accepted-translation · de");
-    expect(items[1]).toContain("Task 7 · Ben Ito (ann-0005) · accepted-translation · de");
+    expect(items[0]).toContain("Task 4, Ana Weber (ann-0004), accepted-translation de");
+    expect(items[1]).toContain("Task 7, Ben Ito (ann-0005), accepted-translation de");
     expect(items[1]).toContain("Resumed by Lea Lang (lead-0002, you)");
-    expect(items[2]).toContain("Task 8 · Cleo Park (ann-0006)");
+    expect(items[2]).toContain("Task 8, Cleo Park (ann-0006)");
     expect(items[2]).toContain("Resumed by reporter Ana Weber (ann-0004)");
     expect(within(screen.getByRole("region", { name: "History" })).getByText(/^Ana Weber \(ann-0004\) reported the problem\./)).toBeTruthy();
     fireEvent.click(intent("Pause other tasks…"));
     const same = await within(confirmBox("Pause other tasks")).findByRole("group", { name: "Same text: accepted-translation" });
-    expect(within(same).getByRole("checkbox", { name: /Task 7 · Ben Ito \(ann-0005\) · accepted-translation · en/ })).toBeTruthy();
+    expect(within(same).getByRole("checkbox", { name: /Task 7, Ben Ito \(ann-0005\), accepted-translation en/ })).toBeTruthy();
     cleanup(); vi.restoreAllMocks();
 
     await setup({ view: leadReport({ state: "resolved", resolution: "Done", state_changed_by_label: "lead-0002", state_changed_by: ME, state_changed_at: T2 }) });
@@ -378,12 +378,12 @@ describe("display names for leads", () => {
     const box = within(confirmBox("Pause other tasks"));
     const search = await box.findByRole("textbox", { name: "Search other tasks" });
     fireEvent.change(search, { target: { value: "dora" } });
-    expect(box.getByRole("checkbox", { name: /Task 12 · Dora Diaz \(ann-0009\) · other-text · en/ })).toBeTruthy();
+    expect(box.getByRole("checkbox", { name: /Task 12, Dora Diaz \(ann-0009\), other-text en/ })).toBeTruthy();
     expect(box.queryByRole("checkbox", { name: /Task 13/ })).toBeNull();
     fireEvent.change(search, { target: { value: "ann-0009" } });
     expect(box.getByRole("checkbox", { name: /Task 12/ })).toBeTruthy();
     fireEvent.change(search, { target: { value: "rev-0001" } });
-    expect(box.getByRole("checkbox", { name: /Task 13 · rev-0001 · third-text/ })).toBeTruthy();
+    expect(box.getByRole("checkbox", { name: /Task 13, rev-0001, third-text/ })).toBeTruthy();
   });
 
   it("confirmation copy names the reporter as Name (ann-…)", async () => {
@@ -402,6 +402,6 @@ describe("display names for leads", () => {
     box = within(confirmBox("Release pause"));
     fireEvent.change(box.getByRole("textbox", { name: /Reason/ }), { target: { value: "Go on" } });
     fireEvent.click(box.getByRole("button", { name: "Release pause" }));
-    await screen.findByText(/Released the pause on Task 4 · Ana Weber \(ann-0004\)\./);
+    await screen.findByText(/Released the pause on Task 4, Ana Weber \(ann-0004\)\./);
   });
 });

@@ -9,13 +9,13 @@ import { useJob } from "./useJob";
 import { LanguageFlag } from "../ui/LanguageTag";
 
 function RowLink({ projectKey, caseId, language }: { projectKey: string; caseId: string; language: string }): JSX.Element {
-  return <a href={routeHref({ name: "projectDocuments", key: projectKey, case: caseId, language })}>Show {caseId} · {language}</a>;
+  return <a href={routeHref({ name: "projectDocuments", key: projectKey, case: caseId, language })}>Show {caseId} {language}</a>;
 }
 function WorkflowWarnings({ projectKey, state }: { projectKey: string; state: FinalPreflight }): JSX.Element {
   const notInPlan = state.not_in_plan ?? [];
   return <>
     {state.warnings.length > 0
-      ? <ul className="final-warning-list">{state.warnings.map(warning => <li key={warning.id}><strong>{warning.case_id} · <LanguageFlag code={warning.language} />{warning.language}</strong><p>{warning.reason}</p><RowLink projectKey={projectKey} caseId={warning.case_id} language={warning.language} /></li>)}</ul>
+      ? <ul className="final-warning-list">{state.warnings.map(warning => <li key={warning.id}><strong>{warning.case_id} <LanguageFlag code={warning.language} />{warning.language}</strong><p>{warning.reason}</p><RowLink projectKey={projectKey} caseId={warning.case_id} language={warning.language} /></li>)}</ul>
       : <p>No open workflow warnings.</p>}
     {state.omissions.length > 0 && <><p>Omitted without a final selection:</p>
       <ul className="final-warning-list" aria-label="Omitted without a final selection">{state.omissions.map(item => <li key={JSON.stringify([item.case_id, item.language])}><RowLink projectKey={projectKey} caseId={item.case_id} language={item.language} /></li>)}</ul></>}
@@ -147,7 +147,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       {!checking && !state && <p id="final-export-recheck" className="field-hint">Check again to confirm the current selections and warnings.</p>}
       {state && <section className="final-export-preflight" aria-labelledby="final-export-preflight-heading">
         <h3 id="final-export-preflight-heading" tabIndex={-1}>Export preflight</h3>
-        <p>{state.selections.length} selected results · {state.warnings.length} warnings · {state.omissions.length} omitted{notInPlan.length > 0 && ` · ${notInPlan.length} not planned`}</p>
+        <p>{state.selections.length} selected results, {state.warnings.length} warnings, {state.omissions.length} omitted{notInPlan.length > 0 && `, ${notInPlan.length} not planned`}</p>
         <WorkflowWarnings projectKey={projectKey} state={state} />
         {state.warnings.length > 0 && <Checkbox ref={acknowledgement} id="final-export-ack" label="Export these selected results with the listed warnings and omissions" checked={accepted} disabled={creating} onChange={event => setAccepted(event.target.checked)} />}
         {!state.selections.length && <InlineMessage tone="warning"><span id="final-export-empty">Select at least one submitted result before exporting.</span></InlineMessage>}

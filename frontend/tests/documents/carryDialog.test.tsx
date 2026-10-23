@@ -16,13 +16,13 @@ function setup() {
   render(<CarryDialog projectKey="demo" row={row} source={carrySourceOfStep(row, step)} {...props} />);
   return props;
 }
-const dialog = () => screen.getByRole("dialog", { name: "Carry to v2 · case-113 · de" });
+const dialog = () => screen.getByRole("dialog", { name: "Carry to v2: case-113 de" });
 const assign = () => within(dialog()).getByRole("button", { name: "Assign" });
 
 describe("CarryDialog", () => {
   it("author preselected with the carried sentence", async () => {
     setup();
-    expect(await within(dialog()).findByText("Ana Weber submitted on v1 (Round 1 · 3 findings).")).toBeDefined();
+    expect(await within(dialog()).findByText("Ana Weber submitted on v1 (Round 1, 3 findings).")).toBeDefined();
     const author = screen.getByRole("radio", { name: "Ana Weber (author)" }) as HTMLInputElement;
     expect(author.checked).toBe(true);
     expect(document.getElementById(author.getAttribute("aria-describedby")!)?.textContent).toBe("Their findings are carried to v2 for them to check.");

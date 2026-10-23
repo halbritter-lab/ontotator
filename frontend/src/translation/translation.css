@@ -20,8 +20,6 @@
 .translation-review-bar h1 { margin: 0; font-family: var(--font-serif); font-size: var(--size-xl); line-height: var(--leading-xl); overflow-wrap: anywhere; }
 .translation-review-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); color: var(--text-muted); font-size: var(--size-md); line-height: var(--leading-md); }
 .translation-review-meta p { margin: 0; }
-/* The separator is decoration: the alternative text after "/" keeps it out of the accessible name. */
-.translation-review-meta p::after { content: "·"; content: "·" / ""; margin-left: var(--space-2); }
 .translation-review-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-left: auto; }
 .translation-save-status .status-pill { font-weight: var(--weight-regular); }
 .translation-review-bar .translation-details { position: relative; }

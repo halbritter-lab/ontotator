@@ -328,8 +328,8 @@ describe("problem reports (from the row panel)", () => {
     const section = (await within(card()).findByRole("heading", { name: "Problem reports (2)" })).closest("section")!;
     const items = within(section).getAllByRole("listitem");
     expect(items.map(item => item.textContent)).toEqual([
-      `Wrong language… · ann-0004 · ${formatTime("2026-10-19T10:00:00Z", { now })} · Report: Withdrawn · Paused tasks: 0 · Open report`,
-      `Text is cut off · ann-0004 · ${formatTime("2026-10-19T08:00:00Z", { now })} · Report: Closed · Paused tasks: 1 · Open report`,
+      `Wrong language…, ann-0004, ${formatTime("2026-10-19T10:00:00Z", { now })}, Report: Withdrawn, Paused tasks: 0, Open report`,
+      `Text is cut off, ann-0004, ${formatTime("2026-10-19T08:00:00Z", { now })}, Report: Closed, Paused tasks: 1, Open report`,
     ]);
     fireEvent.click(within(items[0]).getByRole("link", { name: "Open report" }));
     expect(onNavigate).toHaveBeenCalledWith(reportRoute("r-2"));

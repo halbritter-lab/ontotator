@@ -149,8 +149,8 @@ it("links each preflight warning and omission to its Documents row", async () =>
     omissions: [{ case_id: "GSC18", language: "en" }], state_digest: "a".repeat(64) });
   render(<ExportPage projectKey="p/a" currentUser={user} />);
   await screen.findByText("Text wording needs review");
-  expect(screen.getByRole("link", { name: "Show GSC 17 · de" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=de&case=GSC+17");
-  expect(screen.getByRole("link", { name: "Show GSC18 · en" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=en&case=GSC18");
+  expect(screen.getByRole("link", { name: "Show GSC 17 de" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=de&case=GSC+17");
+  expect(screen.getByRole("link", { name: "Show GSC18 en" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=en&case=GSC18");
   expect(screen.queryByRole("link", { name: "Review issue" })).toBeNull();
   expect(screen.getByText(/Omitted without a final selection/)).toBeTruthy();
 });
@@ -206,8 +206,8 @@ it("lists Not planned, not exported as information", async () => {
   vi.mocked(api.finalExportPreflight).mockResolvedValue({ ...emptyPreflight, project: "p", selections: [selection], not_in_plan: [{ case_id: "case-9", language: "fr" }] });
   render(<ExportPage projectKey="p" currentUser={user} />);
   const list = await finals().findByRole("list", { name: "Not planned, not exported" });
-  expect(within(list).getByRole("link", { name: "Show case-9 · fr" }).getAttribute("href")).toBe("#/projects/p/documents?language=fr&case=case-9");
-  expect(finals().getByText("1 selected results · 0 warnings · 0 omitted · 1 not planned")).toBeTruthy();
+  expect(within(list).getByRole("link", { name: "Show case-9 fr" }).getAttribute("href")).toBe("#/projects/p/documents?language=fr&case=case-9");
+  expect(finals().getByText("1 selected results, 0 warnings, 0 omitted, 1 not planned")).toBeTruthy();
   expect(finals().getByText(/Annotate is off in the work plan/)).toBeTruthy();
   expect(finals().queryByRole("checkbox")).toBeNull();
   expect(finals().getByRole("button", { name: "Create final export" }).getAttribute("aria-disabled")).toBeNull();

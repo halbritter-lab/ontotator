@@ -119,7 +119,7 @@ export function SelectByIdsDialog({ projectKey, current, onClose, onSelect }: Se
         hint={ids.length ? undefined : "Paste case IDs, one per line or separated by commas."}
         onChange={event => { setText(event.target.value); setCopied(""); }} />
       <p className="select-ids-result" role="status" aria-live="polite">
-        {ids.length === 0 ? "" : fresh ? `${found.length} found · ${unknown.length} unknown` : failed === undefined ? "Looking up…" : ""}
+        {ids.length === 0 ? "" : fresh ? `${found.length} found, ${unknown.length} unknown` : failed === undefined ? "Looking up…" : ""}
       </p>
       {failed !== undefined && <div className="select-ids-error"><ErrorNotice error={failed} /><Button size="sm" onClick={() => setRetry(value => value + 1)}>Retry</Button></div>}
       {unknown.length > 0 && <div className="select-ids-unknown">

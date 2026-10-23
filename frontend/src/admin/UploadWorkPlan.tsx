@@ -29,7 +29,7 @@ export interface UploadWorkPlanProps {
 const SOURCE = "source";
 const rowKey = (item: { case_id: string; language: string }) => `${item.case_id}:${item.language}`;
 const keyOf = (item: PlanCase) => (item.review === null ? SOURCE : item.language);
-const languageLabel = (language: PlanLanguage) => (language.key === SOURCE ? "Sources" : `${language.key} · MT`);
+const languageLabel = (language: PlanLanguage) => (language.key === SOURCE ? "Sources" : `${language.key} MT`);
 
 /** "Import 50 cases" / "Import 3 texts" from the cases the upload touches. */
 export function importLabel(workPlan: WorkPlan, kind: "t1" | "text"): string {
@@ -136,7 +136,7 @@ export function UploadWorkPlan({ workPlan, ruleOn = true, canAccept = false, acc
       {casesOpen && <div className="work-plan-table-scroll"><table className="data-table density-compact work-plan-table">
         <thead><tr><th scope="col">Text</th><th scope="col">Translation review</th><th scope="col">Annotate</th></tr></thead>
         <tbody>{workPlan.cases.map(item => {
-          const label = `${item.case_id} · ${item.language}`;
+          const label = `${item.case_id} ${item.language}`;
           if (!item.new_row) return <tr key={rowKey(item)}><th scope="row">{label}</th><td colSpan={2} className="field-hint">keeps its plan</td></tr>;
           const flags = caseFlags(item);
           return <tr key={rowKey(item)}>

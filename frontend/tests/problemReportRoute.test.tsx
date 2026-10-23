@@ -9,7 +9,7 @@ import { hold, report as reportFixture } from './problems/fixtures';
 import { group, page, row } from './documents/fixtures';
 
 vi.mock('../src/tasks/ProblemReportDetail', () => ({ ProblemReportDetail: (props: { projectKey: string; reportId: string; canManage: boolean; action?: string; section?: string; documents?: object }) =>
-  <section aria-label="Authorized report detail" data-route={JSON.stringify({ action: props.action, section: props.section, documents: props.documents })}>{props.projectKey} · {props.reportId} · {String(props.canManage)}</section> }));
+  <section aria-label="Authorized report detail" data-route={JSON.stringify({ action: props.action, section: props.section, documents: props.documents })}>{props.projectKey}, {props.reportId}, {String(props.canManage)}</section> }));
 const { ProblemReportDetail } = await vi.importActual<typeof import('../src/tasks/ProblemReportDetail')>('../src/tasks/ProblemReportDetail');
 afterEach(() => { cleanup(); vi.restoreAllMocks(); window.sessionStorage.clear(); window.history.replaceState(null, '', '#/'); });
 const project: ProjectSummary = { project_key: 'p/key', name: 'Project', can_manage: true, document_count: 1, description: null, roles: ['lead'], allowed_modes: ['independent'] };
@@ -20,7 +20,7 @@ it('waits for current project authority before mounting the exact encoded lead r
   render(<App user={testUser('lead')} />);
   expect(screen.queryByRole('region', { name: 'Authorized report detail' })).toBeNull();
   await act(async () => projects.resolve([project]));
-  expect((await screen.findByRole('region', { name: 'Authorized report detail' })).textContent).toBe('p/key · report/1 % · true');
+  expect((await screen.findByRole('region', { name: 'Authorized report detail' })).textContent).toBe('p/key, report/1 %, true');
 });
 
 it('answers a project member without management authority with "Problem report not found" and a way to My tasks', async () => {
@@ -192,7 +192,7 @@ it('after a decision offers Back to Documents and Next decision under a segment 
   confirmWith('Close report', 'Close report (pauses stay)', 'Done', 'Close report');
   const outcome = (await screen.findByText(/Report closed/)).closest('.lead-outcome') as HTMLElement;
   expect(within(outcome).getByRole('link', { name: 'Back to Documents' }).getAttribute('href')).toBe(routeHref({ name: 'projectDocuments', key: 'p/key', ...segment }));
-  const next = await within(outcome).findByRole('link', { name: 'Next decision: case-0102 · de' });
+  const next = await within(outcome).findByRole('link', { name: 'Next decision: case-0102 de' });
   // The next decision opens in the row panel (the legacy `open=` list became `panel`), unfiltered.
   const expected: Route = { name: 'projectDocuments', key: 'p/key', segment: 'decision', panel: 'case-0102:de', panel_stage: undefined, panel_tab: undefined };
   expect(next.getAttribute('href')).toBe(routeHref(expected));

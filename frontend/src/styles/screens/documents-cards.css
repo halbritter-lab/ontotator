@@ -22,7 +22,7 @@
 .document-card-head .documents-issues,
 .document-card-head .documents-row-badge { flex: none; }
 .document-card-activity { color: var(--text-muted); }
-/* Stage lines "Review: ✓ Accepted · unchanged": label muted, status in the tone colour (stage-cell--{tone}), detail muted. */
+/* Stage lines "Review: ✓ Accepted, unchanged": label muted, status in the tone colour (stage-cell--{tone}), detail muted. */
 .document-card-stage { display: block; margin: 0; overflow-wrap: anywhere; }
 .document-card-stage-label { color: var(--text-muted); }
 .document-card-stage .stage-cell-status { white-space: normal; }

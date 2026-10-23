@@ -46,14 +46,14 @@ describe("assign summary", () => {
   });
 
   it("labels steps, reasons, partial targets and results", () => {
-    expect(stepLabel("translation_review", "de", 20)).toBe("Translation review · de · 20 versions");
-    expect(stepLabel("annotate", "fr", 1)).toBe("Annotation · fr · 1 version");
+    expect(stepLabel("translation_review", "de", 20)).toBe("Translation review, de, 20 versions");
+    expect(stepLabel("annotate", "fr", 1)).toBe("Annotation, fr, 1 version");
     expect(memberReason({ unavailable: "does_not_read", already_assigned: 0, reads: ["en"] }, "annotate", "de")).toBe("does not read de");
     expect(memberReason({ unavailable: "does_not_read", already_assigned: 0, reads: ["de"] }, "translation_review", "de")).toBe("does not read the source language");
     expect(memberReason({ unavailable: "role_missing", already_assigned: 0, reads: ["de"] }, "annotate", "de")).toBe("Not an annotator in this project");
     expect(memberReason({ unavailable: null, already_assigned: 3, reads: ["de"] }, "annotate", "de")).toBe("Already annotating 3 of these cases");
     expect(memberReason({ unavailable: null, already_assigned: 0, reads: ["de"] }, "annotate", "de")).toBeNull();
-    expect(partlyAssignedLines([{ case_id: "case-0101", language: "de", remaining: 1 }, { case_id: "case-0102", language: "de", remaining: 2 }], 2)).toEqual(["case-0101 · de: 1 of 2 assigned"]);
+    expect(partlyAssignedLines([{ case_id: "case-0101", language: "de", remaining: 1 }, { case_id: "case-0102", language: "de", remaining: 2 }], 2)).toEqual(["case-0101 de: 1 of 2 assigned"]);
     expect(resultMessage("translation_review", 20, [{ person: ana, count: 20 }], true)).toBe("20 translation reviews assigned to Ana Weber");
     expect(resultMessage("translation_review", 20, [{ person: ana, count: 10 }, { person: ben, count: 10 }], true)).toBe("20 translation reviews split between Ana Weber (10) and Ben Roth (10)");
     expect(resultMessage("annotate", 2, [{ person: ana, count: 1 }, { person: ben, count: 1 }], false)).toBe("2 annotations assigned to Ana Weber and Ben Roth");

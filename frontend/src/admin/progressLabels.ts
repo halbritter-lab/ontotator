@@ -18,7 +18,7 @@ export function ledeSentence(lede: ProgressLedeView): string {
     countLabel(lede.cases, "case"),
     countLabel(lede.translations_to_review, "translation to review", "translations to review"),
     `${countLabel(lede.versions_to_annotate, "language version to annotate", "language versions to annotate")} (${lede.not_in_plan} not in plan).`,
-  ].join(" · ");
+  ].join(", ");
 }
 
 export function doneSentence(done: number, total: number, word: string): string {
@@ -66,7 +66,7 @@ const row = (stage: Stage, key: string, label: string, warning?: boolean): Stage
 
 export function stageCards(stages: ProgressStagesView, annotationsPerText: number | null): StageCard[] {
   const review = stages.translation_review, annotation = stages.annotation, final = stages.final;
-  const perText = annotationsPerText == null ? "" : ` · ${countLabel(annotationsPerText, "annotation per text", "annotations per text")}`;
+  const perText = annotationsPerText == null ? "" : `, ${countLabel(annotationsPerText, "annotation per text", "annotations per text")}`;
   return [
     {
       id: "translation_review", title: "Translation review",
@@ -76,7 +76,7 @@ export function stageCards(stages: ProgressStagesView, annotationsPerText: numbe
         row(review, "to_assign", "To assign"),
         row(review, "in_review", "In review"),
         row(review, "check_failed_with_reviewer", "Check failed, with reviewer"),
-        row(review, "rejected_or_queried", "Rejected or queried · your decision"),
+        row(review, "rejected_or_queried", "Rejected or queried, your decision"),
         row(review, "accepted", "Accepted"),
       ],
     },
@@ -98,8 +98,8 @@ export function stageCards(stages: ProgressStagesView, annotationsPerText: numbe
       done: doneSentence(final.done, final.total, "final"), doneCount: final.done, total: final.total,
       rows: [
         row(final, "not_ready", "Not ready (work open)"),
-        row(final, "to_choose", "To choose · your decision"),
-        row(final, "to_confirm", "To confirm · your decision"),
+        row(final, "to_choose", "To choose, your decision"),
+        row(final, "to_confirm", "To confirm, your decision"),
         row(final, "final", "Final"),
       ],
       footer: `(${final.counts.final ?? 0} final, ${final.counts.would_be_omitted ?? 0} would be omitted)`,

@@ -61,18 +61,18 @@ describe("LanguageTag", () => {
 
 describe("LanguageText", () => {
   it("puts the flag before the code and keeps the text", () => {
-    const { container } = render(<p><LanguageText text="Consolidate case-de · de v2" code="de" /></p>);
-    expect(container.textContent).toBe("Consolidate case-de · de v2");
+    const { container } = render(<p><LanguageText text="Consolidate case-de de v2" code="de" /></p>);
+    expect(container.textContent).toBe("Consolidate case-de de v2");
     const flag = container.querySelector("svg.language-flag")!;
     expect(flag.getAttribute("aria-hidden")).toBe("true");
-    expect(flag.previousSibling?.textContent).toBe("Consolidate case-de · ");
+    expect(flag.previousSibling?.textContent).toBe("Consolidate case-de ");
     expect(flag.nextSibling?.textContent).toBe("de v2");
     // The text stays in the paragraph itself, so getByText still finds it.
-    expect(screen.getByText("Consolidate case-de · de v2").tagName).toBe("P");
+    expect(screen.getByText("Consolidate case-de de v2").tagName).toBe("P");
   });
 
   it("leaves text without the code or without a flag as it is", () => {
-    const { container, rerender } = render(<p><LanguageText text="case-0101 · xx" code="xx" /></p>);
+    const { container, rerender } = render(<p><LanguageText text="case-0101 xx" code="xx" /></p>);
     expect(container.querySelector("svg")).toBeNull();
     rerender(<p><LanguageText text="nothing here" code="de" /></p>);
     expect(container.querySelector("svg")).toBeNull();

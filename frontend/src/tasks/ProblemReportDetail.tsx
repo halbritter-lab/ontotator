@@ -14,6 +14,7 @@ import { ReportTimeline } from "../problems/ReportTimeline";
 import { useLeadReport } from "../problems/useLeadReport";
 import { Button, EmptyState, IconChevronLeft, InlineMessage } from "../ui";
 import { refKey } from "../variants/versionState";
+import { onSpaceActivate } from "../ui/spaceActivates";
 
 const TASK_TYPES = { annotate: "Annotation", review: "Consolidation", translation_review: "Translation review" } as const;
 /** Actions that settle the row the lead came from (Documents shows it as decided). */
@@ -98,7 +99,7 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(route);
   }}>{text}</a>;
-  const backLink = <a className="problem-report-back btn btn-secondary btn-sm" href={routeHref(back)} onClick={event => {
+  const backLink = <a className="problem-report-back btn btn-secondary btn-sm" href={routeHref(back)} onKeyDown={onSpaceActivate} onClick={event => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault(); onNavigate(back);
   }}><IconChevronLeft aria-hidden /> Back to Documents</a>;
@@ -146,18 +147,18 @@ export function ProblemReportDetail({ projectKey, reportId, canManage, action: r
     ...(report.submission ? { annotations: refKey({ kind: "submission", id: report.submission.submission_id }) } : {}),
     ...(documents ? { documents } : {}),
   };
-  const identity = [report.case_id, report.language, taskRef({ assignment_id: report.assignment_id, owner_label: report.reporter_label, owner: report.viewer_is_lead ? report.reporter : null }),
-    report.task ? TASK_TYPES[report.task] : null, report.round_ordinal != null ? `Round ${report.round_ordinal}` : null].filter(Boolean).join(" · ");
+  const identity = [[report.case_id, report.language].filter(Boolean).join(" "), taskRef({ assignment_id: report.assignment_id, owner_label: report.reporter_label, owner: report.viewer_is_lead ? report.reporter : null }),
+    report.task ? TASK_TYPES[report.task] : null, report.round_ordinal != null ? `Round ${report.round_ordinal}` : null].filter(Boolean).join(", ");
   const stateId = `${id}-state`, decideId = `${id}-decide`, historyId = `${id}-history`;
   const states = intentState(report);
 
   return <section className="problem-report-detail">
     {backLink}
     <h1>Problem report</h1>
-    <p className="problem-report-identity">{identity} · {link(viewText, "View text")}</p>
+    <p className="problem-report-identity">{identity}, {link(viewText, "View text")}</p>
     <blockquote className="report-text">{report.reason}</blockquote>
-    <p className="problem-report-meta">Reported by {reporterName(report)}{report.created_at && <> · <Time iso={report.created_at} /></>}</p>
-    {report.submission && <p className="problem-report-meta">About the submitted result {report.submission.round_ordinal != null ? `Round ${report.submission.round_ordinal}` : "Initial submission"} · <Time iso={report.submission.recorded_at} /></p>}
+    <p className="problem-report-meta">Reported by {reporterName(report)}{report.created_at && <>, <Time iso={report.created_at} /></>}</p>
+    {report.submission && <p className="problem-report-meta">About the submitted result {report.submission.round_ordinal != null ? `Round ${report.submission.round_ordinal}` : "Initial submission"}, <Time iso={report.submission.recorded_at} /></p>}
 
     <section aria-labelledby={stateId}>
       <h2 id={stateId}>Current state</h2>
