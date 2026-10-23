@@ -9212,6 +9212,20 @@
             },
             "type": "array",
             "title": "Skipped Rows"
+          },
+          "mode_locked": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Mode Locked"
+          },
+          "mode_no_proposals": {
+            "items": {
+              "$ref": "#/components/schemas/RowRefView"
+            },
+            "type": "array",
+            "title": "Mode No Proposals"
           }
         },
         "type": "object",
@@ -13702,6 +13716,17 @@
             ],
             "title": "Annotate",
             "default": "keep"
+          },
+          "annotation_mode": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "proposals",
+              "scratch",
+              "project"
+            ],
+            "title": "Annotation Mode",
+            "default": "keep"
           }
         },
         "additionalProperties": false,
@@ -13759,6 +13784,14 @@
           "marked_in_package": {
             "type": "integer",
             "title": "Marked In Package"
+          },
+          "mode_locked": {
+            "type": "integer",
+            "title": "Mode Locked"
+          },
+          "mode_no_proposals": {
+            "type": "integer",
+            "title": "Mode No Proposals"
           }
         },
         "type": "object",
@@ -14994,6 +15027,21 @@
           "decided": {
             "type": "boolean",
             "title": "Decided"
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Mode"
           }
         },
         "type": "object",
@@ -15027,6 +15075,22 @@
               }
             ],
             "title": "Annotate"
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch",
+                  "project"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Mode"
           },
           "expected_revision": {
             "type": "integer",
@@ -16570,6 +16634,14 @@
             "title": "Import Plan",
             "default": "review_and_annotate_translations"
           },
+          "tool_proposal_mode": {
+            "type": "string",
+            "enum": [
+              "proposals",
+              "scratch"
+            ],
+            "title": "Tool Proposal Mode"
+          },
           "project_key": {
             "type": "string",
             "title": "Project Key"
@@ -16723,6 +16795,21 @@
               }
             ],
             "title": "Import Plan"
+          },
+          "tool_proposal_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Proposal Mode"
           }
         },
         "additionalProperties": false,
@@ -21280,6 +21367,21 @@
           "decided": {
             "type": "boolean",
             "title": "Decided"
+          },
+          "annotation_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposals",
+                  "scratch"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation Mode"
           }
         },
         "type": "object",

@@ -145,7 +145,7 @@ export function row(overrides: Partial<DocumentRowView> & Pick<DocumentRowView, 
     matches_decision: true,
     next_step: null,
     steps: [],
-    plan_row: { review: false, annotate: true, review_applicable: false, discarded: false, decided: true },
+    plan_row: { review: false, annotate: true, review_applicable: false, discarded: false, decided: true, annotation_mode: null },
     in_plan: true,
     stages: stages(),
     version_marker: null,
@@ -564,7 +564,7 @@ export function planRow(caseId: string, language: string, next: NextStepView | n
     versions: [version({ document_id: `${caseId}-${language}`, chain_name: isSource ? "Source" : "DeepL", origin: isSource ? "native" : "machine_translation", translation_status: isSource ? null : "ready_for_review" })],
     next_step: next,
     steps: next ? [next] : [],
-    plan_row: { review: !isSource, annotate: true, review_applicable: !isSource, discarded: false, decided: true },
+    plan_row: { review: !isSource, annotate: true, review_applicable: !isSource, discarded: false, decided: true, annotation_mode: null },
     in_plan: next !== null,
     ...overrides,
   });
@@ -573,7 +573,7 @@ export function planRow(caseId: string, language: string, next: NextStepView | n
 /** A row that is not in the plan (both flags off). */
 export function notInPlanRow(caseId: string, language: string, overrides: Partial<DocumentRowView> = {}): DocumentRowView {
   const isSource = overrides.is_source ?? false;
-  return planRow(caseId, language, null, { plan_row: { review: false, annotate: false, review_applicable: !isSource, discarded: false, decided: true }, in_plan: false, ...overrides });
+  return planRow(caseId, language, null, { plan_row: { review: false, annotate: false, review_applicable: !isSource, discarded: false, decided: true, annotation_mode: null }, in_plan: false, ...overrides });
 }
 
 // ---- Lead workflow (L4): acceptance and discard records on text versions ----

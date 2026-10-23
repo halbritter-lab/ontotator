@@ -1,7 +1,7 @@
 """Work plan endpoints: chips, plan dialog, Undo, case IDs, discard (lead only)."""
 
 from collections.abc import Sequence
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -12,6 +12,7 @@ from ontocurator.api.routes import get_access
 from ontocurator.application.work_plans import WorkPlanService
 from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Action, Task, can
+from ontocurator.domain.annotation_modes import AnnotationMode
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.work_plans import Preset, TriState
 
@@ -27,6 +28,8 @@ class PlanFlagsView(BaseModel):
     # default keeps the field optional in the generated types (older fixtures
     # and clients omit it; absent means decided).
     decided: bool = Field(default_factory=lambda: True)
+    # The text's stored annotation-mode override; None follows the project.
+    annotation_mode: AnnotationMode | None = Field(default_factory=lambda: None)
 
 
 # Abuse guards for a text key; generous, well above real case IDs and
@@ -88,6 +91,8 @@ class UndoRowView(BaseModel):
     restored_revision: int | None = None
     # False restores an undecided row (VD3) on Undo; absent means decided.
     decided: bool = Field(default_factory=lambda: True)
+    # The exact override to restore (None = follow the project setting).
+    annotation_mode: AnnotationMode | None = Field(default_factory=lambda: None)
 
 
 class UndoView(BaseModel):
@@ -104,6 +109,8 @@ class PlanRowPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     review: bool | None = None
     annotate: bool | None = None
+    # None keeps; "project" clears the override.
+    annotation_mode: Literal["proposals", "scratch", "project"] | None = None
     expected_revision: int
     confirm: bool = False
     accept_external_review: AcceptExternalReview | None = None
@@ -123,6 +130,7 @@ class LanguageChangeView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     review: TriState = "keep"
     annotate: TriState = "keep"
+    annotation_mode: Literal["keep", "proposals", "scratch", "project"] = "keep"
 
 
 class BulkAcceptance(BaseModel):
@@ -165,6 +173,9 @@ class LanguagePreviewView(BaseModel):
     not_acceptable: int = 0  # of these: rejected/queried or with an open review
     in_review: int = 0  # subset of not_acceptable with an open translation review
     marked_in_package: int
+    # Rows whose mode change is refused: locked, or "proposals" without any.
+    mode_locked: int = Field(default_factory=lambda: 0)
+    mode_no_proposals: int = Field(default_factory=lambda: 0)
 
 
 class BulkPreview(BaseModel):
@@ -188,6 +199,9 @@ class BulkResult(BaseModel):
     withdrawn: list[WithdrawnTaskView]
     # As ``BulkPreview.skipped_rows`` (bulk saves with ``rows`` only).
     skipped_rows: list[RowRefView] = Field(default_factory=list)
+    # Rows whose mode was not saved (their flags were).
+    mode_locked: list[RowRefView] = Field(default_factory=list)
+    mode_no_proposals: list[RowRefView] = Field(default_factory=list)
 
 
 class PlanRowsSet(BaseModel):

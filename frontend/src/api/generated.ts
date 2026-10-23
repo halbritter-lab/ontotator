@@ -2900,6 +2900,10 @@ export interface components {
             withdrawn: components["schemas"]["WithdrawnTaskView"][];
             /** Skipped Rows */
             skipped_rows?: components["schemas"]["RowRefView"][];
+            /** Mode Locked */
+            mode_locked?: components["schemas"]["RowRefView"][];
+            /** Mode No Proposals */
+            mode_no_proposals?: components["schemas"]["RowRefView"][];
         };
         /** BulkTargetView */
         BulkTargetView: {
@@ -4403,6 +4407,12 @@ export interface components {
              * @enum {string}
              */
             annotate: "keep" | "on" | "off";
+            /**
+             * Annotation Mode
+             * @default keep
+             * @enum {string}
+             */
+            annotation_mode: "keep" | "proposals" | "scratch" | "project";
         };
         /** LanguagePreviewView */
         LanguagePreviewView: {
@@ -4430,6 +4440,10 @@ export interface components {
             in_review: number;
             /** Marked In Package */
             marked_in_package: number;
+            /** Mode Locked */
+            mode_locked?: number;
+            /** Mode No Proposals */
+            mode_no_proposals?: number;
         };
         /**
          * LayerDefinition
@@ -4903,6 +4917,8 @@ export interface components {
             discarded: boolean;
             /** Decided */
             decided?: boolean;
+            /** Annotation Mode */
+            annotation_mode?: ("proposals" | "scratch") | null;
         };
         /** PlanRowPatch */
         PlanRowPatch: {
@@ -4910,6 +4926,8 @@ export interface components {
             review?: boolean | null;
             /** Annotate */
             annotate?: boolean | null;
+            /** Annotation Mode */
+            annotation_mode?: ("proposals" | "scratch" | "project") | null;
             /** Expected Revision */
             expected_revision: number;
             /**
@@ -5510,6 +5528,11 @@ export interface components {
              * @enum {string}
              */
             import_plan: "nothing" | "review_and_annotate_translations";
+            /**
+             * Tool Proposal Mode
+             * @enum {string}
+             */
+            tool_proposal_mode?: "proposals" | "scratch";
             /** Project Key */
             project_key: string;
             profile: components["schemas"]["TaskProfile"];
@@ -5588,6 +5611,8 @@ export interface components {
             annotations_per_text?: number | null;
             /** Import Plan */
             import_plan?: ("nothing" | "review_and_annotate_translations") | null;
+            /** Tool Proposal Mode */
+            tool_proposal_mode?: ("proposals" | "scratch") | null;
         };
         /**
          * ProjectSummary
@@ -7136,6 +7161,8 @@ export interface components {
             restored_revision?: number | null;
             /** Decided */
             decided?: boolean;
+            /** Annotation Mode */
+            annotation_mode?: ("proposals" | "scratch") | null;
         };
         /** UndoView */
         UndoView: {

@@ -14,6 +14,7 @@ from ontocurator.auth.audit import Actor, record_audit
 from ontocurator.authz.memberships import grant_roles
 from ontocurator.authz.policy import ROLES, Action
 from ontocurator.authz.project_authority import require_project_management
+from ontocurator.domain.annotation_modes import AnnotationMode
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile, profile_hash
@@ -66,11 +67,15 @@ class ProjectSettingsChange(BaseModel):
     # ``None`` keeps the stored value (the settings page sends full replaces).
     annotations_per_text: int | None = Field(None, ge=1, le=5)
     import_plan: ImportPlanSetting | None = None
+    tool_proposal_mode: AnnotationMode | None = None
 
 
 class ProjectSettings(ProjectSettingsChange):
     annotations_per_text: int = 1
     import_plan: ImportPlanSetting = "review_and_annotate_translations"
+    # A factory default keeps the field optional in the generated types
+    # (older fixtures omit it; absent means "proposals").
+    tool_proposal_mode: AnnotationMode = Field(default_factory=lambda: "proposals")
     project_key: str
     profile: TaskProfile
     pins: list[PinnedOntology]
@@ -345,7 +350,7 @@ class ProjectService:
         self, actor: Actor, key: str, change: ProjectSettingsChange
     ) -> ProjectSettings:
         fields = change.model_dump(exclude_unset=True)
-        for name in ("annotations_per_text", "import_plan"):
+        for name in ("annotations_per_text", "import_plan", "tool_proposal_mode"):
             if fields.get(name, 0) is None:
                 del fields[name]
         if "languages" in fields:

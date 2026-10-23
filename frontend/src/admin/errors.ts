@@ -225,6 +225,11 @@ export function errorMessage(error: unknown): string {
     const limit = error.details.limit;
     if (typeof limit === "number" && Number.isSafeInteger(limit) && limit > 0) return `This text already has ${limit} annotation assignments, the project's limit (Settings, Workflow).`;
   }
+  if (error instanceof ApiError && error.code === "TEXT_CHANGE_NOT_APPLICABLE" && typeof error.details === "object" && error.details !== null && error.details.reason === "from_proposals") {
+    return error.details.step === "carry"
+      ? "Annotation from proposals is not carried to a new version. Assign the new version; it is annotated from its own proposals."
+      : "Annotation from proposals stays on its version. Remove the assignment and assign the new version; its draft is discarded.";
+  }
   const guideline = guidelineMessage(error);
   if (guideline) return guideline;
   // ORCID's checksum/format explanation is already specific and user-facing.

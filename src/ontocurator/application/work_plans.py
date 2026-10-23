@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from fastapi import HTTPException
 from sqlalchemy import Connection, RowMapping, func, insert, select, update
 
 from ontocurator.application.final_causes import latest_review_decisions
@@ -586,6 +587,7 @@ class WorkPlanService:
     def patch_row(
         self, key: str, case_id: str, language: str, change: PlanRowPatch
     ) -> dict[str, Any]:
+        _mode_not_implemented([change.annotation_mode])
         row_key = RowKey(case_id, language)
         with self.db.transaction() as conn:
             project = self._lock(conn, key, exclusive=True)
@@ -733,6 +735,7 @@ class WorkPlanService:
         return plan
 
     def bulk_preview(self, key: str, request: BulkPlanRequest) -> dict[str, Any]:
+        _mode_not_implemented(c.annotation_mode for c in request.languages.values())
         with self.db.transaction() as conn:
             project = self._lock(conn, key, exclusive=False)
             plan = self._bulk_plan(conn, project, request)
@@ -816,6 +819,7 @@ class WorkPlanService:
             }
 
     def bulk_save(self, key: str, request: BulkPlanRequest) -> dict[str, Any]:
+        _mode_not_implemented(c.annotation_mode for c in request.languages.values())
         with self.db.transaction() as conn:
             project = self._lock(conn, key, exclusive=True)
             plan = self._bulk_plan(conn, project, request)
@@ -1145,3 +1149,9 @@ class WorkPlanService:
                 "revision": revision,
                 "withdrawn": self._withdrawn_views(conn, key, result.withdrawn),
             }
+
+
+def _mode_not_implemented(modes: Iterable[str | None]) -> None:
+    # Contract step (plan P4): the annotation-mode override is not built yet.
+    if any(mode not in (None, "keep") for mode in modes):
+        raise HTTPException(status_code=501)
