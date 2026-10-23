@@ -36,7 +36,7 @@ const view = () => page([
 
 describe("table", () => {
   it("caption Documents, one tbody per case, group th colspan 7", () => {
-    render(<DocumentsTable page={view()} projectKey="p" query={{}} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection()} />);
+    render(<DocumentsTable page={view()} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection()} />);
     const table = screen.getByRole("table", { name: "Documents" });
     const caption = table.querySelector("caption");
     expect(caption?.textContent).toBe("Documents");
@@ -64,10 +64,11 @@ describe("table", () => {
   });
 
   it("row checkbox names and mixed group checkbox", () => {
-    render(<DocumentsTable page={view()} projectKey="p" query={{}} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
+    render(<DocumentsTable page={view()} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
       sort="case" onSort={vi.fn()} />);
     expect(screen.getByRole("checkbox", { name: "Select case-107 · de" })).toHaveProperty("checked", true);
-    expect(screen.getByRole("checkbox", { name: "Select case-107 · en" })).toHaveProperty("checked", false);
+    // The not-planned en source is folded into the case line: no row, no checkbox; the case checkbox covers it.
+    expect(screen.queryByRole("checkbox", { name: "Select case-107 · en" })).toBeNull();
     const caseBox = screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" }) as HTMLInputElement;
     expect(caseBox.indeterminate).toBe(true);
     expect(screen.getByRole("checkbox", { name: "Select case-108 (1 text)" })).toHaveProperty("indeterminate", false);
@@ -75,7 +76,22 @@ describe("table", () => {
     expect(textHeader.getAttribute("aria-sort")).toBe("ascending");
     expect(within(textHeader).getByRole("button", { name: "Text" })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "Select" })).toBeTruthy();
-    expect(screen.getByRole("columnheader", { name: "Action" })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Next step" })).toBeTruthy();
+  });
+
+  it("one-line rows: named text buttons, robot image, More menu, no nested interactive content", () => {
+    const fresh = { ...stagedRow("case-108", "fr", { steps: [stepOf("assign_annotation"), stepOf("decide_report")] }), proposal_count: 3 };
+    const { container } = render(<DocumentsTable page={page([group("case-108", [fresh])])} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection()} />);
+    const name = screen.getByRole("button", { name: "Open text card, case-108 fr" });
+    expect(name.closest("th")!.getAttribute("scope")).toBe("row");
+    expect(screen.getByRole("img", { name: "3 tool proposals available; the annotation starts from them" }).querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
+    const more = screen.getByRole("button", { name: "More actions, case-108 fr" });
+    expect(more.getAttribute("aria-haspopup")).toBe("menu");
+    // No interactive element inside another one; every button has a name.
+    for (const element of container.querySelectorAll("button, a, input")) {
+      expect(element.parentElement!.closest("button, a")).toBeNull();
+      expect((element.getAttribute("aria-label") ?? element.textContent ?? "").trim()).not.toBe("");
+    }
   });
 });
 

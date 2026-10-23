@@ -57,9 +57,9 @@ describe("cards", () => {
     expect(within(caseCard).getAllByRole("article")).toHaveLength(3);
     expect(cardOf("case-106 · en").className).toContain("document-card--muted");
     const de = cardOf("case-106 · de");
-    expect(de.textContent).toContain("Review: ✓ Accepted · unchanged");
+    expect(de.textContent).toContain("Translation: ✓ Accepted · unchanged");
     expect(de.textContent).toContain("Annotation: ○ 0 of 2 assigned");
-    expect(de.textContent).toContain("Final: —");
+    expect(de.textContent).toContain("Finalization: —");
     expect(de.textContent).toContain("Waiting on: You");
     const action = within(de).getByRole("button", { name: "Assign annotation…, case-106 · de" });
     expect(action.classList.contains("documents-action--block")).toBe(true);
@@ -95,8 +95,8 @@ describe("cards", () => {
     expect(details.id).toBe("documents-row-case-106-de-details");
     fireEvent.click(details);
     expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-106", language: "de" }), { opener: details });
-    // Details also adds the text to the selection (as a row click in the table).
-    expect(props.selection!.select).toHaveBeenCalledWith("case-106:de", "select", expect.arrayContaining(["case-106:de"]));
+    // Details opens the card like the text name in the table: the selection stays as it is.
+    expect(props.selection!.select).not.toHaveBeenCalled();
     expect(card.getAttribute("aria-current")).toBe("true");
     expect(cardOf("case-106 · fr").getAttribute("aria-current")).toBeNull();
   });
@@ -114,7 +114,7 @@ describe("cards", () => {
     // Deep links and the panel focus the card heading like the table's row header.
     expect(heading.id).toBe("documents-row-case-106-de-header");
     const lines = [...de.querySelectorAll<HTMLElement>(".document-card-stage")];
-    expect(lines.map(line => line.textContent)).toEqual(["Review: ✓ Accepted · unchanged", "Annotation: ○ 0 of 2 assigned", "Final: —"]);
+    expect(lines.map(line => line.textContent)).toEqual(["Translation: ✓ Accepted · unchanged", "Annotation: ○ 0 of 2 assigned", "Finalization: —"]);
     // Glyphs are decorative: never read aloud.
     for (const line of lines) {
       const glyph = line.querySelector(".stage-cell-symbol");
@@ -123,7 +123,7 @@ describe("cards", () => {
     expect(lines[0].className).toContain("stage-cell--done");
   });
 
-  it("Waiting on line, full-width action ≥ 32 px with +n, Open and Details", () => {
+  it("Waiting on line, full-width action ≥ 32 px with More, Open and Details", () => {
     const people = [ana, tom, { pseudonym: "ann-0005", display_name: "Luc Martin", is_me: false }];
     const fr = stagedRow("case-108", "fr", {
       stages: { annotation: cell("in_progress", "running", { people }) },
@@ -135,7 +135,7 @@ describe("cards", () => {
     expect(within(deCard).getByText("You").tagName).toBe("STRONG");
     const action = within(deCard).getByRole("button", { name: "Assign annotation…, case-108 · de" });
     expect(action.classList.contains("documents-action--block")).toBe(true);
-    expect(within(deCard).getByRole("button", { name: /1 more action/ }).textContent).toBe("+1");
+    expect(within(deCard).getByRole("button", { name: "More actions, case-108 de" }).textContent).toBe("More");
     expect(within(deCard).getByRole("link", { name: "Open in editor, case-108 · de" })).toBeTruthy();
     expect(within(deCard).getByRole("button", { name: "Details, case-108 · de" })).toBeTruthy();
     // More than two people: the visible "+n" line, the full list for assistive technology (not only in a title).
@@ -193,10 +193,10 @@ describe("cards", () => {
 
   it("Escape closes the stage popover and returns focus to the stage cell", () => {
     renderCards(page([case106()]));
-    const stageButton = within(cardOf("case-106 · de")).getByRole("button", { name: "Review: Accepted. Show history, case-106 · de" });
+    const stageButton = within(cardOf("case-106 · de")).getByRole("button", { name: "Translation: Accepted. Show history, case-106 · de" });
     fireEvent.click(stageButton);
-    const dialog = screen.getByRole("dialog", { name: "Review activity, case-106 · de" });
-    expect(within(dialog).getByText("No review activity yet.")).toBeTruthy();
+    const dialog = screen.getByRole("dialog", { name: "Translation activity, case-106 · de" });
+    expect(within(dialog).getByText("No translation activity yet.")).toBeTruthy();
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(stageButton);
@@ -207,7 +207,7 @@ describe("cards", () => {
     renderCards(page([group("case-120", [flagged])]));
     const card = cardOf("case-120 · de");
     expect(within(card).getByText("· 1 flagged")).toBeTruthy();
-    const button = within(card).getByRole("button", { name: /^Final:/ });
+    const button = within(card).getByRole("button", { name: /^Finalization:/ });
     const described = (button.getAttribute("aria-describedby") ?? "").split(" ").map(id => document.getElementById(id)?.textContent).join(" ");
     expect(described).toContain("1 flagged");
     cleanup();
@@ -225,5 +225,14 @@ describe("cards", () => {
     const card = cardOf("case-106 · de");
     const heading = within(card).getByRole("heading", { name: "case-106 · de" });
     expect(heading.contains(within(card).getByText("Changed: Work plan changed"))).toBe(false);
+  });
+
+  it("Open my task is the card's action; Open stays a link", () => {
+    const mine = stagedRow("case-150", "de", { steps: [], overrides: { own_open_assignment_id: 41 } });
+    renderCards(page([group("case-150", [mine])]));
+    const card = cardOf("case-150 · de");
+    expect(within(card).getAllByRole("link", { name: "Open my task" })).toHaveLength(1);
+    expect(within(card).getByRole("link", { name: "Open my task" }).id).toBe("documents-row-case-150-de-action");
+    expect(within(card).getByRole("link", { name: "Open in editor, case-150 · de" })).toBeTruthy();
   });
 });

@@ -294,6 +294,11 @@ describe("consolidation view addresses", () => {
     }
   });
 
+  it("keeps the proposals facet in the Documents query", () => {
+    expect(parseRoute("#/projects/a/documents?proposals=with")).toEqual({ name: "projectDocuments", key: "a", proposals: "with" });
+    expect(routeHref({ name: "projectDocuments", key: "a", proposals: "without" })).toBe("#/projects/a/documents?proposals=without");
+  });
+
   it("keeps the flags facet in the Documents query", () => {
     expect(parseRoute("#/projects/a/documents?flags=guidelines_unclear")).toEqual({ name: "projectDocuments", key: "a", flags: "guidelines_unclear" });
     expect(routeHref({ name: "projectDocuments", key: "a", flags: "guidelines_unclear" })).toBe("#/projects/a/documents?flags=guidelines_unclear");

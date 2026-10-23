@@ -27,9 +27,8 @@ import { DocumentsSearch, LiveRegion, type DocumentsSearchHandle, type LiveRegio
 import { activeTab, chipsOf, clearAllPatch, filtersActive, listOf, rowsRequest, tabCount } from "../documents/filterModel";
 import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
-import { DocumentsTable, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
+import { DocumentsTable, foldedSource, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
 import { consolidationStartedToast, panelStep } from "../documents/finalPanelText";
-import type { MenuItem } from "../ui/MenuButton";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { DecisionBlock } from "../documents/FinalPanel";
 import { StageActions, type StageActionsProps } from "../documents/StageActions";
@@ -44,7 +43,7 @@ import { useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { ResolveTranslation } from "../documents/ResolveTranslation";
 import { SelectByIdsDialog } from "../documents/SelectByIdsDialog";
 import { SelectionBar } from "../documents/SelectionBar";
-import { documentsGroupId, documentsRowId, isPlainClick, type DocumentsRowPart, type OpenRowPanel, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
+import { documentsGroupId, documentsRowId, isPlainClick, type DocumentsRowPart, type OpenTextCard, RouteLink, rowKeyOf, rowName } from "../documents/RowCells";
 import type { TextVersionsTools } from "../documents/TextVersions";
 import { workText } from "../documents/labels";
 import { isActiveRow } from "../documents/stageLabels";
@@ -56,6 +55,7 @@ import { notifyFinalSelectionChanged } from "../variants/finalSelectionState";
 import { AssignWorkDialog, type AssignWorkDialogProps } from "./AssignWorkDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { UploadPanel } from "./UploadPanel";
+import { onSpaceActivate } from "../ui/spaceActivates";
 import { reviewLanguages, translationStatusLabels } from "./variantMetadata";
 
 export interface DocumentsPageProps {
@@ -74,7 +74,7 @@ export const NARROW_DOCUMENTS_QUERY = "(max-width: 699px)";
 export { ID_FILTER_DELAY_MS } from "../documents/DocumentsSearch";
 /** The table's eight columns; "Select" and "Action" headers are visually hidden. */
 const SKELETON_HEADERS: readonly (readonly [string, boolean])[] = [
-  ["Select", true], ["Text", false], ["Review", false], ["Annotation", false], ["Final", false], ["Waiting on", false], ["Action", true], ["Last activity", false],
+  ["Select", true], ["Text", false], ["Translation", false], ["Annotation", false], ["Finalization", false], ["Waiting on", false], ["Next step", false], ["Last activity", false],
 ];
 /** ID of the tab panel around the table (the Documents tabs control it). */
 const PANEL_ID = "documents-panel";
@@ -132,7 +132,7 @@ export type AssignTask = "translation_review" | "annotate";
 /** Previous / Next; at either end an `aria-disabled` link that stays focusable (focus survives the page change). */
 function PagingLink({ route, onNavigate, children }: { route: Route | null; onNavigate: (route: Route) => void; children: ReactNode }): JSX.Element {
   if (!route) return <a role="link" aria-disabled="true" tabIndex={0} className="btn btn-secondary btn-sm">{children}</a>;
-  return <a className="btn btn-secondary btn-sm" href={routeHref(route)} onClick={event => {
+  return <a className="btn btn-secondary btn-sm" href={routeHref(route)} onKeyDown={onSpaceActivate} onClick={event => {
     if (!isPlainClick(event)) return;
     event.preventDefault(); onNavigate(route);
   }}>{children}</a>;
@@ -596,7 +596,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     window.setTimeout(() => (opener?.isConnected ? opener : rowElement(key, "header"))?.focus(), 0);
   };
   /** Text name and stage cells: the panel unfiltered or filtered to the stage, on Activity. */
-  const onOpenPanel: OpenRowPanel = (row, { stage, opener }) => openCard({ key: rowKeyOf(row), stage }, { opener, focus: true });
+  const onOpenPanel: OpenTextCard = (row, { stage, opener }) => openCard({ key: rowKeyOf(row), stage }, { opener, focus: true });
   const panelSource = panelRow ? groupOf(panelRow.case_id)?.rows.find(entry => entry.is_source)?.language ?? null : null;
   // Rows without a final decision step still offer "Consolidate…" once two submissions exist on one version.
   const decisionOptional = !(panelKey && decisionKey.current === panelKey) && panelRow != null && !panelRow.final && isActiveRow(panelRow);
@@ -639,8 +639,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     closePanel(resolveOptions.rowKey);
   }, { allowInInputs: true, enabled: resolveOptions != null });
 
-  // Lead actions that are no step, in the row's "+n" menu (also reachable without opening the row panel; annotation
-  // review and consolidation stay in the row panel).
+  // "Request correction…" from the text card's Translation part (StageActions).
   const [correctionFor, setCorrectionFor] = useState<{ row: DocumentRowView; variant: VariantSummary } | null>(null);
   /** The accepted newest translation a correction can be requested for (Text versions offers the same). */
   const correctionVariant = (row: DocumentRowView): VariantSummary | null => {
@@ -649,14 +648,6 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     return newest ? textVersionTools.variants.get(newest.document_id) ?? null : null;
   };
   const closeCorrection = () => { setCorrectionFor(null); reloadAfterAction(); };
-  const rowExtras = (row: DocumentRowView): MenuItem[] => {
-    const key = rowKeyOf(row);
-    const items: MenuItem[] = [];
-    if (row.final && !panelStep(row)) items.push({ id: "change-final", label: "Change final…", onSelect: () => openCard({ key }, { changeFinal: true, opener: focusedElement(), focus: true }) });
-    const variant = correctionVariant(row);
-    if (variant) items.push({ id: "request-correction", label: "Request translation correction…", onSelect: () => setCorrectionFor({ row, variant }) });
-    return items;
-  };
 
   const [planFor, setPlanFor] = useState<string | null>(null);
   /** "Annotate from proposals myself": the lead's own annotate assignment (P3 grants the annotator role), then its task. */
@@ -669,14 +660,17 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     onNavigate({ name: "task", assignmentId: created.id });
   };
   const stepCard = (direction: -1 | 1) => {
-    const index = pageRows.findIndex(entry => rowKeyOf(entry) === panelKey);
-    const target = index >= 0 ? pageRows[index + direction] : undefined;
+    // ‹ › walk the texts the list shows: the table skips folded sources unless the card shows one (opened from its case line).
+    const folded = narrow ? new Set<DocumentRowView>() : new Set(page?.groups.map(foldedSource) ?? []);
+    const steps = pageRows.filter(entry => !folded.has(entry) || rowKeyOf(entry) === panelKey);
+    const index = steps.findIndex(entry => rowKeyOf(entry) === panelKey);
+    const target = index >= 0 ? steps[index + direction] : undefined;
     if (target) {
       openCard({ key: rowKeyOf(target), tab: panelTab });
       if (!panelDirty) announce(`Showing ${target.case_id} ${target.language}`);
     } else announce(direction > 0 ? "Last row" : "First row");
   };
-  const rowPanel = panelKey && panelRow ? <TextCard projectKey={projectKey} row={panelRow} rows={pageRows} query={query}
+  const textCard = panelKey && panelRow ? <TextCard projectKey={projectKey} row={panelRow} rows={pageRows} query={query}
     segment={panelStage ? SEGMENT_OF[panelStage] : decisionKey.current === panelKey ? "finalization" : undefined} view={VIEW_OF[panelTab]}
     onSegment={segment => openCard({ key: panelKey, stage: STAGE_OF[segment] })}
     onView={view => openCard({ key: panelKey, stage: panelStage, tab: view === "path" ? undefined : view })}
@@ -760,11 +754,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       body = emptyState(page.bar);
     } else if (narrow) {
       body = <DocumentCards page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} onOpenPanel={onOpenPanel} activeKey={panelKey} planSaves={planSaves}
-        renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras}
+        renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
         stageActions={(row, stage) => <StageActions {...stageActionProps} row={row} stage={stage} />} me={currentUser?.pseudonym ?? null} />;
     } else {
-      body = <DocumentsTable page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} planSaves={planSaves}
-        onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading} rowExtras={rowExtras}
+      body = <DocumentsTable page={page} selection={tableSelection} planSaves={planSaves}
+        onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
         sort={request.sort} onSort={(next: HeaderSort) => changeFilter({ sort: next === "case" ? undefined : next })} />;
     }
     // Floats at the bottom of the viewport; placed above the table (below 700 px after the cards) to keep the focus order.
@@ -817,7 +811,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         annotateAcceptedOnly={settings.annotate_accepted_translations_only ?? true} onImported={importDone} />}
     </Dialog>
     {/* The card first: dialogs it opens share its z-index, so they must come later in the DOM to sit on top. */}
-    {rowPanel}
+    {textCard}
     {reviewDocument !== null && <ReviewHistory key={reviewDocument} projectKey={projectKey} documentId={reviewDocument} onClose={() => setReviewDocument(null)} />}
     {assignDialog && <AssignWorkDialog {...assignDialog} />}
     {textChangeDialog}

@@ -43,6 +43,8 @@ export interface ProjectDocumentsQuery {
   waiting_on?: string;
   /** Flag facet (`guidelines_unclear`: a finding flagged "guidelines unclear" in the submitted consolidation). */
   flags?: string;
+  /** Tool proposal facet (`with` | `without`; spec 2026-10-23 §2b), comma-joined (OR). */
+  proposals?: string;
   /** Row of the open row panel as `<case>:<language>`; the legacy `open=` parameter maps to it. */
   panel?: string;
   /** Activity filter of the row panel (`review` | `annotation` | `final`); `stage` is the table's stage filter. */
@@ -68,7 +70,7 @@ export interface NavigateOptions { replace?: boolean }
 export const DOCUMENT_FIELDS = [
   "language", "status", "q", "select", "origin", "translation_status", "case", "decision", "final",
   "segment", "step", "stage", "owner", "plan", "paused", "sort", "page",
-  "review_state", "annotation_state", "final_state", "waiting_on", "flags", "panel", "panel_stage", "panel_tab",
+  "review_state", "annotation_state", "final_state", "waiting_on", "flags", "proposals", "panel", "panel_stage", "panel_tab",
 ] as const;
 
 function readDocumentsQuery(params: URLSearchParams, prefix = ""): ProjectDocumentsQuery {

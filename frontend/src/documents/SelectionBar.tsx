@@ -1,6 +1,6 @@
 /**
- * Selection bar of Documents (spec "Selection bar"; documents overview VD4, VD21): "3 texts in 2
- * cases selected", the common next step,
+ * Selection bar of Documents (spec "Selection bar"; documents overview VD4, VD21; spec 2026-10-23 §2: only
+ * for bulk work, so it shows from two selected texts on): "3 texts in 2 cases selected", the common next step,
  * "{k} not shown with these filters" (from the selection summary with the current filters) and
  * "Clear selection"; primary "Assign…" (the page's only primary button) and the plan actions
  * "Translation review and annotation", "Annotation only, no translation review" (one click when no existing work is affected)
@@ -46,6 +46,9 @@ export interface SelectionBarProps {
   onRevisions?: (revisions: Record<string, number>) => void;
 }
 
+/** One selected text is the open card's text, not bulk work. */
+const MIN_TEXTS = 2;
+
 /** Delay before the selection summary is requested (Shift+Arrow can change the selection quickly). */
 export const SUMMARY_DELAY_MS = 150;
 
@@ -82,7 +85,7 @@ export function SelectionBar({
   const filtersKey = JSON.stringify(filters);
   const [summary, setSummary] = useState<{ key: string; value: SelectionSummary } | null>(null);
   useEffect(() => {
-    if (!rows.length) return;
+    if (rows.length < MIN_TEXTS) return;
     let active = true;
     const key = idsKey + filtersKey;
     const timer = window.setTimeout(() => {
@@ -172,14 +175,14 @@ export function SelectionBar({
     }
   };
 
-  const visible = keys.size > 0 || undoState !== null;
+  const visible = keys.size >= MIN_TEXTS || undoState !== null;
   useFloatingBar(section, visible);
   if (!visible && !plan) return null;
   const withdrawing = undoState?.kind === "conflict" && undoState.consequences.withdrawn.length > 0;
 
   return <>
     {visible && <section ref={section} className={["selection-bar", narrow && "selection-bar--narrow"].filter(Boolean).join(" ")} aria-label="Selection">
-      {keys.size > 0 && <div className="selection-bar-line">
+      {keys.size >= MIN_TEXTS && <div className="selection-bar-line">
         <p className="selection-bar-summary">
           <strong>{`${plural(keys.size, "text")} in ${plural(caseIds.length, "case")} selected`}</strong>
           {current?.common && <span className="selection-bar-step"> · {commonStepText(current.common)}</span>}
@@ -194,7 +197,7 @@ export function SelectionBar({
           <Button onClick={onClear}>Clear selection</Button>
         </div>
       </div>}
-      {limitNote && keys.size > 0 && <p className="selection-bar-limit">{limitNote}</p>}
+      {limitNote && keys.size >= MIN_TEXTS && <p className="selection-bar-limit">{limitNote}</p>}
       {error !== undefined && <div className="selection-bar-error"><ErrorNotice error={error} /></div>}
       {undoState?.kind === "changed" && <InlineMessage tone="info">{PLAN_CHANGED_MESSAGE}</InlineMessage>}
       {undoState?.kind === "conflict" && <div className="selection-bar-undo">

@@ -1,16 +1,16 @@
 /**
  * Cell renderers of a Documents text row, shared by the table and the narrow cards (documents
- * overview "Columns"): Text (row header with the "Details" entry of the row panel), the stage cells
- * (the filtered entry of the row panel), Waiting on, Last activity. Each renderer takes the row view
- * plus explicit options; none holds state.
+ * overview "Columns"; one-line rows, spec 2026-10-23 §2b): Text (row header whose name opens the text
+ * card), the one-line status cells, Waiting on, Last activity. Each renderer takes the row view plus
+ * explicit options; none holds state.
  */
 import { useId, type MouseEvent, type ReactNode } from "react";
 import type { DocumentRowView, DocumentVersionView, FinalSelectionSummary } from "../api/client";
 import { kindLabels, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { routeHref, type PanelStage, type ProjectDocumentsQuery, type Route } from "../app/router";
-import { IconCheck } from "../ui/icons";
-import { StageCell } from "../ui/StageCell";
+import { IconBot, IconCheck } from "../ui/icons";
+import { onSpaceActivate } from "../ui/spaceActivates";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
   decisionCategoryLabels,
@@ -24,7 +24,8 @@ import {
   workText,
   type DecisionCategory,
 } from "./labels";
-import { isActiveRow, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
+import { isActiveRow, shortName, stageText, versionMarkerText, waitingOnText, type StageName } from "./stageLabels";
+import { annotationState, finalizationState, translationState } from "./textCard/cardModel";
 import { LanguageFlag } from "../ui/LanguageTag";
 
 /** Longest ID shown in full in a cell; longer IDs get a middle ellipsis with the full value in `title`. */
@@ -96,12 +97,13 @@ export function documentsNotInPlanId(caseId: string): string {
   return `documents-group-${encodeURIComponent(caseId)}-not-in-plan`;
 }
 
-/** A link with a real `href`; plain left clicks go through `onNavigate` when given. */
+/** A link with a real `href`; plain left clicks go through `onNavigate` when given; styled as a button (`btn`) it also answers Space (V4). */
 export function RouteLink({ route, onNavigate, children, className, ...rest }: {
   route: Route;
   onNavigate?: (route: Route) => void;
   children: ReactNode;
   className?: string;
+  id?: string;
   "aria-label"?: string;
   "aria-describedby"?: string;
 }): JSX.Element {
@@ -110,6 +112,7 @@ export function RouteLink({ route, onNavigate, children, className, ...rest }: {
       {...rest}
       className={className}
       href={routeHref(route)}
+      onKeyDown={className?.split(" ").includes("btn") ? onSpaceActivate : undefined}
       onClick={onNavigate ? event => {
         if (!isPlainClick(event)) return;
         event.preventDefault();
@@ -256,7 +259,7 @@ export function openLink(row: DocumentRowView, projectKey: string, query: Projec
   };
 }
 
-/** "Open" (with its description) and "Open my task" of a row; shared by the table and the cards. */
+/** "Open" (with its description) of a narrow card; "Open my task" is the row's next step (`RowActionCell`). */
 export function RowOpenLinks({ row, projectKey, query, onNavigate }: {
   row: DocumentRowView;
   projectKey: string;
@@ -268,9 +271,6 @@ export function RowOpenLinks({ row, projectKey, query, onNavigate }: {
   return <>
     <RouteLink route={route} onNavigate={onNavigate} className="documents-open btn btn-secondary btn-sm" aria-label={`Open in editor, ${rowName(row)}`} aria-describedby={description ? descriptionId : undefined}>Open</RouteLink>
     {description && <span id={descriptionId} className="visually-hidden">{description}</span>}
-    {row.own_open_assignment_id != null && (
-      <RouteLink route={{ name: "task", assignmentId: row.own_open_assignment_id }} onNavigate={onNavigate} className="documents-open-task btn btn-secondary btn-sm">Open my task</RouteLink>
-    )}
   </>;
 }
 
@@ -298,73 +298,84 @@ export function NewBadge(): JSX.Element {
   return <StatusBadge tone="info"><span aria-hidden="true">NEW</span><span className="visually-hidden">New since your last visit</span></StatusBadge>;
 }
 
-/** Opens the row panel for a row: unfiltered (text name) or filtered to a stage (stage cell); `opener` gets focus back. */
-export type OpenRowPanel = (row: DocumentRowView, options: { stage?: PanelStage; opener: HTMLElement }) => void;
+/** Opens the text card of a row, optionally on a stage segment; `opener` gets focus back. */
+export type OpenTextCard = (row: DocumentRowView, options: { stage?: PanelStage; opener: HTMLElement }) => void;
 
 export interface RowHeaderCellProps {
   row: DocumentRowView;
-  projectKey: string;
-  /** Current Documents query; passed through as `documents_*` so the case viewer can return. */
-  query: ProjectDocumentsQuery;
-  onNavigate?: (route: Route) => void;
   /** Visit badge ("Resolved" / "Changed: …"). */
   badge?: ReactNode;
-  /** The text name opens the row panel ("Details, {case} · {language}"); without it the name is plain text. */
-  onOpenPanel?: OpenRowPanel;
+  /** The text name opens the text card; without it the name is plain text. */
+  onOpenCard?: (opener: HTMLElement) => void;
 }
 
 /**
- * Text cell (row header, named "{case} · {language}"): the text name (the row panel's entry "Details, …"),
- * "source", version marker, NEW, visit badge, "Open" and "Open my task"; decision rows add the hidden
- * "Needs your decision".
+ * Text cell (row header): the text name, flag and language code in plain text style (a button that opens
+ * the text card, "Open text card, case-107 de"), "source", version marker, NEW and the visit badge;
+ * decision rows add the hidden "Needs your decision". No "Open" link: the row opens the card.
  */
-export function RowHeaderCell({ row, projectKey, query, onNavigate, badge, onOpenPanel }: RowHeaderCellProps): JSX.Element {
+export function RowHeaderCell({ row, badge, onOpenCard }: RowHeaderCellProps): JSX.Element {
   const active = isActiveRow(row);
   const nameId = documentsRowId(row.case_id, row.language, "header");
   const nameContent = <><span className="visually-hidden">{`${row.case_id} · `}</span><span className="documents-language"><LanguageFlag code={row.language} />{row.language}</span></>;
   return (
     <span className="documents-row-header documents-text-cell">
-      {onOpenPanel
-        ? <button type="button" id={nameId} className="documents-text-name documents-text-button" aria-label={`Details, ${rowName(row)}`}
-          onClick={event => onOpenPanel(row, { opener: event.currentTarget })}>{nameContent}</button>
+      {onOpenCard
+        ? <button type="button" id={nameId} className="documents-text-name" aria-label={`Open text card, ${row.case_id} ${row.language}`}
+          onClick={event => onOpenCard(event.currentTarget)}>{nameContent}</button>
         : <span id={nameId} tabIndex={-1} className="documents-text-name">{nameContent}</span>}
       {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
       {row.is_source && <span className="documents-source">source</span>}
       <VersionMarker row={row} />
       {active && rowIsNew(row) && <NewBadge />}
       {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
-      <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
     </span>
   );
 }
 
-/** Stage column titles (the accessible names of the stage cell buttons). */
-const STAGE_CELL_TITLES: Readonly<Record<StageName, string>> = { review: "Review", annotation: "Annotation", final: "Final" };
+/** Tool proposals wait for the annotation: a planned text with proposals, not set to start from scratch, and no annotate work yet (spec §2b). */
+export function proposalsWaiting(row: DocumentRowView): number {
+  const waiting = isActiveRow(row) && row.annotation_mode?.mode !== "scratch" && row.proposal_count > 0 && !row.work.some(entry => entry.task === "annotate");
+  return waiting ? row.proposal_count : 0;
+}
+
+/** The robot icon of the Annotation cell; gone once someone is assigned. */
+export function ProposalsIcon({ row }: { row: DocumentRowView }): JSX.Element | null {
+  const count = proposalsWaiting(row);
+  if (!count) return null;
+  const text = `${count} tool proposals available; the annotation starts from them`;
+  return <span className="documents-bot" title={text} aria-label={text} role="img"><IconBot /></span>;
+}
+
+/** The short state of a stage as the text card's path names it (`cardModel`). */
+const STATE_OF: Readonly<Record<StageName, (row: DocumentRowView) => { state: string }>> = {
+  review: translationState,
+  annotation: annotationState,
+  final: row => finalizationState(row, new Date()),
+};
 
 /**
- * One stage cell of the row; rows outside the plan are muted (VD1). With `onOpenPanel` the cell is a
- * frameless button with a dotted status underline that opens the row panel filtered to this stage:
- * "Annotation: 0 of 2 submitted. Show history, case-108 · de" (the detail line is its description).
+ * One stage cell of the row on one line: glyph, the card's short state and a short "who" in grey, cut with an
+ * ellipsis; `title` holds the full text. Rows outside the plan are muted (VD1). The Annotation cell adds the robot icon.
  */
-export function RowStageCell({ row, stage, sourceLanguage, onOpenPanel }: {
-  row: DocumentRowView; stage: StageName; sourceLanguage?: string | null; onOpenPanel?: OpenRowPanel;
-}): JSX.Element {
-  const detailId = useId();
-  const flagId = useId();
+export function RowStageCell({ row, stage }: { row: DocumentRowView; stage: StageName }): JSX.Element {
   const cell = row.stages?.[stage];
-  if (!cell) return <StageCell symbol="" word="—" tone="none" muted={!isActiveRow(row)} />;
-  const text = stageText(stage, cell, row, { sourceLanguage });
-  // X5: the Final cell's second line "1 flagged" (findings flagged "guidelines unclear" in the submitted consolidation).
-  const flagged = stage === "final" ? row.flagged_unclear ?? 0 : 0;
-  const detail = text.detail || flagged > 0 ? <>
-    {text.detail && <span id={detailId}>{text.detail}</span>}
-    {flagged > 0 && <span id={flagId} className="documents-stage-flagged">{`${flagged} flagged`}</span>}
-  </> : undefined;
-  const content = <StageCell symbol={text.symbol} word={text.word} detail={detail} tone={cell.tone} muted={!isActiveRow(row)} />;
-  if (!onOpenPanel) return content;
-  const describedBy = [text.detail && detailId, flagged > 0 && flagId].filter(Boolean).join(" ");
-  return <button type="button" className="documents-stage-button" aria-label={`${STAGE_CELL_TITLES[stage]}: ${text.word}. Show history, ${rowName(row)}`}
-    aria-describedby={describedBy || undefined} onClick={event => onOpenPanel(row, { stage, opener: event.currentTarget })}>{content}</button>;
+  const symbol = cell ? stageText(stage, cell, row).symbol : "";
+  const { state } = STATE_OF[stage](row);
+  // Who works on the annotation (the translation state already names its reviewers).
+  const people = stage === "annotation" && (cell?.state === "in_progress" || cell?.state === "paused") ? (cell.detail.people ?? []).map(shortName).join(", ") : "";
+  // X5: findings flagged "guidelines unclear" in the submitted consolidation.
+  const flagged = stage === "final" && (row.flagged_unclear ?? 0) > 0 ? `${row.flagged_unclear} flagged` : "";
+  const who = [people, flagged].filter(Boolean).join(", ");
+  const full = who ? `${state} (${who})` : state;
+  const className = ["documents-status", "stage-cell", `stage-cell--${cell?.tone ?? "none"}`, !isActiveRow(row) && "stage-cell--muted"].filter(Boolean).join(" ");
+  return <span className="documents-status-cell">
+    <span className={className} title={full}>
+      {symbol && <><span className="stage-cell-symbol" aria-hidden="true">{symbol}</span>{" "}</>}
+      {state}{who && <span className="documents-status-who">{` (${who})`}</span>}
+    </span>
+    {stage === "annotation" && <ProposalsIcon row={row} />}
+  </span>;
 }
 
 /** Waiting on: "You" (strong), a person, up to two names and "+n" with the full list (VD8), or "—". */

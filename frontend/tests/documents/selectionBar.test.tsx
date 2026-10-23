@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError, type BulkPreview, type BulkResult, type ConsequencesView, type DocumentRowFilters, type SelectionSummary } from "../../src/api/client";
-import { SelectionBar, type SelectionBarProps } from "../../src/documents/SelectionBar";
+import { SelectionBar, SUMMARY_DELAY_MS, type SelectionBarProps } from "../../src/documents/SelectionBar";
 import { Toast, useToast } from "../../src/ui";
 
 type LanguagePreview = BulkPreview["languages"][number];
@@ -63,9 +63,25 @@ it("shows count, common next step, hidden count and Clear selection", async () =
 it("counts texts in cases", () => {
   render(<Harness initial={["case-0101:en", "case-0101:de", "case-0102:de"]} />);
   expect(within(bar()).getByText("3 texts in 2 cases selected")).toBeTruthy();
-  cleanup();
+});
+
+it("hidden with one selected text", async () => {
   render(<Harness initial={["case-0101:de"]} />);
-  expect(within(bar()).getByText("1 text in 1 case selected")).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
+  await new Promise(resolve => setTimeout(resolve, SUMMARY_DELAY_MS + 20));
+  expect(api.selectionSummary).not.toHaveBeenCalled();
+});
+
+it("shown with two", () => {
+  render(<Harness initial={["case-0101:de", "case-0102:de"]} />);
+  expect(within(bar()).getByText("2 texts in 2 cases selected")).toBeTruthy();
+});
+
+it("labels name the task and its context", () => {
+  render(<Harness initial={["case-0101:de", "case-0102:de"]} />);
+  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(
+    ["Assign…", "Translation review and annotation", "Annotation only, no translation review", "Plan…", "Clear selection"]);
+  expect(bar().textContent).not.toMatch(/\bReview\b|Annotation review|Independent annotation/);
 });
 
 it("sends rows to selection-summary and bulk plan", async () => {

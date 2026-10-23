@@ -22,6 +22,7 @@ const counts: DecisionBarView = bar({
     origin: { machine_translation: 7 },
     plan: { not_in_plan: 3 },
     waiting_on: { me: 2, "ann-0001": 1 },
+    proposals: { with: 4, without: 10 },
   },
 });
 
@@ -46,9 +47,9 @@ it("four fieldsets with counts, muted zero facets stay checkable when checked", 
   expect(button.getAttribute("aria-expanded")).toBe("true");
   const dialog = screen.getByRole("dialog", { name: "Filter" });
   expect(button.getAttribute("aria-controls")).toBe(dialog.querySelector("[id]")!.id);
-  // Language, Translation review, Annotation, Final, Origin, Plan, Flags; Waiting on when someone has open work.
+  // Language, Translation review, Annotation, Final, Origin, Plan, Flags, Tool proposals; Waiting on when someone has open work.
   expect(within(dialog).getAllByRole("group").map(group => group.querySelector("legend")!.textContent))
-    .toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags", "Waiting on", "Order"]);
+    .toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags", "Tool proposals", "Waiting on", "Order"]);
   // X5: the flags facet with its count.
   expect(within(dialog).getByRole("checkbox", { name: /^Flagged: guidelines unclear, / })).toBeTruthy();
   // Focus moves to the first checkbox.
@@ -122,4 +123,14 @@ it("sheet with Show {n} texts below 700 px", () => {
   expect(sheet.closest(".ui-popover-sheet") ?? sheet.querySelector(".ui-popover-sheet") ?? (sheet.classList.contains("ui-popover-sheet") ? sheet : null)).not.toBeNull();
   fireEvent.click(within(sheet).getByRole("button", { name: "Show 14 texts" }));
   expect(screen.queryByRole("dialog", { name: "Filter" })).toBeNull();
+});
+
+it("shows With tool proposals and Without with counts", () => {
+  const { open, onChange } = renderPopover();
+  open();
+  const group = screen.getByRole("group", { name: "Tool proposals" });
+  expect(within(group).getAllByRole("checkbox").map(box => box.getAttribute("aria-label"))).toEqual(["With tool proposals, 4 texts", "Without, 10 texts"]);
+  fireEvent.click(within(group).getByRole("checkbox", { name: "With tool proposals, 4 texts" }));
+  expect(onChange).toHaveBeenLastCalledWith({ proposals: "with" });
+  expect(screen.getByRole("button", { name: "Filter, 1 active" })).toBeTruthy();
 });

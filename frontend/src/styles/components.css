@@ -613,7 +613,8 @@ textarea.form-control {
 .shell-nav-link:hover { background: var(--surface-sunken); text-decoration: underline; }
 .shell-nav-link[aria-current] { color: var(--accent); background: var(--accent-light); font-weight: var(--weight-strong); }
 .shell-nav-link:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
-.shell-main { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: auto; }
+/* position: relative contains the absolutely positioned visually hidden spans of long tables (no extra document height). */
+.shell-main { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: auto; }
 .shell-main > * { flex-shrink: 0; }
 .shell-main.density-reading { overflow: hidden; }
 .shell-main.density-reading > div:first-child { flex: 1; min-height: 0; }

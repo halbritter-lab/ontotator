@@ -26,8 +26,8 @@ const undecided = (language = "de") => notInPlanRow("case-101", language, {
 beforeEach(() => { onAction.mockReset(); vi.spyOn(api, "patchWorkPlan"); vi.spyOn(api, "setWorkPlanRows"); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-it("one button for the first lead-owned step and a +n menu for the others", () => {
-  const steps: NextStepView[] = [stepOf("decide_report"), stepOf("annotation_in_progress"), stepOf("assign_annotation"), stepOf("choose_final")];
+it("one next-step button", () => {
+  const steps: NextStepView[] = [stepOf("decide_report"), stepOf("annotation_in_progress")];
   const target = stagedRow("case-109", "de", { steps });
   render(<Harness row={target} />);
   const first = screen.getByRole("button", { name: "Decide on report…, case-109 · de" });
@@ -35,21 +35,43 @@ it("one button for the first lead-owned step and a +n menu for the others", () =
   expect(first.id).toBe("documents-row-case-109-de-action");
   fireEvent.click(first);
   expect(onAction).toHaveBeenLastCalledWith(target, steps[0]);
-  const more = screen.getByRole("button", { name: "+2 more actions, case-109 · de" });
-  expect(more.textContent).toBe("+2");
+  // annotation_in_progress is no lead step: one button, no menu, no "+n".
+  expect(screen.getAllByRole("button")).toHaveLength(1);
+  expect(document.body.textContent).not.toMatch(/\+\d/);
+  cleanup();
+  const { container } = render(<Harness row={stagedRow("case-103", "de", { steps: [stepOf("translation_review_in_progress")] })} />);
+  expect(container.querySelector("button")).toBeNull();
+});
+
+it("More menu when several actions remain", () => {
+  const steps: NextStepView[] = [stepOf("decide_report"), stepOf("assign_annotation"), stepOf("choose_final")];
+  const target = stagedRow("case-109", "de", { steps });
+  render(<Harness row={target} />);
+  expect(screen.getByRole("button", { name: "Decide on report…, case-109 · de" })).toBeTruthy();
+  const more = screen.getByRole("button", { name: "More actions, case-109 de" });
+  expect(more.textContent).toBe("More");
+  expect(more.querySelector("svg")).not.toBeNull();
   expect(more.getAttribute("aria-haspopup")).toBe("menu");
   fireEvent.click(more);
   const menu = screen.getByRole("menu");
   expect(within(menu).getAllByRole("menuitem").map(item => item.textContent)).toEqual(["Assign annotation…", "Compare results…"]);
   fireEvent.click(within(menu).getByRole("menuitem", { name: "Assign annotation…" }));
-  expect(onAction).toHaveBeenLastCalledWith(target, steps[2]);
-  // One lead step: no menu; no lead step: nothing.
-  cleanup();
-  render(<Harness row={stagedRow("case-109", "de", { steps: [stepOf("assign_annotation")] })} />);
-  expect(screen.queryByRole("button", { name: /more action/ })).toBeNull();
-  cleanup();
-  const { container } = render(<Harness row={stagedRow("case-103", "de", { steps: [stepOf("translation_review_in_progress")] })} />);
-  expect(container.querySelector("button")).toBeNull();
+  expect(onAction).toHaveBeenLastCalledWith(target, steps[1]);
+});
+
+it("Open my task is the viewer's next step; Space activates it like a button", () => {
+  const onNavigate = vi.fn();
+  const mine = stagedRow("case-111", "de", { steps: [stepOf("choose_final")], overrides: { own_open_assignment_id: 41 } });
+  render(<RowActionCell row={mine} onAction={onAction} onNavigate={onNavigate} />);
+  const task = screen.getByRole("link", { name: "Open my task" });
+  expect(task.getAttribute("href")).toBe("#/tasks/41");
+  expect(task.className).toContain("btn");
+  expect(task.id).toBe("documents-row-case-111-de-action");
+  // The lead step moves into More.
+  expect(screen.getByRole("button", { name: "More actions, case-111 de" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /^Accept result|^Compare results/ })).toBeNull();
+  fireEvent.keyDown(task, { key: " " });
+  expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 41 });
 });
 
 it("Plan… is a secondary button on undecided rows and on not-in-plan rows (never a text link); none on in-plan rows", () => {
@@ -134,21 +156,6 @@ it("plan popover stays open when a save moves the row into the plan; closing foc
   expect(screen.queryByRole("button", { name: "Plan…, case-101 · de" })).toBeNull();
   expect(document.activeElement?.id).toBe("documents-row-case-101-de-action");
   expect(document.activeElement?.textContent).toBe("Assign review…");
-});
-
-it("lists lead actions that are no step after the other steps; without a step the cell stays empty", () => {
-  const changeFinal = vi.fn();
-  const steps: NextStepView[] = [stepOf("decide_report"), stepOf("assign_annotation")];
-  const target = stagedRow("case-109", "de", { steps });
-  const view = render(<RowActionCell row={target} onAction={onAction} extraActions={[{ id: "change-final", label: "Change final…", onSelect: changeFinal }]} />);
-  fireEvent.click(screen.getByRole("button", { name: "+2 more actions, case-109 · de" }));
-  expect(screen.getAllByRole("menuitem").map(entry => entry.textContent)).toEqual(["Assign annotation…", "Change final…"]);
-  fireEvent.click(screen.getByRole("menuitem", { name: "Change final…" }));
-  expect(changeFinal).toHaveBeenCalledOnce();
-  view.unmount();
-  render(<RowActionCell row={stagedRow("case-110", "de", { steps: [] })} onAction={onAction}
-    extraActions={[{ id: "change-final", label: "Change final…", onSelect: changeFinal }]} />);
-  expect(screen.queryByRole("button")).toBeNull();
 });
 
 it("Don't annotate on an undecided row records the decision without turning anything on", async () => {

@@ -1,17 +1,19 @@
 /**
- * Action column of a Documents row (documents overview "Columns" item 7, VD2, VD18): the first
- * lead-owned step's button plus a "+{n}" menu with the other lead actions; "Plan…" opens a small
- * plan popover with the row's Review / Annotate chips (a secondary button on undecided rows and on rows
- * outside the plan: actions are never text links). In-plan rows without a lead step show nothing.
+ * Next step column of a Documents row (spec 2026-10-23 §2b, VD2): one button, the viewer's next step
+ * ("Open my task" for an own open task, else the first lead-owned step); further actions live in the text
+ * card, and a "More" menu holds any that remain. "Plan…" opens a small plan popover with the row's chips
+ * (a secondary button on undecided rows and on rows outside the plan). In-plan rows without a step show nothing.
  */
 import { useEffect, useRef, useState } from "react";
 import type { DocumentRowView, NextStepView } from "../api/client";
+import type { Route } from "../app/router";
 import { Button } from "../ui/Button";
+import { IconMore } from "../ui/icons";
 import { MenuButton, type MenuItem } from "../ui/MenuButton";
 import { Popover } from "../ui/Popover";
 import { leadSteps, rowActionLabel } from "./nextStepLabels";
 import { PlanChips, type PlanSaves } from "./PlanChips";
-import { documentsRowId, rowName } from "./RowCells";
+import { documentsRowId, RouteLink, rowName } from "./RowCells";
 import { isUndecided } from "./stageLabels";
 
 export interface PlanPopoverProps {
@@ -83,19 +85,16 @@ export interface RowActionCellProps {
   plan?: { groupRevision: number; saves: PlanSaves };
   /** Full-width button (narrow cards). */
   block?: boolean;
-  /**
-   * Lead actions that are no step ("Change final…", "Request translation correction…"): listed in the
-   * "+n" menu after the other steps of a row that has a step (the row panel offers them too).
-   */
-  extraActions?: readonly MenuItem[];
+  /** In-app navigation of "Open my task". */
+  onNavigate?: (route: Route) => void;
 }
 
-/** "+2 more actions, case-107 · de" (starts with the visible "+2", WCAG 2.5.3). */
-export function moreActionsLabel(count: number, row: Pick<DocumentRowView, "case_id" | "language">): string {
-  return `+${count} more ${count === 1 ? "action" : "actions"}, ${rowName(row)}`;
+/** "More actions, case-107 de" (starts with the visible "More", WCAG 2.5.3). */
+export function moreActionsLabel(row: Pick<DocumentRowView, "case_id" | "language">): string {
+  return `More actions, ${row.case_id} ${row.language}`;
 }
 
-export function RowActionCell({ row, onAction, plan, block = false, extraActions = [] }: RowActionCellProps): JSX.Element | null {
+export function RowActionCell({ row, onAction, plan, block = false, onNavigate }: RowActionCellProps): JSX.Element | null {
   // The plan popover's open state lives here: a chip save reloads the row, which may change its
   // branch (undecided → in plan); the popover stays open until the user closes it.
   const [planOpen, setPlanOpen] = useState(false);
@@ -118,13 +117,22 @@ export function RowActionCell({ row, onAction, plan, block = false, extraActions
     : null;
   const active = row.in_plan || isUndecided(row);
   const steps = active ? leadSteps(row) : [];
-  const [first, ...rest] = steps;
+  const ownTask = row.own_open_assignment_id;
+  // An own open task is the viewer's next step; the lead steps then move into More.
+  const [first, ...rest] = ownTask != null ? [null, ...steps] : steps;
   // Open popover: keep it (and its button) in the first slot whatever the row's branch is now.
   if (planOpen && plan) {
     return <span className={className}>{popover()}{menuOf(rest)}</span>;
   }
+  if (ownTask != null) {
+    return <span className={className}>
+      <RouteLink route={{ name: "task", assignmentId: ownTask }} onNavigate={onNavigate} id={documentsRowId(row.case_id, row.language, "action")}
+        className={["documents-action", "btn", "btn-secondary", "btn-sm", block && "documents-action--block"].filter(Boolean).join(" ")}>Open my task</RouteLink>
+      {menuOf(rest)}
+    </span>;
+  }
   if (!active) return plan ? <span className={className}>{popover()}</span> : null;
-  // In-plan rows without a lead step show nothing; their other actions are in the row panel.
+  // In-plan rows without a lead step show nothing; their other actions are in the text card.
   if (!first) return null;
   const firstLabel = rowActionLabel(first, row);
   return <span className={className}>
@@ -136,11 +144,10 @@ export function RowActionCell({ row, onAction, plan, block = false, extraActions
     {menuOf(rest)}
   </span>;
 
-  function menuOf(others: NextStepView[]): JSX.Element | null {
-    const items: MenuItem[] = [
-      ...(onAction ? others.map((step, index) => ({ id: `${step.code}-${index}`, label: rowActionLabel(step, row), onSelect: () => onAction(row, step) })) : []),
-      ...extraActions,
-    ];
-    return items.length > 0 ? <MenuButton key="more" label={moreActionsLabel(items.length, row)} buttonLabel={`+${items.length}`} items={items} /> : null;
+  // Lead actions that are no step ("Change final…", "Request correction…") live in the text card only.
+  function menuOf(others: readonly (NextStepView | null)[]): JSX.Element | null {
+    const items: MenuItem[] = onAction ? others.filter((step): step is NextStepView => step !== null)
+      .map((step, index) => ({ id: `${step.code}-${index}`, label: rowActionLabel(step, row), onSelect: () => onAction(row, step) })) : [];
+    return items.length > 0 ? <MenuButton key="more" label={moreActionsLabel(row)} buttonLabel="More" icon={<IconMore />} items={items} /> : null;
   }
 }

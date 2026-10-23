@@ -2,9 +2,9 @@
  * Narrow-viewport Documents list (documents overview "Narrow"): one case card per case (case
  * checkbox + "case-107 · en source + 1 translation"), one `<article>` per text with its checkbox,
  * heading "{case · language}" with version marker and NEW, the three stage lines, "Waiting on: …",
- * the row action full width with the "+n" menu, "Open" and "Details" (the only way into the row panel's
- * sheet, acceptance fixes X19). As in the table, opening the panel ("Details" or a stage popover's details)
- * also adds the text to the selection. Rows outside the plan are muted articles; nothing collapses (VD1). Card and
+ * the next step full width with the "More" menu, "Open" and "Details" (the way into the text card's
+ * sheet, acceptance fixes X19). Like the text name in the table, "Details" opens the card and leaves the
+ * selection as it is. Rows outside the plan are muted articles; nothing collapses (VD1). Card and
  * case headings carry the table's row-header and group-label ids, so deep links, plan saves and the panel
  * find the same focus targets in both layouts.
  */
@@ -12,11 +12,10 @@ import { useId, useMemo, useRef, useState, type MouseEvent, type ReactNode } fro
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, NextStepView } from "../api/client";
 import type { ProjectDocumentsQuery, Route } from "../app/router";
 import type { GroupSelectMode } from "../ui/DataTable";
-import type { MenuItem } from "../ui/MenuButton";
-import { caseHeaderText, openAndSelect, type TableSelection } from "./DocumentsTable";
+import { caseHeaderText, type TableSelection } from "./DocumentsTable";
 import type { PlanSaves } from "./PlanChips";
 import { RowActionCell } from "./RowActions";
-import { documentsGroupId, documentsRowId, LastActivityCell, NewBadge, RowOpenLinks, rowIsNew, rowKeyOf, rowName, rowNeedsDecision, ShortId, VersionMarker, type OpenRowPanel } from "./RowCells";
+import { documentsGroupId, documentsRowId, LastActivityCell, NewBadge, RowOpenLinks, rowIsNew, rowKeyOf, rowName, rowNeedsDecision, ShortId, VersionMarker, type OpenTextCard } from "./RowCells";
 import { StagePopover } from "./StagePopover";
 import { isActiveRow, stageText, waitingOnText, type StageName } from "./stageLabels";
 import { LanguageFlag } from "../ui/LanguageTag";
@@ -26,7 +25,7 @@ export interface DocumentCardsProps {
   projectKey: string;
   query: ProjectDocumentsQuery;
   /** "Details" opens the row panel (a full-screen sheet below 700 px); a stage line's popover opens it filtered. */
-  onOpenPanel?: OpenRowPanel;
+  onOpenPanel?: OpenTextCard;
   /** Admin actions of one stage of a row, shown in the stage popover (as under the row panel's filtered Activity). */
   stageActions?: (row: DocumentRowView, stage: StageName) => ReactNode;
   /** Pseudonym of the signed-in lead (stage popover lines "Final: chosen by you"). */
@@ -40,8 +39,6 @@ export interface DocumentCardsProps {
   onAction?: (row: DocumentRowView, step: NextStepView) => void;
   /** Plan saves for the "Plan…" popover (VD2). */
   planSaves?: PlanSaves;
-  /** Lead actions of a row that are no step (its "+n" menu). */
-  rowExtras?: (row: DocumentRowView) => readonly MenuItem[];
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
@@ -56,7 +53,8 @@ interface DocumentCardProps extends Omit<DocumentCardsProps, "page" | "busy" | "
   select?: { checked: boolean; onSelect: (mode: GroupSelectMode) => void };
 }
 
-const STAGE_TITLES: readonly (readonly [StageName, string])[] = [["review", "Review"], ["annotation", "Annotation"], ["final", "Final"]];
+// The path names of the text card (spec D2).
+const STAGE_TITLES: readonly (readonly [StageName, string])[] = [["review", "Translation"], ["annotation", "Annotation"], ["final", "Finalization"]];
 
 const selectModeOf = (event: MouseEvent<HTMLInputElement>): GroupSelectMode =>
   event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle-keep-anchor" : "toggle";
@@ -67,7 +65,7 @@ interface StageLineProps {
   title: string;
   sourceLanguage: string | null;
   projectKey: string;
-  onOpenPanel?: OpenRowPanel;
+  onOpenPanel?: OpenTextCard;
   stageActions?: DocumentCardsProps["stageActions"];
   me?: string | null;
 }
@@ -119,7 +117,7 @@ function WaitingOnLine({ row }: { row: DocumentRowView }): JSX.Element {
   return <span className="documents-waiting-on">Waiting on: {value}</span>;
 }
 
-function DocumentCard({ row, group, projectKey, query, active: current, onOpenPanel, stageActions, me, renderRowNotice, rowBadge, onAction, planSaves, onNavigate, select, rowExtras }: DocumentCardProps): JSX.Element {
+function DocumentCard({ row, group, projectKey, query, active: current, onOpenPanel, stageActions, me, renderRowNotice, rowBadge, onAction, planSaves, onNavigate, select }: DocumentCardProps): JSX.Element {
   const headingId = documentsRowId(row.case_id, row.language, "header");
   const name = rowName(row);
   const badge = rowBadge?.(row);
@@ -149,7 +147,7 @@ function DocumentCard({ row, group, projectKey, query, active: current, onOpenPa
         <WaitingOnLine row={row} />
         <span className="document-card-activity"><LastActivityCell iso={row.last_activity_at} /></span>
       </div>
-      <RowActionCell row={row} onAction={onAction} extraActions={rowExtras?.(row)} plan={planSaves ? { saves: planSaves, groupRevision: group.plan_revision } : undefined} block />
+      <RowActionCell row={row} onAction={onAction} onNavigate={onNavigate} plan={planSaves ? { saves: planSaves, groupRevision: group.plan_revision } : undefined} block />
       <div className="document-card-line document-card-actions">
         <RowOpenLinks row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} />
         {onOpenPanel && <button type="button" id={documentsRowId(row.case_id, row.language, "details")} className="documents-details-button target-min"
@@ -162,7 +160,6 @@ function DocumentCard({ row, group, projectKey, query, active: current, onOpenPa
 
 export function DocumentCards({ page, busy, empty, query, selection, activeKey = null, onOpenPanel, ...rest }: DocumentCardsProps): JSX.Element {
   const order = useMemo(() => page.groups.flatMap(group => group.rows.map(rowKeyOf)), [page.groups]);
-  const openPanel = openAndSelect(onOpenPanel, selection, order);
   if (page.groups.length === 0) return <div className="document-cards-empty">{empty}</div>;
   return (
     <ul className="document-cards" aria-label="Documents" aria-busy={busy || undefined}>
@@ -179,7 +176,7 @@ export function DocumentCards({ page, busy, empty, query, selection, activeKey =
               <h3 id={documentsGroupId(group.case_id)} tabIndex={-1} className="document-case-card-title">{caseHeaderText(group)}</h3>
             </div>
             {group.rows.map(row => (
-              <DocumentCard key={rowKeyOf(row)} {...rest} onOpenPanel={openPanel} row={row} group={group} query={query} active={rowKeyOf(row) === activeKey}
+              <DocumentCard key={rowKeyOf(row)} {...rest} onOpenPanel={onOpenPanel} row={row} group={group} query={query} active={rowKeyOf(row) === activeKey}
                 select={selection ? { checked: selection.keys.has(rowKeyOf(row)), onSelect: mode => selection.select(rowKeyOf(row), mode, order) } : undefined} />
             ))}
           </li>

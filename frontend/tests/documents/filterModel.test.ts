@@ -105,12 +105,31 @@ describe("filter model", () => {
 
   it("builds the Language and Waiting on groups from the facet counts and the route", () => {
     const groups = facetGroups({ language: { de: 8, en: 3 }, waiting_on: { "ann-0002": 1, me: 2 } }, { language: "fr", waiting_on: "ann-0009" }, new Set(["en"]));
-    expect(groups.map(group => group.legend)).toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags", "Waiting on"]);
+    expect(groups.map(group => group.legend)).toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags", "Tool proposals", "Waiting on"]);
     expect(groups[0].options.map(option => option.label)).toEqual(["de", "en (source)", "fr"]);
-    expect(groups[7].options.map(option => option.label)).toEqual(["You", "ann-0002", "ann-0009"]);
+    expect(groups[8].options.map(option => option.label)).toEqual(["You", "ann-0002", "ann-0009"]);
     const named = facetGroups({ waiting_on: { "ann-0002": 1 } }, {}, new Set(), new Map([["ann-0002", "Ana Weber"]]));
     expect(named.at(-1)!.options.map(option => option.label)).toEqual(["Ana Weber"]);
     expect(chipsOf({ waiting_on: "ann-0002" }, new Map([["ann-0002", "Ana Weber"]])).map(chip => chip.label)).toEqual(["Waiting on: Ana Weber"]);
-    expect(facetGroups({}, {}, new Set()).map(group => group.legend)).toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags"]);
+    expect(facetGroups({}, {}, new Set()).map(group => group.legend)).toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags", "Tool proposals"]);
+  });
+
+  it("proposals facet round-trips through the route", () => {
+    const group = FACET_GROUPS.find(entry => entry.id === "proposals")!;
+    expect(group.legend).toBe("Tool proposals");
+    expect(group.options.map(option => option.label)).toEqual(["With tool proposals", "Without"]);
+    const [withOption, without] = group.options;
+    const query: ProjectDocumentsQuery = { ...toggleOption({}, withOption, true) };
+    expect(query).toEqual({ proposals: "with" });
+    expect(optionChecked(query, withOption)).toBe(true);
+    expect(optionChecked(query, without)).toBe(false);
+    expect(rowsRequest(query)).toEqual({ proposals: "with" });
+    expect(rowsRequest({ proposals: "with,without,nope" })).toEqual({ proposals: ["with", "without"] });
+    expect(labels({ proposals: "without" })).toEqual(["Tool proposals: Without"]);
+    expect(chipsOf({ proposals: "with" })[0].patch).toEqual({ proposals: undefined });
+    expect(optionCount({ proposals: { with: 4, without: 9 } }, without)).toBe(9);
+    expect(filtersActive({ proposals: "with" })).toBe(true);
+    expect(clearAllPatch({ proposals: "with" })).toMatchObject({ proposals: undefined });
+    expect(tabRoute("p", { proposals: "with" }, "assign")).toMatchObject({ proposals: "with" });
   });
 });

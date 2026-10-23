@@ -26,10 +26,6 @@
   .selection-bar { animation: selection-bar-in 150ms ease-out; }
 }
 @keyframes selection-bar-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-/* The open row panel (from 700 px, fixed on the right) keeps the bar's actions uncovered. */
-@media (min-width: 700px) {
-  .documents-page:has(.row-panel:not(.row-panel--sheet)) .selection-bar { right: calc(min(480px, 45vw) + var(--selection-bar-inset)); }
-}
 .documents-page { padding-bottom: var(--selection-bar-space, 0px); }
 .shell, .shell-main { scroll-padding-bottom: var(--selection-bar-space, 0px); }
 .selection-bar-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }

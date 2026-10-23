@@ -25,9 +25,18 @@
 .documents-filter-chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); min-width: 0; }
 .documents-filter-count { margin: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* Filter popover body: four fieldsets in two columns (one in the sheet); each facet "label … count" */
+/* Filter popover body: fieldsets in two columns (one below 900 px and in the sheet); each facet "label … count".
+   The body scrolls so every option stays reachable (V7). */
 .documents-filter-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: var(--space-3) var(--space-4); }
 .ui-popover-sheet .documents-filter-groups { grid-template-columns: minmax(0, 1fr); }
+.ui-popover-body:has(> .documents-filter-groups) { max-height: min(70vh, 32rem); overflow-y: auto; }
+/* Below 900 px (V7): one filter column; the table drops Waiting on and Last activity (both in the text card)
+   so it fits 768 px without horizontal scroll. */
+@media (max-width: 899px) {
+  .documents-filter-groups { grid-template-columns: minmax(0, 1fr); }
+  .documents-table th:has(.documents-col-wide), .documents-table td:has(> .documents-col-wide) { display: none; }
+  .documents-status-cell { max-width: 10rem; }
+}
 .documents-filter-group { display: grid; align-content: start; gap: 2px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .documents-filter-group > legend { margin-bottom: var(--space-1); padding: 0; font-weight: var(--weight-strong); }
 .documents-facet { display: flex; align-items: center; gap: var(--space-2); min-height: 24px; cursor: pointer; }
@@ -49,20 +58,24 @@
 .documents-group-label:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
 .documents-group-label .documents-id { font-weight: var(--weight-strong); }
 .documents-group-meta { color: var(--text-muted); }
+/* The folded source's entry point: plain text that opens its card. */
+button.documents-group-meta { min-height: 24px; padding: 0; border: 0; background: transparent; font: inherit; cursor: pointer; }
+button.documents-group-meta:hover { text-decoration: underline; }
+button.documents-group-meta:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
 
-/* Text rows: the Text cell is indented 20 px with a thin rule at its left */
+/* Text rows (spec 2026-10-23 §2b): one line each, 40 px; the Text cell is indented 20 px with a thin rule at its left */
+.documents-table .documents-row > td,
+.documents-table .documents-row > th { height: 40px; padding-block: var(--space-1); white-space: nowrap; }
 .documents-table .documents-row > th[scope="row"] { padding-inline-start: 20px; box-shadow: inset 1px 0 var(--border); background: transparent; font-weight: var(--weight-regular); }
-.documents-row-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); font-weight: var(--weight-regular); }
-.documents-language { font-weight: var(--weight-strong); }
-/* Row header name: a focus target of deep links and "Next decision"; in the table a link-styled button
-   that opens the row panel ("Details, case-107 · de"). */
+.documents-row-header { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1) var(--space-3); font-weight: var(--weight-regular); }
+.documents-language { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: var(--weight-strong); }
+/* Row header name: a focus target of deep links and "Next decision"; in the table a button in plain
+   text style (not a link) that opens the text card. */
 .documents-text-name:focus { outline: none; }
 .documents-text-name:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
-.documents-text-button { min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.documents-text-button .documents-language { color: inherit; }
-.documents-text-button:hover { color: var(--accent-hover); }
+button.documents-text-name { min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-decoration: none; cursor: pointer; }
 .documents-version-marker { display: inline-block; padding: 0 var(--space-1); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: var(--size-sm); line-height: var(--leading-sm); white-space: nowrap; }
-.documents-open, .documents-open-task { white-space: nowrap; }
+.documents-open { white-space: nowrap; }
 .documents-muted, .documents-notes, .documents-final--none, .documents-source { color: var(--text-muted); }
 .documents-source { font-size: var(--size-sm); }
 
@@ -73,18 +86,16 @@
 .documents-actions--block { display: flex; }
 .documents-action { white-space: nowrap; }
 .documents-activity-cell { display: inline-flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
-/* Stage cells open the row panel filtered to their stage: no frame or chevron; the status word has a
-   permanent subtle dotted underline, a solid accent underline on hover and focus. */
-.documents-stage-button { display: block; min-height: 24px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
-.documents-stage-button .stage-cell-status { text-decoration: underline dotted var(--border-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
-.documents-stage-button:hover .stage-cell-status,
-.documents-stage-button:focus-visible .stage-cell-status { text-decoration: underline solid var(--accent); text-decoration-thickness: 2px; }
-.documents-stage-button:focus { outline: none; }
-.documents-stage-button:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); border-radius: var(--radius-sm); }
-/* A click on a row's empty area opens its panel and selects it: pointer cursor; the checkbox cell keeps its own. */
+/* Status cells: one line, cut with an ellipsis (the full text is the title); the short "who" in grey. */
+.documents-status-cell { display: flex; align-items: center; gap: var(--space-2); max-width: 16rem; min-width: 0; }
+.documents-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.documents-status-who { color: var(--text-muted); }
+/* Robot icon: the text has tool proposals and nobody is assigned yet; the accent of the editor's AI badge. */
+.documents-bot { display: inline-flex; flex: none; color: var(--accent); }
+/* A click on a row's empty area selects it and opens its card (a second click deselects): pointer cursor; the checkbox cell keeps its own. */
 .documents-table .documents-row--clickable { cursor: pointer; }
 .documents-table .documents-row--clickable > .data-table-select-cell { cursor: auto; }
-/* The row the row panel shows: a light accent background, a 2 px accent edge above and below every cell
+/* The row the card shows: a light accent background, a 2 px accent edge above and below every cell
    (visible beside the panel, never colour alone) and its text name in strong weight; the first cell keeps
    the decision edge of decision rows; `aria-current` names it. Box shadows only: no layout shift. */
 .documents-table .documents-row--active > * { background: var(--accent-light); box-shadow: inset 0 2px var(--accent), inset 0 -2px var(--accent); }
@@ -130,7 +141,7 @@
   .documents-version-marker { border-color: CanvasText; }
   .documents-filter-active { forced-color-adjust: none; background: CanvasText; color: Canvas; }
   .documents-skeleton-bar { background: GrayText; }
-  .documents-text-button { color: LinkText; }
+  .documents-bot { color: CanvasText; }
   /* An outline inside the row: forced colours drop box shadows, and a border would shift the cells. */
   .documents-table .documents-row--active > * { box-shadow: none; }
   .documents-table .documents-row--active { outline: 2px solid Highlight; outline-offset: -2px; }

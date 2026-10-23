@@ -11,12 +11,12 @@ import { decisionCategoryLabels, type DecisionCategory } from "./labels";
 import { STEP_LABELS, stepLabel, type StepCode } from "./nextStepLabels";
 
 /** Route parameters with a facet in the popover. */
-export type FacetParam = "language" | "review_state" | "annotation_state" | "final_state" | "origin" | "plan" | "waiting_on" | "flags";
+export type FacetParam = "language" | "review_state" | "annotation_state" | "final_state" | "origin" | "plan" | "waiting_on" | "flags" | "proposals";
 export type Facets = NonNullable<DecisionBarView["facets"]>;
 
 /** One checkbox of the popover; it sets every value of `values` in `param` (OR). */
 export interface FacetOption { id: string; label: string; param: FacetParam; values: readonly string[] }
-export interface FacetGroup { id: "language" | "review" | "annotation" | "final" | "origin" | "plan" | "flags" | "waiting_on"; legend: string; options: readonly FacetOption[] }
+export interface FacetGroup { id: "language" | "review" | "annotation" | "final" | "origin" | "plan" | "flags" | "proposals" | "waiting_on"; legend: string; options: readonly FacetOption[] }
 
 export type TabId = "decision" | "assign" | "progress" | "done" | "all";
 export const TABS: readonly (readonly [TabId, string, keyof DecisionBarView])[] = [
@@ -80,6 +80,8 @@ export const FACET_GROUPS: readonly FacetGroup[] = [
   ] },
   // X5: findings flagged "guidelines unclear" in the submitted consolidation of the current version.
   { id: "flags", legend: "Flags", options: [option("flags", FLAGGED_UNCLEAR, "guidelines_unclear")] },
+  // Spec §2b: texts whose newest proposal set has tool proposals (read model facet `proposals`).
+  { id: "proposals", legend: "Tool proposals", options: [option("proposals", "With tool proposals", "with"), option("proposals", "Without", "without")] },
 ];
 
 /** Every value the server accepts per stage facet (generated `DocumentRowFilters`); labels for the ones without a popover option. */
@@ -90,7 +92,7 @@ const STATE_VALUES: Readonly<Record<"review_state" | "annotation_state" | "final
 };
 const PARAM_PREFIX: Readonly<Record<FacetParam, string>> = {
   language: "Language", review_state: "Translation review", annotation_state: "Annotation", final_state: "Final", origin: "Origin", plan: "Plan", waiting_on: "Waiting on",
-  flags: "",
+  flags: "", proposals: "Tool proposals",
 };
 
 /** The values of a comma-joined route parameter, in order, without duplicates and empties. */
@@ -107,6 +109,7 @@ const KNOWN: Readonly<Record<string, (value: string) => boolean>> = {
   language: () => true,
   waiting_on: () => true,
   flags: value => value === "guidelines_unclear",
+  proposals: value => value === "with" || value === "without",
   origin: value => Object.hasOwn(originLabels, value),
   plan: value => Object.hasOwn(PLAN_LABELS, value),
   review_state: value => stateKnown("review_state", value),
@@ -124,7 +127,7 @@ const known = (param: string, value: string | undefined): string[] => listOf(val
  */
 export function rowsRequest(query: ProjectDocumentsQuery): DocumentRowsRequest {
   const result: Record<string, unknown> = {};
-  for (const param of ["language", "origin", "step", "stage", "plan", "review_state", "annotation_state", "final_state", "waiting_on", "flags"] as const) {
+  for (const param of ["language", "origin", "step", "stage", "plan", "review_state", "annotation_state", "final_state", "waiting_on", "flags", "proposals"] as const) {
     const values = known(param, query[param]);
     if (values.length) result[param] = values.length > 1 ? values : values[0];
   }
@@ -156,7 +159,7 @@ export function tabCount(bar: DecisionBarView, tab: TabId): number {
 
 /** Route parameters "Clear all" removes: every filter and the search, not the tab (`segment`) or the order (`sort`). */
 const FILTER_PARAMS = [
-  "language", "review_state", "annotation_state", "final_state", "origin", "plan", "waiting_on", "flags",
+  "language", "review_state", "annotation_state", "final_state", "origin", "plan", "waiting_on", "flags", "proposals",
   "decision", "step", "stage", "owner", "paused", "status", "translation_status", "final", "case", "q",
 ] as const satisfies readonly (keyof ProjectDocumentsQuery)[];
 
@@ -254,7 +257,7 @@ function listChips(query: ProjectDocumentsQuery, param: "step" | "stage", label:
  */
 export function chipsOf(query: ProjectDocumentsQuery, people: PeopleNames = new Map()): Chip[] {
   const chips: Chip[] = [];
-  for (const param of ["language", "review_state", "annotation_state", "final_state", "origin", "plan", "flags", "waiting_on"] as const) chips.push(...facetChips(query, param, people));
+  for (const param of ["language", "review_state", "annotation_state", "final_state", "origin", "plan", "flags", "proposals", "waiting_on"] as const) chips.push(...facetChips(query, param, people));
   if (query.segment === undefined && query.decision && Object.hasOwn(decisionCategoryLabels, query.decision)) {
     chips.push({ id: "decision", label: decisionCategoryLabels[query.decision as DecisionCategory], patch: { decision: undefined, segment: "decision" } });
   }
