@@ -132,7 +132,8 @@ export function DataTable<T>({ label, columns, rows, rowKey, initialSort, empty,
   if (groups) {
     body = groups.length ? groups.map((group) => {
       const { className: headerClassName, ...headerProps } = group.headerProps ?? {};
-      const groupBox = groupSelection && <input type="checkbox" className="data-table-group-select checkbox-target" data-group-key={group.key}
+      // A group without rows (all folded away) has nothing to select: no checkbox.
+      const groupBox = groupSelection && group.rows.length > 0 && <input type="checkbox" className="data-table-group-select checkbox-target" data-group-key={group.key}
         ref={groupSelection.state ? indeterminateRef(groupSelection.state(group.key) === "some") : undefined}
         aria-label={groupSelection.checkboxLabel(group.key)} checked={groupSelection.selected(group.key)}
         onChange={() => undefined} onClick={(event) => groupSelection.onSelect(group.key, groupSelectionModeOf(event))}

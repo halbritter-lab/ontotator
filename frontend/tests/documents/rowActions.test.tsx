@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, type DocumentRowView, type NextStepView } from "../../src/api/client";
 import { RowActionCell } from "../../src/documents/RowActions";
@@ -41,20 +41,13 @@ it("one next-step button", () => {
   expect(container.querySelector("button")).toBeNull();
 });
 
-it("More menu when several actions remain", () => {
+it("one button even when several lead steps remain (the others are in the text card)", () => {
   const steps: NextStepView[] = [stepOf("decide_report"), stepOf("assign_annotation"), stepOf("choose_final")];
   const target = stagedRow("case-109", "de", { steps });
   render(<Harness row={target} />);
   expect(screen.getByRole("button", { name: "Decide on report…, case-109 de" })).toBeTruthy();
-  const more = screen.getByRole("button", { name: "More actions, case-109 de" });
-  expect(more.textContent).toBe("More");
-  expect(more.querySelector("svg")).not.toBeNull();
-  expect(more.getAttribute("aria-haspopup")).toBe("menu");
-  fireEvent.click(more);
-  const menu = screen.getByRole("menu");
-  expect(within(menu).getAllByRole("menuitem").map(item => item.textContent)).toEqual(["Assign annotation…", "Compare results…"]);
-  fireEvent.click(within(menu).getByRole("menuitem", { name: "Assign annotation…" }));
-  expect(onAction).toHaveBeenLastCalledWith(target, steps[1]);
+  expect(screen.getAllByRole("button")).toHaveLength(1);
+  expect(screen.queryByRole("menu")).toBeNull();
 });
 
 it("Open my task is the viewer's next step; Space activates it like a button", () => {
@@ -65,8 +58,8 @@ it("Open my task is the viewer's next step; Space activates it like a button", (
   expect(task.getAttribute("href")).toBe("#/tasks/41");
   expect(task.className).toContain("btn");
   expect(task.id).toBe("documents-row-case-111-de-action");
-  // The lead step moves into More.
-  expect(screen.getByRole("button", { name: "More actions, case-111 de" })).toBeTruthy();
+  // The lead step is in the text card only: no second control in the row.
+  expect(screen.queryAllByRole("button")).toHaveLength(0);
   expect(screen.queryByRole("button", { name: /^Accept result|^Compare results/ })).toBeNull();
   fireEvent.keyDown(task, { key: " " });
   expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 41 });

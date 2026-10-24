@@ -1,19 +1,21 @@
 /**
  * Documents table (spec 2026-10-23 §2b, documents overview VD1, VD4, VD5): one `<tbody>` per case with a
- * slim case line (case checkbox, case ID and, when the source is not planned, "source en (native),
- * 1 translation" instead of the source's own row), then one line per text: [checkbox] Text, Translation,
- * Annotation, Finalization, Waiting on, Next step, Last activity. Rows outside the plan are muted;
- * decision rows get the left edge. A row click selects the text and opens its card, a second click
- * deselects (`rowClick`); the text name opens the card. Selection and the card are owned by the page.
+ * slim case line (case checkbox, case ID and, on the right, the "n not in plan" toggle), then one line per
+ * planned text: [checkbox] Text, Translation, Annotation, Finalization, Waiting on, Next step, Last activity.
+ * Texts outside the plan (source and translations alike) stay folded per case; expanded they are muted rows
+ * with "Add to plan…". Decision rows get the left edge. A row click (or the text name) opens the text card
+ * and never changes the selection; only the checkboxes select. Selection and the card are owned by the page.
  */
 import { useMemo, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, DocumentRowsRequest, NextStepView } from "../api/client";
 import type { Route } from "../app/router";
 import { plural } from "../app/labels";
 import { DataTable, type Column, type DataTableGroup, type DataTableSort, type GroupSelectMode } from "../ui/DataTable";
+import { IconChevronRight } from "../ui/icons";
 import { RowActionCell } from "./RowActions";
 import {
   documentsGroupId,
+  documentsNotInPlanId,
   documentsRowId,
   LastActivityCell,
   type OpenTextCard,
@@ -35,16 +37,10 @@ export function caseHeaderText(group: Pick<DocumentGroupView, "case_id" | "rows"
   return `${group.case_id}, ${source.language} source${translations > 0 ? ` + ${plural(translations, "translation")}` : ""}`;
 }
 
-/** The source row the case line stands for: not planned, and the case shows other rows (spec §2b). */
-export function foldedSource(group: Pick<DocumentGroupView, "rows">): DocumentRowView | null {
-  const source = group.rows.find(row => row.is_source);
-  return source && !isActiveRow(source) && group.rows.length > 1 ? source : null;
-}
-
-/** Grey part of the case line: "source en (native), 1 translation" when the source row is folded into it. */
-export function caseLineMeta(group: Pick<DocumentGroupView, "rows" | "language_count">): string | null {
-  const source = foldedSource(group);
-  return source ? `source ${source.language} (native), ${plural(group.language_count - 1, "translation")}` : null;
+/** The rows a case shows: its planned texts, then (when the case's "not in plan" toggle is open) the others. */
+export function visibleRows(group: Pick<DocumentGroupView, "rows">, notInPlanOpen: boolean): DocumentRowView[] {
+  const planned = group.rows.filter(isActiveRow);
+  return notInPlanOpen ? [...planned, ...group.rows.filter(row => !isActiveRow(row))] : planned;
 }
 
 /** The page's text selection as the table needs it (`"{case}:{language}"` keys, list order passed back). */
@@ -70,22 +66,6 @@ export function rowAreaClick(event: MouseEvent<HTMLElement>): "row" | "range" | 
   const selected = typeof window.getSelection === "function" ? window.getSelection()?.toString() ?? "" : "";
   if (selected.length > 0) return null;
   return event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle-keep-anchor" : "row";
-}
-
-/** Spec §2: unselected row → select and open the card; selected row → deselect, no card;
- *  the text name → open the card, selection unchanged. Checkbox, Shift and Ctrl keep their behaviour. */
-export function rowClick(
-  row: DocumentRowView,
-  target: "row" | "name",
-  selection: TableSelection | undefined,
-  order: readonly string[],
-  open: (row: DocumentRowView) => void,
-): void {
-  const key = rowKeyOf(row);
-  if (target === "name" || !selection) { open(row); return; }
-  if (selection.keys.has(key)) { selection.select(key, "toggle", order); return; }
-  selection.select(key, "select", order);
-  open(row);
 }
 
 /** Server sorts the headers can set (VD10). */
@@ -127,6 +107,11 @@ export interface DocumentsTableProps {
   empty?: ReactNode;
   /** Row and case checkboxes (VD4); the page owns the selection. */
   selection?: TableSelection;
+  /** Cases whose "n not in plan" toggle is open (the page owns it: ‹ › in the card walk the visible rows). */
+  notInPlanOpen?: ReadonlySet<string>;
+  onToggleNotInPlan?: (caseId: string) => void;
+  /** "Add to plan…" of a text outside the plan (the Change plan dialog). */
+  onAddToPlan?: (row: DocumentRowView) => void;
   /** Current server sort; with `onSort` the Text and Last activity headers sort (VD10). */
   sort?: DocumentRowsRequest["sort"];
   onSort?: (sort: HeaderSort) => void;
@@ -134,25 +119,20 @@ export interface DocumentsTableProps {
 
 export function DocumentsTable({
   page, onOpenPanel, activeKey = null, renderRowNotice, rowBadge, onAction, onNavigate, busy, empty, selection, sort, onSort,
+  notInPlanOpen, onToggleNotInPlan, onAddToPlan,
 }: DocumentsTableProps): JSX.Element {
-  // Folded source rows are not rendered: they are not part of the range order; the case checkbox and the case line's
-  // "source en (native)" button cover them.
-  const shownGroups = useMemo(() => page.groups.map(group => {
-    const folded = foldedSource(group);
-    return { group, rows: folded ? group.rows.filter(row => row !== folded) : group.rows };
-  }), [page.groups]);
+  // Folded (not in plan) rows are not rendered: they are not part of the range order, and the case checkbox skips them.
+  const shownGroups = useMemo(() => page.groups.map(group => ({ group, rows: visibleRows(group, notInPlanOpen?.has(group.case_id) ?? false) })),
+    [page.groups, notInPlanOpen]);
   const order = useMemo(() => shownGroups.flatMap(entry => entry.rows.map(rowKeyOf)), [shownGroups]);
-  const groupOf = useMemo(() => new Map(page.groups.map(group => [group.case_id, group])), [page.groups]);
   const shownRowsOf = useMemo(() => new Map(shownGroups.map(entry => [entry.group.case_id, entry.rows])), [shownGroups]);
 
   const openCard = (row: DocumentRowView, opener: HTMLElement) => onOpenPanel?.(row, { opener });
+  // A plain click on the row's own area opens the card (never the selection); modifier clicks do nothing.
   const onRowClick = (row: DocumentRowView) => onOpenPanel ? (event: MouseEvent<HTMLTableRowElement>) => {
-    const kind = rowAreaClick(event);
-    if (kind === null) return;
-    if (kind !== "row") { selection?.select(rowKeyOf(row), kind, order); return; }
+    if (rowAreaClick(event) !== "row") return;
     // The text name gets focus back when the card closes.
-    const opener = document.getElementById(documentsRowId(row.case_id, row.language, "header")) ?? event.currentTarget;
-    rowClick(row, "row", selection, order, entry => openCard(entry, opener));
+    openCard(row, document.getElementById(documentsRowId(row.case_id, row.language, "header")) ?? event.currentTarget);
   } : undefined;
 
   const columns: Column<DocumentRowView>[] = [
@@ -161,8 +141,7 @@ export function DocumentsTable({
       header: "Text",
       rowHeader: true,
       sortable: true,
-      cell: row => <RowHeaderCell row={row} badge={rowBadge?.(row)}
-        onOpenCard={onOpenPanel ? opener => rowClick(row, "name", selection, order, entry => openCard(entry, opener)) : undefined} />,
+      cell: row => <RowHeaderCell row={row} badge={rowBadge?.(row)} onOpenCard={onOpenPanel ? opener => openCard(row, opener) : undefined} />,
     },
     { id: "review", header: "Translation", cell: row => <RowStageCell row={row} stage="review" /> },
     { id: "annotation", header: "Annotation", cell: row => <RowStageCell row={row} stage="annotation" /> },
@@ -172,7 +151,7 @@ export function DocumentsTable({
     {
       id: "action",
       header: "Next step",
-      cell: row => <RowActionCell row={row} onAction={onAction} onNavigate={onNavigate} />,
+      cell: row => <RowActionCell row={row} onAction={onAction} onNavigate={onNavigate} onAddToPlan={onAddToPlan} />,
     },
     {
       id: "activity",
@@ -182,32 +161,29 @@ export function DocumentsTable({
     },
   ];
 
+  // The case line is a heading only; the "n not in plan" toggle on its right folds the texts outside the plan.
   const groups: DataTableGroup<DocumentRowView>[] = shownGroups.map(({ group, rows }) => {
-    const meta = caseLineMeta(group);
-    const folded = foldedSource(group);
+    const hidden = group.rows.filter(row => !isActiveRow(row)).length;
+    const open = notInPlanOpen?.has(group.case_id) ?? false;
     return {
       key: group.case_id,
       expanded: true,
       rows,
       headerProps: { className: "documents-group" },
       header: (
-        <span id={documentsGroupId(group.case_id)} tabIndex={-1} className="documents-group-label">
-          <ShortId value={group.case_id} />
-          {meta && (folded && onOpenPanel
-            ? <button type="button" className="documents-group-meta" onClick={event => openCard(folded, event.currentTarget)}>{meta}</button>
-            : <span className="documents-group-meta">{meta}</span>)}
+        <span className="documents-group-line">
+          <span id={documentsGroupId(group.case_id)} tabIndex={-1} className="documents-group-label"><ShortId value={group.case_id} /></span>
+          {hidden > 0 && onToggleNotInPlan && <button type="button" id={documentsNotInPlanId(group.case_id)} className="documents-not-in-plan-toggle"
+            aria-expanded={open} onClick={() => onToggleNotInPlan(group.case_id)}>
+            {`${hidden} not in plan`}<IconChevronRight className="disclosure-chevron" />
+          </button>}
         </span>
       ),
     };
   });
 
-  // The case checkbox selects the case's texts in the current view (filters respected), the folded source included
-  // (Select all filtered and Select by IDs add it too, so unchecking the case must clear it). Shown rows first: the
-  // range and the anchor use the shown order.
-  const caseRows = (caseId: string) => {
-    const shown = shownRowsOf.get(caseId) ?? [];
-    return [...shown, ...(groupOf.get(caseId)?.rows ?? []).filter(row => !shown.includes(row))];
-  };
+  // The case checkbox selects exactly the case's visible rows (filters respected, folded rows not).
+  const caseRows = (caseId: string) => shownRowsOf.get(caseId) ?? [];
   const caseKeys = (caseId: string) => caseRows(caseId).map(rowKeyOf);
 
   const below = (row: DocumentRowView): ReactNode | null => {

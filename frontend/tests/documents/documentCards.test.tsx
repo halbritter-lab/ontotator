@@ -123,7 +123,7 @@ describe("cards", () => {
     expect(lines[0].className).toContain("stage-cell--done");
   });
 
-  it("Waiting on line, full-width action ≥ 32 px with More, Open and Details", () => {
+  it("Waiting on line, one full-width action ≥ 32 px (no More), Open and Details", () => {
     const people = [ana, tom, { pseudonym: "ann-0005", display_name: "Luc Martin", is_me: false }];
     const fr = stagedRow("case-108", "fr", {
       stages: { annotation: cell("in_progress", "running", { people }) },
@@ -135,7 +135,7 @@ describe("cards", () => {
     expect(within(deCard).getByText("You").tagName).toBe("STRONG");
     const action = within(deCard).getByRole("button", { name: "Assign annotation…, case-108 de" });
     expect(action.classList.contains("documents-action--block")).toBe(true);
-    expect(within(deCard).getByRole("button", { name: "More actions, case-108 de" }).textContent).toBe("More");
+    expect(within(deCard).queryByRole("button", { name: /^More/ })).toBeNull();
     expect(within(deCard).getByRole("link", { name: "Open in editor, case-108 de" })).toBeTruthy();
     expect(within(deCard).getByRole("button", { name: "Details, case-108 de" })).toBeTruthy();
     // More than two people: the visible "+n" line, the full list for assistive technology (not only in a title).

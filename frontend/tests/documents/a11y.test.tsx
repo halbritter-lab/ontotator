@@ -64,11 +64,16 @@ describe("table", () => {
   });
 
   it("row checkbox names and mixed group checkbox", () => {
-    render(<DocumentsTable page={view()} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
-      sort="case" onSort={vi.fn()} />);
+    const { unmount } = render(<DocumentsTable page={view()} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
+      sort="case" onSort={vi.fn()} onToggleNotInPlan={vi.fn()} />);
     expect(screen.getByRole("checkbox", { name: "Select case-107 de" })).toHaveProperty("checked", true);
-    // The not-planned en source is folded into the case line: no row, no checkbox; the case checkbox covers it.
+    // The not-planned en source is folded behind the case line's toggle: no row, no checkbox, not in the case checkbox.
     expect(screen.queryByRole("checkbox", { name: "Select case-107 en" })).toBeNull();
+    expect(screen.getByRole("button", { name: "1 not in plan" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("checkbox", { name: "Select case-107 (1 text)" })).toHaveProperty("checked", true);
+    unmount();
+    render(<DocumentsTable page={view()} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
+      sort="case" onSort={vi.fn()} onToggleNotInPlan={vi.fn()} notInPlanOpen={new Set(["case-107"])} />);
     const caseBox = screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" }) as HTMLInputElement;
     expect(caseBox.indeterminate).toBe(true);
     expect(screen.getByRole("checkbox", { name: "Select case-108 (1 text)" })).toHaveProperty("indeterminate", false);
@@ -79,14 +84,15 @@ describe("table", () => {
     expect(screen.getByRole("columnheader", { name: "Next step" })).toBeTruthy();
   });
 
-  it("one-line rows: named text buttons, robot image, More menu, no nested interactive content", () => {
+  it("one-line rows: named text buttons, robot image, one next-step button, no nested interactive content", () => {
     const fresh = { ...stagedRow("case-108", "fr", { steps: [stepOf("assign_annotation"), stepOf("decide_report")] }), proposal_count: 3 };
     const { container } = render(<DocumentsTable page={page([group("case-108", [fresh])])} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection()} />);
     const name = screen.getByRole("button", { name: "Open text card, case-108 fr" });
     expect(name.closest("th")!.getAttribute("scope")).toBe("row");
     expect(screen.getByRole("img", { name: "3 tool proposals available; the annotation starts from them" }).querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
-    const more = screen.getByRole("button", { name: "More actions, case-108 fr" });
-    expect(more.getAttribute("aria-haspopup")).toBe("menu");
+    expect(screen.getByRole("button", { name: "Assign annotation…, case-108 fr" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^More/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Decide on report/ })).toBeNull();
     // No interactive element inside another one; every button has a name.
     for (const element of container.querySelectorAll("button, a, input")) {
       expect(element.parentElement!.closest("button, a")).toBeNull();

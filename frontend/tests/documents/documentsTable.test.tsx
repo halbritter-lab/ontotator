@@ -26,6 +26,7 @@ function renderTable(view: DocumentRowsPage, overrides: Partial<DocumentsTablePr
     page: view,
     onOpenPanel: vi.fn(),
     onAction: vi.fn(),
+    onToggleNotInPlan: vi.fn(),
     selection: selection(),
     ...overrides,
   };
@@ -64,53 +65,45 @@ describe("structure", () => {
     expect(cellsOf("case-107 de")).toHaveLength(8);
   });
 
-  it("a not-planned source is folded into the case line", () => {
+  it("texts outside the plan fold behind the case line's toggle; the case line is a heading only", () => {
     const { props } = renderTable(page([case107()]));
-    const box = screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" });
-    const groupRow = box.closest("tr")!;
-    const label = groupRow.querySelector("th")!;
+    const box = screen.getByRole("checkbox", { name: "Select case-107 (1 text)" });
+    const label = box.closest("tr")!.querySelector("th")!;
     expect(label.getAttribute("scope")).toBe("rowgroup");
     expect(label.querySelector(".documents-id")!.textContent).toBe("case-107");
-    expect(label.querySelector(".documents-group-meta")!.textContent).toBe("source en (native), 1 translation");
+    expect(label.querySelector(".documents-group-meta")).toBeNull();
     expect(label.textContent).not.toContain("·");
+    const toggle = within(label).getByRole("button", { name: "1 not in plan" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.getAllByRole("rowheader").filter(element => element.getAttribute("scope") === "row")).toHaveLength(1);
     expect(screen.queryByRole("checkbox", { name: "Select case-107 en" })).toBeNull();
-    // The case checkbox covers the folded source too (shown rows first); the range order covers the shown rows only.
+    // The case checkbox covers exactly the visible rows.
     fireEvent.click(box, { shiftKey: true });
-    expect(props.selection!.selectCase).toHaveBeenCalledWith(["case-107:de", "case-107:en"], "range", ["case-107:de"]);
+    expect(props.selection!.selectCase).toHaveBeenCalledWith(["case-107:de"], "range", ["case-107:de"]);
+    fireEvent.click(toggle);
+    expect(props.onToggleNotInPlan).toHaveBeenCalledWith("case-107");
   });
 
-  it("a folded source selected elsewhere (Select all filtered, Select by IDs) shows in the case checkbox", () => {
-    renderTable(page([case107()]), { selection: selection(["case-107:en"]) });
-    const box = screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" }) as HTMLInputElement;
-    expect(box.indeterminate).toBe(true);
-    cleanup();
-    renderTable(page([case107()]), { selection: selection(["case-107:de", "case-107:en"]) });
-    expect((screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" }) as HTMLInputElement).checked).toBe(true);
+  it("an open toggle shows the folded texts as muted rows with Add to plan…", () => {
+    const onAddToPlan = vi.fn();
+    const { props } = renderTable(page([case107()]), { notInPlanOpen: new Set(["case-107"]), onAddToPlan });
+    expect(screen.getByRole("button", { name: "1 not in plan" }).getAttribute("aria-expanded")).toBe("true");
+    expect(rowOf("case-107 en").className).toContain("documents-row--not-in-plan");
+    fireEvent.click(screen.getByRole("button", { name: "Add to plan…, case-107 en" }));
+    expect(onAddToPlan).toHaveBeenCalledWith(expect.objectContaining({ language: "en" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" }), { shiftKey: true });
+    expect(props.selection!.selectCase).toHaveBeenCalledWith(["case-107:de", "case-107:en"], "range", ["case-107:de", "case-107:en"]);
   });
 
-  it("the case line opens the folded source's card", () => {
-    const { props } = renderTable(page([case107()]));
-    const button = screen.getByRole("button", { name: "source en (native), 1 translation" });
-    expect(button.className).toBe("documents-group-meta");
-    fireEvent.click(button);
-    expect(props.onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "en" }), { opener: button });
-    cleanup();
-    renderTable(page([case107()]), { onOpenPanel: undefined });
-    expect(screen.queryByRole("button", { name: "source en (native), 1 translation" })).toBeNull();
-    expect(screen.getByText("source en (native), 1 translation").tagName).toBe("SPAN");
-  });
-
-  it("a planned native text stays a row", () => {
+  it("a planned native text stays a row; a case with no planned text shows only its toggle", () => {
     const native = stagedRow("EN100017", "en", { overrides: { is_source: true } });
     renderTable(page([group("EN100017", [native])]));
     expect(header("EN100017 en")).toBeTruthy();
-    const label = screen.getByRole("checkbox", { name: "Select EN100017 (1 text)" }).closest("tr")!.querySelector("th")!;
-    expect(label.querySelector(".documents-group-meta")).toBeNull();
-    // A case whose only row is a not-planned source keeps that row.
+    expect(screen.queryByRole("button", { name: /not in plan/ })).toBeNull();
     cleanup();
     renderTable(page([group("case-9", [notInPlanRow("case-9", "fr", { is_source: true })])]));
-    expect(header("case-9 fr")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "1 not in plan" })).toBeTruthy();
+    expect(screen.getAllByRole("rowheader").filter(element => element.getAttribute("scope") === "row")).toHaveLength(0);
     expect(caseHeaderText(group("case-9", [row({ case_id: "case-9", language: "fr", is_source: true })]))).toBe("case-9, fr source");
   });
 
@@ -142,13 +135,17 @@ describe("structure", () => {
     expect(within(th).getByText("New since your last visit").className).toBe("visually-hidden");
   });
 
-  it("not-in-plan translations are muted rows, never collapsed", () => {
+  it("not-in-plan translations fold with the source; open they are muted rows", () => {
     const view = group("case-101", [
       notInPlanRow("case-101", "en", { is_source: true }),
       planRow("case-101", "de", stepOf("assign_translation_review")),
       notInPlanRow("case-101", "fr"),
     ], { not_in_plan_languages: ["en", "fr"] });
     renderTable(page([view]));
+    expect(screen.getByRole("button", { name: "2 not in plan" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Open text card, case-101 fr" })).toBeNull();
+    cleanup();
+    renderTable(page([view]), { notInPlanOpen: new Set(["case-101"]) });
     expect(rowOf("case-101 fr").className).toContain("documents-row--not-in-plan");
     expect(rowOf("case-101 de").className).not.toContain("documents-row--not-in-plan");
     expect(cellsOf("case-101 fr")[2].querySelector(".stage-cell--muted")).not.toBeNull();
@@ -289,7 +286,7 @@ describe("cells", () => {
     const scratch = { ...withProposals(stagedRow("case-142", "de"), 9), annotation_mode: { mode: "scratch" } } as DocumentRowView;
     const muted = withProposals(notInPlanRow("case-142", "fr"), 9);
     const proposals = { ...withProposals(stagedRow("case-142", "it"), 9), annotation_mode: { mode: "proposals" } } as DocumentRowView;
-    renderTable(page([group("case-142", [scratch, muted, proposals])]));
+    renderTable(page([group("case-142", [scratch, muted, proposals])]), { notInPlanOpen: new Set(["case-142"]) });
     expect(cellsOf("case-142 de")[3].querySelector(".documents-bot")).toBeNull();
     expect(cellsOf("case-142 fr")[3].querySelector(".documents-bot")).toBeNull();
     expect(cellsOf("case-142 it")[3].querySelector(".documents-bot")).not.toBeNull();

@@ -49,8 +49,9 @@ export function annotationState(row: DocumentRowView): State {
     case "unassigned":
     case "partly_assigned":
     case "undecided": {
-      const proposals = row.proposal_count ?? 0;
-      return { state: `${detail.assigned ?? 0} of ${target} assigned${proposals > 0 ? `, ${proposals} proposals` : ""}`, tone: "now" };
+      // Never "0 of 0 assigned"; the proposal count is in the Annotation part (and the table's robot icon), not here.
+      const assigned = detail.assigned ?? 0;
+      return { state: assigned === 0 ? "Unassigned" : target > 0 ? `${assigned} of ${target} assigned` : `${assigned} assigned`, tone: "now" };
     }
     case "in_progress":
     case "paused": return { state: submitted, tone: "now" };
@@ -94,7 +95,8 @@ export function cardSegments(row: DocumentRowView, now = new Date()): PathSegmen
   return [
     { id: "translation", title: "Translation", ...translationState(row) },
     { id: "annotation", title: "Annotation", ...annotationState(row) },
-    { id: "finalization", title: "Finalization", ...finalizationState(row, now) },
+    // Without annotation there is nothing to finalize: an off step, like the others (dashed in the path).
+    { id: "finalization", title: "Finalization", ...(row.stages?.annotation.state === "not_planned" && !row.final ? { state: "—", tone: "optional" as const } : finalizationState(row, now)) },
   ];
 }
 

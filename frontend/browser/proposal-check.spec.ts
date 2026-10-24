@@ -107,7 +107,8 @@ test("the lead assigns two annotations from proposals, both work with J/K and 1â
   let card = textCard(page, CASE, "en");
   await expect(card).toBeVisible();
   await expect(cardSegment(card, "Annotation")).toHaveAttribute("aria-current", "step");
-  await expect(cardSegment(card, "Annotation")).toContainText("3 proposals");
+  // The count is in the Annotation part, not in the path state.
+  await expect(card.getByText("3 tool proposals", { exact: true })).toBeVisible();
   await expect(card.getByText("Annotation, from proposals", { exact: true })).toBeVisible();
   await assignPerson(page, card, s.display_names.tom);
   await page.keyboard.press("Escape");

@@ -35,8 +35,10 @@ export interface StageActionsProps {
 export function StageActions({ row, stage, onAssign, onRequestCorrection, canRequestCorrection, onChangeFinal, canChangeFinal, textVersionTools }: StageActionsProps): JSX.Element | null {
   const show = (name: PanelStage) => !stage || stage === name;
   const documents = new Set(row.versions.map(version => version.document_id));
-  const workIds = new Set(row.work.filter(item => item.task !== "translation_review" && item.status !== "submitted" && item.moved_to_version == null).map(item => item.assignment_id));
-  const reassignable: AssignmentView[] = show("annotation") && textVersionTools
+  // Open work of the stage (reviewers under Translation, annotators under Annotation): Reassign… and the assignment actions.
+  const workIds = new Set(row.work.filter(item => item.status !== "submitted" && item.moved_to_version == null
+    && (item.task === "translation_review" ? show("review") : show("annotation"))).map(item => item.assignment_id));
+  const reassignable: AssignmentView[] = textVersionTools
     ? textVersionTools.assignments.filter(assignment => workIds.has(assignment.id) && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
   const correction = show("review") && onRequestCorrection && canRequestCorrection?.(row);
   const newReview = show("review") && onAssign && canAssignNewReview(row);

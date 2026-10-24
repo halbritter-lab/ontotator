@@ -62,7 +62,7 @@ describe("path", () => {
   it("opens on the segment that needs work now", () => {
     renderCard();
     expect(segmentButton("Annotation").getAttribute("aria-current")).toBe("step");
-    expect(segmentButton("Annotation").textContent).toContain("1 of 2 assigned, 17 proposals");
+    expect(segmentButton("Annotation").textContent).toContain("1 of 2 assigned");
     expect(segmentButton("Translation").textContent).toContain("not reviewed, optional");
     expect(segmentButton("Finalization").textContent).toContain("waiting");
     expect(within(card()).getByRole("heading", { name: "Annotation" })).toBeTruthy();
@@ -302,11 +302,16 @@ describe("footer", () => {
     expect(within(card()).getByRole("navigation", { name: "Text path" })).toBeTruthy();
   });
 
-  it("Change plan… calls onChangePlan", () => {
-    const row = assignRow();
-    const { onChangePlan } = renderCard({ row });
-    fireEvent.click(within(card()).getByRole("button", { name: "Change plan…" }));
-    expect(onChangePlan).toHaveBeenCalledWith(row);
+  it("no Change plan… in the footer; a text outside the plan offers Add to plan… (the dialog)", () => {
+    renderCard({ row: assignRow() });
+    expect(within(card()).queryByRole("button", { name: "Change plan…" })).toBeNull();
+    expect(within(card()).queryByText("This text is not worked on.")).toBeNull();
+    cleanup();
+    const outside = { ...assignRow(), in_plan: false } as DocumentRowView;
+    const { onChangePlan } = renderCard({ row: outside });
+    expect(within(card()).getByText("This text is not worked on.")).toBeTruthy();
+    fireEvent.click(within(card()).getByRole("button", { name: "Add to plan…" }));
+    expect(onChangePlan).toHaveBeenCalledWith(outside);
   });
 
   it("has no tabs", () => {

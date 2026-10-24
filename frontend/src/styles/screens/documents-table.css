@@ -56,11 +56,12 @@
 .documents-group-label:focus { outline: none; }
 .documents-group-label:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
 .documents-group-label .documents-id { font-weight: var(--weight-strong); }
-.documents-group-meta { color: var(--text-muted); }
-/* The folded source's entry point: plain text that opens its card. */
-button.documents-group-meta { min-height: 24px; padding: 0; border: 0; background: transparent; font: inherit; cursor: pointer; }
-button.documents-group-meta:hover { text-decoration: underline; }
-button.documents-group-meta:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
+/* The case line is a heading: case ID on the left, the "n not in plan" toggle (link style) on the right. */
+.documents-group-line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; }
+.documents-not-in-plan-toggle { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 24px; padding: 0; border: 0; background: transparent;
+  color: var(--accent); font: inherit; white-space: nowrap; cursor: pointer; }
+.documents-not-in-plan-toggle:hover { text-decoration: underline; }
+.documents-not-in-plan-toggle:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
 
 /* Text rows (spec 2026-10-23 §2b): one line each, 40 px; the Text cell is indented 20 px with a thin rule at its left */
 .documents-table .documents-row > td,
@@ -80,13 +81,13 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 
 /* Stage cells, Waiting on, Action, Last activity */
 .documents-plan-chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
-.documents-waiting-on { overflow-wrap: anywhere; }
+.documents-waiting-on { display: block; max-width: 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .documents-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
 .documents-actions--block { display: flex; }
 .documents-action { white-space: nowrap; }
 .documents-activity-cell { display: inline-flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
 /* Status cells: one line, cut with an ellipsis (the full text is the title); the short "who" in grey. */
-.documents-status-cell { display: flex; align-items: center; gap: var(--space-2); max-width: 16rem; min-width: 0; }
+.documents-status-cell { display: flex; align-items: center; gap: var(--space-2); max-width: 13rem; min-width: 0; }
 /* `display: block` overrides the stacked .stage-cell column (icon, label, who on one line). */
 .documents-status.stage-cell { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .documents-status-who { color: var(--text-muted); }
@@ -127,6 +128,17 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 .documents-id { overflow-wrap: anywhere; }
 
 /* Page shell: filters, actions, paging, notices */
+/* From 700 px the page fills the main column and does not scroll as a whole: heading, tabs, filters and the
+   select-all line stay, only the table scrolls (sticky header). Full width, not the compact page cap. Phones keep the page flow. */
+@media (min-width: 700px) {
+  .shell-page:has(> .documents-page) { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; max-width: none; padding-bottom: var(--space-3); }
+  .documents-page { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  .documents-page > * { flex: none; }
+  .documents-page > [role="tabpanel"] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  .documents-page > [role="tabpanel"] > * { flex: none; }
+  .documents-page > [role="tabpanel"] > .data-table-scroll { position: relative; flex: 0 1 auto; min-height: 0; overflow: auto; scroll-padding-top: 40px; }
+  .documents-table thead th { position: sticky; top: 0; z-index: 2; }
+}
 .documents-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-4); }
 .documents-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .documents-row-notice { margin: 0 0 var(--space-3); color: var(--text-muted); }

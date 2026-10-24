@@ -77,12 +77,13 @@ it("assigns the selected cases from the selection bar and refreshes rows and inv
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
 });
 
-it("wires actual assignment IDs through the Text versions actions and refreshes after removal", async () => {
+it("wires actual assignment IDs through the card's stage actions and refreshes after removal", async () => {
   vi.mocked(api.listDocumentRows).mockImplementation(async () => page([group("z/doc", [zRow({ work: [work({ assignment_id: 3, document_id: "z/doc", author_label: "A" })] })])]));
-  render(<DocumentsPage projectKey="p/key" canManage query={{ panel: "z/doc:en", panel_tab: "versions" }} onNavigate={vi.fn()} />);
-  const versions = await screen.findByRole("list", { name: "Assignments on v1" });
-  fireEvent.click(await within(versions).findByText("Assignment actions"));
-  fireEvent.click(await within(versions).findByRole("button", { name: "Remove assignment", hidden: true }));
+  render(<DocumentsPage projectKey="p/key" canManage query={{ panel: "z/doc:en", panel_stage: "annotation" }} onNavigate={vi.fn()} />);
+  // Open work is a chip with its actions beside it, not a second line in Text versions.
+  const card = await screen.findByRole("dialog", { name: "z/doc en" });
+  fireEvent.click(await within(card).findByText("Assignment actions"));
+  fireEvent.click(await within(card).findByRole("button", { name: "Remove assignment", hidden: true }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
   await waitFor(() => expect(api.listAssignments).toHaveBeenCalledTimes(2)); expect(api.revokeAssignment).toHaveBeenCalledWith(3);
 });

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { DocumentRowView, RowSubmissionView } from "../../api/client";
 import { errorMessage } from "../../admin/errors";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
@@ -13,7 +13,7 @@ const NO_PROPOSALS = "This text has no tool proposals, so it is annotated from s
 const MYSELF_HINT = "You will then not be able to consolidate this text yourself (project rule).";
 
 /** Annotation part of the text card: mode, tool proposals, one chip per person, + Person, Annotate from proposals myself. */
-export function AnnotationPart({ row, projectKey, query, submissions, canManage, adjudicatorNotAnnotator = false, onAssign, onCheckMyself, onNavigate, onChanged, now }: {
+export function AnnotationPart({ row, projectKey, query, submissions, canManage, adjudicatorNotAnnotator = false, onAssign, onCheckMyself, onNavigate, onChanged, now, planControl }: {
   row: DocumentRowView;
   projectKey: string;
   query: ProjectDocumentsQuery;
@@ -27,6 +27,8 @@ export function AnnotationPart({ row, projectKey, query, submissions, canManage,
   onNavigate: (route: Route) => void;
   onChanged: () => void;
   now?: Date;
+  /** The annotation mode select in the header (planned texts). */
+  planControl?: ReactNode;
 }): JSX.Element {
   const id = useId();
   const [busy, setBusy] = useState(false);
@@ -51,7 +53,10 @@ export function AnnotationPart({ row, projectKey, query, submissions, canManage,
   };
 
   return <section className="text-card-part" aria-labelledby={`${id}-title`}>
-    <h3 id={`${id}-title`} className="text-card-part-title">Annotation</h3>
+    <div className="text-card-part-head">
+      <h3 id={`${id}-title`} className="text-card-part-title">Annotation</h3>
+      {planControl}
+    </div>
     {mode && <p>{annotationTaskName(mode.mode)}</p>}
     {mode?.source === "no_proposals" && <p className="text-card-muted">{NO_PROPOSALS}</p>}
     {proposals > 0 && <p>

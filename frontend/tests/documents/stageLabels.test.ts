@@ -104,10 +104,10 @@ describe("Final cell", () => {
 });
 
 describe("Waiting on", () => {
-  it("You, one person in identity format, or —", () => {
+  it("You, one person by short name (identity format as title), or —", () => {
     expect(waitingOnText(row({ case_id: "c", language: "de", next_step: stepOf("assign_annotation") })).text).toBe("You");
     const one = row({ case_id: "c", language: "de", next_step: stepOf("annotation_in_progress", { owner: { kind: "person", person: ana, count: 1, people: [ana] } }) });
-    expect(waitingOnText(one)).toEqual({ text: "Ana Weber (ann-0003)", title: "Ana Weber (ann-0003)", you: false });
+    expect(waitingOnText(one)).toEqual({ text: "Ana Weber", title: "Ana Weber (ann-0003)", you: false });
     expect(waitingOnText(row({ case_id: "c", language: "de", next_step: stepOf("done") })).text).toBe("—");
     expect(waitingOnText(notInPlanRow("c", "de")).text).toBe("—");
     const undecided = notInPlanRow("c", "de", { next_step: stepOf("decide_plan"), plan_row: { review: false, annotate: false, review_applicable: true, discarded: false, decided: false } });

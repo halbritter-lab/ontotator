@@ -222,7 +222,8 @@ export function waitingOnText(row: Pick<DocumentRowView, "in_plan" | "plan_row" 
     return none;
   }
   const title = people.map(person => personLabel(person)).join(", ");
-  if (people.length === 1) return { text: personLabel(people[0]), title, you: false };
+  // The short name in the cell; the full "Name (pseudonym)" is the title and the accessible text.
+  if (people.length === 1) return { text: shortName(people[0]), title, you: false };
   const shown = people.slice(0, WAITING_ON_NAMES).map(shortName).join(", ");
   const rest = people.length - WAITING_ON_NAMES;
   return { text: rest > 0 ? `${shown} +${rest}` : shown, title, you: false };

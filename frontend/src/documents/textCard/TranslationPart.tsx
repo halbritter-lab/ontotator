@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { DocumentRowView } from "../../api/client";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
 import { languageName } from "../../translation/labels";
@@ -19,7 +20,7 @@ function sourceDocument(row: DocumentRowView, documentId: string): string | null
 }
 
 /** Translation part of the text card: version and origin, automatic check, reviewers, actions, versions. */
-export function TranslationPart({ row, projectKey, query, sourceLanguage, canManage, onAssign, onRequestCorrection, onNavigate, onChanged, textVersionTools, now }: {
+export function TranslationPart({ row, projectKey, query, sourceLanguage, canManage, onAssign, onRequestCorrection, onNavigate, onChanged, textVersionTools, now, planControl }: {
   row: DocumentRowView;
   projectKey: string;
   query: ProjectDocumentsQuery;
@@ -31,6 +32,8 @@ export function TranslationPart({ row, projectKey, query, sourceLanguage, canMan
   onChanged: () => void;
   textVersionTools?: TextVersionsTools;
   now?: Date;
+  /** "Review" On / Off in the header (planned translations). */
+  planControl?: ReactNode;
 }): JSX.Element {
   const shown = row.versions.find(version => version.document_id === row.open.document_id) ?? row.versions[row.versions.length - 1];
   const native = row.is_source || shown?.origin === "native";
@@ -41,7 +44,10 @@ export function TranslationPart({ row, projectKey, query, sourceLanguage, canMan
   const source = shown && !native ? sourceDocument(row, shown.document_id) : null;
   const reviewers = row.work.filter(item => item.task === "translation_review" && item.moved_to_version == null);
   return <section className="text-card-part" aria-labelledby="text-card-translation">
-    <h3 id="text-card-translation" className="text-card-part-title">Translation</h3>
+    <div className="text-card-part-head">
+      <h3 id="text-card-translation" className="text-card-part-title">Translation</h3>
+      {planControl}
+    </div>
     <p>{origin}</p>
     {check && <p className="text-card-muted">{check}</p>}
     {reviewers.length > 0 && <div className="text-card-chips">
@@ -53,6 +59,6 @@ export function TranslationPart({ row, projectKey, query, sourceLanguage, canMan
         className="btn btn-secondary btn-sm">Compare with source</RouteLink>}
       {canManage && onRequestCorrection && !native && <Button size="sm" onClick={() => onRequestCorrection(row)}>Request correction…</Button>}
     </div>
-    <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} now={now} />
+    <TextVersions row={row} projectKey={projectKey} query={query} onNavigate={onNavigate} tools={textVersionTools} now={now} hideOpenWork />
   </section>;
 }

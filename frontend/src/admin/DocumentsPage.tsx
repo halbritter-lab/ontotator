@@ -27,14 +27,15 @@ import { DocumentsSearch, LiveRegion, type DocumentsSearchHandle, type LiveRegio
 import { activeTab, chipsOf, clearAllPatch, filtersActive, listOf, rowsRequest, tabCount } from "../documents/filterModel";
 import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
-import { DocumentsTable, foldedSource, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
+import { DocumentsTable, visibleRows, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
 import { consolidationStartedToast, panelStep } from "../documents/finalPanelText";
+import { leadSteps, rowActionLabel } from "../documents/nextStepLabels";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
 import { DecisionBlock } from "../documents/FinalPanel";
 import { StageActions, type StageActionsProps } from "../documents/StageActions";
 import { TextCard } from "../documents/textCard/TextCard";
 import type { CardView, SegmentId } from "../documents/textCard/cardModel";
-import { TextPlanDialog } from "../documents/PlanSteps";
+import { CardPlanSelect, TextPlanDialog } from "../documents/PlanSteps";
 import { HandleTextChangeDialog } from "../documents/HandleTextChangeDialog";
 import { CarryDialog, carrySourceOfFinal, carrySourceOfStep, type CarrySource } from "../documents/CarryDialog";
 import { PlanChips, PlanRowNotice, usePlanSaves } from "../documents/PlanChips";
@@ -70,6 +71,8 @@ export interface DocumentsPageProps {
 
 /** Below 700 px the page renders cards instead of the table (the same breakpoint as popover sheets and the side panel). */
 export const NARROW_DOCUMENTS_QUERY = "(max-width: 699px)";
+/** Lead steps the text card's parts offer themselves (Assign reviewer…, + Person, the decision block, Change plan…). */
+const CARD_PART_ACTIONS: ReadonlySet<string> = new Set(["assign_translation_review", "assign_annotation", "choose_final", "review_changes", "plan"]);
 
 export { ID_FILTER_DELAY_MS } from "../documents/DocumentsSearch";
 /** The table's eight columns; "Select" and "Action" headers are visually hidden. */
@@ -649,6 +652,13 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const closeCorrection = () => { setCorrectionFor(null); reloadAfterAction(); };
 
   const [planFor, setPlanFor] = useState<DocumentRowView | null>(null);
+  // Cases whose texts outside the plan are shown (the case line's "n not in plan" toggle); folded by default.
+  const [notInPlanOpen, setNotInPlanOpen] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleNotInPlan = (caseId: string) => setNotInPlanOpen(current => {
+    const next = new Set(current);
+    if (!next.delete(caseId)) next.add(caseId);
+    return next;
+  });
   /** "Annotate from proposals myself": the lead's own annotate assignment (P3 grants the annotator role), then its task. */
   const checkMyself = async (row: DocumentRowView) => {
     const username = currentUser?.username ?? "";
@@ -659,15 +669,22 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     onNavigate({ name: "task", assignmentId: created.id });
   };
   const stepCard = (direction: -1 | 1) => {
-    // ‹ › walk the texts the list shows: the table skips folded sources unless the card shows one (opened from its case line).
-    const folded = narrow ? new Set<DocumentRowView>() : new Set(page?.groups.map(foldedSource) ?? []);
-    const steps = pageRows.filter(entry => !folded.has(entry) || rowKeyOf(entry) === panelKey);
+    // ‹ › walk the texts in the order the list shows them: the table skips folded (not in plan) texts; a card on a
+    // folded text (a deep link) walks the page order.
+    const shown = narrow ? pageRows : page?.groups.flatMap(group => visibleRows(group, notInPlanOpen.has(group.case_id))) ?? [];
+    const steps = shown.some(entry => rowKeyOf(entry) === panelKey) ? shown : pageRows;
     const index = steps.findIndex(entry => rowKeyOf(entry) === panelKey);
     const target = index >= 0 ? steps[index + direction] : undefined;
     if (target) {
       openCard({ key: rowKeyOf(target), tab: panelTab });
       if (!panelDirty) announce(`Showing ${target.case_id} ${target.language}`);
     } else announce(direction > 0 ? "Last row" : "First row");
+  };
+  // The row shows one next-step button; the card offers every other lead step its parts do not cover.
+  const cardSteps = (row: DocumentRowView) => {
+    const steps = isActiveRow(row) ? leadSteps(row).filter(step => !CARD_PART_ACTIONS.has(step.action ?? "")) : [];
+    return steps.length ? steps.map((step, index) => <Button key={`${step.code}-${index}`} size="sm"
+      onClick={() => { closeCard(); onAction(row, step); }}>{rowActionLabel(step, row)}</Button>) : null;
   };
   const textCard = panelKey && panelRow ? <TextCard projectKey={projectKey} row={panelRow} rows={pageRows} query={query}
     segment={panelStage ? SEGMENT_OF[panelStage] : decisionKey.current === panelKey ? "finalization" : undefined} view={VIEW_OF[panelTab]}
@@ -681,6 +698,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} sourceLanguage={panelSource}
     plan={<><PlanChips row={panelRow} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} /><PlanRowNotice row={panelRow} saves={planSaves} /></>}
     stageActions={stage => <StageActions {...stageActionProps} row={panelRow} stage={stage} />}
+    steps={cardSteps(panelRow)}
+    planControl={step => <CardPlanSelect row={panelRow} step={step} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} />}
     returnFocus={() => { const opener = panelOpenedKey.current === panelKey ? panelOpener.current : null; return opener?.isConnected ? opener : rowElement(panelKey, "header"); }}
     planRevision={planSaves.revisionOf(panelRow.case_id, groupOf(panelRow.case_id)?.plan_revision ?? 1)}
     notice={pendingPanel ? <InlineConfirm title="Discard your unsaved choice?" headingLevel={3}
@@ -759,7 +778,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     } else {
       body = <DocumentsTable page={page} selection={tableSelection}
         onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
-        sort={request.sort} onSort={(next: HeaderSort) => changeFilter({ sort: next === "case" ? undefined : next })} />;
+        sort={request.sort} onSort={(next: HeaderSort) => changeFilter({ sort: next === "case" ? undefined : next })}
+        notInPlanOpen={notInPlanOpen} onToggleNotInPlan={toggleNotInPlan} onAddToPlan={setPlanFor} />;
     }
     // Floats at the bottom of the viewport; placed above the table (below 700 px after the cards) to keep the focus order.
     const selectionBar = <SelectionBar projectKey={projectKey} keys={selection.keys} filters={filters} refresh={page} narrow={narrow} limitNote={limitNote}

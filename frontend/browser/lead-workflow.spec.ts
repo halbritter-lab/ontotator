@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  caseBox, documentsReady, documentsTab, foldedSource, openDecisionBlock, openFilters, openTextCard, rowAction, rowCell, textCard, textName, textNamePattern,
+  caseBox, documentsReady, documentsTab, notInPlanToggle, openDecisionBlock, openFilters, openTextCard, rowAction, rowCell, textCard, textName, textNamePattern,
   textRow, textVersionItems,
 } from "./documentsHelpers";
 import { authenticatedRequest, openTasksHome, TEST_PASSWORD } from "./helpers";
@@ -168,7 +168,7 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
     await expect(rowCell(row(page, "case-0101", language), "translation"), language).toContainText("not decided");
     await expect(rowAction(page, "Plan…", "case-0101", language)).toBeVisible();
   }
-  await expect(foldedSource(page, "case-0101")).toHaveText("source en (native), 3 translations");
+  await expect(notInPlanToggle(page, "case-0101")).toHaveText("1 not in plan");
   await expect(textName(page, "case-0101", "en")).toHaveCount(0);
 
   // 2. Plan the 20 de cases from pasted IDs: Select by case IDs…, Select 20, Plan…, Review, Annotate, Save (6 + paste; total 7).
@@ -200,7 +200,7 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
   await expect(bar(page)).toHaveCount(0);
   for (const caseId of [de[0], de[19]]) {
     await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText(`in review (${s.display_names.ana})`);
-    await expect(rowCell(row(page, caseId, "de"), "waiting")).toHaveText(person(s, "ana"));
+    await expect(rowCell(row(page, caseId, "de"), "waiting")).toContainText(person(s, "ana"));
   }
   await expect(documentsTab(page, "In progress", 20)).toBeVisible();
   await evidence(page, "d15-de-assigned");
@@ -226,8 +226,8 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
   await expect(dialog).toHaveCount(0);
   await expect(toast(page).locator(".ui-toast-message")).toHaveText("30 translation reviews split between Ben Roth (15) and Ana Weber (15)");
   await expect(bar(page)).toHaveCount(0);
-  await expect(rowCell(row(page, "case-0121", "fr"), "waiting")).toHaveText(person(s, "ben"));
-  await expect(rowCell(row(page, "case-0150", "fr"), "waiting")).toHaveText(person(s, "ana"));
+  await expect(rowCell(row(page, "case-0121", "fr"), "waiting")).toContainText(person(s, "ben"));
+  await expect(rowCell(row(page, "case-0150", "fr"), "waiting")).toContainText(person(s, "ana"));
   await expect(documentsTab(page, "In progress", 50)).toBeVisible();
   await expect(documentsTab(page, "To assign", 0)).toBeVisible();
 });
@@ -276,7 +276,7 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   for (const caseId of s.in_review!) {
     await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText(`in review (${s.display_names.ana})`);
     await expect(rowCell(row(page, caseId, "de"), "annotation")).toContainText("after translation review");
-    await expect(rowCell(row(page, caseId, "de"), "waiting")).toHaveText(person(s, "ana"));
+    await expect(rowCell(row(page, caseId, "de"), "waiting")).toContainText(person(s, "ana"));
   }
 });
 
@@ -327,24 +327,26 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   await clicks.click(review());
   expect(clicks.total).toBe(3);
   await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Translation review off`);
-  // Out of plan: a muted row under All (VD1), no longer collapsed behind "not in plan · show".
+  // Out of plan: the row folds behind the case line's "n not in plan" toggle (the card stays open on it).
   const collapsed = row(page, caseId, "fr");
-  await expect(collapsed).toHaveClass(/documents-row--not-in-plan/);
+  await expect(collapsed).toHaveCount(0);
 
   // Undo restores the previous state.
   await toast(page).getByRole("button", { name: "Undo", exact: true }).click();
   await expect(live(page)).toHaveText("Plan change undone.");
   await expect(review()).toHaveAttribute("aria-pressed", "true");
   await expect(collapsed).not.toHaveClass(/documents-row--not-in-plan/);
+  await expect(collapsed).toHaveCount(1);
   await expect(toast(page)).toHaveCount(0);
 
   // Ctrl+Z works while the toast is visible, also with a case checkbox focused (the checkbox does not toggle).
   await review().click();
   await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Translation review off`);
-  await expect(collapsed).toHaveClass(/documents-row--not-in-plan/);
+  await expect(collapsed).toHaveCount(0);
   // The card is modal: close it so the case checkbox can take focus.
   await textCard(page, caseId, "fr").getByRole("button", { name: "Close", exact: true }).click();
-  const box = caseBox(page, caseId, 3);
+  // Focus a case checkbox (fr of this case is folded now, so use another case).
+  const box = caseBox(page, s.cases!.acceptance, 2);
   await box.focus();
   await page.keyboard.press("Control+z");
   await expect(live(page)).toHaveText("Plan change undone.");
@@ -405,9 +407,11 @@ test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }
   const assignments = (await response.json()) as { document_id: string; task: string; status: string; revoked_at: string | null }[];
   const open = assignments.filter(item => item.revoked_at === null && item.status !== "submitted");
   expect(open, JSON.stringify(open)).toEqual([]);
-  // fr is out of plan: muted rows under All (VD1).
+  // fr is out of plan: folded per case; open, muted rows under All (VD1).
   await documentsTab(page, "All").click();
   for (const caseId of Object.values(s.open_reviews!)) {
+    const toggle = notInPlanToggle(page, caseId);
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
     await expect(row(page, caseId, "fr")).toHaveClass(/documents-row--not-in-plan/);
     await expect(rowCell(row(page, caseId, "fr"), "translation")).toContainText("not reviewed, optional");
   }

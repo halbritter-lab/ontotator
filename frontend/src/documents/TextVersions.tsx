@@ -112,10 +112,12 @@ export interface TextVersionsProps {
   tools?: TextVersionsTools;
   /** Reference time for the current-year rule (tests). */
   now?: Date;
+  /** Text card: open current work is shown as chips with its actions beside them; list only submitted and moved work. */
+  hideOpenWork?: boolean;
 }
 
 /** Child rows per text version of a row: origin, status with review decision, chain name, work and version actions. */
-export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(function TextVersions({ row, projectKey, query, onNavigate, tools, now }, ref) {
+export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(function TextVersions({ row, projectKey, query, onNavigate, tools, now, hideOpenWork = false }, ref) {
   const documents = Object.keys(query).length ? { documents: query } : {};
   const chooseInVersions = row.bulk.mode === "choose_in_versions";
   return <ul ref={ref} className="text-versions">
@@ -124,7 +126,8 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
       const badge = statusBadgeText(version.translation_status, version.latest_review_decision, version.accepted_without_review);
       const view: Route = { name: "projectCase", key: projectKey, caseId: row.case_id, variant: version.document_id, ...documents };
       // Moved tasks (text change, "Move to v2") stay listed on their old version as history.
-      const work = [...row.work, ...(row.moved_work ?? [])].filter(item => item.document_id === version.document_id);
+      const work = [...row.work.filter(item => !hideOpenWork || item.status === "submitted" || item.moved_to_version != null), ...(row.moved_work ?? [])]
+        .filter(item => item.document_id === version.document_id);
       const variant = tools?.variants.get(version.document_id);
       const fullName = `${name} of ${rowName(row)}`;
       const checkboxId = `text-version-select-${encodeURIComponent(version.document_id)}`;

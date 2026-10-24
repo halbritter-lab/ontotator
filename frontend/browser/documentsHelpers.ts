@@ -74,18 +74,14 @@ export const rowCell = (row: Locator, column: keyof typeof STAGE_COLUMNS): Locat
 export const rowAction = (page: Page, label: string, caseId: string, language: string): Locator =>
   page.getByRole("button", { name: textNamePattern(`${label}, `, caseId, language) });
 
-/** The row's "More" menu button ("More actions, {case} {language}"). */
-export const moreMenu = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `More actions, ${caseId} ${language}`, exact: true });
-
 /** The row checkbox "Select {case} {language}". */
 export const rowBox = (page: Page, caseId: string, language: string): Locator =>
   page.getByRole("checkbox", { name: textNamePattern("Select ", caseId, language) });
 
-/** The not-planned source folded into its case line: the button "source en (native), 1 translation" opens its card. */
-export const foldedSource = (page: Page, caseId: string): Locator =>
-  documentsTable(page).locator(".documents-group-label").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) })
-    .getByRole("button", { name: /^source \S+ \(native\), \d+ translations?$/ });
+/** The case line's toggle "n not in plan": the texts outside the plan fold behind it. */
+export const notInPlanToggle = (page: Page, caseId: string): Locator =>
+  documentsTable(page).locator(".documents-group-line").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) })
+    .getByRole("button", { name: /^\d+ not in plan$/ });
 
 /** The case (group) checkbox "Select {case} ({n} texts)". */
 export const caseBox = (page: Page, caseId: string, texts: number): Locator =>

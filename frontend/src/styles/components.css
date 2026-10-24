@@ -607,7 +607,8 @@ textarea.form-control {
 .shell-breadcrumb li + li::before { content: "/"; margin-right: var(--space-2); }
 .shell-breadcrumb a { color: var(--accent); }
 .shell-body { display: flex; flex: 1; min-height: 0; }
-.app-nav { flex: 0 0 14rem; padding: var(--space-5); border-right: 1px solid var(--border); overflow: auto; }
+/* Narrow sidebar: about its longest item ("Documents (34)", the project switcher); small gutter to the main column. */
+.app-nav { flex: 0 0 11rem; padding: var(--space-4) var(--space-3); border-right: 1px solid var(--border); overflow: auto; }
 .shell-nav-list { list-style: none; margin: 0; padding: 0; }
 .shell-nav-list li + li { margin-top: var(--space-1); }
 .shell-nav-group { margin-top: var(--space-5); }
@@ -1083,6 +1084,9 @@ button.stage-path-seg:focus-visible { outline: var(--focus-width) solid var(--fo
 .stage-path-seg--done { background: var(--success-light); box-shadow: inset 0 -2px 0 var(--success); }
 .stage-path-seg--now { background: var(--accent-light); color: var(--text); }
 .stage-path-seg--current, .stage-path-seg--current .stage-path-title { background: var(--accent); color: var(--on-accent); }
+/* A step that is off (not in the plan, optional): a dashed box instead of an arrow; the tone is also said in words. */
+.stage-path-seg--optional:not(.stage-path-seg--current) { clip-path: none; background: transparent; border: 1px dashed var(--border-strong); }
+.stage-path > li:first-child .stage-path-seg--optional:not(.stage-path-seg--current) { clip-path: none; }
 @media (forced-colors: active) {
   .axis-value { border: 1px solid CanvasText; }
   .stage-path-seg { clip-path: none; border: 1px solid CanvasText; }

@@ -17,6 +17,7 @@ import { useShortcut } from "../../ui/shortcuts";
 import { StagePath } from "../../ui/StagePath";
 import { useMediaQuery } from "../../ui/useMediaQuery";
 import { historyLines } from "../historyLines";
+import { isActiveRow } from "../stageLabels";
 import { RouteLink, rowKeyOf } from "../RowCells";
 import { RowActivity } from "../RowActivity";
 import type { TextVersionsTools } from "../TextVersions";
@@ -75,6 +76,10 @@ export interface TextCardProps {
   returnFocus?: () => HTMLElement | null | undefined;
   /** A notice on top of the card (the page's "Discard your unsaved choice?" before a row switch). */
   notice?: ReactNode;
+  /** The row's lead steps that no part of the card offers (text changes, reports, Resolve…); the table row shows one button only. */
+  steps?: ReactNode;
+  /** The plan control of a step in its section header (Review On / Off, the annotation mode); planned texts only. */
+  planControl?: (step: "review" | "annotation") => ReactNode;
 }
 
 /** "v2", plus ", newer than the annotations" when annotate work sits on an older version; null with one version. */
@@ -133,6 +138,8 @@ export function TextCard(props: TextCardProps): JSX.Element {
     { scope: "dialog", group: "Documents", description: "Next / previous text in the text card" });
 
   const warning = versionWarning(row);
+  // Texts outside the plan get "Add to plan…" (the dialog), planned ones edit each step in place.
+  const plannable = canManage && isActiveRow(row);
   const heading = <span className="text-card-heading">
     {row.case_id} <LanguageTag code={row.language} />{warning && <>{" "}<span className="text-card-version">{warning}</span></>}
   </span>;
@@ -154,11 +161,18 @@ export function TextCard(props: TextCardProps): JSX.Element {
     // block's "saved, next" message survives its automatic move to the next row.
     body = <>
       <Banners {...props} />
+      {props.steps && <div className="text-card-actions">{props.steps}</div>}
       <StagePath segments={segments} current={segment} onSelect={id => onSegment(id as SegmentId)} />
+      {!isActiveRow(row) && <div className="text-card-not-planned">
+        <p>This text is not worked on.</p>
+        {canManage && <Button variant="primary" size="sm" onClick={() => props.onChangePlan(row)}>Add to plan…</Button>}
+      </div>}
       {segment === "translation" && <><TranslationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} sourceLanguage={props.sourceLanguage} canManage={canManage}
-        onAssign={props.onAssign} onRequestCorrection={props.onRequestCorrection} onNavigate={onNavigate} onChanged={props.onChanged} textVersionTools={props.textVersionTools} now={now} />{props.stageActions && <div className="text-card-actions">{props.stageActions("review")}</div>}</>}
+        onAssign={props.onAssign} onRequestCorrection={props.onRequestCorrection} onNavigate={onNavigate} onChanged={props.onChanged} textVersionTools={props.textVersionTools} now={now}
+        planControl={plannable ? props.planControl?.("review") : undefined} />{props.stageActions && <div className="text-card-actions">{props.stageActions("review")}</div>}</>}
       {segment === "annotation" && <><AnnotationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} submissions={list} canManage={canManage}
-        adjudicatorNotAnnotator={props.adjudicatorNotAnnotator} onAssign={props.onAssign} onCheckMyself={props.onCheckMyself} onNavigate={onNavigate} onChanged={props.onChanged} now={now} />{props.stageActions && <div className="text-card-actions">{props.stageActions("annotation")}</div>}</>}
+        adjudicatorNotAnnotator={props.adjudicatorNotAnnotator} onAssign={props.onAssign} onCheckMyself={props.onCheckMyself} onNavigate={onNavigate} onChanged={props.onChanged} now={now}
+        planControl={plannable ? props.planControl?.("annotation") : undefined} />{props.stageActions && <div className="text-card-actions">{props.stageActions("annotation")}</div>}</>}
       {segment === "finalization" && <><FinalizationPart row={row} projectKey={projectKey} query={query} decision={props.decision} onNavigate={onNavigate} now={now} />{props.stageActions && <div className="text-card-actions">{props.stageActions("final")}</div>}</>}
     </>;
   }
@@ -172,6 +186,6 @@ export function TextCard(props: TextCardProps): JSX.Element {
     </div>
     <div className="text-card-body">{body}</div>
     {view === "path" && <CardFooter historyCount={list ? historyLines(row, list, { now }).length : null}
-      onHistory={() => onView("history")} onDetails={() => onView("details")} onChangePlan={() => props.onChangePlan(row)} />}
+      onHistory={() => onView("history")} onDetails={() => onView("details")} />}
   </Dialog>;
 }

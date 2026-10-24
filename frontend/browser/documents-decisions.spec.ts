@@ -130,9 +130,7 @@ test("first selection: Accept result… opens the text card, saves, announces an
   const en = textRow(page, caseId, "en");
   await expect(rowCell(en, "finalization")).toContainText("Your choice");
 
-  // "Choose final…" became "Accept result…" (one submission, V6, X14, D2); here it follows "Carry to v2…" in the "More" menu.
-  await page.getByRole("button", { name: `More actions, ${caseId} en`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Accept result…", exact: true }).click();
+  // "Choose final…" became "Accept result…" (one submission, V6, X14, D2); the row shows "Carry to v2…", the card the decision.
   const panel = await openDecisionBlock(page, caseId, "en");
   await expect(panel.getByText(/^Accept .+ as the result\?$/)).toBeVisible();
   await expect(panel.getByRole("link", { name: "Open in editor", exact: true })).toBeVisible();
@@ -347,8 +345,6 @@ test("S13 session ends during a decision: nothing is saved and the decision stay
   const { s } = await prepare(page, "S13");
   const caseId = "case-0713";
   await openDocuments(page, s);
-  await page.getByRole("button", { name: `More actions, ${caseId} en`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Accept result…", exact: true }).click();
   const panel = await openDecisionBlock(page, caseId, "en");
   await panel.getByRole("button", { name: "Accept result…", exact: true }).click();
   const accept = panel.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true });
@@ -408,12 +404,12 @@ test("S14 waiting: an open translation review and open work after an early selec
   // de: the translation review of v1 is open; it waits on the reviewer, no action.
   const de = textRow(page, caseId, "de");
   await expect(rowCell(de, "translation")).toContainText("in review");
-  await expect(rowCell(de, "waiting")).toHaveText(labels.reviewer);
+  await expect(rowCell(de, "waiting")).toContainText(labels.reviewer);
   await expect(rowCell(de, "next")).toHaveText("");
   // en: Round 1 of ann-0002 is still open after the early selection; it waits on ann-0002.
   const en = textRow(page, caseId, "en");
   await expect(rowCell(en, "annotation")).toContainText("1 of 1 submitted");
-  await expect(rowCell(en, "waiting")).toHaveText(labels["ann-0002"]);
+  await expect(rowCell(en, "waiting")).toContainText(labels["ann-0002"]);
   await expect(rowCell(en, "next")).toHaveText("");
   const area = await openCardHistory(page, caseId, "en");
   await expect(activityLines(area).filter({ hasText: new RegExp(`^Annotation: ${esc(labels["ann-0002"])}.*Round 1`) })).toHaveCount(1);

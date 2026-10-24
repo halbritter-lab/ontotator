@@ -1,9 +1,10 @@
 /**
  * The steps of one text's plan in words (spec F5): translation review and annotation, each option with
- * its explanation, including the annotation mode (§1 Q3: one mode per text, lock reason). "Change plan…"
- * of the text card uses `TextPlanDialog`; the bulk "Plan…" dialog reuses `PlanOption` and the copy.
+ * its explanation, including the annotation mode (§1 Q3: one mode per text, lock reason). "Add to plan…"
+ * uses `TextPlanDialog`; the text card edits each step in place (`CardPlanSelect`, same save); the bulk "Plan…"
+ * dialog reuses `PlanOption` and the copy.
  */
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { ApiError, type ConsequencesView, type DocumentRowView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Checkbox, Dialog, InlineMessage, Textarea } from "../ui";
@@ -91,14 +92,12 @@ export interface TextPlanDialogProps {
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
- * "Change plan…" of one text: the steps in words; Save sends the flags and, when it changed, the mode in one
- * row PATCH (nothing is half saved). A refusal shows inline and the dialog keeps the user's choices.
+ * The save of one text's plan, shared by the dialog and the card's selects: one row PATCH with the flags and,
+ * when it changed, the mode (nothing is half saved). A refusal that needs more (withdrawing open tasks, an
+ * acceptance reason) or a plan changed elsewhere shows in `extras`; saving again sends the confirmation.
  */
-export function TextPlanDialog({ row, groupRevision, saves, onClose }: TextPlanDialogProps): JSX.Element {
+export function usePlanRowSave(row: DocumentRowView, groupRevision: number, saves: PlanSaves) {
   const ids = useId().replace(/:/g, "");
-  const reasonId = `${ids}-save-reason`;
-  const [initial] = useState<PlanStepsValue>(() => ({ ...saves.flagsOf(row, groupRevision), mode: row.plan_row?.annotation_mode ?? "project" }));
-  const [value, setValue] = useState(initial);
   const [confirming, setConfirming] = useState<ConsequencesView | null>(null);
   const [understood, setUnderstood] = useState(false);
   const [accepting, setAccepting] = useState(false);
@@ -108,16 +107,15 @@ export function TextPlanDialog({ row, groupRevision, saves, onClose }: TextPlanD
   const [changed, setChanged] = useState(false);
   const reviewApplicable = row.plan_row?.review_applicable ?? !row.is_source;
   const withdrawing = !!confirming?.withdrawn.length;
+  /** What the next save still needs, or null. */
+  const pending = withdrawing && !understood ? "Confirm that the open tasks are withdrawn."
+    : accepting && !reason.trim() ? "Enter a reason." : null;
+  const clear = () => { setError(undefined); setConfirming(null); };
+  const reset = () => { clear(); setAccepting(false); setReason(""); setUnderstood(false); setChanged(false); };
 
-  // An undecided row may save its current flags: the PATCH records the decision (VD3).
-  const undecided = row.plan_row?.decided === false && !saves.decidedLocally(row);
-  const unchanged = !undecided && value.review === initial.review && value.annotate === initial.annotate && value.mode === initial.mode;
-  const blocked = unchanged ? NOTHING
-    : withdrawing && !understood ? "Confirm that the open tasks are withdrawn."
-      : accepting && !reason.trim() ? "Enter a reason." : null;
-
-  const save = async () => {
-    if (blocked || saving) return;
+  /** Saves `value` (against `initial`); true when saved. */
+  const save = async (value: PlanStepsValue, initial: PlanStepsValue): Promise<boolean> => {
+    if (saving) return false;
     setSaving(true); setError(undefined); setChanged(false);
     try {
       await saves.saveRow(row, {
@@ -125,7 +123,8 @@ export function TextPlanDialog({ row, groupRevision, saves, onClose }: TextPlanD
         ...(reviewApplicable ? { review: value.review } : {}),
         ...(value.mode !== initial.mode ? { annotation_mode: value.mode } : {}),
       }, groupRevision, { confirm: confirming !== null, ...(accepting ? { reason: reason.trim() } : {}) });
-      onClose();
+      reset();
+      return true;
     } catch (failure: unknown) {
       if (failure instanceof ApiError && failure.code === "WORK_PLAN_CONFIRMATION_REQUIRED" && isRecord(failure.details)) {
         setConfirming(failure.details as unknown as ConsequencesView); setUnderstood(false);
@@ -134,29 +133,142 @@ export function TextPlanDialog({ row, groupRevision, saves, onClose }: TextPlanD
       } else if (failure instanceof ApiError && failure.code === "WORK_PLAN_CHANGED") {
         setChanged(true); setConfirming(null);
       } else setError(failure);
+      return false;
     } finally { setSaving(false); }
+  };
+
+  const extras = <>
+    {changed && <InlineMessage tone="info">{PLAN_CHANGED_MESSAGE}</InlineMessage>}
+    {accepting && <div className="work-plan-acceptance">
+      <p className="work-plan-acceptance-title">{ACCEPT_EXTERNAL_LABEL}</p>
+      <Textarea id={`${ids}-reason`} label="Reason" required maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} />
+      <p className="field-hint">{ACCEPTANCE_RECORDED}</p>
+    </div>}
+    {confirming && <div className="work-plan-warning work-plan-confirm">
+      <ul>{consequenceLines(confirming).map(line => <li key={line}>{line}</li>)}</ul>
+      {withdrawing && <Checkbox id={`${ids}-understood`} label={WITHDRAW_CHECKBOX} checked={understood} onChange={event => setUnderstood(event.target.checked)} />}
+    </div>}
+    {error !== undefined && <ErrorNotice error={error} />}
+  </>;
+  /** A refusal waits for the user (confirmation, reason, or an error to read). */
+  const open = confirming !== null || accepting || changed || error !== undefined;
+  return { save, saving, pending, clear, reset, extras, open, needsMore: confirming !== null || accepting };
+}
+
+/**
+ * "Add to plan…" (and the former "Change plan…") of one text: the steps in words; Save sends the flags and, when
+ * it changed, the mode in one row PATCH. A refusal shows inline and the dialog keeps the user's choices.
+ */
+export function TextPlanDialog({ row, groupRevision, saves, onClose }: TextPlanDialogProps): JSX.Element {
+  const ids = useId().replace(/:/g, "");
+  const reasonId = `${ids}-save-reason`;
+  const [initial] = useState<PlanStepsValue>(() => ({ ...saves.flagsOf(row, groupRevision), mode: row.plan_row?.annotation_mode ?? "project" }));
+  const [value, setValue] = useState(initial);
+  const plan = usePlanRowSave(row, groupRevision, saves);
+
+  // An undecided row may save its current flags: the PATCH records the decision (VD3).
+  const undecided = row.plan_row?.decided === false && !saves.decidedLocally(row);
+  const unchanged = !undecided && value.review === initial.review && value.annotate === initial.annotate && value.mode === initial.mode;
+  const blocked = unchanged ? NOTHING : plan.pending;
+
+  const save = async () => {
+    if (blocked || plan.saving) return;
+    if (await plan.save(value, initial)) onClose();
   };
 
   const footer = <>
     <span id={reasonId} className="work-plan-save-reason" hidden={!blocked}>{blocked}</span>
     <Button onClick={onClose}>Cancel</Button>
-    <Button variant="primary" loading={saving} aria-disabled={blocked ? true : undefined} aria-describedby={blocked ? reasonId : undefined} onClick={() => void save()}>Save</Button>
+    <Button variant="primary" loading={plan.saving} aria-disabled={blocked ? true : undefined} aria-describedby={blocked ? reasonId : undefined} onClick={() => void save()}>Save</Button>
   </>;
 
   return <Dialog open title={`Plan for ${row.case_id} ${row.language}`} size="md" onClose={onClose} footer={footer}>
     <div className="work-plan-dialog">
-      {changed && <InlineMessage tone="info">{PLAN_CHANGED_MESSAGE}</InlineMessage>}
-      <PlanSteps row={row} value={value} onChange={next => { setValue(next); setError(undefined); setConfirming(null); }} />
-      {accepting && <div className="work-plan-acceptance">
-        <p className="work-plan-acceptance-title">{ACCEPT_EXTERNAL_LABEL}</p>
-        <Textarea id={`${ids}-reason`} label="Reason" required maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} />
-        <p className="field-hint">{ACCEPTANCE_RECORDED}</p>
-      </div>}
-      {confirming && <div className="work-plan-warning work-plan-confirm">
-        <ul>{consequenceLines(confirming).map(line => <li key={line}>{line}</li>)}</ul>
-        {withdrawing && <Checkbox id={`${ids}-understood`} label={WITHDRAW_CHECKBOX} checked={understood} onChange={event => setUnderstood(event.target.checked)} />}
-      </div>}
-      {error !== undefined && <ErrorNotice error={error} />}
+      <PlanSteps row={row} value={value} onChange={next => { setValue(next); plan.clear(); }} />
+      {plan.extras}
     </div>
   </Dialog>;
+}
+
+/** Select options of the card's plan controls. */
+const CARD_ANNOTATION_OPTIONS = { proposals: "From proposals", scratch: "From scratch", off: "Off" } as const;
+
+/**
+ * One step of the plan in the text card's section header (mockup variant A): "Review" On / Off, or the annotation
+ * From proposals / From scratch / Off. A change saves at once through the plan save of `TextPlanDialog`; the saved
+ * state or the refusal shows inline. "From proposals" is only offered with tool proposals; a locked mode keeps the
+ * select focusable (`aria-disabled`) with the lock reason.
+ */
+export function CardPlanSelect({ row, step, groupRevision, saves }: {
+  row: DocumentRowView;
+  step: "review" | "annotation";
+  groupRevision: number;
+  saves: PlanSaves;
+}): JSX.Element | null {
+  const id = useId().replace(/:/g, "");
+  const plan = usePlanRowSave(row, groupRevision, saves);
+  const current: PlanStepsValue = { ...saves.flagsOf(row, groupRevision), mode: row.plan_row?.annotation_mode ?? "project" };
+  const [chosen, setChosen] = useState<PlanStepsValue | null>(null);
+  const [saved, setSaved] = useState(false);
+  // The refetched row carries the saved plan: the local choice gives way to it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setChosen(previous => (saved ? null : previous)); }, [row]);
+  const textMode = row.annotation_mode ?? null;
+  const count = textMode?.proposal_count ?? row.proposal_count ?? 0;
+  const follows = row.plan_row?.annotation_mode == null;
+  // The choice stands while it saves, waits for a confirmation or awaits the refetch; after a plain error the saved plan shows.
+  const value = chosen && (plan.saving || plan.needsMore || saved) ? chosen : current;
+  const shownMode = (value.mode === "project" ? textMode?.mode : value.mode) ?? (count > 0 ? "proposals" : "scratch");
+  const locked = step === "annotation" && !!textMode?.locked;
+  if (step === "review" && !(row.plan_row?.review_applicable ?? !row.is_source)) return null;
+
+  const selected = step === "review" ? (value.review ? "on" : "off") : value.annotate ? shownMode : "off";
+  const nextOf = (choice: string): PlanStepsValue => {
+    if (step === "review") return { ...value, review: choice === "on" };
+    if (choice === "off") return { ...value, annotate: false };
+    const mode = choice as PlanMode;
+    // Picking the mode the text already has while it follows the project setting keeps it following.
+    return { ...value, annotate: true, mode: follows && mode === textMode?.mode ? "project" : mode };
+  };
+  const run = async (next: PlanStepsValue) => {
+    setSaved(false);
+    if (await plan.save(next, current)) setSaved(true);
+  };
+  const choose = (choice: string) => {
+    if (locked || plan.saving) return;
+    const next = nextOf(choice);
+    plan.reset();
+    setChosen(next);
+    void run(next);
+  };
+  const cancel = () => { plan.reset(); setChosen(null); setSaved(false); };
+  const describedBy = [locked && `${id}-lock`, plan.pending && `${id}-pending`].filter(Boolean).join(" ") || undefined;
+
+  return <div className="text-card-plan-control">
+    <span className="text-card-plan-line">
+      <label htmlFor={`${id}-select`} className={step === "review" ? "text-card-plan-label" : "visually-hidden"}>{step === "review" ? "Review" : "Annotation plan"}</label>
+      <select id={`${id}-select`} className="form-select text-card-plan-select" value={selected}
+        aria-disabled={locked ? "true" : undefined} aria-describedby={describedBy} aria-busy={plan.saving || undefined}
+        onChange={event => choose(event.target.value)}>
+        {step === "review"
+          ? <><option value="on">On</option><option value="off">Off</option></>
+          : <>
+            {(count > 0 || shownMode === "proposals") && <option value="proposals">{CARD_ANNOTATION_OPTIONS.proposals}</option>}
+            <option value="scratch">{CARD_ANNOTATION_OPTIONS.scratch}</option>
+            <option value="off">{CARD_ANNOTATION_OPTIONS.off}</option>
+          </>}
+      </select>
+      <span className="text-card-muted" role="status">{plan.saving ? "Saving…" : saved && !plan.open ? "Saved" : ""}</span>
+    </span>
+    {locked && <p id={`${id}-lock`} className="text-card-muted">{LOCK_REASON}</p>}
+    {plan.open && <div className="text-card-plan-refusal">
+      {plan.extras}
+      {plan.needsMore && <div className="text-card-actions">
+        {plan.pending && <span id={`${id}-pending`} className="text-card-muted">{plan.pending}</span>}
+        <Button size="sm" variant="primary" loading={plan.saving} aria-disabled={plan.pending ? true : undefined}
+          onClick={() => { if (!plan.pending && chosen) void run(chosen); }}>Save change</Button>
+        <Button size="sm" onClick={cancel}>Cancel</Button>
+      </div>}
+    </div>}
+  </div>;
 }

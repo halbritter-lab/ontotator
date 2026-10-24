@@ -14,6 +14,14 @@
 .text-card-view { display: grid; justify-items: start; gap: var(--space-3); }
 .text-card-view > :not(button) { justify-self: stretch; }
 .text-card-part { display: grid; gap: var(--space-2); min-width: 0; padding-top: var(--space-3); border-top: 1px solid var(--border); }
+/* Section header: the title, the step's plan control on the right (mockup variant A). */
+.text-card-part-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); }
+.text-card-plan-control { display: grid; justify-items: end; gap: var(--space-1); }
+.text-card-plan-line { display: inline-flex; align-items: center; gap: var(--space-2); }
+.text-card-plan-line .text-card-plan-label { white-space: nowrap; }
+.text-card-plan-select { width: auto; height: auto; min-height: 32px; padding-block: 2px; }
+.text-card-plan-refusal { display: grid; gap: var(--space-2); justify-self: stretch; }
+.text-card-not-planned { display: grid; justify-items: start; gap: var(--space-2); }
 .text-card-part-title,
 .text-card-subheading { margin: 0; font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); }
 .text-card-subheading { margin-bottom: var(--space-2); }

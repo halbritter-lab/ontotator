@@ -71,10 +71,6 @@ export const rowHeader = (row: Locator): Locator => row.locator(':scope > th[sco
 export const rowAction = (page: Page, label: string, caseId: string, language: string): Locator =>
   page.getByRole("button", { name: namePattern(`${label}, `, caseId, language) });
 
-/** The row's "More" menu button ("More actions, {case} {language}"). */
-export const moreMenu = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `More actions, ${rowName(caseId, language)}`, exact: true });
-
 /** The text card dialog "{case} {language}" (a full-width sheet below 700 px). */
 export const textCard = (page: Page, caseId: string, language: string): Locator =>
   page.getByRole("dialog", { name: rowName(caseId, language), exact: true });
@@ -138,10 +134,10 @@ export async function axeViolations(page: Page, include: string): Promise<string
 export const horizontalOverflow = (page: Page): Promise<number> =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-/** The slim case line of a case: its ID, plus the folded source when that is not planned. */
+/** The slim case line of a case: its ID and, when texts are outside the plan, the "n not in plan" toggle. */
 export const caseLine = (page: Page, caseId: string): Locator =>
-  documentsTable(page).locator(".documents-group-label").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) });
+  documentsTable(page).locator(".documents-group-line").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) });
 
-/** The not-planned source folded into the case line: the button "source en (native), 1 translation" opens its card. */
-export const foldedSource = (page: Page, caseId: string): Locator =>
-  caseLine(page, caseId).getByRole("button", { name: /^source \S+ \(native\), \d+ translations?$/ });
+/** The case line's toggle "n not in plan": the texts outside the plan fold behind it. */
+export const notInPlanToggle = (page: Page, caseId: string): Locator =>
+  caseLine(page, caseId).getByRole("button", { name: /^\d+ not in plan$/ });

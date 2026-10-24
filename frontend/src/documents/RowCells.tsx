@@ -361,9 +361,11 @@ const STATE_OF: Readonly<Record<StageName, (row: DocumentRowView) => { state: st
 export function RowStageCell({ row, stage }: { row: DocumentRowView; stage: StageName }): JSX.Element {
   const cell = row.stages?.[stage];
   const symbol = cell ? stageText(stage, cell, row).symbol : "";
-  const { state } = STATE_OF[stage](row);
-  // Who works on the annotation (the translation state already names its reviewers).
-  const people = stage === "annotation" && (cell?.state === "in_progress" || cell?.state === "paused") ? (cell.detail.people ?? []).map(shortName).join(", ") : "";
+  // Who works on the stage, in grey after the state: reviewers of a running review, annotators at work.
+  const working = stage === "review" ? ["in_progress", "re_review"] : stage === "annotation" ? ["in_progress", "paused"] : [];
+  const people = cell && working.includes(cell.state) ? (cell.detail.people ?? []).map(shortName).join(", ") : "";
+  // The card's "in review (Ana Weber)" becomes "in review" plus the grey who.
+  const state = stage === "review" && people ? "in review" : STATE_OF[stage](row).state;
   // X5: findings flagged "guidelines unclear" in the submitted consolidation.
   const flagged = stage === "final" && (row.flagged_unclear ?? 0) > 0 ? `${row.flagged_unclear} flagged` : "";
   const who = [people, flagged].filter(Boolean).join(", ");

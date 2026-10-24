@@ -1,8 +1,7 @@
-/** Row click on Documents (spec 2026-10-23 §2 "Row click toggles the selection"). */
+/** Row click on Documents (M1): it opens the text card only; only the checkboxes select. */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DocumentRowView } from "../../src/api/client";
-import { DocumentsTable, rowClick, type TableSelection } from "../../src/documents/DocumentsTable";
+import { DocumentsTable, type TableSelection } from "../../src/documents/DocumentsTable";
 import { group, page } from "./fixtures";
 import { stagedRow } from "./tableFixtures";
 
@@ -25,38 +24,6 @@ const de = stagedRow("case-120", "de");
 const fr = stagedRow("case-120", "fr");
 const order = ["case-120:de", "case-120:fr"];
 
-describe("rowClick", () => {
-  it("a click on an unselected row selects it and opens the card", () => {
-    const open = vi.fn<(row: DocumentRowView) => void>();
-    const current = selection(["case-120:fr"]);
-    rowClick(de, "row", current, order, open);
-    expect(current.select).toHaveBeenCalledWith("case-120:de", "select", order);
-    expect(open).toHaveBeenCalledWith(de);
-  });
-
-  it("a click on a selected row deselects it and opens nothing", () => {
-    const open = vi.fn();
-    const current = selection(["case-120:de"]);
-    rowClick(de, "row", current, order, open);
-    expect(current.select).toHaveBeenCalledWith("case-120:de", "toggle", order);
-    expect(open).not.toHaveBeenCalled();
-  });
-
-  it("a click on the text name opens the card and keeps the selection", () => {
-    const open = vi.fn();
-    const current = selection(["case-120:de"]);
-    rowClick(de, "name", current, order, open);
-    expect(current.select).not.toHaveBeenCalled();
-    expect(open).toHaveBeenCalledWith(de);
-  });
-
-  it("without selection rights a row click only opens the card", () => {
-    const open = vi.fn();
-    rowClick(de, "row", undefined, order, open);
-    expect(open).toHaveBeenCalledWith(de);
-  });
-});
-
 describe("in the table", () => {
   function renderTable(selected: readonly string[] = []) {
     const onOpenPanel = vi.fn();
@@ -69,18 +36,18 @@ describe("in the table", () => {
     return { onOpenPanel, current, waitingCell };
   }
 
-  it("a click on an unselected row's empty area selects it and opens the card", () => {
+  it("a click on a row's empty area opens the card and never selects", () => {
     const { onOpenPanel, current, waitingCell } = renderTable();
     fireEvent.click(waitingCell("de"));
-    expect(current.select).toHaveBeenCalledWith("case-120:de", "select", order);
+    expect(current.select).not.toHaveBeenCalled();
     expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), { opener: screen.getByRole("button", { name: "Open text card, case-120 de" }) });
   });
 
-  it("a click on a selected row deselects it and opens nothing", () => {
+  it("a click on a selected row keeps it selected and opens the card", () => {
     const { onOpenPanel, current, waitingCell } = renderTable(["case-120:de"]);
     fireEvent.click(waitingCell("de"));
-    expect(current.select).toHaveBeenCalledWith("case-120:de", "toggle", order);
-    expect(onOpenPanel).not.toHaveBeenCalled();
+    expect(current.select).not.toHaveBeenCalled();
+    expect(onOpenPanel).toHaveBeenCalledTimes(1);
   });
 
   it("a click on the text name opens the card and keeps the selection", () => {
@@ -91,19 +58,12 @@ describe("in the table", () => {
     expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), { opener: name });
   });
 
-  it("shift-click selects a range without opening", () => {
-    const { onOpenPanel, current, waitingCell } = renderTable();
-    fireEvent.click(waitingCell("fr"), { shiftKey: true });
-    expect(current.select).toHaveBeenCalledWith("case-120:fr", "range", order);
-    expect(onOpenPanel).not.toHaveBeenCalled();
-  });
-
-  it("ctrl-click toggles without opening", () => {
+  it("shift-, ctrl- and meta-clicks on the row area neither select nor open", () => {
     const { onOpenPanel, current, waitingCell } = renderTable(["case-120:de"]);
+    fireEvent.click(waitingCell("fr"), { shiftKey: true });
     fireEvent.click(waitingCell("de"), { ctrlKey: true });
-    expect(current.select).toHaveBeenCalledWith("case-120:de", "toggle-keep-anchor", order);
     fireEvent.click(waitingCell("fr"), { metaKey: true });
-    expect(current.select).toHaveBeenLastCalledWith("case-120:fr", "toggle-keep-anchor", order);
+    expect(current.select).not.toHaveBeenCalled();
     expect(onOpenPanel).not.toHaveBeenCalled();
   });
 

@@ -117,7 +117,6 @@ test("Tab-only order: tabs, search, Filter, selection tools, then the case and e
     named("input", "Select ", "de"),
     `button:Open text card, ${S0_CASE} de`,
     named("button", "Review changes…, ", "de"),
-    `button:More actions, ${S0_CASE} de`,
   ];
   const positions = expected.map(stop => stopIndex(stops, stop));
   expect(positions.filter(position => position < 0).length, `Tab stops: ${stops.join(" | ")}`).toBe(0);

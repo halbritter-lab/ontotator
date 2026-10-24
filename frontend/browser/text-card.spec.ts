@@ -103,7 +103,7 @@ test("annotate from proposals myself", async ({ page }) => {
   await expect(again.getByRole("button", { name: "Annotate from proposals myself", exact: true })).toHaveCount(0);
 });
 
-test("row click toggles the selection and the bar needs two texts", async ({ page }) => {
+test("row click opens only the card; the checkboxes select and the bar needs two texts", async ({ page }) => {
   const s = await proposalCheckScenario(page, "FRESH");
   await loginScenarioUser(page, s, "lead");
   await openDocuments(page, s);
@@ -111,14 +111,8 @@ test("row click toggles the selection and the bar needs two texts", async ({ pag
 
   await clickRow(page, CASE);
   await expect(card).toBeVisible();
-  await expect(rowCheckbox(page, CASE)).toBeChecked();
-  await page.keyboard.press("Escape");
-  await expect(card).toHaveCount(0);
-  await expect(rowCheckbox(page, CASE)).toBeChecked();
-  await expect(selectionBar(page)).toHaveCount(0);
-
-  await clickRow(page, CASE);
   await expect(rowCheckbox(page, CASE)).not.toBeChecked();
+  await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
 
   await textName(page, CASE, "en").click();
@@ -126,11 +120,9 @@ test("row click toggles the selection and the bar needs two texts", async ({ pag
   await expect(rowCheckbox(page, CASE)).not.toBeChecked();
   await page.keyboard.press("Escape");
 
-  await clickRow(page, CASE);
-  await page.keyboard.press("Escape");
+  await rowCheckbox(page, CASE).check();
   await expect(selectionBar(page)).toHaveCount(0);
-  await clickRow(page, "EN100017");
-  await page.keyboard.press("Escape");
+  await rowCheckbox(page, "EN100017").check();
   await expect(selectionBar(page)).toBeVisible();
   await expect(selectionBar(page)).toContainText("2");
 });

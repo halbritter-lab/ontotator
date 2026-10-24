@@ -13,8 +13,8 @@
  */
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import {
-  caseLine, documentsTab, evidence, expectCounterEqualsTab, expectEdge, expectStage, expectWaiting, foldedSource,
-  moreMenu, namePattern, newBadge, openDocuments, rowAction, rowCell, rowHeader, textCard, textName, textRow, type CellText,
+  caseLine, documentsTab, evidence, expectCounterEqualsTab, expectEdge, expectStage, expectWaiting, notInPlanToggle,
+  namePattern, newBadge, openDocuments, rowAction, rowCell, rowHeader, textCard, textName, textRow, type CellText,
 } from "./documentsOverviewHelpers";
 import { LeadClicks, loginOverviewUser, overviewAct, overviewScenario, type OverviewActBody, type OverviewScenario } from "./overviewHelpers";
 
@@ -63,15 +63,9 @@ function record(step: number): void {
   test.info().annotations.push({ type: "lead clicks", description: `step ${step}: ${clicks.total} (plan ${PLAN_TOTALS[step - 1]})` });
 }
 
-/** No "Assign annotation…" anywhere on the row while old-version work waits (VD22). */
+/** No "Assign annotation…" on the row while old-version work waits (VD22; the row has one button, no menu). */
 async function expectNoAssignAnnotation(): Promise<void> {
   await expect(action("Assign annotation…")).toHaveCount(0);
-  const more = moreMenu(page, CASE, "de");
-  if (await more.count()) {
-    await more.click();
-    await expect(page.getByRole("menuitem", { name: /Assign annotation/ })).toHaveCount(0);
-    await page.keyboard.press("Escape");
-  }
 }
 
 async function contextFor(browser: Browser): Promise<Page> {
@@ -101,9 +95,10 @@ test("step 1: the lead imports the package (1 click)", async () => {
   await clicks.count(dialog.getByRole("button", { name: /^Import 1 case/ }));
   await expect(dialog).toHaveCount(0, { timeout: 90_000 });
 
-  // The en source is not planned: folded into the case line instead of its own row.
+  // The en source is not planned: folded behind the case line's toggle instead of its own row.
   await expect(caseLine(page, CASE)).toContainText(CASE);
-  await expect(foldedSource(page, CASE)).toHaveText("source en (native), 1 translation");
+  await expect(notInPlanToggle(page, CASE)).toHaveText("1 not in plan");
+  await expect(notInPlanToggle(page, CASE)).toHaveAttribute("aria-expanded", "false");
   await expect(textName(page, CASE, "en")).toHaveCount(0);
   await expectStage(cell("translation"), { state: "Unassigned", who: "" });
   await expectStage(cell("annotation"), { state: "after translation review", who: "" });
@@ -134,7 +129,7 @@ test("step 3: Ana accepts unchanged; NEW on the next visit", async () => {
   await act({ actor: "ana", action: "accept_review" });
   await revisit(true);
   await expectStage(cell("translation"), { state: "accepted", who: "" });
-  await expectStage(cell("annotation"), { state: /0 of 2 assigned/, who: "" });
+  await expectStage(cell("annotation"), { state: "Unassigned", who: "" });
   await expect(newBadge(de())).toHaveCount(1);
   await expect(documentsTab(page, "To assign", 1)).toBeVisible();
   await expectCounterEqualsTab(page);
@@ -198,12 +193,12 @@ test("step 6: the lead requests a correction, Ana corrects → v2", async () => 
   await expectStage(cell("annotation"), { state: "In progress on old text", who: "" });
   await expectEdge(page, de(), true);
   await expect(rowCell(de(), "next").getByRole("button").first()).toHaveAccessibleName(namePattern("Handle text change…, ", CASE, "de"));
-  // The other lead step is in the row's "More" menu; actions that are no step (correction requests) live in the text card.
-  const more = moreMenu(page, CASE, "de");
-  await more.click();
-  await expect(page.getByRole("menuitem", { name: "Carry to v2…", exact: true })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: /correction/ })).toHaveCount(0);
+  // One button per row; the other lead step is in the text card.
+  await expect(rowCell(de(), "next").getByRole("button")).toHaveCount(1);
+  await textName(page, CASE, "de").click();
+  await expect(textCard(page, CASE, "de").getByRole("button", { name: "Carry to v2…", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(textCard(page, CASE, "de")).toHaveCount(0);
   await expect(documentsTab(page, "Needs your decision", 1)).toBeVisible();
   await expect(await expectCounterEqualsTab(page)).toBe(1);
   await expectNoAssignAnnotation();
