@@ -334,6 +334,16 @@ class WorkspaceService:
                 if s.annotation.layer_id
                 in (scope.editable_layer_ids + scope.reference_layer_ids)
             ]
+            if key.mode == "proposal_check":
+                # Older sets' proposals stay out, as on the round path.
+                wanted = {
+                    (t.annotation_id, t.version) for t in effective_targets.targets
+                }
+                available_inputs = [
+                    s
+                    for s in available_inputs
+                    if (s.annotation.annotation_id, s.version) in wanted
+                ]
             canonical = ReviewTargetSet.create(effective_targets.targets)
             if (
                 effective_targets != canonical

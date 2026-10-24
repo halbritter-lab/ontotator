@@ -50,6 +50,28 @@ def test_reassign_keeps_the_count(tmp_path):
     assert response.json()["annotation_mode"] == "proposals"
 
 
+def test_reassigning_submitted_work_needs_a_free_slot(tmp_path):
+    """The revoked submitted assignment keeps its slot: per_text=1 refuses
+    the replacement, per_text=2 allows it."""
+    from work_plan_support import submit
+
+    for per_text, expected in ((1, 422), (2, 200)):
+        env = proposal_env(tmp_path / str(per_text), per_text=per_text)
+        first = assign(env, env.c1, "anno")
+        submit(env, first["id"], "sub-anno")
+        response = env.lead.post(
+            f"/api/v1/assignments/{first['id']}/reassign",
+            json={
+                "username": "anno2",
+                "confirm_language": True,
+                "confirm_started": True,
+            },
+        )
+        assert response.status_code == expected, response.text
+        if expected != 200:
+            assert response.json()["code"] == "ANNOTATIONS_PER_TEXT_REACHED"
+
+
 def test_removed_assignments_free_the_slot(tmp_path):
     env = proposal_env(tmp_path, per_text=1)
     first = assign(env, env.c1, "anno")

@@ -690,6 +690,9 @@ class TextChangeService:
                 select(UserRow.pseudonym).where(UserRow.id == user_id)
             ).scalar_one()
             now = datetime.now(UTC)
+            AssignmentService._require_annotation_slot(
+                conn, project_row, target.document_id
+            )
             snapshot_id = self._freeze_draft(conn, key, pid, old, source)
             assignments = AssignmentService(self.db, now=lambda: now)
             # The person already works on this row's language: a language
@@ -1104,6 +1107,9 @@ class TextChangeService:
             )
             existing = None
         if existing is None:
+            AssignmentService._require_annotation_slot(
+                conn, project_row, target.document_id
+            )
             eligibility = assignments.check_assignable(
                 conn,
                 project_row,

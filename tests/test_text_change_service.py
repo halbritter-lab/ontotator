@@ -835,7 +835,17 @@ def test_all_or_nothing_on_failure(env, monkeypatch):
     assert _assignment(env, work["assignment_id"]).revoked_at is None
 
 
+def _per_text(env: Env, limit: int) -> None:
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.id == _pid(env))
+            .values(annotations_per_text=limit)
+        )
+
+
 def test_nothing_is_deleted(env):
+    _per_text(env, 2)  # tom's and ana's work both land on v2
     moved = _started(env, "tom")
     carried = _submitted(env, "ana")
     withdrawn = _started(env, "eva")
@@ -957,6 +967,21 @@ def test_move_refuses_started_work_without_a_round(env):
     moved = _move(env, waiting)
     assert moved.round is None
     assert _assignment(env, moved.assignment_id).document_id == env.docs[1]
+
+
+def test_move_and_carry_respect_the_target_limit(env):
+    """per_text=1 and Eva holds v2: moving or carrying Tom's work there is
+    refused and changes nothing."""
+    started = _started(env)
+    submitted = _submitted(env, "ana")
+    assign(env.scenario, env.docs[1], "eva", "annotate")
+    _per_text(env, 1)
+    before = _counts(env)
+    with pytest.raises(DomainError, match="ANNOTATIONS_PER_TEXT_REACHED"):
+        _move(env, started["assignment_id"])
+    with pytest.raises(DomainError, match="ANNOTATIONS_PER_TEXT_REACHED"):
+        _carry(env, submitted["submission_id"])
+    assert _counts(env) == before
 
 
 def test_move_refused_when_the_person_holds_the_target(env):
@@ -1082,6 +1107,7 @@ def test_carry_author_refuses_a_target_assignment_with_a_result(env):
 def test_operations_lock_the_assignee(env, monkeypatch):
     from ontocurator.application import text_changes
 
+    _per_text(env, 2)  # ana's carried and eva's moved work both land on v2
     work = _submitted(env)
     locked: list[int | None] = []
     original = text_changes.lock_user_authority

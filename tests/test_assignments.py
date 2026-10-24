@@ -168,6 +168,8 @@ def test_reassign_reopen_revoke_preserve_history_and_audit(core) -> None:
     db, service, _project, _users = core
     old = service.assign(Actor.cli(), "p", "first", "alice", "annotate")
     with db.transaction() as conn:
+        # The replacement joins alice's submitted work, which keeps its slot.
+        conn.execute(update(ProjectRow).values(annotations_per_text=2))
         conn.execute(
             update(AssignmentRow)
             .where(AssignmentRow.id == old.id)

@@ -664,6 +664,19 @@ class AssignmentService:
         ):
             raise DomainError("ASSIGNMENT_EXISTS", {"reason": "lead_correction_open"})
 
+    @staticmethod
+    def _require_annotation_slot(
+        conn: Connection, project: RowMapping, document_id: str
+    ) -> None:
+        """A new annotate assignment needs a free "annotations per text" slot."""
+        # Per version on purpose (plan review R25).
+        limit = int(project["annotations_per_text"])
+        held = held_annotations(conn, project["id"], [document_id])[document_id]
+        if held >= limit:
+            raise DomainError(
+                "ANNOTATIONS_PER_TEXT_REACHED", {"limit": limit, "assigned": held}
+            )
+
     def _assign_locked(
         self,
         conn: Connection,
@@ -697,13 +710,7 @@ class AssignmentService:
         if task == "translation_review":
             self._require_no_open_lead_correction(conn, project["id"], document_id)
         if task == "annotate":
-            # Per version on purpose (plan review R25); reassign does not count.
-            limit = int(project["annotations_per_text"])
-            held = held_annotations(conn, project["id"], [document_id])[document_id]
-            if held >= limit:
-                raise DomainError(
-                    "ANNOTATIONS_PER_TEXT_REACHED", {"limit": limit, "assigned": held}
-                )
+            self._require_annotation_slot(conn, project, document_id)
         eligibility = self.check_assignable(
             conn,
             project,
@@ -759,6 +766,9 @@ class AssignmentService:
                 excluding=assignment_id,
                 check_plan=False,
             )
+            if task == "annotate" and old["last_submission_id"] is not None:
+                # Revoked submitted work keeps its slot; an unsubmitted one frees it.
+                self._require_annotation_slot(conn, project, old["document_id"])
             now = self._now()
             revoke_assignments(
                 conn, actor, project["id"], [dict(old)], now, reason="reassign"

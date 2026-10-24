@@ -231,3 +231,28 @@ def test_open_refuses_targets_outside_the_newest_set(checker, tmp_path: Path):
     )
     assert response.status_code == 422, response.text
     assert response.json()["code"] == "INVALID_TARGET_SET"
+
+
+def test_first_open_offers_only_the_newest_set(checker, tmp_path: Path):
+    from t1_fixtures import annotation, bundle, run_import, unit
+
+    later = unit("EN100017", set_id="set-b", annotations=[annotation("p3", (63, 76))])
+    assert (
+        run_import(checker.db, bundle(tmp_path / "b.zip", [later], "b-2")).status
+        == "succeeded"
+    )
+    from_proposals(checker.db)
+    response = checker.client.post(
+        "/api/v1/workspaces/open",
+        json={
+            "project_key": "proj",
+            "document_id": "EN100017",
+            "mode": "proposal_check",
+        },
+    )
+    assert response.status_code == 200, response.text
+    offered = {
+        (p["annotation"]["annotation_id"], p["version"])
+        for p in response.json()["view"]["available_inputs"]
+    }
+    assert offered == set(_newest(checker))
