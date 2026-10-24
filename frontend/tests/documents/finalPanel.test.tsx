@@ -12,7 +12,7 @@ import { assignment } from "../assignmentFixtures";
 import { agreement, bar, final, finalPanel, group, item, page, panelSubmission, round, rowKey, stepOf, translationReview, version } from "./fixtures";
 import { acceptPanel, ana, anaSubmission, chooseRow, comparePanel, luc, panelRowSubmissions, reviewRow, tom, tomSubmission } from "./panelFixtures";
 
-const OWN_REASON = "This project keeps adjudication separate from annotation. Another lead must choose this result.";
+const OWN_REASON = "In this project the consolidator of a text may not be one of its annotators. Another lead must choose this result.";
 const now = new Date("2026-10-21T12:00:00Z");
 
 let panels: Record<string, FinalPanelView>;

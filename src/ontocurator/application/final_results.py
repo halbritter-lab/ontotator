@@ -117,8 +117,8 @@ class FinalResultService:
             if rule and exact.annotator_id == selected_by:
                 raise DomainError(
                     "OWN_RESULT_NOT_SELECTABLE",
-                    "This project keeps adjudication separate from annotation. "
-                    "Another lead must choose this result.",
+                    "In this project the consolidator of a text may not be one of "
+                    "its annotators. Another lead must choose this result.",
                 )
             same = bool(
                 old

@@ -29,7 +29,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   VERSION_NOT_FOUND: "This annotation version is not available to you.",
   OVERRIDE_NOT_APPLICABLE: "The override must name one translation variant in this import.",
   OVERRIDE_REASON_REQUIRED: "Accepting a translation requires a reason.",
-  OWN_RESULT_NOT_SELECTABLE: "This project keeps adjudication separate from annotation. Another lead must choose this result.",
+  OWN_RESULT_NOT_SELECTABLE: "In this project the consolidator of a text may not be one of its annotators. Another lead must choose this result.",
   VARIANT_CASE_MISMATCH: "The variant and its source must belong to the same case.",
   VARIANT_ID_COLLISION: "The variant ID is already in use.",
   VARIANT_SOURCE_AMBIGUOUS: "Several source variants match. Supply the case identity.",

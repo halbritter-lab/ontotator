@@ -17,9 +17,12 @@ import sys
 from collections.abc import Sequence
 
 from sqlalchemy import create_engine, func, select
-from sqlalchemy.engine import make_url
 
-from ontocurator.storage.database import advisory_lock_id, connect_args
+from ontocurator.storage.database import (
+    advisory_lock_id,
+    connect_args,
+    psycopg_url,
+)
 from ontocurator.storage.work_purge import purge_annotation_work
 
 
@@ -37,7 +40,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Refused: this deletes annotation work; add --confirm.", file=sys.stderr)
         return 2
     if args.database_url:
-        url = make_url(args.database_url)
+        url = psycopg_url(args.database_url)
     else:
         from ontocurator.settings import database_url
 

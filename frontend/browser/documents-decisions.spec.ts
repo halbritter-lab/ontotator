@@ -26,7 +26,7 @@ test.use({ actionTimeout: 15_000 });
 
 /** "19 Oct, 15:01", optionally with seconds or a year, or "15:01" today. */
 const TIME = String.raw`(?:\d{1,2} [A-Z][a-z]{2}(?: \d{4})?, )?\d{2}:\d{2}(?::\d{2})?`;
-const OWN_RESULT_REASON = "This project keeps adjudication separate from annotation. Another lead must choose this result.";
+const OWN_RESULT_REASON = "In this project the consolidator of a text may not be one of its annotators. Another lead must choose this result.";
 
 const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** The separator of joined copy: " · " before U9 removes it (F11), else ", " or a space. */

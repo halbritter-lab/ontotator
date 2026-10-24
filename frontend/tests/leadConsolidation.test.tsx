@@ -67,7 +67,7 @@ it('says nothing about the role when you already hold it', async () => {
   expect(screen.queryByText('You will get the Consolidator role for this project.')).toBeNull();
 });
 
-it('disables people who annotated this text with the reason, while the project keeps adjudication separate', async () => {
+it('disables people who annotated this text with the reason, while the consolidator may not be an annotator', async () => {
   vi.mocked(api.listAssignments).mockResolvedValue([annotateTask('lead'), { ...annotateTask('luc'), id: 51 }]);
   await openForm({ adjudicatorNotAnnotator: true });
   const own = within(reviewerSelect()).getByRole('option', { name: 'You (Mia Kühn) — You annotated this text' }) as HTMLOptionElement;

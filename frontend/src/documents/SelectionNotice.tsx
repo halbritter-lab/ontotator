@@ -13,8 +13,8 @@ export const ACKNOWLEDGEABLE_CODES: ReadonlySet<string> = new Set([
   "PLAN_RESTORED",
 ]);
 
-/** Reason shown when the project keeps adjudication separate and the final result is the lead's own. */
-export const OWN_RESULT_REASON = "This project keeps adjudication separate from annotation. Another lead must choose this result.";
+/** Reason shown when the consolidator may not be an annotator and the final result is the lead's own. */
+export const OWN_RESULT_REASON = "In this project the consolidator of a text may not be one of its annotators. Another lead must choose this result.";
 
 /** Stored review decisions (`translation_reviews.decision`) that did not accept a correction. */
 const NOT_ACCEPTED_DECISIONS: Readonly<Record<string, string>> = { rejected: "rejected", query: "queried" };

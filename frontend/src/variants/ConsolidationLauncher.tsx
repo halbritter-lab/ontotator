@@ -20,7 +20,7 @@ interface Props {
   defaultOpen?: boolean;
   /** Submissions checked when the form opens (e.g. the compared submissions on the current text). */
   defaultSelected?: readonly string[];
-  /** The project keeps adjudication separate from annotation: people who annotated this text are unavailable. */
+  /** The consolidator may not be an annotator: people who annotated this text are unavailable. */
   adjudicatorNotAnnotator?: boolean;
   /** The round was started; a caller that closes (the final-result panel) replaces the success line with its own message. */
   onStarted?: (round: WorkRoundView, started: ConsolidationStarted) => void;

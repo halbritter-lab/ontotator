@@ -25,6 +25,14 @@ operating system's TCP timeout (minutes) instead of failing fast.
 """
 
 
+def psycopg_url(url: str | URL) -> URL:
+    """``url`` parsed, with a plain ``postgresql://`` mapped to the psycopg driver."""
+    parsed = make_url(url) if isinstance(url, str) else url
+    if parsed.drivername == "postgresql":
+        parsed = parsed.set(drivername="postgresql+psycopg")
+    return parsed
+
+
 def connect_args(url: URL) -> dict[str, object]:
     """The driver arguments for ``url``: the default connect timeout, unless set.
 
@@ -87,9 +95,7 @@ class Database:
         pool_size: int = 5,
         max_overflow: int = 10,
     ) -> None:
-        parsed = make_url(url) if isinstance(url, str) else url
-        if parsed.drivername == "postgresql":
-            parsed = parsed.set(drivername="postgresql+psycopg")
+        parsed = psycopg_url(url)
         self.url = parsed
         self.engine: Engine = create_engine(
             parsed,

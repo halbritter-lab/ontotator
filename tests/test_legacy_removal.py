@@ -100,6 +100,22 @@ def test_purge_script_keeps_edit_events_of_purged_drafts(env) -> None:
         assert drafts.first() is None
 
 
+def test_purge_script_accepts_a_plain_postgresql_url(env) -> None:
+    aid = assign(env, doc("c2", "en"), "ana", "annotate")
+    url = owner_engine(env.db).url.set(drivername="postgresql")
+    plain = url.render_as_string(hide_password=False)
+    assert plain.startswith("postgresql://")
+    assert (
+        _purge_script().main(
+            ["--project", "proj", "--confirm", "--database-url", plain]
+        )
+        == 0
+    )
+    with env.db.transaction() as conn:
+        gone = conn.execute(select(AssignmentRow.id).where(AssignmentRow.id == aid))
+        assert gone.first() is None
+
+
 def test_consolidation_start_still_assigns_the_consolidator(env) -> None:
     response = env.lead.post(URL, json=body(env, reviewer="adj"))
     assert response.status_code == 200, response.text
