@@ -3,7 +3,7 @@
 import io
 
 import pytest
-from auth_harness import upload_package
+from auth_harness import ROLES, provision_assignments, upload_package, username_for
 from pg_harness import count_rows, database_for, tamper
 from support.v2_reader import read_package
 from support.v2_writer import PackageWriter
@@ -277,6 +277,11 @@ def test_round_selection_api_resumes_selected_round_and_rejects_incompatible_req
         files={"file": ("proposals.zip", stream.getvalue(), "application/zip")},
     )
     assert imported.status_code == 200, imported.text
+    # The reviewer's annotate assignment starts from the tool proposals.
+    client._join("reviewer", "pkg-rev-1")
+    provision_assignments(
+        client.app, username_for("reviewer"), "pkg-rev-1", ROLES, mode="proposals"
+    )
     request = {
         "project_key": "pkg-rev-1",
         "document_id": "doc-1",

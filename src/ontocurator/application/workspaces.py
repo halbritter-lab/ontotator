@@ -335,14 +335,20 @@ class WorkspaceService:
                 in (scope.editable_layer_ids + scope.reference_layer_ids)
             ]
             if key.mode == "proposal_check":
-                # Older sets' proposals stay out, as on the round path.
+                # Older sets' proposals stay out, as on the round path; the
+                # newest set's reference-layer proposals stay as context.
                 wanted = {
                     (t.annotation_id, t.version) for t in effective_targets.targets
                 }
+                newest = self._newest_refs(key.project_key, key.document_id)
                 available_inputs = [
                     s
                     for s in available_inputs
                     if (s.annotation.annotation_id, s.version) in wanted
+                    or (
+                        s.annotation.layer_id not in scope.editable_layer_ids
+                        and (s.annotation.annotation_id, s.version) in newest
+                    )
                 ]
             canonical = ReviewTargetSet.create(effective_targets.targets)
             if (

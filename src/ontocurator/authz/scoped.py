@@ -580,6 +580,12 @@ class ScopedRepository(Repository):
                 ),
             }
 
+    def require_proposals(self, project_key: str, document_id: str) -> None:
+        """Raise unless this user may see the document's proposals."""
+        with self.db.transaction() as conn:
+            project_id = self._require_project(conn, project_key)
+            require_proposals(conn, self.access, project_id, project_key, document_id)
+
     def get_reanchor_items(
         self, project_key: str, document_id: str
     ) -> list[dict[str, Any]]:

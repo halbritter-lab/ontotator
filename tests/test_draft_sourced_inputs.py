@@ -29,6 +29,7 @@ from test_text_change_service import (
     _carry,
     _env,
     _move,
+    _per_text,
     _pid,
     _scoped,
     _started,
@@ -304,6 +305,7 @@ def test_human_inputs_skip_draft_sources(env):
 def test_final_export_with_draft_sourced_final(env):
     # Ana's v1 submission is carried to v2 by its author (a carry-forward round
     # from a submission); Tom's v1 draft is moved to v2 (a text-change round).
+    _per_text(env, 2)
     ana = _submitted(env, "ana")
     moved = _moved(env)
     carried = _carry(env, ana["submission_id"])

@@ -11373,6 +11373,31 @@
               }
             ],
             "title": "Flags"
+          },
+          "proposals": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "with",
+                  "without"
+                ]
+              },
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "with",
+                    "without"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposals"
           }
         },
         "additionalProperties": false,

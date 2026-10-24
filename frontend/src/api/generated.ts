@@ -3569,6 +3569,8 @@ export interface components {
             waiting_on?: string | string[] | null;
             /** Flags */
             flags?: "guidelines_unclear" | "guidelines_unclear"[] | null;
+            /** Proposals */
+            proposals?: ("with" | "without") | ("with" | "without")[] | null;
         };
         /**
          * DocumentRowKeys

@@ -17,6 +17,7 @@ from test_text_change_service import (
     THIRD_DE,
     Env,
     _env,
+    _per_text,
     _revision,
     _started,
     _submitted,
@@ -84,6 +85,7 @@ def _code(response: Any) -> tuple[int, str]:
 
 def test_routes_are_lead_only(client):
     env = _env(_app(client))
+    _per_text(env, 2)  # tom's moved and ana's carried work both land on v2
     work = _started(env)
     done = _submitted(env, "ana")
     _login(client, env, "tom")
@@ -131,6 +133,7 @@ def test_routes_are_lead_only(client):
 
 def test_error_statuses(client):
     env = _env(_app(client), [TEXT_DE, CORRECTED_DE, THIRD_DE])
+    _per_text(env, 2)  # ana's and tom's moved work both land on v3
     _login(client, env, "lead")
     work = _started(env)
     # A stale target: v3 arrived after the dialog opened on v2.

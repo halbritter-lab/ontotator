@@ -46,7 +46,6 @@ from ontocurator.authz.policy import (
     can,
 )
 from ontocurator.authz.scoped import ScopedRepository, project_not_found
-from ontocurator.authz.versions import require_proposals
 from ontocurator.domain.errors import AccessDenied, DomainError
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope, is_review_like
@@ -390,11 +389,7 @@ def get_review_inputs(
         )
     if req.mode == "proposal_check":
         # Every annotator may open the mode; only one from proposals sees them.
-        with repo.db.transaction() as conn:
-            project_id = repo._require_project(conn, req.project_key)
-            require_proposals(
-                conn, get_access(request), project_id, req.project_key, req.document_id
-            )
+        cast(ScopedRepository, repo).require_proposals(req.project_key, req.document_id)
     return ws_svc.get_review_inputs(req.project_key, req.document_id, mode=req.mode)
 
 

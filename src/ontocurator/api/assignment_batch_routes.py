@@ -24,6 +24,7 @@ from ontocurator.application.document_rows import (
     FinalFilter,
     Paused,
     PlanFilter,
+    ProposalFilter,
     RowQuery,
     Segment,
     Sort,
@@ -74,6 +75,7 @@ class DocumentRowFilters(BaseModel):
     # "me" or a pseudonym.
     waiting_on: str | list[str] | None = None
     flags: FlagFilter | list[FlagFilter] | None = None
+    proposals: ProposalFilter | list[ProposalFilter] | None = None
 
     @model_validator(mode="after")
     def _exclusive(self) -> Self:
