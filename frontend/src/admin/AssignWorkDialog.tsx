@@ -4,6 +4,7 @@ import { personLabel, textLabel } from "../app/identity";
 import { assignedText } from "../app/assignedDate";
 import { annotationTaskName } from "../editor/modes";
 import { plural } from "../app/labels";
+import { routeHref } from "../app/router";
 import { Button, Dialog, Select } from "../ui";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
@@ -12,7 +13,12 @@ import { memberReason, memberUnavailable, needsPeopleMessage, onePersonSummary, 
 
 export type AssignWorkTask = "translation_review" | "annotate";
 export type AssignWorkDialogProps =
-  | { mode: "row"; projectKey: string; row: DocumentRowView; task: AssignWorkTask; newReviewOfAccepted?: boolean; reviewReason?: "source_changed"; onClose: () => void; onAssigned: (message: string) => void }
+  | { mode: "row"; projectKey: string; row: DocumentRowView; task: AssignWorkTask; newReviewOfAccepted?: boolean; reviewReason?: "source_changed";
+    /** The lead: listed as "<name> (you)" for annotation; picking them uses the self-assignment (P3 grants the annotator role). */
+    me?: { username: string; name: string };
+    /** Project rule "the consolidator is not an annotator": its hint shows with the lead's own entry. */
+    consolidatorRule?: boolean;
+    onClose: () => void; onAssigned: (message: string) => void }
   | { mode: "cases"; projectKey: string; caseIds: readonly string[]; sort: "case" | "import" | "activity"; filters: DocumentRowFilters; onClose: () => void; onAssigned: (message: string, skipped: readonly string[]) => void };
 
 type Preview = BatchPreview;
@@ -50,6 +56,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [changingTask, setChangingTask] = useState(false);
   const [distribute, setDistribute] = useState<"one" | "split">("one");
   const [chosen, setChosen] = useState<string[]>([]);
+  const [self, setSelf] = useState(false);
   const [reload, setReload] = useState(0);
   const [preview, setPreview] = useState<{ key: string; value: Preview } | null>(null);
   const [previewError, setPreviewError] = useState<{ key: string; error: unknown } | null>(null);
@@ -90,9 +97,11 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   /** "Assign review…" for a changed source: the review resolves the source-change obligation (spec V5). */
   const sourceChanged = props.mode === "row" && props.reviewReason === "source_changed" && task === "translation_review";
   const shown = preview?.value ?? null;
-  const people = shown ? sortMembers(shown.people) : [];
+  const me = props.mode === "row" && task === "annotate" ? props.me ?? null : null;
+  const people = shown ? sortMembers(shown.people.filter(person => person.username !== me?.username)) : [];
   const order = people.map(person => person.username);
   const usernames = order.filter(name => chosen.includes(name));
+  const picked = usernames.length + (self ? 1 : 0);
   const apiMode: "one" | "split" = isRow ? (usernames.length > 1 ? "split" : "one") : distribute;
   const request: BatchAssignRequest | null = !task ? null : props.mode === "row"
     ? { task, language, case_ids: [props.row.case_id], mode: apiMode, usernames, ...(props.newReviewOfAccepted && task === "translation_review" ? { review_accepted_translation: true } : {}), ...(sourceChanged ? { review_reason: "source_changed" as const } : {}) }
@@ -126,30 +135,46 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const count = assignments || fresh?.versions || shown?.versions || 0;
   const needs = fresh?.needs_people ?? null;
   const rowLimit = rowMulti ? Math.max(1, shown?.targets[0]?.remaining ?? 1) : Infinity;
+  const meHolds = !!me && props.mode === "row" && props.row.work.some(item => item.task === "annotate" && item.is_me && item.moved_to_version == null);
 
   const reset = () => { setConfirming(false); setRefused([]); setFailure(null); setNotice(null); };
   const choose = (username: string, checked: boolean) => {
     if (busy) return;
     reset();
     if (radios) setChosen([username]);
-    else setChosen(names => checked ? (names.includes(username) || names.length >= rowLimit ? names : [...names, username]) : names.filter(name => name !== username));
+    else setChosen(names => checked ? (names.includes(username) || names.length + (self ? 1 : 0) >= rowLimit ? names : [...names, username]) : names.filter(name => name !== username));
+  };
+  const chooseSelf = (checked: boolean) => {
+    if (busy) return;
+    reset();
+    setSelf(checked && (picked < rowLimit || self));
   };
 
   const reason = !task || steps === null ? "Loading…"
     : calculating || !fresh ? "Calculating…"
     : !fresh.targets.length ? "No cases in the selection need this task."
-    : needs !== null ? needsPeopleMessage(needs, task)
-    : !usernames.length ? (radios ? "Choose a person first." : "Choose people first.")
-    : !assignments ? "The chosen people already hold these tasks."
+    : needs !== null && usernames.length ? needsPeopleMessage(needs, task)
+    : !picked ? (radios ? "Choose a person first." : "Choose people first.")
+    : usernames.length && !assignments ? "The chosen people already hold these tasks."
     : null;
 
   const commit = async (confirmLanguage: boolean) => {
     if (writing.current || !request || !fresh || !task) return;
     writing.current = true; setBusy(true); reset();
     try {
-      const result = await api.commitAssignmentBatch(props.projectKey, { ...request, expected_preview_digest: fresh.digest, confirm_language: confirmLanguage });
-      if (!alive.current) return;
-      const message = resultMessage(task, result.created.length, chosenPeople.map(person => ({ person: person.person, count: result.created.filter(item => item.username === person.username).length })), split);
+      const messages: string[] = [];
+      if (usernames.length) {
+        const result = await api.commitAssignmentBatch(props.projectKey, { ...request, expected_preview_digest: fresh.digest, confirm_language: confirmLanguage });
+        if (!alive.current) return;
+        messages.push(resultMessage(task, result.created.length, chosenPeople.map(person => ({ person: person.person, count: result.created.filter(item => item.username === person.username).length })), split));
+      }
+      if (self && me && props.mode === "row") {
+        const response = await api.createAssignments(props.projectKey, { rows: [{ document_id: props.row.open.document_id, username: me.username }], task: "annotate", confirm_language: true });
+        if (!alive.current) return;
+        if (!response.created.length) throw new ApiError(409, "You could not be assigned to this text.", response.refused[0]?.code ?? "ASSIGNMENT_REFUSED");
+        messages.push(`You annotate ${props.row.case_id} ${props.row.language}.`);
+      }
+      const message = messages.join(" ");
       if (props.mode === "row") props.onAssigned(message);
       else props.onAssigned(message, fresh.skipped.map(item => item.case_id));
     } catch (error: unknown) {
@@ -223,7 +248,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   return <Dialog open title={title} size="md" onClose={closing} footer={<>
     {reason && <span id={reasonId} className="assign-footer-reason">{reason}</span>}
     <Button disabled={busy} onClick={props.onClose}>Cancel</Button>
-    <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{isRow && !usernames.length ? "Assign" : `Assign ${count}`}</Button>
+    <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{rowMulti
+      ? (picked ? `Assign ${picked === 1 ? "1 person" : `${picked} people`}` : "Assign") : isRow && !usernames.length ? "Assign" : `Assign ${count}`}</Button>
   </>}>
     <div className="assign-dialog">
       {props.mode === "row" && <div className="assign-context">
@@ -231,6 +257,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         {textMode && <p>{annotationTaskName(textMode.mode)}{textMode.source === "no_proposals" && <span className="assign-muted"> This text has no tool proposals, so it is annotated from scratch.</span>}</p>}
         <p className="assign-muted">Currently: {holders.length ? holders.join("; ") : "nobody"}</p>
         {task === "annotate" && target && shown && <p className="assign-muted">{`${shown.per_text - target.remaining} of ${shown.per_text} annotators assigned`}</p>}
+        {rowMulti && shown && <p id={limitId} className="assign-limit">{`${picked} of ${rowLimit} chosen. Limit: ${shown.per_text === 1 ? "1 annotation" : `${shown.per_text} annotations`} per text (`}
+          <a href={routeHref({ name: "projectSettings", key: props.projectKey, section: "workflow" })}>project setting</a>{")."}</p>}
       </div>}
 
       {props.mode === "cases" && stepsError !== undefined && <><ErrorNotice error={stepsError} /><Button onClick={() => setStepsRetry(value => value + 1)}>Retry</Button></>}
@@ -263,7 +291,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
           const why = memberReason(person, task, language);
           const off = memberUnavailable(person);
           const checked = usernames.includes(person.username);
-          const atLimit = !radios && !checked && usernames.length >= rowLimit;
+          const atLimit = !radios && !checked && picked >= rowLimit;
           const inputId = `${id}-member-${index}`;
           const whyId = `${id}-why-${index}`;
           const describedBy = [why && whyId, atLimit && limitId].filter(Boolean).join(" ") || undefined;
@@ -276,15 +304,30 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
                 onClick={event => { if (off || atLimit || busy) event.preventDefault(); }}
                 onChange={event => { if (!off && !atLimit) choose(person.username, event.target.checked); }}
                 onKeyDown={event => rove(event, person.username)} />
-              <label htmlFor={inputId}>{personLabel(person.person)}{why && <span id={whyId} className="assign-reason">, {why}</span>}</label>
+              <label htmlFor={inputId}>{personLabel(person.person)}{why ? <span id={whyId} className="assign-reason">, {why}</span> : atLimit && <span className="assign-reason">, limit reached</span>}</label>
             </span></td>
             <td className="assign-reads"><span className="assign-narrow-label">Reads </span>{person.reads.length ? person.reads.map((item, at) => <span key={item}>{at > 0 && ", "}{item === language ? <strong>{item}</strong> : item}</span>) : "None listed"}</td>
             <td className="assign-open"><span className="assign-narrow-label">Open </span>{person.open_before}</td>
             {split && !isRow && <td className="assign-gets">{person.gets > 0 ? <strong>{person.gets}</strong> : "–"}</td>}
           </tr>;
-        })}</tbody>
+        })}
+        {me && rowMulti && (() => {
+          const atLimit = !self && picked >= rowLimit;
+          const off = meHolds || atLimit || busy;
+          const why = meHolds ? "already annotating this text" : atLimit ? "limit reached" : null;
+          return <tr key="me" className={self ? "is-chosen" : undefined}>
+            <td><span className="assign-member">
+              <input id={`${id}-member-me`} type="checkbox" checked={self} aria-disabled={off ? "true" : undefined}
+                aria-describedby={[why && `${id}-why-me`, props.mode === "row" && props.consolidatorRule && `${id}-rule`].filter(Boolean).join(" ") || undefined}
+                onClick={event => { if (off) event.preventDefault(); }} onChange={event => { if (!off) chooseSelf(event.target.checked); }} />
+              <label htmlFor={`${id}-member-me`}>{`${me.name} (you)`}{why && <span id={`${id}-why-me`} className="assign-reason">, {why}</span>}</label>
+            </span></td>
+            <td className="assign-reads" /><td className="assign-open" />
+          </tr>;
+        })()}
+        </tbody>
       </table>}
-      {rowMulti && <p id={limitId} className="assign-muted">{rowLimit === 1 ? "1 annotator is still needed." : `${rowLimit} annotators are still needed.`}</p>}
+      {me && rowMulti && props.mode === "row" && props.consolidatorRule && <p id={`${id}-rule`} className="assign-muted">If you annotate this text yourself, you cannot consolidate it afterwards (project rule "the consolidator is not an annotator").</p>}
 
       <div className="assign-summary" role="status" aria-live="polite" aria-label="Summary">{summaryLines.map(line => <p key={line}>{line}</p>)}</div>
 

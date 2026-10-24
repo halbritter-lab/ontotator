@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import { documentsTab, openTextCard, rowAction, textCard, textName, textNamePattern, textVersionItems } from "./documentsHelpers";
+import { documentsTab, openTextCard, rowAction, showSegment, textCard, textName, textNamePattern, textVersionItems } from "./documentsHelpers";
 import { openTasksHome, selectText, submitCase, TASKS_HOME, TEST_PASSWORD } from "./helpers";
 
 interface Actor { username: string; code: string }
@@ -288,7 +288,9 @@ test.describe("Administration through real accounts and jobs", () => {
     await reopen.getByLabel("Reason (optional)").fill("Check this finding again.");
     await reopen.getByRole("button", { name: "Reopen assignment", exact: true }).click();
     await expect(reopen).toHaveCount(0);
-    await expect(document).toContainText("Reopened");
+    // Reopened work is open work again: the version list leaves it to the Annotation part, where its chip says so.
+    await showSegment(textCard(page, "one", "en"), "Annotation");
+    await expect(textCard(page, "one", "en").getByRole("button", { name: /, in progress: actions$/ })).toBeVisible();
     // The text card is modal: close it before logging out.
     await textCard(page, "one", "en").getByRole("button", { name: "Close", exact: true }).click();
     await logout(page);

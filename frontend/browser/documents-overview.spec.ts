@@ -8,7 +8,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 import {
-  documentsReady, documentsTabs, evidence, expectEdge, expectStage, expectWaiting, namePattern, notInPlanToggle, openDocuments, rowAction, rowCell, rowHeader,
+  documentsReady, documentsTabs, evidence, expectEdge, expectStage, expectWaiting, namePattern, moreMarker, openDocuments, rowAction, rowCell, rowHeader,
   textRow, type CellText,
 } from "./documentsOverviewHelpers";
 import { loginOverviewUser, overviewScenario, type OverviewScenarioName } from "./overviewHelpers";
@@ -40,7 +40,7 @@ interface RowExpect {
   marker?: string;
 }
 
-/** A not-planned source folded into the case line instead of its own row. */
+/** A not-planned text shown only as the "+n" marker of its case's rows. */
 interface FoldedExpect {
   case_id: string;
   folded: string | RegExp;
@@ -49,7 +49,7 @@ interface FoldedExpect {
 const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect | FoldedExpect)[]> = {
   S1: [
     { case_id: "case-101", language: "de", translation: { state: "not decided", who: "" }, annotation: { state: /^(Unassigned|\d+ of \d+ assigned)$/, who: "" }, finalization: WAITING, waiting: "You", action: "Plan…", edge: true },
-    { case_id: "case-101", folded: "1 not in plan" },
+    { case_id: "case-101", folded: "+1" },
   ],
   S2: [
     { case_id: "case-102", language: "de", translation: { state: "Check failed", who: "" }, annotation: AFTER_REVIEW, finalization: WAITING, waiting: "You", action: "Assign review…", edge: false },
@@ -86,7 +86,7 @@ const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect
   S11: [
     { case_id: "case-111", language: "de", translation: ACCEPTED, annotation: { state: "2 of 2 submitted", who: "" }, finalization: { state: ACCEPTED_ON, who: "" }, waiting: "—", action: null, edge: false },
     { case_id: "case-111", language: "fr", translation: ACCEPTED, annotation: { state: "2 of 2 submitted", who: "" }, finalization: { state: ACCEPTED_ON, who: "" }, waiting: "—", action: null, edge: false },
-    { case_id: "case-111", folded: /^\d+ not in plan$/ },
+    { case_id: "case-111", folded: /^\+\d+$/ },
   ],
   S12: [
     { case_id: "case-112", language: "de", translation: ACCEPTED, annotation: { state: "In progress on old text", who: "" }, finalization: WAITING, waiting: "You", action: "Handle text change…", edge: true, marker: "v2 corrected" },
@@ -98,7 +98,7 @@ const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect
     { case_id: "case-114", language: "de", translation: ACCEPTED, annotation: SUBMITTED, finalization: { state: "Final is on old text", who: "" }, waiting: "You", action: "Review changes…", edge: true, marker: "v2 corrected" },
   ],
   S15: [
-    { case_id: "case-115", folded: "1 not in plan" },
+    { case_id: "case-115", folded: "+1" },
     // Source changed: decision colour, but step kind assign (no edge, To assign, VD14).
     { case_id: "case-115", language: "de", translation: { state: "Source changed", who: "" }, annotation: SUBMITTED, finalization: { state: "may be outdated", who: "" }, waiting: "You", action: "Assign review…", edge: false },
   ],
@@ -109,7 +109,7 @@ const SCENARIOS: Record<Exclude<OverviewScenarioName, "WALKTHROUGH">, (RowExpect
 
 async function expectRow(page: Page, expected: RowExpect | FoldedExpect): Promise<void> {
   if ("folded" in expected) {
-    await expect(notInPlanToggle(page, expected.case_id), `${expected.case_id} not in plan`).toHaveText(expected.folded);
+    await expect(moreMarker(page, expected.case_id), `${expected.case_id} not in plan`).toHaveText(expected.folded);
     return;
   }
   const { case_id: caseId, language } = expected;

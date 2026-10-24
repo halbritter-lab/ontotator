@@ -64,7 +64,8 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   vi.spyOn(api, "commitAssignmentBatch").mockResolvedValue({ created: [{ ...assignment, username: "alice" }] });
   render(<App user={testUser("lead", { is_system_admin: false })} />);
   await screen.findByRole("button", { name: "Open text card, z/doc en" });
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (2 texts)" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc en" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc de" }));
   const bar = screen.getByRole("region", { name: "Selection" });
   expect(within(bar).getByText("2 texts in 1 case selected")).toBeTruthy();
   fireEvent.click(within(bar).getByRole("button", { name: "Assign…" }));

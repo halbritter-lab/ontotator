@@ -36,7 +36,7 @@ function assignRow(overrides: Partial<DocumentRowView> = {}): DocumentRowView {
   });
 }
 
-type Handlers = Pick<TextCardProps, "onStep" | "onClose" | "onNavigate" | "onAssign" | "onChangePlan" | "onCheckMyself" | "onChanged">;
+type Handlers = Pick<TextCardProps, "onStep" | "onClose" | "onNavigate" | "onAssign" | "onChangePlan" | "onChanged">;
 
 function Harness({ initialSegment, initialView = "path", ...props }: Partial<TextCardProps> & Handlers & { initialSegment?: SegmentId; initialView?: TextCardProps["view"] }): JSX.Element {
   const [segment, setSegment] = useState<SegmentId | undefined>(initialSegment);
@@ -48,8 +48,7 @@ function Harness({ initialSegment, initialView = "path", ...props }: Partial<Tex
 
 function renderCard(props: Partial<TextCardProps> & { initialSegment?: SegmentId; initialView?: TextCardProps["view"] } = {}) {
   const handlers = {
-    onStep: vi.fn(), onClose: vi.fn(), onNavigate: vi.fn(), onAssign: vi.fn(), onChangePlan: vi.fn(),
-    onCheckMyself: vi.fn().mockResolvedValue(undefined), onChanged: vi.fn(),
+    onStep: vi.fn(), onClose: vi.fn(), onNavigate: vi.fn(), onAssign: vi.fn(), onChangePlan: vi.fn(), onChanged: vi.fn(),
   };
   render(<Harness {...handlers} {...props} />);
   return handlers;
@@ -110,7 +109,8 @@ describe("header", () => {
 
   it("J / K do nothing while another dialog is on top of the card", () => {
     const { onStep } = renderCard({ initialSegment: "annotation" });
-    fireEvent.click(within(card()).getByRole("button", { name: "Remove Tom Reis" }));
+    fireEvent.click(within(card()).getByRole("button", { name: "Tom Reis, not started: actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove (draft is discarded)" }));
     const confirm = screen.getByRole("dialog", { name: "Remove assignment?" });
     fireEvent.keyDown(document.activeElement ?? confirm, { key: "j" });
     fireEvent.keyDown(document.activeElement ?? confirm, { key: "k" });
@@ -138,82 +138,59 @@ describe("header", () => {
 });
 
 describe("annotation part", () => {
-  it("the annotation part shows the mode, the proposal count and View proposals", () => {
+  it("the header's Open text opens the text view with the proposals; the part counts the annotators", () => {
     const { onNavigate } = renderCard();
-    expect(within(card()).getByText("Annotation, from proposals")).toBeTruthy();
-    expect(within(card()).getByText("17 tool proposals")).toBeTruthy();
-    const link = within(card()).getByRole("link", { name: "View proposals" });
+    const link = within(card()).getByRole("link", { name: "Open text, case-200 de" });
     const route: Route = { name: "projectCase", key: "p", caseId: "case-200", variant: "case-200-de", show: "proposals", documents: query };
     expect(link.getAttribute("href")).toBe(routeHref(route));
     fireEvent.click(link);
     expect(onNavigate).toHaveBeenCalledWith(route);
-    const chip = within(card()).getByText("Tom Reis").closest(".assignment-chip")!;
-    expect(chip.textContent).toContain("not started");
+    expect(within(card()).queryByRole("link", { name: "View proposals" })).toBeNull();
+    expect(within(card()).getByText("1 of 2 annotators assigned.")).toBeTruthy();
+    const chip = within(card()).getByRole("button", { name: "Tom Reis, not started: actions" });
     expect(chip.textContent).toContain("assigned yesterday");
-    expect(within(chip as HTMLElement).getByRole("button", { name: "Remove Tom Reis" })).toBeTruthy();
+    expect(within(card()).queryByRole("button", { name: "Remove Tom Reis" })).toBeNull();
   });
 
-  it("says why a text without proposals is annotated from scratch", () => {
+  it("says why a text without proposals is annotated from scratch; Open text shows no proposals", () => {
     renderCard({ row: assignRow({ proposal_count: 0, annotation_mode: { mode: "scratch", source: "no_proposals", locked: false, proposal_count: 0 } }) });
     expect(within(card()).getByText("Annotation, from scratch")).toBeTruthy();
     expect(within(card()).getByText("This text has no tool proposals, so it is annotated from scratch.")).toBeTruthy();
-    expect(within(card()).queryByRole("link", { name: "View proposals" })).toBeNull();
-    expect(within(card()).queryByRole("button", { name: "Annotate from proposals myself" })).toBeNull();
+    expect(within(card()).getByRole("link", { name: "Open text, case-200 de" }).getAttribute("href")).not.toContain("proposals");
   });
 
-  it("+ Person is unavailable with the reason when the limit is reached", () => {
+  it("one Assign annotators… opens the assign dialog; unavailable at the limit", () => {
     const { onAssign } = renderCard();
-    fireEvent.click(within(card()).getByRole("button", { name: "+ Person" }));
+    expect(within(card()).queryByRole("button", { name: "+ Person" })).toBeNull();
+    expect(within(card()).queryByRole("button", { name: "Annotate from proposals myself" })).toBeNull();
+    fireEvent.click(within(card()).getByRole("button", { name: "Assign annotators…" }));
     expect(onAssign).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-200" }), "annotate");
     cleanup();
     const full = renderCard({ row: assignRow({ stages: { review: cell("not_planned", "none"), annotation: cell("in_progress", "running", { assigned: 2, target: 2, submitted: 0, total: 2 }), final: cell("after_annotation", "waiting") } }) });
-    const button = screen.getByRole("button", { name: "+ Person" });
+    const button = screen.getByRole("button", { name: "Assign annotators…" });
     expect(button.getAttribute("aria-disabled")).toBe("true");
-    expect(document.getElementById(button.getAttribute("aria-describedby")!)!.textContent).toBe("2 of 2 assigned");
+    expect(document.getElementById(button.getAttribute("aria-describedby")!)!.textContent).toBe("2 of 2 annotators assigned.");
     fireEvent.click(button);
     expect(full.onAssign).not.toHaveBeenCalled();
+    // At the limit the chip menu offers no "Assign another person".
+    fireEvent.click(within(card()).getByRole("button", { name: "Tom Reis, not started: actions" }));
+    expect(screen.queryByRole("menuitem", { name: /^Assign another person/ })).toBeNull();
   });
 
-  it("Annotate from proposals myself assigns and opens the task", async () => {
-    const { onCheckMyself } = renderCard();
-    fireEvent.click(within(card()).getByRole("button", { name: "Annotate from proposals myself" }));
-    await waitFor(() => expect(onCheckMyself).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-200" })));
-    cleanup();
-    // The lead already annotates this text: no button.
-    renderCard({ row: assignRow({ work: [annotateItem({ assignment_id: 2, is_me: true, author_label: "lead-0001" })] }) });
-    expect(within(card()).queryByRole("button", { name: "Annotate from proposals myself" })).toBeNull();
+  it("below the limit a chip offers Assign another person", () => {
+    const { onAssign } = renderCard();
+    fireEvent.click(within(card()).getByRole("button", { name: "Tom Reis, not started: actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Assign another person (Tom Reis keeps working)" }));
+    expect(onAssign).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-200" }), "annotate");
   });
 
-  it("an error of one row is gone after ‹ › to the next row", async () => {
-    const handlers = { onStep: vi.fn(), onClose: vi.fn(), onNavigate: vi.fn(), onAssign: vi.fn(), onChangePlan: vi.fn(), onChanged: vi.fn(),
-      onCheckMyself: vi.fn().mockRejectedValue(new Error("Could not assign.")) };
-    const view = render(<Harness {...handlers} initialSegment="annotation" />);
-    fireEvent.click(within(card()).getByRole("button", { name: "Annotate from proposals myself" }));
-    expect(await within(card()).findByText("Could not assign.")).toBeTruthy();
-    view.rerender(<Harness {...handlers} initialSegment="annotation" row={assignRow({ case_id: "case-201" })} />);
-    const next = screen.getByRole("dialog", { name: "case-201 de" });
-    expect(within(next).queryByText("Could not assign.")).toBeNull();
-  });
-
-  it("after removing a person, focus moves to + Person", async () => {
+  it("after removing a person, focus moves to Assign annotators…", async () => {
     vi.spyOn(api, "removeAssignment").mockResolvedValue({} as Awaited<ReturnType<typeof api.removeAssignment>>);
     renderCard({ initialSegment: "annotation" });
-    fireEvent.click(within(card()).getByRole("button", { name: "Remove Tom Reis" }));
+    fireEvent.click(within(card()).getByRole("button", { name: "Tom Reis, not started: actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove (draft is discarded)" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Remove assignment?" })).getByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(document.activeElement).toBe(within(card()).getByRole("button", { name: "+ Person" })));
-  });
-
-  it("Annotate from proposals myself shows the consequence when the consolidator rule is on", () => {
-    const hint = "You will then not be able to consolidate this text yourself (project rule).";
-    renderCard({ adjudicatorNotAnnotator: true });
-    const button = within(card()).getByRole("button", { name: "Annotate from proposals myself" });
-    const described = document.getElementById(button.getAttribute("aria-describedby")!)!;
-    expect(described.textContent).toBe(hint);
-    expect(within(card()).getByText(hint)).toBe(described);
-    cleanup();
-    renderCard({ adjudicatorNotAnnotator: false });
-    expect(within(card()).getByRole("button", { name: "Annotate from proposals myself" }).getAttribute("aria-describedby")).toBeNull();
-    expect(screen.queryByText(hint)).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(card()).getByRole("button", { name: "Assign annotators…" })));
   });
 
   it("no chip offers a review of a submitted annotation", async () => {
@@ -225,22 +202,21 @@ describe("annotation part", () => {
       ],
     });
     const { onNavigate } = renderCard({ row });
-    const chip = within(card()).getByText("Ana Weber").closest(".assignment-chip") as HTMLElement;
-    expect(chip.textContent).toContain("submitted");
-    expect(within(chip).queryByRole("button")).toBeNull();
     const part = within(card()).getByRole("heading", { name: "Annotation" }).closest("section")!;
     expect(within(part).queryByRole("button", { name: /review/i })).toBeNull();
-    // The submitted person's name opens the text view with their layer.
-    const link = await within(chip).findByRole("link", { name: "Ana Weber" });
+    // The submitted person's name opens the text view with their layer; the chip has nothing to change.
+    const link = await within(card()).findByRole("link", { name: "Ana Weber" });
+    const chip = link.closest(".assignment-chip") as HTMLElement;
+    expect(chip.textContent).toContain("submitted");
+    expect(within(chip).queryByRole("button")).toBeNull();
     fireEvent.click(link);
     expect(onNavigate).toHaveBeenCalledWith({ name: "projectCase", key: "p", caseId: "case-200", variant: "case-200-de", show: "submission:s-ana", documents: query });
   });
 
-  it("people without lead rights see no remove, + Person or myself", () => {
+  it("people without lead rights see no menus and no Assign annotators…", () => {
     renderCard({ canManage: false });
-    expect(within(card()).queryByRole("button", { name: /^Remove/ })).toBeNull();
-    expect(within(card()).queryByRole("button", { name: "+ Person" })).toBeNull();
-    expect(within(card()).queryByRole("button", { name: "Annotate from proposals myself" })).toBeNull();
+    expect(within(card()).queryByRole("button", { name: /: actions$/ })).toBeNull();
+    expect(within(card()).queryByRole("button", { name: "Assign annotators…" })).toBeNull();
   });
 });
 
@@ -296,7 +272,7 @@ describe("footer", () => {
     expect(within(card()).queryByRole("navigation", { name: "Text path" })).toBeNull();
     fireEvent.click(within(card()).getByRole("button", { name: "Back" }));
     expect(within(card()).getByRole("navigation", { name: "Text path" })).toBeTruthy();
-    fireEvent.click(within(card()).getByRole("button", { name: "Text details" }));
+    fireEvent.click(within(card()).getByRole("button", { name: "Details" }));
     expect(await within(card()).findByRole("heading", { name: "Technical details" })).toBeTruthy();
     fireEvent.click(within(card()).getByRole("button", { name: "Back" }));
     expect(within(card()).getByRole("navigation", { name: "Text path" })).toBeTruthy();

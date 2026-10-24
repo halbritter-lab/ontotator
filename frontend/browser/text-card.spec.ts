@@ -1,12 +1,12 @@
 /**
  * The text card of Documents (plan T2, spec §2): the path Translation, Annotation, Finalization with its parts,
- * History and Text details inside the card, removing an assignment, "Annotate from proposals myself", the toggling
+ * History and Details inside the card, removing an assignment from the chip menu, assigning yourself, the toggling
  * row click with the selection bar for two or more texts, ‹ › through the table order, the 390 px sheet and axe.
  * Scenarios: tests/browser_proposal_check_scenarios.py.
  */
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { cardRow, cardSegment, documentsReady, documentsTable, openTextCard, removeChipButton, robotIcon, showSegment, textCard, textName } from "./documentsHelpers";
+import { cardRow, cardSegment, documentsReady, chipMenu, documentsTable, openTextCard, robotIcon, showSegment, textCard, textName } from "./documentsHelpers";
 import { authenticatedRequest } from "./helpers";
 import { loginScenarioUser, proposalCheckScenario, type ProposalCheckScenario } from "./proposalCheckHelpers";
 
@@ -50,7 +50,7 @@ test("path segments, details and actions", async ({ page }) => {
   await expect(card.getByRole("navigation", { name: "Text path" })).toHaveCount(0);
   await card.getByRole("button", { name: "Back", exact: true }).click();
   await expect(cardSegment(card, "Annotation")).toBeVisible();
-  await card.getByRole("button", { name: "Text details", exact: true }).click();
+  await card.getByRole("button", { name: "Details", exact: true }).click();
   await expect(card.getByRole("heading", { name: "Technical details", exact: true })).toBeVisible();
   await card.getByRole("button", { name: "Back", exact: true }).click();
   await expect(cardSegment(card, "Annotation")).toBeVisible();
@@ -67,23 +67,26 @@ test("remove an assignment after confirming", async ({ page }) => {
   const tom = s.display_names.tom;
   const confirm = page.getByRole("dialog", { name: "Remove assignment?", exact: true });
 
-  await removeChipButton(card, tom).click();
+  await chipMenu(card, tom).click();
+  await expect(page.getByRole("menuitem", { name: "Reassign to someone else…", exact: true })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Remove (draft is discarded)", exact: true }).click();
   await expect(confirm.getByText(`Remove ${tom} from the annotation of ${CASE}? Their draft is discarded.`, { exact: true })).toBeVisible();
   await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(confirm).toHaveCount(0);
-  await expect(removeChipButton(card, tom)).toBeVisible();
+  await expect(chipMenu(card, tom)).toBeVisible();
 
-  await removeChipButton(card, tom).click();
+  await chipMenu(card, tom).click();
+  await page.getByRole("menuitem", { name: "Remove (draft is discarded)", exact: true }).click();
   const removed = page.waitForResponse(r => r.request().method() === "POST" && /\/assignments\/\d+\/remove$/.test(r.url()));
   await confirm.getByRole("button", { name: "Remove", exact: true }).click();
   expect((await removed).ok()).toBeTruthy();
-  await expect(removeChipButton(card, tom)).toHaveCount(0);
+  await expect(chipMenu(card, tom)).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
   await expect(robotIcon(row, 3)).toBeVisible();
 });
 
-test("annotate from proposals myself", async ({ page }) => {
+test("the lead assigns themselves in the assign dialog; the consolidator rule is said there", async ({ page }) => {
   const s = await proposalCheckScenario(page, "FRESH");
   await loginScenarioUser(page, s, "lead");
   const rule = await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(s.project)}/settings`, "PATCH", { adjudicator_not_annotator: true });
@@ -91,16 +94,17 @@ test("annotate from proposals myself", async ({ page }) => {
   await openDocuments(page, s);
   const card = await openTextCard(page, CASE, "en");
   await showSegment(card, "Annotation");
-  await expect(card.getByText("You will then not be able to consolidate this text yourself (project rule).", { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "Annotate from proposals myself", exact: true }).click();
-  await expect(page).toHaveURL(/#\/tasks\/\d+$/, { timeout: 30_000 });
-  await expect(page.getByTitle("You see the tool's proposals, never other people's work.", { exact: true })).toHaveText("Annotate from proposals");
-
-  await openDocuments(page, s);
-  const again = await openTextCard(page, CASE, "en");
-  await showSegment(again, "Annotation");
-  await expect(again.getByText(s.display_names.lead, { exact: true })).toBeVisible();
-  await expect(again.getByRole("button", { name: "Annotate from proposals myself", exact: true })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "Annotate from proposals myself", exact: true })).toHaveCount(0);
+  await card.getByRole("button", { name: "Assign annotators…", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: /^Assign / });
+  await expect(dialog.getByText(/^0 of \d+ chosen\. Limit: \d+ annotations? per text/)).toBeVisible();
+  await expect(dialog.getByText("If you annotate this text yourself, you cannot consolidate it afterwards (project rule \"the consolidator is not an annotator\").", { exact: true })).toBeVisible();
+  await dialog.getByRole("checkbox", { name: new RegExp(`^${s.display_names.lead}.*\\(you\\)`) }).check();
+  const saved = page.waitForResponse(r => r.request().method() === "POST" && /\/assignments$/.test(r.url()));
+  await dialog.getByRole("button", { name: "Assign 1 person", exact: true }).click();
+  expect((await saved).ok()).toBeTruthy();
+  await expect(dialog).toHaveCount(0);
+  await expect(chipMenu(card, s.display_names.lead)).toBeVisible();
 });
 
 test("row click opens only the card; the checkboxes select and the bar needs two texts", async ({ page }) => {

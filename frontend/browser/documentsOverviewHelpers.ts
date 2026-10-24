@@ -134,10 +134,10 @@ export async function axeViolations(page: Page, include: string): Promise<string
 export const horizontalOverflow = (page: Page): Promise<number> =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-/** The slim case line of a case: its ID and, when texts are outside the plan, the "n not in plan" toggle. */
-export const caseLine = (page: Page, caseId: string): Locator =>
-  documentsTable(page).locator(".documents-group-line").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) });
+/** The "+n" marker of a case's rows (its texts not in plan, hidden while the switch is off): the visible "+n". */
+export const moreMarker = (page: Page, caseId: string): Locator =>
+  documentsTable(page).locator("th[scope=row]").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) })
+    .locator(".documents-more > [aria-hidden='true']").first();
 
-/** The case line's toggle "n not in plan": the texts outside the plan fold behind it. */
-export const notInPlanToggle = (page: Page, caseId: string): Locator =>
-  caseLine(page, caseId).getByRole("button", { name: /^\d+ not in plan$/ });
+/** The toolbar switch "Show texts not in plan (N)". */
+export const notInPlanSwitch = (page: Page): Locator => page.getByRole("checkbox", { name: /^Show texts not in plan \(\d+\)$/ });

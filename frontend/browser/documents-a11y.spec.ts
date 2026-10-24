@@ -97,7 +97,7 @@ async function axeViolations(page: Page): Promise<string[]> {
 
 // --- Keyboard, screen reader semantics, live announcements, deep links ---------------------- //
 
-test("Tab-only order: tabs, search, Filter, selection tools, then the case and each row's controls", async ({ page }) => {
+test("Tab-only order: tabs, search, Filter, selection tools, then each row's controls", async ({ page }) => {
   await openScenario(page, "S0");
   await expect(textName(page, S0_CASE, "de")).toBeVisible();
 
@@ -110,7 +110,6 @@ test("Tab-only order: tabs, search, Filter, selection tools, then the case and e
     "button:Filter",
     "input:Select the filtered case",
     "button:Select by case IDs…",
-    `input:Select ${S0_CASE} (2 texts)`,
     named("input", "Select ", "en"),
     `button:Open text card, ${S0_CASE} en`,
     named("button", "Assign annotation…, ", "en"),
@@ -122,7 +121,8 @@ test("Tab-only order: tabs, search, Filter, selection tools, then the case and e
   expect(positions.filter(position => position < 0).length, `Tab stops: ${stops.join(" | ")}`).toBe(0);
   // Every control is a stop of its own, in document order; nothing is skipped (no roving tabindex in the table).
   expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-  const tableStart = expected.indexOf(`input:Select ${S0_CASE} (2 texts)`);
+  // The first row checkbox starts the table (the stop right after "Select by case IDs…").
+  const tableStart = expected.indexOf("button:Select by case IDs…") + 1;
   const fromCase = positions[tableStart];
   const tableStops = stops.slice(fromCase, fromCase + 32);
   expect(expected.slice(tableStart).map(stop => stopIndex(tableStops, stop))).toEqual(expected.slice(tableStart).map((_, index) => index));
@@ -170,7 +170,7 @@ test("Tab-only order: tabs, search, Filter, selection tools, then the case and e
   await expect(documentsTab(page, "Needs your decision", 1)).toHaveAttribute("aria-selected", "true");
 });
 
-test("Screen reader semantics: tabs and tabpanel, case lines and row headers, text names, modal card", async ({ page }) => {
+test("Screen reader semantics: tabs and tabpanel, a flat list of row headers, text names, modal card", async ({ page }) => {
   const { s } = await openScenario(page, "S0");
 
   // Tabs: All is selected without a segment (VD7); the table sits in the tabpanel labelled by it.
@@ -180,18 +180,10 @@ test("Screen reader semantics: tabs and tabpanel, case lines and row headers, te
   }
   await expect(page.getByRole("tabpanel", { name: "All, 2" })).toContainText(S0_CASE);
 
-  // Case line: a label in <th scope="rowgroup" colspan>, the case checkbox in the first column, one <tbody> per case.
-  const groupHeader = await page.locator(".documents-group-label").first().evaluate(label => {
-    const cell = label.closest("th");
-    const row = cell?.closest("tr");
-    return {
-      scope: cell?.getAttribute("scope"), colspan: Number(cell?.getAttribute("colspan") ?? 1),
-      rowgroup: cell?.closest("tbody") != null, text: label.textContent,
-      checkbox: row?.querySelector('td input[type="checkbox"]')?.getAttribute("aria-label") ?? null,
-      button: label.closest("button") != null,
-    };
-  });
-  expect(groupHeader).toEqual({ scope: "rowgroup", colspan: 7, rowgroup: true, text: S0_CASE, checkbox: `Select ${S0_CASE} (2 texts)`, button: false });
+  // M1 flat list: one <tbody>, no case lines (no rowgroup headers, no case checkbox).
+  await expect(documentsTable(page).locator("tbody")).toHaveCount(1);
+  await expect(documentsTable(page).locator("th[scope=rowgroup]")).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: `Select ${S0_CASE} (2 texts)`, exact: true })).toHaveCount(0);
 
   // Row headers: <th scope="row"> with the text name "Open text card, {text} {language}"; no "Open" link any more.
   for (const language of ["en", "de"]) {
@@ -285,10 +277,10 @@ test("Deep links: case, language, decision, final, legacy open; pinned row; unkn
   await expect(page.locator(rowHeaderId(S0_CASE, "de"))).toBeFocused();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  // case alone: the group label has focus.
+  // case alone: the case's first text name has focus.
   await page.goto("about:blank");
   await openDocuments(page, s, `?case=${S0_CASE}`);
-  await expect(page.locator(`#documents-group-${encodeURIComponent(S0_CASE)}-toggle`)).toBeFocused();
+  await expect(page.locator(rowHeaderId(S0_CASE, "en"))).toBeFocused();
 
   // A named row that no longer matches the decision stays visible with a notice.
   await page.goto("about:blank");
@@ -342,9 +334,10 @@ test("Deep link page: S15 page 2 of 2", async ({ page }) => {
   await openScenario(page, "S15", "?page=2");
   const pages = page.getByRole("navigation", { name: "Pages" });
   await expect(pages).toContainText("Page 2 of 2");
-  const groups = documentsTable(page).locator(".documents-group-label");
-  await expect(groups).toHaveCount(5);
-  await expect(groups.first()).toHaveText(/^case-0051/);
+  const cases = await documentsTable(page).locator("th[scope=row] .documents-row-case .documents-id")
+    .evaluateAll(ids => [...new Set(ids.map(id => id.getAttribute("title") ?? ""))]);
+  expect(cases).toHaveLength(5);
+  expect(cases[0]).toMatch(/^case-0051/);
   // "Next" at the end stays focusable as an aria-disabled link.
   await expect(pages.getByRole("link", { name: "Next", exact: true })).toHaveAttribute("aria-disabled", "true");
 });

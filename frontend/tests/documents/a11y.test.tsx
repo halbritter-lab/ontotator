@@ -35,22 +35,15 @@ const view = () => page([
 ]);
 
 describe("table", () => {
-  it("caption Documents, one tbody per case, group th colspan 7", () => {
+  it("caption Documents, one flat tbody without case lines", () => {
     render(<DocumentsTable page={view()} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection()} />);
     const table = screen.getByRole("table", { name: "Documents" });
     const caption = table.querySelector("caption");
     expect(caption?.textContent).toBe("Documents");
     expect(caption?.className).toBe("visually-hidden");
     const bodies = table.querySelectorAll("tbody");
-    expect(bodies).toHaveLength(2);
-    for (const body of bodies) {
-      const groupRow = body.querySelector("tr")!;
-      expect(groupRow.children[0].tagName).toBe("TD");
-      const label = groupRow.children[1];
-      expect(label.tagName).toBe("TH");
-      expect(label.getAttribute("scope")).toBe("rowgroup");
-      expect(label.getAttribute("colspan")).toBe("7");
-    }
+    expect(bodies).toHaveLength(1);
+    expect(table.querySelector("th[scope='rowgroup']")).toBeNull();
     // Text cells are row headers named "{case}, {language}"; stage cells are plain cells.
     const de = within(bodies[0]).getAllByRole("rowheader").find(element => element.getAttribute("scope") === "row" && element.textContent?.startsWith("case-107 de"))!;
     expect(de).toBeTruthy();
@@ -63,20 +56,18 @@ describe("table", () => {
     expect(textHeader.getAttribute("aria-sort")).toBeNull();
   });
 
-  it("row checkbox names and mixed group checkbox", () => {
+  it("row checkbox names, no case checkbox, sortable headers", () => {
     const { unmount } = render(<DocumentsTable page={view()} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
-      sort="case" onSort={vi.fn()} onToggleNotInPlan={vi.fn()} />);
+      sort="case" onSort={vi.fn()} />);
     expect(screen.getByRole("checkbox", { name: "Select case-107 de" })).toHaveProperty("checked", true);
-    // The not-planned en source is folded behind the case line's toggle: no row, no checkbox, not in the case checkbox.
+    // The not-planned en source is not a row (only "+1" says it exists): no checkbox.
     expect(screen.queryByRole("checkbox", { name: "Select case-107 en" })).toBeNull();
-    expect(screen.getByRole("button", { name: "1 not in plan" }).getAttribute("aria-expanded")).toBe("false");
-    expect(screen.getByRole("checkbox", { name: "Select case-107 (1 text)" })).toHaveProperty("checked", true);
+    expect(screen.getByText("1 more text of this case not in plan")).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: /^Select case-107 \(/ })).toBeNull();
     unmount();
     render(<DocumentsTable page={view()} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection(["case-107:de"])}
-      sort="case" onSort={vi.fn()} onToggleNotInPlan={vi.fn()} notInPlanOpen={new Set(["case-107"])} />);
-    const caseBox = screen.getByRole("checkbox", { name: "Select case-107 (2 texts)" }) as HTMLInputElement;
-    expect(caseBox.indeterminate).toBe(true);
-    expect(screen.getByRole("checkbox", { name: "Select case-108 (1 text)" })).toHaveProperty("indeterminate", false);
+      sort="case" onSort={vi.fn()} showNotInPlan />);
+    expect(screen.getByRole("checkbox", { name: "Select case-107 en" })).toHaveProperty("checked", false);
     const textHeader = screen.getByRole("columnheader", { name: "Text" });
     expect(textHeader.getAttribute("aria-sort")).toBe("ascending");
     expect(within(textHeader).getByRole("button", { name: "Text" })).toBeTruthy();
@@ -116,7 +107,7 @@ describe("tabs, popover, card, dialogs", () => {
         <MenuButton label="1 more action for case-107 de" buttonLabel="+1" items={[{ id: "a", label: "Decide on report…", onSelect: vi.fn() }]} />
         <Popover open={false} anchorRef={anchor} label="Plan" onClose={vi.fn()}>plan</Popover>
         {panel && <TextCard projectKey="p" row={row} rows={[row]} query={{}} canManage onSegment={vi.fn()} onView={vi.fn()} onStep={vi.fn()}
-          onNavigate={vi.fn()} onAssign={vi.fn()} onChangePlan={vi.fn()} onCheckMyself={vi.fn()} onChanged={vi.fn()} onClose={() => setPanel(false)}
+          onNavigate={vi.fn()} onAssign={vi.fn()} onChangePlan={vi.fn()} onChanged={vi.fn()} onClose={() => setPanel(false)}
           reportRoute={reportId => ({ name: "projectProblemReport", key: "p", reportId })} />}
       </>;
     }

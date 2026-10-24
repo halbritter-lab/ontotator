@@ -307,6 +307,12 @@ export interface RowHeaderCellProps {
   badge?: ReactNode;
   /** The text name opens the text card; without it the name is plain text. */
   onOpenCard?: (opener: HTMLElement) => void;
+  /** Flat table: the case ID shows before the language (muted); otherwise it is only in the accessible name. */
+  showCaseId?: boolean;
+  /** Texts of the case the table does not show (not in plan): a "+n" marker, information only. */
+  more?: number;
+  /** Another text of the case is open in the card (the row's tint has this as its words). */
+  sibling?: boolean;
 }
 
 /**
@@ -314,10 +320,11 @@ export interface RowHeaderCellProps {
  * the text card, "Open text card, case-107 de"), "source", version marker, NEW and the visit badge;
  * decision rows add the hidden "Needs your decision". No "Open" link: the row opens the card.
  */
-export function RowHeaderCell({ row, badge, onOpenCard }: RowHeaderCellProps): JSX.Element {
+export function RowHeaderCell({ row, badge, onOpenCard, showCaseId = false, more = 0, sibling = false }: RowHeaderCellProps): JSX.Element {
   const active = isActiveRow(row);
   const nameId = documentsRowId(row.case_id, row.language, "header");
-  const nameContent = <><span className="visually-hidden">{`${row.case_id} `}</span><span className="documents-language"><LanguageFlag code={row.language} />{row.language}</span></>;
+  const caseId = showCaseId ? <><span className="documents-row-case"><ShortId value={row.case_id} /></span>{" "}</> : <span className="visually-hidden">{`${row.case_id} `}</span>;
+  const nameContent = <>{caseId}<span className="documents-language"><LanguageFlag code={row.language} />{row.language}</span></>;
   return (
     <span className="documents-row-header documents-text-cell">
       {onOpenCard
@@ -326,6 +333,9 @@ export function RowHeaderCell({ row, badge, onOpenCard }: RowHeaderCellProps): J
         : <span id={nameId} tabIndex={-1} className="documents-text-name">{nameContent}</span>}
       {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
       {row.is_source && <span className="documents-source">source</span>}
+      {more > 0 && <span className="documents-more"><span aria-hidden="true">{`+${more}`}</span>
+        <span className="visually-hidden">{`${more} more ${more === 1 ? "text" : "texts"} of this case not in plan`}</span></span>}
+      {sibling && <span className="visually-hidden">Same case as the open text</span>}
       <VersionMarker row={row} />
       {active && rowIsNew(row) && <NewBadge />}
       {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
@@ -354,18 +364,30 @@ const STATE_OF: Readonly<Record<StageName, (row: DocumentRowView) => { state: st
   final: row => finalizationState(row, new Date()),
 };
 
+/** Who works on the stage, in grey after the state: reviewers of a running review, annotators at work. */
+function stagePeople(row: DocumentRowView, stage: StageName): string {
+  const cell = row.stages?.[stage];
+  const working = stage === "review" ? ["in_progress", "re_review"] : stage === "annotation" ? ["in_progress", "paused"] : [];
+  return cell && working.includes(cell.state) ? (cell.detail.people ?? []).map(shortName).join(", ") : "";
+}
+
+/** The state a stage cell shows (also its sort value); texts outside the plan: "not in plan" and no finalization (D10). */
+export function stageCellText(row: DocumentRowView, stage: StageName): string {
+  if (!isActiveRow(row) && stage !== "review") return stage === "annotation" ? "not in plan" : "—";
+  // The card's "in review (Ana Weber)" becomes "in review" plus the grey who.
+  return stage === "review" && stagePeople(row, stage) ? "in review" : STATE_OF[stage](row).state;
+}
+
 /**
  * One stage cell of the row on one line: glyph, the card's short state and a short "who" in grey, cut with an
  * ellipsis; `title` holds the full text. Rows outside the plan are muted (VD1). The Annotation cell adds the robot icon.
  */
 export function RowStageCell({ row, stage }: { row: DocumentRowView; stage: StageName }): JSX.Element {
   const cell = row.stages?.[stage];
-  const symbol = cell ? stageText(stage, cell, row).symbol : "";
-  // Who works on the stage, in grey after the state: reviewers of a running review, annotators at work.
-  const working = stage === "review" ? ["in_progress", "re_review"] : stage === "annotation" ? ["in_progress", "paused"] : [];
-  const people = cell && working.includes(cell.state) ? (cell.detail.people ?? []).map(shortName).join(", ") : "";
-  // The card's "in review (Ana Weber)" becomes "in review" plus the grey who.
-  const state = stage === "review" && people ? "in review" : STATE_OF[stage](row).state;
+  const outside = !isActiveRow(row) && stage !== "review";
+  const symbol = cell && !outside ? stageText(stage, cell, row).symbol : "";
+  const people = stagePeople(row, stage);
+  const state = stageCellText(row, stage);
   // X5: findings flagged "guidelines unclear" in the submitted consolidation.
   const flagged = stage === "final" && (row.flagged_unclear ?? 0) > 0 ? `${row.flagged_unclear} flagged` : "";
   const who = [people, flagged].filter(Boolean).join(", ");

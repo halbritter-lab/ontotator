@@ -22,6 +22,14 @@ export interface RowActionCellProps {
   onAddToPlan?: (row: DocumentRowView) => void;
 }
 
+/** The label of the row's one button, as the Next step column shows it (its sort value). */
+export function rowActionText(row: DocumentRowView): string {
+  if (row.own_open_assignment_id != null) return "Open my task";
+  if (!(row.in_plan || isUndecided(row))) return "Add to plan…";
+  const first = leadSteps(row)[0];
+  return first ? rowActionLabel(first, row) : "";
+}
+
 export function RowActionCell({ row, onAction, block = false, onNavigate, onAddToPlan }: RowActionCellProps): JSX.Element | null {
   const name = rowName(row);
   const className = ["documents-actions", block && "documents-actions--block"].filter(Boolean).join(" ");

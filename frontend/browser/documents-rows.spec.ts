@@ -20,14 +20,15 @@ async function rowsPage(page: Page): Promise<LeadScenario> {
   return s;
 }
 
-test("one line per text, about 16 rows at 1280×900", async ({ page }) => {
+test("one line per text, at least 13 rows at 1280×900", async ({ page }) => {
   await rowsPage(page);
   const rows = await documentsTable(page).locator("tbody tr").evaluateAll(elements => elements.map(element => {
     const box = element.getBoundingClientRect();
     return { top: box.top, bottom: box.bottom, height: box.height, view: window.innerHeight };
   }));
   const visible = rows.filter(row => row.top >= 0 && row.bottom <= row.view);
-  expect(visible.length).toBeGreaterThanOrEqual(15);
+  // M1 flat list: only 40 px text rows (no 28 px case lines any more), below the tabs, toolbar and selection tools.
+  expect(visible.length).toBeGreaterThanOrEqual(13);
   for (const row of rows) expect(row.height).toBeLessThanOrEqual(44);
 });
 

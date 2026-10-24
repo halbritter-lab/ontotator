@@ -24,7 +24,7 @@ import type { TextVersionsTools } from "../TextVersions";
 import { useRowSubmissions } from "../useRowSubmissions";
 import { AnnotationPart } from "./AnnotationPart";
 import { CardFooter, TextDetails } from "./CardFooter";
-import { cardSegments, defaultSegment, type CardView, type SegmentId } from "./cardModel";
+import { cardSegments, defaultSegment, textViewRoute, type CardView, type SegmentId } from "./cardModel";
 import { FinalizationPart } from "./FinalizationPart";
 import { TranslationPart } from "./TranslationPart";
 import "./textCard.css";
@@ -50,7 +50,8 @@ export interface TextCardProps {
   onAssign: (row: DocumentRowView, task: "translation_review" | "annotate") => void;
   onRequestCorrection?: (row: DocumentRowView) => void;
   onChangePlan: (row: DocumentRowView) => void;
-  onCheckMyself: (row: DocumentRowView) => Promise<void>;
+  /** Switches the card to another text of the case (the "Other languages" list). */
+  onOpenText?: (row: DocumentRowView) => void;
   /** Reload rows after remove. */
   onChanged: () => void;
   /** The existing DecisionBlock (Compare/Consolidate/Accept result). */
@@ -62,8 +63,6 @@ export interface TextCardProps {
   now?: Date;
   /** Route of a problem report (banner, History, Text details). */
   reportRoute: (reportId: string) => Route;
-  /** The page's `adjudicator_not_annotator` (hint under "Annotate from proposals myself"). */
-  adjudicatorNotAnnotator?: boolean;
   /** Source language of the case ("machine translation from English"). */
   sourceLanguage?: string | null;
   /** The row's plan chips (Text details). */
@@ -88,6 +87,24 @@ function versionWarning(row: DocumentRowView): string | null {
   const newest = Math.max(...row.versions.map(version => version.version));
   const older = row.work.some(item => item.task === "annotate" && item.version < newest);
   return `v${newest}${older ? ", newer than the annotations" : ""}`;
+}
+
+/** The case's other texts on this page: each switches the card; texts outside the plan say so and offer "Add to plan…". */
+function OtherLanguages({ row, rows, canManage, onOpenText, onChangePlan }: Pick<TextCardProps, "row" | "rows" | "canManage" | "onChangePlan"> & { onOpenText: (row: DocumentRowView) => void }): JSX.Element | null {
+  const others = rows.filter(entry => entry.case_id === row.case_id && entry.language !== row.language);
+  if (!others.length) return null;
+  return <div className="text-card-languages">
+    <span id="text-card-languages-label" className="text-card-plan-label">Other languages</span>
+    <ul className="text-card-language-list" aria-labelledby="text-card-languages-label">
+      {others.map(entry => <li key={entry.language} className="text-card-language">
+        <Button size="sm" aria-label={`Show ${entry.case_id} ${entry.language}`} onClick={() => onOpenText(entry)}>
+          <LanguageTag code={entry.language} />{entry.is_source && <span className="text-card-muted">source</span>}
+        </Button>
+        {!isActiveRow(entry) && <><span className="text-card-muted">not in plan</span>
+          {canManage && <Button size="sm" aria-label={`Add to plan…, ${entry.case_id} ${entry.language}`} onClick={() => onChangePlan(entry)}>Add to plan…</Button>}</>}
+      </li>)}
+    </ul>
+  </div>;
 }
 
 /** Banners above the path: open problem reports and findings flagged "guidelines unclear" (X5). */
@@ -143,6 +160,10 @@ export function TextCard(props: TextCardProps): JSX.Element {
   const heading = <span className="text-card-heading">
     {row.case_id} <LanguageTag code={row.language} />{warning && <>{" "}<span className="text-card-version">{warning}</span></>}
   </span>;
+  // "Open text": the text view, with the proposals layer shown when the text has tool proposals.
+  const proposals = row.proposal_count ?? row.annotation_mode?.proposal_count ?? 0;
+  const openText = <RouteLink route={textViewRoute(projectKey, row.case_id, row.open.document_id, query, proposals > 0 ? { show: "proposals" } : {})} onNavigate={onNavigate}
+    className="btn btn-secondary btn-sm text-card-open-text" aria-label={`Open text, ${row.case_id} ${row.language}`}>Open text</RouteLink>;
   const back = <Button size="sm" onClick={() => onView("path")}>Back</Button>;
 
   let body: ReactNode;
@@ -161,6 +182,7 @@ export function TextCard(props: TextCardProps): JSX.Element {
     // block's "saved, next" message survives its automatic move to the next row.
     body = <>
       <Banners {...props} />
+      {props.onOpenText && <OtherLanguages row={row} rows={props.rows} canManage={canManage} onOpenText={props.onOpenText} onChangePlan={props.onChangePlan} />}
       {props.steps && <div className="text-card-actions">{props.steps}</div>}
       <StagePath segments={segments} current={segment} onSelect={id => onSegment(id as SegmentId)} />
       {!isActiveRow(row) && <div className="text-card-not-planned">
@@ -171,16 +193,18 @@ export function TextCard(props: TextCardProps): JSX.Element {
         onAssign={props.onAssign} onRequestCorrection={props.onRequestCorrection} onNavigate={onNavigate} onChanged={props.onChanged} textVersionTools={props.textVersionTools} now={now}
         planControl={plannable ? props.planControl?.("review") : undefined} />{props.stageActions && <div className="text-card-actions">{props.stageActions("review")}</div>}</>}
       {segment === "annotation" && <><AnnotationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} submissions={list} canManage={canManage}
-        adjudicatorNotAnnotator={props.adjudicatorNotAnnotator} onAssign={props.onAssign} onCheckMyself={props.onCheckMyself} onNavigate={onNavigate} onChanged={props.onChanged} now={now}
+        onAssign={props.onAssign} onNavigate={onNavigate} onChanged={props.onChanged} onHistory={() => onView("history")} tools={props.textVersionTools} now={now}
         planControl={plannable ? props.planControl?.("annotation") : undefined} />{props.stageActions && <div className="text-card-actions">{props.stageActions("annotation")}</div>}</>}
       {segment === "finalization" && <><FinalizationPart row={row} projectKey={projectKey} query={query} decision={props.decision} onNavigate={onNavigate} now={now} />{props.stageActions && <div className="text-card-actions">{props.stageActions("final")}</div>}</>}
     </>;
   }
 
-  body = <>{props.notice}{body}</>;
+  // The sheet's header has room for ‹ › only: "Open text" leads the body there.
+  body = <>{props.notice}{sheet && <div className="text-card-actions">{openText}</div>}{body}</>;
   return <Dialog open title={`${row.case_id} ${row.language}`} heading={heading} variant="center" size="lg" closeOnBackdrop onClose={onClose} returnFocus={props.returnFocus}
     className={sheet ? "text-card text-card--sheet" : "text-card"}>
     <div ref={nav} className="text-card-nav">
+      {!sheet && openText}
       <IconButton label="Previous text" icon={<IconChevronLeft />} variant="quiet" size="sm" aria-keyshortcuts="K" onClick={() => onStep(-1)} />
       <IconButton label="Next text" icon={<IconChevronRight />} variant="quiet" size="sm" aria-keyshortcuts="J" onClick={() => onStep(1)} />
     </div>

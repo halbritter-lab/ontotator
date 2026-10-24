@@ -41,13 +41,14 @@ async function openRows(page: Page): Promise<LeadScenario> {
   // The landing opens "Needs your decision" (VD7); these checks use every row (All).
   await documentsTab(page, "All").click();
   await expect(documentsTab(page, "All")).toHaveAttribute("aria-selected", "true");
-  await expect(caseBox(page, "case-0101")).toBeVisible();
+  await expect(rowBox(page, "case-0101", "de")).toBeVisible();
   return s;
 }
 
 const bar = (page: Page) => page.getByRole("region", { name: "Selection", exact: true });
 const toast = (page: Page) => page.locator(".ui-toast");
 const live = (page: Page) => page.locator(".documents-page > p[role=\"status\"]");
+/** The narrow case card's checkbox (cards keep their case header; the table has none). */
 const caseBox = (page: Page, caseId: string) => page.getByRole("checkbox", { name: `Select ${caseId} (3 texts)`, exact: true });
 const chip = (page: Page, flag: "Translation review" | "Annotate", caseId: string, language: string) =>
   page.getByRole("button", { name: textNamePattern(`${flag}, `, caseId, language) });
@@ -83,7 +84,7 @@ async function showPlanLine(page: Page, caseId: string, language: string) {
     else await textName(page, caseId, language).click();
   }
   await expect(target).toBeVisible();
-  const details = target.getByRole("button", { name: "Text details", exact: true });
+  const details = target.getByRole("button", { name: "Details", exact: true });
   if (await details.count()) await details.click();
   await expect(target.getByRole("group", { name: "Plan", exact: true })).toBeVisible();
 }
@@ -119,19 +120,14 @@ function overlap(a: { x: number; y: number; width: number; height: number }, b: 
 
 test("keyboard-only range selection", async ({ page }) => {
   await openRows(page);
-  // From "Select by case IDs…", Tab passes the sortable headers (VD10) and reaches the first case checkbox,
-  // then the first row checkbox (VD4).
+  // From "Select by case IDs…", Tab passes the sortable headers (VD10) and reaches the first row checkbox (VD4);
+  // the not-planned en source is no row (M1 flat list).
   await page.getByRole("button", { name: "Select by case IDs…", exact: true }).focus();
   const table = page.getByRole("table", { name: "Documents", exact: true });
-  await page.keyboard.press("Tab");
-  await expect(table.getByRole("columnheader", { name: "Text" }).getByRole("button")).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(table.getByRole("columnheader", { name: "Last activity" }).getByRole("button")).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(caseBox(page, "case-0101")).toBeFocused();
-  // The not-planned en source is folded into the case line (U4): its button, then the first row (de).
-  await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: /^source en \(native\)/ }).first()).toBeFocused();
+  for (const header of ["Text", "Translation", "Annotation", "Finalization", "Waiting on", "Next step", "Last activity"]) {
+    await page.keyboard.press("Tab");
+    await expect(table.getByRole("columnheader", { name: header }).getByRole("button"), header).toBeFocused();
+  }
   await page.keyboard.press("Tab");
   await expect(rowBox(page, "case-0101", "de")).toBeFocused();
   await page.keyboard.press("Space");
@@ -162,8 +158,9 @@ test("keyboard-only range selection", async ({ page }) => {
 
 test("axe has no violations on Documents with selection bar, plan dialog, assign dialog, Progress", async ({ page }) => {
   const s = await openRows(page);
-  await caseBox(page, "case-0101").check();
-  await expect(bar(page).getByText("3 texts in 1 case selected", { exact: true })).toBeVisible();
+  await rowBox(page, "case-0101", "de").check();
+  await rowBox(page, "case-0101", "fr").check();
+  await expect(bar(page).getByText("2 texts in 1 case selected", { exact: true })).toBeVisible();
   expect(await axeViolations(page, "main"), "Documents with selection bar").toEqual([]);
 
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();

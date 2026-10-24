@@ -51,7 +51,7 @@ export function TranslationPart({ row, projectKey, query, sourceLanguage, canMan
     <p>{origin}</p>
     {check && <p className="text-card-muted">{check}</p>}
     {reviewers.length > 0 && <div className="text-card-chips">
-      {reviewers.map(item => <AssignmentChip key={item.assignment_id} item={item} caseId={row.case_id} canRemove={false} onChanged={onChanged} now={now} />)}
+      {reviewers.map(item => <AssignmentChip key={item.assignment_id} item={item} caseId={row.case_id} onChanged={onChanged} now={now} />)}
     </div>}
     <div className="text-card-actions">
       {canManage && !native && <Button size="sm" onClick={() => onAssign(row, "translation_review")}>Assign reviewer…</Button>}

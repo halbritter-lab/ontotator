@@ -8,6 +8,8 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { ApiError, type ConsequencesView, type DocumentRowView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Checkbox, Dialog, InlineMessage, Textarea } from "../ui";
+import { IconCheck } from "../ui/icons";
+import { shortName } from "./stageLabels";
 import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, PLAN_CHANGED_MESSAGE, WITHDRAW_CHECKBOX, type PlanSaves } from "./PlanChips";
 
 export type PlanMode = "proposals" | "scratch";
@@ -193,11 +195,19 @@ export function TextPlanDialog({ row, groupRevision, saves, onClose }: TextPlanD
 /** Select options of the card's plan controls. */
 const CARD_ANNOTATION_OPTIONS = { proposals: "From proposals", scratch: "From scratch", off: "Off" } as const;
 
+/** What the current choice of a card plan control means (the line under it). */
+export function cardChoiceLine(step: "review" | "annotation", choice: string, count: number): string {
+  if (step === "review") return choice === "on" ? "A person reviews the translation before annotation." : "The translation is annotated as it is.";
+  if (choice === "off") return "This text is not annotated.";
+  if (choice === "proposals") return `Annotators start from the ${count === 1 ? "1 tool proposal" : `${count} tool proposals`} and confirm, reject or correct them.`;
+  return count > 0 ? "Annotators start from the plain text and do not see the proposals." : "No tool proposals for this text, so annotation starts from scratch.";
+}
+
 /**
- * One step of the plan in the text card's section header (mockup variant A): "Review" On / Off, or the annotation
- * From proposals / From scratch / Off. A change saves at once through the plan save of `TextPlanDialog`; the saved
- * state or the refusal shows inline. "From proposals" is only offered with tool proposals; a locked mode keeps the
- * select focusable (`aria-disabled`) with the lock reason.
+ * One step of the plan in the text card (M1 card mockup v3): a segmented control with every choice ("Review: On | Off",
+ * "From proposals | From scratch | Off"), radio semantics with arrow keys; the current choice is filled and ticked,
+ * another saves at once through the plan save of `TextPlanDialog`, one line below says what the choice means. A locked
+ * mode or a missing proposal set keeps the choices focusable (`aria-disabled`) and says why.
  */
 export function CardPlanSelect({ row, step, groupRevision, saves }: {
   row: DocumentRowView;
@@ -214,7 +224,8 @@ export function CardPlanSelect({ row, step, groupRevision, saves }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setChosen(previous => (saved ? null : previous)); }, [row]);
   const textMode = row.annotation_mode ?? null;
-  const count = textMode?.proposal_count ?? row.proposal_count ?? 0;
+  // "no_proposals": the text's current version has none (counts may come from other versions).
+  const count = textMode?.source === "no_proposals" ? 0 : textMode?.proposal_count ?? row.proposal_count ?? 0;
   const follows = row.plan_row?.annotation_mode == null;
   // The choice stands while it saves, waits for a confirmation or awaits the refetch; after a plain error the saved plan shows.
   const value = chosen && (plan.saving || plan.needsMore || saved) ? chosen : current;
@@ -223,6 +234,13 @@ export function CardPlanSelect({ row, step, groupRevision, saves }: {
   if (step === "review" && !(row.plan_row?.review_applicable ?? !row.is_source)) return null;
 
   const selected = step === "review" ? (value.review ? "on" : "off") : value.annotate ? shownMode : "off";
+  const starter = row.work.find(item => item.task === "annotate" && item.moved_to_version == null);
+  const lockLine = locked ? `Fixed: ${starter ? (starter.person ? shortName(starter.person) : starter.author_label) : "an annotator"} has started ${textMode?.mode === "scratch" ? "from scratch" : "from proposals"}. Remove all unsubmitted work to change it.` : null;
+  const choices = step === "review"
+    ? [{ value: "on", label: "On" }, { value: "off", label: "Off" }]
+    : [{ value: "proposals", label: CARD_ANNOTATION_OPTIONS.proposals }, { value: "scratch", label: CARD_ANNOTATION_OPTIONS.scratch }, { value: "off", label: CARD_ANNOTATION_OPTIONS.off }];
+  const reasonOf = (choice: string): string | null => locked ? lockLine
+    : step === "annotation" && choice === "proposals" && count === 0 && selected !== "proposals" ? NO_PROPOSALS_REASON : null;
   const nextOf = (choice: string): PlanStepsValue => {
     if (step === "review") return { ...value, review: choice === "on" };
     if (choice === "off") return { ...value, annotate: false };
@@ -235,32 +253,36 @@ export function CardPlanSelect({ row, step, groupRevision, saves }: {
     if (await plan.save(next, current)) setSaved(true);
   };
   const choose = (choice: string) => {
-    if (locked || plan.saving) return;
+    if (reasonOf(choice) || plan.saving || choice === selected) return;
     const next = nextOf(choice);
     plan.reset();
     setChosen(next);
     void run(next);
   };
   const cancel = () => { plan.reset(); setChosen(null); setSaved(false); };
-  const describedBy = [locked && `${id}-lock`, plan.pending && `${id}-pending`].filter(Boolean).join(" ") || undefined;
+  const lineId = `${id}-line`;
+  const title = step === "review" ? "Review" : "Annotation plan";
 
   return <div className="text-card-plan-control">
     <span className="text-card-plan-line">
-      <label htmlFor={`${id}-select`} className={step === "review" ? "text-card-plan-label" : "visually-hidden"}>{step === "review" ? "Review" : "Annotation plan"}</label>
-      <select id={`${id}-select`} className="form-select text-card-plan-select" value={selected}
-        aria-disabled={locked ? "true" : undefined} aria-describedby={describedBy} aria-busy={plan.saving || undefined}
-        onChange={event => choose(event.target.value)}>
-        {step === "review"
-          ? <><option value="on">On</option><option value="off">Off</option></>
-          : <>
-            {(count > 0 || shownMode === "proposals") && <option value="proposals">{CARD_ANNOTATION_OPTIONS.proposals}</option>}
-            <option value="scratch">{CARD_ANNOTATION_OPTIONS.scratch}</option>
-            <option value="off">{CARD_ANNOTATION_OPTIONS.off}</option>
-          </>}
-      </select>
+      {step === "review" && <span id={`${id}-label`} className="text-card-plan-label" aria-hidden="true">Review</span>}
+      <span role="radiogroup" aria-label={title} aria-describedby={lineId} aria-busy={plan.saving || undefined} className="segmented">
+        {choices.map(choice => {
+          const checked = selected === choice.value;
+          const reason = reasonOf(choice.value);
+          return <label key={choice.value} className="segment" data-checked={checked || undefined} data-unavailable={reason ? true : undefined}>
+            <input type="radio" name={`${id}-choice`} value={choice.value} checked={checked}
+              aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? lineId : undefined}
+              onClick={event => { if (reason) event.preventDefault(); }}
+              onChange={() => choose(choice.value)} />
+            {checked && <IconCheck className="segment-check" />}{choice.label}
+          </label>;
+        })}
+      </span>
       <span className="text-card-muted" role="status">{plan.saving ? "Saving…" : saved && !plan.open ? "Saved" : ""}</span>
     </span>
-    {locked && <p id={`${id}-lock`} className="text-card-muted">{LOCK_REASON}</p>}
+    <p id={lineId} className="text-card-muted text-card-plan-help">{lockLine ?? cardChoiceLine(step, selected, count)}
+      {!lockLine && step === "annotation" && count === 0 && selected !== "proposals" && selected !== "scratch" ? ` ${NO_PROPOSALS_REASON}` : ""}</p>
     {plan.open && <div className="text-card-plan-refusal">
       {plan.extras}
       {plan.needsMore && <div className="text-card-actions">

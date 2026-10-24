@@ -189,7 +189,7 @@ test("close while paused: Documents shows the orphaned pause, Resume task releas
   await expect(expanded.getByRole("link", { name: "Resume task" })).toHaveCount(0);
   // The closed report: no banner, listed under Text details.
   await expect(expanded.locator(".text-card-banner")).toHaveCount(0);
-  await expanded.getByRole("button", { name: "Text details", exact: true }).click();
+  await expanded.getByRole("button", { name: "Details", exact: true }).click();
   const reports = expanded.locator("section").filter({ has: page.getByRole("heading", { name: "Problem reports (1)" }) });
   const listed = reports.getByRole("listitem");
   await expect(listed).toHaveCount(1);

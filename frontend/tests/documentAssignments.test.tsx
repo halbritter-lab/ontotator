@@ -61,7 +61,8 @@ it("assigns the selected cases from the selection bar and refreshes rows and inv
   render(<DocumentsPage projectKey="p/key" canManage query={{ language: "en" }} onNavigate={vi.fn()} />);
   await screen.findByRole("button", { name: "Open text card, z/doc en" });
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (2 texts)" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc en" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc de" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
   expect(api.selectionSummary).toHaveBeenCalledWith("p/key", ["z/doc"], { language: "en" });
@@ -92,7 +93,8 @@ it("closes an open assign dialog on project change and ignores its pending mutat
   const pending = deferred<Awaited<ReturnType<typeof api.commitAssignmentBatch>>>(); vi.mocked(api.commitAssignmentBatch).mockReturnValue(pending.promise);
   const view = render(<DocumentsPage projectKey="p/key" canManage query={{}} onNavigate={vi.fn()} />);
   await screen.findByRole("button", { name: "Open text card, z/doc en" });
-  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc (2 texts)" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc en" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc de" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
   fireEvent.click(await within(dialog).findByRole("radio", { name: /Alice/ }));

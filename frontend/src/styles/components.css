@@ -1003,6 +1003,8 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
   white-space: nowrap;
   cursor: pointer;
 }
+/* An item's one line on what it does: under the label, muted, wraps within 22rem. */
+.ui-menu-item-description { display: block; max-width: 22rem; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); white-space: normal; }
 .ui-menu-item:hover,
 .ui-menu-item:focus-visible { background: var(--accent-light); }
 .ui-menu-item:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }

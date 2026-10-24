@@ -1,84 +1,73 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { DocumentRowView, RowSubmissionView } from "../../api/client";
-import { errorMessage } from "../../admin/errors";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
 import { annotationTaskName } from "../../editor/modes";
 import { Button } from "../../ui/Button";
-import { InlineMessage } from "../../ui/InlineMessage";
-import { RouteLink } from "../RowCells";
+import type { TextVersionsTools } from "../TextVersions";
 import { AssignmentChip } from "./AssignmentChip";
 import { textViewRoute } from "./cardModel";
 
 const NO_PROPOSALS = "This text has no tool proposals, so it is annotated from scratch.";
-const MYSELF_HINT = "You will then not be able to consolidate this text yourself (project rule).";
 
-/** Annotation part of the text card: mode, tool proposals, one chip per person, + Person, Annotate from proposals myself. */
-export function AnnotationPart({ row, projectKey, query, submissions, canManage, adjudicatorNotAnnotator = false, onAssign, onCheckMyself, onNavigate, onChanged, now, planControl }: {
+/**
+ * Annotation part of the text card (M1 card mockups v1, v3): the plan control in the header (planned texts), how many
+ * annotators the text has of its limit, one chip per person (the lead's chips are menus: Reassign, Remove, Assign
+ * another person) and one "Assign annotators…" that opens the assign dialog (the lead can pick themselves there).
+ */
+export function AnnotationPart({ row, projectKey, query, submissions, canManage, onAssign, onNavigate, onChanged, onHistory, tools, now, planControl }: {
   row: DocumentRowView;
   projectKey: string;
   query: ProjectDocumentsQuery;
   /** The row's submissions (the name of a submitted person links to their layer); null while loading. */
   submissions: readonly RowSubmissionView[] | null;
   canManage: boolean;
-  /** Project rule "The consolidator of a text may not be one of its annotators". */
-  adjudicatorNotAnnotator?: boolean;
   onAssign: (row: DocumentRowView, task: "annotate") => void;
-  onCheckMyself: (row: DocumentRowView) => Promise<void>;
   onNavigate: (route: Route) => void;
   onChanged: () => void;
+  /** Opens the card's History (submitted chips). */
+  onHistory?: () => void;
+  /** Assignments and members for the chips' Reassign. */
+  tools?: TextVersionsTools;
   now?: Date;
-  /** The annotation mode select in the header (planned texts). */
+  /** The annotation plan control in the header (planned texts). */
   planControl?: ReactNode;
 }): JSX.Element {
   const id = useId();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // After a removal the chip goes away; focus "+ Person" once the confirm dialog has returned focus (effects run after it).
-  const addButton = useRef<HTMLButtonElement>(null);
+  // After a removal the chip goes away; focus "Assign annotators…" once the confirm dialog has returned focus (effects run after it).
+  const assignButton = useRef<HTMLButtonElement>(null);
   const [removed, setRemoved] = useState(0);
-  useEffect(() => { if (removed) addButton.current?.focus(); }, [removed]);
+  useEffect(() => { if (removed) assignButton.current?.focus(); }, [removed]);
   const mode = row.annotation_mode ?? null;
-  const proposals = row.proposal_count ?? mode?.proposal_count ?? 0;
   const people = row.work.filter(item => item.task === "annotate" && item.moved_to_version == null);
   const detail = row.stages?.annotation.detail;
   const target = detail?.target ?? 0;
-  const full = target > 0 && (detail?.assigned ?? 0) >= target;
-  const myself = canManage && mode?.mode === "proposals" && !people.some(item => item.is_me);
+  const assigned = detail?.assigned ?? people.length;
+  const full = target > 0 && assigned >= target;
   const layerOf = (authorLabel: string, documentId: string) => submissions?.find(item => item.kind === "annotation" && item.author_label === authorLabel && item.document_id === documentId);
-
-  const checkMyself = async () => {
-    setBusy(true);
-    setError(null);
-    try { await onCheckMyself(row); } catch (failure) { setError(errorMessage(failure)); } finally { setBusy(false); }
-  };
+  const annotating = row.stages?.annotation.state !== "not_planned";
+  const status = target > 0 ? (assigned === 0 ? `Nobody assigned yet (limit ${target} per text).` : `${assigned} of ${target} annotators assigned.`) : null;
+  const assignAnother = canManage && !full ? () => onAssign(row, "annotate") : undefined;
 
   return <section className="text-card-part" aria-labelledby={`${id}-title`}>
     <div className="text-card-part-head">
       <h3 id={`${id}-title`} className="text-card-part-title">Annotation</h3>
       {planControl}
     </div>
-    {mode && <p>{annotationTaskName(mode.mode)}</p>}
-    {mode?.source === "no_proposals" && <p className="text-card-muted">{NO_PROPOSALS}</p>}
-    {proposals > 0 && <p>
-      <span>{`${proposals} tool proposals`}</span>{" "}
-      <RouteLink route={textViewRoute(projectKey, row.case_id, row.open.document_id, query, { show: "proposals" })} onNavigate={onNavigate}>View proposals</RouteLink>
-    </p>}
-    <div className="text-card-chips">
+    {/* Without the plan control (texts outside the plan, annotators) the mode is a line of its own. */}
+    {!planControl && mode && <p>{annotationTaskName(mode.mode)}</p>}
+    {!planControl && mode?.source === "no_proposals" && <p className="text-card-muted">{NO_PROPOSALS}</p>}
+    {annotating && status && <p id={`${id}-status`}>{status}</p>}
+    {people.length > 0 && <div className="text-card-chips">
       {people.map(item => {
         const layer = item.status === "submitted" ? layerOf(item.author_label, item.document_id) : undefined;
-        return <AssignmentChip key={item.assignment_id} item={item} caseId={row.case_id} canRemove={canManage} onChanged={() => { onChanged(); setRemoved(count => count + 1); }} now={now} onNavigate={onNavigate}
+        return <AssignmentChip key={item.assignment_id} item={item} caseId={row.case_id} onChanged={() => { onChanged(); setRemoved(count => count + 1); }} now={now} onNavigate={onNavigate}
+          menu={canManage ? { tools, mode: mode?.mode, onAssignAnother: assignAnother, onHistory } : undefined}
           link={layer ? textViewRoute(projectKey, row.case_id, item.document_id, query, { show: `submission:${layer.submission_id}` }) : undefined} />;
       })}
-      {canManage && <>
-        <Button ref={addButton} size="sm" aria-disabled={full ? "true" : undefined} aria-describedby={full ? `${id}-full` : undefined}
-          onClick={() => { if (!full) onAssign(row, "annotate"); }}>+ Person</Button>
-        {full && <span id={`${id}-full`} className="text-card-muted">{`${target} of ${target} assigned`}</span>}
-      </>}
-    </div>
-    {myself && <div className="text-card-myself">
-      <Button size="sm" loading={busy} aria-describedby={adjudicatorNotAnnotator ? `${id}-hint` : undefined} onClick={() => { void checkMyself(); }}>Annotate from proposals myself</Button>
-      {adjudicatorNotAnnotator && <p id={`${id}-hint`} className="text-card-muted">{MYSELF_HINT}</p>}
     </div>}
-    {error && <InlineMessage tone="error">{error}</InlineMessage>}
+    {canManage && annotating && <div className="text-card-actions">
+      <Button ref={assignButton} size="sm" variant="primary" aria-disabled={full ? "true" : undefined} aria-describedby={full ? `${id}-status` : undefined}
+        onClick={() => { if (!full) onAssign(row, "annotate"); }}>Assign annotators…</Button>
+    </div>}
   </section>;
 }

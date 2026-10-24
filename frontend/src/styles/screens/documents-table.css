@@ -48,25 +48,16 @@
 .documents-filter-order > legend { float: left; margin-inline-end: var(--space-2); padding: 0; color: var(--text-muted); }
 .documents-filter-order-option { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 24px; white-space: nowrap; cursor: pointer; }
 
-/* Group label row (VD5): one slim row per case, 28 px, sunken; no disclosure, no edge */
 .documents-table thead th { white-space: nowrap; }
-.documents-table .documents-group > td,
-.documents-table .documents-group > th { height: 28px; padding-block: 0; background: var(--surface-sunken); font-weight: var(--weight-regular); }
-.documents-group-label { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-1); }
-.documents-group-label:focus { outline: none; }
-.documents-group-label:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
-.documents-group-label .documents-id { font-weight: var(--weight-strong); }
-/* The case line is a heading: case ID on the left, the "n not in plan" toggle (link style) on the right. */
-.documents-group-line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; }
-.documents-not-in-plan-toggle { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 24px; padding: 0; border: 0; background: transparent;
-  color: var(--accent); font: inherit; white-space: nowrap; cursor: pointer; }
-.documents-not-in-plan-toggle:hover { text-decoration: underline; }
-.documents-not-in-plan-toggle:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: var(--focus-offset); }
 
-/* Text rows (spec 2026-10-23 §2b): one line each, 40 px; the Text cell is indented 20 px with a thin rule at its left */
+/* Text rows (spec 2026-10-23 §2b, M1 flat list): one line each, 40 px; the Text cell leads with the muted case ID */
 .documents-table .documents-row > td,
 .documents-table .documents-row > th { height: 40px; padding-block: var(--space-1); white-space: nowrap; }
-.documents-table .documents-row > th[scope="row"] { padding-inline-start: 20px; box-shadow: inset 1px 0 var(--border); background: transparent; font-weight: var(--weight-regular); }
+/* :where keeps this below the active and sibling tints (same specificity, earlier). */
+.documents-table .documents-row > :where(th[scope="row"]) { background: transparent; font-weight: var(--weight-regular); }
+.documents-row-case { margin-inline-end: var(--space-2); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+/* "+n": texts of the case not shown (not in plan); information, not a control. */
+.documents-more { padding: 0 var(--space-1); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--size-xs); line-height: var(--leading-xs); white-space: nowrap; }
 .documents-row-header { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1) var(--space-3); font-weight: var(--weight-regular); }
 .documents-language { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: var(--weight-strong); }
 /* Row header name: a focus target of deep links and "Next decision"; in the table a button in plain
@@ -93,7 +84,10 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 .documents-status-who { color: var(--text-muted); }
 /* Below 900 px: narrower status cells and cell padding so the one-line row fits 768 px (after the base rules, which would win otherwise). */
 @media (max-width: 899px) {
-  .documents-status-cell { max-width: 9rem; }
+  /* The flat list's Text cell carries the case ID: the status cells give up the room (ellipsis, full text in title). */
+  .documents-status-cell { max-width: 6.5rem; }
+  .documents-row-header { column-gap: var(--space-1); }
+  .documents-row-case { margin-inline-end: var(--space-1); }
   .documents-table { --cell-pad-x: var(--space-2); }
 }
 /* Robot icon: the text has tool proposals and nobody is assigned yet; the accent of the editor's AI badge. */
@@ -105,13 +99,17 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
    (visible beside the panel, never colour alone) and its text name in strong weight; the first cell keeps
    the decision edge of decision rows; `aria-current` names it. Box shadows only: no layout shift. */
 .documents-table .documents-row--active > * { background: var(--accent-light); box-shadow: inset 0 2px var(--accent), inset 0 -2px var(--accent); }
-.documents-table .documents-row--active > th[scope="row"] { box-shadow: inset 1px 0 var(--border), inset 0 2px var(--accent), inset 0 -2px var(--accent); }
 .documents-table .documents-row--active.data-table-row--decision > :first-child { box-shadow: inset 3px 0 var(--warning), inset 0 2px var(--accent), inset 0 -2px var(--accent); }
 .documents-table .documents-row--active .documents-text-name { font-weight: var(--weight-strong); }
 /* The Final cell's second line "1 flagged" (X5). */
 .documents-stage-flagged { display: block; }
 /* Rows outside the plan (VD1): muted, the same structure */
 .documents-table .documents-row--not-in-plan > * { color: var(--text-muted); }
+.documents-table .documents-row--not-in-plan .documents-text-name { font-style: italic; }
+/* The other shown texts of the case open in the card: a light warm tint and a gold left edge (words: a hidden
+   "Same case as the open text" in the Text cell). */
+.documents-table .documents-row--sibling > * { background: var(--warning-light); }
+.documents-table .documents-row--sibling > :first-child { box-shadow: inset 3px 0 var(--warning); }
 
 /* Inline notices under a row: plan confirmations, Resolve options */
 .documents-plan-notice, .documents-resolve { max-width: 48rem; }
@@ -154,7 +152,6 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 @keyframes documents-skeleton-pulse { 50% { opacity: 0.5; } }
 
 @media (forced-colors: active) {
-  .documents-table .documents-row > th[scope="row"] { box-shadow: none; border-left: 1px solid CanvasText; }
   .documents-version-marker { border-color: CanvasText; }
   .documents-filter-active { forced-color-adjust: none; background: CanvasText; color: Canvas; }
   .documents-skeleton-bar { background: GrayText; }
@@ -162,6 +159,8 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
   /* An outline inside the row: forced colours drop box shadows, and a border would shift the cells. */
   .documents-table .documents-row--active > * { box-shadow: none; }
   .documents-table .documents-row--active { outline: 2px solid Highlight; outline-offset: -2px; }
+  .documents-table .documents-row--sibling > :first-child { box-shadow: none; }
+  .documents-table .documents-row--sibling { outline: 1px dashed CanvasText; outline-offset: -1px; }
 }
 
 /* Case selection tools above the table (L3b) */

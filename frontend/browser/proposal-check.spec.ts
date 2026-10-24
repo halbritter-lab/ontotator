@@ -25,15 +25,15 @@ async function switchTo(page: Page, s: ProposalCheckScenario, person: ProposalCh
   await loginScenarioUser(page, s, person);
 }
 
-/** "+ Person" in the card's Annotation part: choose ``name`` in the assign dialog and assign. */
+/** "Assign annotators…" in the card's Annotation part: choose ``name`` in the assign dialog and assign. */
 async function assignPerson(page: Page, card: Locator, name: string): Promise<void> {
   await showSegment(card, "Annotation");
-  await card.getByRole("button", { name: "+ Person", exact: true }).click();
+  await card.getByRole("button", { name: "Assign annotators…", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: /^Assign / });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("table", { name: "Members" }).getByLabel(new RegExp(`^${name}`)).check();
   const saved = page.waitForResponse(r => r.request().method() === "POST" && /\/assignments/.test(r.url()));
-  await dialog.getByRole("button", { name: /^Assign( \d+)?$/ }).click();
+  await dialog.getByRole("button", { name: /^Assign( \d+( person| people)?)?$/ }).click();
   expect((await saved).ok()).toBeTruthy();
   await expect(dialog).toHaveCount(0);
   await expect(card.getByText(name, { exact: false }).first()).toBeVisible();
@@ -107,9 +107,9 @@ test("the lead assigns two annotations from proposals, both work with J/K and 1�
   let card = textCard(page, CASE, "en");
   await expect(card).toBeVisible();
   await expect(cardSegment(card, "Annotation")).toHaveAttribute("aria-current", "step");
-  // The count is in the Annotation part, not in the path state.
-  await expect(card.getByText("3 tool proposals", { exact: true })).toBeVisible();
-  await expect(card.getByText("Annotation, from proposals", { exact: true })).toBeVisible();
+  // The count is in the Annotation part's plan control line, not in the path state.
+  await expect(card.getByText("Annotators start from the 3 tool proposals and confirm, reject or correct them.", { exact: true })).toBeVisible();
+  await expect(card.getByRole("radiogroup", { name: "Annotation plan" }).getByRole("radio", { name: "From proposals" })).toBeChecked();
   await assignPerson(page, card, s.display_names.tom);
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
@@ -171,7 +171,10 @@ test("an annotator working from scratch never sees proposals", async ({ page }) 
   await loginScenarioUser(page, s, "lead");
   await openDocuments(page, s);
   const card = await openTextCard(page, SCRATCH, "en");
-  await expect(card.getByText("Annotation, from scratch", { exact: true })).toBeVisible();
+  await showSegment(card, "Annotation");
+  // The plan overrides the mode: from scratch although the text has proposals.
+  await expect(card.getByRole("radio", { name: "From scratch" })).toBeChecked();
+  await expect(card.getByText("Annotators start from the plain text and do not see the proposals.", { exact: true })).toBeVisible();
   await assignPerson(page, card, s.display_names.ali);
 
   await switchTo(page, s, "ali");

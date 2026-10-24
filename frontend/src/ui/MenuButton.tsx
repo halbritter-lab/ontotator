@@ -5,6 +5,8 @@ export interface MenuItem {
   id: string;
   label: string;
   onSelect: () => void;
+  /** One line under the label on what the item does (the item's accessible description). */
+  description?: string;
 }
 export interface MenuButtonProps {
   /** Accessible name of the button and the menu, e.g. "2 more actions for case-107 de". */
@@ -14,6 +16,9 @@ export interface MenuButtonProps {
   buttonLabel: string;
   /** Icon before the text, e.g. `<IconMore />` for a "More" menu. */
   icon?: ReactNode;
+  /** Visible button content instead of `buttonLabel` (e.g. a person chip). */
+  content?: ReactNode;
+  className?: string;
 }
 
 /**
@@ -21,7 +26,7 @@ export interface MenuButtonProps {
  * arrows (wrapping), Home and End move; Enter, Space or click choose; Escape closes; focus returns to the button.
  * Tab and a pointer down outside close the menu without moving focus.
  */
-export function MenuButton({ label, items, buttonLabel, icon }: MenuButtonProps): JSX.Element {
+export function MenuButton({ label, items, buttonLabel, icon, content, className }: MenuButtonProps): JSX.Element {
   const [open, setOpen] = useState<null | "first" | "last">(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -82,11 +87,14 @@ export function MenuButton({ label, items, buttonLabel, icon }: MenuButtonProps)
   };
 
   return <span className="ui-menu-button">
-    <Button ref={button} size="sm" aria-label={label} aria-haspopup="menu" aria-expanded={open !== null} aria-controls={open ? menuId : undefined}
-      onClick={() => open ? setOpen(null) : setOpen("first")} onKeyDown={onButtonKeyDown}>{icon ? <>{icon}<span>{buttonLabel}</span></> : buttonLabel}</Button>
+    <Button ref={button} size="sm" className={className} aria-label={label} aria-haspopup="menu" aria-expanded={open !== null} aria-controls={open ? menuId : undefined}
+      onClick={() => open ? setOpen(null) : setOpen("first")} onKeyDown={onButtonKeyDown}>{content ?? (icon ? <>{icon}<span>{buttonLabel}</span></> : buttonLabel)}</Button>
     {open && <div ref={menu} id={menuId} role="menu" aria-label={label} className="ui-menu" onKeyDown={onMenuKeyDown}
       style={{ position: "fixed", top: `${position.top}px`, right: `${position.right}px` }}>
-      {items.map((item) => <button key={item.id} type="button" role="menuitem" tabIndex={-1} className="ui-menu-item" onClick={() => choose(item)}>{item.label}</button>)}
+      {items.map((item) => <button key={item.id} type="button" role="menuitem" tabIndex={-1} className="ui-menu-item" onClick={() => choose(item)}
+        aria-label={item.description ? item.label : undefined} aria-describedby={item.description ? `${menuId}-${item.id}` : undefined}>
+        {item.label}{item.description && <span id={`${menuId}-${item.id}`} className="ui-menu-item-description">{item.description}</span>}
+      </button>)}
     </div>}
   </span>;
 }

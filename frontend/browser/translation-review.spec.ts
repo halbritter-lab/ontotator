@@ -136,7 +136,7 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
     await expect(row).toContainText('Ready for review');
     // Work plan: the lead turns Translation review on in the text card's Text details (VD2), then assigns it from the row action.
     const panel = textCard(lead.page, s.case_id, 'de');
-    await panel.getByRole('button', { name: 'Text details', exact: true }).click();
+    await panel.getByRole('button', { name: 'Details', exact: true }).click();
     const review = panel.getByRole('button', { name: textNamePattern('Translation review, ', s.case_id, 'de') });
     if ((await review.getAttribute('aria-pressed')) !== 'true') await review.click();
     await expect(review).toHaveAttribute('aria-pressed', 'true');

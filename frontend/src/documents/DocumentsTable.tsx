@@ -1,21 +1,18 @@
 /**
- * Documents table (spec 2026-10-23 §2b, documents overview VD1, VD4, VD5): one `<tbody>` per case with a
- * slim case line (case checkbox, case ID and, on the right, the "n not in plan" toggle), then one line per
- * planned text: [checkbox] Text, Translation, Annotation, Finalization, Waiting on, Next step, Last activity.
- * Texts outside the plan (source and translations alike) stay folded per case; expanded they are muted rows
- * with "Add to plan…". Decision rows get the left edge. A row click (or the text name) opens the text card
- * and never changes the selection; only the checkboxes select. Selection and the card are owned by the page.
+ * Documents table (spec 2026-10-23 §2b, M1 variant D "flat list"): one line per text, no case headings:
+ * [checkbox] Text (case ID, language, "+n" for texts of the case not shown), Translation, Annotation,
+ * Finalization, Waiting on, Next step, Last activity. Texts outside the plan are rows only with the page's
+ * "Show texts not in plan" switch: muted, with "Add to plan…". The row open in the card is current; the other
+ * shown texts of its case are tinted wherever the sort puts them. Decision rows get the left edge. A row click
+ * (or the text name) opens the text card and never changes the selection; only the checkboxes select.
  */
 import { useMemo, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, DocumentRowsRequest, NextStepView } from "../api/client";
 import type { Route } from "../app/router";
 import { plural } from "../app/labels";
-import { DataTable, type Column, type DataTableGroup, type DataTableSort, type GroupSelectMode } from "../ui/DataTable";
-import { IconChevronRight } from "../ui/icons";
-import { RowActionCell } from "./RowActions";
+import { DataTable, type Column, type DataTableSort, type GroupSelectMode } from "../ui/DataTable";
+import { RowActionCell, rowActionText } from "./RowActions";
 import {
-  documentsGroupId,
-  documentsNotInPlanId,
   documentsRowId,
   LastActivityCell,
   type OpenTextCard,
@@ -24,10 +21,13 @@ import {
   rowKeyOf,
   rowName,
   rowNeedsDecision,
-  ShortId,
+  stageCellText,
   WaitingOnCell,
 } from "./RowCells";
-import { isActiveRow } from "./stageLabels";
+import { isActiveRow, waitingOnText } from "./stageLabels";
+
+/** The case of a `"{case}:{language}"` key (case IDs may hold colons; languages do not). */
+const caseOfKey = (key: string): string => key.slice(0, key.lastIndexOf(":"));
 
 /** Narrow cards' case heading: "case-0101, en source + 2 translations"; without the source row in view "case-0101, 3 languages". */
 export function caseHeaderText(group: Pick<DocumentGroupView, "case_id" | "rows" | "language_count">): string {
@@ -37,10 +37,38 @@ export function caseHeaderText(group: Pick<DocumentGroupView, "case_id" | "rows"
   return `${group.case_id}, ${source.language} source${translations > 0 ? ` + ${plural(translations, "translation")}` : ""}`;
 }
 
-/** The rows a case shows: its planned texts, then (when the case's "not in plan" toggle is open) the others. */
-export function visibleRows(group: Pick<DocumentGroupView, "rows">, notInPlanOpen: boolean): DocumentRowView[] {
-  const planned = group.rows.filter(isActiveRow);
-  return notInPlanOpen ? [...planned, ...group.rows.filter(row => !isActiveRow(row))] : planned;
+/** Sort of a status column, done on the loaded page (the server pages and sorts by case). */
+export type ColumnSort = DataTableSort;
+
+/** Columns the table sorts itself, by the text the cell shows; ties keep the server order (case ID). */
+const COLUMN_SORT_TEXT: Readonly<Record<string, (row: DocumentRowView) => string>> = {
+  review: row => stageCellText(row, "review"),
+  annotation: row => stageCellText(row, "annotation"),
+  final: row => stageCellText(row, "final"),
+  waiting: row => waitingOnText(row).text,
+  action: rowActionText,
+};
+export const isColumnSort = (column: string): boolean => column in COLUMN_SORT_TEXT;
+
+/**
+ * The flat rows of the table in display order: the page's texts in plan (with `showNotInPlan` also the others),
+ * sorted by `sort` when a status column is sorted. ‹ › in the text card walk the same list.
+ */
+export function tableRows(page: Pick<DocumentRowsPage, "groups">, showNotInPlan: boolean, sort: ColumnSort | null = null): DocumentRowView[] {
+  const rows = page.groups.flatMap(group => showNotInPlan ? group.rows : group.rows.filter(isActiveRow));
+  const text = sort ? COLUMN_SORT_TEXT[sort.column] : undefined;
+  if (!sort || !text) return rows;
+  const sign = sort.direction === "asc" ? 1 : -1;
+  return rows.map((row, index) => ({ row, index, key: text(row) }))
+    .sort((a, b) => sign * a.key.localeCompare(b.key, undefined, { sensitivity: "base" }) || a.index - b.index)
+    .map(entry => entry.row);
+}
+
+/** Texts of a case the table does not show: not in plan while the switch is off (also those the tab leaves out). */
+export function hiddenNotInPlan(group: Pick<DocumentGroupView, "rows" | "not_in_plan_languages">): number {
+  const shown = new Set(group.rows.filter(isActiveRow).map(row => row.language));
+  const hidden = new Set([...(group.not_in_plan_languages ?? []), ...group.rows.filter(row => !isActiveRow(row)).map(row => row.language)]);
+  return [...hidden].filter(language => !shown.has(language)).length;
 }
 
 /** The page's text selection as the table needs it (`"{case}:{language}"` keys, list order passed back). */
@@ -91,6 +119,8 @@ export function nextHeaderSort(column: string, sort: DocumentRowsRequest["sort"]
 
 export interface DocumentsTableProps {
   page: DocumentRowsPage;
+  /** The rows in display order; default `tableRows(page, showNotInPlan, columnSort)` (the page passes the list ‹ › walk). */
+  rows?: readonly DocumentRowView[];
   /** Opens the text card; `opener` gets focus back on close. */
   onOpenPanel?: OpenTextCard;
   /** `"{case}:{language}"` of the row the card shows (the active row). */
@@ -105,27 +135,29 @@ export interface DocumentsTableProps {
   onNavigate?: (route: Route) => void;
   busy?: boolean;
   empty?: ReactNode;
-  /** Row and case checkboxes (VD4); the page owns the selection. */
+  /** Row checkboxes (VD4); the page owns the selection. */
   selection?: TableSelection;
-  /** Cases whose "n not in plan" toggle is open (the page owns it: ‹ › in the card walk the visible rows). */
-  notInPlanOpen?: ReadonlySet<string>;
-  onToggleNotInPlan?: (caseId: string) => void;
+  /** True while texts not in plan are rows of their own (no "+n" marker then). */
+  showNotInPlan?: boolean;
   /** "Add to plan…" of a text outside the plan (the Change plan dialog). */
   onAddToPlan?: (row: DocumentRowView) => void;
   /** Current server sort; with `onSort` the Text and Last activity headers sort (VD10). */
   sort?: DocumentRowsRequest["sort"];
   onSort?: (sort: HeaderSort) => void;
+  /** Status-column sort of the loaded page; it wins over `sort` in the headers while set. */
+  columnSort?: ColumnSort | null;
+  onColumnSort?: (sort: ColumnSort) => void;
 }
 
 export function DocumentsTable({
-  page, onOpenPanel, activeKey = null, renderRowNotice, rowBadge, onAction, onNavigate, busy, empty, selection, sort, onSort,
-  notInPlanOpen, onToggleNotInPlan, onAddToPlan,
+  page, rows: givenRows, onOpenPanel, activeKey = null, renderRowNotice, rowBadge, onAction, onNavigate, busy, empty, selection, sort, onSort,
+  showNotInPlan = false, onAddToPlan, columnSort = null, onColumnSort,
 }: DocumentsTableProps): JSX.Element {
-  // Folded (not in plan) rows are not rendered: they are not part of the range order, and the case checkbox skips them.
-  const shownGroups = useMemo(() => page.groups.map(group => ({ group, rows: visibleRows(group, notInPlanOpen?.has(group.case_id) ?? false) })),
-    [page.groups, notInPlanOpen]);
-  const order = useMemo(() => shownGroups.flatMap(entry => entry.rows.map(rowKeyOf)), [shownGroups]);
-  const shownRowsOf = useMemo(() => new Map(shownGroups.map(entry => [entry.group.case_id, entry.rows])), [shownGroups]);
+  const rows = useMemo(() => givenRows ?? tableRows(page, showNotInPlan, columnSort), [givenRows, page, showNotInPlan, columnSort]);
+  const order = useMemo(() => rows.map(rowKeyOf), [rows]);
+  const hidden = useMemo(() => new Map(page.groups.map(group => [group.case_id, showNotInPlan ? 0 : hiddenNotInPlan(group)])), [page.groups, showNotInPlan]);
+  const activeCase = activeKey ? caseOfKey(activeKey) : null;
+  const isSibling = (row: DocumentRowView) => row.case_id === activeCase && rowKeyOf(row) !== activeKey;
 
   const openCard = (row: DocumentRowView, opener: HTMLElement) => onOpenPanel?.(row, { opener });
   // A plain click on the row's own area opens the card (never the selection); modifier clicks do nothing.
@@ -141,16 +173,18 @@ export function DocumentsTable({
       header: "Text",
       rowHeader: true,
       sortable: true,
-      cell: row => <RowHeaderCell row={row} badge={rowBadge?.(row)} onOpenCard={onOpenPanel ? opener => openCard(row, opener) : undefined} />,
+      cell: row => <RowHeaderCell row={row} badge={rowBadge?.(row)} onOpenCard={onOpenPanel ? opener => openCard(row, opener) : undefined}
+        showCaseId more={hidden.get(row.case_id) ?? 0} sibling={isSibling(row)} />,
     },
-    { id: "review", header: "Translation", cell: row => <RowStageCell row={row} stage="review" /> },
-    { id: "annotation", header: "Annotation", cell: row => <RowStageCell row={row} stage="annotation" /> },
-    { id: "final", header: "Finalization", cell: row => <RowStageCell row={row} stage="final" /> },
+    { id: "review", header: "Translation", sortable: true, cell: row => <RowStageCell row={row} stage="review" /> },
+    { id: "annotation", header: "Annotation", sortable: true, cell: row => <RowStageCell row={row} stage="annotation" /> },
+    { id: "final", header: "Finalization", sortable: true, cell: row => <RowStageCell row={row} stage="final" /> },
     // `documents-col-wide`: hidden below 900 px (the text card shows it).
-    { id: "waiting", header: <span className="documents-col-wide">Waiting on</span>, cell: row => <span className="documents-col-wide"><WaitingOnCell row={row} /></span> },
+    { id: "waiting", header: <span className="documents-col-wide">Waiting on</span>, sortable: true, cell: row => <span className="documents-col-wide"><WaitingOnCell row={row} /></span> },
     {
       id: "action",
       header: "Next step",
+      sortable: true,
       cell: row => <RowActionCell row={row} onAction={onAction} onNavigate={onNavigate} onAddToPlan={onAddToPlan} />,
     },
     {
@@ -161,65 +195,37 @@ export function DocumentsTable({
     },
   ];
 
-  // The case line is a heading only; the "n not in plan" toggle on its right folds the texts outside the plan.
-  const groups: DataTableGroup<DocumentRowView>[] = shownGroups.map(({ group, rows }) => {
-    const hidden = group.rows.filter(row => !isActiveRow(row)).length;
-    const open = notInPlanOpen?.has(group.case_id) ?? false;
-    return {
-      key: group.case_id,
-      expanded: true,
-      rows,
-      headerProps: { className: "documents-group" },
-      header: (
-        <span className="documents-group-line">
-          <span id={documentsGroupId(group.case_id)} tabIndex={-1} className="documents-group-label"><ShortId value={group.case_id} /></span>
-          {hidden > 0 && onToggleNotInPlan && <button type="button" id={documentsNotInPlanId(group.case_id)} className="documents-not-in-plan-toggle"
-            aria-expanded={open} onClick={() => onToggleNotInPlan(group.case_id)}>
-            {`${hidden} not in plan`}<IconChevronRight className="disclosure-chevron" />
-          </button>}
-        </span>
-      ),
-    };
-  });
-
-  // The case checkbox selects exactly the case's visible rows (filters respected, folded rows not).
-  const caseRows = (caseId: string) => shownRowsOf.get(caseId) ?? [];
-  const caseKeys = (caseId: string) => caseRows(caseId).map(rowKeyOf);
-
   const below = (row: DocumentRowView): ReactNode | null => {
     const notice = renderRowNotice?.(row) ?? null;
     return notice == null ? null : <div className="documents-row-notice-slot">{notice}</div>;
   };
-  const rowClass = (row: DocumentRowView) => ["documents-row", !isActiveRow(row) && "documents-row--not-in-plan", rowKeyOf(row) === activeKey && "documents-row--active", onOpenPanel && "documents-row--clickable"]
-    .filter(Boolean).join(" ");
+  const rowClass = (row: DocumentRowView) => ["documents-row", !isActiveRow(row) && "documents-row--not-in-plan", rowKeyOf(row) === activeKey && "documents-row--active",
+    isSibling(row) && "documents-row--sibling", onOpenPanel && "documents-row--clickable"].filter(Boolean).join(" ");
+  const headerSort = (column: string) => {
+    if (isColumnSort(column)) onColumnSort?.({ column, direction: columnSort?.column === column && columnSort.direction === "asc" ? "desc" : "asc" });
+    // Text and Last activity sort on the server; coming from a status-column sort they start ascending / newest first.
+    else onSort?.(columnSort ? (column === "activity" ? "activity" : "case") : nextHeaderSort(column, sort));
+  };
 
   return (
     <DataTable
       label="Documents"
       className="documents-table"
       columns={columns}
-      rows={[]}
-      groups={groups}
+      rows={[...rows]}
       rowKey={rowKeyOf}
       rowProps={row => ({ className: rowClass(row), onClick: onRowClick(row), ...(rowKeyOf(row) === activeKey ? { "aria-current": true } : {}) })}
       rowEdge={row => (rowNeedsDecision(row) ? "decision" : null)}
       renderExpanded={below}
       busy={busy}
       empty={empty}
-      groupLayout="label"
       rowSelection={selection ? {
         selected: row => selection.keys.has(rowKeyOf(row)),
         onSelect: (row, mode) => selection.select(rowKeyOf(row), mode, order),
         label: row => `Select ${rowName(row)}`,
       } : undefined}
-      groupSelection={selection ? {
-        selected: caseId => selection.caseState(caseKeys(caseId)) === "all",
-        state: caseId => selection.caseState(caseKeys(caseId)),
-        onSelect: (caseId, mode) => selection.selectCase(caseKeys(caseId), mode, order),
-        checkboxLabel: caseId => `Select ${caseId} (${plural(caseRows(caseId).length, "text")})`,
-      } : undefined}
-      sort={onSort ? headerSortOf(sort) : undefined}
-      onSort={onSort ? column => onSort(nextHeaderSort(column, sort)) : undefined}
+      sort={onSort ? columnSort ?? headerSortOf(sort) : undefined}
+      onSort={onSort ? headerSort : undefined}
     />
   );
 }

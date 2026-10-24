@@ -199,6 +199,32 @@ const row = {
   work: [{ assignment_id: 9, document_id: "doc-case-0101", version: 1, author_label: "ann-0004", is_me: false, task: "annotate", status: "in_progress", held: false, round_ordinal: null, round_state: null, person: { pseudonym: "ann-0004", display_name: "Ana Weber", is_me: false } }],
 } as unknown as DocumentRowView;
 
+it("annotation: the limit up front, names past it say limit reached, the lead is listed as (you) with the rule", async () => {
+  perText = 2; remainingOf = () => 1;
+  const onAssigned = vi.fn();
+  const created = { ...assignment, username: "lead", task: "annotate" };
+  const self = vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [created], refused: [] } as unknown as Awaited<ReturnType<typeof api.createAssignments>>);
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={{ ...row, open: { document_id: "doc-case-0101" } } as DocumentRowView} task="annotate" me={{ username: "lead", name: "Pat Lead" }} consolidatorRule onClose={vi.fn()} onAssigned={onAssigned} />);
+  await ready();
+  expect(screen.getByText(/^0 of 1 chosen\. Limit: 2 annotations per text/).textContent).toBe("0 of 1 chosen. Limit: 2 annotations per text (project setting).");
+  expect(screen.getByRole("link", { name: "project setting" }).getAttribute("href")).toContain("settings/workflow");
+  const me = screen.getByRole("checkbox", { name: /^Pat Lead \(you\)/ });
+  expect(document.getElementById(me.getAttribute("aria-describedby")!)!.textContent).toBe("If you annotate this text yourself, you cannot consolidate it afterwards (project rule \"the consolidator is not an annotator\").");
+  fireEvent.click(me);
+  expect(screen.getByText(/^1 of 1 chosen/)).toBeDefined();
+  // The limit is reached by the tick: every other name is unavailable and says why.
+  const ben = screen.getByRole("checkbox", { name: /Ben Roth/ });
+  expect(ben.getAttribute("aria-disabled")).toBe("true");
+  expect(ben.closest("label, .assign-member")!.textContent).toContain("limit reached");
+  fireEvent.click(ben);
+  expect(screen.getByText(/^1 of 1 chosen/)).toBeDefined();
+  expect(lastPreview().usernames ?? []).toEqual([]);
+  fireEvent.click(screen.getByRole("button", { name: "Assign 1 person" }));
+  await waitFor(() => expect(onAssigned).toHaveBeenCalledWith("You annotate case-0101 de."));
+  expect(self).toHaveBeenCalledWith("p/key", { rows: [{ document_id: "doc-case-0101", username: "lead" }], task: "annotate", confirm_language: true });
+  expect(api.commitAssignmentBatch).not.toHaveBeenCalled();
+});
+
 it("row mode shows context, Currently and Change task", async () => {
   perText = 2; remainingOf = () => 1;
   const onAssigned = vi.fn();
@@ -214,7 +240,7 @@ it("row mode shows context, Currently and Change task", async () => {
   // 3 activations: the row action (outside), the person, Assign.
   fireEvent.click(screen.getByRole("checkbox", { name: /Ben Roth/ }));
   await waitForPreviewOf(["ben"]);
-  fireEvent.click(screen.getByRole("button", { name: "Assign 1" }));
+  fireEvent.click(screen.getByRole("button", { name: "Assign 1 person" }));
   await waitFor(() => expect(onAssigned).toHaveBeenCalledWith("1 annotation assigned to Ben Roth"));
   cleanup();
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);

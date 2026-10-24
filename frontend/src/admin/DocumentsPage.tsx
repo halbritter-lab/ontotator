@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   api,
-  ApiError,
   type AssignmentView,
   type DocumentRowFilters,
   type CaseSummary,
@@ -17,6 +16,7 @@ import {
   type TranslationReviewRecord,
   type VariantSummary,
 } from "../api/client";
+import { personLabel } from "../app/identity";
 import { formatDateTime, labelFor, plural } from "../app/labels";
 import { DOCUMENT_FIELDS, MY_TASKS, PANEL_STAGES, PANEL_TABS, routeHref, type NavigateOptions, type PanelStage, type PanelTab, type ProjectDocumentsQuery, type Route } from "../app/router";
 import { categoryLabels, decisionLabels } from "../translation/labels";
@@ -27,7 +27,7 @@ import { DocumentsSearch, LiveRegion, type DocumentsSearchHandle, type LiveRegio
 import { activeTab, chipsOf, clearAllPatch, filtersActive, listOf, rowsRequest, tabCount } from "../documents/filterModel";
 import { FilterPopover } from "../documents/FilterPopover";
 import { DocumentCards } from "../documents/DocumentCards";
-import { DocumentsTable, visibleRows, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
+import { DocumentsTable, tableRows, type ColumnSort, type HeaderSort, type TableSelection } from "../documents/DocumentsTable";
 import { consolidationStartedToast, panelStep } from "../documents/finalPanelText";
 import { leadSteps, rowActionLabel } from "../documents/nextStepLabels";
 import { TranslationCorrectionAction } from "../variants/TranslationCorrectionAction";
@@ -66,7 +66,7 @@ export interface DocumentsPageProps {
   /** Lead access (`ProjectSummary.can_manage`); checked before anything loads. */
   canManage: boolean;
   canOverrideTranslationStatus?: boolean;
-  currentUser?: Pick<CurrentUser, "username" | "pseudonym">;
+  currentUser?: Pick<CurrentUser, "username" | "pseudonym"> & Partial<Pick<CurrentUser, "display_name">>;
 }
 
 /** Below 700 px the page renders cards instead of the table (the same breakpoint as popover sheets and the side panel). */
@@ -309,6 +309,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const onAssign = (row: DocumentRowView, task: AssignTask, options?: { newReviewOfAccepted?: boolean; reviewReason?: "source_changed" }) => {
     setAssignDialog({
       mode: "row", projectKey, row, task, newReviewOfAccepted: options?.newReviewOfAccepted, reviewReason: options?.reviewReason,
+      me: currentUser ? { username: currentUser.username, name: personLabel({ pseudonym: currentUser.pseudonym, display_name: currentUser.display_name ?? null }) } : undefined,
+      consolidatorRule: page?.adjudicator_not_annotator ?? false,
       onClose: () => setAssignDialog(null),
       onAssigned: message => { setAssignDialog(null); showToast({ message }); announce(message); refreshAll(); },
     });
@@ -652,26 +654,24 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const closeCorrection = () => { setCorrectionFor(null); reloadAfterAction(); };
 
   const [planFor, setPlanFor] = useState<DocumentRowView | null>(null);
-  // Cases whose texts outside the plan are shown (the case line's "n not in plan" toggle); folded by default.
-  const [notInPlanOpen, setNotInPlanOpen] = useState<ReadonlySet<string>>(() => new Set());
-  const toggleNotInPlan = (caseId: string) => setNotInPlanOpen(current => {
-    const next = new Set(current);
-    if (!next.delete(caseId)) next.add(caseId);
-    return next;
-  });
-  /** "Annotate from proposals myself": the lead's own annotate assignment (P3 grants the annotator role), then its task. */
-  const checkMyself = async (row: DocumentRowView) => {
-    const username = currentUser?.username ?? "";
-    const response = await api.createAssignments(projectKey, { rows: [{ document_id: row.open.document_id, username }], task: "annotate", confirm_language: true });
-    const created = response.created[0];
-    if (!created) { const code = response.refused[0]?.code ?? "ASSIGNMENT_REFUSED"; throw new ApiError(409, "You could not be assigned to this text.", code); }
-    reloadAfterAction();
-    onNavigate({ name: "task", assignmentId: created.id });
+  // "Show texts not in plan" (All tab only; off by default, remembered per user in this browser).
+  const notInPlanKey = `ontocurator.documents.showNotInPlan.v1:${currentUser?.username ?? ""}`;
+  const [showNotInPlan, setShowNotInPlan] = useState(() => { try { return window.localStorage.getItem(notInPlanKey) === "1"; } catch { return false; } });
+  const changeShowNotInPlan = (value: boolean) => {
+    setShowNotInPlan(value);
+    try { window.localStorage.setItem(notInPlanKey, value ? "1" : "0"); } catch { /* Blocked storage: not remembered. */ }
   };
+  const notInPlanShown = showNotInPlan && activeTab(query) === "all";
+  // Texts outside the plan in the current filters: the plan facet's "not in plan" minus the undecided rows it also counts.
+  const planFacet = page?.bar.facets?.plan;
+  const notInPlanCount = Math.max(0, (planFacet?.not_in_plan ?? 0) - (planFacet?.not_decided ?? 0));
+  // A status-column sort of the loaded page (the server sorts by Text and Last activity only).
+  const [columnSort, setColumnSort] = useState<ColumnSort | null>(null);
+  const shownRows = useMemo(() => page ? tableRows(page, notInPlanShown, columnSort) : [], [page, notInPlanShown, columnSort]);
   const stepCard = (direction: -1 | 1) => {
-    // ‹ › walk the texts in the order the list shows them: the table skips folded (not in plan) texts; a card on a
-    // folded text (a deep link) walks the page order.
-    const shown = narrow ? pageRows : page?.groups.flatMap(group => visibleRows(group, notInPlanOpen.has(group.case_id))) ?? [];
+    // ‹ › walk the texts in the order the list shows them; a card on a text the table does not show (a deep link,
+    // a not-in-plan language from the card) walks the page order.
+    const shown = narrow ? pageRows : shownRows;
     const steps = shown.some(entry => rowKeyOf(entry) === panelKey) ? shown : pageRows;
     const index = steps.findIndex(entry => rowKeyOf(entry) === panelKey);
     const target = index >= 0 ? steps[index + direction] : undefined;
@@ -692,10 +692,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     onView={view => openCard({ key: panelKey, stage: panelStage, tab: view === "path" ? undefined : view })}
     onStep={stepCard} onClose={closeCard} onNavigate={route => onNavigate(route)}
     onAssign={(row, task) => { void onAssign(row, task); }}
-    onChangePlan={row => setPlanFor(row)} onCheckMyself={checkMyself} onChanged={reloadAfterAction}
+    onChangePlan={row => setPlanFor(row)} onOpenText={entry => openCard({ key: rowKeyOf(entry), tab: panelTab })} onChanged={reloadAfterAction}
     decision={decision} textVersionTools={textVersionTools} canManage me={currentUser ?? null}
     reportRoute={reportId => ({ name: "projectProblemReport", key: projectKey, reportId, documents: query })}
-    adjudicatorNotAnnotator={page?.adjudicator_not_annotator ?? false} sourceLanguage={panelSource}
+    sourceLanguage={panelSource}
     plan={<><PlanChips row={panelRow} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} /><PlanRowNotice row={panelRow} saves={planSaves} /></>}
     stageActions={stage => <StageActions {...stageActionProps} row={panelRow} stage={stage} />}
     steps={cardSteps(panelRow)}
@@ -776,10 +776,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
         stageActions={(row, stage) => <StageActions {...stageActionProps} row={row} stage={stage} />} me={currentUser?.pseudonym ?? null} />;
     } else {
-      body = <DocumentsTable page={page} selection={tableSelection}
+      body = <DocumentsTable page={page} rows={shownRows} selection={tableSelection}
         onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
-        sort={request.sort} onSort={(next: HeaderSort) => changeFilter({ sort: next === "case" ? undefined : next })}
-        notInPlanOpen={notInPlanOpen} onToggleNotInPlan={toggleNotInPlan} onAddToPlan={setPlanFor} />;
+        sort={request.sort} onSort={(next: HeaderSort) => { setColumnSort(null); changeFilter({ sort: next === "case" ? undefined : next }); }}
+        columnSort={columnSort} onColumnSort={setColumnSort} showNotInPlan={notInPlanShown} onAddToPlan={setPlanFor}
+        empty={<EmptyState title="No texts in plan on this page." action={notInPlanCount > 0 ? <Button size="sm" onClick={() => changeShowNotInPlan(true)}>Show texts not in plan</Button> : undefined} />} />;
     }
     // Floats at the bottom of the viewport; placed above the table (below 700 px after the cards) to keep the focus order.
     const selectionBar = <SelectionBar projectKey={projectKey} keys={selection.keys} filters={filters} refresh={page} narrow={narrow} limitNote={limitNote}
@@ -820,6 +821,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} language={chip.language} onRemove={() => removeChip(index)} />)}
       </div>}
       {filtersActive(query) && <Button size="sm" onClick={clearAll}>Clear all</Button>}
+      {page && !narrow && tab === "all" && <Checkbox id="documents-show-not-in-plan" className="checkbox-target" label={`Show texts not in plan (${notInPlanCount})`}
+        checked={showNotInPlan} onChange={event => changeShowNotInPlan(event.currentTarget.checked)} />}
       {page && filtersActive(query) && <p className="documents-filter-count">{`${page.bar.shown} of ${tabCount(page.bar, tab)}`}</p>}
     </Toolbar>
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}

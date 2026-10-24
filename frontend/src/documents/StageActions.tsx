@@ -1,4 +1,5 @@
 /** Admin actions of one stage (moved out of the row panel, U3); the cards' stage popover lists them. */
+import { useState } from "react";
 import type { AssignmentView, DocumentRowView } from "../api/client";
 import { AssignmentActions } from "../admin/AssignmentActions";
 import type { PanelStage } from "../app/router";
@@ -40,10 +41,14 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
     && (item.task === "translation_review" ? show("review") : show("annotation"))).map(item => item.assignment_id));
   const reassignable: AssignmentView[] = textVersionTools
     ? textVersionTools.assignments.filter(assignment => workIds.has(assignment.id) && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
+  // Submitted annotations: "Reopen…" with the stage (the version list's Assignment actions offer it too).
+  const reopenable: AssignmentView[] = textVersionTools && show("annotation")
+    ? textVersionTools.assignments.filter(assignment => assignment.task === "annotate" && assignment.status === "submitted" && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
+  const [reopening, setReopening] = useState<number | null>(null);
   const correction = show("review") && onRequestCorrection && canRequestCorrection?.(row);
   const newReview = show("review") && onAssign && canAssignNewReview(row);
   const changeFinal = show("final") && onChangeFinal && canChangeFinal?.(row);
-  if (!reassignable.length && !correction && !newReview && !changeFinal) return null;
+  if (!reassignable.length && !reopenable.length && !correction && !newReview && !changeFinal) return null;
   const personOf = (pseudonym: string) => {
     const display = textVersionTools?.members.find(member => member.pseudonym === pseudonym)?.display_name?.trim();
     return display ? `${display} (${pseudonym})` : pseudonym;
@@ -52,6 +57,12 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
     {reassignable.map(assignment => <div key={assignment.id} className="stage-actions-reassign">
       <span>{personOf(assignment.pseudonym)}</span>
       {textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} onChanged={textVersionTools.onAssignmentsChanged} directReassign />}
+    </div>)}
+    {reopenable.map(assignment => <div key={assignment.id} className="stage-actions-reassign">
+      <span>{personOf(assignment.pseudonym)}</span>
+      <Button size="sm" aria-label={`Reopen…, ${personOf(assignment.pseudonym)}`} onClick={() => setReopening(assignment.id)}>Reopen…</Button>
+      {reopening === assignment.id && textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} open="reopen"
+        onChanged={textVersionTools.onAssignmentsChanged} onClose={() => setReopening(null)} />}
     </div>)}
     {correction && <Button size="sm" onClick={() => onRequestCorrection(row)}>Request correction…</Button>}
     {newReview && <Button size="sm" onClick={() => onAssign(row, "translation_review", { newReviewOfAccepted: true })}>Assign a new review…</Button>}

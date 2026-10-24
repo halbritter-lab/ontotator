@@ -62,8 +62,9 @@ const casesPage = (count: number, overrides: Partial<DocumentRowsPage> = {}) => 
   const caseId = `case-${String(101 + index).padStart(4, "0")}`;
   return group(caseId, [planRow(caseId, "de", stepOf("assign_translation_review"))]);
 }), overrides);
-const caseBox = (caseId: string) => screen.getByRole("checkbox", { name: new RegExp(`^Select ${caseId} \\(`) });
 const rowBox = (caseId: string, language: string) => screen.getByRole("checkbox", { name: `Select ${caseId} ${language}` });
+/** The checkbox of a `casesPage` case's one text (the flat table has no case checkboxes). */
+const caseBox = (caseId: string) => rowBox(caseId, "de");
 /** The Text cell (`th scope="row"`) of a row, found through its text name ("Open text card, …"). */
 const rowHeader = (name: string) => screen.getByRole("button", { name: `Open text card, ${name.replace(", ", " ")}` }).closest("tr")!.querySelector<HTMLElement>("th[scope=row]")!;
 /** The text card of a row (a modal dialog "{case} {language}"); `name` is the row name "{case}, {language}". */
@@ -350,22 +351,20 @@ it("keeps the rows and shows Could not refresh when a background refetch fails",
 });
 
 describe("case selection", () => {
-  it("case checkbox is named with the case and its visible text count and selects every visible text", async () => {
+  it("no case checkboxes: texts not in plan are rows only with the switch, then selectable like any text", async () => {
+    window.localStorage.clear();
     mockRows(page([group("case-0101", [planRow("case-0101", "en", stepOf("assign_annotation"), { is_source: true }), planRow("case-0101", "de", stepOf("assign_translation_review")), notInPlanRow("case-0101", "fr")])]));
     renderPage();
     await loaded();
-    expect(screen.getByRole("checkbox", { name: "Select case-0101 (2 texts)" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "1 not in plan" }));
-    const box = screen.getByRole("checkbox", { name: "Select case-0101 (3 texts)" });
-    expect(box.closest("td")!.nextElementSibling?.getAttribute("scope")).toBe("rowgroup");
-    expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
-    fireEvent.click(box);
-    expect((box as HTMLInputElement).checked).toBe(true);
-    expect(within(selectionRegion()).getByText("3 texts in 1 case selected")).toBeTruthy();
-    // One text off: the case checkbox is mixed.
-    fireEvent.click(rowBox("case-0101", "fr"));
-    expect((box as HTMLInputElement).indeterminate).toBe(true);
+    expect(screen.queryByRole("checkbox", { name: /^Select case-0101 \(/ })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "Select case-0101 fr" })).toBeNull();
+    fireEvent.click(rowBox("case-0101", "en"));
+    fireEvent.click(rowBox("case-0101", "de"));
     expect(within(selectionRegion()).getByText("2 texts in 1 case selected")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Show texts not in plan \(/ }));
+    fireEvent.click(rowBox("case-0101", "fr"));
+    expect(within(selectionRegion()).getByText("3 texts in 1 case selected")).toBeTruthy();
+    window.localStorage.clear();
   });
 
   it("Shift-click selects a range and announces the count", async () => {
@@ -395,9 +394,6 @@ describe("case selection", () => {
     const first = caseBox("case-0101");
     first.focus();
     fireEvent.click(first); // Space on a focused checkbox is a click
-    // From a case checkbox the case's own row comes next, then the next case's row.
-    fireEvent.keyDown(first, { key: "ArrowDown", shiftKey: true });
-    expect(document.activeElement).toBe(rowBox("case-0101", "de"));
     fireEvent.keyDown(rowBox("case-0101", "de"), { key: "ArrowDown", shiftKey: true });
     expect(document.activeElement).toBe(rowBox("case-0102", "de"));
     expect((caseBox("case-0102") as HTMLInputElement).checked).toBe(true);
@@ -432,7 +428,7 @@ describe("case selection", () => {
     expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
   });
 
-  it("Ctrl+Z and Meta+Z undo the last plan change while a case checkbox has focus", async () => {
+  it("Ctrl+Z and Meta+Z undo the last plan change while a row checkbox has focus", async () => {
     const fr = planRow("case-0101", "fr", stepOf("assign_translation_review"));
     mockRows(page([group("case-0101", [fr], { plan_revision: 2 })]));
     const saved = (revision: number) => ({
@@ -447,19 +443,19 @@ describe("case selection", () => {
     await screen.findByText("fr of case-0101: Translation review off");
     // The text card is modal: close it to reach the case checkbox.
     fireEvent.click(within(await textCard("case-0101 fr")).getByRole("button", { name: "Close" }));
-    const box = caseBox("case-0101");
+    const box = rowBox("case-0101", "fr");
     box.focus();
     fireEvent.keyDown(box, { key: "z", ctrlKey: true });
     await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(1));
     expect(api.setWorkPlanRows).toHaveBeenLastCalledWith("p", expect.objectContaining({ undo: true }));
     await waitFor(() => expect(screen.queryByText("fr of case-0101: Translation review off")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Open text card, case-0101 fr" }));
-    fireEvent.click(within(await textCard("case-0101 fr")).getByRole("button", { name: "Text details" }));
+    fireEvent.click(within(await textCard("case-0101 fr")).getByRole("button", { name: "Details" }));
     fireEvent.click(await screen.findByRole("button", { name: /^Translation review, case-0101 fr/ }));
     await screen.findByText(/fr of case-0101: Translation review/);
     fireEvent.click(within(await textCard("case-0101 fr")).getByRole("button", { name: "Close" }));
-    caseBox("case-0101").focus();
-    fireEvent.keyDown(caseBox("case-0101"), { key: "z", metaKey: true });
+    rowBox("case-0101", "fr").focus();
+    fireEvent.keyDown(rowBox("case-0101", "fr"), { key: "z", metaKey: true });
     await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(2));
   });
 
@@ -1209,7 +1205,7 @@ describe("plan chips on the page", () => {
     expect(region.nextElementSibling?.getAttribute("aria-label")).toBe("Pages");
   });
 
-  it("the card's plan selects save each step at once through the row PATCH", async () => {
+  it("the card's segmented plan controls save each step at once through the row PATCH", async () => {
     const fr = { ...planRow("case-0101", "fr", stepOf("assign_annotation")), proposal_count: 12, annotation_mode: { mode: "proposals" as const, source: "project" as const, locked: false, override: null, proposal_count: 12 } };
     mockRows(page([group("case-0101", [fr], { plan_revision: 2 })]));
     vi.spyOn(api, "patchWorkPlan").mockResolvedValue({
@@ -1219,10 +1215,12 @@ describe("plan chips on the page", () => {
     renderPage({ query: { panel: "case-0101:fr", panel_stage: "annotation" } });
     const card = await textCard("case-0101 fr");
     expect(within(card).queryByRole("button", { name: "Change plan…" })).toBeNull();
-    const mode = await within(card).findByRole("combobox", { name: "Annotation plan" }) as HTMLSelectElement;
-    expect(mode.value).toBe("proposals");
-    expect(Array.from(mode.options).map(option => option.textContent)).toEqual(["From proposals", "From scratch", "Off"]);
-    fireEvent.change(mode, { target: { value: "scratch" } });
+    const mode = await within(card).findByRole("radiogroup", { name: "Annotation plan" });
+    const choices = within(mode).getAllByRole("radio") as HTMLInputElement[];
+    expect(choices.map(choice => choice.closest("label")!.textContent)).toEqual(["From proposals", "From scratch", "Off"]);
+    expect(choices.map(choice => choice.checked)).toEqual([true, false, false]);
+    expect(document.getElementById(mode.getAttribute("aria-describedby")!)!.textContent).toBe("Annotators start from the 12 tool proposals and confirm, reject or correct them.");
+    fireEvent.click(within(mode).getByRole("radio", { name: "From scratch" }));
     await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledTimes(1));
     expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "fr", { review: true, annotate: true, annotation_mode: "scratch", expected_revision: 2, confirm: false });
     expect(await within(card).findByText("Saved")).toBeTruthy();
@@ -1236,24 +1234,29 @@ describe("plan chips on the page", () => {
     vi.spyOn(api, "patchWorkPlan").mockRejectedValue(new ApiError(409, "Locked", "ANNOTATION_MODE_LOCKED"));
     renderPage({ query: { panel: "case-0101:fr", panel_stage: "annotation" } });
     const card = await textCard("case-0101 fr");
-    const mode = await within(card).findByRole("combobox", { name: "Annotation plan" }) as HTMLSelectElement;
-    fireEvent.change(mode, { target: { value: "scratch" } });
+    const mode = await within(card).findByRole("radiogroup", { name: "Annotation plan" });
+    fireEvent.click(within(mode).getByRole("radio", { name: "From scratch" }));
     expect(await within(card).findByText("The annotation of this text has already started this way, so it cannot change.")).toBeTruthy();
-    expect(mode.value).toBe("proposals");
+    expect((within(mode).getByRole("radio", { name: "From proposals" }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it("a locked mode keeps the select focusable with the lock reason; the change is not sent", async () => {
-    const fr = { ...planRow("case-0101", "fr", stepOf("assign_annotation")), proposal_count: 12, annotation_mode: { mode: "proposals" as const, source: "project" as const, locked: true, override: null, proposal_count: 12 } };
+  it("a locked mode keeps every choice focusable with who started it; the change is not sent", async () => {
+    const fr = { ...planRow("case-0101", "fr", stepOf("assign_annotation")), proposal_count: 12, annotation_mode: { mode: "proposals" as const, source: "project" as const, locked: true, override: null, proposal_count: 12 },
+      work: [work({ assignment_id: 4, document_id: "case-0101-fr", task: "annotate", status: "in_progress", person: { pseudonym: "ann-0004", display_name: "Tom Reis", is_me: false } })] };
     mockRows(page([group("case-0101", [fr], { plan_revision: 2 })]));
     vi.spyOn(api, "patchWorkPlan");
     renderPage({ query: { panel: "case-0101:fr", panel_stage: "annotation" } });
     const card = await textCard("case-0101 fr");
-    const mode = await within(card).findByRole("combobox", { name: "Annotation plan" }) as HTMLSelectElement;
-    expect(mode.getAttribute("aria-disabled")).toBe("true");
-    expect(mode.disabled).toBe(false);
-    expect(document.getElementById(mode.getAttribute("aria-describedby")!)!.textContent).toBe("The annotation of this text has already started this way, so it cannot change.");
-    fireEvent.change(mode, { target: { value: "scratch" } });
+    const mode = await within(card).findByRole("radiogroup", { name: "Annotation plan" });
+    const lock = "Fixed: Tom Reis has started from proposals. Remove all unsubmitted work to change it.";
+    for (const choice of within(mode).getAllByRole("radio") as HTMLInputElement[]) {
+      expect(choice.getAttribute("aria-disabled")).toBe("true");
+      expect(choice.disabled).toBe(false);
+      expect(document.getElementById(choice.getAttribute("aria-describedby")!)!.textContent).toBe(lock);
+    }
+    fireEvent.click(within(mode).getByRole("radio", { name: "From scratch" }));
     expect(api.patchWorkPlan).not.toHaveBeenCalled();
+    expect((within(mode).getByRole("radio", { name: "From proposals" }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("opens the upload dialog from the heading row", async () => {
@@ -1291,7 +1294,7 @@ describe("lead review fixes", () => {
     withdrawn: [], accepted_document_ids: [],
   } as PlanRowResult);
 
-  it("never collapses case groups, also above 50 matching cases (VD5)", async () => {
+  it("lists every text flat, also above 50 matching cases (VD5)", async () => {
     const plain = (caseId: string) => group(caseId, [planRow(caseId, "de", stepOf("assign_annotation"))]);
     const many = Array.from({ length: 50 }, (_, index) => plain(`case-${String(index).padStart(3, "0")}`));
     mockRows(page([group("case-d", [planRow("case-d", "de", stepOf("decide_report"))]), ...many], { group_count: 51 }));
@@ -1299,24 +1302,37 @@ describe("lead review fixes", () => {
     await loaded();
     expect(screen.getByRole("button", { name: "Open text card, case-000 de" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open text card, case-d de" }).closest("tr")!.className).toContain("data-table-row--decision");
-    // The group row is a label, not a disclosure.
-    expect(document.getElementById("documents-group-case-d-toggle")!.tagName).toBe("SPAN");
+    expect(document.querySelector("th[scope='rowgroup']")).toBeNull();
   });
 
-  it("folds not-in-plan texts behind the case line; open they are muted rows with Add to plan… (VD1, F5)", async () => {
-    mockRows(page([group("case-1", [notInPlanRow("case-1", "en", { is_source: true }), notInPlanRow("case-1", "fr")])]));
+  it("hides texts not in plan behind the remembered switch; on they are muted rows with Add to plan… (VD1, F5)", async () => {
+    window.localStorage.clear();
+    const planned = planRow("case-2", "de", stepOf("assign_annotation"));
+    const view = page([group("case-1", [notInPlanRow("case-1", "en", { is_source: true }), notInPlanRow("case-1", "fr")]), group("case-2", [planned])]);
+    mockRows({ ...view, bar: { ...view.bar, facets: { plan: { not_in_plan: 3, not_decided: 1, annotate: 1 } } } });
     renderPage();
-    const toggle = await screen.findByRole("button", { name: "2 not in plan" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    const toggle = await screen.findByRole("checkbox", { name: "Show texts not in plan (2)" });
+    expect((toggle as HTMLInputElement).checked).toBe(false);
     expect(screen.queryByRole("button", { name: "Open text card, case-1 fr" })).toBeNull();
     fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
     const fr = screen.getByRole("button", { name: "Open text card, case-1 fr" }).closest("tr")!;
     expect(fr.className).toContain("documents-row--not-in-plan");
-    expect(screen.queryByText(/not in plan ·/)).toBeNull();
-    expect(within(fr).queryByRole("button", { name: /^Plan…/ })).toBeNull();
+    expect(within(fr).getAllByRole("button").map(button => button.getAttribute("aria-label"))).toEqual(["Open text card, case-1 fr", "Add to plan…, case-1 fr"]);
+    expect(window.localStorage.getItem("ontocurator.documents.showNotInPlan.v1:lead")).toBe("1");
     fireEvent.click(within(fr).getByRole("button", { name: "Add to plan…, case-1 fr" }));
     expect(await screen.findByRole("dialog", { name: "Plan for case-1 fr" })).toBeTruthy();
+    cleanup();
+    // Remembered; the tabs never list texts outside the plan and have no switch.
+    mockRows(view);
+    renderPage();
+    expect(((await screen.findByRole("checkbox", { name: /^Show texts not in plan/ })) as HTMLInputElement).checked).toBe(true);
+    cleanup();
+    mockRows(view);
+    renderPage({ query: { segment: "assign" } });
+    await loaded();
+    expect(screen.queryByRole("checkbox", { name: /^Show texts not in plan/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open text card, case-1 fr" })).toBeNull();
+    window.localStorage.clear();
   });
 
   it("Assign review or accept… saves through the panel and later chip saves use the returned revision", async () => {
@@ -1363,8 +1379,8 @@ describe("lead review fixes", () => {
     const box = await screen.findByRole("group", { name: "Change the plan of case-1 de" });
     mockRows(page([group("case-1", [en, notInPlanRow("case-1", "de")], { plan_revision: 3 })]));
     fireEvent.click(within(box).getByRole("button", { name: "Save" }));
-    // Out of the plan the row folds behind the case line's toggle; the card stays open on it.
-    await waitFor(() => expect(screen.getByRole("button", { name: "2 not in plan" })).toBeTruthy());
+    // Out of the plan the row leaves the list (the switch is off); the card stays open on it.
+    await waitFor(() => expect(screen.getByText("No texts in plan on this page.")).toBeTruthy());
     await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Translation review, case-1 de"));
   });
 });
@@ -1518,7 +1534,7 @@ describe("text card (U3)", () => {
     expect(within(card).getByRole("heading", { name: "Translation" })).toBeTruthy();
     // The path switches the segment through the route (panel_stage).
     fireEvent.click(within(path).getByRole("button", { name: /^Annotation / }));
-    expect(await within(card).findByText("17 tool proposals")).toBeTruthy();
+    expect(await within(card).findByRole("button", { name: "Assign annotators…" })).toBeTruthy();
   });
 
   it("a row click opens only the card and marks the row current; it never changes the selection", async () => {
@@ -1553,37 +1569,26 @@ describe("text card (U3)", () => {
     expect(screen.getByRole("checkbox", { name: "Select case-0200 de" })).toHaveProperty("checked", true);
   });
 
-  it("Annotate from proposals myself navigates to the task", async () => {
-    mockRows(page([group("case-0200", [proposalsRow()])]));
-    const created = { id: 42, document_id: "case-0200-de", task: "annotate", username: "lead" } as AssignmentView;
-    const assign = vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [created], refused: [] });
-    const { onNavigate } = renderStateful({ panel: "case-0200:de" });
+  it("Assign annotators… opens the assign dialog with the lead as a choice and the consolidator rule", async () => {
+    mockRows(page([group("case-0200", [proposalsRow()])], { adjudicator_not_annotator: true }));
+    renderStateful({ panel: "case-0200:de", panel_stage: "annotation" });
     const card = await textCard("case-0200 de");
-    fireEvent.click(within(card).getByRole("button", { name: "Annotate from proposals myself" }));
-    await waitFor(() => expect(onNavigate).toHaveBeenLastCalledWith({ name: "task", assignmentId: 42 }, undefined));
-    expect(assign).toHaveBeenCalledWith("p", { rows: [{ document_id: "case-0200-de", username: "lead" }], task: "annotate", confirm_language: true });
-  });
-
-  it("a refused Annotate from proposals myself says so in words", async () => {
-    mockRows(page([group("case-0200", [proposalsRow()])]));
-    vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [], refused: [] });
-    renderStateful({ panel: "case-0200:de" });
-    const card = await textCard("case-0200 de");
-    fireEvent.click(within(card).getByRole("button", { name: "Annotate from proposals myself" }));
-    expect(await within(card).findByText("You could not be assigned to this text.")).toBeTruthy();
-    expect(within(card).queryByText("ASSIGNMENT_REFUSED")).toBeNull();
+    expect(within(card).queryByRole("button", { name: "Annotate from proposals myself" })).toBeNull();
+    fireEvent.click(within(card).getByRole("button", { name: "Assign annotators…" }));
+    expect(lastAssign()).toMatchObject({ mode: "row", task: "annotate", row: { case_id: "case-0200", language: "de" }, me: { username: "lead", name: "lead-0002" }, consolidatorRule: true });
   });
 
   it("the assign dialog opened from the card comes after the card, so it sits on top", async () => {
     mockRows(page([group("case-0200", [proposalsRow()])]));
     renderStateful({ panel: "case-0200:de", panel_stage: "annotation" });
     const card = await textCard("case-0200 de");
-    fireEvent.click(within(card).getByRole("button", { name: "+ Person" }));
+    fireEvent.click(within(card).getByRole("button", { name: "Assign annotators…" }));
     const assign = await screen.findByRole("dialog", { name: "Assign stub" });
     expect(card.compareDocumentPosition(assign) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("‹ › skip folded texts; once the case's not-in-plan toggle is open they are walked too", async () => {
+  it("‹ › skip texts not in plan; with the switch on they are walked too", async () => {
+    window.localStorage.clear();
     const en = notInPlanRow("case-0200", "en", { is_source: true });
     mockRows(page([group("case-0200", [en, stagedRow("case-0200", "de", {})]), group("case-0201", [stagedRow("case-0201", "de", {})])]));
     renderStateful({ panel: "case-0201:de" });
@@ -1591,10 +1596,27 @@ describe("text card (U3)", () => {
     fireEvent.click(within(await textCard("case-0200 de")).getByRole("button", { name: "Previous text" }));
     await waitFor(() => expect(live().textContent).toBe("First row"));
     fireEvent.click(within(await textCard("case-0200 de")).getByRole("button", { name: "Close" }));
-    fireEvent.click(await screen.findByRole("button", { name: "1 not in plan" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /^Show texts not in plan/ }));
     fireEvent.click(screen.getByRole("button", { name: "Open text card, case-0200 de" }));
-    fireEvent.click(within(await textCard("case-0200 de")).getByRole("button", { name: "Next text" }));
+    fireEvent.click(within(await textCard("case-0200 de")).getByRole("button", { name: "Previous text" }));
     await textCard("case-0200 en");
+    window.localStorage.clear();
+  });
+
+  it("the card lists the case's other languages; a click switches the card, texts not in plan offer Add to plan…", async () => {
+    const en = notInPlanRow("case-0200", "en", { is_source: true });
+    mockRows(page([group("case-0200", [en, stagedRow("case-0200", "de", {}), stagedRow("case-0200", "fr", {})])]));
+    renderStateful({ panel: "case-0200:de" });
+    const card = await textCard("case-0200 de");
+    const list = within(card).getByRole("list", { name: "Other languages" });
+    expect(within(list).getAllByRole("listitem").map(item => item.textContent)).toEqual(["ensourcenot in planAdd to plan…", "fr"]);
+    // The open row is current; its planned sibling in the table is tinted.
+    expect(screen.getByRole("button", { name: "Open text card, case-0200 fr", hidden: true }).closest("tr")!.className).toContain("documents-row--sibling");
+    fireEvent.click(within(list).getByRole("button", { name: "Add to plan…, case-0200 en" }));
+    expect(await screen.findByRole("dialog", { name: "Plan for case-0200 en" })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Plan for case-0200 en" })).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(list).getByRole("button", { name: "Show case-0200 fr" }));
+    await textCard("case-0200 fr");
   });
 
   it("‹ › announce the text the card shows now", async () => {

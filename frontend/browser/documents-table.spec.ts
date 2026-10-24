@@ -12,7 +12,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
 import {
-  activityLines, caseBox, documentsReady, documentsScenario, documentsTab, documentsTable, filterChip, openCardHistory, openDecisionBlock,
+  activityLines, documentsReady, documentsScenario, documentsTab, documentsTable, filterChip, openCardHistory, openDecisionBlock,
   openFilters, openTextCard, rowAction, rowBox, rowCell, showSegment, textCard, textName, textNamePattern, textRow, textVersionItems,
   type DocumentsScenario,
 } from "./documentsHelpers";
@@ -58,9 +58,9 @@ async function openScenario(page: Page, name: string, query = "") {
   return { s, ...people };
 }
 
-/** The slim case line of a case: the case ID, plus "source en (native), n translations" when the source is folded in. */
-const groupLabel = (page: Page, caseId: string) =>
-  documentsTable(page).locator(".documents-group-label").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) });
+/** The case IDs of the table's rows in order, each once (the flat list has no case lines). */
+const casesInOrder = (page: Page): Promise<string[]> =>
+  documentsTable(page).locator("th[scope=row] .documents-row-case .documents-id").evaluateAll(ids => [...new Set(ids.map(id => id.getAttribute("title") ?? ""))]);
 
 /** Language codes of a case's rows in table order (from the text names "Open text card, {case} {language}"). */
 async function languagesInOrder(page: Page, caseId: string): Promise<string[]> {
@@ -91,9 +91,10 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   const caseId = "synthetic-accepted";
   const ann = esc(names["ann-0004"]);
 
-  // The slim case line: the case ID only (the en source is planned, so it has its own row); one decision (de) in the tab.
-  await expect(groupLabel(page, caseId)).toHaveText(caseId);
-  await expect(caseBox(page, caseId, 2)).toBeVisible();
+  // Flat list: no case line, the case ID in each Text cell (the en source is planned, so it has its own row); one decision (de) in the tab.
+  await expect(documentsTable(page).locator("th[scope=rowgroup]")).toHaveCount(0);
+  await expect(textRow(page, caseId, "en").getByRole("rowheader")).toContainText(caseId);
+  await expect(rowBox(page, caseId, "en")).toBeVisible();
   expect(await languagesInOrder(page, caseId)).toEqual(["en", "de"]);
   await expect(documentsTab(page, "Needs your decision", 1)).toBeVisible();
 
@@ -157,7 +158,7 @@ test("S1 case-0042: two submissions and a final result, nothing to do", async ({
 
   await expect(documentsTab(page, "Needs your decision", 0)).toBeVisible();
   await expect(documentsTab(page, "Done", 1)).toBeVisible();
-  await expect(caseBox(page, caseId, 1)).toBeVisible();
+  await expect(rowBox(page, caseId, "en")).toBeVisible();
 
   const en = textRow(page, caseId, "en");
   await expect(rowCell(en, "annotation")).toContainText("2 of 2 submitted");
@@ -184,7 +185,7 @@ test("S2 case-0108: seven languages, final 4 of 7, de failed its automatic check
   await openScenario(page, "S2");
   const caseId = "case-0108";
 
-  await expect(groupLabel(page, caseId)).toHaveText(caseId);
+  await expect(textRow(page, caseId, "en").locator(".documents-row-case")).toHaveText(caseId);
   // A failed check without a reviewer is "To assign", not a decision (D4).
   await expect(documentsTab(page, "Needs your decision", 0)).toBeVisible();
   await expect(documentsTab(page, "To assign", 6)).toBeVisible();
@@ -246,8 +247,8 @@ test("S4 case-0305 fr: two independent translations, each annotated in its own r
   const { names } = await openScenario(page, "S4");
   const caseId = "case-0305";
 
-  // Selection is per text (VD4): case checkbox and one checkbox per row.
-  await expect(caseBox(page, caseId, 2)).toBeVisible();
+  // Selection is per text (VD4): one checkbox per row, no case checkbox.
+  await expect(page.getByRole("checkbox", { name: new RegExp(`^Select ${esc(caseId)} \\(`) })).toHaveCount(0);
   await expect(rowBox(page, caseId, "fr")).toBeVisible();
   const fr = textRow(page, caseId, "fr");
   await expect(fr.getByRole("rowheader")).toContainText("2 translations");
@@ -295,7 +296,7 @@ test("S6 case-0390 de: open problem report with a paused task", async ({ page })
   await expect(paused.getByRole("link", { name: "Open report", exact: true })).toHaveAttribute("href", new RegExp(`/problem-reports/${esc(String(s.report_id))}`));
   await card.getByRole("button", { name: "Back", exact: true }).click();
   await expect(card.locator(".text-card-banner")).toHaveText("1 open problem report, Open");
-  await card.getByRole("button", { name: "Text details", exact: true }).click();
+  await card.getByRole("button", { name: "Details", exact: true }).click();
   const report = card.locator("section", { has: page.getByRole("heading", { name: "Problem reports (1)" }) }).getByRole("listitem");
   await expect(report).toContainText("Report: Open");
   await expect(report).toContainText("Paused tasks: 1");
@@ -309,17 +310,16 @@ test("S6 case-0390 de: open problem report with a paused task", async ({ page })
   await expect(textName(page, caseId, "en")).toHaveCount(0);
 });
 
-test("S7 300 texts: 50 groups per page, page 1 of 6, groups never collapse", async ({ page }) => {
+test("S7 300 texts: 50 cases per page, page 1 of 6, a flat list", async ({ page }) => {
   await openScenario(page, "S7");
-  const groups = documentsTable(page).locator(".documents-group-label");
-  await expect(groups).toHaveCount(50);
   const pages = page.getByRole("navigation", { name: "Pages" });
   await expect(pages).toContainText("Page 1 of 6");
-  await expect(groups.first()).toHaveText("case-0001");
-  await expect(groups.last()).toHaveText("case-0050");
+  const first = await casesInOrder(page);
+  expect(first).toHaveLength(50);
+  expect([first[0], first[49]]).toEqual(["case-0001", "case-0050"]);
 
-  // VD5: the case line is a label, not a disclosure; every text row of the page is shown.
-  await expect(documentsTable(page).locator("button.documents-group-toggle")).toHaveCount(0);
+  // VD5 / M1: no case lines; every text row in plan of the page is shown.
+  await expect(documentsTable(page).locator("th[scope=rowgroup]")).toHaveCount(0);
   await expect(textName(page, "case-0007", "de")).toBeVisible();
   await expect(rowCell(textRow(page, "case-0007", "de"), "translation")).toContainText("Check failed");
   const rowsOnPage = await documentsTable(page).getByRole("button", { name: /^Open text card, / }).count();
@@ -327,8 +327,7 @@ test("S7 300 texts: 50 groups per page, page 1 of 6, groups never collapse", asy
 
   await pages.getByRole("link", { name: "Next", exact: true }).click();
   await expect(pages).toContainText("Page 2 of 6");
-  await expect(groups.first()).toHaveText("case-0051");
-  await expect(groups).toHaveCount(50);
+  await expect.poll(async () => { const second = await casesInOrder(page); return [second.length, second[0]]; }).toEqual([50, "case-0051"]);
 });
 
 test("S8 synthetic-accepted at 390 px: cards instead of a table", async ({ page }) => {

@@ -8,11 +8,14 @@ export interface AssignmentActionsProps {
   assignment: AssignmentView; members: Member[]; onChanged: () => void;
   /** A direct "Reassign…" button before the "Assignment actions" menu (the Documents row panel, S3). */
   directReassign?: boolean;
+  /** Only this action's dialog, open at once (no buttons); `onClose` runs when it closes or the action is done. */
+  open?: "reassign" | "reopen";
+  onClose?: () => void;
 }
 export function AssignmentActions(props: AssignmentActionsProps): JSX.Element { return <Actions key={JSON.stringify([props.assignment.project_key, props.assignment.id, props.assignment.updated_at, props.assignment.status, props.assignment.revoked_at])} {...props} />; }
 const startedMessage = "Work has started. The previous draft stays with its author; the new person starts from the document's inputs.";
-function Actions({ assignment, members, onChanged, directReassign = false }: AssignmentActionsProps): JSX.Element {
-  const [action, setAction] = useState<"reassign" | "reopen" | "revoke" | null>(null);
+function Actions({ assignment, members, onChanged, directReassign = false, open, onClose }: AssignmentActionsProps): JSX.Element {
+  const [action, setAction] = useState<"reassign" | "reopen" | "revoke" | null>(open ?? null);
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
   const [confirmation, setConfirmation] = useState<"started" | "language" | null>(null);
@@ -21,7 +24,7 @@ function Actions({ assignment, members, onChanged, directReassign = false }: Ass
   const [busy, setBusy] = useState(false);
   const writing = useRef(false);
   const alive = useAlive();
-  const close = () => { if (!writing.current) { setAction(null); setConfirmation(null); setError(undefined); setTarget(""); setReason(""); setConfirmedStarted(false); } };
+  const close = () => { if (!writing.current) { setAction(null); setConfirmation(null); setError(undefined); setTarget(""); setReason(""); setConfirmedStarted(false); onClose?.(); } };
   const mutate = async (confirm_started = false, confirm_language = false) => {
     if (writing.current || !action) return;
     writing.current = true; setBusy(true); setError(undefined);
@@ -29,7 +32,7 @@ function Actions({ assignment, members, onChanged, directReassign = false }: Ass
       if (action === "reassign") await api.reassign(assignment.id, { username: target, confirm_started, confirm_language });
       else if (action === "reopen") await api.reopenAssignment(assignment.id, reason.trim() || undefined);
       else await api.revokeAssignment(assignment.id);
-      if (alive.current) { setAction(null); setConfirmation(null); onChanged(); }
+      if (alive.current) { setAction(null); setConfirmation(null); onChanged(); onClose?.(); }
     } catch (failure: unknown) {
       if (!alive.current) return;
       if (action === "reassign" && failure instanceof ApiError && failure.code === "REASSIGN_CONFIRMATION_REQUIRED") setConfirmation("started");
@@ -41,12 +44,14 @@ function Actions({ assignment, members, onChanged, directReassign = false }: Ass
   // D1: a consolidation task (task review) cannot be handed to someone else.
   const reassignable = assignment.task !== "review";
   return <>
+    {!open && <>
     {directReassign && reassignable && <Button size="sm" onClick={() => setAction("reassign")}>Reassign…</Button>}
     <details><summary aria-label={`Actions for ${assignment.pseudonym}: ${labelFor(taskLabels, assignment.task)}, ${assignment.document_id}`}>Assignment actions</summary>
     {!directReassign && reassignable && <Button onClick={() => setAction("reassign")}>Reassign …</Button>}
     {assignment.status === "submitted" && <Button onClick={() => setAction("reopen")}>Reopen</Button>}
     <Button onClick={() => setAction("revoke")}>Remove assignment</Button>
     </details>
+    </>}
     <Dialog open={action === "reassign"} title={`Reassign ${assignment.document_id}`} onClose={busy || confirmation ? undefined : close} footer={<><Button disabled={busy || confirmation !== null} onClick={close}>Cancel</Button><Button disabled={!target || confirmation !== null} loading={busy} onClick={() => { if (assignment.status !== "open" && !confirmedStarted) setConfirmation("started"); else void mutate(confirmedStarted, false); }}>Reassign</Button></>}>
       <p>{assignment.pseudonym}: {labelFor(taskLabels, assignment.task)}, {labelFor(assignmentStatusLabels, assignment.status).toLowerCase()}</p>
       {confirmedStarted && <p>{startedMessage}</p>}

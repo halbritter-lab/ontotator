@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
-  caseBox, documentsReady, documentsTab, notInPlanToggle, openDecisionBlock, openFilters, openTextCard, rowAction, rowCell, textCard, textName, textNamePattern,
+  documentsReady, documentsTab, moreMarker, notInPlanSwitch, openDecisionBlock, rowBox, openFilters, openTextCard, rowAction, rowCell, textCard, textName, textNamePattern,
   textRow, textVersionItems,
 } from "./documentsHelpers";
 import { authenticatedRequest, openTasksHome, TEST_PASSWORD } from "./helpers";
@@ -79,7 +79,7 @@ const row = textRow;
 /** The text card on Text details, where the plan chips of a row live (VD2, U3). */
 async function openPlan(page: Page, caseId: string, language: string): Promise<Locator> {
   const card = await openTextCard(page, caseId, language);
-  await card.getByRole("button", { name: "Text details", exact: true }).click();
+  await card.getByRole("button", { name: "Details", exact: true }).click();
   return card;
 }
 /** A plan chip in the card's Text details ("Translation review, {case} {language}", "Annotate, …"). */
@@ -160,7 +160,7 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
   // Not counted: the upload dialog stays open with the import result and is closed here.
   await finishImport(page, upload, 200);
   // "Nothing planned": every translation is undecided (VD3): a normal row with "? not decided" and "Plan…", counted as a
-  // decision (V10). The en sources are never undecided: not planned, folded into the case line, no decision.
+  // decision (V10). The en sources are never undecided: not planned, no row (the "+1" of the case's rows), no decision.
   await expect(documentsTab(page, "All", 200)).toBeVisible();
   await expect(documentsTab(page, "Needs your decision", 150)).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Select all 50 filtered cases", exact: true })).toBeVisible();
@@ -168,7 +168,7 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
     await expect(rowCell(row(page, "case-0101", language), "translation"), language).toContainText("not decided");
     await expect(rowAction(page, "Plan…", "case-0101", language)).toBeVisible();
   }
-  await expect(notInPlanToggle(page, "case-0101")).toHaveText("1 not in plan");
+  await expect(moreMarker(page, "case-0101")).toHaveText("+1");
   await expect(textName(page, "case-0101", "en")).toHaveCount(0);
 
   // 2. Plan the 20 de cases from pasted IDs: Select by case IDs…, Select 20, Plan…, Review, Annotate, Save (6 + paste; total 7).
@@ -322,12 +322,12 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   await expect(documentsTab(page, "All")).toHaveAttribute("aria-selected", "true");
   const clicks = counter(page);
   await clicks.click(textName(page, caseId, "fr"));
-  await clicks.click(textCard(page, caseId, "fr").getByRole("button", { name: "Text details", exact: true }));
+  await clicks.click(textCard(page, caseId, "fr").getByRole("button", { name: "Details", exact: true }));
   await expect(review()).toHaveAttribute("aria-pressed", "true");
   await clicks.click(review());
   expect(clicks.total).toBe(3);
   await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Translation review off`);
-  // Out of plan: the row folds behind the case line's "n not in plan" toggle (the card stays open on it).
+  // Out of plan: the row leaves the list while "Show texts not in plan" is off (the card stays open on it).
   const collapsed = row(page, caseId, "fr");
   await expect(collapsed).toHaveCount(0);
 
@@ -339,14 +339,14 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   await expect(collapsed).toHaveCount(1);
   await expect(toast(page)).toHaveCount(0);
 
-  // Ctrl+Z works while the toast is visible, also with a case checkbox focused (the checkbox does not toggle).
+  // Ctrl+Z works while the toast is visible, also with a row checkbox focused (the checkbox does not toggle).
   await review().click();
   await expect(toast(page).locator(".ui-toast-message")).toHaveText(`fr of ${caseId}: Translation review off`);
   await expect(collapsed).toHaveCount(0);
-  // The card is modal: close it so the case checkbox can take focus.
+  // The card is modal: close it so a row checkbox can take focus.
   await textCard(page, caseId, "fr").getByRole("button", { name: "Close", exact: true }).click();
-  // Focus a case checkbox (fr of this case is folded now, so use another case).
-  const box = caseBox(page, s.cases!.acceptance, 2);
+  // Focus a row checkbox (fr of this case is hidden now, so use another case).
+  const box = rowBox(page, s.cases!.acceptance, "fr");
   await box.focus();
   await page.keyboard.press("Control+z");
   await expect(live(page)).toHaveText("Plan change undone.");
@@ -407,11 +407,10 @@ test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }
   const assignments = (await response.json()) as { document_id: string; task: string; status: string; revoked_at: string | null }[];
   const open = assignments.filter(item => item.revoked_at === null && item.status !== "submitted");
   expect(open, JSON.stringify(open)).toEqual([]);
-  // fr is out of plan: folded per case; open, muted rows under All (VD1).
+  // fr is out of plan: hidden by default; with "Show texts not in plan" muted rows under All (VD1).
   await documentsTab(page, "All").click();
+  await notInPlanSwitch(page).check();
   for (const caseId of Object.values(s.open_reviews!)) {
-    const toggle = notInPlanToggle(page, caseId);
-    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
     await expect(row(page, caseId, "fr")).toHaveClass(/documents-row--not-in-plan/);
     await expect(rowCell(row(page, caseId, "fr"), "translation")).toContainText("not reviewed, optional");
   }

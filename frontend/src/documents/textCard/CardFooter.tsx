@@ -11,7 +11,7 @@ import { acceptanceLabel, acceptanceOf, discardLabel, isDiscarded, type TextVers
 /** Report state words of the details list (same words as `reportStateBadge`). */
 const REPORT_STATE_TEXT = { open: "Open", resolved: "Closed", withdrawn: "Withdrawn" } as const;
 
-/** Footer of the text card: History (n), Text details, Change plan…. No tabs. */
+/** Footer of the text card: History (n), Details, Change plan…. No tabs. */
 export function CardFooter({ historyCount, onHistory, onDetails, onChangePlan }: {
   /** Null while the history loads. */
   historyCount: number | null;
@@ -21,7 +21,7 @@ export function CardFooter({ historyCount, onHistory, onDetails, onChangePlan }:
 }): JSX.Element {
   return <div className="text-card-footer">
     <Button size="sm" variant="quiet" onClick={onHistory}>{historyCount == null ? "History" : `History (${historyCount})`}</Button>
-    <Button size="sm" variant="quiet" onClick={onDetails}>Text details</Button>
+    <Button size="sm" variant="quiet" onClick={onDetails}>Details</Button>
     {onChangePlan && <Button size="sm" variant="quiet" className="text-card-footer-end" onClick={onChangePlan}>Change plan…</Button>}
   </div>;
 }

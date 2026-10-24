@@ -13,7 +13,7 @@
  */
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import {
-  caseLine, documentsTab, evidence, expectCounterEqualsTab, expectEdge, expectStage, expectWaiting, notInPlanToggle,
+  documentsTab, evidence, expectCounterEqualsTab, expectEdge, expectStage, expectWaiting, moreMarker,
   namePattern, newBadge, openDocuments, rowAction, rowCell, rowHeader, textCard, textName, textRow, type CellText,
 } from "./documentsOverviewHelpers";
 import { LeadClicks, loginOverviewUser, overviewAct, overviewScenario, type OverviewActBody, type OverviewScenario } from "./overviewHelpers";
@@ -95,10 +95,8 @@ test("step 1: the lead imports the package (1 click)", async () => {
   await clicks.count(dialog.getByRole("button", { name: /^Import 1 case/ }));
   await expect(dialog).toHaveCount(0, { timeout: 90_000 });
 
-  // The en source is not planned: folded behind the case line's toggle instead of its own row.
-  await expect(caseLine(page, CASE)).toContainText(CASE);
-  await expect(notInPlanToggle(page, CASE)).toHaveText("1 not in plan");
-  await expect(notInPlanToggle(page, CASE)).toHaveAttribute("aria-expanded", "false");
+  // The en source is not planned: no row of its own, the de row's "+1" says it exists.
+  await expect(moreMarker(page, CASE)).toHaveText("+1");
   await expect(textName(page, CASE, "en")).toHaveCount(0);
   await expectStage(cell("translation"), { state: "Unassigned", who: "" });
   await expectStage(cell("annotation"), { state: "after translation review", who: "" });
@@ -145,7 +143,7 @@ test("step 4: the lead assigns the annotation to Tom and Luc", async () => {
   if (await split.count()) await clicks.count(split);
   await clicks.count(dialog.getByRole("checkbox", { name: new RegExp(`^${TOM}`) }));
   await clicks.count(dialog.getByRole("checkbox", { name: new RegExp(`^${LUC}`) }));
-  await clicks.count(dialog.getByRole("button", { name: "Assign 2", exact: true }));
+  await clicks.count(dialog.getByRole("button", { name: "Assign 2 people", exact: true }));
   await expect(dialog).toHaveCount(0);
 
   await expectStage(cell("annotation"), { state: "0 of 2 submitted", who: either(TOM, LUC) });

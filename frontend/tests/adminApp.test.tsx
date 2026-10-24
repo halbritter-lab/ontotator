@@ -62,7 +62,7 @@ it("uses controlled document query routes and actual managed-project documents",
   vi.spyOn(api, "listProjectDocuments").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   render(<App user={user} />);
-  expect(await screen.findByLabelText("Select ID (1 text)")).toHaveProperty("checked", false);
+  expect(await screen.findByLabelText("Select ID de")).toHaveProperty("checked", false);
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { language: "de", q: "ID" });
   expect(screen.getByRole("link", { name: "Documents" }).getAttribute("aria-current")).toBe("page");
   // Status is a facet of the filter popover now; the search box drives the same controlled route

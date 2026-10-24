@@ -35,7 +35,7 @@ test("the lead opens the proposals from the card, switches layers and compares",
   await documentsReady(page);
   const card = await openTextCard(page, CASE, "en");
   await showSegment(card, "Annotation");
-  await card.getByRole("link", { name: "View proposals", exact: true }).click();
+  await card.getByRole("link", { name: `Open text, ${CASE} en`, exact: true }).click();
   await expect(page).toHaveURL(/show=proposals/);
 
   const select = showSelects(page).first();

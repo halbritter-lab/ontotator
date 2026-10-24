@@ -78,14 +78,13 @@ export const rowAction = (page: Page, label: string, caseId: string, language: s
 export const rowBox = (page: Page, caseId: string, language: string): Locator =>
   page.getByRole("checkbox", { name: textNamePattern("Select ", caseId, language) });
 
-/** The case line's toggle "n not in plan": the texts outside the plan fold behind it. */
-export const notInPlanToggle = (page: Page, caseId: string): Locator =>
-  documentsTable(page).locator(".documents-group-line").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) })
-    .getByRole("button", { name: /^\d+ not in plan$/ });
+/** The "+n" marker of a case's rows (its texts not in plan, hidden while the switch is off): the visible "+n". */
+export const moreMarker = (page: Page, caseId: string): Locator =>
+  documentsTable(page).locator("th[scope=row]").filter({ has: page.locator(`.documents-id[title="${caseId}"]`) })
+    .locator(".documents-more > [aria-hidden='true']").first();
 
-/** The case (group) checkbox "Select {case} ({n} texts)". */
-export const caseBox = (page: Page, caseId: string, texts: number): Locator =>
-  page.getByRole("checkbox", { name: `Select ${caseId} (${texts === 1 ? "1 text" : `${texts} texts`})`, exact: true });
+/** The toolbar switch "Show texts not in plan (N)". */
+export const notInPlanSwitch = (page: Page): Locator => page.getByRole("checkbox", { name: /^Show texts not in plan \(\d+\)$/ });
 
 /** The decision block of a text card (its Finalization part): the region "Final result". */
 export const decisionBlock = (card: Locator): Locator => card.getByRole("region", { name: "Final result", exact: true });
@@ -166,5 +165,6 @@ export async function showSegment(card: Locator, title: "Translation" | "Annotat
   await expect(segment).toHaveAttribute("aria-current", "step");
 }
 
-/** ✕ on a person's chip in the card ("Remove {name}"). */
-export const removeChipButton = (card: Locator, name: string): Locator => card.getByRole("button", { name: `Remove ${name}`, exact: true });
+/** A person's chip in the card: the lead's menu button "{name}, {state}: actions" (Reassign, Remove, Assign another person). */
+export const chipMenu = (card: Locator, name: string): Locator =>
+  card.getByRole("button", { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}, [^:]+: actions$`) });
