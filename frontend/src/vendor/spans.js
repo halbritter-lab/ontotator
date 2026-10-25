@@ -81,6 +81,7 @@ export class SpanEditor {
     this.markers = [];
     this.paragraphStarts = [];
     this.activeIds = new Set();
+    this.framedIds = new Set();
     this.readOnly = false;
     this.resizableIds = new Set();
     this.resizableLabels = {};
@@ -228,7 +229,8 @@ export class SpanEditor {
     const starts = new Map();
     const ends = new Map();
     for (const mention of this.mentions) {
-      if (!this.resizableIds.has(mention.mention_id)) continue;
+      // A modifier segment is never resizable.
+      if (!this.resizableIds.has(mention.mention_id) || mention.kind === "modifier") continue;
       normaliseSpans(mention.spans || []).forEach((span, index) => {
         const base = { mentionId: mention.mention_id, index };
         starts.set(span.start, [...(starts.get(span.start) || []), { ...base, edge: "start", offset: span.start }]);
@@ -470,6 +472,15 @@ export class SpanEditor {
     }
   }
 
+  /** Runs containing any of these mentions get the `run--framed` frame. */
+  setFramed(mentionIds) {
+    this.framedIds = new Set(mentionIds || []);
+    for (const node of this.container.querySelectorAll(".run")) {
+      const ids = (node.dataset.mentions || "").split(",").filter(Boolean);
+      node.classList.toggle("run--framed", ids.some((id) => this.framedIds.has(id)));
+    }
+  }
+
   render() {
     const marks = normaliseSpans(this.markers);
     const runs = decomposeRuns(
@@ -517,6 +528,8 @@ export class SpanEditor {
         if (edges.atEnd) node.classList.add("run--hot-end");
       }
 
+      if (run.mentionIds.some((id) => this.framedIds.has(id))) node.classList.add("run--framed");
+
       if (run.mentionIds.length > 0) {
         const runMentions = run.mentionIds
           .map((id) => this.mentions.find((m) => m.mention_id === id))
@@ -524,6 +537,8 @@ export class SpanEditor {
         for (const m of runMentions) {
           if (m.kind) node.classList.add(`run--${m.kind}`);
         }
+        const titles = runMentions.map((m) => m.label).filter(Boolean);
+        if (titles.length) node.title = titles.join("; ");
         if (runMentions.some((m) => m.negated)) node.classList.add("run--negated");
         const activeMention = runMentions.find((m) => this.activeIds.has(m.mention_id));
         const primaryMention = activeMention || runMentions[0];

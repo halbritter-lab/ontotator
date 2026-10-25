@@ -202,6 +202,25 @@ describe("design tokens", () => {
     expect(failing).toEqual([]);
   });
 
+  it("modifier_and_framed_marks", () => {
+    const css = readFileSync(resolve(src, "styles/screens/editor.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = (selector: string, from = 0): string => {
+      const at = css.indexOf(`${selector} {`, from);
+      if (at < 0) throw new Error(`Missing rule ${selector}`);
+      return css.slice(at, css.indexOf("}", at));
+    };
+    const modifier = rule(".run--modifier");
+    expect(modifier).toContain("text-decoration-style: double");
+    expect(modifier).toContain("text-decoration-color: var(--mark-line)");
+    const framed = rule(".run--framed");
+    expect(framed).toMatch(/box-shadow:[^;]*var\(--mark-selected\)/);
+    expect(framed).not.toMatch(/padding|margin/);
+    const forced = css.search(/@media \(forced-colors: active\) \{\s*\.run--modifier/);
+    expect(forced).toBeGreaterThan(-1);
+    expect(rule(".run--modifier", forced)).toContain("text-decoration-color: CanvasText");
+    expect(rule(".run--framed", forced)).toContain("Highlight");
+  });
+
   it("consolidation_lane_lines", () => {
     const css = readFileSync(resolve(here, "../src/styles/tokens.css"), "utf8");
     const LANES = ["--accent", "--warning", "--success", "--mark-line"];

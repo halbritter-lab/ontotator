@@ -183,6 +183,8 @@ The six fills and their exact values are `colors.mark-0-fill` through `colors.ma
 | Multiple overlaps          | `run--multi`: 3 px underline; own state takes precedence over target/source where they overlap.                                           |
 | Negated finding (`absent`) | `run--negated`: diagonal hatch over the fill; axis value stays in the detail pane.                                                        |
 | Selected mention           | `run--hot`, `run--hot-start`, `run--hot-end`: segmented frame with true segment ends; legacy `mention-span selected` retains its outline. |
+| Modifier of a finding      | `run--modifier`: 1 px double underline in `mark-line`, its finding's fill slot; not a tab stop; title "Severe, modifier of Seizure".      |
+| Framed                     | `run--framed` (hover, focus, selected finding): 2 px `mark-selected` box shadow, no layout shift; `Highlight` outline in forced colours.  |
 
 No horizontal padding or margin may move text when a mark is selected or resized. New mark states need a distinct line style or pattern and a passing `tokens.test.ts`, plus browser verification of the rendered treatment.
 

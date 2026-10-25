@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TextPane } from "../src/editor/TextPane";
 
 afterEach(cleanup);
@@ -89,4 +89,54 @@ it("flushResizeRef flushes the editor", () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+describe("modifier marks", () => {
+  const text = "schwere Krampfanfälle";
+  const finding = { evidence_id: "ev-1", segments: [{ start: 0, end: 21 }], kind: "own" as const, colorIndex: 2 };
+  const modifier = { evidence_id: "mod:ann-1:HP:0012828", segments: [{ start: 0, end: 7 }], kind: "modifier" as const,
+    colorIndex: 2, label: "Severe, modifier of Seizure" };
+  const runs = (container: HTMLElement) => Array.from(container.querySelectorAll<HTMLElement>(".run"));
+
+  it("renders runs with run--modifier in the finding's slot, titled, not focusable, without handles", () => {
+    const mounted = render(<TextPane {...base} text={text} mentions={[{ ...modifier, segments: [{ start: 0, end: 7 }] }]}
+      resizableEvidenceIds={[modifier.evidence_id]} />);
+    const [run] = runs(mounted.container);
+    expect(run.classList.contains("run--modifier")).toBe(true);
+    expect(run.classList.contains("run--color-2")).toBe(true);
+    expect(run.title).toBe("Severe, modifier of Seizure");
+    expect(run.hasAttribute("tabindex")).toBe(false);
+    expect(mounted.container.querySelectorAll(".resize-handle")).toHaveLength(0);
+  });
+
+  it("framedIds frames exactly the runs of those ids and follows changes", () => {
+    const mounted = render(<TextPane {...base} text={text} mentions={[finding, modifier]} framedIds={[modifier.evidence_id]} />);
+    const framed = () => runs(mounted.container).filter((r) => r.classList.contains("run--framed")).map((r) => r.textContent);
+    expect(framed()).toEqual(["schwere"]);
+    mounted.rerender(<TextPane {...base} text={text} mentions={[finding, modifier]} framedIds={["ev-1"]} />);
+    expect(framed()).toEqual(["schwere", " Krampfanfälle"]);
+    mounted.rerender(<TextPane {...base} text={text} mentions={[finding, modifier]} framedIds={[]} />);
+    expect(framed()).toEqual([]);
+  });
+
+  it("reports hovered mention ids and [] on leave", () => {
+    const hover = vi.fn();
+    const mounted = render(<TextPane {...base} text={text} mentions={[finding, modifier]} onHoverMentions={hover} />);
+    const [both] = runs(mounted.container);
+    fireEvent.mouseOver(both);
+    expect(hover).toHaveBeenLastCalledWith(["ev-1", modifier.evidence_id]);
+    fireEvent.mouseOut(both);
+    expect(hover).toHaveBeenLastCalledWith([]);
+  });
+
+  it("a click on a pure modifier run picks the modifier; on a shared run the finding wins", () => {
+    const onPick = vi.fn();
+    const solo = render(<TextPane {...base} onPick={onPick} text={text} mentions={[modifier]} />);
+    fireEvent.click(runs(solo.container)[0]);
+    expect(onPick).toHaveBeenLastCalledWith(modifier.evidence_id);
+    solo.unmount();
+    const shared = render(<TextPane {...base} onPick={onPick} text={text} mentions={[modifier, finding]} />);
+    fireEvent.click(runs(shared.container)[0]);
+    expect(onPick).toHaveBeenLastCalledWith("ev-1");
+  });
 });

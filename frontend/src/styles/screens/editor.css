@@ -518,6 +518,43 @@
   border-bottom-width: 3px;
 }
 
+/* A modifier segment (e.g. "schwere" for Severe of Seizure) takes its finding's fill slot and a
+   1 px double underline; it never takes the solid / dashed / dotted border of the finding states. */
+
+.run--modifier {
+  text-decoration-line: underline;
+  text-decoration-style: double;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--mark-line);
+  text-underline-offset: 3px;
+}
+
+/* Framed with its finding on hover, focus or selection; a box shadow, so the text never moves.
+   Before .run--hot, so a selected mention keeps its exact segment frame. */
+
+.run--framed {
+  box-shadow: 0 0 0 2px var(--mark-selected);
+}
+
+@media (forced-colors: active) {
+  .run--modifier {
+    text-decoration-color: CanvasText;
+  }
+
+  .run--framed {
+    box-shadow: none;
+    outline: 2px solid Highlight;
+  }
+}
+
+/* .run animates its box shadow; the frame appears at once under reduced motion. */
+
+@media (prefers-reduced-motion: reduce) {
+  .run--framed {
+    transition: none;
+  }
+}
+
 /* A negated finding (assertion "absent"): a fine diagonal hatch over the whole run,
    on top of the highlighter. */
 

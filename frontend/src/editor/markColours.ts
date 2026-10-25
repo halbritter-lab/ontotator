@@ -10,6 +10,9 @@
  *
  * The state of a mark (own, proposal, reference, negated, selected) is never a colour:
  * it is drawn as a line style or pattern, so it stays readable whatever the colours mean.
+ *
+ * A modifier segment (e.g. "schwere" for Severe of Seizure) takes its finding's slot, so colour
+ * connects it to its finding; its state is the `run--modifier` double underline.
  */
 
 /** Number of palette slots (`--mark-0-fill` … `--mark-5-fill`). */

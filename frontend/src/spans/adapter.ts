@@ -3,6 +3,7 @@
  */
 
 import { SpanEditor } from "../vendor/spans.js";
+import { parseModifierDisplayId } from "../editor/modifiers";
 import {
   toCodepoint,
   toUtf16,
@@ -17,10 +18,11 @@ export interface CodepointSegment {
 export interface MentionDisplay {
   evidence_id: string;
   sourceId?: string;
+  /** Run title and accessible description, e.g. "Severe, modifier of Seizure". */
   label?: string;
   segments: CodepointSegment[];
   is_suggestion?: boolean;
-  kind?: "own" | "target" | "source" | "context";
+  kind?: "own" | "target" | "source" | "context" | "modifier";
   colorIndex?: number;
   /** The annotation's assertion is "absent": its runs get a hatch. */
   negated?: boolean;
@@ -34,6 +36,7 @@ export interface SelectionPayload {
 
 export type SelectionCallback = (payload: SelectionPayload) => void;
 export type PickCallback = (evidenceId: string) => void;
+export type HoverCallback = (evidenceIds: string[]) => void; // [] when the pointer leaves a run
 export type ResizeCallback = (evidenceId: string, segments: CodepointSegment[]) => void;
 
 export interface SpanEditorHandle {
@@ -52,6 +55,8 @@ export interface SpanEditorHandle {
   flushResize: () => void;
   /** Scrolls the first mark of the evidence to the middle of the text; unknown ids do nothing. */
   scrollToEvidence: (evidenceId: string) => void;
+  /** Evidence ids whose runs get the `run--framed` frame (hover, focus, selection of a finding). */
+  setFramed: (evidenceIds: string[]) => void;
   destroy: () => void;
 }
 
@@ -63,7 +68,8 @@ interface VendorSpan {
 interface VendorMention {
   mention_id: string;
   spans: VendorSpan[];
-  kind?: "own" | "target" | "source" | "context";
+  kind?: MentionDisplay["kind"];
+  label?: string;
   colorIndex?: number;
   negated?: boolean;
 }
@@ -98,6 +104,7 @@ export function mentionsToVendor(
       mention_id: mention.evidence_id,
       spans,
       kind: mention.kind,
+      label: mention.label,
       colorIndex: mention.colorIndex,
       negated: mention.negated,
     });
@@ -117,6 +124,7 @@ export function mountSpanEditor(
   onInvalidMentions?: (evidenceIds: string[]) => void,
   onResize?: ResizeCallback,
   paragraphStarts: readonly number[] = [],
+  onHoverMentions?: HoverCallback,
 ): SpanEditorHandle {
   const convert = (items: MentionDisplay[]): VendorMention[] => {
     const invalid: string[] = [];
@@ -155,9 +163,11 @@ export function mountSpanEditor(
     },
     onPick: (mentionIds: string[]) => {
       if (mentionIds && mentionIds.length > 0) {
-        onPick(mentionIds[0]);
+        // A finding mark under a modifier segment wins: only a pure modifier run picks the modifier.
+        onPick(mentionIds.find((id) => parseModifierDisplayId(id) === null) ?? mentionIds[0]);
       }
     },
+    onHoverMentions: (mentionIds: string[]) => onHoverMentions?.(mentionIds),
     onResize: (mentionId: string, spans: Array<{ start: number; end: number }>) => {
       if (!onResize) return;
       try {
@@ -204,6 +214,9 @@ export function mountSpanEditor(
       const mark = Array.from(container.querySelectorAll<HTMLElement>(".run[data-mentions]"))
         .find((node) => (node.dataset.mentions ?? "").split(",").includes(evidenceId));
       mark?.scrollIntoView?.({ block: "center" });
+    },
+    setFramed: (evidenceIds: string[]) => {
+      editor.setFramed(evidenceIds);
     },
     destroy: () => {
       editor.destroy();
