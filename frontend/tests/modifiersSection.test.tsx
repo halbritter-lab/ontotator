@@ -81,6 +81,19 @@ describe("ModifiersSection", () => {
     expect(props.onLinkSpan).toHaveBeenCalledWith("HP:0031796");
   });
 
+  it("without a link action the status only names the added modifier", async () => {
+    const searchOntology = vi.fn().mockResolvedValue({ search_id: "s1", candidates: [
+      { term_id: "HP:0031796", label: "Recurrent", rank: 1, role: "modifier" }] });
+    renderSection({ onLinkSpan: undefined }, searchOntology);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add modifier…" }));
+    const input = screen.getByRole("combobox", { name: "Search modifier" });
+    fireEvent.change(input, { target: { value: "rec" } });
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect((await screen.findByText("Added Recurrent to Seizure.")).closest('[role="status"]')).not.toBeNull();
+    expect(screen.queryByText(/Link a text span/)).toBeNull();
+  });
+
   it("read-only shows the chips without actions", () => {
     renderSection({ readOnly: true });
     expect(chips().map(chip => chip.textContent)).toEqual(["Severe · “schwere”"]);

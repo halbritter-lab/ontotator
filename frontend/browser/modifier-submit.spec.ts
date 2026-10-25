@@ -50,7 +50,7 @@ test("Mild and Severe: Two severities is listed, the ticked box submits", async 
   await addModifiers(page, ["Mild", "Severe"]);
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   const dialog = submitDialog(page);
-  const warnings = dialog.getByRole("region", { name: "Modifier warnings · 1" });
+  const warnings = dialog.getByRole("region", { name: "Modifier warnings (1)" });
   await expect(warnings).toContainText("Seizure: Two severities: Mild, Severe.");
   await expect(warnings.getByRole("button", { name: "Go to Seizure" })).toBeVisible();
   await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values and 1 modifier warnings$/ }).check();
@@ -63,7 +63,7 @@ test("Frequent: the cohort term is listed as a modifier warning", async ({ page 
   await open(page, { with_finding: "1" });
   await addModifiers(page, ["Frequent"]);
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
-  const warnings = submitDialog(page).getByRole("region", { name: "Modifier warnings · 1" });
+  const warnings = submitDialog(page).getByRole("region", { name: "Modifier warnings (1)" });
   await expect(warnings).toContainText("Seizure: Frequent is a cohort term.");
 });
 

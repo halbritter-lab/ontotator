@@ -153,6 +153,11 @@ type AxisWarning = {
   acknowledgement: { draft_revision: number; policy_revision: number; warning_digest: string };
   warnings: { annotationId: string; axis: string }[];
 };
+/** Status after the acknowledged pairs changed: only modifier warning pairs → "The warnings changed." (`pairKey("", "")` is the separator.) */
+function changedStatus(changed: readonly string[]): string {
+  return changed.length && changed.every(pair => isModifierWarningKey(pair.slice(pair.indexOf(pairKey("", "")) + 1)))
+    ? "The warnings changed. Check the list again." : "The unconfirmed values changed. Check the list again.";
+}
 function submissionAxisWarning(error: unknown): AxisWarning | null {
   if (!(error instanceof ApiError) || error.code !== "AXIS_CONFIRMATION_WARNING" || typeof error.details !== "object" || !error.details) return null;
   const acknowledgement = error.details.acknowledgement as AxisWarning["acknowledgement"] | undefined;
@@ -2222,7 +2227,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const attachMark = attachSegments.length
     ? { start: Math.min(...attachSegments.map(s => s.start)), end: Math.max(...attachSegments.map(s => s.end)) } : null;
   const attachNearest = attachActive && attachMark ? attachCandidates(view.document.text, attachMark, attachTargets)[0] ?? null : null;
+  /** Hidden layers of the targets become visible: their rows render and take keyboard focus. */
+  const showLayersOf = (targets: readonly AttachFinding[]) => setLayerSelection(previous => ({ ...previous, visibleLayerIds: [...new Set([
+    ...previous.visibleLayerIds, ...targets.flatMap(target => draftAnnotationById.get(target.annotationId)?.annotation.layer_id ?? [])])] }));
   const startAttach = (candidate: { term_id: string; label?: string | null }) => {
+    showLayersOf(attachTargets);
     setAttachModifier({ termId: candidate.term_id, termLabel: candidate.label ?? candidate.term_id, mode: "attach" });
     setAttachFocusId(null); setAttachReplaceId(null);
     // At <=700 px the list pane holds the targets (the "Create the finding first" state stays in the details pane).
@@ -2236,7 +2245,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setAttachModifier({ termId: snapshot.annotation.term_id, termLabel: findingNameOf(snapshot), mode: "convert", sourceId: snapshot.annotation.annotation_id,
       mark: first ? allEvidenceMap[first.evidence_id]?.mention.segments ?? [] : [] });
     setAttachFocusId(null); setAttachReplaceId(null);
-    if (panesLayout) setMobilePane("list");
+    // attachTargets is not filtered for convert mode yet: the source's layer is the only target layer.
+    const targets = attachTargets.filter(target => target.annotationId !== snapshot.annotation.annotation_id
+      && draftAnnotationById.get(target.annotationId)?.annotation.layer_id === snapshot.annotation.layer_id);
+    showLayersOf(targets);
+    if (panesLayout && targets.length) setMobilePane("list");
+    // No target: the panel's "Create the finding first" state is announced (its "OK" takes focus).
+    if (!targets.length) announceCarried(attachCopy.noFindings(findingNameOf(snapshot)));
   };
   /** Convert mode: Esc and Cancel only end the mode (the finding stays) and focus "Turn into modifier…" again. */
   const cancelAttachModifier = () => {
@@ -2257,9 +2272,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (conflict && !replace) { setAttachReplaceId(annotationId); setAttachFocusId(annotationId); return; }
     creatingPending.current = true;
     try {
-      // convert_to_modifier refuses another span (DUPLICATE_MODIFIER): convert without it, then set the source's span.
-      await modifierCommands.convert(sourceId, annotationId, !conflict);
+      // convert_to_modifier refuses another span (DUPLICATE_MODIFIER): set the source's span first (the same span passes),
+      // so a failure leaves the source finding in place.
       if (conflict) await modifierCommands.setSegments(annotationId, termId, mark);
+      await modifierCommands.convert(sourceId, annotationId, true);
     } catch { return; } finally { creatingPending.current = false; }
     setAttachModifier(null); setAttachFocusId(null); setAttachReplaceId(null);
     setSelectedTargetId(null); setSelectedSourceId(null); setSelectedInputId(null);
@@ -2459,7 +2475,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if ([...unconfirmedPairs].some(pair => !ackSeen.has(pair))) {
       setAxisWarningAcknowledged(false);
       setAckSeen(null);
-      setSubmitStatus("The unconfirmed values changed. Check the list again.");
+      setSubmitStatus(changedStatus([...unconfirmedPairs].filter(pair => !ackSeen.has(pair))));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pairsKey]);
@@ -2508,7 +2524,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     modifierAsFinding: completionResults.filter(snapshot => isModifierTerm(snapshot)).map(snapshot => ({ ...findingRef(snapshot) })),
     modifierWarnings: modifierWarningList.map(warning => {
       const snapshot = completionResults.find(candidate => candidate.annotation.annotation_id === warning.annotationId);
-      return { ...warning, term: snapshot ? snapshotTerm(snapshot) : warning.annotationId, evidenceId: snapshot ? firstEvidenceId(snapshot) : undefined };
+      return { ...warning, ...(snapshot ? findingRef(snapshot) : { term: warning.annotationId }) };
     }),
     defaulted: defaulted.map(snapshot => {
       const axes = axisDefinitions(snapshot), defaultedAxes = snapshot.annotation.axes_defaulted ?? [];
@@ -2518,7 +2534,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   /** Control of an open item in the inspector: an axis item focuses its axis field, else the item's selector. */
   const openItemControl = (item: OpenItem) => (root: HTMLElement): HTMLElement | null => {
-    if (!item.axisId) return root.querySelector<HTMLElement>(item.focus);
+    // Proposals have no modifier buttons nor "Turn into modifier…": their decision buttons resolve them.
+    if (!item.axisId) return root.querySelector<HTMLElement>(item.focus) ?? root.querySelector<HTMLElement>(".decision-btn");
     const field = Array.from(root.querySelectorAll<HTMLElement>("[data-axis-field]")).find(element => element.dataset.axisField === item.axisId);
     const control = field?.querySelector<HTMLElement>('input[type="radio"]:checked:not(:disabled)')
       ?? field?.querySelector<HTMLElement>('input[type="radio"]:not(:disabled)')
@@ -2692,7 +2709,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         setAxisWarning(submission.axisWarning);
         setAxisWarningAcknowledged(false);
         setAckSeen(null);
-        setSubmitStatus("The unconfirmed values changed. Check the list again.");
+        const answered = new Set(submission.axisWarning.warnings.map(item => pairKey(item.annotationId, item.axis)));
+        setSubmitStatus(changedStatus([...answered].filter(pair => !expected.has(pair)).concat([...expected].filter(pair => !answered.has(pair)))));
         setSubmitDialogOpen(true);
         return;
       }
@@ -3475,7 +3493,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 </p>)}
               </div>
             </section>
-          ) : attachModifier && (attachModifier.mode === "convert" ? attachActive : pendingAnnotation) ? (
+          ) : attachModifier && (attachModifier.mode === "convert" ? !readOnly : pendingAnnotation) ? (
             <AttachModePanel termLabel={attachModifier.termLabel} termId={attachModifier.termId}
               markQuote={attachSegments.length ? quoteSegments(view.document.text, attachSegments, 40) : null}
               note={attachModifier.mode === "convert"
@@ -3490,7 +3508,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               noFindings={attachTargets.length === 0}
               onAttach={annotationId => { void attachTo(annotationId); }}
               onReplace={annotationId => { void attachTo(annotationId, true); }}
-              onCancel={attachActive ? cancelAttachModifier : discardPending} />
+              onCancel={attachActive || attachModifier.mode === "convert" ? cancelAttachModifier : discardPending} />
           ) : pendingAnnotation ? (
             <section className="detail-pane" aria-label="New finding">
               <div className="detail-section">

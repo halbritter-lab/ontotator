@@ -145,4 +145,10 @@ describe("modifier items (R3, R10, R12)", () => {
     expect(summaryLine(onsets)).toBe("1 finding has a cohort term as modifier, 1 finding has two modifiers of one kind");
     expect(submitBlockedReason(onsets)).toBeNull();
   });
+
+  it("a confirmed proposal's items select its target row", () => {
+    const list = collectOpenItems({ ...empty, modifierAsFinding: [{ annotationId: "sev", term: "Severe", targetKey: "sev:v1" }],
+      modifierWarnings: [{ annotationId: "p", term: "P", targetKey: "p:v2", kind: "cohort-modifier", key: "cohort:x", labels: ["Frequent"] }] });
+    expect(list.map(item => item.listKey)).toEqual(["target:sev:v1", "target:p:v2"]);
+  });
 });

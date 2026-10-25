@@ -76,7 +76,8 @@ export function ModifiersSection({ finding, modifiers, text, termInfo, readOnly 
             const label = candidate.label ?? candidate.term_id;
             closeSearch();
             void onAdd(candidate.term_id, label).then(
-              () => setStatus({ text: `Added ${label} to ${finding}. Link a text span?`, linkTermId: onLinkSpan ? candidate.term_id : undefined }),
+              () => setStatus(onLinkSpan ? { text: `Added ${label} to ${finding}. Link a text span?`, linkTermId: candidate.term_id }
+                : { text: `Added ${label} to ${finding}.` }),
               () => undefined, // the caller reports the failure
             );
           }} />

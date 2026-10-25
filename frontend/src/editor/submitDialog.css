@@ -109,7 +109,7 @@
   }
 }
 
-/* "Modifier warnings · {m}" (finding modifiers, R10, R12): the box of "Unconfirmed values". */
+/* "Modifier warnings ({m})" (finding modifiers, R10, R12): the box of "Unconfirmed values". */
 .modifier-warnings__heading {
   margin: 0;
   font-size: var(--size-md);

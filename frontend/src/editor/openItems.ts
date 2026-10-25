@@ -31,9 +31,9 @@ export interface OpenItemsInput {
   openTargets: { key: string; term: string; evidenceId?: string }[];
   defaulted: { annotationId: string; term: string; axisId: string; targetKey?: string; evidenceId?: string }[];
   /** Findings whose term is a modifier (old data, R3): `term` is that modifier's label. */
-  modifierAsFinding?: { annotationId: string; term: string; evidenceId?: string }[];
+  modifierAsFinding?: { annotationId: string; term: string; targetKey?: string; evidenceId?: string }[];
   /** Acknowledgeable modifier warnings (R10, R12; `modifierWarnings`): `term` is the finding's label. */
-  modifierWarnings?: (ModifierWarning & { term: string; evidenceId?: string })[];
+  modifierWarnings?: (ModifierWarning & { term: string; targetKey?: string; evidenceId?: string })[];
 }
 
 const AXIS_FOCUS = "[data-axis-field]";
@@ -74,7 +74,7 @@ export function collectOpenItems(input: OpenItemsInput): OpenItem[] {
     ...(input.modifierAsFinding ?? []).map((entry): OpenItem => ({
       key: `modifier-as-finding:${entry.annotationId}`, kind: "modifier-as-finding", blocking: true, term: entry.term,
       line: `${entry.term} is a modifier. Turn it into a modifier of another finding.`,
-      listKey: findingKey(entry.annotationId), focus: "[data-turn-into-modifier]", evidenceId: entry.evidenceId,
+      listKey: findingKey(entry.annotationId, entry.targetKey), focus: "[data-turn-into-modifier]", evidenceId: entry.evidenceId,
     })),
     ...input.unconfirmed.map((entry): OpenItem => ({
       key: `unconfirmed:${entry.targetKey ?? entry.annotationId}`, kind: "unconfirmed-values", blocking: false, term: entry.term,
@@ -88,7 +88,7 @@ export function collectOpenItems(input: OpenItemsInput): OpenItem[] {
     })),
     ...(input.modifierWarnings ?? []).map((entry): OpenItem => ({
       key: `${entry.kind}:${entry.annotationId}:${entry.key}`, kind: entry.kind, blocking: false, term: entry.term,
-      line: modifierWarningLine(entry), listKey: findingKey(entry.annotationId), focus: MODIFIERS_FOCUS, evidenceId: entry.evidenceId,
+      line: modifierWarningLine(entry), listKey: findingKey(entry.annotationId, entry.targetKey), focus: MODIFIERS_FOCUS, evidenceId: entry.evidenceId,
     })),
   ];
 }

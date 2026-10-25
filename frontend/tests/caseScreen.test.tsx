@@ -2744,7 +2744,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
         .mockRejectedValueOnce(modWarning(view, [{ rule: "exclusive_modifier_class", detail: { class: "severity" } }]))
         .mockResolvedValue(submitted(view) as never);
       const dialog = await openSubmit();
-      const section = await within(dialog).findByRole("region", { name: "Modifier warnings · 1" });
+      const section = await within(dialog).findByRole("region", { name: "Modifier warnings (1)" });
       expect(section.textContent).toContain("Seizure: Two severities: Mild, Severe.");
       expect(within(dialog).queryByText(/Turn .* before submitting/)).toBeNull();
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warnings" }));
@@ -2765,11 +2765,11 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warnings" }));
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
-      await waitFor(() => expect(dialog.querySelector("[data-submit-status]")!.textContent).toBe("The unconfirmed values changed. Check the list again."));
+      await waitFor(() => expect(dialog.querySelector("[data-submit-status]")!.textContent).toBe("The warnings changed. Check the list again."));
       expect(submit).toHaveBeenCalledTimes(1);
       const box = within(dialog).getByRole("checkbox", { name: "Submit with 2 modifier warnings" }) as HTMLInputElement;
       expect(box.checked).toBe(false);
-      expect(within(dialog).getByRole("region", { name: "Modifier warnings · 2" }).textContent).toContain("Seizure: HP:0040283 is a cohort term.");
+      expect(within(dialog).getByRole("region", { name: "Modifier warnings (2)" }).textContent).toContain("Seizure: HP:0040283 is a cohort term.");
       // No unconfirmed values row comes from the modifier pairs.
       expect(dialog.querySelector("[data-unconfirmed-values]")).toBeNull();
     });
@@ -2828,6 +2828,33 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Turn into modifier…" })));
       expect(container.querySelector('[data-list-key="annotation:sev"]')).not.toBeNull();
       expect(payloads(apply)).toEqual([]);
+    });
+
+    it("without a target shows “Create the finding first”; OK ends the mode", async () => {
+      const view = modView([STANDALONE[0]]);
+      const { container } = await setup(view);
+      await startConvert(container);
+      const region = screen.getByRole("region", { name: "Attach Severe" });
+      expect(region.textContent).toContain("Severe is a modifier. Create the finding first, then add Severe under Modifiers.");
+      await waitFor(() => expect(announcer(container)).toBe("Severe is a modifier. Create the finding first, then add Severe under Modifiers."));
+      const ok = within(region).getByRole("button", { name: "OK" });
+      await waitFor(() => expect(document.activeElement).toBe(ok));
+      fireEvent.click(ok);
+      await waitFor(() => expect(screen.queryByRole("region", { name: "Attach Severe" })).toBeNull());
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Turn into modifier…" })));
+    });
+
+    it("Replace text span sets the source's span first, then converts with it", async () => {
+      const view = modView([STANDALONE[0], ["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012828", segments: [pos("wiederholt")] }]]]);
+      const { container } = await setup(view);
+      const apply = convertSpy(view);
+      await startConvert(container);
+      fireEvent.click(screen.getByRole("button", { name: "Attach Severe to Seizure" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Replace text span" }));
+      await waitFor(() => expect(payloads(apply)).toEqual([
+        { command: "set_modifier_segments", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] },
+        { command: "convert_to_modifier", annotation_id: "sev", target_annotation_id: "seizure", link_span: true }]));
+      await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
     });
 
     it("marking other text ends the convert mode and starts a new mark", async () => {
@@ -2926,6 +2953,8 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     await chooseSevere(container);
     await waitFor(() => expect(container.querySelector(".attach-mention-banner")).not.toBeNull());
     expect(screen.queryByText("Severe is a modifier. Create the finding first, then add Severe under Modifiers.")).toBeNull();
+    // Its layer is shown: the row renders and takes the keyboard focus.
+    await waitFor(() => expect(document.activeElement).toBe(container.querySelector('[data-list-key="annotation:seizure"]')));
   });
 
   it("a mark made while an attach command runs stays pending", async () => {

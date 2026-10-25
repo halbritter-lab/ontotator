@@ -430,7 +430,7 @@ describe("Unconfirmed values section", () => {
     it("lists the warnings in their own section after the values, before the acknowledgement", () => {
       const onGoTo = vi.fn();
       render(<SubmitCaseDialog {...dialogProps({ items: warnings, unconfirmed: threeRows().slice(0, 1), textChecked: true, onGoTo })} />);
-      const section = screen.getByRole("region", { name: "Modifier warnings · 2" });
+      const section = screen.getByRole("region", { name: "Modifier warnings (2)" });
       expect(within(section).getAllByRole("listitem").map(item => item.querySelector("span")!.textContent))
         .toEqual(["Seizure: Two severities: Mild, Severe.", "Seizure: Frequent is a cohort term."]);
       expect(document.querySelector("[data-unconfirmed-values]")!.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
