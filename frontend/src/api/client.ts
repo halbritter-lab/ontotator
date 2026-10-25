@@ -29,6 +29,7 @@ export type ReviewInputsRequest = components["schemas"]["ReviewInputsRequest"];
 export type EditorProposal = components["schemas"]["EditorProposal"];
 export type ProposalSetView = components["schemas"]["ProposalSetView"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
+export type Modifier = components["schemas"]["Modifier"];
 export type FinalPreflight = components["schemas"]["FinalPreflight"];
 export type FinalSelectionView = components["schemas"]["FinalSelectionView"];
 export type FinalExportRequest = components["schemas"]["FinalExportRequest"];

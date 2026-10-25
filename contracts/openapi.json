@@ -7676,6 +7676,13 @@
             ],
             "title": "Note"
           },
+          "modifiers": {
+            "items": {
+              "$ref": "#/components/schemas/Modifier"
+            },
+            "type": "array",
+            "title": "Modifiers"
+          },
           "evidence_refs": {
             "items": {
               "$ref": "#/components/schemas/EvidenceRef"
@@ -14232,6 +14239,28 @@
         ],
         "title": "MixedCountView"
       },
+      "Modifier": {
+        "properties": {
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/Segment"
+            },
+            "type": "array",
+            "title": "Segments"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "term_id"
+        ],
+        "title": "Modifier",
+        "description": "A clinical modifier of one finding (T1 F6): a term and 0..n segments."
+      },
       "MoveToVersionRequest": {
         "properties": {
           "target_document_id": {
@@ -17433,7 +17462,8 @@
               "evidence_source_mismatch",
               "invalid_bounds",
               "changed_segment",
-              "changed_cue"
+              "changed_cue",
+              "changed_modifier_segment"
             ],
             "title": "Reason"
           },

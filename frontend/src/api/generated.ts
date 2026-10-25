@@ -2305,6 +2305,8 @@ export interface components {
             axes_defaulted?: string[];
             /** Note */
             note?: string | null;
+            /** Modifiers */
+            modifiers?: components["schemas"]["Modifier"][];
             /** Evidence Refs */
             evidence_refs?: components["schemas"]["EvidenceRef"][];
             provenance: components["schemas"]["Provenance"];
@@ -4604,6 +4606,16 @@ export interface components {
             /** Off */
             off: number;
         };
+        /**
+         * Modifier
+         * @description A clinical modifier of one finding (T1 F6): a term and 0..n segments.
+         */
+        Modifier: {
+            /** Term Id */
+            term_id: string;
+            /** Segments */
+            segments?: components["schemas"]["Segment"][];
+        };
         /** MoveToVersionRequest */
         MoveToVersionRequest: {
             /** Target Document Id */
@@ -5822,7 +5834,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "source_text_mismatch" | "missing_evidence" | "evidence_version_mismatch" | "ambiguous_evidence" | "evidence_source_mismatch" | "invalid_bounds" | "changed_segment" | "changed_cue";
+            reason: "source_text_mismatch" | "missing_evidence" | "evidence_version_mismatch" | "ambiguous_evidence" | "evidence_source_mismatch" | "invalid_bounds" | "changed_segment" | "changed_cue" | "changed_modifier_segment";
             /** Old Mentions */
             old_mentions: components["schemas"]["OldMentionView"][];
             old_context: components["schemas"]["TextWindowView"];
