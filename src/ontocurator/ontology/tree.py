@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import heapq
 import threading
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -37,6 +38,8 @@ class TreeNode(BaseModel):
     label: str
     child_count: int
     external_url: str | None = None
+    # Filled by the tree routes for layers pinned with ``hpo-phenotype``.
+    role: Literal["finding", "modifier", "cohort"] = "finding"
 
 
 class TreeLevel(BaseModel):

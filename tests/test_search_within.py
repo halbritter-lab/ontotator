@@ -64,3 +64,187 @@ def test_seeds_without_within_are_unchanged(
 ) -> None:
     result = hp.search(_request(query, route=route, languages=languages))
     assert result.seed == seed
+
+
+ROOTS = ["HP:0012823", "HP:0040279"]
+
+
+def _subtree_terms(service: OntologyService) -> set[str]:
+    from ontocurator.ontology.modifiers import subtree
+
+    return set().union(*(subtree(service, root) for root in ROOTS))
+
+
+@pytest.mark.parametrize("route", ["auto", "lexical", "exact"])
+def test_within_returns_only_subtree_terms(mods: OntologyService, route: str) -> None:
+    allowed = _subtree_terms(mods)
+    result = mods.search(_request("sev", route=route, k=100, within=ROOTS))
+    assert result.candidates
+    assert {c.term_id for c in result.candidates} <= allowed
+
+
+def test_within_filters_before_the_cut(mods: OntologyService) -> None:
+    allowed = _subtree_terms(mods)
+    everything = mods.search(_request("se", k=100))
+    matching = [c.term_id for c in everything.candidates if c.term_id in allowed]
+    top = mods.search(_request("se", k=3))
+    assert len([c for c in top.candidates if c.term_id in allowed]) < 3
+    restricted = mods.search(_request("se", k=3, within=ROOTS))
+    assert len(restricted.candidates) == min(3, len(matching))
+    assert {c.term_id for c in restricted.candidates} <= set(matching)
+
+
+def test_within_changes_the_seed(mods: OntologyService) -> None:
+    plain = mods.search(_request("se"))
+    restricted = mods.search(_request("se", within=ROOTS))
+    reordered = mods.search(_request("se", within=list(reversed(ROOTS))))
+    assert plain.seed is not None and restricted.seed is not None
+    assert restricted.seed != plain.seed
+    assert reordered.seed == restricted.seed
+
+
+def test_code_query_within(mods: OntologyService) -> None:
+    assert [
+        c.term_id for c in mods.search(_request("HP:0012828", within=ROOTS)).candidates
+    ] == ["HP:0012828"]
+    assert mods.search(_request("HP:0001250", within=ROOTS)).candidates == []
+
+
+def test_browse_within_returns_the_roots(mods: OntologyService) -> None:
+    result = mods.search(_request("HP:0001250", route="browse", within=ROOTS))
+    assert [c.term_id for c in result.candidates] == ROOTS
+
+
+def test_within_must_be_curies() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _request("se", within=["not a curie"])
+    with pytest.raises(ValidationError):
+        _request("se", within=["HP:1"] * 9)
+
+
+# --- API: role, stored ``within``, labels and tree on a MOD_PIN project ---- #
+
+
+@pytest.fixture
+def api(tmp_path):  # type: ignore[no-untyped-def]
+    from browser_modifier_scenarios import register_modifier_scenario_route
+    from browser_server import ONTOLOGY
+    from fastapi.testclient import TestClient
+    from pg_harness import database_url_for
+    from test_browser_review_flow_fixture import Session
+
+    from ontocurator.api.app import create_app
+    from ontocurator.config import AppConfig
+
+    app = create_app(
+        AppConfig(
+            workspace_dir=tmp_path,
+            database_url=database_url_for(tmp_path / "search.db"),
+            ontology_paths=[ONTOLOGY],
+        )
+    )
+    register_modifier_scenario_route(app)
+    with TestClient(app) as client:
+        response = client.post("/__test_modifiers__", params={"with_finding": 1})
+        assert response.status_code == 200, response.text
+        built = response.json()
+        session = Session(client, built["users"]["annotator"])
+        view = session.post(f"/api/v1/rounds/{built['round_id']}/open", {})["view"]
+        yield app, session, built["project"], view["key"]
+
+
+def _search(session, key, **extra):  # type: ignore[no-untyped-def]
+    return session.post(
+        "/api/v1/search",
+        {
+            "workspace_key": key,
+            "annotation_id": "seizure",
+            "layer_id": "hpo",
+            "query": "se",
+            **extra,
+        },
+    )
+
+
+def test_search_api_roles_and_stored_within(api) -> None:  # type: ignore[no-untyped-def]
+    app, session, project, key = api
+    result = _search(session, key, within=ROOTS, k=20)
+    roles = {c["term_id"]: c["role"] for c in result["candidates"]}
+    assert roles["HP:0012828"] == "modifier"
+    assert set(roles.values()) <= {"modifier", "cohort"}
+    event = app.state.repo.get_search_event(result["search_id"], project)
+    assert event.within == ROOTS
+    plain = _search(session, key, query="Krampfanfall")
+    assert {c["role"] for c in plain["candidates"]} == {"finding"}
+    stored = app.state.repo.get_search_event(plain["search_id"], project)
+    assert stored.within is None
+    assert "within" not in stored.model_dump()
+
+
+def test_search_api_role_is_finding_on_a_generic_pin(api) -> None:  # type: ignore[no-untyped-def]
+    from sqlalchemy import update
+
+    from ontocurator.storage.tables import ProjectOntologyRow
+
+    app, session, _, key = api
+    with app.state.repo.db.transaction() as conn:
+        conn.execute(update(ProjectOntologyRow).values(t1_profile="generic"))
+    result = _search(session, key, within=ROOTS)
+    assert result["candidates"]
+    assert {c["role"] for c in result["candidates"]} == {"finding"}
+
+
+def test_labels_api_roles(api) -> None:  # type: ignore[no-untyped-def]
+    _, session, project, _ = api
+    labels = session.post(
+        "/api/v1/terms/labels",
+        {
+            "project_key": project,
+            "terms": [
+                {"layer_id": "hpo", "term_id": term}
+                for term in ("HP:0012828", "HP:0040282", "HP:0001250", "HP:0003623")
+            ],
+        },
+    )
+    assert [(t["role"], t["exclusive_class"]) for t in labels] == [
+        ("modifier", "severity"),
+        ("cohort", None),
+        ("finding", None),
+        ("modifier", "onset"),
+    ]
+
+
+def test_tree_api_roles(api) -> None:  # type: ignore[no-untyped-def]
+    _, session, _, key = api
+    opened = session.post(
+        "/api/v1/terms/tree/open",
+        {
+            "workspace_key": key,
+            "annotation_id": "seizure",
+            "layer_id": "hpo",
+            "term_id": "HP:0012828",
+        },
+    )
+    nodes = {
+        node["term_id"]: node["role"]
+        for level in opened["levels"]
+        for node in level["children"]
+    } | {node["term_id"]: node["role"] for node in opened["roots"]}
+    assert nodes["HP:0012823"] == "modifier"
+    assert nodes["HP:0040279"] == "cohort"
+    assert nodes["HP:0012828"] == "modifier"
+    assert nodes["HP:0000118"] == "finding"
+    node = session.post(
+        "/api/v1/terms/tree/node",
+        {
+            "workspace_key": key,
+            "annotation_id": "seizure",
+            "layer_id": "hpo",
+            "browse_id": opened["browse_id"],
+            "term_id": "HP:0040279",
+            "expand": True,
+        },
+    )
+    assert {c["role"] for c in node["children"]} == {"cohort"}

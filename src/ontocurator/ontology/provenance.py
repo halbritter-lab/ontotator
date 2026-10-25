@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
@@ -91,6 +91,11 @@ class SearchRequest(BaseModel):
     # Translation languages to search besides English. None means every
     # language that is loaded; codes that are not loaded are ignored.
     languages: list[str] | None = Field(default=None, max_length=32)
+    # Only terms in the subtrees of these roots (root included), filtered
+    # before the ``k`` cut ("+ Add modifier…"). None: unrestricted.
+    within: (
+        list[Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$")]] | None
+    ) = Field(default=None, max_length=8)
 
 
 class SearchCandidate(BaseModel):
@@ -112,6 +117,8 @@ class SearchCandidate(BaseModel):
     route: str = ""
     # Language of the name that matched, when the route knows it.
     match_language: str | None = None
+    # Filled by the search route for layers pinned with ``hpo-phenotype``.
+    role: Literal["finding", "modifier", "cohort"] = "finding"
 
     @model_validator(mode="before")
     @classmethod

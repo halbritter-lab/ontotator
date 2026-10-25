@@ -17,9 +17,15 @@ from uuid import uuid4
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
-from ontocurator.api.routes import RepoDep, WorkspaceSvcDep, layer_ontology
+from ontocurator.api.routes import (
+    RepoDep,
+    WorkspaceSvcDep,
+    layer_classifier,
+    layer_ontology,
+)
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.workspace import WorkspaceKey
+from ontocurator.ontology.modifiers import ModifierClassifier
 from ontocurator.ontology.tree import (
     TreeLevel,
     TreeNode,
@@ -85,6 +91,12 @@ class TreeNodeResponse(BaseModel):
     levels: list[TreeLevel]
 
 
+def _roles(classifier: ModifierClassifier, nodes: list[TreeNode]) -> list[TreeNode]:
+    for node in nodes:
+        node.role = classifier.role(node.term_id)
+    return nodes
+
+
 def _shown(*groups: list[TreeNode]) -> list[str]:
     """Term ids in order of first appearance."""
     return list(dict.fromkeys(node.term_id for group in groups for node in group))
@@ -109,6 +121,12 @@ def open_tree(
     path = tree.path_to(req.term_id)
     roots = tree.nodes(tree.roots_with(path))
     levels = tree.levels(path)
+    classifier = layer_classifier(
+        repo, req.workspace_key.project_key, req.layer_id, ontology
+    )
+    _roles(classifier, roots)
+    for level in levels:
+        _roles(classifier, level.children)
     shown = _shown(roots, *(level.children for level in levels))
 
     browse_id = str(uuid4())
@@ -187,6 +205,12 @@ def tree_node(
         path = tree.path_to(detail.term_id, req.via_parent_id)
         levels = tree.levels(path[:-1])
     children = tree.nodes(tree.children_of(detail.term_id)) if req.expand else []
+    classifier = layer_classifier(
+        repo, req.workspace_key.project_key, req.layer_id, ontology
+    )
+    _roles(classifier, children)
+    for level in levels:
+        _roles(classifier, level.children)
 
     # The repository checks the owner again, in the transaction that writes.
     grown = repo.append_search_event_candidates(

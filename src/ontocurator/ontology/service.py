@@ -8,7 +8,7 @@ import gc
 import hashlib
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
@@ -22,6 +22,7 @@ from ontocurator.ontology.conditions import (
     TranslationResource,
     current_runtime,
 )
+from ontocurator.ontology.modifiers import subtree
 from ontocurator.ontology.provenance import (
     HierarchyWarning,
     SearchCandidate,
@@ -408,10 +409,38 @@ class OntologyService:
             query=request.query,
             k=request.k,
         )
-        if not languages:
-            return seed
-        raw = f"{seed}|{','.join(sorted(languages))}"
-        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+        if languages:
+            raw = f"{seed}|{','.join(sorted(languages))}"
+            seed = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+        if request.within is not None:
+            # A restricted search is another question; unrestricted seeds stay.
+            raw = f"{seed}|within:{','.join(sorted(request.within))}"
+            seed = hashlib.sha256(raw.encode()).hexdigest()[:16]
+        return seed
+
+    def _allowed(self, request: SearchRequest) -> frozenset[str] | None:
+        """The terms a ``within`` search may return; None when unrestricted."""
+        if request.within is None:
+            return None
+        return frozenset().union(*(subtree(self, root) for root in request.within))
+
+    def _widened(
+        self,
+        fetch: Callable[[int], list[dict[str, Any]]],
+        depth: int,
+        need: int,
+        keep: Callable[[dict[str, Any]], bool],
+        widen: bool,
+    ) -> list[dict[str, Any]]:
+        """The first ``need`` kept hits; with ``widen`` the fetch depth grows
+        (k x 10, then all) until enough survive or the ranking is exhausted."""
+        total = len(self.ontology)
+        while True:
+            fetched = fetch(depth)
+            kept = [hit for hit in fetched if keep(hit)]
+            if not widen or len(kept) >= need or len(fetched) < depth or depth >= total:
+                return kept[:need]
+            depth = depth * 10 if depth < need * 10 else total
 
     def _similar(
         self, query: str, k: int, languages: Sequence[str]
@@ -438,23 +467,46 @@ class OntologyService:
             seed = self._seed(request, languages)
         query = request.query.strip()
         lexical = self.engine.lexical
+        allowed = self._allowed(request)
         hits: list[dict[str, Any]]
-        if (
+        if allowed is not None and request.route == "browse":
+            # A restricted walk starts at its roots.
+            hits = [
+                {**term.as_dict(), "matched_term": term.label, "match_kind": "browse"}
+                for root in request.within or []
+                if (term := self.ontology.get(root)) is not None
+            ][: request.k]
+            for position, hit in enumerate(hits, start=1):
+                hit["rank"] = hit["display_pos"] = position
+            was_shuffled = False
+        elif (
             seed is not None
             and query
             and isinstance(lexical, LanguageLexicalIndex)
             and lexical.ready
         ):
-            hits = shuffled(lexical.search(query, request.k, languages=languages), seed)
+            hits = shuffled(
+                self._widened(
+                    lambda depth: lexical.search(query, depth, languages=languages),
+                    request.k,
+                    request.k,
+                    lambda hit: allowed is None or hit["hpo_id"] in allowed,
+                    allowed is not None,
+                ),
+                seed,
+            )
             was_shuffled = True
         else:
             raw_result = self.engine.search(
                 query=request.query,
                 path=request.route,
-                k=request.k,
+                # Restricted: filter the whole answer before the cut.
+                k=request.k if allowed is None else len(self.ontology),
                 seed=seed,
             )
             hits = raw_result["hits"]
+            if allowed is not None:
+                hits = [h for h in hits if h["hpo_id"] in allowed][: request.k]
             was_shuffled = bool(raw_result.get("shuffled", False))
         for hit in hits:
             hit["route"] = request.route
@@ -468,11 +520,16 @@ class OntologyService:
         if not query:
             return [], False, None
 
+        allowed = self._allowed(request)
         if looks_like_code(query):
             # A typed id is a statement, not a question: that term or nothing.
-            hits: list[dict[str, Any]] = self.engine.search(
-                query=query, path="id", k=request.k
-            )["hits"]
+            hits: list[dict[str, Any]] = [
+                hit
+                for hit in self.engine.search(query=query, path="id", k=request.k)[
+                    "hits"
+                ]
+                if allowed is None or hit["hpo_id"] in allowed
+            ]
             for hit in hits:
                 hit["route"] = "id"
             return hits, False, None
@@ -480,14 +537,23 @@ class OntologyService:
         # Exact name matches first, in their fixed order: that a name equals the
         # query is a fact about the query, not a score. No prefix fallback here;
         # a partial word is what the similar block is for.
-        exact = self.ontology.exact(query, limit=request.k)
+        if allowed is None:
+            exact = self.ontology.exact(query, limit=request.k)
+        else:
+            exact = [
+                hit
+                for hit in self.ontology.exact(query, limit=len(self.ontology))
+                if hit["hpo_id"] in allowed
+            ][: request.k]
         taken = {hit["hpo_id"] for hit in exact}
         # Then the translated names of the active languages. A term that an
         # English name already matched is not listed twice.
         for hit in self._translated.exact(query, languages):
             if len(exact) >= request.k:
                 break
-            if hit["hpo_id"] not in taken:
+            if hit["hpo_id"] not in taken and (
+                allowed is None or hit["hpo_id"] in allowed
+            ):
                 taken.add(hit["hpo_id"])
                 exact.append(hit)
         for position, hit in enumerate(exact, start=1):
@@ -500,11 +566,16 @@ class OntologyService:
         similar: list[dict[str, Any]] = []
         remaining = request.k - len(exact)
         if remaining > 0:
-            ranked = [
-                hit
-                for hit in self._similar(query, request.k + len(exact), languages)
-                if hit["hpo_id"] not in taken
-            ][:remaining]
+            ranked = self._widened(
+                lambda depth: self._similar(query, depth, languages),
+                request.k + len(exact),
+                remaining,
+                lambda hit: (
+                    hit["hpo_id"] not in taken
+                    and (allowed is None or hit["hpo_id"] in allowed)
+                ),
+                allowed is not None,
+            )
             # Shuffled because this order is a score. Ranks continue after the
             # exact block so one event describes the whole list.
             similar = shuffled(ranked, seed)

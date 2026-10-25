@@ -32,6 +32,10 @@ class SearchEventRecord(BaseModel):
     # when it looked at no names (a term id, the tree) and on events written
     # before translations existed.
     languages: list[str] = Field(default_factory=list)
+    # The subtree roots a restricted search looked in; absent when unrestricted.
+    within: list[str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     selected_term_id: str | None = None
     ranked_position: int | None = None
     displayed_position: int | None = None

@@ -56,6 +56,10 @@ from ontocurator.domain.workspace import (
     WorkspaceKey,
     WorkspaceMode,
 )
+from ontocurator.ontology.modifiers import (
+    ModifierClassifier,
+    term_roles_for_services,
+)
 from ontocurator.ontology.provenance import SearchRequest, SearchResult
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
@@ -147,6 +151,9 @@ class TermLabel(TermLookup):
     replaced_by: str | None = None
     consider: list[str] = Field(default_factory=list)
     alt_ids: list[str] = Field(default_factory=list)
+    # Modifier roles, for layers pinned with the T1 profile ``hpo-phenotype``.
+    role: Literal["finding", "modifier", "cohort"] = "finding"
+    exclusive_class: Literal["severity", "onset"] | None = None
 
 
 # --- Dependencies ------------------------------------------------------------- #
@@ -352,10 +359,15 @@ def resolve_term_labels(
 ) -> list[TermLabel]:
     """Resolve display names against the ontology pinned to each package layer."""
     labels: list[TermLabel] = []
+    classifiers: dict[str, ModifierClassifier] = {}
     for term in payload.terms:
-        status = ontology.for_package_layer(
-            repo, payload.project_key, term.layer_id
-        ).validate_term(term.term_id)
+        service = ontology.for_package_layer(repo, payload.project_key, term.layer_id)
+        if term.layer_id not in classifiers:
+            classifiers[term.layer_id] = layer_classifier(
+                repo, payload.project_key, term.layer_id, service
+            )
+        classifier = classifiers[term.layer_id]
+        status = service.validate_term(term.term_id)
         labels.append(
             TermLabel(
                 layer_id=term.layer_id,
@@ -366,9 +378,22 @@ def resolve_term_labels(
                 replaced_by=status.replaced_by,
                 consider=status.consider,
                 alt_ids=status.alt_ids,
+                role=classifier.role(status.term_id),
+                exclusive_class=classifier.exclusive_class(status.term_id),
             )
         )
     return labels
+
+
+def layer_classifier(
+    repo: Repository, project_key: str, layer_id: str, service: OntologyService
+) -> ModifierClassifier:
+    """The layer's modifier classifier; empty unless its pin is ``hpo-phenotype``."""
+    return term_roles_for_services(
+        repo.get_task_profile(project_key),
+        repo.project_pins(project_key),
+        {layer_id: service},
+    ).classifier(layer_id)
 
 
 @router.post("/workspaces/review-inputs")
@@ -569,6 +594,11 @@ def search_ontology(
     result.runtime_drift = ontology.runtime_drift()
     result.layer_id = req.layer_id
     result.ontology_sha256 = ontology.ref.sha256
+    classifier = layer_classifier(
+        repo, req.workspace_key.project_key, req.layer_id, ontology
+    )
+    for candidate in result.candidates:
+        candidate.role = classifier.role(candidate.term_id)
 
     event = SearchEventRecord(
         event_id=result.search_id,
@@ -585,6 +615,7 @@ def search_ontology(
         },
         candidate_routes={c.term_id: c.route for c in result.candidates if c.route},
         languages=result.languages,
+        within=req.within,
         ontology_release=ontology.ref.release,
         index_identity=result.index_identity,
         search_condition_id=result.search_condition_id,
