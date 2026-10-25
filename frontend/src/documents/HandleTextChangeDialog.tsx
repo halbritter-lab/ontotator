@@ -3,7 +3,7 @@ import { api, ApiError, type DocumentRowView, type NextStepView, type TextChange
 import { textLabel } from "../app/identity";
 import { errorMessage } from "../admin/errors";
 import { personName } from "../admin/assignSummary";
-import { Button, Dialog } from "../ui";
+import { Button, ConfirmDialog, Dialog } from "../ui";
 import {
   CHECKING, finishDescription, finishingMessage, finishLabel, handleTitle, heldLine, moveDescription, movedMessage, moveLabel,
   openWorkLine, RELOADED_MESSAGE, unplacedLine, WITHDRAW_LABEL, withdrawDescription, withdrawnMessage,
@@ -49,6 +49,7 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [unreviewed, setUnreviewed] = useState(false);
   const writing = useRef(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -64,7 +65,7 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
     return () => { active = false; };
   }, [projectKey, assignmentId, targetId, held, reload]);
 
-  const apply = async () => {
+  const apply = async (confirmUnreviewed = false) => {
     if (writing.current || assignmentId === null) return;
     writing.current = true; setBusy(true); setFailure(null);
     try {
@@ -72,7 +73,7 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
       if (!current) throw new ApiError(409, RELOADED_MESSAGE, "TEXT_CHANGE_CHANGED");
       const expected_workflow_revision = current.workflow_revision;
       if (choice === "move") {
-        await api.moveToVersion(assignmentId, { target_document_id: targetId, expected_workflow_revision, request_id: crypto.randomUUID() });
+        await api.moveToVersion(assignmentId, { target_document_id: targetId, expected_workflow_revision, request_id: crypto.randomUUID(), confirm_unreviewed_translation: confirmUnreviewed });
         if (alive.current) props.onDone(movedMessage(person, to));
       } else {
         await api.resolveTextChange(assignmentId, { resolution: choice === "finish" ? "finish_then_carry" : "withdrawn", target_document_id: targetId, expected_workflow_revision });
@@ -80,7 +81,9 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
       }
     } catch (error: unknown) {
       if (!alive.current) return;
+      setUnreviewed(false);
       if (isTextChangeConflict(error)) { setFailure(RELOADED_MESSAGE); props.onReload(); setReload(value => value + 1); }
+      else if (error instanceof ApiError && error.code === "TRANSLATION_NOT_REVIEWED" && !confirmUnreviewed) setUnreviewed(true);
       else setFailure(errorMessage(error));
     } finally {
       writing.current = false;
@@ -123,5 +126,7 @@ export function HandleTextChangeDialog(props: HandleTextChangeDialogProps): JSX.
         })}
       </fieldset>}
     </div>
+    <ConfirmDialog open={unreviewed} title="Annotate before the review is accepted?" message={<p>Translation not reviewed yet.</p>} confirmLabel="Annotate before the review is accepted" busy={busy}
+      onCancel={() => setUnreviewed(false)} onConfirm={() => { void apply(true); }} />
   </Dialog>;
 }

@@ -65,6 +65,20 @@ describe("HandleTextChangeDialog", () => {
     expect(props.onDone).toHaveBeenCalledWith("Tom Reis’s task is withdrawn. v2 needs a new annotation.");
   });
 
+  it("move asks before annotating an unreviewed translation, then resends with the acknowledgement", async () => {
+    const move = vi.spyOn(api, "moveToVersion")
+      .mockRejectedValueOnce(new ApiError(409, "x", "TRANSLATION_NOT_REVIEWED"))
+      .mockResolvedValueOnce({ assignment: {} as AssignmentView, round: null });
+    const props = setup();
+    await screen.findByText(/could not be placed/);
+    fireEvent.click(apply());
+    expect(await screen.findByText("Translation not reviewed yet.")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Annotate before the review is accepted" }));
+    await waitFor(() => expect(props.onDone).toHaveBeenCalledWith("Tom Reis continues on v2."));
+    expect(move).toHaveBeenNthCalledWith(1, 41, expect.objectContaining({ confirm_unreviewed_translation: false }));
+    expect(move).toHaveBeenNthCalledWith(2, 41, expect.objectContaining({ confirm_unreviewed_translation: true }));
+  });
+
   it("held task shows the paused sentence, a Decide on report… link and no primary", () => {
     const props = setup({ held: true });
     expect(within(dialog()).getByText("Tom Reis’s task is paused by a problem report. Decide the report first.")).toBeDefined();

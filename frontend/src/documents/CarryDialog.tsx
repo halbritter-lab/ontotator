@@ -64,7 +64,8 @@ export function CarryDialog(props: CarryDialogProps): JSX.Element {
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<"language" | "unreviewed" | null>(null);
+  const [confirmedLanguage, setConfirmedLanguage] = useState(false);
   const writing = useRef(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -89,13 +90,13 @@ export function CarryDialog(props: CarryDialogProps): JSX.Element {
   const chosen = others.find(person => person.username === username) ?? null;
   const reason = mode === "other" && (!chosen || chosen.has_work) ? CHOOSE_PERSON : null;
 
-  const reset = () => { setFailure(null); setConfirming(false); };
-  const carry = async (confirmLanguage: boolean) => {
+  const reset = () => { setFailure(null); setConfirming(null); };
+  const carry = async (confirmLanguage: boolean, confirmUnreviewed = false) => {
     if (writing.current || reason) return;
     writing.current = true; setBusy(true); reset();
     try {
       const result = await api.carrySubmission(projectKey, source.submissionId, {
-        target_document_id: source.targetDocumentId, mode, confirm_language: confirmLanguage, request_id: crypto.randomUUID(),
+        target_document_id: source.targetDocumentId, mode, confirm_language: confirmLanguage, confirm_unreviewed_translation: confirmUnreviewed, request_id: crypto.randomUUID(),
         ...(mode === "other" && chosen ? { username: chosen.username } : {}),
       });
       if (!alive.current) return;
@@ -104,7 +105,8 @@ export function CarryDialog(props: CarryDialogProps): JSX.Element {
     } catch (error: unknown) {
       if (!alive.current) return;
       if (isTextChangeConflict(error)) { setFailure(RELOADED_MESSAGE); props.onReload(); setReload(value => value + 1); }
-      else if (error instanceof ApiError && error.code === "LANGUAGE_CONFIRMATION_REQUIRED" && !confirmLanguage) setConfirming(true);
+      else if (error instanceof ApiError && error.code === "LANGUAGE_CONFIRMATION_REQUIRED" && !confirmLanguage) setConfirming("language");
+      else if (error instanceof ApiError && error.code === "TRANSLATION_NOT_REVIEWED" && !confirmUnreviewed) { setConfirmedLanguage(confirmLanguage); setConfirming("unreviewed"); }
       else setFailure(errorMessage(error));
     } finally {
       writing.current = false;
@@ -158,11 +160,18 @@ export function CarryDialog(props: CarryDialogProps): JSX.Element {
           </div>;
         })}
       </fieldset>
-      {confirming && <section className="assign-confirm" aria-label="Confirm languages">
+      {confirming === "language" && <section className="assign-confirm" aria-label="Confirm languages">
         <p>{`${mode === "other" && chosen ? chosen.display_name : author} does not read every language this task needs. Assign anyway?`}</p>
         <span className="assign-confirm-actions">
-          <Button disabled={busy} onClick={() => setConfirming(false)}>Back</Button>
+          <Button disabled={busy} onClick={() => setConfirming(null)}>Back</Button>
           <Button loading={busy} onClick={() => { void carry(true); }}>Assign anyway</Button>
+        </span>
+      </section>}
+      {confirming === "unreviewed" && <section className="assign-confirm" aria-label="Translation not reviewed yet">
+        <p>Translation not reviewed yet.</p>
+        <span className="assign-confirm-actions">
+          <Button disabled={busy} onClick={() => setConfirming(null)}>Back</Button>
+          <Button loading={busy} onClick={() => { void carry(confirmedLanguage, true); }}>Annotate before the review is accepted</Button>
         </span>
       </section>}
     </div>

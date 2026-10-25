@@ -95,6 +95,10 @@ export function historyLines(row: DocumentRowView, submissions: readonly RowSubm
   }
   for (const item of allWork) {
     if (item.task === "translation_review") continue;
+    if (item.task === "annotate" && item.unreviewed_translation) {
+      const by = item.assigned_by ? personLabel(item.assigned_by.pseudonym, !!item.assigned_by.is_me, item.assigned_by) : "the lead";
+      lines.push({ key: `unreviewed-${item.assignment_id}`, stage: "annotation", text: `Annotation assigned before the translation review was accepted (confirmed by ${by})` });
+    }
     if (item.status === "submitted" && submissions && item.moved_to_version == null) continue;
     const status = item.moved_to_version != null ? `moved to v${item.moved_to_version}` : join(labelFor(assignmentStatusLabels, item.status), item.held && "Paused");
     const round = item.moved_to_version == null && item.round_ordinal != null ? `Round ${item.round_ordinal}` : null;

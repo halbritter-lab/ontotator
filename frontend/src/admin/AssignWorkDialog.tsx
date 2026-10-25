@@ -5,7 +5,7 @@ import { assignedText } from "../app/assignedDate";
 import { annotationTaskName } from "../editor/modes";
 import { plural } from "../app/labels";
 import { routeHref } from "../app/router";
-import { Button, Dialog, Select } from "../ui";
+import { Button, Checkbox, Dialog, Select } from "../ui";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { errorMessage } from "./errors";
@@ -66,6 +66,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [randomOpen, setRandomOpen] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
   const randomChanged = useRef(false);
   const writing = useRef(false);
   const alive = useRef(true);
@@ -135,6 +136,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const count = assignments || fresh?.versions || shown?.versions || 0;
   const needs = fresh?.needs_people ?? null;
   const rowLimit = rowMulti ? Math.max(1, shown?.targets[0]?.remaining ?? 1) : Infinity;
+  const unreviewed = task === "annotate" && fresh ? fresh.targets.filter(target => target.unreviewed_translation) : [];
+  const unacknowledged = unreviewed.length > 0 && !acknowledged;
   const meHolds = !!me && props.mode === "row" && props.row.work.some(item => item.task === "annotate" && item.is_me && item.moved_to_version == null);
 
   const reset = () => { setConfirming(false); setRefused([]); setFailure(null); setNotice(null); };
@@ -154,6 +157,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     : calculating || !fresh ? "Calculating…"
     : !fresh.targets.length ? "No cases in the selection need this task."
     : needs !== null && usernames.length ? needsPeopleMessage(needs, task)
+    : unacknowledged ? "Confirm annotating before the translation review is accepted."
     : !picked ? (radios ? "Choose a person first." : "Choose people first.")
     : usernames.length && !assignments ? "The chosen people already hold these tasks."
     : null;
@@ -164,12 +168,12 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     try {
       const messages: string[] = [];
       if (usernames.length) {
-        const result = await api.commitAssignmentBatch(props.projectKey, { ...request, expected_preview_digest: fresh.digest, confirm_language: confirmLanguage });
+        const result = await api.commitAssignmentBatch(props.projectKey, { ...request, expected_preview_digest: fresh.digest, confirm_language: confirmLanguage, confirm_unreviewed_translation: acknowledged });
         if (!alive.current) return;
         messages.push(resultMessage(task, result.created.length, chosenPeople.map(person => ({ person: person.person, count: result.created.filter(item => item.username === person.username).length })), split));
       }
       if (self && me && props.mode === "row") {
-        const response = await api.createAssignments(props.projectKey, { rows: [{ document_id: props.row.open.document_id, username: me.username }], task: "annotate", confirm_language: true });
+        const response = await api.createAssignments(props.projectKey, { rows: [{ document_id: props.row.open.document_id, username: me.username }], task: "annotate", confirm_language: true, confirm_unreviewed_translation: acknowledged });
         if (!alive.current) return;
         if (!response.created.length) throw new ApiError(409, "You could not be assigned to this text.", response.refused[0]?.code ?? "ASSIGNMENT_REFUSED");
         messages.push(`You annotate ${props.row.case_id} ${props.row.language}.`);
@@ -242,7 +246,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const stepOptions = props.mode === "row"
     ? (["translation_review", "annotate"] as const).filter(item => item !== "translation_review" || !props.row.is_source).map(item => ({ value: stepKey(item, props.row.language), label: stepName(item) }))
     : (steps ?? []).map(step => ({ value: stepKey(step.task, step.language), label: stepLabel(step.task, step.language, step.versions) }));
-  const changeStep = (value: string) => { reset(); setChosen([]); setCurrent(value); };
+  const changeStep = (value: string) => { reset(); setChosen([]); setAcknowledged(false); setCurrent(value); };
   const closing = busy ? undefined : props.onClose;
 
   return <Dialog open title={title} size="md" onClose={closing} footer={<>
@@ -329,9 +333,14 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       </table>}
       {me && rowMulti && props.mode === "row" && props.consolidatorRule && <p id={`${id}-rule`} className="assign-muted">If you annotate this text yourself, you cannot consolidate it afterwards (project rule "the consolidator is not an annotator").</p>}
 
+      {unreviewed.length > 0 && <Checkbox id={`${id}-unreviewed`} label="Annotate before the translation review is accepted"
+        hint={`Translation review not accepted yet: ${unreviewed.map(item => textLabel(item)).join(", ")}`}
+        checked={acknowledged} disabled={busy} onChange={event => { reset(); setAcknowledged(event.target.checked); }} />}
+
       <div className="assign-summary" role="status" aria-live="polite" aria-label="Summary">{summaryLines.map(line => <p key={line}>{line}</p>)}</div>
 
-      {fresh && fresh.targets.length > 0 && <p className="assign-random"><Button size="sm" disabled={busy} onClick={() => { randomChanged.current = false; setRandomOpen(true); }}>Random distribution…</Button></p>}
+      {fresh && fresh.targets.length > 0 && <p className="assign-random"><Button size="sm" disabled={busy} aria-disabled={unacknowledged ? "true" : undefined} aria-describedby={unacknowledged && reason ? reasonId : undefined}
+        onClick={() => { if (unacknowledged) return; randomChanged.current = false; setRandomOpen(true); }}>Random distribution…</Button></p>}
 
       {notice && <p className="assign-notice" role="alert">{notice}</p>}
       {failure && <p className="assign-error" role="alert">{failure}</p>}
@@ -346,7 +355,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         <span className="assign-confirm-actions"><Button disabled={busy} onClick={() => setConfirming(false)}>Back</Button><Button loading={busy} onClick={() => { void commit(true); }}>Assign anyway</Button></span>
       </section>}
     </div>
-    {randomOpen && fresh && task && <DistributionDialog projectKey={props.projectKey} task={task}
+    {randomOpen && fresh && task && <DistributionDialog projectKey={props.projectKey} task={task} confirmUnreviewedTranslation={acknowledged}
       documents={fresh.targets.map(item => ({ document_id: item.document_id, language: item.language }))}
       onChanged={() => { randomChanged.current = true; }}
       onClose={() => {

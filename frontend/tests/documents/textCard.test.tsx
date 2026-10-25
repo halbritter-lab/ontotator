@@ -175,6 +175,15 @@ describe("annotation part", () => {
     expect(within(part()).queryByText(/tool proposals?$/)).toBeNull();
   });
 
+  it("shows Translation not reviewed yet only for a flagged row", () => {
+    const part = () => within(card()).getByRole("region", { name: "Annotation" });
+    renderCard({ row: assignRow({ unreviewed_translation: true }) });
+    expect(within(part()).getByText("Translation not reviewed yet")).toBeTruthy();
+    cleanup();
+    renderCard({ row: assignRow({ unreviewed_translation: false }) });
+    expect(within(part()).queryByText("Translation not reviewed yet")).toBeNull();
+  });
+
   it("one Assign annotators… opens the assign dialog; unavailable at the limit", () => {
     const { onAssign } = renderCard();
     expect(within(card()).queryByRole("button", { name: "+ Person" })).toBeNull();

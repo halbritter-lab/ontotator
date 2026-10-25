@@ -22,6 +22,7 @@ let perText = 1;
 let remainingOf: (caseId: string) => number = () => 1;
 let needsPeople: number | null = null;
 let digest = "digest-1";
+let unreviewedOf: (caseId: string) => boolean = () => false;
 
 function preview(body: BatchAssignRequest): BatchPreview & { needs_people?: number | null } {
   const usernames = body.usernames ?? [];
@@ -32,7 +33,7 @@ function preview(body: BatchAssignRequest): BatchPreview & { needs_people?: numb
     const size = Math.ceil(ids.length / usernames.length);
     ids.forEach((id, index) => blocks.set(id, [usernames[Math.floor(index / size)]]));
   }
-  const targets = ids.map(id => ({ case_id: id, language: body.language, document_id: `doc-${id}`, version: 1, remaining: remainingOf(id), usernames: blocks.get(id) ?? [] }));
+  const targets = ids.map(id => ({ case_id: id, language: body.language, document_id: `doc-${id}`, version: 1, remaining: remainingOf(id), usernames: blocks.get(id) ?? [], unreviewed_translation: unreviewedOf(id) }));
   return {
     task: body.task, language: body.language, versions: targets.length, targets, skipped, per_text: perText, digest, needs_people: needsPeople,
     people: people.map(item => {
@@ -44,7 +45,7 @@ function preview(body: BatchAssignRequest): BatchPreview & { needs_people?: numb
 const summary = (steps: SelectionSummary["steps"]): SelectionSummary => ({ cases: 20, steps, skipped: {}, common: steps[0] ?? null, not_shown: 0 });
 
 beforeEach(() => {
-  skipped = []; perText = 1; remainingOf = () => 1; needsPeople = null; digest = "digest-1";
+  skipped = []; perText = 1; remainingOf = () => 1; needsPeople = null; digest = "digest-1"; unreviewedOf = () => false;
   vi.spyOn(api, "selectionSummary").mockResolvedValue(summary([{ task: "translation_review", language: "de", versions: 20, cases: 20 }]));
   vi.spyOn(api, "previewAssignmentBatch").mockImplementation(async (_key, body) => preview(body));
   vi.spyOn(api, "commitAssignmentBatch").mockImplementation(async (_key, body) => ({ created: preview(body).targets.flatMap(target => target.usernames.map(username => ({ ...assignment, username, document_id: target.document_id, task: body.task }))) }));
@@ -221,7 +222,7 @@ it("annotation: the limit up front, names past it say limit reached, the lead is
   expect(lastPreview().usernames ?? []).toEqual([]);
   fireEvent.click(screen.getByRole("button", { name: "Assign 1 person" }));
   await waitFor(() => expect(onAssigned).toHaveBeenCalledWith("You annotate case-0101 de."));
-  expect(self).toHaveBeenCalledWith("p/key", { rows: [{ document_id: "doc-case-0101", username: "lead" }], task: "annotate", confirm_language: true });
+  expect(self).toHaveBeenCalledWith("p/key", { rows: [{ document_id: "doc-case-0101", username: "lead" }], task: "annotate", confirm_language: true, confirm_unreviewed_translation: false });
   expect(api.commitAssignmentBatch).not.toHaveBeenCalled();
 });
 
@@ -339,4 +340,74 @@ it("row mode assigns a translation review after a source change with review_reas
   fireEvent.click(radio(/Ana Weber/)); await waitForPreviewOf(["ana"]);
   fireEvent.click(screen.getByRole("button", { name: "Assign 1" }));
   await waitFor(() => expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ review_reason: "source_changed", usernames: ["ana"] })));
+});
+
+const annotateCases = () => vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 20, cases: 20 }]));
+const acknowledgement = () => screen.queryByRole("checkbox", { name: "Annotate before the translation review is accepted" });
+
+it("the acknowledgement appears only for unreviewed targets and gates Assign", async () => {
+  annotateCases(); unreviewedOf = id => id === "case-0102";
+  const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
+  fireEvent.click(radio(/Ana Weber/));
+  await waitForPreviewOf(["ana"]);
+  const box = acknowledgement()!;
+  expect(document.getElementById(box.getAttribute("aria-describedby")!)!.textContent).toBe("Translation review not accepted yet: case-0102 de");
+  const assign = screen.getByRole("button", { name: "Assign 20" });
+  expect(assign.getAttribute("aria-disabled")).toBe("true");
+  expect(document.getElementById(assign.getAttribute("aria-describedby")!)!.textContent).toBe("Confirm annotating before the translation review is accepted.");
+  fireEvent.click(assign);
+  expect(api.commitAssignmentBatch).not.toHaveBeenCalled();
+  fireEvent.click(box);
+  expect(assign.getAttribute("aria-disabled")).toBeNull();
+  fireEvent.click(assign);
+  await waitFor(() => expect(props.onAssigned).toHaveBeenCalled());
+  expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ usernames: ["ana"], confirm_unreviewed_translation: true }));
+});
+
+it("no acknowledgement for reviewed targets", async () => {
+  annotateCases();
+  const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
+  fireEvent.click(radio(/Ana Weber/));
+  await waitForPreviewOf(["ana"]);
+  expect(acknowledgement()).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Assign 20" }));
+  await waitFor(() => expect(props.onAssigned).toHaveBeenCalled());
+  expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ confirm_unreviewed_translation: false }));
+});
+
+it("bulk mode names every affected text", async () => {
+  annotateCases(); unreviewedOf = id => id === "case-0101" || id === "case-0105";
+  render(<AssignWorkDialog {...casesProps()} />); await ready();
+  const box = acknowledgement()!;
+  expect(document.getElementById(box.getAttribute("aria-describedby")!)!.textContent).toBe("Translation review not accepted yet: case-0101 de, case-0105 de");
+});
+
+it("assigning myself sends the acknowledgement", async () => {
+  perText = 2; unreviewedOf = () => true;
+  const self = vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [{ ...assignment, username: "lead", task: "annotate" }], refused: [] } as unknown as Awaited<ReturnType<typeof api.createAssignments>>);
+  const onAssigned = vi.fn();
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={{ ...row, open: { document_id: "doc-case-0101" } } as DocumentRowView} task="annotate" me={{ username: "lead", name: "Pat Lead" }} onClose={vi.fn()} onAssigned={onAssigned} />);
+  await ready();
+  fireEvent.click(screen.getByRole("checkbox", { name: /^Pat Lead \(you\)/ }));
+  fireEvent.click(acknowledgement()!);
+  fireEvent.click(screen.getByRole("button", { name: "Assign 1 person" }));
+  await waitFor(() => expect(onAssigned).toHaveBeenCalledWith("You annotate case-0101 de."));
+  expect(self).toHaveBeenCalledWith("p/key", expect.objectContaining({ confirm_unreviewed_translation: true }));
+});
+
+it("random distribution waits for the acknowledgement", async () => {
+  vi.spyOn(api, "listMembers").mockResolvedValue([]);
+  vi.spyOn(api, "listCases").mockResolvedValue([]);
+  annotateCases(); unreviewedOf = () => true;
+  render(<AssignWorkDialog {...casesProps()} />); await ready();
+  await waitFor(() => expect(acknowledgement()).not.toBeNull());
+  const link = screen.getByRole("button", { name: "Random distribution…" });
+  expect(link.getAttribute("aria-disabled")).toBe("true");
+  expect(document.getElementById(link.getAttribute("aria-describedby")!)!.textContent).toBe("Confirm annotating before the translation review is accepted.");
+  fireEvent.click(link);
+  expect(screen.queryByRole("dialog", { name: "Propose distribution" })).toBeNull();
+  fireEvent.click(acknowledgement()!);
+  expect(link.getAttribute("aria-disabled")).toBeNull();
+  fireEvent.click(link);
+  expect(await screen.findByRole("dialog", { name: "Propose distribution" })).toBeDefined();
 });

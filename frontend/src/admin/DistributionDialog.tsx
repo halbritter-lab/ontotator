@@ -7,9 +7,9 @@ import type { CaseSummary } from "../api/client";
 import { ErrorNotice } from "./ErrorNotice";
 type Slot = { document_id: string; language: string; username: string; place: number };
 /** `task` presets the task (the assign dialog's "Random distribution…" link). */
-export interface DistributionDialogProps { projectKey: string; documents: readonly TaskDocument[]; cases?: readonly CaseSummary[] | null; task?: Task; onClose: () => void; onChanged: () => void }
+export interface DistributionDialogProps { projectKey: string; documents: readonly TaskDocument[]; cases?: readonly CaseSummary[] | null; task?: Task; confirmUnreviewedTranslation?: boolean; onClose: () => void; onChanged: () => void }
 export function DistributionDialog(props: DistributionDialogProps): JSX.Element { return <DistributionEditor key={JSON.stringify([props.projectKey, props.documents.map(doc => [doc.document_id, doc.language]), props.task])} {...props} />; }
-function DistributionEditor({ projectKey, documents, cases, task: initialTask, onClose, onChanged }: DistributionDialogProps): JSX.Element {
+function DistributionEditor({ projectKey, documents, cases, task: initialTask, confirmUnreviewedTranslation, onClose, onChanged }: DistributionDialogProps): JSX.Element {
   const [task, setTask] = useState<Task>(initialTask ?? "annotate");
   const [count, setCount] = useState("1");
   const [proposal, setProposal] = useState<ProposalResponse | null>(null);
@@ -51,7 +51,7 @@ function DistributionEditor({ projectKey, documents, cases, task: initialTask, o
   const newRows = editedRows.filter(row => !(inventory ?? []).some(existing => !existing.revoked_at && existing.project_key === projectKey && existing.document_id === row.document_id && existing.username === row.username && existing.task === proposal?.context.task));
   const confirm = (confirm_language: boolean) => {
     if (!proposal || stale || busy || duplicate || (!confirm_language && batch.attempted)) return;
-    void batch.submit({ rows: confirm_language ? batch.languageRows : editedRows, task: proposal.context.task, seed: proposal.seed, context: proposal.context, confirm_language });
+    void batch.submit({ rows: confirm_language ? batch.languageRows : editedRows, task: proposal.context.task, seed: proposal.seed, context: proposal.context, confirm_language, ...(confirmUnreviewedTranslation ? { confirm_unreviewed_translation: true } : {}) });
   };
   const eligible = members ? eligibleMembers(members, task) : [];
   const loadBefore = new Map<string, number>();

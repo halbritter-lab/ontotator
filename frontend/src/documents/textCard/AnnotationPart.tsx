@@ -60,6 +60,7 @@ export function AnnotationPart({ row, projectKey, query, submissions, canManage,
     {!planControl && mode && <p>{annotationTaskName(mode.mode)}</p>}
     {!planControl && mode?.source === "no_proposals" && <p className="text-card-muted">{NO_PROPOSALS}</p>}
     {proposals > 0 && <p className="text-card-muted">{plural(proposals, "tool proposal")}</p>}
+    {annotating && row.unreviewed_translation && <p className="text-card-muted">Translation not reviewed yet</p>}
     {annotating && status && <p id={`${id}-status`}>{status}</p>}
     {people.length > 0 && <div className="text-card-chips">
       {people.map(item => {

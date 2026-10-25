@@ -35,6 +35,21 @@ describe("historyLines", () => {
     ]);
   });
 
+  it("an acknowledged annotation adds its line", () => {
+    const line = "Annotation assigned before the translation review was accepted (confirmed by Ana Weber (ann-0003))";
+    const flagged = (status: "in_progress" | "submitted", assigned_by: typeof ana | null = ana) => row({
+      case_id: "case-202", language: "de",
+      versions: [version({ document_id: "case-202-de", origin: "machine_translation" })],
+      work: [work({ assignment_id: 7, document_id: "case-202-de", status, author_label: "ann-0004", person: tom, assigned_by, unreviewed_translation: true })],
+    });
+    const open = historyLines(flagged("in_progress"), null, { now });
+    expect(open.find(entry => entry.key === "unreviewed-7")).toEqual({ key: "unreviewed-7", stage: "annotation", text: line });
+    const submitted = historyLines(flagged("submitted"), [submission({ submission_id: "s-7", document_id: "case-202-de", author_label: "ann-0004", author: tom, recorded_at: "2026-10-21T22:15:00" })], { now });
+    expect(submitted.map(entry => entry.text)).toContain(line);
+    expect(historyLines(flagged("in_progress", null), null, { now }).map(entry => entry.text))
+      .toContain("Annotation assigned before the translation review was accepted (confirmed by the lead)");
+  });
+
   it("tags every line with its stage for the row panel's Activity filter", () => {
     const lines = historyLines(walkthroughRow(), [tomSubmission], { me: "lead-0002", now });
     expect(lines.map(line => line.stage)).toEqual(["review", "annotation", "annotation", "final"]);

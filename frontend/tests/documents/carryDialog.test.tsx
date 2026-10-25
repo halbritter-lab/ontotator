@@ -92,6 +92,21 @@ describe("CarryDialog", () => {
     expect(carry).toHaveBeenLastCalledWith("demo", "sub-ana-1", expect.objectContaining({ confirm_language: true }));
   });
 
+  it("asks before annotating an unreviewed translation and keeps the language flag", async () => {
+    const carry = vi.spyOn(api, "carrySubmission")
+      .mockRejectedValueOnce(new ApiError(422, "x", "LANGUAGE_CONFIRMATION_REQUIRED"))
+      .mockRejectedValueOnce(new ApiError(409, "x", "TRANSLATION_NOT_REVIEWED"))
+      .mockResolvedValueOnce(carried());
+    const props = setup();
+    await screen.findByText(/submitted on v1/);
+    fireEvent.click(assign());
+    fireEvent.click(await within(dialog()).findByRole("button", { name: "Assign anyway" }));
+    expect(await within(dialog()).findByText("Translation not reviewed yet.")).toBeDefined();
+    fireEvent.click(within(dialog()).getByRole("button", { name: "Annotate before the review is accepted" }));
+    await waitFor(() => expect(props.onDone).toHaveBeenCalled());
+    expect(carry).toHaveBeenLastCalledWith("demo", "sub-ana-1", expect.objectContaining({ confirm_language: true, confirm_unreviewed_translation: true }));
+  });
+
   it("carries a final's submission to the corrected version", () => {
     const { row } = submittedOnOldText();
     const withFinal = { ...row, final: final({ case_id: "case-113", language: "de", document_id: "case-113-de-v1", submission_id: "sub-final", round_ordinal: 2 }) };
