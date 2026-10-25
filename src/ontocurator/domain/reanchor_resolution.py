@@ -66,6 +66,7 @@ class ReanchorItem(BaseModel):
         "invalid_bounds",
         "changed_segment",
         "changed_cue",
+        "changed_modifier_segment",
     ]
     old_mentions: list[OldMentionView]
     old_context: TextWindowView

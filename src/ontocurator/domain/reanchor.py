@@ -74,10 +74,17 @@ class MappedEvidence:
 
 
 @dataclass(frozen=True)
+class MappedModifier:
+    term_id: str
+    segments: tuple[Span, ...]
+
+
+@dataclass(frozen=True)
 class Carried:
     source: AnnotationSnapshot
     source_ref: AnnotationRef
     evidence: tuple[MappedEvidence, ...]
+    modifiers: tuple[MappedModifier, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -92,6 +99,12 @@ class OldMention:
     source_ref: EvidenceRef
     segments: tuple[TextSpan, ...]
     cue_segments: tuple[TextSpan, ...]
+
+
+@dataclass(frozen=True)
+class OldModifier:
+    term_id: str
+    segments: tuple[TextSpan, ...]
 
 
 @dataclass(frozen=True)
@@ -124,6 +137,7 @@ ReviewReason = Literal[
     "invalid_bounds",
     "changed_segment",
     "changed_cue",
+    "changed_modifier_segment",
 ]
 
 
@@ -137,6 +151,7 @@ class NeedsReview:
     old_context: TextWindow
     new_context: TextWindow
     diff: tuple[WindowOpcode, ...]
+    old_modifiers: tuple[OldModifier, ...] = ()
 
     @property
     def old_segments(self) -> tuple[TextSpan, ...]:
