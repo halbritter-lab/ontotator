@@ -108,3 +108,16 @@
     border-color: CanvasText;
   }
 }
+
+/* "Modifier warnings · {m}" (finding modifiers, R10, R12): the box of "Unconfirmed values". */
+.modifier-warnings__heading {
+  margin: 0;
+  font-size: var(--size-md);
+}
+
+.modifier-warnings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationSnapshot } from "../src/api/client";
 import {
-  UNCONFIRMED_REASONS, pairKey, rowPairs, sameSet, unconfirmedRows, valueCount, valuesLine,
+  UNCONFIRMED_REASONS, modifierWarningPairs, modifierWarnings, pairKey, rowPairs, sameSet, unconfirmedRows, valueCount, valuesLine,
   type UnconfirmedAxisDef, type UnconfirmedInput,
 } from "../src/editor/unconfirmedValues";
 
@@ -105,5 +105,38 @@ describe("rowPairs, sameSet and valueCount", () => {
     expect(sameSet(pairs, new Set([pairKey("a", "assertion")]))).toBe(false);
     expect(sameSet(new Set(["x"]), new Set(["y"]))).toBe(false);
     expect(sameSet(new Set(), new Set())).toBe(true);
+  });
+});
+
+describe("modifierWarnings", () => {
+  const INFO: Record<string, { label: string; role: "modifier" | "cohort"; exclusiveClass: "severity" | "onset" | null }> = {
+    "HP:0012828": { label: "Severe", role: "modifier", exclusiveClass: "severity" },
+    "HP:0012825": { label: "Mild", role: "modifier", exclusiveClass: "severity" },
+    "HP:0040283": { label: "Frequent", role: "cohort", exclusiveClass: null },
+    "HP:0031796": { label: "Recurrent", role: "modifier", exclusiveClass: null },
+  };
+  const info = (_snapshot: AnnotationSnapshot, termId: string) => INFO[termId];
+  const withModifiers = (id: string, terms: string[]) => {
+    const value = snapshot(id, {}, []);
+    (value.annotation as { modifiers?: unknown }).modifiers = terms.map(term_id => ({ term_id }));
+    return value;
+  };
+
+  it("mirrors the server: a cohort warning per Frequency modifier, then one per exclusive class with two", () => {
+    const warnings = modifierWarnings([withModifiers("a", ["HP:0012828", "HP:0040283", "HP:0012825", "HP:0031796"]), withModifiers("b", ["HP:0012828"])], info);
+    expect(warnings).toEqual([
+      { annotationId: "a", kind: "cohort-modifier", key: "cohort:HP:0040283", labels: ["Frequent"] },
+      { annotationId: "a", kind: "exclusive-modifiers", key: "exclusive:severity", labels: ["Mild", "Severe"], exclusiveClass: "severity" },
+    ]);
+    expect(modifierWarningPairs(warnings)).toEqual(new Set([pairKey("a", "cohort:HP:0040283"), pairKey("a", "exclusive:severity")]));
+  });
+
+  it("adds server pairs the client did not compute and ignores axis pairs", () => {
+    const warnings = modifierWarnings([withModifiers("a", ["HP:0012828"])], info, [
+      { annotationId: "a", axis: "assertion" }, { annotationId: "a", axis: "cohort:HP:0040283" }, { annotationId: "a", axis: "exclusive:onset" }]);
+    expect(warnings).toEqual([
+      { annotationId: "a", kind: "cohort-modifier", key: "cohort:HP:0040283", labels: ["Frequent"] },
+      { annotationId: "a", kind: "exclusive-modifiers", key: "exclusive:onset", labels: [], exclusiveClass: "onset" },
+    ]);
   });
 });

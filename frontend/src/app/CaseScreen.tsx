@@ -59,7 +59,7 @@ import { FindingRow } from "../editor/FindingRow";
 import { SubmitCaseDialog } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
 import { collectOpenItems, nextOpenItem, type OpenItem } from "../editor/openItems";
-import { pairKey, rowPairs, sameSet, unconfirmedRows, type UnconfirmedRow } from "../editor/unconfirmedValues";
+import { isModifierWarningKey, modifierWarningPairs, modifierWarnings, pairKey, rowPairs, sameSet, unconfirmedRows, type UnconfirmedRow } from "../editor/unconfirmedValues";
 import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
 import { fromSubmission } from "../editor/historicalSubmission";
 import { MySubmissions } from "../editor/MySubmissions";
@@ -160,8 +160,12 @@ function submissionAxisWarning(error: unknown): AxisWarning | null {
     || typeof acknowledgement.warning_digest !== "string" || !acknowledgement.warning_digest) return null;
   const warnings = Array.isArray(error.details.warnings) ? error.details.warnings.flatMap((warning: unknown) => {
     if (!warning || typeof warning !== "object") return [];
-    const item = warning as { annotation_id?: unknown; detail?: { axis?: unknown } };
-    return typeof item.annotation_id === "string" && typeof item.detail?.axis === "string" ? [{ annotationId: item.annotation_id, axis: item.detail.axis }] : [];
+    const item = warning as { annotation_id?: unknown; rule?: unknown; detail?: { axis?: unknown; term_id?: unknown; class?: unknown } };
+    // Modifier warnings keep their own key next to the axis ids: "cohort:<term id>", "exclusive:<class>".
+    const axis = item.rule === "cohort_modifier" ? typeof item.detail?.term_id === "string" ? `cohort:${item.detail.term_id}` : null
+      : item.rule === "exclusive_modifier_class" ? typeof item.detail?.class === "string" ? `exclusive:${item.detail.class}` : null
+      : typeof item.detail?.axis === "string" ? item.detail.axis : null;
+    return typeof item.annotation_id === "string" && axis ? [{ annotationId: item.annotation_id, axis }] : [];
   }) : [];
   return { acknowledgement, warnings };
 }
@@ -2325,6 +2329,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const confirmedCount = (draft.decisions ?? []).filter((d) => d.outcome === "confirmed").length;
 
   const completionResults = resultSnapshots(draft, view.available_inputs ?? []);
+  /** A finding whose term is a modifier or cohort term (R3, old or imported data). */
+  const isModifierTerm = (snapshot: SnapshotLike) => {
+    const role = termLabel.info(snapshot.annotation.layer_id, snapshot.annotation.term_id)?.role;
+    return role === "modifier" || role === "cohort";
+  };
   // Submission always uses current project rules, including legacy open drafts.
   const submissionIssues = completionResults.flatMap(snapshot => {
     const ann = snapshot.annotation;
@@ -2369,6 +2378,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const own = reviewTargetOf(snapshot) ? undefined : allEvidenceMap[snapshot.annotation.evidence_refs?.[0]?.evidence_id ?? ""];
     return (own ?? snapshot.evidence?.[0])?.mention.segments ?? [];
   };
+  const currentServerPairs = axisWarning && axisWarning.acknowledgement.draft_revision === draft.revision ? axisWarning.warnings : [];
   // F2: the Submit dialog's "Unconfirmed values" rows, computed locally; a current server warning adds its pairs.
   const unconfirmed = unconfirmedRows({
     snapshots: completionResults,
@@ -2378,9 +2388,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     term: snapshotTerm,
     quote: snapshot => { const segments = firstSegments(snapshot); return segments.length ? quoteSegments(view.document.text, segments, 40) : ""; },
     evidenceId: firstEvidenceId,
-    serverPairs: axisWarning && axisWarning.acknowledgement.draft_revision === draft.revision ? axisWarning.warnings : undefined,
+    serverPairs: currentServerPairs.filter(pair => !isModifierWarningKey(pair.axis)),
   });
-  const unconfirmedPairs = rowPairs(unconfirmed);
+  // R10, R12: acknowledged with the values (one list and digest on the server).
+  const modifierWarningList = modifierWarnings(completionResults,
+    (snapshot, termId) => termLabel.info(snapshot.annotation.layer_id, termId), currentServerPairs);
+  /** Every acknowledged pair: unconfirmed values (as the server lists them) and modifier warnings. */
+  const unconfirmedPairs = new Set([...(view.require_chosen_axes ? [] : rowPairs(unconfirmed)), ...modifierWarningPairs(modifierWarningList)]);
   const pairsKey = [...unconfirmedPairs].sort().join(",");
   const setAcknowledged = (checked: boolean) => {
     setAxisWarningAcknowledged(checked);
@@ -2411,7 +2425,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const confirmUnavailableReason = queueState === "conflict" || queueState === "error" || isOffline ? statusText : null;
   // Server axis warnings that still apply: the value is empty or still a default (as the server checks).
   const unconfirmedEntries = axisWarning ? completionResults.flatMap(snapshot => {
-    const warned = new Set(axisWarning.warnings.filter(warning => warning.annotationId === snapshot.annotation.annotation_id).map(warning => warning.axis));
+    const warned = new Set(axisWarning.warnings.filter(warning => warning.annotationId === snapshot.annotation.annotation_id && !isModifierWarningKey(warning.axis))
+      .map(warning => warning.axis));
     const axes = axisDefinitions(snapshot);
     const position = (id: string) => { const index = axes.findIndex(axis => axis.id === id); return index < 0 ? axes.length : index; };
     const open = [...warned].filter(axis => {
@@ -2437,6 +2452,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const snapshot = (view.available_inputs ?? []).find(s => s.annotation.annotation_id === target.annotation_id && s.version === target.version);
       return { key: refKey(target), term: snapshot ? snapshotTerm(snapshot) : target.annotation_id, evidenceId: snapshot ? firstEvidenceId(snapshot) : undefined };
     }) : [],
+    // R3: old data with a modifier term standing alone (the server blocks it as `modifier_as_finding`).
+    modifierAsFinding: completionResults.filter(snapshot => isModifierTerm(snapshot)).map(snapshot => ({ ...findingRef(snapshot) })),
+    modifierWarnings: modifierWarningList.map(warning => {
+      const snapshot = completionResults.find(candidate => candidate.annotation.annotation_id === warning.annotationId);
+      return { ...warning, term: snapshot ? snapshotTerm(snapshot) : warning.annotationId, evidenceId: snapshot ? firstEvidenceId(snapshot) : undefined };
+    }),
     defaulted: defaulted.map(snapshot => {
       const axes = axisDefinitions(snapshot), defaultedAxes = snapshot.annotation.axes_defaulted ?? [];
       return { ...findingRef(snapshot), axisId: axes.find(axis => defaultedAxes.includes(axis.id))?.id ?? defaultedAxes[0] };
@@ -2562,7 +2583,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Step 2: submit after the explicit "entire text checked" confirmation.
   const confirmSubmit = async () => {
     const rowsRemain = unconfirmed.length > 0;
-    if (readOnlyRef.current || submittingWorkspace.current || (rowsRemain && (view.require_chosen_axes || !axisWarningAcknowledged))) return;
+    if (readOnlyRef.current || submittingWorkspace.current || (rowsRemain && view.require_chosen_axes)) return;
+    if (unconfirmedPairs.size > 0 && !axisWarningAcknowledged) return;
     if (!textCheckedConfirmed || blockInvalidUnresolvedNotes() || submissionIssues.length || unresolvedReanchorCount || pendingCarriedCount) return;
     if (isReviewLike(view.key.mode)) {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
@@ -2576,7 +2598,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     submittingWorkspace.current = true;
     // The values the user saw when submitting; a warning listing exactly these is acknowledged at once (D1).
     const expected = unconfirmedPairs;
-    const acknowledged = rowsRemain && axisWarningAcknowledged;
+    const acknowledged = unconfirmedPairs.size > 0 && axisWarningAcknowledged;
     const held = acknowledged ? axisWarning?.acknowledgement : undefined;
     try {
       const submitEnvelope = (expectedRevision: number, acknowledgement?: AxisWarning["acknowledgement"]) => ({

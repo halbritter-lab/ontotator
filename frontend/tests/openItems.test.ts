@@ -81,7 +81,7 @@ describe("dialogItems and blocking values", () => {
     defaulted: [{ annotationId: "d", term: "D", axisId: "x" }] });
 
   it("drops defaulted and unconfirmed values from the dialog list", () => {
-    expect(DIALOG_HIDDEN_KINDS).toEqual(["defaulted", "unconfirmed-values"]);
+    expect(DIALOG_HIDDEN_KINDS).toEqual(["defaulted", "unconfirmed-values", "cohort-modifier", "exclusive-modifiers"]);
     expect(dialogItems(mixed()).map(item => item.kind)).toEqual(["carried"]);
     expect(summaryLine(dialogItems(mixed()))).toBe("1 carried finding still needs a check");
   });
@@ -108,5 +108,41 @@ describe("nextOpenItem", () => {
     expect(nextOpenItem(items, "annotation:a", items[0].key)?.key).toBe(items[1].key);
     expect(nextOpenItem(items, "annotation:b", items[2].key)?.key).toBe(items[0].key);
     expect(nextOpenItem(items, "annotation:other", null)?.key).toBe(items[0].key);
+  });
+});
+
+describe("modifier items (R3, R10, R12)", () => {
+  const items = () => collectOpenItems({ ...empty,
+    unconfirmed: [{ annotationId: "u", term: "U", axisId: "x", axisLabel: "X" }],
+    modifierAsFinding: [{ annotationId: "sev", term: "Severe", evidenceId: "ev-sev" }],
+    modifierWarnings: [
+      { annotationId: "seizure", term: "Seizure", kind: "cohort-modifier", key: "cohort:HP:0040283", labels: ["Frequent"] },
+      { annotationId: "seizure", term: "Seizure", kind: "exclusive-modifiers", key: "exclusive:severity", labels: ["Mild", "Severe"], exclusiveClass: "severity" },
+    ],
+  });
+
+  it("lists the blocking item before the values and the warnings after them, with their lines and focus", () => {
+    const list = items();
+    expect(list.map(item => item.kind)).toEqual(["modifier-as-finding", "unconfirmed-values", "cohort-modifier", "exclusive-modifiers"]);
+    expect(list[0]).toMatchObject({ blocking: true, term: "Severe", line: "Severe is a modifier. Turn it into a modifier of another finding.",
+      focus: "[data-turn-into-modifier]", listKey: "annotation:sev", evidenceId: "ev-sev" });
+    expect(list[2]).toMatchObject({ blocking: false, term: "Seizure", line: "Frequent is a cohort term.", listKey: "annotation:seizure" });
+    expect(list[3]).toMatchObject({ blocking: false, line: "Two severities: Mild, Severe." });
+    expect(dialogItems(list).map(item => item.kind)).toEqual(["modifier-as-finding"]);
+  });
+
+  it("summarises per finding and names the blocking item before the values reason", () => {
+    expect(summaryLine(items())).toBe("1 finding uses a modifier term, 1 finding has unconfirmed clinical values, "
+      + "1 finding has a cohort term as modifier, 1 finding has two modifiers of one kind");
+    expect(submitBlockedReason(items(), 2)).toBe("Turn 1 modifier used as a finding into a modifier before submitting.");
+    const two = collectOpenItems({ ...empty, modifierAsFinding: [{ annotationId: "a", term: "Severe" }, { annotationId: "b", term: "Mild" }] });
+    expect(submitBlockedReason(two)).toBe("Turn 2 modifiers used as findings into modifiers before submitting.");
+    const onsets = collectOpenItems({ ...empty, modifierWarnings: [
+      { annotationId: "a", term: "A", kind: "exclusive-modifiers", key: "exclusive:onset", labels: [], exclusiveClass: "onset" },
+      { annotationId: "a", term: "A", kind: "cohort-modifier", key: "cohort:x", labels: ["Frequent"] },
+      { annotationId: "a", term: "A", kind: "cohort-modifier", key: "cohort:y", labels: ["Very frequent"] }] });
+    expect(onsets[0].line).toBe("Two onsets.");
+    expect(summaryLine(onsets)).toBe("1 finding has a cohort term as modifier, 1 finding has two modifiers of one kind");
+    expect(submitBlockedReason(onsets)).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, type AnnotationSnapshot, type Draft, type RoundInputView } from "../src/api/client";
 import { CaseScreen } from "../src/app/CaseScreen";
 import { SubmitCaseDialog, type SubmitCaseDialogProps } from "../src/editor/SubmitCaseDialog";
+import { collectOpenItems } from "../src/editor/openItems";
 import { unconfirmedRows, type UnconfirmedRow } from "../src/editor/unconfirmedValues";
 import { historical } from "./variantFixtures";
 import { workspaceFixture } from "./assignments";
@@ -415,5 +416,54 @@ describe("Unconfirmed values section", () => {
     rerender(<SubmitCaseDialog {...dialogProps({ submitStatus: { text, count: 2 } })} />);
     expect(region.textContent).toBe(text);
     expect(region.firstElementChild).not.toBe(first);
+  });
+
+  describe("modifier warnings and the modifier-as-finding item", () => {
+    const warnings = collectOpenItems({ carried: [], evidence: [], reanchor: [], unconfirmed: [], openTargets: [], defaulted: [],
+      modifierWarnings: [
+        { annotationId: "s", term: "Seizure", kind: "exclusive-modifiers", key: "exclusive:severity", labels: ["Mild", "Severe"], exclusiveClass: "severity" },
+        { annotationId: "s", term: "Seizure", kind: "cohort-modifier", key: "cohort:HP:0040283", labels: ["Frequent"] }],
+    });
+    const standalone = collectOpenItems({ carried: [], evidence: [], reanchor: [], unconfirmed: [], openTargets: [], defaulted: [],
+      modifierAsFinding: [{ annotationId: "sev", term: "Severe" }] });
+
+    it("lists the warnings in their own section after the values, before the acknowledgement", () => {
+      const onGoTo = vi.fn();
+      render(<SubmitCaseDialog {...dialogProps({ items: warnings, unconfirmed: threeRows().slice(0, 1), textChecked: true, onGoTo })} />);
+      const section = screen.getByRole("region", { name: "Modifier warnings · 2" });
+      expect(within(section).getAllByRole("listitem").map(item => item.querySelector("span")!.textContent))
+        .toEqual(["Seizure: Two severities: Mild, Severe.", "Seizure: Frequent is a cohort term."]);
+      expect(document.querySelector("[data-unconfirmed-values]")!.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(section.compareDocumentPosition(document.querySelector(".submit-ack")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(document.querySelectorAll('[data-open-item]:not([data-modifier-warnings] *)')).toHaveLength(0);
+      fireEvent.click(within(section).getAllByRole("button", { name: "Go to Seizure" })[0]);
+      expect(onGoTo).toHaveBeenCalledWith(warnings[0]);
+      expect(screen.getByRole("checkbox", { name: "Submit with 2 unconfirmed values and 2 modifier warnings" })).toBeDefined();
+      expect(reasonOf(submitButton())).toBe("Confirm the values or tick \u201cSubmit with 2 unconfirmed values and 2 modifier warnings\u201d before submitting.");
+    });
+
+    it("with only modifier warnings (also under the project rule) the box names them and blocks until ticked", () => {
+      const onConfirm = vi.fn();
+      const { rerender } = render(<SubmitCaseDialog {...dialogProps({ items: warnings, unconfirmed: [], requireChosenAxes: true, textChecked: true, onConfirm })} />);
+      const box = screen.getByRole("checkbox", { name: "Submit with 2 modifier warnings" });
+      expect(box.getAttribute("aria-describedby")).toBeNull();
+      expect(reasonOf(submitButton())).toBe("Tick \u201cSubmit with 2 modifier warnings\u201d before submitting.");
+      fireEvent.click(submitButton());
+      expect(onConfirm).not.toHaveBeenCalled();
+      rerender(<SubmitCaseDialog {...dialogProps({ items: warnings, unconfirmed: [], requireChosenAxes: true, textChecked: true, acknowledged: true, onConfirm })} />);
+      fireEvent.click(submitButton());
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it("lists a modifier used as a finding in the generic list with Go to, and blocks", () => {
+      const onGoTo = vi.fn();
+      render(<SubmitCaseDialog {...dialogProps({ items: standalone, unconfirmed: [], textChecked: true, onGoTo })} />);
+      const item = document.querySelector<HTMLElement>('[data-open-item="modifier-as-finding"]')!;
+      expect(item.textContent).toContain("Severe is a modifier. Turn it into a modifier of another finding.");
+      fireEvent.click(within(item).getByRole("button", { name: "Go to Severe" }));
+      expect(onGoTo).toHaveBeenCalledWith(standalone[0]);
+      expect(reasonOf(submitButton())).toBe("Turn 1 modifier used as a finding into a modifier before submitting.");
+      expect(screen.queryByRole("region", { name: /Modifier warnings/ })).toBeNull();
+    });
   });
 });

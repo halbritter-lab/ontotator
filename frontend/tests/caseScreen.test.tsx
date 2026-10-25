@@ -2450,6 +2450,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
   const LABELS: Record<string, [string, "finding" | "modifier" | "cohort", ("severity" | "onset" | null)?]> = {
     "HP:0001250": ["Seizure", "finding"], "HP:0001252": ["Hypotonia", "finding"],
     "HP:0012828": ["Severe", "modifier", "severity"], "HP:0031796": ["Recurrent", "modifier"],
+    "HP:0012825": ["Mild", "modifier", "severity"], "HP:0040283": ["Frequent", "cohort"],
   };
   const AXES = [{ id: "assertion", label: "Assertion", options: ["present", "absent"], allow_empty: true }];
   type Mod = { term_id: string; segments?: { start: number; end: number }[] };
@@ -2720,6 +2721,58 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     const option = (await screen.findAllByRole("option"))[0];
     expect(option.getAttribute("aria-disabled")).toBe("true");
     expect(option.textContent).toContain("Modifier — add it under Modifiers instead.");
+  });
+
+  describe("submit with modifier warnings", () => {
+    const MILD_SEVERE: Finding[] = [["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012825" }, { term_id: "HP:0012828" }]]];
+    const modWarning = (view: WorkspaceView, warnings: { rule: string; detail: Record<string, string> }[], digest = "mod-digest") =>
+      new ApiError(422, "Review warnings", "AXIS_CONFIRMATION_WARNING", {
+        acknowledgement: { draft_revision: view.draft.revision, policy_revision: 1, warning_digest: digest },
+        warnings: warnings.map(warning => ({ annotation_id: "seizure", ...warning })) });
+    const submitted = (view: WorkspaceView) => ({ format_version: "ontocurator-submission/v2", submission_id: "mod-submitted", origin_key: view.key,
+      targets: view.targets!, draft_revision: view.draft.revision, snapshots: view.draft.annotations!, decisions: [], document_checked: true,
+      created_at: "2026-10-25T12:00:00Z" });
+    const openSubmit = async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
+      return screen.findByRole("dialog", { name: "Submit case" });
+    };
+
+    it("Two severities is listed, never blocks, and the ticked box submits with the acknowledgement in one action", async () => {
+      const view = modView(MILD_SEVERE);
+      await setup(view);
+      const submit = vi.spyOn(api, "submitWorkspace")
+        .mockRejectedValueOnce(modWarning(view, [{ rule: "exclusive_modifier_class", detail: { class: "severity" } }]))
+        .mockResolvedValue(submitted(view) as never);
+      const dialog = await openSubmit();
+      const section = await within(dialog).findByRole("region", { name: "Modifier warnings · 1" });
+      expect(section.textContent).toContain("Seizure: Two severities: Mild, Severe.");
+      expect(within(dialog).queryByText(/Turn .* before submitting/)).toBeNull();
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warnings" }));
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+      await screen.findByRole("dialog", { name: "Case submitted" });
+      expect(submit).toHaveBeenCalledTimes(2);
+      expect((submit.mock.calls[1][1] as any).payload.warning_acknowledgement).toEqual(
+        { draft_revision: view.draft.revision, policy_revision: 1, warning_digest: "mod-digest" });
+    });
+
+    it("a server warning with an extra modifier pair does not resend and lists it", async () => {
+      const view = modView(MILD_SEVERE);
+      await setup(view);
+      const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValue(modWarning(view, [
+        { rule: "exclusive_modifier_class", detail: { class: "severity" } }, { rule: "cohort_modifier", detail: { term_id: "HP:0040283" } }]));
+      const dialog = await openSubmit();
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warnings" }));
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+      await waitFor(() => expect(dialog.querySelector("[data-submit-status]")!.textContent).toBe("The unconfirmed values changed. Check the list again."));
+      expect(submit).toHaveBeenCalledTimes(1);
+      const box = within(dialog).getByRole("checkbox", { name: "Submit with 2 modifier warnings" }) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      expect(within(dialog).getByRole("region", { name: "Modifier warnings · 2" }).textContent).toContain("Seizure: HP:0040283 is a cohort term.");
+      // No unconfirmed values row comes from the modifier pairs.
+      expect(dialog.querySelector("[data-unconfirmed-values]")).toBeNull();
+    });
   });
 
   it("re-creating a carried finding passes the source's modifiers along without text spans", async () => {

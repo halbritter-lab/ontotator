@@ -4,13 +4,21 @@ import { Checkbox } from "../ui/Checkbox";
 import { Dialog } from "../ui/Dialog";
 import { InlineMessage } from "../ui/InlineMessage";
 import { axisOptionLabel } from "./axisLabels";
-import { dialogItems, submitBlockedReason, summaryLine, type OpenItem } from "./openItems";
+import { ModifierWarningsSection } from "./ModifierWarningsSection";
+import { dialogItems, MODIFIER_WARNING_KINDS, submitBlockedReason, summaryLine, type OpenItem } from "./openItems";
 import { UnconfirmedValuesSection } from "./UnconfirmedValuesSection";
 import { valueCount, type UnconfirmedRow } from "./unconfirmedValues";
 import "./submitDialog.css";
 
 /** At most this many open items are listed; the rest are reached with "Next open item". */
 const LISTED_ITEMS = 5;
+
+/** Label of the acknowledgement checkbox (plan D-f); null when nothing needs acknowledging. */
+export function acknowledgementLabel(values: number, modifierWarnings: number): string | null {
+  if (values && modifierWarnings) return `Submit with ${values} unconfirmed values and ${modifierWarnings} modifier warnings`;
+  if (values) return `Submit with ${values} unconfirmed values`;
+  return modifierWarnings ? `Submit with ${modifierWarnings} modifier warnings` : null;
+}
 
 export interface SubmitCaseDialogProps {
   open: boolean;
@@ -71,13 +79,17 @@ export function SubmitCaseDialog({
 
   // Defaulted and unconfirmed values have their own section; the generic list keeps the other kinds.
   const items = dialogItems(allItems);
+  const modifierWarnings = allItems.filter(item => MODIFIER_WARNING_KINDS.includes(item.kind));
   const n = valueCount(unconfirmed);
   const rowsRemain = unconfirmed.length > 0;
-  const showAcknowledgement = rowsRemain && !requireChosenAxes;
+  // With `require_chosen_axes` the values block instead; modifier warnings are acknowledged either way.
+  const ackLabel = acknowledgementLabel(rowsRemain && !requireChosenAxes ? n : 0, modifierWarnings.length);
+  const showAcknowledgement = ackLabel !== null;
   const blockedReason = readOnly ? "This case is read-only."
     : submitBlockedReason(items, requireChosenAxes ? n : 0)
     ?? (!textChecked ? "Confirm that the entire text was checked before submitting."
-      : rowsRemain && !acknowledged ? `Confirm the values or tick “Submit with ${n} unconfirmed values” before submitting.`
+      : ackLabel && !acknowledged ? (rowsRemain && !requireChosenAxes
+        ? `Confirm the values or tick “${ackLabel}” before submitting.` : `Tick “${ackLabel}” before submitting.`)
       : null);
   const blocking = items.some(item => item.blocking);
   const firstCarried = items.find(item => item.kind === "carried");
@@ -141,9 +153,10 @@ export function SubmitCaseDialog({
       <UnconfirmedValuesSection rows={unconfirmed} optionLabel={axisOptionLabel}
         confirmUnavailableReason={confirmUnavailableReason} onConfirmValues={onConfirmValues}
         onGoTo={onGoToRow} onEmpty={focusAfterRows} />
+      <ModifierWarningsSection items={modifierWarnings} onGoTo={onGoTo} />
       {showAcknowledgement && <div className="submit-ack">
-        <Checkbox id="submit-axis-warning" label={`Submit with ${n} unconfirmed values`}
-          hint="Acknowledging does not confirm the values; they stay marked as defaults."
+        <Checkbox id="submit-axis-warning" label={ackLabel}
+          hint={rowsRemain && !requireChosenAxes ? "Acknowledging does not confirm the values; they stay marked as defaults." : undefined}
           checked={acknowledged} disabled={saving} onChange={event => setAcknowledged(event.target.checked)} />
       </div>}
       <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>

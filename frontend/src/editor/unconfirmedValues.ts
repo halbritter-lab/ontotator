@@ -1,4 +1,5 @@
 import type { AnnotationSnapshot } from "../api/client";
+import type { TermInfo } from "./modifiers";
 
 /**
  * Rows of the Submit dialog's "Unconfirmed values" section (annotator acceptance spec F2).
@@ -127,4 +128,62 @@ export function valuesLine(row: UnconfirmedRow, optionLabel: (value: string | nu
 /** Number of (finding, axis) pairs: the n of "Submit with {n} unconfirmed values". */
 export function valueCount(rows: readonly UnconfirmedRow[]): number {
   return rows.reduce((sum, row) => sum + row.values.length, 0);
+}
+
+/**
+ * An acknowledgeable modifier warning (R10 `cohort_modifier`, R12 `exclusive_modifier_class`). Its `key`
+ * ("cohort:<term id>", "exclusive:<class>") joins the axis ids in the acknowledged pair set.
+ */
+export interface ModifierWarning {
+  annotationId: string;
+  kind: "cohort-modifier" | "exclusive-modifiers";
+  key: string;
+  /** Cohort: the modifier's label; exclusive: the labels of the class, sorted. */
+  labels: string[];
+  exclusiveClass?: "severity" | "onset";
+}
+export const isModifierWarningKey = (axis: string): boolean => axis.startsWith("cohort:") || axis.startsWith("exclusive:");
+
+/**
+ * The server's modifier warnings computed from the draft (`modifier_warnings`, `domain/project_rules.py`):
+ * per finding a cohort warning per Frequency modifier, then one per exclusive class with two or more
+ * modifiers. Server pairs the client did not compute are added (the server set wins).
+ */
+export function modifierWarnings(
+  snapshots: readonly AnnotationSnapshot[],
+  info: (snapshot: AnnotationSnapshot, termId: string) => TermInfo | undefined,
+  serverPairs: readonly { annotationId: string; axis: string }[] = [],
+): ModifierWarning[] {
+  const label = (snapshot: AnnotationSnapshot, termId: string) => info(snapshot, termId)?.label ?? termId;
+  const byLabel = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base" });
+  const classLabels = (snapshot: AnnotationSnapshot, cls: string) => (snapshot.annotation.modifiers ?? [])
+    .filter(modifier => info(snapshot, modifier.term_id)?.exclusiveClass === cls).map(modifier => label(snapshot, modifier.term_id)).sort(byLabel);
+  const warnings = snapshots.flatMap((snapshot): ModifierWarning[] => {
+    const annotationId = snapshot.annotation.annotation_id;
+    const modifiers = snapshot.annotation.modifiers ?? [];
+    const cohort = modifiers.filter(modifier => info(snapshot, modifier.term_id)?.role === "cohort").map((modifier): ModifierWarning => ({
+      annotationId, kind: "cohort-modifier", key: `cohort:${modifier.term_id}`, labels: [label(snapshot, modifier.term_id)],
+    }));
+    const classes = [...new Set(modifiers.flatMap(modifier => info(snapshot, modifier.term_id)?.exclusiveClass ?? []))];
+    const exclusive = classes.filter(cls => classLabels(snapshot, cls).length >= 2).map((cls): ModifierWarning => ({
+      annotationId, kind: "exclusive-modifiers", key: `exclusive:${cls}`, labels: classLabels(snapshot, cls), exclusiveClass: cls,
+    }));
+    return [...cohort, ...exclusive];
+  });
+  const known = new Set(warnings.map(warning => pairKey(warning.annotationId, warning.key)));
+  for (const pair of serverPairs) {
+    if (!isModifierWarningKey(pair.axis) || known.has(pairKey(pair.annotationId, pair.axis))) continue;
+    known.add(pairKey(pair.annotationId, pair.axis));
+    const snapshot = snapshots.find(candidate => candidate.annotation.annotation_id === pair.annotationId);
+    const value = pair.axis.slice(pair.axis.indexOf(":") + 1);
+    warnings.push(pair.axis.startsWith("cohort:")
+      ? { annotationId: pair.annotationId, kind: "cohort-modifier", key: pair.axis, labels: [snapshot ? label(snapshot, value) : value] }
+      : { annotationId: pair.annotationId, kind: "exclusive-modifiers", key: pair.axis, labels: snapshot ? classLabels(snapshot, value) : [],
+        exclusiveClass: value === "onset" ? "onset" : "severity" });
+  }
+  return warnings;
+}
+
+export function modifierWarningPairs(warnings: readonly ModifierWarning[]): Set<string> {
+  return new Set(warnings.map(warning => pairKey(warning.annotationId, warning.key)));
 }
