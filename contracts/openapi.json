@@ -7925,6 +7925,11 @@
             "title": "Confirm Language",
             "default": false
           },
+          "confirm_unreviewed_translation": {
+            "type": "boolean",
+            "title": "Confirm Unreviewed Translation",
+            "default": false
+          },
           "seed": {
             "anyOf": [
               {
@@ -8729,6 +8734,11 @@
             "type": "boolean",
             "title": "Confirm Language",
             "default": false
+          },
+          "confirm_unreviewed_translation": {
+            "type": "boolean",
+            "title": "Confirm Unreviewed Translation",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -9061,6 +9071,11 @@
             },
             "type": "array",
             "title": "Usernames"
+          },
+          "unreviewed_translation": {
+            "type": "boolean",
+            "title": "Unreviewed Translation",
+            "default": false
           }
         },
         "type": "object",
@@ -9479,6 +9494,11 @@
           "confirm_language": {
             "type": "boolean",
             "title": "Confirm Language",
+            "default": false
+          },
+          "confirm_unreviewed_translation": {
+            "type": "boolean",
+            "title": "Confirm Unreviewed Translation",
             "default": false
           },
           "request_id": {
@@ -11726,6 +11746,11 @@
                 "type": "null"
               }
             ]
+          },
+          "unreviewed_translation": {
+            "type": "boolean",
+            "title": "Unreviewed Translation",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -14224,6 +14249,11 @@
             "maxLength": 128,
             "minLength": 1,
             "title": "Request Id"
+          },
+          "confirm_unreviewed_translation": {
+            "type": "boolean",
+            "title": "Confirm Unreviewed Translation",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -17532,6 +17562,11 @@
           "confirm_language": {
             "type": "boolean",
             "title": "Confirm Language",
+            "default": false
+          },
+          "confirm_unreviewed_translation": {
+            "type": "boolean",
+            "title": "Confirm Unreviewed Translation",
             "default": false
           }
         },
@@ -22757,6 +22792,11 @@
               }
             ],
             "title": "Annotation Mode"
+          },
+          "unreviewed_translation": {
+            "type": "boolean",
+            "title": "Unreviewed Translation",
+            "default": false
           }
         },
         "additionalProperties": false,

@@ -578,6 +578,15 @@ def _accepted_without_review(conn: Connection, pid: int) -> frozenset[str]:
 
 
 def _assignments(conn: Connection, pid: int) -> list[rules.AssignmentFact]:
+    confirmed = frozenset(
+        conn.execute(
+            select(AuditEventRow.target_id).where(
+                AuditEventRow.project_id == pid,
+                AuditEventRow.target_type == "assignment",
+                AuditEventRow.action == "assignment.unreviewed_translation",
+            )
+        ).scalars()
+    )
     return [
         rules.AssignmentFact(
             assignment_id=row.id,
@@ -594,6 +603,7 @@ def _assignments(conn: Connection, pid: int) -> list[rules.AssignmentFact]:
             created_by=row.created_by,
             annotation_mode=row.annotation_mode,
             submitted_work=row.last_submission_id is not None,
+            unreviewed_translation=str(row.id) in confirmed,
         )
         for row in conn.execute(
             select(

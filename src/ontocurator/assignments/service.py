@@ -50,6 +50,7 @@ from ontocurator.authz.policy import (
 from ontocurator.authz.project_authority import require_project_management
 from ontocurator.domain.annotation_modes import AnnotationMode, workspace_mode
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.next_steps import translations_accepted
 from ontocurator.domain.variants import VariantInfo
 from ontocurator.domain.workspace import WorkspaceMode
 from ontocurator.projects.assignments import revoke_assignments
@@ -459,8 +460,13 @@ class AssignmentService:
         variants: Mapping[str, VariantInfo] | None = None,
         allow_accepted_translation_review: bool = False,
         check_plan: bool = True,
-    ) -> tuple[str, list[str], bool, list[str]]:
-        """``check_plan=False`` only for work that already exists (reassign)."""
+        confirm_unreviewed_translation: bool = False,
+    ) -> tuple[str, list[str], bool, list[str], bool]:
+        """``check_plan=False`` only for work that already exists (reassign).
+
+        The last element: annotate work on a translation whose review is not
+        accepted while the rule is off, acknowledged by the caller (spec
+        2026-10-25 §2); ``_create`` audits it."""
         AssignmentService._require_target(conn, project, target, task)
         if variants is None:
             variants = load_variants(conn, project["id"], document_id)
@@ -508,6 +514,18 @@ class AssignmentService:
                     "required_languages": sorted(required),
                 },
             )
+        # After the language check: a caller can meet both confirmations.
+        unreviewed = (
+            statuses is not None
+            and not project["annotate_accepted_translations_only"]
+            and not translations_accepted(
+                False, (variant.translation_status, *statuses)
+            )
+        )
+        if unreviewed and not confirm_unreviewed_translation:
+            raise DomainError(
+                "TRANSLATION_NOT_REVIEWED", {"document_ids": [document_id]}
+            )
         if project["adjudicator_not_annotator"] and conflicting_tasks(task):
             conflict = select(AssignmentRow.id).where(
                 AssignmentRow.project_id == project["id"],
@@ -520,7 +538,7 @@ class AssignmentService:
                 conflict = conflict.where(AssignmentRow.id != excluding)
             if conn.execute(conflict.limit(1)).first() is not None:
                 raise DomainError("ADJUDICATOR_IS_ANNOTATOR")
-        return language, languages, mismatch, sorted(required)
+        return language, languages, mismatch, sorted(required), unreviewed
 
     def _create(
         self,
@@ -530,7 +548,7 @@ class AssignmentService:
         document_id: str,
         target: int,
         task: Task,
-        eligibility: tuple[str, list[str], bool, list[str]],
+        eligibility: tuple[str, list[str], bool, list[str], bool],
         now: datetime,
         *,
         lead_correction: bool = False,
@@ -554,7 +572,18 @@ class AssignmentService:
             )
             .returning(AssignmentRow.id)
         ).scalar_one()
-        language, languages, mismatch, required = eligibility
+        language, languages, mismatch, required, unreviewed = eligibility
+        if unreviewed:
+            record_audit(
+                conn,
+                actor,
+                "assignment.unreviewed_translation",
+                target_type="assignment",
+                target_id=assignment_id,
+                project_id=project["id"],
+                details={"document_id": document_id},
+                at=now,
+            )
         if mismatch:
             record_audit(
                 conn,
@@ -591,6 +620,7 @@ class AssignmentService:
         task: Task,
         *,
         confirm_language: bool = False,
+        confirm_unreviewed_translation: bool = False,
         review_accepted_translation: bool = False,
         review_reason: ReviewReason | None = None,
     ) -> Assignment:
@@ -655,6 +685,9 @@ class AssignmentService:
                 task,
                 confirm_language,
                 allow_accepted_translation_review=allow,
+                # Unlike the language, the lead's own work is not confirmed
+                # implicitly (plan D5).
+                confirm_unreviewed_translation=confirm_unreviewed_translation,
             )
 
     @staticmethod
@@ -704,6 +737,7 @@ class AssignmentService:
         *,
         variants: Mapping[str, VariantInfo] | None = None,
         allow_accepted_translation_review: bool = False,
+        confirm_unreviewed_translation: bool = False,
     ) -> Assignment:
         """Assign on caller's connection under preheld authority/target locks.
 
@@ -735,6 +769,7 @@ class AssignmentService:
             confirm_language,
             variants=variants,
             allow_accepted_translation_review=allow_accepted_translation_review,
+            confirm_unreviewed_translation=confirm_unreviewed_translation,
         )
         return self._create(
             conn, actor, project, document_id, target, task, eligibility, self._now()
@@ -748,6 +783,7 @@ class AssignmentService:
         *,
         confirm_started: bool = False,
         confirm_language: bool = False,
+        confirm_unreviewed_translation: bool = False,
     ) -> Assignment:
         with self.db.transaction() as conn:
             key = self._locate(conn, assignment_id)
@@ -780,6 +816,7 @@ class AssignmentService:
                 confirm_language,
                 excluding=assignment_id,
                 check_plan=False,
+                confirm_unreviewed_translation=confirm_unreviewed_translation,
             )
             if task == "annotate" and old["last_submission_id"] is not None:
                 # Revoked submitted work keeps its slot; an unsubmitted one frees it.

@@ -577,6 +577,9 @@ def _build_row(ctx: _Context, case_id: str, language: str) -> dict[str, Any]:
             facts, key, versions, row_assignments, proposal_count, planned=annotate
         ),
         "consolidation_progress": None,
+        "unreviewed_translation": steps_rules.unreviewed_translation(
+            ctx.step_facts[key]
+        ),
     }
 
 
@@ -682,6 +685,7 @@ def _work_item(
             ctx.person_of(item.created_by) if item.created_by is not None else None
         ),
         "annotation_mode": item.annotation_mode,
+        "unreviewed_translation": item.unreviewed_translation,
     }
 
 

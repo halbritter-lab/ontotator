@@ -173,6 +173,16 @@ def translations_accepted(is_source: bool, statuses: Iterable[str | None]) -> bo
     return is_source or all(status == "accepted" for status in statuses)
 
 
+def unreviewed_translation(facts: StepFacts) -> bool:
+    """Rule off and a translation not accepted: annotating it needs the lead's
+    explicit acknowledgement (spec 2026-10-25 §2)."""
+    return (
+        not facts.is_source
+        and not facts.rule_on
+        and not translations_accepted(False, facts.translation_statuses)
+    )
+
+
 def _accepted(facts: StepFacts) -> bool:
     return translations_accepted(facts.is_source, facts.translation_statuses)
 

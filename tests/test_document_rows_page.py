@@ -334,6 +334,7 @@ ROW_KEYS = {
     "proposal_count",
     "annotation_mode",
     "consolidation_progress",
+    "unreviewed_translation",
 }
 VERSION_KEYS = {
     "document_id",
@@ -369,6 +370,7 @@ WORK_KEYS = {
     "assigned_at",
     "assigned_by",
     "annotation_mode",
+    "unreviewed_translation",
 }
 FINAL_KEYS = {
     "author",

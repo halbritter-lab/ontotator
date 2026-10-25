@@ -173,7 +173,13 @@ def test_multiple_assignments_contribute_only_their_exact_texts(case_env):
     service = AssignmentService(env.db)
     old = service.list("proj", user="alice")[0]
     service.assign(
-        HARNESS, "proj", CORRECTED, "alice", "annotate", confirm_language=True
+        HARNESS,
+        "proj",
+        CORRECTED,
+        "alice",
+        "annotate",
+        confirm_language=True,
+        confirm_unreviewed_translation=True,
     )
     detail = env.alice.get(f"{BASE}/cases/{quote(CASE, safe='')}").json()
     assert {row["document_id"] for row in detail["variants"]} == {SOURCE, CORRECTED}

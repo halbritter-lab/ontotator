@@ -641,6 +641,7 @@ class TextChangeService:
         target_document_id: str,
         expected_workflow_revision: int,
         request_id: str,
+        confirm_unreviewed_translation: bool = False,
     ) -> MoveResult:
         """Freeze the draft, continue on the target, revoke the old assignment."""
         request_hash = canonical_hash(
@@ -705,6 +706,7 @@ class TextChangeService:
                 "annotate",
                 True,
                 variants=load_variants(conn, pid, target.document_id),
+                confirm_unreviewed_translation=confirm_unreviewed_translation,
             )
             created = assignments._create(
                 conn,
@@ -902,6 +904,7 @@ class TextChangeService:
         username: str | None,
         confirm_language: bool,
         request_id: str,
+        confirm_unreviewed_translation: bool = False,
     ) -> CarryResult:
         """Carry a submission on an old version to the target (rule 3b).
 
@@ -919,6 +922,7 @@ class TextChangeService:
                 "mode": mode,
                 "username": username,
                 "confirm_language": confirm_language,
+                "confirm_unreviewed_translation": confirm_unreviewed_translation,
             }
         )
         actor_key = str(access.user_id)
@@ -979,6 +983,7 @@ class TextChangeService:
                     username=username,
                     locked_user_id=assignee,
                     confirm_language=confirm_language,
+                    confirm_unreviewed_translation=confirm_unreviewed_translation,
                     now=now,
                 )
             self._record(
@@ -1059,6 +1064,9 @@ class TextChangeService:
         locked_user_id: int | None,
         confirm_language: bool,
         now: datetime,
+        # Never set by the automatic carry (plan D2): it falls back to the
+        # lead's manual carry, which asks.
+        confirm_unreviewed_translation: bool = False,
     ) -> CarryResult:
         pid = int(project_row["id"])
         assignments = AssignmentService(self.db, now=lambda: now)
@@ -1118,6 +1126,7 @@ class TextChangeService:
                 "annotate",
                 confirm_language,
                 variants=load_variants(conn, pid, target.document_id),
+                confirm_unreviewed_translation=confirm_unreviewed_translation,
             )
             assignment_id = assignments._create(
                 conn,

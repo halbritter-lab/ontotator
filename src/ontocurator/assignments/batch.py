@@ -125,6 +125,8 @@ class _Target:
     source_review: bool = False
     # NO_PROPOSALS_ON_VERSION: locked "from proposals", none on this version.
     no_proposals: bool = False
+    # Annotate: the rule is off and the translation is not accepted.
+    unreviewed_translation: bool = False
     usernames: list[str] = field(default_factory=list)
 
 
@@ -331,6 +333,8 @@ class _Rows:
                 return _Match((), "not_in_plan", holders)
             if ASSIGN_STEPS[task] in codes:
                 candidates = [self._target(v, task) for v in newest]
+                for candidate in candidates:
+                    candidate.unreviewed_translation = row["unreviewed_translation"]
         targets = tuple(t for t in candidates if t.remaining > 0)
         if targets:
             return _Match(targets, None, holders)
@@ -591,6 +595,7 @@ class BatchAssignmentService:
                 "version": t.version,
                 "remaining": t.remaining,
                 "usernames": list(t.usernames),
+                "unreviewed_translation": t.unreviewed_translation,
             }
             for t in flat
         ]
@@ -707,6 +712,7 @@ class BatchAssignmentService:
         *,
         expected_digest: str,
         confirm_language: bool = False,
+        confirm_unreviewed_translation: bool = False,
     ) -> list[Assignment]:
         """All assignments of the preview, or none (``ASSIGNMENT_BATCH_REFUSED``)."""
         names = [normalize_username(name) for name in spec.usernames]
@@ -796,6 +802,9 @@ class BatchAssignmentService:
                                     confirm_language,
                                     variants=variants,
                                     allow_accepted_translation_review=allow,
+                                    confirm_unreviewed_translation=(
+                                        confirm_unreviewed_translation
+                                    ),
                                 )
                             )
                     except DomainError as error:

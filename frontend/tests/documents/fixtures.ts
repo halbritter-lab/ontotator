@@ -87,6 +87,7 @@ export function work(overrides: Partial<WorkItemView> & Pick<WorkItemView, "assi
     assigned_at: null,
     assigned_by: null,
     annotation_mode: null,
+    unreviewed_translation: false,
     ...overrides,
   };
 }
@@ -160,6 +161,7 @@ export function row(overrides: Partial<DocumentRowView> & Pick<DocumentRowView, 
     proposal_count: 0,
     annotation_mode: null,
     consolidation_progress: null,
+    unreviewed_translation: false,
     ...overrides,
   };
 }

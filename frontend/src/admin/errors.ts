@@ -24,6 +24,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   QUALIFICATION_REQUIRED: "Add your qualification before submitting a translation review.",
   REVIEW_INVALID: "Check the translation review issues before submitting.",
   TRANSLATION_NOT_ACCEPTED: "This translation must be accepted before annotation can continue.",
+  TRANSLATION_NOT_REVIEWED: "This translation's review is not accepted yet. Confirm that it is annotated before the review is accepted.",
   VARIANT_REVIEW_STALE: "A newer text version exists. Review the current version before creating a correction.",
   CASE_NOT_FOUND: "This case is not available to you.",
   VERSION_NOT_FOUND: "This annotation version is not available to you.",

@@ -200,6 +200,8 @@ class AssignRequest(BaseModel):
     rows: list[AssignmentRowRequest]
     task: AssignableTask
     confirm_language: bool = False
+    # Spec 2026-10-25 §2: annotate a translation whose review is not accepted.
+    confirm_unreviewed_translation: bool = False
     seed: int | None = None
     context: DistributionContextView | None = None
     # D25: a new review of a translation the lead or an import override accepted.
@@ -230,6 +232,7 @@ class ReassignRequest(BaseModel):
     username: str
     confirm_started: bool = False
     confirm_language: bool = False
+    confirm_unreviewed_translation: bool = False
 
 
 class ReasonRequest(BaseModel):
@@ -386,6 +389,7 @@ def assign(
             task=body.task,
             seed=body.seed,
             confirm_language=body.confirm_language,
+            confirm_unreviewed_translation=body.confirm_unreviewed_translation,
         )
         return AssignResponse(
             created=_views(request, list(outcome.created)),
@@ -403,6 +407,7 @@ def assign(
                     row.username,
                     body.task,
                     confirm_language=body.confirm_language,
+                    confirm_unreviewed_translation=body.confirm_unreviewed_translation,
                     review_accepted_translation=bool(body.review_accepted_translation),
                     review_reason=body.review_reason,
                 )

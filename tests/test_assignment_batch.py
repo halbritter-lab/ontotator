@@ -263,6 +263,7 @@ def test_preview_targets_newest_version_per_root_and_skips_with_reasons(env, tmp
         "version": 1,
         "remaining": 1,
         "usernames": [],
+        "unreviewed_translation": False,
     }
     assert result["versions"] == 15 and result["per_text"] == 1
     assert result["task"] == "annotate" and result["language"] == "de"

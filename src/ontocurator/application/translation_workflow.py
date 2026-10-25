@@ -293,7 +293,7 @@ class TranslationWorkflowService:
                 document_id,
                 lead,
                 "translation_review",
-                (variant.language, languages, mismatch, sorted(required)),
+                (variant.language, languages, mismatch, sorted(required), False),
                 now,
                 lead_correction=True,
             )

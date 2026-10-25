@@ -154,7 +154,13 @@ def test_revoking_exact_assignment_removes_text_and_own_history(
     env = case_env
     service = AssignmentService(env.db)
     row = service.assign(
-        HARNESS, "proj", TARGET, "alice", "annotate", confirm_language=True
+        HARNESS,
+        "proj",
+        TARGET,
+        "alice",
+        "annotate",
+        confirm_language=True,
+        confirm_unreviewed_translation=True,
     )
     seed_submission(env, "alice", "own-target", document=TARGET)
     assert refs(env.alice)[0]["id"] == "own-target"

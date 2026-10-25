@@ -178,7 +178,7 @@ def assign(env: Any, document_id: str, username: str, task: str, **extra: Any) -
                 username,
                 task,  # type: ignore[arg-type]
                 confirm_language=True,
-                **extra,
+                **{"confirm_unreviewed_translation": True, **extra},
             )
             .id
         )

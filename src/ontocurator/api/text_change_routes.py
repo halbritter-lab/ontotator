@@ -42,6 +42,8 @@ class MoveToVersionRequest(BaseModel):
     target_document_id: str = Field(min_length=1)
     expected_workflow_revision: int = Field(ge=0)
     request_id: str = Field(min_length=1, max_length=128)
+    # Spec 2026-10-25 §2: the target translation's review is not accepted.
+    confirm_unreviewed_translation: bool = False
 
 
 class MoveToVersionResponse(BaseModel):
@@ -65,6 +67,7 @@ class CarryRequest(BaseModel):
     mode: Literal["author", "other", "dismiss"]
     username: str | None = None
     confirm_language: bool = False
+    confirm_unreviewed_translation: bool = False
     request_id: str = Field(min_length=1, max_length=128)
 
 

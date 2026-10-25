@@ -121,6 +121,9 @@ class WorkItemView(_View):
     assigned_at: datetime | None = None
     assigned_by: PersonRefView | None = None
     annotation_mode: AnnotationMode | None = None
+    # Spec 2026-10-25 §2: annotate work the lead confirmed before the
+    # translation review was accepted (the History line).
+    unreviewed_translation: bool = False
 
 
 class ReportIssueView(_View):
@@ -370,6 +373,9 @@ class DocumentRowView(_View):
     proposal_count: int = 0
     annotation_mode: AnnotationModeView | None = None
     consolidation_progress: ConsolidationProgressView | None = None
+    # Spec 2026-10-25 §2: the rule is off and the translation is not accepted,
+    # so annotating it needs an explicit acknowledgement.
+    unreviewed_translation: bool = False
 
 
 class DocumentGroupView(_View):

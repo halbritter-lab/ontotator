@@ -86,18 +86,10 @@ def test_row_savepoint_rolls_back_a_create_before_domain_refusal(stored, monkeyp
     assign = AssignmentService._assign_locked
 
     def refuse_after_create(
-        self, conn, actor, project, document, target, task, confirm, *, variants=None
+        self, conn, actor, project, document, target, task, confirm, **kwargs
     ):
         created = assign(
-            self,
-            conn,
-            actor,
-            project,
-            document,
-            target,
-            task,
-            confirm,
-            variants=variants,
+            self, conn, actor, project, document, target, task, confirm, **kwargs
         )
         if target == users["alice"]:
             raise DomainError("ROW_REFUSED_AFTER_WRITE")

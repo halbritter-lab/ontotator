@@ -2414,6 +2414,11 @@ export interface components {
              * @default false
              */
             confirm_language: boolean;
+            /**
+             * Confirm Unreviewed Translation
+             * @default false
+             */
+            confirm_unreviewed_translation: boolean;
             /** Seed */
             seed?: number | null;
             context?: components["schemas"]["DistributionContextView"] | null;
@@ -2725,6 +2730,11 @@ export interface components {
              * @default false
              */
             confirm_language: boolean;
+            /**
+             * Confirm Unreviewed Translation
+             * @default false
+             */
+            confirm_unreviewed_translation: boolean;
         };
         /** BatchAssignRequest */
         BatchAssignRequest: {
@@ -2837,6 +2847,11 @@ export interface components {
             remaining: number;
             /** Usernames */
             usernames: string[];
+            /**
+             * Unreviewed Translation
+             * @default false
+             */
+            unreviewed_translation: boolean;
         };
         /** Body_create_upload_api_v1_projects__key__uploads_post */
         Body_create_upload_api_v1_projects__key__uploads_post: {
@@ -2987,6 +3002,11 @@ export interface components {
              * @default false
              */
             confirm_language: boolean;
+            /**
+             * Confirm Unreviewed Translation
+             * @default false
+             */
+            confirm_unreviewed_translation: boolean;
             /** Request Id */
             request_id: string;
         };
@@ -3677,6 +3697,11 @@ export interface components {
             proposal_count: number;
             annotation_mode?: components["schemas"]["AnnotationModeView"] | null;
             consolidation_progress?: components["schemas"]["ConsolidationProgressView"] | null;
+            /**
+             * Unreviewed Translation
+             * @default false
+             */
+            unreviewed_translation: boolean;
         };
         /** DocumentRowsPage */
         DocumentRowsPage: {
@@ -4587,6 +4612,11 @@ export interface components {
             expected_workflow_revision: number;
             /** Request Id */
             request_id: string;
+            /**
+             * Confirm Unreviewed Translation
+             * @default false
+             */
+            confirm_unreviewed_translation: boolean;
         };
         /**
          * MoveToVersionResponse
@@ -5835,6 +5865,11 @@ export interface components {
              * @default false
              */
             confirm_language: boolean;
+            /**
+             * Confirm Unreviewed Translation
+             * @default false
+             */
+            confirm_unreviewed_translation: boolean;
         };
         /** RedeemCodeRequest */
         RedeemCodeRequest: {
@@ -7594,6 +7629,11 @@ export interface components {
             assigned_by?: components["schemas"]["PersonRefView"] | null;
             /** Annotation Mode */
             annotation_mode?: ("proposals" | "scratch") | null;
+            /**
+             * Unreviewed Translation
+             * @default false
+             */
+            unreviewed_translation: boolean;
         };
         /** WorkRoundView */
         WorkRoundView: {

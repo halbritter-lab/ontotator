@@ -168,10 +168,18 @@ def assign(scenario: Scenario, document_id: str, name: str, task: str) -> int:
         )
     from auth_harness import harness_annotation
 
+    # The scenarios annotate translations before their review is accepted.
     with harness_annotation(scenario.db, scenario.key, document_id, task):
         return (
             AssignmentService(scenario.db)
-            .assign(Actor.cli(), scenario.key, document_id, scenario.users[name], task)  # type: ignore[arg-type]
+            .assign(
+                Actor.cli(),
+                scenario.key,
+                document_id,
+                scenario.users[name],
+                task,  # type: ignore[arg-type]
+                confirm_unreviewed_translation=True,
+            )
             .id
         )
 

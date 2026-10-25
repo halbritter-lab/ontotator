@@ -878,6 +878,13 @@ def assign_documents(
             help="Explicitly confirm and audit any language mismatch.",
         ),
     ] = False,
+    confirm_unreviewed_translation: Annotated[
+        bool,
+        typer.Option(
+            "--confirm-unreviewed-translation",
+            help="Explicitly confirm annotating translations whose review is not accepted.",
+        ),
+    ] = False,
 ) -> None:
     """Assign real tasks to a current project member with the matching role."""
     from typing import cast
@@ -903,6 +910,7 @@ def assign_documents(
                 username,
                 cast(Task, task),
                 confirm_language=confirm_language,
+                confirm_unreviewed_translation=confirm_unreviewed_translation,
             )
             typer.echo(
                 f"{assignment.id}\t{document_id}\t{assignment.username}\t{assignment.task}\t{assignment.status}"

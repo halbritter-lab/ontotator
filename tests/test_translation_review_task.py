@@ -228,7 +228,22 @@ def test_current_acceptance_gate_assignments_proposals_and_option_false(case_env
         response.status_code == 200
         and response.json()["annotate_accepted_translations_only"] is False
     )
-    assert assigned(env, username=username, task=task)["task"] == task
+    # Rule off: annotating before the review is accepted needs the flag.
+    refused = env.lead.post(
+        f"{BASE}/assignments",
+        json={
+            "rows": [{"document_id": TARGET, "username": username}],
+            "task": task,
+            "confirm_language": True,
+        },
+    )
+    assert refused.json()["refused"][0]["code"] == "TRANSLATION_NOT_REVIEWED"
+    assert (
+        assigned(
+            env, username=username, task=task, confirm_unreviewed_translation=True
+        )["task"]
+        == task
+    )
     assert (
         env.lead.get(f"{BASE}/settings").json()["annotate_accepted_translations_only"]
         is False

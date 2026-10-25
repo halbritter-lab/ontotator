@@ -189,7 +189,11 @@ def test_batch_preview_and_commit_with_rows_target_only_those_texts(env):
     committed = env.lead.post(
         f"{BASE}/assignments/batch",
         json=batch("annotate", "de", rows=rows, usernames=["anno"])
-        | {"expected_preview_digest": preview["digest"], "confirm_language": True},
+        | {
+            "expected_preview_digest": preview["digest"],
+            "confirm_language": True,
+            "confirm_unreviewed_translation": True,
+        },
     )
     assert committed.status_code == 200, committed.text
     assert [a["document_id"] for a in committed.json()["created"]] == [doc("c1", "de")]

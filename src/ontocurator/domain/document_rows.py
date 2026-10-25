@@ -142,6 +142,9 @@ class AssignmentFact:
     # A submission exists (``last_submission_id``): revoked work still locks
     # the text's annotation mode.
     submitted_work: bool = False
+    # Assigned before the translation review was accepted, confirmed by the
+    # lead (audit ``assignment.unreviewed_translation``, spec 2026-10-25 §2).
+    unreviewed_translation: bool = False
 
 
 def base_chain_name(root: Version) -> str:

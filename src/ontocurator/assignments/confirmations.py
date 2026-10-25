@@ -74,6 +74,7 @@ class DistributionConfirmationService:
         task: Task,
         seed: int | None = None,
         confirm_language: bool = False,
+        confirm_unreviewed_translation: bool = False,
     ) -> ConfirmationOutcome:
         if task == "review":
             raise DomainError("TASK_NOT_ASSIGNABLE", {"task": "review"})
@@ -153,6 +154,9 @@ class DistributionConfirmationService:
                             task,
                             confirm_language,
                             variants=variants,
+                            confirm_unreviewed_translation=(
+                                confirm_unreviewed_translation
+                            ),
                         )
                 except DomainError as error:
                     refusal = RefusedRow(row.document_id, row.username, error.code)
@@ -176,6 +180,7 @@ class DistributionConfirmationService:
                     "original_proposal": asdict(original.proposal),
                     "confirmed_rows": [asdict(row) for row in rows],
                     "confirm_language": confirm_language,
+                    "confirm_unreviewed_translation": confirm_unreviewed_translation,
                     "outcomes": outcomes,
                 },
             )

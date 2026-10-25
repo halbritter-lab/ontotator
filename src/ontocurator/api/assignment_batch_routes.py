@@ -134,6 +134,8 @@ class BatchAssignRequest(BaseModel):
 class BatchAssignBody(BatchAssignRequest):
     expected_preview_digest: str
     confirm_language: bool = False
+    # Spec 2026-10-25 §2: annotate translations whose review is not accepted.
+    confirm_unreviewed_translation: bool = False
 
     @model_validator(mode="after")
     def _someone(self) -> Self:
@@ -162,6 +164,9 @@ class BatchTargetView(BaseModel):
     version: int
     remaining: int
     usernames: list[str]
+    # Annotate: the rule is off and the translation is not accepted (the
+    # dialog's acknowledgement, spec 2026-10-25 §2).
+    unreviewed_translation: bool = False
 
 
 class BatchPersonView(BaseModel):
@@ -294,6 +299,7 @@ def commit_assignment_batch(
         body.spec(),
         expected_digest=body.expected_preview_digest,
         confirm_language=body.confirm_language,
+        confirm_unreviewed_translation=body.confirm_unreviewed_translation,
     )
     return BatchAssignResult(created=_views(request, created))
 

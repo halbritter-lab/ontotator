@@ -21,6 +21,7 @@ from ontocurator.storage.plan_tables import DiscardedVariantRow
 from ontocurator.storage.tables import (
     AssignmentRow,
     AuditEventRow,
+    DocumentRow,
     ProjectMembershipRow,
     ProjectRow,
     UserLanguageRow,
@@ -166,6 +167,12 @@ def test_child_is_assignable_for_annotation(rejected):
             update(ProjectRow)
             .where(ProjectRow.project_key == "proj")
             .values(annotate_accepted_translations_only=True)
+        )
+        # The parallel root must be accepted too (all roots, as next steps).
+        conn.execute(
+            update(DocumentRow)
+            .where(DocumentRow.document_id == "comparison")
+            .values(translation_status="accepted")
         )
     assignment = start(env)
     record = submit_as_lead(env, assignment.id, "accepted_corrected", "Korrigiert")

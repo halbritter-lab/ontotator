@@ -293,6 +293,7 @@ def assign(scenario: Scenario, document_id: str, name: str, task: str) -> int:
             document_id,
             scenario.users[name],
             task,  # type: ignore[arg-type]
+            confirm_unreviewed_translation=True,
         ).id
 
 
@@ -315,7 +316,10 @@ def batch_assign(
     return [
         item.id
         for item in service.commit(
-            scenario.key, spec, expected_digest=preview["digest"]
+            scenario.key,
+            spec,
+            expected_digest=preview["digest"],
+            confirm_unreviewed_translation=True,
         )
     ]
 
@@ -382,6 +386,7 @@ def carry_to_author(scenario: Scenario, submission_id: str, target: str) -> Any:
         mode="author",
         username=None,
         confirm_language=False,
+        confirm_unreviewed_translation=True,
         request_id=f"carry-{uuid4().hex}",
     )
 
