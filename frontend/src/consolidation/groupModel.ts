@@ -305,13 +305,15 @@ export function attachCandidates(group: ConsolidationGroupView, groups: readonly
   const at = group.start;
   if (at === null) return [];
   const [from, to] = sentenceOf(text, at);
+  const layerId = group.members[0]?.layer_id;
   return groups
-    .filter(other => other.group_id !== group.group_id && other.state !== "open" && other.state !== "leave_out" && other.annotation_ids.length
+    .filter(other => other.group_id !== group.group_id && other.state !== "open" && other.state !== "leave_out"
+      && other.annotation_ids.some(id => id.startsWith("cons-")) && other.members[0]?.layer_id === layerId
       && other.start !== null && other.start >= from && other.start < to)
     .sort((a, b) => Math.abs(a.start! - at) - Math.abs(b.start! - at))
     .map(other => {
       const base = other.members.find(member => member.input_id === other.keep_input_id) ?? other.members[0];
-      return { groupId: other.group_id, annotationId: other.annotation_ids[0], label: `${termLabel(base)}, ${quoted(groupName(other, text))}` };
+      return { groupId: other.group_id, annotationId: other.annotation_ids.find(id => id.startsWith("cons-"))!, label: `${termLabel(base)}, ${quoted(groupName(other, text))}` };
     });
 }
 

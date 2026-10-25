@@ -26,6 +26,9 @@ class ConsolidationMark(BaseModel):
     attached_to: str | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    # The attach only gave segments to the target's spanless modifier of the
+    # same term, so a reopen restores that modifier (left out while unset).
+    attached_linked: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class ReviewDecision(BaseModel):

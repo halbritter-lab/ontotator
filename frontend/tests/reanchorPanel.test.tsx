@@ -155,3 +155,9 @@ it('names each old modifier text that needs checking', () => {
   expect(screen.getByText('Text of Severe changed: “schwere”')).toBeTruthy();
   expect(screen.queryByText(/Text of HP:0031796/)).toBeNull();
 });
+it('names old modifier texts only when a modifier text changed', () => {
+  render(<ReanchorPanel items={[item({ reason: 'changed_segment', old_modifiers: [
+    { term_id: 'HP:0012828', segments: [{ start: 0, end: 7, text: 'schwere' }] },
+  ] })]} labelFor={() => 'Severe'} onContext={() => {}} />);
+  expect(screen.queryByText(/Text of Severe/)).toBeNull();
+});

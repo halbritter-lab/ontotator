@@ -15,6 +15,7 @@ from t1_fixtures import ADMIN_ACCESS, OPERATOR, hpo_profile
 from ontocurator.authz.scoped import ScopedRepository
 from ontocurator.domain.profiles import TaskProfile
 from ontocurator.exchange.t1 import Pin
+from ontocurator.ontology.modifiers import install_service_source
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.store import OntologyStore
 from ontocurator.storage.database import Database
@@ -38,11 +39,19 @@ def modifier_profile() -> TaskProfile:
     )
 
 
-def create_modifier_project(db: Database, key: str = "mods") -> None:
-    """Store hp-modifiers.json (and its German file) and create a project pinning MOD_PIN."""
+def create_modifier_project(
+    db: Database, key: str = "mods", registry: OntologyRegistry | None = None
+) -> None:
+    """Store hp-modifiers.json (and its German file) and create a project
+    pinning MOD_PIN; an app's ``registry`` learns the file."""
     store = OntologyStore(db, OntologyRegistry(), db.data_dir)
     store.add(OPERATOR, MOD_DE.name, MOD_DE.read_bytes())
     store.add(OPERATOR, MOD_PATH.name, MOD_PATH.read_bytes())
+    if registry is not None:
+        registry.register_path(db.blobs.path(MOD_SHA))
+    else:
+        # No app: modifier terms classify through this registry (D-a).
+        install_service_source(store.registry.get_service)
     ScopedRepository(db, ADMIN_ACCESS, OPERATOR).create_project(
         key, "Modifiers", None, modifier_profile(), {"hp": MOD_PIN}
     )

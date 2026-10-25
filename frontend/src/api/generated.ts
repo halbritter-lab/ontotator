@@ -3173,6 +3173,11 @@ export interface components {
             content_sha256?: string | null;
             /** Attached To */
             attached_to?: string | null;
+            /**
+             * Attached Linked
+             * @default false
+             */
+            attached_linked: boolean;
         };
         /** ConsolidationMemberView */
         ConsolidationMemberView: {

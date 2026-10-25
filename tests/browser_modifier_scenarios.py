@@ -123,7 +123,7 @@ def _insert_standalone(scenario: Scenario, key: Any) -> None:
 def build_modifiers(
     app: FastAPI, *, with_finding: bool = False, standalone: bool = False
 ) -> dict[str, Any]:
-    from modifier_fixtures import MOD_DE, MOD_PATH, MOD_PIN, modifier_profile
+    from modifier_fixtures import MOD_DE, MOD_PATH, MOD_PIN, MOD_SHA, modifier_profile
     from t1_builders import native_unit
     from t1_fixtures import ADMIN_ACCESS, OPERATOR
 
@@ -133,6 +133,8 @@ def build_modifiers(
     store = OntologyStore(db, OntologyRegistry(), db.data_dir)
     store.add(OPERATOR, MOD_DE.name, MOD_DE.read_bytes())
     store.add(OPERATOR, MOD_PATH.name, MOD_PATH.read_bytes())
+    # The app's registry classifies modifier terms for the reads (D-a).
+    app.state.ontology_registry.register_path(db.blobs.path(MOD_SHA))
     ScopedRepository(db, ADMIN_ACCESS, OPERATOR).create_project(
         key, "Modifiers", None, profile, {"hp": MOD_PIN}
     )

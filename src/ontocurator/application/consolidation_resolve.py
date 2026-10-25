@@ -427,15 +427,12 @@ def _with_modifiers(
 def _detach(draft: Draft, item: _Group, document: Document) -> None:
     """Undo an earlier attach of this standalone modifier group (S21): the
     target loses the modifier while it still has exactly that term and
-    segments.
-
-    shortcut: an attach that only linked segments to a spanless modifier of
-    the target is undone by removing it; record the link if that matters.
-    """
+    segments. An attach that only linked segments to the target's spanless
+    modifier gives that modifier back without segments."""
     refs = list(item.refs.values())
-    target_id = next(
+    mark = next(
         (
-            d.consolidation.attached_to
+            d.consolidation
             for d in draft.decisions
             if d.target in refs
             and d.consolidation is not None
@@ -443,22 +440,27 @@ def _detach(draft: Draft, item: _Group, document: Document) -> None:
         ),
         None,
     )
-    if target_id is None:
+    if mark is None or mark.attached_to is None:
         return
-    current = _draft_snapshot(draft, target_id)
+    current = _draft_snapshot(draft, mark.attached_to)
     if current is None:
         return
     attached = _standalone_modifier(item)
     if attached in current.annotation.modifiers:
         kept = [m for m in current.annotation.modifiers if m != attached]
+        if mark.attached_linked:
+            kept.append(Modifier(term_id=attached.term_id))
         _with_modifiers(draft, current, kept, document, item.profile)
 
 
-def _attach(draft: Draft, item: _Group, target_id: str, document: Document) -> bool:
+def _attach(
+    draft: Draft, item: _Group, target_id: str, document: Document
+) -> tuple[bool, bool]:
     """Add the group's standalone modifier to the resolved ``cons-…``
-    finding ``target_id`` (S18); whether the target changed. The term
-    already there without segments gets them; with the same segments it is
-    a no-op; with other segments ``DUPLICATE_MODIFIER``."""
+    finding ``target_id`` (S18); whether the target changed and whether it
+    only linked segments. The term already there without segments gets
+    them; with the same segments it is a no-op; with other segments
+    ``DUPLICATE_MODIFIER``."""
     current = (
         _draft_snapshot(draft, target_id) if target_id.startswith("cons-") else None
     )
@@ -471,12 +473,12 @@ def _attach(draft: Draft, item: _Group, target_id: str, document: Document) -> b
     modifiers = list(current.annotation.modifiers)
     found = next((m for m in modifiers if m.term_id == attached.term_id), None)
     if found is not None and found.segments == attached.segments:
-        return False
+        return False, False
     if found is not None and found.segments:
         raise DomainError("DUPLICATE_MODIFIER", {"term_id": attached.term_id})
     kept = [m for m in modifiers if m is not found]
     _with_modifiers(draft, current, [*kept, attached], document, item.profile)
-    return True
+    return True, found is not None
 
 
 def _uncheck(draft: Draft, item: _Group) -> None:
@@ -591,6 +593,10 @@ class ConsolidationGroupService:
             apply(draft, item, document)
             return draft
 
+        # Loads the ontology and its modifier classifier before the draft
+        # lock is taken; the group's inputs are frozen, so this read is stable.
+        with self.repo.db.transaction() as conn:
+            _find_group(conn, self.repo, key, input_ids)
         result = self.repo.run_mutation(key, envelope, operation)
         assert isinstance(result, Draft)
         return result
@@ -672,8 +678,10 @@ class ConsolidationGroupService:
             if cmd.action == "leave_out":
                 # Attaching what the target already has changes nothing: a
                 # plain leave-out, so a reopen never removes the target's own.
-                attached = cmd.attach_to is not None and _attach(
-                    draft, item, cmd.attach_to, document
+                attached, linked = (
+                    _attach(draft, item, cmd.attach_to, document)
+                    if cmd.attach_to is not None
+                    else (False, False)
                 )
                 for ref in item.refs.values():
                     draft.decisions.append(
@@ -686,6 +694,7 @@ class ConsolidationGroupService:
                                 action="leave_out",
                                 guidelines_unclear=cmd.guidelines_unclear,
                                 attached_to=cmd.attach_to if attached else None,
+                                attached_linked=linked,
                             ),
                         )
                     )
@@ -872,6 +881,9 @@ def release_group_of(
         if any(member_ref(m) == target for m in members.values()):
             item = _Group(key.round_id, group, members, profile, found.roles)
             kept = frozenset({keep.annotation_id} if keep is not None else set())
+            document = repo.get_document(key.project_key, key.document_id)
+            assert document is not None
+            _detach(draft, item, document)
             _clear_group(draft, item, keep=kept)
             return True
     return False

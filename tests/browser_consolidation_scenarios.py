@@ -205,18 +205,15 @@ def _modifier_project(app: FastAPI) -> Scenario:
     from t1_fixtures import ADMIN_ACCESS, OPERATOR
 
     from ontocurator.authz.scoped import ScopedRepository
-    from ontocurator.ontology.modifiers import install_service_source
     from ontocurator.ontology.store import OntologyStore
 
     key = f"documents-mods-{uuid4().hex[:8]}"
     db = app.state.repo.db
     registry = app.state.ontology_registry
     # Stored through the app's registry, which classifies modifier terms for
-    # the consolidation read (D-a): other scenarios' throwaway registries may
-    # have taken over the process-wide source.
+    # the consolidation read (D-a).
     store = OntologyStore(db, registry, db.data_dir)
     store.add(OPERATOR, MOD_PATH.name, MOD_PATH.read_bytes())
-    install_service_source(registry.get_service)
     ScopedRepository(db, ADMIN_ACCESS, OPERATOR).create_project(
         key, "Modifiers", None, modifier_profile(), {"hp": MOD_PIN}
     )

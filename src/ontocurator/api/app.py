@@ -59,6 +59,7 @@ from ontocurator.domain.errors import (
     RevisionConflict,
 )
 from ontocurator.jobs.queue import Handler, JobContext, JobQueue, Worker
+from ontocurator.ontology.modifiers import install_service_source
 from ontocurator.ontology.translations import parse_translation_name
 from ontocurator.storage.database import Database
 from ontocurator.storage.lease import RuntimeLease
@@ -114,6 +115,7 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
             yield
         finally:
             app.state.draining = True
+            install_service_source(None)
         return
     await run_in_threadpool(lease.acquire)
     keeper = asyncio.create_task(_keep_lease(lease))
@@ -125,6 +127,7 @@ async def _runtime_lease(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         app.state.draining = True
+        install_service_source(None)
         await run_in_threadpool(worker.stop)
         keeper.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -193,6 +196,8 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                 base_dir=config.workspace_dir,
                 translation_dirs=config.translation_dirs,
             )
+            # Lets DB-side code classify modifier terms without a registry (D-a).
+            install_service_source(registry.get_service)
             store = OntologyStore(db, registry, config.workspace_dir)
             # Uploaded ontologies are registered (parsed on first use) and
             # uploaded translations placed where the loader finds them. A file

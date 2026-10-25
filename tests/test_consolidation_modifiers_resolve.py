@@ -29,10 +29,12 @@ from test_consolidation_modifiers_read import (
 from test_consolidation_resolve_api import (
     annotation,
     cons_id,
+    decide,
     inputs,
     mutate,
     ok,
     revision,
+    target_refs,
     view,
 )
 
@@ -388,6 +390,41 @@ def test_reopen_of_the_attached_group_detaches_the_modifier(standalone):
     assert annotation(draft, seizure["annotation_ids"][0]).annotation.modifiers == []
     assert seizure["edited"] is False
     assert group_of(standalone, SEVERE)["state"] == "open"
+
+
+def test_reopen_after_linking_restores_the_spanless_modifier(tmp_path):
+    """Attaching onto the target's spanless Severe only links segments; a
+    reopen gives the target its own Severe back."""
+    ns = mod_round(
+        mod_env(tmp_path),
+        "c1",
+        {
+            "ana": [found("x", SEVERE, "schwere")],
+            "ben": [found("s", SEIZURE, "Krampfanfälle", modifier(SEVERE))],
+        },
+    )
+    ok(
+        mutate(
+            ns,
+            "resolve",
+            {"input_ids": inputs(group_of(ns, SEIZURE)), "action": "keep"},
+        )
+    )
+    draft = ok(attach(ns, SEIZURE))
+    target = group_of(ns, SEIZURE)["annotation_ids"][0]
+    assert dumped(annotation(draft, target).annotation) == SEVERE_TEXT
+    draft = ok(mutate(ns, "reopen", {"input_ids": inputs(group_of(ns, SEVERE))}))
+    assert dumped(annotation(draft, target).annotation) == [{"term_id": SEVERE}]
+    assert group_of(ns, SEIZURE)["edited"] is False
+
+
+def test_an_editor_decision_on_the_attached_group_detaches(standalone):
+    ok(attach(standalone, SEIZURE))
+    [member] = sorted(target_refs(standalone, inputs(group_of(standalone, SEVERE))))
+    draft = decide(standalone, member, None)
+    target = group_of(standalone, SEIZURE)["annotation_ids"][0]
+    assert annotation(draft, target).annotation.modifiers == []
+    assert group_of(standalone, SEIZURE)["edited"] is False
 
 
 def test_reopen_of_the_target_reopens_the_attached_group(standalone):

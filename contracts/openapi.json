@@ -9972,6 +9972,11 @@
               }
             ],
             "title": "Attached To"
+          },
+          "attached_linked": {
+            "type": "boolean",
+            "title": "Attached Linked",
+            "default": false
           }
         },
         "additionalProperties": false,

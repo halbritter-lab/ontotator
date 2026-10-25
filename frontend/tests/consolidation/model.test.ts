@@ -292,6 +292,14 @@ describe("standalone modifier (S18)", () => {
     expect(standaloneText(groups[0], MOD_TEXT)).toBe("Severe “schwere”");
   });
 
+  it("offers only the cons- result of the standalone modifier's layer", () => {
+    const adopted = { ...resolved("g-seiz", "Krampfanfälle"), annotation_ids: ["a-adopted", "cons-g-seiz"] };
+    const other = group("g-hypo", ["partial"], [member("g-hypo-b", BEN, "HP:0001250", "Seizure", [modSpan("Muskelhypotonie")], { layer_id: "other" })],
+      { state: "keep", annotation_ids: ["cons-g-hypo"] });
+    const groups = [standalone(), adopted, other];
+    expect(attachCandidates(groups[0], groups, MOD_TEXT).map(c => [c.groupId, c.annotationId])).toEqual([["g-seiz", "cons-g-seiz"]]);
+  });
+
   it("an attached group reads attached", () => {
     expect(groupStatus({ state: "leave_out", attached_to: "cons-1" }, 0)).toBe("attached");
   });

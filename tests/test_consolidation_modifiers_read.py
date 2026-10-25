@@ -75,7 +75,7 @@ def mod_env(tmp_path: Any) -> SimpleNamespace:
     """The project ``proj`` pinned with ``MOD_PIN``; one German text per case."""
     app = _app(tmp_path)
     db = app.state.repo.db
-    create_modifier_project(db, "proj")
+    create_modifier_project(db, "proj", app.state.ontology_registry)
     layers = tuple(layers_for(modifier_profile(), {"hp": MOD_PIN}))
     units = []
     for case in CASES:

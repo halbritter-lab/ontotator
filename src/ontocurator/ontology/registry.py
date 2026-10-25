@@ -21,7 +21,6 @@ from ontocurator.domain.profiles import (
     resolve_ontology,
 )
 from ontocurator.ontology.conditions import SearchCondition, validate_resources
-from ontocurator.ontology.modifiers import install_service_source
 from ontocurator.ontology.service import OntologyService
 from ontocurator.ontology.translations import (
     LanguageLexicalIndex,
@@ -88,8 +87,6 @@ class OntologyRegistry:
         # The folders ontologies are looked for in. Translation files
         # (hp-de.babelon.tsv) lie next to the ontologies there.
         self.translation_dirs = [Path(d) for d in translation_dirs]
-        # Lets DB-side code classify modifier terms without a registry (D-a).
-        install_service_source(self.get_service)
 
     def changing(self) -> threading.RLock:
         """The lock for a change to the loaded ontologies or translations.
