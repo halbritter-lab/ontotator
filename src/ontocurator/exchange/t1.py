@@ -20,6 +20,7 @@ from ontocurator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationSnapshot,
+    Modifier,
     Provenance,
     snapshot,
 )
@@ -323,16 +324,26 @@ def axis_options(profile: TaskProfile, layer: LayerDefinition) -> dict[str, list
     }
 
 
-def _refuse_unrepresentable(
-    annotations: Sequence[ontospan.Annotation], profile: TaskProfile
-) -> None:
-    """Refuse the whole unit, listing every affected annotation (Q11)."""
+def _refuse_unrepresentable(aset: ontospan.AnnotationSet, profile: TaskProfile) -> None:
+    """Refuse the whole unit, listing every affected annotation (Q11).
+
+    Modifiers are kept on ``hpo-phenotype`` layers only (the unit's layer
+    profiles match the project's pins: ``pin_differences``).
+    """
+    annotations = aset.annotations
     for item in annotations:
         if item.review_resolution is not None:
             raise DomainError(
                 "UNSUPPORTED_REVIEW_RESOLUTION", {"annotation_id": item.annotation_id}
             )
-    with_modifiers = [a.annotation_id for a in annotations if a.modifiers]
+    hpo_layers = {
+        layer.layer_id for layer in aset.layers if layer.profile == HPO_PROFILE
+    }
+    with_modifiers = [
+        a.annotation_id
+        for a in annotations
+        if a.modifiers and a.layer_id not in hpo_layers
+    ]
     if with_modifiers:
         raise DomainError("T1_UNSUPPORTED", {"annotations": with_modifiers})
     layers = _layer_map(profile)
@@ -404,7 +415,7 @@ def unit_to_proposals(
     cannot represent is refused as a whole.
     """
     aset = unit.annotation_set
-    _refuse_unrepresentable(aset.annotations, profile)
+    _refuse_unrepresentable(aset, profile)
     layers = _layer_map(profile)
     snapshots: list[AnnotationSnapshot] = []
     evidence: list[EvidenceSnapshot] = []
@@ -434,6 +445,10 @@ def unit_to_proposals(
             term_id=item.term_id,
             axes_values=axes_values,
             axes_defaulted=defaulted,
+            modifiers=[
+                Modifier(term_id=m.term_id, segments=_segments(m.segments))
+                for m in item.modifiers
+            ],
             evidence_refs=[
                 EvidenceRef(evidence_id=e.mention.evidence_id, version=e.version)
                 for e in own_evidence
@@ -736,6 +751,16 @@ def submission_to_unit(
                 axes=axes,
                 mentions=mentions,
                 document_level=not mentions,
+                modifiers=tuple(
+                    ontospan.Modifier(
+                        term_id=m.term_id,
+                        segments=tuple(
+                            ontospan.segment(document.text, s.start, s.end)
+                            for s in m.segments
+                        ),
+                    )
+                    for m in item.modifiers
+                ),
                 provenance=provenance,
                 review_resolution=ontospan.ReviewResolution(
                     outcome="uncertain",

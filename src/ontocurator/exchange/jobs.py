@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -108,15 +109,16 @@ def _invalid(report: ontospan.ValidationReport) -> DomainError:
     )
 
 
-def _warnings(report: ontospan.ValidationReport) -> list[str]:
-    return sorted({issue.code for issue in report.warnings})
+def _warnings(report: ontospan.ValidationReport) -> dict[str, int]:
+    """How often each warning code occurs, by code."""
+    return dict(sorted(Counter(issue.code for issue in report.warnings).items()))
 
 
 def _validate(
     units: Sequence[ontospan.AnnotatedDocument],
     ontologies: Mapping[str, ontospan.OntologyView],
-) -> list[str]:
-    """Validate every unit against the pinned ontologies; warnings' codes."""
+) -> dict[str, int]:
+    """Validate every unit against the pinned ontologies; warning counts by code."""
     report = ontospan.ValidationReport()
     for index, unit in enumerate(units):
         for issue in ontospan.validate(unit, ontologies).issues:
@@ -364,7 +366,7 @@ def serialize_t1_content(
             counts[name] += unit_counts[name]  # type: ignore[literal-required]
     # write_bundle checks the format without ontology views. Validate against
     # the same pinned ontologies as import before storing an export artifact.
-    _validate(units, ontologies)
+    warning_counts = _validate(units, ontologies)
     now = datetime.now(UTC).replace(microsecond=0)
     bundle_id = (
         f"{final_bundle_kind}-{final_snapshot_id}"
@@ -394,7 +396,10 @@ def serialize_t1_content(
         "units": len(units),
         "contributors": len(contributors),
         "counts": dict(counts),
-        "warnings": legacy_warnings,
+        # ontospan warnings (e.g. ``cohort_frequency``, ``exclusive_modifier_class``)
+        # by code, with their counts next to them.
+        "warnings": [*legacy_warnings, *({"code": code} for code in warning_counts)],
+        "warning_counts": warning_counts,
     }
     _audit(db, actor, "project.export", project, {**result, "job_id": job_id})
     return result

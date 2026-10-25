@@ -419,13 +419,29 @@ def test_the_application_cannot_rewrite_imported_sets(
 
 
 def test_unrepresentable_units_refuse_the_import(db: Database, tmp_path: Path) -> None:
-    """Q11: a modifier cannot be represented; the whole import is refused."""
+    """Q11: a modifier on a generic layer cannot be represented; the whole
+    import is refused (hpo-phenotype layers keep them: test_t1_modifiers)."""
+    from ontocurator.exchange.t1 import Pin, layers_for
+
+    generic = Pin(sha256=HP_SHA, allowed_roots=("HP:0000118",))
+    create_project(db, "gen", pin=generic)
+    generic_layers = [
+        layer.model_dump(mode="json")
+        for layer in layers_for(hpo_profile(), {"hp": generic})
+    ]
     bad = annotation("p9", (6, 19))
-    bad["modifiers"] = [{"term_id": "HP:0012828", "segments": []}]
+    bad["modifiers"] = [{"term_id": "HP:0001250", "segments": []}]
 
     job = run_import(
         db,
-        bundle(tmp_path / "b.zip", [unit("EN100017"), unit("EN3", annotations=[bad])]),
+        bundle(
+            tmp_path / "b.zip",
+            [
+                unit("EN100017", layer_data=generic_layers),
+                unit("EN3", annotations=[bad], layer_data=generic_layers),
+            ],
+        ),
+        project="gen",
     )
 
     assert job.status == "failed"

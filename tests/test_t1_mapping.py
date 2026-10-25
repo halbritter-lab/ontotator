@@ -355,9 +355,26 @@ def test_an_axis_value_outside_the_profile_is_refused() -> None:
 
 
 def test_modifiers_refuse_the_whole_unit() -> None:
+    """Modifiers are kept on hpo-phenotype layers and refused on generic ones."""
     unit = sketch_unit(sketch_annotations(modifiers=True))
+    imported = unit_to_proposals(
+        unit, hpo_profile(), document_from_unit(unit), bundle_id=None
+    )
+    assert [m.model_dump() for m in imported.annotations[1].annotation.modifiers] == [
+        {"term_id": "HP:0012828", "segments": [{"start": 55, "end": 62}]}
+    ]
+    generic_layers = layers_for(hpo_profile(), {"hp": Pin(sha256=HP_SHA)})
+    generic = unit.model_copy(
+        update={
+            "annotation_set": unit.annotation_set.model_copy(
+                update={"layers": tuple(generic_layers)}
+            )
+        }
+    )
     with pytest.raises(DomainError) as excinfo:
-        unit_to_proposals(unit, hpo_profile(), document_from_unit(unit), bundle_id=None)
+        unit_to_proposals(
+            generic, hpo_profile(), document_from_unit(generic), bundle_id=None
+        )
     assert excinfo.value.code == "T1_UNSUPPORTED"
     assert excinfo.value.details == {"annotations": ["a2"]}
 
