@@ -31,8 +31,8 @@ them". The first stays true whatever the mode; hiding the icon suggests the prop
     annotation starts from them";
   - from scratch: muted icon; "17 tool proposals; this text is annotated from scratch, the
     annotators do not see them";
-  - status never by colour alone: the text differs, the muted icon also gets a slash or an
-    outline variant from `ui/icons.tsx`.
+  - status never by colour alone: the text differs, and the muted icon is a new slashed
+    variant `IconBotOff` in `ui/icons.tsx` (only `IconBot` exists today).
 - The card's Annotation part always shows the count ("17 tool proposals"), in both modes.
 - The filter "With tool proposals" and the icon then agree.
 - Switching the mode keeps saving at once; the card shows "Saved" and an Undo in the existing
@@ -73,15 +73,20 @@ them". The first stays true whatever the mode; hiding the icon suggests the prop
   - the assign dialog (single and bulk) shows a required checkbox "Annotate before the
     translation review is accepted" naming the affected texts; "Assign" stays aria-disabled
     until it is ticked;
-  - backend: the assign, batch, distribution and self-assign paths take
-    `confirm_unreviewed_translation: bool` (same pattern as `confirm_language`) and refuse
-    without it with `TRANSLATION_NOT_REVIEWED` (409, details: affected document ids);
+  - backend: every path that creates or moves annotate work onto such a translation takes
+    `confirm_unreviewed_translation: bool` (same pattern as `confirm_language`) and refuses
+    without it with `TRANSLATION_NOT_REVIEWED` (409, details: affected document ids):
+    `POST /projects/{key}/assignments` (also used when the lead assigns themselves),
+    `POST /assignments/batch` (bulk and confirmed distribution proposals),
+    `POST /assignments/{id}/reassign`, `POST /assignments/{id}/move-to-version` and
+    `POST /projects/{key}/submissions/{id}/carry` (the target version may not be accepted);
   - the confirmation is recorded in the assignment's audit event and shown in the text's
     History: "Annotation assigned before the translation review was accepted (confirmed by
     <lead>)".
   - Native sources and accepted translations never ask.
 - Close the gap: the assign check uses the same "all roots accepted" test as next steps (one
   shared function in `domain/next_steps.py`, called from `eligibility.py`).
+
 ## Open questions
 
 1. Icon after assignment: keep it (proposal: yes, it states a fact) or hide it once someone is
@@ -93,6 +98,7 @@ them". The first stays true whatever the mode; hiding the icon suggests the prop
   shown only for translations with the rule off; shared accepted check.
 - Backend: assign refused when one of several roots is not accepted; with the rule off,
   assign refused without `confirm_unreviewed_translation` and accepted with it (audit event
-  recorded), for single, batch, distribution and self-assign.
+  recorded), for single (including the lead assigning themselves), batch, reassign,
+  move-to-version and carry.
 - Unit: the dialog's checkbox appears only for affected texts and gates the Assign button.
 - Browser: switch a text with proposals to "From scratch": muted icon stays, Undo restores.
