@@ -107,3 +107,33 @@ def test_three_people_hypotonia_group(client: TestClient) -> None:
     assert "assertion" in hypotonia["differing_axes"]
     assert len(hypotonia["members"]) == 3
     assert len({m["person_id"] for m in hypotonia["members"]}) == 3
+
+
+def test_modifiers_scenario_has_the_designed_kinds(client: TestClient) -> None:
+    response = client.post(
+        "/__test_consolidation__", params={"started": "true", "scenario": "modifiers"}
+    )
+    assert response.status_code == 200, response.text
+    built = response.json()
+    assert len(built["submissions"]) == 2
+    login(client, built["users"]["lead"])
+    view = client.get(f"/api/v1/rounds/{built['round_id']}/consolidation").json()
+    assert view["modifier_layer_ids"] == ["hpo"]
+    kinds = {
+        g["members"][0]["term_id"]: (g["kinds"], g["state"]) for g in view["groups"]
+    }
+    assert kinds == {
+        "HP:0007359": (["modifiers_differ"], "open"),  # S4
+        "HP:0001250": (["modifiers_differ"], "open"),  # S9
+        "HP:0001252": (["modifiers_differ"], "open"),  # S9
+        "HP:0000407": (["match"], "auto"),  # S1
+        "HP:0001284": (["partial"], "open"),  # S13
+    }
+    focal = next(
+        g for g in view["groups"] if g["members"][0]["term_id"] == "HP:0007359"
+    )
+    assert [m["term_label"] for g in [focal] for m in g["members"][0]["modifiers"]] == [
+        "Recurrent"
+    ]
+    # Modifiers is the only conflicting row of S4.
+    assert focal["differing_axes"] == [] and focal["span_conflict"] is False

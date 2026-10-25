@@ -8,11 +8,19 @@ spec's 8 groups: 4 match (kept automatically), 1 value, 1 span, 1 partial,
 already started the consolidation as consolidator (self-grant, start command).
 ``people=3`` adds ann-0003 (ann-0001's findings, but "hypotonia" as another
 term), so the hypotonia group is a three-way term and assertion conflict.
+
+``scenario=modifiers`` (modifiers plan M2) builds instead a project pinned
+with ``MOD_PIN`` whose ``MOD_TEXT`` has two submissions (Ana Weber, Ben Roth)
+with modifiers: S4 on "focal seizures" (Recurrent on "Recurrent" vs a
+spanless Severe: Modifiers is its only conflicting row), S9 on the second
+sentence's "seizures" and "hypotonia" (Severe on "Severe" on the other
+finding each), S1 on "hearing loss" (both Bilateral on "Bilateral", kept
+automatically) and S13 on "Reduced reflexes" (Ana only, spanless Bilateral).
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from browser_documents_scenarios import (
@@ -73,8 +81,37 @@ THIRD: list[tuple[str, str, dict[str, str]]] = [
 ]
 
 
-def at(words: str) -> dict[str, int]:
-    start = TEXT.index(words)
+# Modifier scenario: "seizures" occurs twice (``at(..., nth=1)``).
+MOD_TEXT = (
+    "Recurrent focal seizures. Severe seizures and hypotonia since birth. "
+    "Bilateral hearing loss. Reduced reflexes."
+)
+SEVERE = "HP:0012828"
+RECURRENT = "HP:0031796"
+BILATERAL = "HP:0012832"
+# (term, (words, nth), axis changes, [(modifier term, its words or None)]).
+MOD_FINDINGS: dict[str, list[Any]] = {
+    "ana": [
+        ("HP:0007359", ("focal seizures", 0), {}, [(RECURRENT, "Recurrent")]),
+        ("HP:0001250", ("seizures", 1), {}, [(SEVERE, "Severe")]),
+        ("HP:0001252", ("hypotonia", 0), {}, []),
+        ("HP:0000407", ("hearing loss", 0), {}, [(BILATERAL, "Bilateral")]),
+        ("HP:0001284", ("Reduced reflexes", 0), {}, [(BILATERAL, None)]),
+    ],
+    "ben": [
+        ("HP:0007359", ("focal seizures", 0), {}, [(SEVERE, None)]),
+        ("HP:0001250", ("seizures", 1), {}, []),
+        ("HP:0001252", ("hypotonia", 0), {}, [(SEVERE, "Severe")]),
+        ("HP:0000407", ("hearing loss", 0), {}, [(BILATERAL, "Bilateral")]),
+    ],
+}
+
+
+def at(words: str, nth: int = 0, text: str = TEXT) -> dict[str, int]:
+    """The ``nth`` occurrence of ``words`` in ``text`` (code points)."""
+    start = -1
+    for _ in range(nth + 1):
+        start = text.index(words, start + 1)
     return {"start": start, "end": start + len(words)}
 
 
@@ -82,9 +119,13 @@ def _annotate(
     scenario: Scenario,
     name: str,
     document_id: str,
-    findings: list[tuple[str, str, dict[str, str]]],
+    findings: list[Any],
+    text: str = TEXT,
 ) -> str:
-    """Assign, start round 1, mark the designed findings and submit."""
+    """Assign, start round 1, mark the designed findings and submit.
+
+    A finding is ``(term, words, axis changes)``; in the modifier scenario
+    ``(term, (words, nth), axis changes, modifiers)``."""
     from ontocurator.application.editing import EditingService
     from ontocurator.authz.scoped import ScopedRepository
     from ontocurator.domain.workspace import MutationEnvelope
@@ -94,26 +135,42 @@ def _annotate(
     access, actor = identity(scenario, name)
     scoped = ScopedRepository(scenario.db, access, actor)
     editing = EditingService(scoped, scenario.app.state.ontology_registry)
-    for term, words, changes in findings:
-        payload: dict[str, Any] = {
-            "command": "create_annotation",
-            "annotation_id": f"ann-{uuid4().hex[:12]}",
-            "evidence_id": f"ev-{uuid4().hex[:12]}",
-            "term_id": term,
-            "layer_id": "hpo",
-            "type_id": "phenotype",
-            "segments": [at(words)],
-            "axes_values": {**AXES, **changes},
-            "chosen_axis_ids": list(AXES),
-        }
-        editing.apply(
-            key,
-            MutationEnvelope(
-                mutation_id=f"cons-{uuid4().hex}",
-                expected_revision=scoped.open_draft(key).revision,
-                payload=payload,
-            ),
-        )
+    for term, words, changes, *rest in findings:
+        annotation_id = f"ann-{uuid4().hex[:12]}"
+        place = at(*words, text=text) if isinstance(words, tuple) else at(words)
+        payloads: list[dict[str, Any]] = [
+            {
+                "command": "create_annotation",
+                "annotation_id": annotation_id,
+                "evidence_id": f"ev-{uuid4().hex[:12]}",
+                "term_id": term,
+                "layer_id": "hpo",
+                "type_id": "phenotype",
+                "segments": [place],
+                "axes_values": {**AXES, **changes},
+                "chosen_axis_ids": list(AXES),
+            }
+        ]
+        for modifier, modifier_words in rest[0] if rest else []:
+            payloads.append(
+                {
+                    "command": "add_modifier",
+                    "annotation_id": annotation_id,
+                    "term_id": modifier,
+                    "segments": [at(modifier_words, text=text)]
+                    if modifier_words
+                    else [],
+                }
+            )
+        for payload in payloads:
+            editing.apply(
+                key,
+                MutationEnvelope(
+                    mutation_id=f"cons-{uuid4().hex}",
+                    expected_revision=scoped.open_draft(key).revision,
+                    payload=payload,
+                ),
+            )
     return finish_round(scenario, name, key)
 
 
@@ -139,6 +196,78 @@ def start_as_lead(scenario: Scenario, document_id: str, sources: list[str]) -> A
             ),
         )
         .round
+    )
+
+
+def _modifier_project(app: FastAPI) -> Scenario:
+    """A fresh project ``documents-mods-{uuid8}`` pinned with ``MOD_PIN``."""
+    from modifier_fixtures import MOD_PATH, MOD_PIN, modifier_profile
+    from t1_fixtures import ADMIN_ACCESS, OPERATOR
+
+    from ontocurator.authz.scoped import ScopedRepository
+    from ontocurator.ontology.modifiers import install_service_source
+    from ontocurator.ontology.store import OntologyStore
+
+    key = f"documents-mods-{uuid4().hex[:8]}"
+    db = app.state.repo.db
+    registry = app.state.ontology_registry
+    # Stored through the app's registry, which classifies modifier terms for
+    # the consolidation read (D-a): other scenarios' throwaway registries may
+    # have taken over the process-wide source.
+    store = OntologyStore(db, registry, db.data_dir)
+    store.add(OPERATOR, MOD_PATH.name, MOD_PATH.read_bytes())
+    install_service_source(registry.get_service)
+    ScopedRepository(db, ADMIN_ACCESS, OPERATOR).create_project(
+        key, "Modifiers", None, modifier_profile(), {"hp": MOD_PIN}
+    )
+    with db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == key)
+            .values(annotate_accepted_translations_only=False)
+        )
+    return Scenario(app, key, {})
+
+
+def build_modifiers(app: FastAPI, started: bool) -> dict[str, Any]:
+    """The ``modifiers`` scenario (module docstring)."""
+    from browser_lead_workflow_scenarios import person
+    from modifier_fixtures import MOD_PIN, modifier_profile
+    from t1_builders import native_unit
+
+    from ontocurator.exchange.t1 import layers_for
+
+    scenario = _modifier_project(app)
+    unit = native_unit(CASE, "en", MOD_TEXT, case_id=CASE)
+    layers = tuple(layers_for(modifier_profile(), {"hp": MOD_PIN}))
+    unit = unit.model_copy(
+        update={
+            "annotation_set": unit.annotation_set.model_copy(update={"layers": layers})
+        }
+    )
+    document_id = import_texts(scenario, [unit])[(CASE, "en", 1)]
+    person(scenario, "lead", ["lead"])
+    person(scenario, "ana", ["annotator"])
+    person(scenario, "ben", ["annotator"])
+    sources = [
+        _annotate(scenario, name, document_id, items, MOD_TEXT)
+        for name, items in MOD_FINDINGS.items()
+    ]
+    ids: dict[str, Any] = {}
+    if started:
+        round_view = start_as_lead(scenario, document_id, sources)
+        ids = {
+            "round_id": round_view.round_id,
+            "assignment_id": round_view.assignment_id,
+        }
+    return result(
+        scenario,
+        [(CASE, "en")],
+        case_id=CASE,
+        document_id=document_id,
+        submissions=sources,
+        text=MOD_TEXT,
+        **ids,
     )
 
 
@@ -188,8 +317,12 @@ def register_consolidation_scenario_route(app: FastAPI) -> None:
 
     @app.post("/__test_consolidation__")
     def consolidation_scenario(
-        started: bool = Query(False), people: int = Query(2, ge=2, le=3)
+        started: bool = Query(False),
+        people: int = Query(2, ge=2, le=3),
+        scenario: Literal["default", "modifiers"] = Query("default"),
     ) -> dict[str, Any]:
+        if scenario == "modifiers":
+            return build_modifiers(app, started)
         return build(app, started, people)
 
     app.router.routes.insert(0, app.router.routes.pop())
