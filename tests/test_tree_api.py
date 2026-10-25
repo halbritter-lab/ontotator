@@ -236,6 +236,7 @@ def test_open_returns_the_path_to_the_term_and_logs_everything_it_shows(walk):
             "label": "All",
             "child_count": 1,
             "external_url": "https://hpo.jax.org/browse/term/HP:0000001",
+            "role": "finding",
         }
     ]
     assert body["path"] == ["HP:0000001", "HP:0000118", "HP:0000707", "HP:0001250"]
@@ -251,12 +252,14 @@ def test_open_returns_the_path_to_the_term_and_logs_everything_it_shows(walk):
             "label": "Dialeptic seizure",
             "child_count": 0,
             "external_url": "https://hpo.jax.org/browse/term/HP:0011146",
+            "role": "finding",
         },
         {
             "term_id": "HP:0002133",
             "label": "Status epilepticus",
             "child_count": 0,
             "external_url": "https://hpo.jax.org/browse/term/HP:0002133",
+            "role": "finding",
         },
     ]
     detail = body["detail"]
@@ -271,6 +274,7 @@ def test_open_returns_the_path_to_the_term_and_logs_everything_it_shows(walk):
             "label": "Abnormality of the nervous system",
             "child_count": 3,
             "external_url": "https://hpo.jax.org/browse/term/HP:0000707",
+            "role": "finding",
         }
     ]
 
@@ -359,6 +363,7 @@ def test_expanding_a_node_returns_its_children_and_adds_them_to_the_walk(walk):
             "label": "Sensorineural hearing impairment",
             "child_count": 0,
             "external_url": "https://hpo.jax.org/browse/term/HP:0000407",
+            "role": "finding",
         }
     ]
     assert (body["path"], body["levels"]) == ([], [])
@@ -1067,4 +1072,5 @@ def test_details_show_the_names_of_translation_files_that_are_loaded(tmp_path):
         "label": "Seizure",
         "child_count": 2,
         "external_url": "https://hpo.jax.org/browse/term/HP:0001250",
+        "role": "finding",
     }

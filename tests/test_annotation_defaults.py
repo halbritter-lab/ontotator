@@ -22,7 +22,7 @@ def test_creation_defaults_are_server_owned_and_only_explicit_values_are_chosen(
     rules = ProjectRules(
         creation_defaults={"second": {"target": {"presence": "yes", "context": "past"}}}
     )
-    repo = SimpleNamespace(get_project_rules=lambda _: rules)
+    repo = SimpleNamespace(get_project_rules=lambda _: rules, project_pins=lambda _: {})
     ontology = SimpleNamespace(
         validate_term=lambda term: SimpleNamespace(status="valid", term_id=term)
     )
@@ -57,6 +57,7 @@ def test_warning_acknowledgement_binds_draft_and_policy_without_confirming(
     draft = draft_for(profile, annotations=[item])
     rules = ProjectRules(require_spanless_note=False, annotation_policy_revision=4)
     repo = SimpleNamespace(
+        project_pins=lambda _: {},
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: rules,
@@ -106,7 +107,7 @@ def test_legacy_supplied_nonpreset_values_preserve_explicit_creation_semantics(
     profile, document
 ):
     rules = ProjectRules(creation_defaults={"second": {"target": {"presence": "yes"}}})
-    repo = SimpleNamespace(get_project_rules=lambda _: rules)
+    repo = SimpleNamespace(get_project_rules=lambda _: rules, project_pins=lambda _: {})
     ontology = SimpleNamespace(
         validate_term=lambda term: SimpleNamespace(status="valid", term_id=term)
     )
@@ -151,7 +152,9 @@ def test_reanchor_never_fills_missing_source_axis_from_creation_presets(
     draft.reanchor_inputs = [item]
     rules = ProjectRules(creation_defaults={"second": {"target": {"context": "past"}}})
     repo = SimpleNamespace(
-        get_project_rules=lambda _: rules, verified_reanchor_source=lambda *_: source
+        project_pins=lambda _: {},
+        get_project_rules=lambda _: rules,
+        verified_reanchor_source=lambda *_: source,
     )
     ontology = SimpleNamespace(
         validate_term=lambda term: SimpleNamespace(status="valid", term_id=term)

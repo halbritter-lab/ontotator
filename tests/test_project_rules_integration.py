@@ -104,6 +104,7 @@ def test_submission_checks_materialized_result(profile, document, branch):
         decisions=decisions,
     )
     repo = SimpleNamespace(
+        project_pins=lambda _: {},
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(
@@ -138,7 +139,9 @@ def test_adopt_and_edit_inherits_only_unchanged_nonempty_defaults(
     profile, document, changed
 ):
     source = annotation_snapshot(profile, document, defaulted=["presence", "context"])
-    repo = SimpleNamespace(workspace_input_snapshots=lambda *_: [source])
+    repo = SimpleNamespace(
+        workspace_input_snapshots=lambda *_: [source], project_pins=lambda _: {}
+    )
     ontology = SimpleNamespace(
         validate_term=lambda term: SimpleNamespace(status="valid", term_id=term)
     )
@@ -179,7 +182,9 @@ def test_adopt_and_edit_inherits_only_unchanged_nonempty_defaults(
 )
 def test_copy_requires_verified_exact_source(profile, document, change):
     source = annotation_snapshot(profile, document, defaulted=["presence"])
-    repo = SimpleNamespace(workspace_input_snapshots=lambda *_: [source])
+    repo = SimpleNamespace(
+        workspace_input_snapshots=lambda *_: [source], project_pins=lambda _: {}
+    )
     ontology = SimpleNamespace(
         validate_term=lambda term: SimpleNamespace(status="valid", term_id=term)
     )
@@ -269,6 +274,7 @@ def test_materialized_result_resolves_distinct_versions_of_same_evidence_id(
         ],
     )
     repo = SimpleNamespace(
+        project_pins=lambda _: {},
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(contiguous_mentions_only=restricted),
@@ -325,6 +331,7 @@ def test_new_draft_submission_validates_spanless_materialized_results(
         decisions=decisions,
     ).model_copy(update={"spanless_policy_version": marker})
     repo = SimpleNamespace(
+        project_pins=lambda _: {},
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(),
@@ -373,7 +380,9 @@ def test_note_edit_invalidates_approved_exact_replacement_version(profile, docum
     assert result.annotations[0].version != item.version
     assert result.decisions == []
     repo = SimpleNamespace(
-        get_task_profile=lambda _: profile, get_submissions_for_workspace=lambda _: []
+        project_pins=lambda _: {},
+        get_task_profile=lambda _: profile,
+        get_submissions_for_workspace=lambda _: [],
     )
     with pytest.raises(DomainError) as exc:
         SubmissionService(repo)._create_submission(result, SubmitCommand(), draft.key)
@@ -404,6 +413,7 @@ def test_submission_requires_each_frozen_reanchor_resolution(profile, resolved):
             )
         ]
     repo = SimpleNamespace(
+        project_pins=lambda _: {},
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(),
@@ -447,6 +457,7 @@ def test_unresolved_submission_validates_immutable_target_term(
         ],
     )
     repo = SimpleNamespace(
+        project_pins=lambda _: {},
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(require_spanless_note=False),
@@ -481,6 +492,7 @@ def test_current_spanless_setting_applies_to_open_drafts(
         update={"spanless_policy_version": marker}
     )
     repo = SimpleNamespace(
+        project_pins=lambda _: {},
         get_task_profile=lambda _: profile,
         get_submissions_for_workspace=lambda _: [],
         get_project_rules=lambda _: ProjectRules(

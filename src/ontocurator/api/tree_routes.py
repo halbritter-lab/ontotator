@@ -127,6 +127,9 @@ def open_tree(
     _roles(classifier, roots)
     for level in levels:
         _roles(classifier, level.children)
+    detail = tree.detail(req.term_id)
+    if detail is not None:
+        _roles(classifier, detail.parents)
     shown = _shown(roots, *(level.children for level in levels))
 
     browse_id = str(uuid4())
@@ -158,7 +161,7 @@ def open_tree(
         roots=roots,
         path=path,
         levels=levels,
-        detail=tree.detail(req.term_id),
+        detail=detail,
     )
 
 
@@ -211,6 +214,7 @@ def tree_node(
     _roles(classifier, children)
     for level in levels:
         _roles(classifier, level.children)
+    _roles(classifier, detail.parents)
 
     # The repository checks the owner again, in the transaction that writes.
     grown = repo.append_search_event_candidates(
