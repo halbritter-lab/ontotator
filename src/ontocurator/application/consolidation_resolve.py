@@ -22,7 +22,13 @@ event). ``input_ids`` must name exactly one group of the round
   (``span_from_input_id``). A group resolves to exactly one finding; the
   legacy ``keep_both`` action and ``term_choices`` are refused. The group
   note is the decisions' ``note``. Like ``merge-inputs`` it unchecks the
-  group's layer.
+  group's layer. Modifiers (modifiers spec "Consolidation > Backend"):
+  ``choice.modifiers`` is the explicit final list (validated like
+  ``add_modifier``), omitted: the span member's; ``keep`` keeps the member's.
+  A standalone modifier group (``modifier_as_finding``) resolves only by
+  ``leave_out``, optionally with ``attach_to`` a resolved ``cons-…`` finding
+  that then gains the modifier (S18); reopening it detaches it again, and
+  reopening the target also reopens it (S21 B).
 * **Annotate** changes note and flag on the decisions of a resolved group;
   annotations stay untouched, so every ``content_sha256`` stays valid.
 * **Reopen** deletes the group's decisions and resulting annotations.
@@ -67,6 +73,7 @@ from ontocurator.domain.annotations import (
     Annotation,
     AnnotationRef,
     AnnotationSnapshot,
+    Modifier,
     snapshot,
 )
 from ontocurator.domain.axes import validate_axes
@@ -81,6 +88,7 @@ from ontocurator.domain.review import (
     ReviewOutcome,
 )
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
+from ontocurator.ontology.modifiers import TermRoles
 from ontocurator.storage.repository import DraftState, Repository, _key_str
 from ontocurator.storage.tables import (
     DraftAnnotationRow,
@@ -93,6 +101,7 @@ from ontocurator.storage.workflow_tables import WorkRoundRow
 __all__ = [
     "AnnotateCommand",
     "ConsolidationGroupService",
+    "ModifierIn",
     "ReopenCommand",
     "ResolveChoice",
     "ResolveCommand",
@@ -231,6 +240,7 @@ class _Group:
     group: Group
     members: dict[str, RoundMember]
     profile: TaskProfile
+    roles: TermRoles
 
     @property
     def input_ids(self) -> list[str]:
@@ -292,6 +302,7 @@ def _find_group(
                 group=group,
                 members={iid: found.members[iid] for iid in group.members.values()},
                 profile=profile,
+                roles=found.roles,
             )
     raise _invalid("The inputs are not exactly one consolidation group")
 
@@ -304,14 +315,20 @@ def _clear_group(
     names, and adopted copies of its targets (except the annotation ids in
     ``keep``); then their unused evidence."""
     refs = {(r.annotation_id, r.version) for r in item.refs.values()}
+    cons_ids = item.cons_ids()
+    # A standalone modifier attached to this group's result reads open
+    # again with it (S21 B); its modifier goes with the result.
     removed = [
-        d for d in draft.decisions if (d.target.annotation_id, d.target.version) in refs
+        d
+        for d in draft.decisions
+        if (d.target.annotation_id, d.target.version) in refs
+        or (d.consolidation is not None and d.consolidation.attached_to in cons_ids)
     ]
     draft.decisions = [d for d in draft.decisions if d not in removed]
     kept_replacements = {
         d.replacement.annotation_id for d in draft.decisions if d.replacement
     }
-    doomed = item.cons_ids() | {
+    doomed = cons_ids | {
         d.replacement.annotation_id
         for d in removed
         if d.replacement is not None
@@ -342,6 +359,124 @@ def _clear_group(
     draft.evidence = [
         e for e in draft.evidence if (e.mention.evidence_id, e.version) not in orphaned
     ]
+
+
+def _standalone_modifier(item: _Group) -> Modifier:
+    """The modifier a standalone modifier group stands for: the default
+    member's term with its first mention's segments (as
+    ``convert_to_modifier`` with ``link_span``)."""
+    source = item.members[item.group.members[item.group.keep]].snapshot
+    segments: list[Segment] = []
+    if source.annotation.evidence_refs:
+        first = source.annotation.evidence_refs[0]
+        segments = next(
+            (
+                list(e.mention.segments)
+                for e in source.evidence
+                if (e.mention.evidence_id, e.version)
+                == (first.evidence_id, first.version)
+            ),
+            [],
+        )
+    return Modifier(term_id=source.annotation.term_id, segments=segments)
+
+
+def _draft_snapshot(draft: Draft, annotation_id: str) -> AnnotationSnapshot | None:
+    return next(
+        (a for a in draft.annotations if a.annotation.annotation_id == annotation_id),
+        None,
+    )
+
+
+def _with_modifiers(
+    draft: Draft,
+    current: AnnotationSnapshot,
+    modifiers: Sequence[Modifier],
+    document: Document,
+    profile: TaskProfile,
+) -> None:
+    """Re-snapshot the ``cons-…`` annotation ``current`` with ``modifiers``
+    and repoint the decisions naming it; a mark that matched the old content
+    gets the new hash, so the attach does not read *edited* (S18)."""
+    annotation_id = current.annotation.annotation_id
+    before = consolidated_content_sha256(current.annotation)
+    try:
+        annotation = Annotation.model_validate(
+            current.annotation.model_dump()
+            | {"modifiers": [m.model_dump() for m in modifiers]}
+        )
+        made = snapshot(annotation, list(current.evidence), document, profile)
+    except (InvalidAnnotation, ValueError) as exc:
+        raise _invalid(str(exc)) from exc
+    _add(draft, made)
+    after = consolidated_content_sha256(made.annotation)
+    replacement = AnnotationRef(annotation_id=annotation_id, version=made.version)
+    for index, decision in enumerate(draft.decisions):
+        if (
+            decision.replacement is None
+            or decision.replacement.annotation_id != annotation_id
+        ):
+            continue
+        update: dict[str, Any] = {"replacement": replacement}
+        mark = decision.consolidation
+        if mark is not None and mark.content_sha256 == before:
+            update["consolidation"] = mark.model_copy(update={"content_sha256": after})
+        draft.decisions[index] = decision.model_copy(update=update)
+
+
+def _detach(draft: Draft, item: _Group, document: Document) -> None:
+    """Undo an earlier attach of this standalone modifier group (S21): the
+    target loses the modifier while it still has exactly that term and
+    segments.
+
+    shortcut: an attach that only linked segments to a spanless modifier of
+    the target is undone by removing it; record the link if that matters.
+    """
+    refs = list(item.refs.values())
+    target_id = next(
+        (
+            d.consolidation.attached_to
+            for d in draft.decisions
+            if d.target in refs
+            and d.consolidation is not None
+            and d.consolidation.attached_to is not None
+        ),
+        None,
+    )
+    if target_id is None:
+        return
+    current = _draft_snapshot(draft, target_id)
+    if current is None:
+        return
+    attached = _standalone_modifier(item)
+    if attached in current.annotation.modifiers:
+        kept = [m for m in current.annotation.modifiers if m != attached]
+        _with_modifiers(draft, current, kept, document, item.profile)
+
+
+def _attach(draft: Draft, item: _Group, target_id: str, document: Document) -> bool:
+    """Add the group's standalone modifier to the resolved ``cons-…``
+    finding ``target_id`` (S18); whether the target changed. The term
+    already there without segments gets them; with the same segments it is
+    a no-op; with other segments ``DUPLICATE_MODIFIER``."""
+    current = (
+        _draft_snapshot(draft, target_id) if target_id.startswith("cons-") else None
+    )
+    layer_id = next(iter(item.members.values())).snapshot.annotation.layer_id
+    if current is None or current.annotation.layer_id != layer_id:
+        raise DomainError(
+            "INVALID_RESOLUTION", "Attach to a resolved finding of this round"
+        )
+    attached = _standalone_modifier(item)
+    modifiers = list(current.annotation.modifiers)
+    found = next((m for m in modifiers if m.term_id == attached.term_id), None)
+    if found is not None and found.segments == attached.segments:
+        return False
+    if found is not None and found.segments:
+        raise DomainError("DUPLICATE_MODIFIER", {"term_id": attached.term_id})
+    kept = [m for m in modifiers if m is not found]
+    _with_modifiers(draft, current, [*kept, attached], document, item.profile)
+    return True
 
 
 def _uncheck(draft: Draft, item: _Group) -> None:
@@ -460,21 +595,54 @@ class ConsolidationGroupService:
         assert isinstance(result, Draft)
         return result
 
-    def _other_term(self, key: WorkspaceKey, cmd: ResolveCommand) -> str | None:
+    def _checked_choice(
+        self, key: WorkspaceKey, cmd: ResolveCommand
+    ) -> tuple[str | None, list[Modifier] | None]:
         """The canonical id of a chosen term outside the group's terms
-        ("Other term…"), checked before the draft lock is taken: the check
-        may load the ontology, and the group's members are frozen inputs."""
+        ("Other term…") and the validated ``choice.modifiers``, checked
+        before the draft lock is taken: the checks may load the ontology,
+        and the group's members are frozen inputs."""
         choice = cmd.choice
-        if choice is None or self.valid_term is None:
-            return None
+        if choice is None:
+            return None, None
         with self.repo.db.transaction() as conn:
             item = _find_group(conn, self.repo, key, cmd.input_ids)
         base = item.members.get(choice.span_from_input_id)
-        if base is None or choice.term_id in item.group.terms:
-            return None
-        return self.valid_term(
-            key.project_key, base.snapshot.annotation.layer_id, choice.term_id
-        )
+        if base is None:
+            return None, None  # refused by ``_chosen``
+        layer_id = base.snapshot.annotation.layer_id
+        other_term = None
+        if choice.term_id not in item.group.terms and self.valid_term is not None:
+            other_term = self.valid_term(key.project_key, layer_id, choice.term_id)
+        term_id = choice.term_id if choice.term_id in item.group.terms else other_term
+        if term_id is not None and item.roles.kind(layer_id, term_id) is not None:
+            raise DomainError("MODIFIER_AS_FINDING", {"term_id": term_id})
+        if choice.modifiers is None:
+            return other_term, None
+        return other_term, self._modifiers(key, item, layer_id, choice.modifiers)
+
+    def _modifiers(
+        self, key: WorkspaceKey, item: _Group, layer_id: str, given: list[ModifierIn]
+    ) -> list[Modifier]:
+        """The explicit final modifier list (not required to come from the
+        members, so "Edit values…" may add one), validated as ``add_modifier``."""
+        if given and not item.roles.supports(layer_id):
+            raise DomainError("MODIFIERS_NOT_SUPPORTED", {"layer_id": layer_id})
+        result: list[Modifier] = []
+        for modifier in given:
+            term_id = (
+                self.valid_term(key.project_key, layer_id, modifier.term_id)
+                if self.valid_term is not None
+                else modifier.term_id
+            )
+            if term_id is None:
+                raise DomainError("UNKNOWN_TERM", {"term_id": modifier.term_id})
+            if item.roles.kind(layer_id, term_id) is None:
+                raise DomainError("MODIFIER_NOT_ALLOWED", {"term_id": term_id})
+            if any(m.term_id == term_id for m in result):
+                raise DomainError("DUPLICATE_MODIFIER", {"term_id": term_id})
+            result.append(Modifier(term_id=term_id, segments=modifier.segments))
+        return result
 
     def resolve(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
         if (
@@ -486,20 +654,27 @@ class ConsolidationGroupService:
                 " second finding on the text"
             )
         cmd = ResolveCommand.model_validate(envelope.payload)
-        if cmd.attach_to is not None or (
-            cmd.choice is not None and cmd.choice.modifiers is not None
-        ):
-            # shortcut: refused until M2 implements modifier choices and attach_to.
-            raise DomainError(
-                "INVALID_RESOLUTION", "Modifier choices are not supported yet"
-            )
-        other_term = self._other_term(key, cmd)
+        other_term, modifiers = self._checked_choice(key, cmd)
 
         def apply(draft: Draft, item: _Group, document: Document) -> None:
-            plans = self._plans(cmd, item, other_term)
+            if cmd.attach_to is not None and (
+                cmd.action != "leave_out"
+                or "modifier_as_finding" not in item.group.kinds
+            ):
+                raise DomainError(
+                    "INVALID_RESOLUTION",
+                    "Only a standalone modifier left out is attached to a finding",
+                )
+            plans = self._plans(cmd, item, other_term, modifiers)
+            _detach(draft, item, document)
             _clear_group(draft, item)
             note = _note(cmd.note)
             if cmd.action == "leave_out":
+                # Attaching what the target already has changes nothing: a
+                # plain leave-out, so a reopen never removes the target's own.
+                attached = cmd.attach_to is not None and _attach(
+                    draft, item, cmd.attach_to, document
+                )
                 for ref in item.refs.values():
                     draft.decisions.append(
                         review_decision(
@@ -510,6 +685,7 @@ class ConsolidationGroupService:
                             mark=ConsolidationMark(
                                 action="leave_out",
                                 guidelines_unclear=cmd.guidelines_unclear,
+                                attached_to=cmd.attach_to if attached else None,
                             ),
                         )
                     )
@@ -536,11 +712,16 @@ class ConsolidationGroupService:
         return self._run(key, envelope, cmd.input_ids, apply)
 
     def _plans(
-        self, cmd: ResolveCommand, item: _Group, other_term: str | None
+        self,
+        cmd: ResolveCommand,
+        item: _Group,
+        other_term: str | None,
+        modifiers: list[Modifier] | None,
     ) -> list[tuple[RoundMember, Annotation, list[str]]]:
         """Per consolidated annotation: the member giving span and evidence,
         the annotation content and the contributing input ids. ``other_term``
-        is the canonical id of a chosen term outside the group's terms."""
+        is the canonical id of a chosen term outside the group's terms,
+        ``modifiers`` the validated ``choice.modifiers``."""
         if (cmd.choice is not None) != (cmd.action == "choose"):
             raise _invalid("A choice goes with the action 'choose' only")
         group, members = item.group, item.members
@@ -550,6 +731,11 @@ class ConsolidationGroupService:
             if group.kinds & _UNSETTLED_BY_KEEP or group.span_conflict:
                 raise _invalid("Choose the term, every differing value and the text")
             keep = members[group.members[group.keep]]
+            if "modifier_as_finding" in group.kinds:  # R3: attach or leave out
+                raise DomainError(
+                    "MODIFIER_AS_FINDING",
+                    {"term_id": keep.snapshot.annotation.term_id},
+                )
             return [(keep, keep.snapshot.annotation, item.input_ids)]
         choice = cmd.choice
         assert choice is not None
@@ -557,7 +743,7 @@ class ConsolidationGroupService:
         if term_id is None:
             raise _invalid("The term is not valid in this layer")
         base, chosen = self._chosen(
-            item, choice, item.input_ids, group.differing_axes, term_id
+            item, choice, item.input_ids, group.differing_axes, term_id, modifiers
         )
         return [(base, chosen, item.input_ids)]
 
@@ -568,11 +754,13 @@ class ConsolidationGroupService:
         allowed: Sequence[str],
         differing_axes: Sequence[str],
         term_id: str,
+        modifiers: list[Modifier] | None = None,
     ) -> tuple[RoundMember, Annotation]:
-        """The member giving span, evidence and (by default) note, and the
-        chosen annotation: ``term_id``, the member's axes overlaid with the
-        chosen ones. ``allowed`` are the input ids span and note may come
-        from; ``choice.axes`` must name every axis of ``differing_axes``."""
+        """The member giving span, evidence and (by default) note and
+        modifiers, and the chosen annotation: ``term_id``, the member's axes
+        overlaid with the chosen ones, ``modifiers`` when given. ``allowed``
+        are the input ids span and note may come from; ``choice.axes`` must
+        name every axis of ``differing_axes``."""
         members = item.members
         if choice.span_from_input_id not in allowed:
             raise _invalid("The span comes from a member of the group")
@@ -600,9 +788,12 @@ class ConsolidationGroupService:
             )
         else:
             note = source.note
+        content: dict[str, Any] = {"term_id": term_id, "note": note}
+        if modifiers is not None:
+            content["modifiers"] = [m.model_dump() for m in modifiers]
         try:
             chosen = Annotation.model_validate(
-                source.with_axes(axes).model_dump() | {"term_id": term_id, "note": note}
+                source.with_axes(axes).model_dump() | content
             )
         except (InvalidAnnotation, ValueError) as exc:
             raise _invalid(str(exc)) from exc
@@ -645,7 +836,8 @@ class ConsolidationGroupService:
     def reopen(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
         cmd = ReopenCommand.model_validate(envelope.payload)
 
-        def apply(draft: Draft, item: _Group, _document: Document) -> None:
+        def apply(draft: Draft, item: _Group, document: Document) -> None:
+            _detach(draft, item, document)
             _clear_group(draft, item)
             _uncheck(draft, item)
 
@@ -678,7 +870,7 @@ def release_group_of(
     for group in round_groups(found):
         members = {iid: found.members[iid] for iid in group.members.values()}
         if any(member_ref(m) == target for m in members.values()):
-            item = _Group(key.round_id, group, members, profile)
+            item = _Group(key.round_id, group, members, profile, found.roles)
             kept = frozenset({keep.annotation_id} if keep is not None else set())
             _clear_group(draft, item, keep=kept)
             return True

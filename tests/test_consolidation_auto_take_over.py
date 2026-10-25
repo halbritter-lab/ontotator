@@ -223,3 +223,66 @@ def test_ordinary_rounds_are_not_seeded(tmp_path):
             .where(DraftRow.draft_key == _key_str(created.workspace_key))
         ).scalar_one()
     assert count == 0
+
+
+# --- modifiers (modifiers plan M2, R5, R6) ----------------------------------- #
+
+
+def test_only_identical_modifier_sets_are_taken_over(tmp_path):
+    """S1 and S17's variant are kept automatically with their modifiers (the
+    cohort warning never blocks a match); S6, S19 and S20 are not."""
+    from test_consolidation_modifiers_read import (
+        FREQUENT,
+        SEVERE,
+        TEXT,
+        found,
+        group_of,
+        mod_env,
+        mod_round,
+        modifier,
+    )
+    from test_consolidation_resolve_api import annotation
+
+    from ontocurator.domain.annotations import Modifier
+    from ontocurator.domain.documents import Segment
+
+    env = mod_env(tmp_path)
+    start = TEXT.index("schwere")
+    longer = Modifier(
+        term_id=SEVERE, segments=[Segment(start=start, end=start + len("schwere "))]
+    )
+    scenarios = {
+        "S1": ([modifier(SEVERE, "schwere")], [modifier(SEVERE, "schwere")]),
+        "S17": ([modifier(FREQUENT)], [modifier(FREQUENT)]),
+        "S6": ([modifier(SEVERE, "schwere")], [modifier(SEVERE)]),
+        "S20": ([modifier(SEVERE, "schwere")], [longer]),
+    }
+    for n, (name, (ana, ben)) in enumerate(scenarios.items(), start=1):
+        ns = mod_round(
+            env,
+            f"c{n}",
+            {
+                "ana": [found("s", SEIZURE, "Krampfanfälle", *ana)],
+                "ben": [found("s", SEIZURE, "Krampfanfälle", *ben)],
+            },
+        )
+        item = group_of(ns, SEIZURE)
+        if name in {"S1", "S17"}:
+            assert item["state"] == "auto", name
+            draft = ns.env.app.state.repo.open_draft(ns.round.workspace_key)
+            kept = annotation(draft, item["annotation_ids"][0]).annotation
+            assert kept.modifiers == ana, name
+        else:
+            assert (item["state"], item["kinds"]) == ("open", ["modifiers_differ"]), (
+                name
+            )
+    ns = mod_round(
+        env,
+        "c5",
+        {
+            "ana": [found("x", SEVERE, "schwere")],
+            "ben": [found("x", SEVERE, "schwere")],
+        },
+    )
+    both = group_of(ns, SEVERE)
+    assert (both["state"], both["kinds"]) == ("open", ["modifier_as_finding"])
