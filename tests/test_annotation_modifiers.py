@@ -9,11 +9,15 @@ from __future__ import annotations
 
 import hashlib
 
+import pytest
+
 from ontocurator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationSnapshot,
+    Modifier,
     Provenance,
+    annotation_content,
     snapshot,
 )
 from ontocurator.domain.axes import AxisDefinition
@@ -25,6 +29,7 @@ from ontocurator.domain.documents import (
     EvidenceSnapshot,
     Segment,
 )
+from ontocurator.domain.errors import InvalidAnnotation
 from ontocurator.domain.profiles import (
     AnnotationTypeDefinition,
     LayerDefinition,
@@ -33,6 +38,11 @@ from ontocurator.domain.profiles import (
 )
 from ontocurator.domain.review import ReviewTargetSet
 from ontocurator.domain.scopes import build_scope
+from ontocurator.domain.serialization import (
+    decode_snapshot,
+    encode_snapshot,
+    verify_snapshot,
+)
 from ontocurator.domain.workspace import WorkspaceKey
 
 TEXT = "Seit 2 Wochen wiederholt schwere Krampfanfälle und eine Muskelhypotonie."
@@ -166,3 +176,111 @@ def test_existing_versions_and_submission_id_are_unchanged() -> None:
     assert submission_hash(snaps) == (
         "a04f3af5773368d1527d042d88dce187ca2e36e327852762ace89448eadfc771"
     )
+
+
+SEVERE, RECURRENT = "HP:0012828", "HP:0031796"
+
+
+def finding(modifiers: list[Modifier], **kw: object) -> Annotation:
+    return Annotation(
+        annotation_id="a-9",
+        document_id="doc-1",
+        term_id="HP:0001250",
+        provenance=PROVENANCE,
+        modifiers=modifiers,
+        **kw,  # type: ignore[arg-type]
+    )
+
+
+def seg(start: int, end: int) -> Segment:
+    return Segment(start=start, end=end)
+
+
+def test_modifiers_and_segments_are_sorted() -> None:
+    annotation = finding(
+        [
+            Modifier(term_id=SEVERE, segments=[seg(30, 32), seg(25, 28)]),
+            Modifier(term_id=RECURRENT),
+            Modifier(term_id="HP:0012825"),
+        ]
+    )
+    assert [m.term_id for m in annotation.modifiers] == [
+        "HP:0012825",
+        SEVERE,
+        RECURRENT,
+    ]
+    assert annotation.modifiers[1].segments == [seg(25, 28), seg(30, 32)]
+
+
+def test_duplicate_modifier_term_is_refused() -> None:
+    with pytest.raises(InvalidAnnotation, match="Duplicate modifier term 'HP:0012828'"):
+        finding([Modifier(term_id=SEVERE), Modifier(term_id=SEVERE)])
+
+
+def test_invalid_modifier_curie_is_refused() -> None:
+    with pytest.raises(InvalidAnnotation, match="modifier"):
+        finding([Modifier(term_id="not a curie")])
+
+
+def test_overlapping_segments_of_one_modifier_are_refused() -> None:
+    with pytest.raises(InvalidAnnotation, match="Modifier segments overlap"):
+        finding([Modifier(term_id=SEVERE, segments=[seg(25, 30), seg(29, 32)])])
+
+
+def test_overlap_between_modifiers_and_with_the_mention_is_allowed() -> None:
+    ev = mention("ev-1", "schwere Krampfanfälle")
+    annotation = finding(
+        [
+            Modifier(term_id=SEVERE, segments=[at("schwere")]),
+            Modifier(term_id=RECURRENT, segments=[at("wiederholt schwere")]),
+        ],
+        evidence_refs=[EvidenceRef(evidence_id="ev-1", version=ev.version)],
+    )
+    assert snapshot(annotation, [ev], DOCUMENT, PROFILE).version
+
+
+def test_annotation_content_leaves_out_empty_modifiers() -> None:
+    assert "modifiers" not in annotation_content(finding([]))
+    content = annotation_content(
+        finding(
+            [
+                Modifier(term_id=RECURRENT),
+                Modifier(term_id=SEVERE, segments=[seg(25, 32)]),
+            ]
+        )
+    )
+    assert content["modifiers"] == [
+        {"term_id": SEVERE, "segments": [{"start": 25, "end": 32}]},
+        {"term_id": RECURRENT},
+    ]
+
+
+def test_modifiers_change_the_version() -> None:
+    plain = snapshot(finding([]), [], DOCUMENT, PROFILE)
+    with_modifier = snapshot(finding([Modifier(term_id=SEVERE)]), [], DOCUMENT, PROFILE)
+    assert plain.version != with_modifier.version
+
+
+def test_snapshot_refuses_a_modifier_segment_beyond_the_text() -> None:
+    end = len(TEXT)
+    annotation = finding([Modifier(term_id=SEVERE, segments=[seg(end - 1, end + 1)])])
+    with pytest.raises(InvalidAnnotation, match="out of bounds"):
+        snapshot(annotation, [], DOCUMENT, PROFILE)
+
+
+def test_old_payload_round_trips_to_the_same_version() -> None:
+    for snap in golden_snapshots():
+        raw = encode_snapshot(snap)
+        assert "modifiers" not in raw["annotation"]
+        decoded = decode_snapshot(raw)
+        verify_snapshot(decoded)
+        assert decoded.version == snap.version
+
+
+def test_payload_with_modifiers_round_trips() -> None:
+    annotation = finding([Modifier(term_id=SEVERE, segments=[at("schwere")])])
+    snap = snapshot(annotation, [], DOCUMENT, PROFILE)
+    decoded = decode_snapshot(encode_snapshot(snap))
+    verify_snapshot(decoded)
+    assert decoded.version == snap.version
+    assert decoded.annotation.modifiers == annotation.modifiers

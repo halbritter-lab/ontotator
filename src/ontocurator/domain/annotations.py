@@ -1,4 +1,5 @@
 import re
+from itertools import pairwise
 from typing import Any, Literal
 
 from pydantic import (
@@ -14,6 +15,8 @@ from ontocurator.domain.documents import (
     Document,
     EvidenceRef,
     EvidenceSnapshot,
+    Segment,
+    validate_segments,
 )
 from ontocurator.domain.errors import InvalidAnnotation
 from ontocurator.domain.profiles import (
@@ -58,6 +61,17 @@ class AnnotationRef(BaseModel):
     version: str
 
 
+class Modifier(BaseModel):
+    """A clinical modifier of one finding (T1 F6): a term and 0..n segments."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    term_id: str
+    segments: list[Segment] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+
+
 class Annotation(BaseModel):
     """Annotation entity referencing ontology term, layer, type, context axes and evidence."""
 
@@ -76,6 +90,10 @@ class Annotation(BaseModel):
         default_factory=list, exclude_if=lambda value: not value
     )
     note: str | None = Field(default=None, exclude_if=lambda value: not value)
+    # Left out of the content while empty, so older versions stay valid.
+    modifiers: list[Modifier] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     evidence_refs: list[EvidenceRef] = Field(default_factory=list)
     provenance: Provenance
 
@@ -119,6 +137,23 @@ class Annotation(BaseModel):
         if unset:
             raise InvalidAnnotation(f"Defaulted axes without a value: {unset}")
         self.axes_defaulted = sorted(set(self.axes_defaulted))
+        seen: set[str] = set()
+        for modifier in self.modifiers:
+            if not CURIE_PATTERN.match(modifier.term_id):
+                raise InvalidAnnotation(
+                    f"Invalid ontology CURIE format for modifier: '{modifier.term_id}'"
+                )
+            if modifier.term_id in seen:
+                raise InvalidAnnotation(f"Duplicate modifier term '{modifier.term_id}'")
+            seen.add(modifier.term_id)
+            ordered = sorted(modifier.segments, key=lambda s: (s.start, s.end))
+            for left, right in pairwise(ordered):
+                if left.end > right.start:
+                    raise InvalidAnnotation(
+                        f"Modifier segments overlap: {left} and {right}"
+                    )
+            modifier.segments = ordered
+        self.modifiers = sorted(self.modifiers, key=lambda m: m.term_id)
         return self
 
     def with_axes(self, axes_values: dict[str, str | None]) -> "Annotation":
@@ -154,6 +189,8 @@ def annotation_content(annotation: Annotation) -> dict[str, Any]:
         content["note"] = annotation.note
     if annotation.axes_defaulted:
         content["axes_defaulted"] = list(annotation.axes_defaulted)
+    if annotation.modifiers:
+        content["modifiers"] = [m.model_dump() for m in annotation.modifiers]
     return content
 
 
@@ -214,6 +251,9 @@ def snapshot(
             raise InvalidAnnotation(
                 f"Annotation references missing evidence ({ref.evidence_id}, {ref.version})"
             )
+    validate_segments(
+        document.text, [s for m in annotation.modifiers for s in m.segments]
+    )
 
     schema_version: Literal["ontocurator-annotation/v3"] = "ontocurator-annotation/v3"
 
