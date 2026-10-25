@@ -19,7 +19,7 @@ from browser_documents_scenarios import assign as scenario_assign
 from browser_server import ONTOLOGY
 from fastapi.testclient import TestClient
 from pg_harness import database_url_for
-from sqlalchemy import select, update
+from sqlalchemy import event, insert, select, update
 from t1_builders import bundle, correction_unit, native_unit, translation_unit
 from t1_fixtures import create_project, run_import
 from test_auth_api import _app
@@ -27,6 +27,7 @@ from work_plan_support import plan_all, set_rule
 
 from ontocurator.api.app import create_app
 from ontocurator.application.text_changes import TextChangeService
+from ontocurator.application.text_targets import TextRow, text_translation_statuses
 from ontocurator.config import AppConfig
 from ontocurator.domain.errors import DomainError
 from ontocurator.storage.repository import Repository
@@ -142,6 +143,47 @@ def test_native_source_and_accepted_translation_never_ask(gate_env):
     assert audits(gate_env) == []
 
 
+def test_root_statuses_read_only_the_texts_case(gate_env):
+    """Runs per annotate allocation under the project lock: no project-wide scan."""
+    with gate_env.db.transaction() as conn:
+        pid = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == "proj")
+        ).scalar_one()
+        before = text_translation_statuses(conn, pid, TextRow("case", "de"))
+        conn.execute(
+            insert(DocumentRow),
+            [
+                {
+                    "project_id": pid,
+                    "document_id": f"other-{i}",
+                    "case_id": f"other-case-{i}",
+                    "external_id": f"other-{i}",
+                    "language": "de",
+                    "text": "Anderer Text",
+                    "text_sha256": "other-hash",
+                }
+                for i in range(3)
+            ],
+        )
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, *_rest):
+        statements.append(statement)
+
+    event.listen(gate_env.db.engine, "before_cursor_execute", capture)
+    try:
+        with gate_env.db.transaction() as conn:
+            after = text_translation_statuses(conn, pid, TextRow("case", "de"))
+    finally:
+        event.remove(gate_env.db.engine, "before_cursor_execute", capture)
+    assert after == before and len(after) == 2
+    reviews = [s for s in statements if ".translation_reviews " in s]
+    discards = [s for s in statements if ".discarded_variants " in s]
+    assert reviews and discards, statements
+    assert all("documents.case_id IN" in s for s in reviews), reviews
+    assert all("discarded_variants.document_id IN" in s for s in discards), discards
+
+
 def _batch(env, path, **extra):
     return env.lead.post(
         f"{BASE}/assignments/batch{path}",
@@ -220,6 +262,33 @@ def test_reassign_needs_it(gate_env):
     )
     assert moved.status_code == 200, moved.text
     assert len(audits(gate_env, moved.json()["id"])) == 1
+
+
+def test_cli_assign_needs_the_flag(gate_env):
+    from typer.testing import CliRunner
+
+    from ontocurator.cli import app as cli
+
+    arguments = [
+        "admin",
+        "--database-url",
+        gate_env.db.engine.url.render_as_string(hide_password=False),
+        "assign",
+        "proj",
+        "alice",
+        "--document",
+        DE_A,
+        "--confirm-language",
+    ]
+    runner = CliRunner()
+    refused = runner.invoke(cli, arguments)
+    assert refused.exit_code == 1, refused.output
+    assert "TRANSLATION_NOT_REVIEWED" in refused.output
+    assert audits(gate_env) == []
+    created = runner.invoke(cli, [*arguments, "--confirm-unreviewed-translation"])
+    assert created.exit_code == 0, created.output
+    assert DE_A in created.output
+    assert [label.split(":")[0] for _, label in audits(gate_env)] == ["cli"]
 
 
 def test_rule_on_is_unchanged(gate_env):
@@ -328,3 +397,11 @@ def test_move_to_version_and_carry_need_it(change_app):
         assert refused.value.code == "TRANSLATION_NOT_REVIEWED"
         assert refused.value.details == {"document_ids": [v2]}
         call(confirm_unreviewed_translation=True)
+    with scenario.db.transaction() as conn:
+        audited = conn.execute(
+            select(AuditEventRow.details["document_id"].as_string()).where(
+                AuditEventRow.action == "assignment.unreviewed_translation"
+            )
+        ).scalars()
+        # One for the confirmed move, one for the carry (v1 work audited too).
+        assert list(audited).count(v2) == 2

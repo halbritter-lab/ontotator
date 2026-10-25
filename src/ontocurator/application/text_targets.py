@@ -15,7 +15,7 @@ from ontocurator.application.work_plans import _chains, _live, _target
 from ontocurator.domain.document_rows import Chain
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.work_plans import RowKey
-from ontocurator.storage import work_plan_store as store
+from ontocurator.storage.plan_tables import DiscardedVariantRow
 from ontocurator.storage.tables import DocumentRow
 
 __all__ = [
@@ -61,12 +61,18 @@ def text_documents(conn: Connection, project_id: int, row: TextRow) -> list[str]
 
 
 def _live_chains(conn: Connection, project_id: int, row: TextRow) -> list[Chain]:
-    return _live(
-        _chains(conn, project_id, [row.case_id]).get(
-            RowKey(row.case_id, row.language), []
-        ),
-        set(store.discarded(conn, project_id)),
+    chains = _chains(conn, project_id, [row.case_id]).get(
+        RowKey(row.case_id, row.language), []
     )
+    discarded = conn.execute(
+        select(DiscardedVariantRow.document_id).where(
+            DiscardedVariantRow.project_id == project_id,
+            DiscardedVariantRow.document_id.in_(
+                [v.document_id for chain in chains for v in chain.versions]
+            ),
+        )
+    ).scalars()
+    return _live(chains, set(discarded))
 
 
 def text_translation_statuses(

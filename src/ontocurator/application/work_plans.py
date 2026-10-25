@@ -110,7 +110,7 @@ def _chains(
     ).where(DocumentRow.project_id == pid)
     if case_ids is not None:
         query = query.where(DocumentRow.case_id.in_(list(case_ids)))
-    decisions = latest_review_decisions(conn, pid)
+    decisions = latest_review_decisions(conn, pid, case_ids)
     groups: dict[RowKey, list[rules.Version]] = defaultdict(list)
     for row in conn.execute(query):
         groups[RowKey(row.case_id, row.language)].append(

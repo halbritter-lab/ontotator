@@ -831,7 +831,8 @@ def observe_eligibility_metadata(env, monkeypatch):
             "documents.case_id" in statement
             and "documents.translation_status" in statement
             and "documents.text," not in statement
-            # Variant metadata; the text's root statuses (one case's chains) skip it.
+            # Variant metadata only; the text's root statuses read one case, see
+            # test_unreviewed_translation_gate.test_root_statuses_read_only_the_texts_case.
             and "documents.text_sha256" in statement
         ):
             query_rows.append(cursor.rowcount)

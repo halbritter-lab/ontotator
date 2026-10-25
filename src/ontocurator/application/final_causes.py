@@ -97,13 +97,25 @@ def correction_roots(inventory: list[dict[str, Any]]) -> dict[str, str]:
     return roots
 
 
-def latest_review_decisions(conn: Connection, pid: int) -> dict[str, str]:
-    """document_id -> decision of its latest translation review."""
+def latest_review_decisions(
+    conn: Connection, pid: int, case_ids: Collection[str] | None = None
+) -> dict[str, str]:
+    """document_id -> decision of its latest translation review (of the given
+    cases only, when ``case_ids`` is set)."""
+    query = select(
+        TranslationReviewRow.document_id, TranslationReviewRow.decision
+    ).where(TranslationReviewRow.project_id == pid)
+    if case_ids is not None:
+        query = query.where(
+            TranslationReviewRow.document_id.in_(
+                select(DocumentRow.document_id).where(
+                    DocumentRow.project_id == pid,
+                    DocumentRow.case_id.in_(list(case_ids)),
+                )
+            )
+        )
     rows = conn.execute(
-        select(TranslationReviewRow.document_id, TranslationReviewRow.decision)
-        .where(TranslationReviewRow.project_id == pid)
-        .distinct(TranslationReviewRow.document_id)
-        .order_by(
+        query.distinct(TranslationReviewRow.document_id).order_by(
             TranslationReviewRow.document_id,
             TranslationReviewRow.created_at.desc(),
             TranslationReviewRow.id.desc(),
