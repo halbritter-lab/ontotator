@@ -77,6 +77,8 @@ export interface AnnotationPanelProps {
   searchLanguages?: SearchLanguageControl;
   /** The Modifiers section, rendered under Values (only for findings on `hpo-phenotype` layers). */
   modifiersSection?: React.ReactNode;
+  /** A notice above the Values block (R3: "Turn into modifier…" of a modifier used as a finding). */
+  modifierNotice?: React.ReactNode;
 }
 
 /** Quote the text covered by codepoint segments; discontinuous parts are joined with " … ". */
@@ -119,6 +121,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   isAttachingMention = false,
   searchLanguages,
   modifiersSection,
+  modifierNotice,
 }) => {
   const [showSearch, setShowSearch] = useState(false);
   const changeTermButton = useRef<HTMLButtonElement>(null);
@@ -305,6 +308,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
         )}
       </div>
 
+      {modifierNotice}
       {/* 2. Values (hidden if the type has no axes) */}
       {axesConfig && axesConfig.length > 0 && (
         <section ref={valuesSection} className="detail-section values-section" data-values-section data-testid="axes-section" tabIndex={-1}

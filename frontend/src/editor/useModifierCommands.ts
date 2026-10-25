@@ -1,9 +1,9 @@
 import { useState } from "react";
-import type { AddModifierPayload, Draft, RemoveModifierPayload, SetModifierSegmentsPayload } from "../api/client";
+import type { AddModifierPayload, ConvertToModifierPayload, Draft, RemoveModifierPayload, SetModifierSegmentsPayload } from "../api/client";
 import { useToast } from "../ui/Toast";
 import type { Seg } from "./modifiers";
 
-type ModifierPayload = AddModifierPayload | SetModifierSegmentsPayload | RemoveModifierPayload;
+type ModifierPayload = AddModifierPayload | SetModifierSegmentsPayload | RemoveModifierPayload | ConvertToModifierPayload;
 
 export interface ModifierCommandDeps {
   /** One draft mutation through the editor's queue, with the review-decision sync of the finding. */
@@ -38,5 +38,8 @@ export function useModifierCommands({ mutate, segmentsOf, announce, reportError 
     await setSegments(annotationId, termId, []);
     announce(`Removed the text span of ${term}.`);
   };
-  return { add, setSegments, remove, removeSpan, toast, dismissToast: dismiss, linkSpan, setLinkSpan };
+  /** R3: the standalone modifier finding `sourceId` becomes a modifier of `targetId` (one mutation, keyed on the target). */
+  const convert = (sourceId: string, targetId: string, linkSpan: boolean) =>
+    run(targetId, { command: "convert_to_modifier", annotation_id: sourceId, target_annotation_id: targetId, link_span: linkSpan });
+  return { add, setSegments, remove, removeSpan, convert, toast, dismissToast: dismiss, linkSpan, setLinkSpan };
 }

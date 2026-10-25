@@ -96,8 +96,9 @@ import { TreeBrowser } from "../editor/TreeBrowser";
 import { useTermLabels } from "../editor/useTermLabels";
 import { ModifiersSection } from "../editor/ModifiersSection";
 import { AttachModePanel, attachCopy } from "../editor/AttachModePanel";
+import { ModifierAsFindingNotice } from "../editor/ModifierAsFindingNotice";
 import { useModifierCommands } from "../editor/useModifierCommands";
-import { attachCandidates, findingDescription, modifierDisplayId, modifierMarks, parseModifierDisplayId, quoteOf, type AttachFinding } from "../editor/modifiers";
+import { attachCandidates, findingDescription, modifierDisplayId, modifierMarks, parseModifierDisplayId, quoteOf, type AttachFinding, type Seg } from "../editor/modifiers";
 import { Toast } from "../ui/Toast";
 import { type MentionDisplay, type SelectionPayload } from "../spans/adapter";
 import { markColourSlot } from "../editor/markColours";
@@ -299,8 +300,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     return spanlessNotesRequired && ann && !ann.evidence_refs?.length && !note.trim();
   });
   const [isAttachingMention, setIsAttachingMention] = useState(false);
-  // Attach mode of a modifier hit chosen for the pending mark (E-a; M7 adds `mode: "convert"`).
-  const [attachModifier, setAttachModifier] = useState<{ termId: string; termLabel: string; mode: "attach" } | null>(null);
+  // Attach mode of a modifier hit chosen for the pending mark (E-a), or "Turn into modifier…" of a standalone
+  // modifier finding `sourceId` (convert, E-c; `mark` = the source's first mention segments, there is no pending mark).
+  const [attachModifier, setAttachModifier] = useState<{ termId: string; termLabel: string; mode: "attach" }
+    | { termId: string; termLabel: string; mode: "convert"; sourceId: string; mark: Seg[] } | null>(null);
+  const convertSourceId = attachModifier?.mode === "convert" ? attachModifier.sourceId : null;
   /** The focused target row of the attach mode. */
   const [attachFocusId, setAttachFocusId] = useState<string | null>(null);
   /** A target chosen by click or Enter that already has the term with another span: the inspector offers "Replace text span". */
@@ -2203,6 +2207,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // From the draft, not the visible layers: a hidden layer's finding is still a target.
     const snapshot = key.startsWith("annotation:") ? draftAnnotationById.get(key.slice("annotation:".length)) : undefined;
     if (!snapshot || !modifierLayerIds.has(snapshot.annotation.layer_id) || !editableLayerIds.includes(snapshot.annotation.layer_id)) return [];
+    // Convert mode: the source is no target, nor is a finding of another layer (convert_to_modifier refuses LAYER_MISMATCH).
+    if (attachModifier?.mode === "convert" && (snapshot.annotation.annotation_id === attachModifier.sourceId
+      || snapshot.annotation.layer_id !== draftAnnotationById.get(attachModifier.sourceId)?.annotation.layer_id)) return [];
     const mentions = (snapshot.annotation.evidence_refs ?? []).map(ref => allEvidenceMap[ref.evidence_id]).filter(Boolean);
     return [{
       annotationId: snapshot.annotation.annotation_id, term: findingNameOf(snapshot), termId: snapshot.annotation.term_id,
@@ -2210,9 +2217,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       quote: mentions[0] ? quoteSegments(view.document.text, mentions[0].mention.segments, 40) : "",
     }];
   });
-  const attachActive = !!attachModifier && pendingIsMarkedSpan && !readOnly && attachTargets.length > 0;
-  const attachMark = pendingAnnotation?.segments.length
-    ? { start: Math.min(...pendingAnnotation.segments.map(s => s.start)), end: Math.max(...pendingAnnotation.segments.map(s => s.end)) } : null;
+  const attachActive = !!attachModifier && (attachModifier.mode === "convert" || pendingIsMarkedSpan) && !readOnly && attachTargets.length > 0;
+  const attachSegments = attachModifier?.mode === "convert" ? attachModifier.mark : pendingAnnotation?.segments ?? [];
+  const attachMark = attachSegments.length
+    ? { start: Math.min(...attachSegments.map(s => s.start)), end: Math.max(...attachSegments.map(s => s.end)) } : null;
   const attachNearest = attachActive && attachMark ? attachCandidates(view.document.text, attachMark, attachTargets)[0] ?? null : null;
   const startAttach = (candidate: { term_id: string; label?: string | null }) => {
     setAttachModifier({ termId: candidate.term_id, termLabel: candidate.label ?? candidate.term_id, mode: "attach" });
@@ -2222,9 +2230,53 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // No target: the panel's "Create the finding first" state is announced (its "OK" takes focus).
     if (!attachTargets.length) announceCarried(attachCopy.noFindings(candidate.label ?? candidate.term_id));
   };
-  const cancelAttachModifier = () => { setAttachModifier(null); discardPending(); };
+  /** "Turn into modifier…" of a modifier used as a finding (R3, E-c): the attach mode in convert mode. */
+  const startConvert = (snapshot: AnnotationSnapshot) => {
+    const first = snapshot.annotation.evidence_refs?.[0];
+    setAttachModifier({ termId: snapshot.annotation.term_id, termLabel: findingNameOf(snapshot), mode: "convert", sourceId: snapshot.annotation.annotation_id,
+      mark: first ? allEvidenceMap[first.evidence_id]?.mention.segments ?? [] : [] });
+    setAttachFocusId(null); setAttachReplaceId(null);
+    if (panesLayout) setMobilePane("list");
+  };
+  /** Convert mode: Esc and Cancel only end the mode (the finding stays) and focus "Turn into modifier…" again. */
+  const cancelAttachModifier = () => {
+    if (attachModifier?.mode !== "convert") { setAttachModifier(null); discardPending(); return; }
+    const sourceId = attachModifier.sourceId;
+    setAttachModifier(null); setAttachFocusId(null); setAttachReplaceId(null);
+    if (panesLayout) setMobilePane("details");
+    setFocusRequest({ key: `annotation:${sourceId}`, find: root => root.querySelector<HTMLElement>("[data-turn-into-modifier]") });
+  };
+  /** Convert mode: one convert_to_modifier (the source's first mention goes along); `replace` keeps none of the target's old span. */
+  const convertTo = async (annotationId: string, replace: boolean) => {
+    if (attachModifier?.mode !== "convert" || readOnlyRef.current || creatingPending.current) return;
+    const target = latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === annotationId);
+    if (!target) return;
+    const { termId, termLabel: term, sourceId, mark } = attachModifier;
+    const existing = target.annotation.modifiers?.find(modifier => modifier.term_id === termId);
+    const conflict = !!existing?.segments?.length && mark.length > 0 && JSON.stringify(existing.segments) !== JSON.stringify(mark);
+    if (conflict && !replace) { setAttachReplaceId(annotationId); setAttachFocusId(annotationId); return; }
+    creatingPending.current = true;
+    try {
+      // convert_to_modifier refuses another span (DUPLICATE_MODIFIER): convert without it, then set the source's span.
+      await modifierCommands.convert(sourceId, annotationId, !conflict);
+      if (conflict) await modifierCommands.setSegments(annotationId, termId, mark);
+    } catch { return; } finally { creatingPending.current = false; }
+    setAttachModifier(null); setAttachFocusId(null); setAttachReplaceId(null);
+    setSelectedTargetId(null); setSelectedSourceId(null); setSelectedInputId(null);
+    setSelectedAnnotationId(annotationId);
+    setSelectedEvidenceId(target.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+    if (panesLayout) setMobilePane("details");
+    announceCarried(attachCopy.converted(term, findingNameOf(target)));
+    const end = mark.length ? Math.max(...mark.map(segment => segment.end)) : null;
+    setFocusRequest({ key: `annotation:${annotationId}`, find: root => {
+      const chip = chipIn(root, termId);
+      if (!chip) setTextFocusRequest({ offset: end });
+      return chip;
+    } });
+  };
   /** Attach the pending mark (as adjusted by its handles) to a finding; `replace` sends set_modifier_segments. */
   const attachTo = async (annotationId: string, replace = false) => {
+    if (attachModifier?.mode === "convert") { await convertTo(annotationId, replace); return; }
     if (!attachModifier || !pendingAnnotation || readOnlyRef.current || creatingPending.current) return;
     const target = latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === annotationId);
     if (!target) return;
@@ -3309,6 +3361,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       defaulted={defaultedKeys.has(refKey({ annotation_id: annSnap.annotation.annotation_id, version: annSnap.version }))}
                       proposal={proposalFor(annSnap, view.available_inputs ?? [])}
                       documentText={view.document.text}
+                      convertSource={attachActive && convertSourceId === annSnap.annotation.annotation_id}
                       attachTarget={attachActive && attachModifier && attachTargetIds.has(annSnap.annotation.annotation_id) ? {
                         term: attachModifier.termLabel, active: attachFocusId === annSnap.annotation.annotation_id, onMove: moveAttachFocus,
                       } : undefined}
@@ -3321,6 +3374,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           void attachTo(annSnap.annotation.annotation_id);
                           return;
                         }
+                        if (attachActive && convertSourceId === annSnap.annotation.annotation_id) return;
                         if (selectedAnnotationId === annSnap.annotation.annotation_id) {
                           handleDeselectAll();
                           return;
@@ -3421,9 +3475,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 </p>)}
               </div>
             </section>
-          ) : pendingAnnotation && attachModifier ? (
+          ) : attachModifier && (attachModifier.mode === "convert" ? attachActive : pendingAnnotation) ? (
             <AttachModePanel termLabel={attachModifier.termLabel} termId={attachModifier.termId}
-              markQuote={pendingAnnotation.segments.length ? quoteSegments(view.document.text, pendingAnnotation.segments, 40) : null}
+              markQuote={attachSegments.length ? quoteSegments(view.document.text, attachSegments, 40) : null}
+              note={attachModifier.mode === "convert"
+                ? <p>{attachCopy.convertNote(attachModifier.termLabel, attachSegments.length ? quoteSegments(view.document.text, attachSegments, 40) : null)}</p>
+                : undefined}
               nearest={attachNearest} focused={attachTargets.find(target => target.annotationId === attachReplaceId) ?? null}
               existing={annotationId => {
                 const modifier = draft.annotations?.find(a => a.annotation.annotation_id === annotationId)?.annotation.modifiers
@@ -3572,6 +3629,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               isAttachingMention={isAttachingMention}
               layerId={selectedAnnotation?.annotation.layer_id}
               searchLanguages={searchLanguagesFor(selectedAnnotation?.annotation.layer_id)}
+              modifierNotice={selectedAnnotation && isModifierTerm(selectedAnnotation) ? <ModifierAsFindingNotice
+                term={findingNameOf(selectedAnnotation)} readOnly={readOnly || !editableLayerIds.includes(selectedAnnotation.annotation.layer_id)}
+                onTurn={() => startConvert(selectedAnnotation)} /> : undefined}
               modifiersSection={selectedAnnotation && modifierLayerIds.has(selectedAnnotation.annotation.layer_id) ? (() => {
                 const ann = selectedAnnotation.annotation, id = ann.annotation_id, finding = findingNameOf(selectedAnnotation);
                 const label = (termId: string) => termLabel.info(ann.layer_id, termId)?.label ?? termId;

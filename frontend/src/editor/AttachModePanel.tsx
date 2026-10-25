@@ -36,6 +36,11 @@ export const attachCopy = {
   targetName: (term: string, finding: string) => `Attach ${term} to ${finding}`,
   attached: (term: string, finding: string) => `Attached ${term} to ${finding}. Next: mark more text, or add another modifier with “+ Add modifier…”.`,
   linked: (quote: string, term: string, finding: string) => `Linked “${quote}” to ${term} of ${finding}.`,
+  /** Convert mode (E-c, R3): the inspector's extra line and the status after attaching. */
+  convertNote: (term: string, quote: string | null) => quote
+    ? `The standalone finding ${term} is then deleted; its text “${quote}” goes with the modifier.`
+    : `The standalone finding ${term} is then deleted.`,
+  converted: (term: string, finding: string) => `Turned ${term} into a modifier of ${finding}.`,
 };
 
 /** The inspector while the attach mode is on (a labelled region "Attach Severe"). */

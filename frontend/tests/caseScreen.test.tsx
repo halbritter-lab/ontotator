@@ -2775,6 +2775,83 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     });
   });
 
+  describe("Turn into modifier… (convert mode, R3, E-c)", () => {
+    // Old data: Severe stands alone as a finding on "schwere".
+    const STANDALONE: Finding[] = [["sev", "HP:0012828", "schwere"], ["seizure", "HP:0001250", "Krampfanfälle"], ["hypo", "HP:0001252", "Muskelhypotonie"]];
+    const convertSpy = (view: WorkspaceView) => vi.spyOn(api, "applyCommand").mockImplementation(async (_ws, envelope) => {
+      const payload = envelope.payload as Record<string, any>;
+      const next = structuredClone(view.draft); next.revision += 1;
+      if (payload.command === "convert_to_modifier") {
+        next.annotations = next.annotations!.filter(a => a.annotation.annotation_id !== payload.annotation_id);
+        (next.annotations.find(a => a.annotation.annotation_id === payload.target_annotation_id)!.annotation as any).modifiers =
+          [{ term_id: "HP:0012828", segments: [pos("schwere")] }];
+      }
+      return next;
+    });
+    const startConvert = async (container: HTMLElement) => {
+      fireEvent.click(container.querySelector('[data-list-key="annotation:sev"]')!);
+      expect(await screen.findByText("Severe is a modifier. Turn it into a modifier of another finding.")).toBeDefined();
+      fireEvent.click(screen.getByRole("button", { name: "Turn into modifier…" }));
+      await screen.findByRole("region", { name: "Attach Severe" });
+    };
+
+    it("starts the attach mode without the source as target; Enter converts on the focused finding", async () => {
+      const view = modView(STANDALONE);
+      const { container } = await setup(view);
+      const apply = convertSpy(view);
+      await startConvert(container);
+      const banner = container.querySelector<HTMLElement>(".attach-mention-banner")!;
+      expect(banner.textContent).toContain("Attach Severe: click its finding in the list or in the text (↑ ↓ Enter in the list). Esc cancels.");
+      expect(screen.getByText("The standalone finding Severe is then deleted; its text “schwere” goes with the modifier.")).toBeDefined();
+      const source = container.querySelector<HTMLElement>('[data-list-key="annotation:sev"]')!;
+      expect(source.textContent).toContain("Becomes a modifier of the finding you choose");
+      expect(screen.queryByRole("button", { name: "Attach Severe to Severe" })).toBeNull();
+      const row = screen.getByRole("button", { name: "Attach Severe to Seizure" });
+      await waitFor(() => expect(document.activeElement).toBe(row));
+      fireEvent.keyDown(row, { key: "Enter" });
+      await waitFor(() => expect(payloads(apply)).toEqual([{ command: "convert_to_modifier", annotation_id: "sev", target_annotation_id: "seizure", link_span: true }]));
+      await waitFor(() => expect(document.activeElement?.closest('[data-modifier-chip="HP:0012828"]')).not.toBeNull());
+      expect(container.querySelector(".attach-mention-banner")).toBeNull();
+      expect(container.querySelector('[data-list-key="annotation:sev"]')).toBeNull();
+      expect(announcer(container)).toBe("Turned Severe into a modifier of Seizure.");
+    });
+
+    it("Esc only ends the mode: the finding stays and “Turn into modifier…” has focus", async () => {
+      const view = modView(STANDALONE);
+      const { container } = await setup(view);
+      const apply = convertSpy(view);
+      await startConvert(container);
+      const row = screen.getByRole("button", { name: "Attach Severe to Seizure" });
+      await waitFor(() => expect(document.activeElement).toBe(row));
+      fireEvent.keyDown(row, { key: "Escape" });
+      await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Turn into modifier…" })));
+      expect(container.querySelector('[data-list-key="annotation:sev"]')).not.toBeNull();
+      expect(payloads(apply)).toEqual([]);
+    });
+
+    it("marking other text ends the convert mode and starts a new mark", async () => {
+      const view = modView(STANDALONE);
+      const { container } = await setup(view);
+      await startConvert(container);
+      mark(container, "Wochen");
+      await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
+      expect(container.querySelector(".pending-quote")!.textContent).toBe("“Wochen”");
+    });
+
+    it("blocks the submit; “Go to Severe” focuses “Turn into modifier…”", async () => {
+      const view = modView(STANDALONE);
+      await setup(view);
+      fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Submit case" });
+      const item = await waitFor(() => dialog.querySelector<HTMLElement>('[data-open-item="modifier-as-finding"]')!);
+      expect(item.textContent).toContain("Severe is a modifier. Turn it into a modifier of another finding.");
+      expect(within(dialog).getByText("Turn 1 modifier used as a finding into a modifier before submitting.")).toBeDefined();
+      fireEvent.click(within(item).getByRole("button", { name: "Go to Severe" }));
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Turn into modifier…" })));
+    });
+  });
+
   it("re-creating a carried finding passes the source's modifiers along without text spans", async () => {
     const view = modView([]);
     const source = findingSnap(["old", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012828", segments: [pos("schwere")] }, { term_id: "HP:0031796" }]]);

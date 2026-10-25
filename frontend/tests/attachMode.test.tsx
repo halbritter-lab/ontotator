@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AttachModePanel, type AttachModePanelProps } from "../src/editor/AttachModePanel";
+import { AttachModePanel, attachCopy, type AttachModePanelProps } from "../src/editor/AttachModePanel";
 
 const SEIZURE = { annotationId: "seizure", term: "Seizure", termId: "HP:0001250", segments: [{ start: 19, end: 32 }], quote: "Krampfanfälle", distance: 1, after: true };
 
@@ -56,5 +56,20 @@ describe("AttachModePanel", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "OK" }));
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(props.onCancel).toHaveBeenCalled();
+  });
+});
+
+describe("AttachModePanel in convert mode (E-c)", () => {
+  it("adds the convert line and attaches to the nearest", () => {
+    const props = renderPanel({ note: <p>{attachCopy.convertNote("Severe", "schwere")}</p> });
+    expect(screen.getByText("The standalone finding Severe is then deleted; its text “schwere” goes with the modifier.")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Attach to Seizure" }));
+    expect(props.onAttach).toHaveBeenCalledWith("seizure");
+  });
+
+  it("without a mention: no quote in the id line and a shorter convert line", () => {
+    renderPanel({ markQuote: null, note: <p>{attachCopy.convertNote("Severe", null)}</p> });
+    expect(screen.getByText("HP:0012828")).toBeDefined();
+    expect(screen.getByText("The standalone finding Severe is then deleted.")).toBeDefined();
   });
 });

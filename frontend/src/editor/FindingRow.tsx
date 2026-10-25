@@ -35,12 +35,14 @@ export interface FindingRowProps {
   /** Document text, for the quotes of linked modifiers. */
   documentText?: string;
   attachTarget?: AttachTarget;
+  /** Convert mode (E-c): this row's finding becomes the modifier; it is no target. */
+  convertSource?: boolean;
   /** Pointer over or focus in the row (true) and away again (false): frames the finding's marks. */
   onFrame?: (on: boolean) => void;
 }
 
 /** One row of the saved findings list in the editor sidebar. */
-export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel, layerName, showLayer, axes, defaulted, proposal, onActivate, children, documentText = "", attachTarget, onFrame }: FindingRowProps) {
+export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel, layerName, showLayer, axes, defaulted, proposal, onActivate, children, documentText = "", attachTarget, convertSource, onFrame }: FindingRowProps) {
   const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
   const termId = annSnap.annotation.term_id;
   const layerId = annSnap.annotation.layer_id;
@@ -85,6 +87,7 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
         {evCount === 0 ? "Spanless" : plural(evCount, "mention")}
         {" "}<AiBadge provenance={annSnap.annotation.provenance} source={proposal} />
       </div>
+      {convertSource && <div className="mod-attach-here">Becomes a modifier of the finding you choose</div>}
       {attachTarget?.active && <div className="mod-attach-here" aria-hidden="true">Attach {attachTarget.term} here <Kbd>Enter</Kbd></div>}
       {modifiers.length > 0 && <ul className="mod-lines" aria-label="Modifiers">
         {modifiers.map(modifier => {
