@@ -88,3 +88,12 @@ def test_term_roles_unknown_sha_raises(source: None) -> None:
         )
     assert refused.value.code == "ONTOLOGY_NOT_FOUND"
     assert refused.value.details == {"sha256": "0" * 64}
+
+
+def test_unknown_subtree_roots_are_not_cached(service: OntologyService) -> None:
+    from ontocurator.ontology import modifiers
+
+    assert subtree(service, "HP:9999998") == frozenset()
+    assert (service.ref.sha256, "HP:9999998") not in modifiers._subtrees
+    subtree(service, "HP:0011008")
+    assert (service.ref.sha256, "HP:0011008") in modifiers._subtrees

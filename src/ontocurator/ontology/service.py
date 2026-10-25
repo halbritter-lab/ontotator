@@ -507,6 +507,13 @@ class OntologyService:
             hits = raw_result["hits"]
             if allowed is not None:
                 hits = [h for h in hits if h["hpo_id"] in allowed][: request.k]
+                # Renumber so the kept hits read 1..n, not their unfiltered slots.
+                for rank, hit in enumerate(
+                    sorted(hits, key=lambda h: h.get("rank", 0)), 1
+                ):
+                    hit["rank"] = rank
+                for position, hit in enumerate(hits, start=1):
+                    hit["display_pos"] = position
             was_shuffled = bool(raw_result.get("shuffled", False))
         for hit in hits:
             hit["route"] = request.route

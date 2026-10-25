@@ -638,6 +638,11 @@ class EditingService:
             annotation = own.annotation.model_copy(
                 update={
                     "axes_defaulted": list(source.annotation.axes_defaulted),
+                    # Modifiers are part of the finding (R9); their old spans may
+                    # no longer exist in the new text, so they come back spanless.
+                    "modifiers": [
+                        Modifier(term_id=m.term_id) for m in source.annotation.modifiers
+                    ],
                     "provenance": Provenance(
                         actor=ActorRef(actor_id=draft.key.annotator_id, kind="human"),
                         method="edited",
@@ -1485,7 +1490,12 @@ class EditingService:
                     ).mention.segments
                 )
             found = next((m for m in current if m.term_id == term_id), None)
-            if found is not None and found.segments and found.segments != segments:
+            if (
+                found is not None
+                and segments
+                and found.segments
+                and found.segments != segments
+            ):
                 raise DomainError("DUPLICATE_MODIFIER", {"term_id": term_id})
             modifiers = [m for m in current if m is not found] + [
                 Modifier(

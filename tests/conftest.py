@@ -45,6 +45,16 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(autouse=True)
+def restore_service_source():  # type: ignore[no-untyped-def]
+    """A registry built in one test must not serve another test's ontology lookups."""
+    from ontocurator.ontology import modifiers
+
+    previous = modifiers._source
+    yield
+    modifiers.install_service_source(previous)
+
+
+@pytest.fixture(autouse=True)
 def database_per_workspace(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
     """Every app and CLI run without an explicit URL gets one database per workspace.
 

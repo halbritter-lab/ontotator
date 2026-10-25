@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -859,7 +859,13 @@ def run_import(job: Job, ctx: JobContext) -> dict[str, Any]:
             project_id=project_id,
             details={**summary, "job_id": job.id},
         )
-        return {**summary, "warnings": sorted({i.code for i in plan.warnings})}
+        return {
+            **summary,
+            "warnings": sorted({i.code for i in plan.warnings}),
+            "warning_counts": dict(
+                sorted(Counter(i.code for i in plan.warnings).items())
+            ),
+        }
 
 
 def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:

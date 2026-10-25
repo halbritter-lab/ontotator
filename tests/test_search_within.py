@@ -83,6 +83,14 @@ def test_within_returns_only_subtree_terms(mods: OntologyService, route: str) ->
     assert {c.term_id for c in result.candidates} <= allowed
 
 
+def test_within_renumbers_kept_exact_hits(mods: OntologyService) -> None:
+    # Unrestricted, "fre" answers Frequency (1) and Frequent (2).
+    result = mods.search(_request("fre", route="exact", within=["HP:0040282"]))
+    assert [(c.term_id, c.rank, c.display_pos) for c in result.candidates] == [
+        ("HP:0040282", 1, 1)
+    ]
+
+
 def test_within_filters_before_the_cut(mods: OntologyService) -> None:
     allowed = _subtree_terms(mods)
     everything = mods.search(_request("se", k=100))

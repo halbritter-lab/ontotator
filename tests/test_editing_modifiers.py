@@ -600,3 +600,91 @@ def test_convert_to_modifier_refusals(
         "DUPLICATE_MODIFIER",
         {"term_id": SEVERE},
     )
+
+
+def test_convert_spanless_onto_spanned_same_term(
+    env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env.seizure()
+    env.run(
+        {
+            "command": "add_modifier",
+            "annotation_id": "a1",
+            "term_id": SEVERE,
+            "segments": [seg(SCHWERE)],
+        }
+    )
+    _old_standalone(env, monkeypatch)
+    draft = env.run(
+        {
+            "command": "convert_to_modifier",
+            "annotation_id": "old",
+            "target_annotation_id": "a1",
+            "link_span": False,
+        }
+    )
+    assert [s.annotation.annotation_id for s in draft.annotations] == ["a1"]
+    assert modifiers(draft) == [{"term_id": SEVERE, "segments": [seg(SCHWERE)]}]
+
+
+def test_recreate_reanchor_keeps_modifiers(
+    env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ontocurator.application.editing import RecreateReanchorCommand
+    from ontocurator.domain.reanchor_resolution import PendingReanchorRef
+    from ontocurator.domain.scopes import build_scope
+
+    env.seizure()
+    env.run(
+        {
+            "command": "add_modifier",
+            "annotation_id": "a1",
+            "term_id": SEVERE,
+            "segments": [seg(SCHWERE)],
+        }
+    )
+    draft = env.run(
+        {"command": "add_modifier", "annotation_id": "a1", "term_id": RECURRENT}
+    )
+    source = next(s for s in draft.annotations if s.annotation.annotation_id == "a1")
+    # "schwere" was edited to "starke": the Severe span no longer exists.
+    text = TEXT.replace("schwere", "starke")
+    doc = env.doc.model_copy(
+        update={
+            "text": text,
+            "text_sha256": hashlib.sha256(text.encode()).hexdigest(),
+        }
+    )
+    item = PendingReanchorRef(
+        proposal_set_id=1,
+        source_ref=AnnotationRef(annotation_id="a1", version=source.version),
+    )
+    review = draft.model_copy(
+        update={
+            "key": draft.key.model_copy(update={"mode": "review"}),
+            "annotations": [],
+            "evidence": [],
+            "reanchor_inputs": [item],
+        }
+    )
+    monkeypatch.setattr(env.repo, "verified_reanchor_source", lambda *_: source)
+    result = env.editor._execute_edit(
+        review,
+        RecreateReanchorCommand(
+            item=item,
+            annotation_id="carried",
+            evidence_id="ev-carried",
+            term_id=SEIZURE,
+            layer_id=source.annotation.layer_id,
+            type_id=source.annotation.type_id,
+            segments=[{"start": 32, "end": 45}],
+        ),
+        doc,
+        env.profile,
+        build_scope(env.profile, "review"),
+        {LAYER: env.ontology},
+    )
+    assert modifiers(result, "carried") == [
+        {"term_id": SEVERE},
+        {"term_id": RECURRENT},
+    ]

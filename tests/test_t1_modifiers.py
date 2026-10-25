@@ -103,6 +103,8 @@ def test_import_keeps_modifiers_and_reports_their_warnings(
     assert {"cohort_frequency", "exclusive_modifier_class"} <= set(
         job.result["warnings"]
     )
+    assert job.result["warning_counts"]["cohort_frequency"] == 1
+    assert job.result["warning_counts"]["exclusive_modifier_class"] == 1
     proposals = {
         s.annotation.annotation_id.rsplit(":", 1)[-1]: s.annotation
         for s in Repository(db).list_annotations_for_document(PROJECT, DOC)

@@ -18,9 +18,9 @@ from browser_carry_fixture import (
     _create,
     _span,
 )
-from browser_documents_scenarios import assign, start_round
+from browser_documents_scenarios import assign, finish_round, start_round
 from sqlalchemy import delete
-from test_text_change_service import Env, _env, _move, _pid, _scoped
+from test_text_change_service import Env, _carry, _env, _move, _pid, _scoped
 from test_text_change_service import app as app
 
 from ontocurator.domain.annotations import Modifier, snapshot
@@ -118,3 +118,27 @@ def test_text_change_sends_a_changed_modifier_text_to_review(app):
     assert item["target_snapshot"] is None
     assert item["review_reason"] == "changed_modifier_segment"
     assert _scoped(env, "tom").open_draft(result.round.workspace_key).annotations == []
+
+
+def test_carry_from_a_submission_carries_modifiers(app, monkeypatch):
+    from ontocurator.application import submissions
+
+    env = _env(app)
+    work = _hypotonia_with(env, "Untersuchung")
+    # This fixture's ontology lacks the modifier terms; carrying never asks it.
+    with monkeypatch.context() as patched:
+        patched.setattr(submissions, "validate_draft_terms", lambda *_: None)
+        submission_id = finish_round(env.scenario, "tom", work["key"])
+    result = _carry(env, submission_id)
+    assert result.round.input_submission_ids == [submission_id]
+    [item] = env.repo.get_round_input_inventory(env.key, result.round.round_id)
+    assert item["mapping_status"] == "carried"
+    start = CORRECTED_DE.index("Untersuchung")
+    expected = [
+        {"term_id": SEVERE, "segments": [{"start": start, "end": start + 12}]},
+        {"term_id": RECURRENT},
+    ]
+    assert item["target_snapshot"]["annotation"]["modifiers"] == expected
+    draft = _scoped(env, "tom").open_draft(result.round.workspace_key)
+    [carried] = draft.annotations
+    assert [m.model_dump() for m in carried.annotation.modifiers] == expected

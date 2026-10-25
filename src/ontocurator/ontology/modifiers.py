@@ -8,6 +8,7 @@ validation, search (``within``, ``role``), submit rules and grouping.
 from __future__ import annotations
 
 import threading
+from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol
@@ -72,16 +73,19 @@ def subtree(service: OntologyService, root: str) -> frozenset[str]:
     term = ontology.get(root)
     found: set[str] = set()
     if term is not None:
-        queue = [term.hpo_id]
+        queue = deque([term.hpo_id])
         while queue:
-            current = queue.pop(0)
+            current = queue.popleft()
             if current in found:
                 continue
             found.add(current)
             queue.extend(ontology.children_of(current))
     result = frozenset(found)
-    with _lock:
-        _subtrees[key] = result
+    if (
+        term is not None
+    ):  # unknown roots stay uncached so arbitrary ids cannot grow the cache
+        with _lock:
+            _subtrees[key] = result
     return result
 
 
