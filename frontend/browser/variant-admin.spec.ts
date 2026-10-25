@@ -145,7 +145,11 @@ test('current accepted-to-reviewed gate refuses old editable commands and submis
   const reviewer = await actor(browser, s.users.reviewer), lead = await actor(browser, s.users.lead), historian = await actor(browser, s.users.historian);
   try {
     const initial = await submitReview(reviewer.page, s); expect(initial.status_after).toBe('accepted');
-    const assigned = await authenticatedRequest(lead.page, `${root(s)}/assignments`, 'POST', { task: 'annotate', confirm_language: false, rows: [{ document_id: s.documents.target, username: s.users.other }, { document_id: s.documents.target, username: s.users.historian }] });
+    // The parallel "failed" root stays unreviewed, so the text is assigned with the rule off and the acknowledgement; the gate below runs with the rule on.
+    const rule = (on: boolean) => authenticatedRequest(lead.page, `${root(s)}/settings`, 'PATCH', { annotate_accepted_translations_only: on });
+    expect((await rule(false)).ok()).toBeTruthy();
+    const assigned = await authenticatedRequest(lead.page, `${root(s)}/assignments`, 'POST', { task: 'annotate', confirm_language: false, confirm_unreviewed_translation: true, rows: [{ document_id: s.documents.target, username: s.users.other }, { document_id: s.documents.target, username: s.users.historian }] });
+    expect((await rule(true)).ok()).toBeTruthy();
     expect(assigned.ok()).toBeTruthy(); const result = await assigned.json() as { created: Assignment[]; refused: unknown[] };
     expect(result.refused).toEqual([]); expect(result.created).toHaveLength(2);
     const editableId = result.created.find(a => a.username === s.users.other)!.id, historicalId = result.created.find(a => a.username === s.users.historian)!.id;
