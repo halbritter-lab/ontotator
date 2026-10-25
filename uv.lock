@@ -1733,7 +1733,7 @@ requires-dist = [
     { name = "argon2-cffi", specifier = ">=23.1,<26" },
     { name = "fastapi", specifier = ">=0.110,<1" },
     { name = "numpy", specifier = ">=1.26,<3" },
-    { name = "ontospan", git = "https://github.com/janpower/ontospan.git?rev=738f3d43ca0896c9d146a15fb9538b938229368a" },
+    { name = "ontospan", git = "https://github.com/janpower/ontospan.git?rev=e00b0161e17a9e77014b2c8582e5ebdaf714f413" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pydantic", specifier = ">=2,<3" },
     { name = "python-multipart", specifier = ">=0.0.9" },
@@ -1758,8 +1758,8 @@ dev = [
 
 [[package]]
 name = "ontospan"
-version = "1.2.0"
-source = { git = "https://github.com/janpower/ontospan.git?rev=738f3d43ca0896c9d146a15fb9538b938229368a#738f3d43ca0896c9d146a15fb9538b938229368a" }
+version = "1.2.1"
+source = { git = "https://github.com/janpower/ontospan.git?rev=e00b0161e17a9e77014b2c8582e5ebdaf714f413#e00b0161e17a9e77014b2c8582e5ebdaf714f413" }
 dependencies = [
     { name = "jsonschema" },
     { name = "pydantic" },
