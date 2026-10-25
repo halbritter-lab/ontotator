@@ -10,8 +10,8 @@ from typing import Any
 import pytest
 from modifier_fixtures import MOD_PATH, MOD_PIN, modifier_profile
 from pg_harness import database_for
-from t1_fixtures import OPERATOR
 from sqlalchemy import insert, select
+from t1_fixtures import OPERATOR
 
 from ontocurator.application.consolidation_resolve import review_decision
 from ontocurator.application.editing import EditorService
