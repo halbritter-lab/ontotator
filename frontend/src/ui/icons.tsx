@@ -135,6 +135,16 @@ export const IconBotOff = (p: IconProps) => (
   </Icon>
 );
 
+// Lucide "tag" (ISC, https://lucide.dev, see THIRD_PARTY_NOTICES.md); scaled from its 24 px grid, paths verbatim.
+export const IconTag = (p: IconProps) => (
+  <Icon {...p}>
+    <g transform="scale(0.6667)" strokeWidth="2.25">
+      <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+      <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+    </g>
+  </Icon>
+);
+
 export const IconMore = (p: IconProps) => (
   <Icon {...p}><circle cx="3.5" cy="8" r="0.75" /><circle cx="8" cy="8" r="0.75" /><circle cx="12.5" cy="8" r="0.75" /></Icon>
 );

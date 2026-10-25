@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { FindingRow } from "../src/editor/FindingRow";
 import { axisOptionLabel } from "../src/editor/axisLabels";
@@ -43,5 +43,36 @@ describe("FindingRow axis values", () => {
     const { getByText } = render(<ul><FindingRow snapshot={snapshot(1)} selected={false} termLabel={() => "Seizure"}
       showLayer={false} axes={[{ id: "assertion", label: "Assertion", value: "absent" }]} defaulted={false} onActivate={vi.fn()} /></ul>);
     expect(getByText("Absent").className).toContain("axis-value--absent");
+  });
+});
+
+describe("FindingRow modifier lines (E-b)", () => {
+  const TEXT = "Wiederholt schwere Krampfanfälle.";
+  const LABELS: Record<string, string> = { "HP:0001250": "Seizure", "HP:0012828": "Severe", "HP:0031796": "Recurrent" };
+  const withModifiers = (modifiers: unknown[]) => { const s = snapshot(1); s.annotation.modifiers = modifiers; return s; };
+  const renderRow = (modifiers: unknown[], extra: Record<string, unknown> = {}) => render(<ul><FindingRow snapshot={withModifiers(modifiers)} selected={false}
+    termLabel={(_l, id) => LABELS[id] ?? null} showLayer={false} axes={[]} defaulted={false} onActivate={vi.fn()} documentText={TEXT} {...extra} /></ul>);
+
+  it("lists one line per modifier in label order, the quote only when linked", () => {
+    const { getByRole } = renderRow([{ term_id: "HP:0031796" }, { term_id: "HP:0012828", segments: [{ start: 11, end: 18 }] }]);
+    const lines = getByRole("list", { name: "Modifiers" }).querySelectorAll("li");
+    expect([...lines].map(line => line.textContent)).toEqual(["↳Modifier: Recurrent HP:0031796", "↳Modifier: Severe HP:0012828 “schwere”"]);
+    expect(lines[1].querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
+    expect(lines[1].querySelector('[aria-hidden="true"]')!.textContent).toBe("↳");
+    expect(lines[1].querySelector(".visually-hidden")!.textContent).toBe("Modifier: ");
+  });
+
+  it("has no modifier list without modifiers", () => {
+    expect(renderRow([]).queryByRole("list", { name: "Modifiers" })).toBeNull();
+  });
+
+  it("as an attach target: accessible name, the active one shows the hint, arrows move", () => {
+    const onMove = vi.fn();
+    const { getByRole, container } = renderRow([], { attachTarget: { term: "Severe", active: true, onMove } });
+    const row = getByRole("button", { name: "Attach Severe to Seizure" });
+    expect(row.getAttribute("tabindex")).toBe("0");
+    expect(container.querySelector(".mod-attach-here")!.textContent).toBe("Attach Severe here Enter");
+    fireEvent.keyDown(row, { key: "ArrowDown" });
+    expect(onMove).toHaveBeenCalledWith(1);
   });
 });
