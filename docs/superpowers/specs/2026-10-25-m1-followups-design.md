@@ -65,22 +65,34 @@ them". The first stays true whatever the mode; hiding the icon suggests the prop
 - Move the checkbox to Settings → Workflow, right below "Texts with tool proposals", with the
   same label and a one-line explanation: "Translations can be annotated only after their review
   is accepted. Native source texts are never held back."
-- With the rule off, a translation that is not accepted and has annotation planned shows a
-  short grey note in its card's Annotation part: "Annotation may start before the translation
-  review (project setting)". No note on native sources.
+- The rule stays on by default for new projects (unchanged). e3c-proposals was switched on by
+  hand on 2026-10-25 (user decision).
+- With the rule off, annotating a translation that is not accepted needs an **explicit
+  acknowledgement** each time work is assigned (user decision 2026-10-25):
+  - the card's Annotation part shows a short note "Translation not reviewed yet" on such texts;
+  - the assign dialog (single and bulk) shows a required checkbox "Annotate before the
+    translation review is accepted" naming the affected texts; "Assign" stays aria-disabled
+    until it is ticked;
+  - backend: the assign, batch, distribution and self-assign paths take
+    `confirm_unreviewed_translation: bool` (same pattern as `confirm_language`) and refuse
+    without it with `TRANSLATION_NOT_REVIEWED` (409, details: affected document ids);
+  - the confirmation is recorded in the assignment's audit event and shown in the text's
+    History: "Annotation assigned before the translation review was accepted (confirmed by
+    <lead>)".
+  - Native sources and accepted translations never ask.
 - Close the gap: the assign check uses the same "all roots accepted" test as next steps (one
   shared function in `domain/next_steps.py`, called from `eligibility.py`).
-- Data: switching e3c-proposals to the rule on is a decision for the user (test data).
-
 ## Open questions
 
 1. Icon after assignment: keep it (proposal: yes, it states a fact) or hide it once someone is
-   assigned (spec 2026-10-23)?
-2. e3c-proposals: turn the gate on?
+   assigned (spec 2026-10-23)? Until decided, the proposal applies.
 
 ## Tests
 
 - Unit: icon states per mode, with and without assignment; card count in both modes; gate note
   shown only for translations with the rule off; shared accepted check.
-- Backend: assign refused when one of several roots is not accepted.
+- Backend: assign refused when one of several roots is not accepted; with the rule off,
+  assign refused without `confirm_unreviewed_translation` and accepted with it (audit event
+  recorded), for single, batch, distribution and self-assign.
+- Unit: the dialog's checkbox appears only for affected texts and gates the Assign button.
 - Browser: switch a text with proposals to "From scratch": muted icon stays, Undo restores.
