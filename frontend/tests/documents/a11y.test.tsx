@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../../src/api/client";
+import { api, type DocumentRowView } from "../../src/api/client";
 import { DocumentsTable, type TableSelection } from "../../src/documents/DocumentsTable";
 import { TextCard } from "../../src/documents/textCard/TextCard";
 import { DocumentsTabs } from "../../src/documents/DocumentsTabs";
@@ -76,11 +76,12 @@ describe("table", () => {
   });
 
   it("one-line rows: named text buttons, robot image, one next-step button, no nested interactive content", () => {
-    const fresh = { ...stagedRow("case-108", "fr", { steps: [stepOf("assign_annotation"), stepOf("decide_report")] }), proposal_count: 3 };
+    const fresh = { ...stagedRow("case-108", "fr", { steps: [stepOf("assign_annotation"), stepOf("decide_report")] }), proposal_count: 3,
+      annotation_mode: { mode: "proposals", source: "project", locked: false, override: null, proposal_count: 3 } } as DocumentRowView;
     const { container } = render(<DocumentsTable page={page([group("case-108", [fresh])])} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection()} />);
     const name = screen.getByRole("button", { name: "Open text card, case-108 fr" });
     expect(name.closest("th")!.getAttribute("scope")).toBe("row");
-    expect(screen.getByRole("img", { name: "3 tool proposals available; the annotation starts from them" }).querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByRole("img", { name: "3 tool proposals; the annotation starts from them" }).querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByRole("button", { name: "Assign annotation…, case-108 fr" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^More/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Decide on report/ })).toBeNull();

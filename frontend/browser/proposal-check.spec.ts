@@ -113,7 +113,8 @@ test("the lead assigns two annotations from proposals, both work with J/K and 1โ
   await assignPerson(page, card, s.display_names.tom);
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
-  await expect(robotIcon(row)).toHaveCount(0);
+  // The icon stays once someone is assigned (spec 2026-10-25 ยง1).
+  await expect(robotIcon(row, 3)).toBeVisible();
 
   // Tom: My tasks names the mode and the date; the editor works through the three proposals.
   await switchTo(page, s, "tom");
@@ -164,6 +165,26 @@ test("the lead assigns two annotations from proposals, both work with J/K and 1โ
   await card.getByRole("button", { name: "Accept result", exact: true }).click();
   expect((await accepted).ok()).toBeTruthy();
   await expect(cardSegment(card, "Finalization")).toContainText(/accepted \d{1,2} [A-Z][a-z]{2}/);
+});
+
+test("switching a text with proposals to From scratch keeps the muted icon and Undo restores it", async ({ page }) => {
+  const s = await proposalCheckScenario(page, "FRESH");
+  await loginScenarioUser(page, s, "lead");
+  await openDocuments(page, s);
+  const row = cardRow(page, CASE, "en");
+  await expect(robotIcon(row, 3)).toBeVisible();
+  const card = await openTextCard(page, CASE, "en");
+  await showSegment(card, "Annotation");
+  const plan = card.getByRole("radiogroup", { name: "Annotation plan" });
+  await plan.getByRole("radio", { name: "From scratch" }).click();
+  await expect(card.getByText("Saved", { exact: true })).toBeVisible();
+  const undo = page.locator(".ui-toast").getByRole("button", { name: "Undo", exact: true });
+  await expect(undo).toBeVisible();
+  await expect(robotIcon(row, 3, true)).toBeVisible();
+  await expect(card.getByText("3 tool proposals", { exact: true })).toBeVisible();
+  await undo.click();
+  await expect(robotIcon(row, 3)).toBeVisible();
+  await expect(plan.getByRole("radio", { name: "From proposals" })).toBeChecked();
 });
 
 test("an annotator working from scratch never sees proposals", async ({ page }) => {

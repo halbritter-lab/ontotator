@@ -159,6 +159,22 @@ describe("annotation part", () => {
     expect(within(card()).getByRole("link", { name: "Open text, case-200 de" }).getAttribute("href")).not.toContain("proposals");
   });
 
+  it("the Annotation part shows the proposal count in both modes", () => {
+    const mode = (name: "proposals" | "scratch", count = 17) => ({ mode: name, source: "project" as const, locked: false, override: null, proposal_count: count });
+    const part = () => within(card()).getByRole("region", { name: "Annotation" });
+    renderCard({ row: assignRow({ annotation_mode: mode("proposals") }) });
+    expect(within(part()).getByText("17 tool proposals")).toBeTruthy();
+    cleanup();
+    renderCard({ row: assignRow({ annotation_mode: mode("scratch") }) });
+    expect(within(part()).getByText("17 tool proposals")).toBeTruthy();
+    cleanup();
+    renderCard({ row: assignRow({ proposal_count: 0, annotation_mode: mode("proposals", 0) }) });
+    expect(within(part()).queryByText(/tool proposals?$/)).toBeNull();
+    cleanup();
+    renderCard({ row: assignRow({ annotation_mode: { mode: "scratch", source: "no_proposals", locked: false, override: null, proposal_count: 17 } }) });
+    expect(within(part()).queryByText(/tool proposals?$/)).toBeNull();
+  });
+
   it("one Assign annotators… opens the assign dialog; unavailable at the limit", () => {
     const { onAssign } = renderCard();
     expect(within(card()).queryByRole("button", { name: "+ Person" })).toBeNull();

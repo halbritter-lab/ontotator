@@ -90,8 +90,9 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
   .documents-row-case { margin-inline-end: var(--space-1); }
   .documents-table { --cell-pad-x: var(--space-2); }
 }
-/* Robot icon: the text has tool proposals and nobody is assigned yet; the accent of the editor's AI badge. */
+/* Robot icon: the text has tool proposals; the accent of the editor's AI badge, muted (bot-off) when annotated from scratch. */
 .documents-bot { display: inline-flex; flex: none; color: var(--accent); }
+.documents-bot--off { color: var(--text-muted); }
 /* A click on a row's empty area selects it and opens its card (a second click deselects): pointer cursor; the checkbox cell keeps its own. */
 .documents-table .documents-row--clickable { cursor: pointer; }
 .documents-table .documents-row--clickable > .data-table-select-cell { cursor: auto; }
@@ -156,6 +157,7 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
   .documents-filter-active { forced-color-adjust: none; background: CanvasText; color: Canvas; }
   .documents-skeleton-bar { background: GrayText; }
   .documents-bot { color: CanvasText; }
+  .documents-bot--off { color: GrayText; }
   /* An outline inside the row: forced colours drop box shadows, and a border would shift the cells. */
   .documents-table .documents-row--active > * { box-shadow: none; }
   .documents-table .documents-row--active { outline: 2px solid Highlight; outline-offset: -2px; }

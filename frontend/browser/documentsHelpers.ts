@@ -140,9 +140,11 @@ export const documentsLive = (page: Page): Locator => page.locator('.documents-p
 
 export { cardPath, textCard } from "./proposalCheckHelpers";
 
-/** The robot icon of a row while nobody is assigned: "{n} tool proposals available; the annotation starts from them". */
-export const robotIcon = (row: Locator, count?: number): Locator =>
-  row.getByRole("img", { name: count === undefined ? /^\d+ tool proposals available; the annotation starts from them$/ : `${count} tool proposals available; the annotation starts from them`, exact: count !== undefined });
+/** The robot icon of a row with tool proposals; `scratch`: the muted icon of a text annotated from scratch. */
+export const robotIcon = (row: Locator, count?: number, scratch = false): Locator => {
+  const rest = scratch ? "this text is annotated from scratch, the annotators do not see them" : "the annotation starts from them";
+  return row.getByRole("img", { name: count === undefined ? new RegExp(`^\\d+ tool proposals?; ${rest}$`) : `${count === 1 ? "1 tool proposal" : `${count} tool proposals`}; ${rest}`, exact: count !== undefined });
+};
 
 /** A path segment of the card by its title ("Translation", "Annotation", "Finalization"); `aria-current="step"` when shown. */
 export const cardSegment = (card: Locator, title: "Translation" | "Annotation" | "Finalization"): Locator =>

@@ -53,6 +53,8 @@ function case107(de: DocumentRowView = scenario7a()): DocumentGroupView {
 
 /** A row with the read model's proposal count (P5 contract field). */
 const withProposals = (entry: DocumentRowView, count: number) => ({ ...entry, proposal_count: count }) as DocumentRowView;
+const withMode = (entry: DocumentRowView, count: number, mode: "proposals" | "scratch") =>
+  ({ ...entry, proposal_count: count, annotation_mode: { mode, source: "project", locked: false, override: null, proposal_count: count } }) as DocumentRowView;
 
 describe("structure", () => {
   it("has the columns Text, Translation, Annotation, Finalization, Waiting on, Next step, Last activity", () => {
@@ -277,39 +279,52 @@ describe("cells", () => {
     expect(next.textContent).not.toMatch(/\+\d/);
   });
 
-  it("the robot icon shows while nobody is assigned and names the proposals", () => {
-    const fresh = withProposals(stagedRow("case-140", "de", { stages: { annotation: cell("unassigned", "waiting") } }), 17);
-    renderTable(page([group("case-140", [fresh, withProposals(stagedRow("case-140", "fr"), 0)])]));
+  it("the robot icon names the proposals and that the annotation starts from them", () => {
+    const fresh = withMode(stagedRow("case-140", "de", { stages: { annotation: cell("unassigned", "waiting") } }), 17, "proposals");
+    renderTable(page([group("case-140", [fresh])]));
     const bot = cellsOf("case-140 de")[3].querySelector(".documents-bot")!;
-    const text = "17 tool proposals available; the annotation starts from them";
+    const text = "17 tool proposals; the annotation starts from them";
     expect(bot.getAttribute("role")).toBe("img");
     expect(bot.getAttribute("title")).toBe(text);
     expect(bot.getAttribute("aria-label")).toBe(text);
+    expect(bot.classList.contains("documents-bot--off")).toBe(false);
     expect(bot.querySelector("svg")).not.toBeNull();
     expect(screen.getByRole("img", { name: text })).toBe(bot);
-    expect(cellsOf("case-140 fr")[3].querySelector(".documents-bot")).toBeNull();
   });
 
-  it("the robot icon is gone once someone is assigned", () => {
-    const assigned = withProposals(stagedRow("case-141", "de", {
+  it("the robot icon stays after someone is assigned", () => {
+    const assigned = withMode(stagedRow("case-141", "de", {
       overrides: { work: [work({ assignment_id: 7, document_id: "case-141-de", task: "annotate" })] },
-    }), 17);
-    const reviewing = withProposals(stagedRow("case-141", "fr", {
+    }), 17, "proposals");
+    const reviewing = withMode(stagedRow("case-141", "fr", {
       overrides: { work: [work({ assignment_id: 8, document_id: "case-141-fr", task: "translation_review" })] },
-    }), 5);
+    }), 5, "proposals");
     renderTable(page([group("case-141", [assigned, reviewing])]));
-    expect(cellsOf("case-141 de")[3].querySelector(".documents-bot")).toBeNull();
+    expect(screen.getByRole("img", { name: "17 tool proposals; the annotation starts from them" })).toBe(cellsOf("case-141 de")[3].querySelector(".documents-bot"));
     expect(cellsOf("case-141 fr")[3].querySelector(".documents-bot")).not.toBeNull();
   });
 
-  it("no robot icon on a text annotated from scratch or outside the plan", () => {
-    const scratch = { ...withProposals(stagedRow("case-142", "de"), 9), annotation_mode: { mode: "scratch" } } as DocumentRowView;
-    const muted = withProposals(notInPlanRow("case-142", "fr"), 9);
-    const proposals = { ...withProposals(stagedRow("case-142", "it"), 9), annotation_mode: { mode: "proposals" } } as DocumentRowView;
-    renderTable(page([group("case-142", [scratch, muted, proposals])]), { showNotInPlan: true });
-    expect(cellsOf("case-142 de")[3].querySelector(".documents-bot")).toBeNull();
-    expect(cellsOf("case-142 fr")[3].querySelector(".documents-bot")).toBeNull();
-    expect(cellsOf("case-142 it")[3].querySelector(".documents-bot")).not.toBeNull();
+  it("a text annotated from scratch shows the muted robot icon", () => {
+    renderTable(page([group("case-142", [withMode(stagedRow("case-142", "de"), 9, "scratch"), withMode(stagedRow("case-142", "it"), 9, "proposals")])]));
+    const bot = cellsOf("case-142 de")[3].querySelector(".documents-bot")!;
+    const text = "9 tool proposals; this text is annotated from scratch, the annotators do not see them";
+    expect(bot.classList.contains("documents-bot--off")).toBe(true);
+    expect(bot.getAttribute("title")).toBe(text);
+    expect(screen.getByRole("img", { name: text })).toBe(bot);
+    const normal = cellsOf("case-142 it")[3].querySelector(".documents-bot")!;
+    // IconBotOff draws seven paths, IconBot five paths and a rect.
+    expect(bot.querySelectorAll("path")).toHaveLength(7);
+    expect(normal.querySelectorAll("path").length).not.toBe(7);
+  });
+
+  it("no robot icon without proposals, outside the plan or with annotation off", () => {
+    const none = withMode(stagedRow("case-143", "de"), 0, "proposals");
+    const outside = withMode(notInPlanRow("case-143", "fr"), 9, "proposals");
+    const off = withProposals(stagedRow("case-143", "it"), 9);
+    renderTable(page([group("case-143", [none, outside, off])]), { showNotInPlan: true });
+    expect(cellsOf("case-143 de")[3].querySelector(".documents-bot")).toBeNull();
+    expect(cellsOf("case-143 fr")[3].querySelector(".documents-bot")).toBeNull();
+    expect(cellsOf("case-143 it")[3].querySelector(".documents-bot")).toBeNull();
   });
 
   it("a source-changed Translation cell reads Source changed; the version marker stays", () => {

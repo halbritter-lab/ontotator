@@ -72,7 +72,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## Lucide icons
 
 - **Source:** https://github.com/lucide-icons/lucide (https://lucide.dev)
-- **Icon:** `bot` (as `IconBot` in `frontend/src/ui/icons.tsx`)
+- **Icons:** `bot` and `bot-off` (as `IconBot` and `IconBotOff` in `frontend/src/ui/icons.tsx`)
 - **License:** ISC License (see `LICENSES/lucide-ISC.txt`)
 - **Modification:** scaled to the 16 px grid (paths unchanged, scaled by a group transform).
 

@@ -61,7 +61,8 @@ test("remove an assignment after confirming", async ({ page }) => {
   await loginScenarioUser(page, s, "lead");
   await openDocuments(page, s);
   const row = cardRow(page, CASE, "en");
-  await expect(robotIcon(row)).toHaveCount(0);
+  // The icon stays while someone is assigned (spec 2026-10-25 §1).
+  await expect(robotIcon(row, 3)).toBeVisible();
   const card = await openTextCard(page, CASE, "en");
   await showSegment(card, "Annotation");
   const tom = s.display_names.tom;

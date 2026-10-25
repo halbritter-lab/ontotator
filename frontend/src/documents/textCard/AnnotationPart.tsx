@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { DocumentRowView, RowSubmissionView } from "../../api/client";
+import { plural } from "../../app/labels";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
 import { annotationTaskName } from "../../editor/modes";
 import { Button } from "../../ui/Button";
@@ -46,6 +47,8 @@ export function AnnotationPart({ row, projectKey, query, submissions, canManage,
   const layerOf = (authorLabel: string, documentId: string) => submissions?.find(item => item.kind === "annotation" && item.author_label === authorLabel && item.document_id === documentId);
   const annotating = row.stages?.annotation.state !== "not_planned";
   const status = target > 0 ? (assigned === 0 ? `Nobody assigned yet (limit ${target} per text).` : `${assigned} of ${target} annotators assigned.`) : null;
+  // Version-aware as `CardPlanSelect`: "no_proposals" means the current version has none.
+  const proposals = mode?.source === "no_proposals" ? 0 : mode?.proposal_count ?? row.proposal_count ?? 0;
   const assignAnother = canManage && !full ? () => onAssign(row, "annotate") : undefined;
 
   return <section className="text-card-part" aria-labelledby={`${id}-title`}>
@@ -56,6 +59,7 @@ export function AnnotationPart({ row, projectKey, query, submissions, canManage,
     {/* Without the plan control (texts outside the plan, annotators) the mode is a line of its own. */}
     {!planControl && mode && <p>{annotationTaskName(mode.mode)}</p>}
     {!planControl && mode?.source === "no_proposals" && <p className="text-card-muted">{NO_PROPOSALS}</p>}
+    {proposals > 0 && <p className="text-card-muted">{plural(proposals, "tool proposal")}</p>}
     {annotating && status && <p id={`${id}-status`}>{status}</p>}
     {people.length > 0 && <div className="text-card-chips">
       {people.map(item => {

@@ -6,10 +6,11 @@
  */
 import { useId, type MouseEvent, type ReactNode } from "react";
 import type { DocumentRowView, DocumentVersionView, FinalSelectionSummary } from "../api/client";
+import { plural } from "../app/labels";
 import { kindLabels, type SubmissionKind } from "../app/submissionLabels";
 import { Time } from "../app/Time";
 import { routeHref, type PanelStage, type ProjectDocumentsQuery, type Route } from "../app/router";
-import { IconBot, IconCheck } from "../ui/icons";
+import { IconBot, IconBotOff, IconCheck } from "../ui/icons";
 import { onSpaceActivate } from "../ui/spaceActivates";
 import { StatusBadge } from "../ui/StatusBadge";
 import {
@@ -343,17 +344,22 @@ export function RowHeaderCell({ row, badge, onOpenCard, showCaseId = false, more
   );
 }
 
-/** Tool proposals wait for the annotation: a planned text with proposals, not set to start from scratch, and no annotate work yet (spec §2b). */
-export function proposalsWaiting(row: DocumentRowView): number {
-  const waiting = isActiveRow(row) && row.annotation_mode?.mode !== "scratch" && row.proposal_count > 0 && !row.work.some(entry => entry.task === "annotate");
-  return waiting ? row.proposal_count : 0;
+/** The robot icon's state: the text is in the plan, has tool proposals and is planned for annotation (spec 2026-10-25 §1). */
+export function proposalIconState(row: DocumentRowView): { count: number; scratch: boolean } | null {
+  const mode = row.annotation_mode?.mode;
+  return isActiveRow(row) && row.proposal_count > 0 && mode ? { count: row.proposal_count, scratch: mode === "scratch" } : null;
 }
 
-/** The robot icon of the Annotation cell; gone once someone is assigned. */
+/** The robot icon of the Annotation cell: the text has tool proposals; muted when it is annotated from scratch. */
 export function ProposalsIcon({ row }: { row: DocumentRowView }): JSX.Element | null {
-  const count = proposalsWaiting(row);
-  if (!count) return null;
-  const text = `${count} tool proposals available; the annotation starts from them`;
+  const state = proposalIconState(row);
+  if (!state) return null;
+  const proposals = plural(state.count, "tool proposal");
+  if (state.scratch) {
+    const text = `${proposals}; this text is annotated from scratch, the annotators do not see them`;
+    return <span className="documents-bot documents-bot--off" title={text} aria-label={text} role="img"><IconBotOff /></span>;
+  }
+  const text = `${proposals}; the annotation starts from them`;
   return <span className="documents-bot" title={text} aria-label={text} role="img"><IconBot /></span>;
 }
 
