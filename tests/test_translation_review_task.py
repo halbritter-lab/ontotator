@@ -192,6 +192,7 @@ def test_disjointness_is_only_annotate_review_not_translation_review(case_env):
         conn.execute(update(ProjectRow).values(adjudicator_not_annotator=True))
     tr = assigned(env)
     status(env)
+    status(env, document=CORRECTED)
     # Existing identity retry remains legal after acceptance.
     assert assigned(env)["id"] == tr["id"]
     assert proposed(env, task="annotate")["rows"][0]["username"] == "alice"
@@ -454,6 +455,7 @@ def test_gate_after_receipt_replay_blocks_editable_open_new_commands_and_submit(
 ):
     env = case_env
     status(env)
+    status(env, document=CORRECTED)
     assigned(env, task="annotate")
     opened = annotation_open(env, mode)
     assert opened.status_code == 200, opened.text
@@ -505,6 +507,7 @@ def test_submitted_annotation_history_survives_gate_drop_and_option_does_not_reo
 ):
     env = case_env
     status(env)
+    status(env, document=CORRECTED)
     row = assigned(env, task="annotate")
     opened = annotation_open(env).json()
     url = f"/api/v1/workspaces/{opened['workspace_id']}"
@@ -540,6 +543,7 @@ def test_submitted_annotation_history_survives_gate_drop_and_option_does_not_reo
 def test_command_waiter_rechecks_gate_after_current_project_lock(case_env):
     env = case_env
     status(env)
+    status(env, document=CORRECTED)
     assigned(env, task="annotate")
     opened = annotation_open(env).json()
     waiting = Event()
@@ -812,6 +816,8 @@ def observe_eligibility_metadata(env, monkeypatch):
             "documents.case_id" in statement
             and "documents.translation_status" in statement
             and "documents.text," not in statement
+            # Variant metadata; the text's root statuses (one case's chains) skip it.
+            and "documents.text_sha256" in statement
         ):
             query_rows.append(cursor.rowcount)
 
@@ -899,6 +905,7 @@ def test_target_ancestry_loads_exact_translation_source_for_assign_and_editable_
         review = assigned(env, document, confirm_language=False)
         assert review["task"] == "translation_review"
         status(env, document=document)
+        status(env, document=CORRECTED)
         assigned(env, document, task="annotate", confirm_language=False)
         opened = env.alice.post(
             "/api/v1/workspaces/open",

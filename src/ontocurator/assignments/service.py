@@ -33,6 +33,7 @@ from ontocurator.assignments.eligibility import (
     check_work_plan,
     conflicting_tasks,
     load_variants,
+    translation_context,
 )
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.audit import Actor, record_audit
@@ -466,12 +467,26 @@ class AssignmentService:
         variant = variants.get(document_id)
         if variant is None:
             raise DomainError("DOCUMENT_NOT_FOUND")
+        statuses = None
+        if (
+            task == "annotate"
+            and translation_context(variant, variants.get) is not None
+        ):
+            from ontocurator.application.text_targets import (
+                TextRow,
+                text_translation_statuses,
+            )
+
+            statuses = text_translation_statuses(
+                conn, project["id"], TextRow(variant.case_id, variant.language)
+            )
         required = check_variant_assignable(
             project,
             variant,
             task,
             variants.get,
             allow_accepted_translation_review=allow_accepted_translation_review,
+            row_statuses=statuses,
         )
         if check_plan:
             check_work_plan(conn, project["id"], variant, task)

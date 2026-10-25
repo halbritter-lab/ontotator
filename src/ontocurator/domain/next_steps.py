@@ -14,6 +14,7 @@ fallback "needs_attention" instead of an error.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from typing import Literal
 
@@ -167,11 +168,13 @@ def in_plan(facts: StepFacts) -> bool:
     return facts.review or facts.annotate
 
 
+def translations_accepted(is_source: bool, statuses: Iterable[str | None]) -> bool:
+    """Every live root's target version is accepted; sources need no acceptance."""
+    return is_source or all(status == "accepted" for status in statuses)
+
+
 def _accepted(facts: StepFacts) -> bool:
-    """Every root's newest version is accepted; sources need no acceptance."""
-    return facts.is_source or all(
-        status == "accepted" for status in facts.translation_statuses
-    )
+    return translations_accepted(facts.is_source, facts.translation_statuses)
 
 
 def _may_annotate(facts: StepFacts) -> bool:

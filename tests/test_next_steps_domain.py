@@ -15,6 +15,7 @@ from ontocurator.domain.next_steps import (
     in_plan,
     row_stage,
     segment_of,
+    translations_accepted,
 )
 
 
@@ -220,6 +221,12 @@ def test_parallel_roots_use_each_newest_version():
         )[0]
         == "assign_translation_review"
     )
+
+
+def test_translations_accepted_needs_every_root():
+    assert translations_accepted(True, ("ready_for_review",))
+    assert not translations_accepted(False, ("accepted", "ready_for_review"))
+    assert translations_accepted(False, ("accepted", "accepted"))
 
 
 def test_review_only_row_done_on_acceptance():

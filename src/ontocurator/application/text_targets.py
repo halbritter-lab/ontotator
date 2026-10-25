@@ -12,12 +12,19 @@ from dataclasses import dataclass
 from sqlalchemy import Connection, select
 
 from ontocurator.application.work_plans import _chains, _live, _target
+from ontocurator.domain.document_rows import Chain
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.work_plans import RowKey
 from ontocurator.storage import work_plan_store as store
 from ontocurator.storage.tables import DocumentRow
 
-__all__ = ["TextRow", "text_documents", "text_row", "text_target_document"]
+__all__ = [
+    "TextRow",
+    "text_documents",
+    "text_row",
+    "text_target_document",
+    "text_translation_statuses",
+]
 
 
 @dataclass(frozen=True)
@@ -53,6 +60,26 @@ def text_documents(conn: Connection, project_id: int, row: TextRow) -> list[str]
     )
 
 
+def _live_chains(conn: Connection, project_id: int, row: TextRow) -> list[Chain]:
+    return _live(
+        _chains(conn, project_id, [row.case_id]).get(
+            RowKey(row.case_id, row.language), []
+        ),
+        set(store.discarded(conn, project_id)),
+    )
+
+
+def text_translation_statuses(
+    conn: Connection, project_id: int, row: TextRow
+) -> tuple[str | None, ...]:
+    """The target version's translation status of every live root, as the
+    next steps see them (``StepFacts.translation_statuses``)."""
+    return tuple(
+        _target(chain).translation_status
+        for chain in _live_chains(conn, project_id, row)
+    )
+
+
 def text_target_document(conn: Connection, project_id: int, row: TextRow) -> str:
     """The newest counted version: the document new work goes to.
 
@@ -60,12 +87,7 @@ def text_target_document(conn: Connection, project_id: int, row: TextRow) -> str
     roots (parallel translations) the root with the highest position wins, as
     ``document_rows.open_target`` picks the text to open.
     """
-    chains = _live(
-        _chains(conn, project_id, [row.case_id]).get(
-            RowKey(row.case_id, row.language), []
-        ),
-        set(store.discarded(conn, project_id)),
-    )
+    chains = _live_chains(conn, project_id, row)
     if not chains:
         raise DomainError("NOT_IN_WORK_PLAN")
     latest = max(

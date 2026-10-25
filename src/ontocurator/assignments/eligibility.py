@@ -1,6 +1,6 @@
 """Shared task target/language rules over bounded, metadata-only lineage."""
 
-from collections.abc import Callable, Collection, Mapping
+from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import Any
 
 from sqlalchemy import Connection, literal, select
@@ -8,6 +8,7 @@ from sqlalchemy.orm import aliased
 
 from ontocurator.authz.policy import Task
 from ontocurator.domain.errors import DomainError
+from ontocurator.domain.next_steps import translations_accepted
 from ontocurator.domain.variants import (
     TRANSLATION_ORIGINS,
     VariantInfo,
@@ -97,8 +98,12 @@ def check_variant_assignable(
     lookup: Callable[[str], VariantInfo | None],
     *,
     allow_accepted_translation_review: bool = False,
+    row_statuses: Sequence[str | None] | None = None,
 ) -> frozenset[str]:
-    """New allocations only; existing exact retries/reopen bypass this rule."""
+    """New allocations only; existing exact retries/reopen bypass this rule.
+
+    ``row_statuses``: every live root's target status of the text (the
+    next steps' test); ``variant`` itself must be accepted as well."""
     context = translation_context(variant, lookup)
     if task == "translation_review":
         if context is None or (
@@ -116,7 +121,9 @@ def check_variant_assignable(
     elif (
         project["annotate_accepted_translations_only"]
         and context is not None
-        and variant.translation_status != "accepted"
+        and not translations_accepted(
+            False, (variant.translation_status, *(row_statuses or ()))
+        )
     ):
         raise DomainError("TRANSLATION_NOT_ACCEPTED")
     return required_languages(variant, task, lookup)
