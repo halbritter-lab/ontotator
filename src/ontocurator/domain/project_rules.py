@@ -68,8 +68,23 @@ class RuleViolation:
         "axis_not_chosen",
         "spanless_disallowed",
         "spanless_note_required",
+        "modifier_as_finding",
+        "cohort_modifier",
+        "exclusive_modifier_class",
     ]
     detail: dict[str, str]
+
+
+class ModifierRoles(Protocol):
+    """What the submit rules need of the modifier classifier (no ontology import)."""
+
+    def kind(
+        self, layer_id: str, term_id: str
+    ) -> Literal["modifier", "cohort"] | None: ...
+
+    def exclusive_class(
+        self, layer_id: str, term_id: str
+    ) -> Literal["severity", "onset"] | None: ...
 
 
 def rule_violations(
@@ -80,6 +95,7 @@ def rule_violations(
     *,
     at_submission: bool,
     enforce_spanless: bool = False,
+    modifier_findings: frozenset[str] = frozenset(),
 ) -> list[RuleViolation]:
     """Inspect snapshots without changing content or defaulted-axis provenance.
 
@@ -91,6 +107,15 @@ def rule_violations(
     for item in snapshots:
         annotation = item.annotation
         annotation_type = resolve_type(profile, annotation.layer_id, annotation.type_id)
+        if annotation.annotation_id in modifier_findings:
+            # Old data: a modifier term standing alone as a finding (R3).
+            violations.append(
+                RuleViolation(
+                    annotation.annotation_id,
+                    "modifier_as_finding",
+                    {"term_id": annotation.term_id},
+                )
+            )
         for ref in annotation.evidence_refs:
             evidence = evidence_by_id.get((ref.evidence_id, ref.version))
             if (
@@ -149,3 +174,34 @@ def rule_violations(
                     )
                 )
     return violations
+
+
+def modifier_warnings(
+    snapshots: Iterable[AnnotationSnapshot], roles: ModifierRoles
+) -> list[RuleViolation]:
+    """Acknowledgeable modifier warnings (R10, R12), in snapshot then modifier order."""
+    warnings: list[RuleViolation] = []
+    for item in snapshots:
+        annotation = item.annotation
+        layer = annotation.layer_id
+        classes: dict[str, int] = {}
+        for modifier in annotation.modifiers:
+            if roles.kind(layer, modifier.term_id) == "cohort":
+                warnings.append(
+                    RuleViolation(
+                        annotation.annotation_id,
+                        "cohort_modifier",
+                        {"term_id": modifier.term_id},
+                    )
+                )
+            kind = roles.exclusive_class(layer, modifier.term_id)
+            if kind is not None:
+                classes[kind] = classes.get(kind, 0) + 1
+        warnings.extend(
+            RuleViolation(
+                annotation.annotation_id, "exclusive_modifier_class", {"class": kind}
+            )
+            for kind, count in classes.items()
+            if count >= 2
+        )
+    return warnings

@@ -16,7 +16,7 @@ from ontocurator.domain.axes import validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.errors import DomainError, IncompleteReview
 from ontocurator.domain.profiles import TaskProfile, resolve_type
-from ontocurator.domain.project_rules import rule_violations
+from ontocurator.domain.project_rules import modifier_warnings, rule_violations
 from ontocurator.domain.results import latest_submissions
 from ontocurator.domain.scopes import TaskScope, build_scope, is_review_like
 from ontocurator.domain.work_rounds import CARRY_ROUND_KINDS
@@ -25,6 +25,13 @@ from ontocurator.domain.workspace import (
     MutationEnvelope,
     Submission,
     WorkspaceKey,
+)
+from ontocurator.ontology.modifiers import (
+    NO_TERM_ROLES,
+    TermRoles,
+    modifier_layers,
+    term_roles,
+    term_roles_for_services,
 )
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
@@ -118,6 +125,16 @@ def validate_draft_terms(
                 f"uses {status.status} term '{snap.annotation.term_id}'{hint}. "
                 "Change the term or delete the annotation before submitting.",
             )
+        for modifier in snap.annotation.modifiers:
+            status = service.validate_term(modifier.term_id)
+            if status.status in {"obsolete", "unknown"}:
+                raise DomainError(
+                    f"{status.status.upper()}_TERM",
+                    f"Annotation '{snap.annotation.annotation_id}' in layer "
+                    f"'{layer_id}' uses {status.status} term as modifier "
+                    f"{modifier.term_id} of {snap.annotation.term_id}. "
+                    "Change or remove the modifier before submitting.",
+                )
 
 
 def validate_completion(
@@ -343,6 +360,23 @@ class SubmissionService:
         if count:
             raise DomainError("CONSOLIDATION_GROUPS_OPEN", {"count": count})
 
+    def _term_roles(self, profile: TaskProfile, project_key: str) -> TermRoles:
+        """Modifier roles of the project's ``hpo-phenotype`` layers."""
+        pins = self.repo.project_pins(project_key)
+        layers = modifier_layers(profile, pins)
+        if not layers:
+            return NO_TERM_ROLES
+        if isinstance(self.ontology, OntologyRegistry):
+            services = {
+                layer: self.ontology.for_package_layer(self.repo, project_key, layer)
+                for layer in layers
+            }
+        elif isinstance(self.ontology, OntologyService):
+            services = {layer: self.ontology for layer in layers}
+        else:
+            return term_roles(profile, pins)
+        return term_roles_for_services(profile, pins, services)
+
     def _create_submission(
         self, draft: Draft, cmd: SubmitCommand, key: WorkspaceKey
     ) -> Submission:
@@ -493,6 +527,7 @@ class SubmissionService:
                     if evidence is not None:
                         evidence_by_id[identity] = evidence
         rules = self.repo.get_project_rules(key.project_key)
+        roles = self._term_roles(task_profile, key.project_key)
         violations = rule_violations(
             deduped_snaps,
             evidence_by_id,
@@ -500,6 +535,11 @@ class SubmissionService:
             rules,
             at_submission=True,
             enforce_spanless=True,
+            modifier_findings=frozenset(
+                s.annotation.annotation_id
+                for s in deduped_snaps
+                if roles.kind(s.annotation.layer_id, s.annotation.term_id) is not None
+            ),
         )
         if violations:
             raise DomainError(
@@ -507,8 +547,10 @@ class SubmissionService:
                 {"violations": [asdict(violation) for violation in violations]},
             )
 
-        if not rules.require_chosen_axes:
-            warnings = [
+        warnings = (
+            []
+            if rules.require_chosen_axes
+            else [
                 asdict(violation)
                 for violation in rule_violations(
                     deduped_snaps,
@@ -519,26 +561,28 @@ class SubmissionService:
                 )
                 if violation.rule == "axis_not_chosen"
             ]
-            if warnings:
-                acknowledgement = AxisWarningAcknowledgement(
-                    draft_revision=draft.revision,
-                    policy_revision=rules.annotation_policy_revision,
-                    warning_digest=canonical_hash(
-                        {
-                            "workspace": key.model_dump(),
-                            "snapshots": sorted(s.version for s in deduped_snaps),
-                            "warnings": warnings,
-                        }
-                    ),
+        ) + [asdict(v) for v in modifier_warnings(deduped_snaps, roles)]
+        # One acknowledged list for value and modifier warnings.
+        if warnings:
+            acknowledgement = AxisWarningAcknowledgement(
+                draft_revision=draft.revision,
+                policy_revision=rules.annotation_policy_revision,
+                warning_digest=canonical_hash(
+                    {
+                        "workspace": key.model_dump(),
+                        "snapshots": sorted(s.version for s in deduped_snaps),
+                        "warnings": warnings,
+                    }
+                ),
+            )
+            if cmd.warning_acknowledgement != acknowledgement:
+                raise DomainError(
+                    "AXIS_CONFIRMATION_WARNING",
+                    {
+                        "warnings": warnings,
+                        "acknowledgement": acknowledgement.model_dump(),
+                    },
                 )
-                if cmd.warning_acknowledgement != acknowledgement:
-                    raise DomainError(
-                        "AXIS_CONFIRMATION_WARNING",
-                        {
-                            "warnings": warnings,
-                            "acknowledgement": acknowledgement.model_dump(),
-                        },
-                    )
 
         if round_view is not None and round_view.kind in CARRY_ROUND_KINDS:
             from ontocurator.application.work_rounds import (
