@@ -2443,3 +2443,305 @@ describe("CaseScreen integration", () => {
     });
   });
 });
+
+describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)", () => {
+  const TEXT = "Seit 2 Wochen wiederholt schwere Krampfanfälle und eine Muskelhypotonie.";
+  const pos = (word: string) => { const start = TEXT.indexOf(word); return { start, end: start + word.length }; };
+  const LABELS: Record<string, [string, "finding" | "modifier" | "cohort", ("severity" | "onset" | null)?]> = {
+    "HP:0001250": ["Seizure", "finding"], "HP:0001252": ["Hypotonia", "finding"],
+    "HP:0012828": ["Severe", "modifier", "severity"], "HP:0031796": ["Recurrent", "modifier"],
+  };
+  const AXES = [{ id: "assertion", label: "Assertion", options: ["present", "absent"], allow_empty: true }];
+  type Mod = { term_id: string; segments?: { start: number; end: number }[] };
+  type Finding = [id: string, term: string, word: string | null, modifiers?: Mod[]];
+  const findingSnap = ([id, term, word, modifiers = []]: Finding) => ({
+    schema_version: "ontocurator-annotation/v3", version: `${id}-v1`, document_id: "doc-mod", text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
+    annotation: { annotation_id: id, document_id: "doc-mod", layer_id: "phenotype", type_id: "default", term_id: term, axes_values: { assertion: "present" },
+      axes_defaulted: [], evidence_refs: word ? [{ evidence_id: `ev-${id}`, version: "ev-1" }] : [], modifiers,
+      provenance: { actor: { actor_id: "ann", kind: "human" }, method: "manual", source_refs: [] } },
+    evidence: [],
+  });
+  const modView = (findings: Finding[]): WorkspaceView => {
+    const key = { project_key: "pkg-1", document_id: "doc-mod", annotator_id: "ann", mode: "independent", scope_id: "scope-default", target_set_id: "targets-0" };
+    return {
+      require_chosen_axes: false, annotation_policy_revision: 1, allow_spanless_findings: true, require_spanless_note: false, enforce_spanless_rules: true,
+      document: { document_id: "doc-mod", text: TEXT, language: "de", text_sha256: "t" }, key,
+      scope: { scope_id: "scope-default", mode: "independent", editable_layer_ids: ["phenotype"], reference_layer_ids: [] },
+      layers: [{ layer_id: "phenotype", label: "Phenotype", ontology_id: "hp", access: "editable", default_visible: true, default_type_id: "default",
+        annotation_types: [{ type_id: "default", label: "Phenotype", evidence_policy: "optional", axes: AXES }] }],
+      ontologies: [{ ontology_id: "hp", release: "1", label: "HPO", sha256: "s", format: "obo-graph-json" }],
+      checked_layer_ids: [], modifier_layer_ids: ["phenotype"],
+      draft: { key, targets: { target_set_id: "targets-0", targets: [] }, revision: 1,
+        annotations: findings.map(findingSnap),
+        evidence: findings.filter(([, , word]) => word).map(([id, , word]) => ({ version: "ev-1", mention: { evidence_id: `ev-${id}`, segments: [pos(word!)] } })),
+        decisions: [], checked_layer_ids: [] },
+      targets: { target_set_id: "targets-0", targets: [] }, submissions: [], available_inputs: [], term_statuses: {},
+      axes_definition: "editor-axes/v1", axes_config: AXES, axes_config_sha256: "x",
+    } as unknown as WorkspaceView;
+  };
+  const severeHits = { search_id: "s-sev", candidates: [
+    { term_id: "HP:0012828", label: "Severe", rank: 1, display_pos: 1, match_kind: "label", matched_term: "schwer", role: "modifier" }] };
+  /** applyCommand that applies the modifier commands to the draft it last returned. */
+  const commandSpy = (view: WorkspaceView) => {
+    let current = structuredClone(view.draft);
+    return vi.spyOn(api, "applyCommand").mockImplementation(async (_ws, envelope) => {
+      const payload = envelope.payload as Record<string, any>;
+      current = structuredClone(current); current.revision += 1;
+      const ann = current.annotations!.find(a => a.annotation.annotation_id === payload.annotation_id)?.annotation as any;
+      if (ann) {
+        const rest = (ann.modifiers ?? []).filter((m: Mod) => m.term_id !== payload.term_id);
+        const old = (ann.modifiers ?? []).find((m: Mod) => m.term_id === payload.term_id);
+        if (payload.command === "add_modifier") ann.modifiers = [...rest, { term_id: payload.term_id, segments: payload.segments ?? old?.segments ?? [] }];
+        if (payload.command === "set_modifier_segments") ann.modifiers = [...rest, { term_id: payload.term_id, segments: payload.segments }];
+        if (payload.command === "remove_modifier") ann.modifiers = rest;
+      }
+      return current;
+    });
+  };
+  const setup = async (view: WorkspaceView, hits: unknown = severeHits) => {
+    vi.spyOn(api, "resolveTermLabels").mockImplementation(async (_p, terms) => terms.map(t => ({ ...t, label: LABELS[t.term_id]?.[0] ?? t.term_id,
+      role: LABELS[t.term_id]?.[1] ?? "finding", exclusive_class: LABELS[t.term_id]?.[2] ?? null })) as never);
+    vi.spyOn(api, "searchOntology").mockResolvedValue(hits as never);
+    const apply = commandSpy(view);
+    const rendered = render(<CaseScreen view={view} workspaceId="ws-mod" onClose={vi.fn()} />);
+    if (view.draft.annotations?.length) await screen.findAllByText(LABELS[view.draft.annotations[0].annotation.term_id][0]);
+    return { ...rendered, apply };
+  };
+  const mark = (container: HTMLElement, word: string) => {
+    const text = container.querySelector(".text-container")!;
+    const run = [...text.querySelectorAll(".run")].find(r => r.textContent!.includes(word))!;
+    const node = run.firstChild!, start = node.textContent!.indexOf(word);
+    const range = document.createRange(); range.setStart(node, start); range.setEnd(node, start + word.length);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+    fireEvent.mouseUp(text);
+    window.getSelection()!.removeAllRanges();
+  };
+  const chooseSevere = async (container: HTMLElement) => {
+    mark(container, "schwere");
+    const input = screen.getByRole("combobox", { name: "Search term" });
+    await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBeTruthy());
+    fireEvent.keyDown(input, { key: "Enter" });
+  };
+  const startAttach = async (container: HTMLElement) => {
+    await chooseSevere(container);
+    await screen.findByRole("region", { name: "Attach Severe" });
+  };
+  const runsOf = (container: HTMLElement, id: string) => [...container.querySelectorAll<HTMLElement>(".text-container .run")]
+    .filter(run => (run.dataset.mentions ?? "").split(" ").includes(id));
+  const payloads = (apply: { mock: { calls: unknown[][] } }) => apply.mock.calls.map(call => (call[1] as { payload: Record<string, unknown> }).payload);
+  const announcer = (container: HTMLElement) => container.querySelector("[data-carried-announcer]")!.textContent;
+  const SEIZURE_HYPO: Finding[] = [["seizure", "HP:0001250", "Krampfanfälle"], ["hypo", "HP:0001252", "Muskelhypotonie"]];
+  const SEVERE_ON_SEIZURE: Finding[] = [["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012828", segments: [pos("schwere")] }]]];
+
+  it("a modifier hit for a new mark starts the attach mode; Enter on the focused row attaches", async () => {
+    const { container, apply } = await setup(modView(SEIZURE_HYPO));
+    await startAttach(container);
+    expect(payloads(apply)).toEqual([]);
+    const banner = container.querySelector<HTMLElement>(".attach-mention-banner")!;
+    expect(banner.getAttribute("role")).toBe("status");
+    expect(banner.textContent).toContain("Attach Severe: click its finding in the list or in the text (↑ ↓ Enter in the list). Esc cancels.");
+    expect(within(banner).getByRole("button", { name: "Cancel (Esc)" })).toBeDefined();
+    expect(container.querySelector(".pending-mark-bar")).not.toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Search term" })).toBeNull();
+    const row = screen.getByRole("button", { name: "Attach Severe to Seizure" });
+    await waitFor(() => expect(document.activeElement).toBe(row));
+    expect(row.textContent).toContain("Attach Severe here");
+    await waitFor(() => expect(runsOf(container, "ev-seizure")[0].classList.contains("run--framed")).toBe(true));
+    expect(runsOf(container, "ev-hypo")[0].classList.contains("run--framed")).toBe(false);
+    expect(runsOf(container, "ev-seizure")[0].title).toBe("Attach Severe to Seizure");
+    fireEvent.keyDown(row, { key: "Enter" });
+    await waitFor(() => expect(payloads(apply)).toEqual([{ command: "add_modifier", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }]));
+    await waitFor(() => expect(document.activeElement?.closest('[data-modifier-chip="HP:0012828"]')).not.toBeNull());
+    expect(container.querySelector(".attach-mention-banner")).toBeNull();
+    expect(screen.getByRole("list", { name: "Modifiers of Seizure" }).textContent).toContain("Severe · “schwere”");
+    expect(announcer(container)).toBe("Attached Severe to Seizure. Next: mark more text, or add another modifier with “+ Add modifier…”.");
+    expect(container.querySelector('[data-list-key="annotation:seizure"] .mod-lines')!.textContent).toContain("Severe HP:0012828 “schwere”");
+    const modRun = runsOf(container, "mod:seizure:HP:0012828")[0];
+    expect(modRun.classList.contains("run--modifier")).toBe(true);
+    expect(modRun.title).toBe("Severe, modifier of Seizure");
+    expect(runsOf(container, "ev-seizure")[0].title).toBe("Seizure, modifiers: Severe (“schwere”)");
+  });
+
+  it("↓ moves to the next target row and Enter attaches there", async () => {
+    const { container, apply } = await setup(modView(SEIZURE_HYPO));
+    await startAttach(container);
+    const seizure = screen.getByRole("button", { name: "Attach Severe to Seizure" });
+    await waitFor(() => expect(document.activeElement).toBe(seizure));
+    fireEvent.keyDown(seizure, { key: "ArrowDown" });
+    const hypo = screen.getByRole("button", { name: "Attach Severe to Hypotonia" });
+    await waitFor(() => expect(document.activeElement).toBe(hypo));
+    fireEvent.keyDown(hypo, { key: "Enter" });
+    await waitFor(() => expect(payloads(apply)[0]).toEqual(expect.objectContaining({ command: "add_modifier", annotation_id: "hypo" })));
+  });
+
+  it("a click on another finding's mark attaches to it", async () => {
+    const { container, apply } = await setup(modView(SEIZURE_HYPO));
+    await startAttach(container);
+    fireEvent.click(runsOf(container, "ev-hypo")[0]);
+    await waitFor(() => expect(payloads(apply)[0]).toEqual(expect.objectContaining({ annotation_id: "hypo", segments: [pos("schwere")] })));
+  });
+
+  it("“Attach to Seizure” in the inspector attaches to the nearest", async () => {
+    const { container, apply } = await setup(modView(SEIZURE_HYPO));
+    await startAttach(container);
+    fireEvent.click(screen.getByRole("button", { name: "Attach to Seizure" }));
+    await waitFor(() => expect(payloads(apply)[0]).toEqual(expect.objectContaining({ annotation_id: "seizure" })));
+  });
+
+  it("a target with Severe on another span is only focused; Replace text span sends set_modifier_segments", async () => {
+    const { container, apply } = await setup(modView([["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012828", segments: [pos("wiederholt")] }]], ["hypo", "HP:0001252", "Muskelhypotonie"]]));
+    await startAttach(container);
+    fireEvent.click(screen.getByRole("button", { name: "Attach Severe to Seizure" }));
+    expect(await screen.findByText("Seizure already has Severe (“wiederholt”). Attaching replaces its text span.")).toBeDefined();
+    expect(payloads(apply)).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Replace text span" }));
+    await waitFor(() => expect(payloads(apply)).toEqual([{ command: "set_modifier_segments", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }]));
+  });
+
+  it("a spanless Severe on the target is linked through add_modifier", async () => {
+    const { container, apply } = await setup(modView([["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012828" }]]]));
+    await startAttach(container);
+    fireEvent.click(screen.getByRole("button", { name: "Link “schwere” to Severe" }));
+    await waitFor(() => expect(payloads(apply)).toEqual([{ command: "add_modifier", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }]));
+    await waitFor(() => expect(announcer(container)).toBe("Linked “schwere” to Severe of Seizure."));
+  });
+
+  it("the pending mark stays resizable; an adjusted mark is attached", async () => {
+    const { container, apply } = await setup(modView(SEIZURE_HYPO));
+    await startAttach(container);
+    const handles = container.querySelectorAll<HTMLElement>(".text-container .resize-handle");
+    expect(handles.length).toBe(2);
+    // A keyboard move of the end handle, still waiting for its pause when attaching.
+    handles[1].focus();
+    fireEvent.keyDown(handles[1], { key: "ArrowRight" });
+    fireEvent.click(screen.getByRole("button", { name: "Attach to Seizure" }));
+    await waitFor(() => expect(payloads(apply)).toHaveLength(1));
+    // The edge skips the space: "schwere K".
+    expect(payloads(apply)[0].segments).toEqual([{ start: pos("schwere").start, end: pos("schwere").end + 2 }]);
+  });
+
+  for (const end of ["Escape", "Cancel (Esc)", "Discard"] as const) {
+    it(`${end} ends the mode and drops the mark without a command`, async () => {
+      const { container, apply } = await setup(modView(SEIZURE_HYPO));
+      await startAttach(container);
+      const row = screen.getByRole("button", { name: "Attach Severe to Seizure" });
+      await waitFor(() => expect(document.activeElement).toBe(row));
+      if (end === "Escape") fireEvent.keyDown(row, { key: "Escape" });
+      else if (end === "Cancel (Esc)") fireEvent.click(screen.getByRole("button", { name: "Cancel (Esc)" }));
+      else fireEvent.click(within(container.querySelector<HTMLElement>(".pending-mark-bar")!).getByRole("button", { name: /Discard/ }));
+      await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
+      expect(screen.queryByRole("region", { name: "Attach Severe" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
+      expect(announcer(container)).toBe("Marked text discarded.");
+      expect(payloads(apply)).toEqual([]);
+    });
+  }
+
+  it("marking other text ends the mode and replaces the pending mark", async () => {
+    const { container } = await setup(modView(SEIZURE_HYPO));
+    await startAttach(container);
+    mark(container, "Wochen");
+    await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
+    expect(container.querySelector(".pending-quote")!.textContent).toBe("“Wochen”");
+  });
+
+  it("without a target the mode does not start: Create the finding first, OK discards", async () => {
+    const { container, apply } = await setup(modView([]));
+    await chooseSevere(container);
+    expect(await screen.findByText("Severe is a modifier. Create the finding first, then add Severe under Modifiers.")).toBeDefined();
+    expect(container.querySelector(".attach-mention-banner")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    await waitFor(() => expect(container.querySelector(".pending-quote")).toBeNull());
+    expect(payloads(apply)).toEqual([]);
+  });
+
+  it("Link a text span: the next selection sends set_modifier_segments; Esc returns to the chip", async () => {
+    const { container, apply } = await setup(modView([["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0031796" }]]]));
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    fireEvent.click(await screen.findByRole("button", { name: "Actions, Recurrent" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Link a text span…" }));
+    const banner = container.querySelector<HTMLElement>(".attach-mention-banner")!;
+    expect(banner.textContent).toContain("Select the text for Recurrent, then press Enter. Esc cancels.");
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
+    expect(document.activeElement?.closest('[data-modifier-chip="HP:0031796"]')).not.toBeNull();
+    expect(payloads(apply)).toEqual([]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions, Recurrent" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Link a text span…" }));
+    mark(container, "wiederholt");
+    await waitFor(() => expect(payloads(apply)).toEqual([{ command: "set_modifier_segments", annotation_id: "seizure", term_id: "HP:0031796", segments: [pos("wiederholt")] }]));
+    await waitFor(() => expect(announcer(container)).toBe("Linked “wiederholt” to Recurrent."));
+    expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();
+  });
+
+  it("hovering a finding row frames its marks and modifier segments; a click on a modifier segment selects the finding and focuses the chip", async () => {
+    const { container } = await setup(modView(SEVERE_ON_SEIZURE));
+    const row = container.querySelector<HTMLElement>('[data-list-key="annotation:seizure"]')!;
+    fireEvent.pointerEnter(row);
+    await waitFor(() => expect(runsOf(container, "ev-seizure")[0].classList.contains("run--framed")).toBe(true));
+    expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--framed")).toBe(true);
+    fireEvent.pointerLeave(row);
+    await waitFor(() => expect(runsOf(container, "ev-seizure")[0].classList.contains("run--framed")).toBe(false));
+    fireEvent.click(runsOf(container, "mod:seizure:HP:0012828")[0]);
+    await waitFor(() => expect(document.activeElement?.closest('[data-modifier-chip="HP:0012828"]')).not.toBeNull());
+    expect(row.getAttribute("aria-pressed")).toBe("true");
+    // The selected finding keeps its modifier segments framed.
+    expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--framed")).toBe(true);
+  });
+
+  it("“+ Add modifier…” adds without a span; remove shows an Undo toast and Ctrl+Z restores", async () => {
+    const recurrent = { search_id: "s-rec", candidates: [{ term_id: "HP:0031796", label: "Recurrent", rank: 1, display_pos: 1, role: "modifier" }] };
+    const { container, apply } = await setup(modView(SEVERE_ON_SEIZURE), recurrent);
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    fireEvent.click(await screen.findByRole("button", { name: "+ Add modifier…" }));
+    const input = screen.getByRole("combobox", { name: "Search modifier" });
+    fireEvent.change(input, { target: { value: "rec" } });
+    await waitFor(() => expect(input.getAttribute("aria-activedescendant")).toBeTruthy());
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(payloads(apply)).toEqual([{ command: "add_modifier", annotation_id: "seizure", term_id: "HP:0031796" }]));
+    expect(await screen.findByText("Added Recurrent to Seizure. Link a text span?")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions, Severe" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove modifier" }));
+    await waitFor(() => expect(payloads(apply)[1]).toEqual({ command: "remove_modifier", annotation_id: "seizure", term_id: "HP:0012828" }));
+    expect(await screen.findByText("Removed Severe from Seizure")).toBeDefined();
+    fireEvent.keyDown(document.body, { key: "z", ctrlKey: true });
+    await waitFor(() => expect(payloads(apply)[2]).toEqual({ command: "add_modifier", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }));
+  });
+
+  it("Change term never offers a modifier term", async () => {
+    const { container } = await setup(modView(SEIZURE_HYPO));
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    fireEvent.click(await screen.findByRole("button", { name: /Change term/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: "schwer" } });
+    const option = (await screen.findAllByRole("option"))[0];
+    expect(option.getAttribute("aria-disabled")).toBe("true");
+    expect(option.textContent).toContain("Modifier — add it under Modifiers instead.");
+  });
+
+  it("re-creating a carried finding passes the source's modifiers along without text spans", async () => {
+    const view = modView([]);
+    const source = findingSnap(["old", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012828", segments: [pos("schwere")] }, { term_id: "HP:0031796" }]]);
+    const input = { input_id: "in-1", source_submission_id: "sub-1", source_ref: { annotation_id: "old", version: "old-v1" }, source_snapshot: source,
+      target_snapshot: null, mapping_status: "needs_review", source_round_ordinal: 1 };
+    view.key.round_id = "round-2"; view.draft.key = view.key;
+    vi.spyOn(api, "resolveTermLabels").mockImplementation(async (_p, terms) => terms.map(t => ({ ...t, label: LABELS[t.term_id]?.[0] ?? t.term_id })) as never);
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_ws, envelope) => {
+      const payload = envelope.payload as Record<string, any>;
+      return { ...view.draft, revision: view.draft.revision + 1, annotations: payload.command === "create_annotation" ? [findingSnap([payload.annotation_id, "HP:0001250", "Krampfanfälle"])] : view.draft.annotations } as never;
+    });
+    const { container } = render(<CaseScreen view={view} workspaceId="ws-carry" roundKind="carry_forward" roundInputs={[input as never]} onClose={vi.fn()} />);
+    fireEvent.click(await waitFor(() => container.querySelector<HTMLElement>('[data-list-key="input:in-1"]')!));
+    fireEvent.click(await screen.findByRole("button", { name: "Mark in text" }));
+    mark(container, "Krampfanfälle");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save re-created finding" })); });
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(3));
+    const [create, ...mods] = payloads(apply);
+    expect(create.command).toBe("create_annotation");
+    expect(mods).toEqual([
+      { command: "add_modifier", annotation_id: create.annotation_id, term_id: "HP:0012828" },
+      { command: "add_modifier", annotation_id: create.annotation_id, term_id: "HP:0031796" },
+    ]);
+  });
+});

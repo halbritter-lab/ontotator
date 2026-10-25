@@ -1,0 +1,76 @@
+import type { ReactNode } from "react";
+import { Button } from "../ui/Button";
+import { Kbd } from "../ui/Kbd";
+import type { AttachCandidate, AttachFinding } from "./modifiers";
+import "./modifiers.css";
+
+export interface AttachModePanelProps {
+  termLabel: string;
+  termId: string;
+  /** Text of the marked span; null when there is none. */
+  markQuote: string | null;
+  /** Nearest finding in the mark's sentence (spec "Attach mode" 3). */
+  nearest: AttachCandidate | null;
+  /** A target chosen by click or Enter that already has this modifier with another span (spec 7). */
+  focused: AttachFinding | null;
+  /** The term on a finding already: its span's quote, or null without span; undefined when absent. */
+  existing: (annotationId: string) => { segmentsQuote: string | null } | undefined;
+  /** No target at all: the mode does not start (spec 9). */
+  noFindings: boolean;
+  /** add_modifier on that finding (also links a spanless modifier). */
+  onAttach: (annotationId: string) => void;
+  /** set_modifier_segments on that finding. */
+  onReplace: (annotationId: string) => void;
+  onCancel: () => void;
+  /** An extra line (M7's convert mode). */
+  note?: ReactNode;
+}
+
+/** Copy of the attach mode in one place (spec "Attach mode" 4, 7–9). */
+export const attachCopy = {
+  banner: (term: string) => `Attach ${term}: click its finding in the list or in the text (↑ ↓ Enter in the list). Esc cancels.`,
+  describes: (term: string) => `${term} describes a finding. Choose it in the findings list or in the text.`,
+  noNearest: "No finding in this sentence. Choose one in the findings list or in the text.",
+  noFindings: (term: string) => `${term} is a modifier. Create the finding first, then add ${term} under Modifiers.`,
+  replaceLine: (finding: string, term: string, quote: string) => `${finding} already has ${term} (“${quote}”). Attaching replaces its text span.`,
+  targetName: (term: string, finding: string) => `Attach ${term} to ${finding}`,
+  attached: (term: string, finding: string) => `Attached ${term} to ${finding}. Next: mark more text, or add another modifier with “+ Add modifier…”.`,
+  linked: (quote: string, term: string, finding: string) => `Linked “${quote}” to ${term} of ${finding}.`,
+};
+
+/** The inspector while the attach mode is on (a labelled region "Attach Severe"). */
+export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused, existing, noFindings, onAttach, onReplace, onCancel, note }: AttachModePanelProps): JSX.Element {
+  const enter = <span aria-hidden="true"> <Kbd>Enter</Kbd></span>;
+  const esc = <span aria-hidden="true"> <Kbd>Esc</Kbd></span>;
+  if (noFindings) {
+    return <section className="detail-pane" aria-label={`Attach ${termLabel}`}>
+      <div className="detail-section mod-attach-panel">
+        <p>{attachCopy.noFindings(termLabel)}</p>
+        <div className="mod-attach-actions"><Button variant="primary" onClick={onCancel}>OK</Button></div>
+      </div>
+    </section>;
+  }
+  const replaceTarget = focused && existing(focused.annotationId)?.segmentsQuote ? focused : null;
+  const target = replaceTarget ?? nearest;
+  const there = target ? existing(target.annotationId) : undefined;
+  return <section className="detail-pane" aria-label={`Attach ${termLabel}`}>
+    <div className="detail-section mod-attach-panel">
+      <h2 className="term-heading">{termLabel}<span className="mod-tag">Modifier</span></h2>
+      <p className="mod-line-id">{termId}{markQuote ? ` · “${markQuote}”` : ""}</p>
+      <p>{attachCopy.describes(termLabel)}</p>
+      {note}
+      {nearest
+        ? <p><strong>Nearest in this sentence:</strong> {nearest.term}{nearest.quote ? ` · “${nearest.quote}”` : ""}</p>
+        : <p>{attachCopy.noNearest}</p>}
+      {target && there?.segmentsQuote && <p>{attachCopy.replaceLine(target.term, termLabel, there.segmentsQuote)}</p>}
+      <div className="mod-attach-actions">
+        {target && (there?.segmentsQuote
+          ? <Button variant="primary" onClick={() => onReplace(target.annotationId)}>Replace text span{enter}</Button>
+          : there && markQuote
+            ? <Button variant="primary" onClick={() => onAttach(target.annotationId)}>Link “{markQuote}” to {termLabel}{enter}</Button>
+            : <Button variant="primary" onClick={() => onAttach(target.annotationId)}>Attach to {target.term}{enter}</Button>)}
+        <Button aria-keyshortcuts="Escape" onClick={onCancel}>Cancel{esc}</Button>
+      </div>
+    </div>
+  </section>;
+}
