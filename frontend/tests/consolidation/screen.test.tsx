@@ -59,7 +59,8 @@ describe("ConsolidationScreen", () => {
     const resolve = vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
     const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(5));
     await renderScreen();
-    fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    // The first open group is selected by an effect after the heading renders: wait for its check.
+    fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
     await waitFor(() => expect(expandedTitle()).toBe("Delayed development"));
     expect(resolve).toHaveBeenCalledTimes(1);
     const [workspaceId, envelope] = resolve.mock.calls[0];
@@ -116,7 +117,7 @@ describe("ConsolidationScreen", () => {
     load(exampleView(), after);
     vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
     await renderScreen();
-    fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
     await screen.findByRole("button", { name: "Undo" });
     fireEvent.keyDown(window, { key: "?" });
     const help = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
@@ -340,7 +341,7 @@ describe("ConsolidationScreen", () => {
     const spy = load(exampleView());
     vi.spyOn(api, "resolveConsolidationGroup").mockRejectedValue(new ApiError(409, "conflict", "REVISION_CONFLICT"));
     await renderScreen();
-    fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
     const review = await screen.findByRole("button", { name: "Review again" });
     expect(expandedTitle()).toBe("muscular hypotonia");
     await act(async () => { fireEvent.click(review); });
