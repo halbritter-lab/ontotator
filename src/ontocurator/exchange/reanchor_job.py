@@ -78,7 +78,7 @@ def pending_payload(item: NeedsReview) -> dict[str, Any]:
         for span in item.old_segments
     ):
         raise DomainError("T1_INVALID", {"codes": ["invalid_source_anchor"]})
-    return {
+    payload: dict[str, Any] = {
         "source_ref": item.source_ref.model_dump(mode="json"),
         "term_id": item.term_id,
         "layer_id": item.layer_id,
@@ -95,6 +95,12 @@ def pending_payload(item: NeedsReview) -> dict[str, Any]:
         "new_context": asdict(item.new_context),
         "diff": [asdict(op) for op in item.diff],
     }
+    if item.old_modifiers:  # absent while empty, so stored items stay equal
+        payload["old_modifiers"] = [
+            {"term_id": m.term_id, "segments": [asdict(s) for s in m.segments]}
+            for m in item.old_modifiers
+        ]
+    return payload
 
 
 def original_urn(source: ReanchorSource, annotation_id: str) -> str:

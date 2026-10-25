@@ -129,6 +129,8 @@ export function ReanchorPanel({ items, labelFor, onContext, resolutions=[], anno
       return <li key={reanchorKey(item)} data-reanchor-item={reanchorKey(item)} data-reanchor-pending={!resolution}>
         <Button variant="quiet" onClick={() => onContext(item.new_context)}>{label && label !== item.term_id ? `${label} (${item.term_id})` : item.term_id}, {item.layer_id}</Button>
         <p>{Object.prototype.hasOwnProperty.call(reasons, item.reason) ? reasons[item.reason] : `Unknown reason: ${item.reason}`}</p>
+        {(item.old_modifiers ?? []).filter(modifier => modifier.segments?.length).map(modifier =>
+          <p key={modifier.term_id}>Text of {labelFor(item.layer_id, modifier.term_id) ?? modifier.term_id} changed: “{(modifier.segments ?? []).map(segment => segment.text).join(' … ')}”</p>)}
         {item.axes_values && <p aria-label="Original clinical axes">{Object.entries(item.axes_values).map(([axis,value],axisIndex)=><span key={axis}>
           {axisIndex>0 && ', '}<span>{axis}: {value ?? 'Not specified'}{item.axes_defaulted?.includes(axis) ? ' (defaulted)' : ''}</span>
         </span>)}</p>}
@@ -172,7 +174,7 @@ export function PendingReanchorPanel({ projectKey, documentId, scope, enabled, p
     return () => {active=false;};
   },[identity]);
   const current = enabled && state?.identity===identity ? state : null;
-  const labelFor = useTermLabels(projectKey,(current?.items ?? []).map(item => ({layer_id:item.layer_id,term_id:item.term_id})));
+  const labelFor = useTermLabels(projectKey,(current?.items ?? []).flatMap(item => [item.term_id, ...(item.old_modifiers ?? []).map(modifier => modifier.term_id)].map(term_id => ({layer_id:item.layer_id,term_id}))));
   return current?.error ? <ErrorNotice error={current.error}/> : <ReanchorPanel items={current?.items ?? []} labelFor={labelFor} onContext={onContext}/>;
 }
 

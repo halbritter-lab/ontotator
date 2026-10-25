@@ -1027,5 +1027,12 @@ def test_changed_modifier_text_sends_the_whole_proposal_to_review():
     assert built.proposals.annotations == []
     (pending,) = built.pending_items
     assert pending["reason"] == "changed_modifier_segment"
+    assert pending["old_modifiers"] == [
+        {
+            "term_id": "HP:0012828",
+            "segments": [{"start": 0, "end": 7, "text": "schwere"}],
+        },
+        {"term_id": "HP:0031796", "segments": []},
+    ]
     # The stored item stays a valid ReanchorItem (no contract change in M1b).
     ReanchorItem.model_validate({**pending, "proposal_set_id": 1})
