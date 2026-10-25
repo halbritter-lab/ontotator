@@ -325,3 +325,27 @@ describe("ReviewActions", () => {
   });
 
 });
+
+describe("ReviewActions: modifiers of a proposal (DN-9 A)", () => {
+  const TEXT = "Sehr schwere Krampfanfälle.";
+  const target: TargetProposal = { annotation_id: "p", version: "v", term_id: "HP:0001250", provenance: { actor: { actor_id: "tool", kind: "tool" }, method: "automated" }, evidence_count: 1 };
+  const source = (modifiers: unknown[]) => ({ schema_version: "ontocurator-annotation/v3", version: "v", document_id: "d", text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l", evidence: [],
+    annotation: { annotation_id: "p", document_id: "d", layer_id: "hpo", type_id: "t", term_id: "HP:0001250", axes_values: {}, modifiers,
+      provenance: { actor: { actor_id: "tool", kind: "tool" }, method: "automated" } } }) as any;
+  const info = (id: string) => id === "HP:0012828" ? { label: "Severe", role: "modifier" as const, exclusiveClass: "severity" as const } : undefined;
+
+  it("shows the read-only chip list without actions", () => {
+    render(<ReviewActions target={target} termLabel="Seizure" source={source([{ term_id: "HP:0012828", segments: [{ start: 5, end: 12 }] }])}
+      documentText={TEXT} termInfo={info} currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
+    const list = screen.getByRole("list", { name: "Modifiers of Seizure" });
+    expect(list.textContent).toBe("Severe · “schwere”");
+    expect(screen.queryByRole("button", { name: /Actions, Severe/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "+ Add modifier…" })).toBeNull();
+  });
+
+  it("shows no Modifiers section without modifiers", () => {
+    render(<ReviewActions target={target} termLabel="Seizure" source={source([])} documentText={TEXT} termInfo={info}
+      currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
+    expect(screen.queryByRole("heading", { name: "Modifiers" })).toBeNull();
+  });
+});

@@ -18,6 +18,7 @@ import {
   type TreeData,
 } from "./treeState";
 import { LanguageFlag } from "../ui/LanguageTag";
+import { MODIFIER_IN_CHANGE } from "./SearchPanel";
 
 export interface TreeBrowserProps {
   /** Out of sight and out of reach for now; the walk and its state are kept. */
@@ -184,7 +185,12 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
   const pathParentId = selectedParentKey ? termOfKey(selectedParentKey) : null;
   const otherParents = (detail?.parents ?? []).filter((parent) => parent.term_id !== pathParentId);
   const isCurrent = selectedTermId !== null && selectedTermId === currentTermId;
-  const canUse = canAssign && browseId !== null && selectedTermId !== null && !isCurrent && !saving;
+  const isModifier = (termId: string) => {
+    const role = data.nodes[termId]?.role;
+    return role === "modifier" || role === "cohort";
+  };
+  const selectedIsModifier = selectedTermId !== null && isModifier(selectedTermId);
+  const canUse = canAssign && browseId !== null && selectedTermId !== null && !isCurrent && !saving && !selectedIsModifier;
 
   const assignTerm = async () => {
     if (!canUse || !selectedTermId || !browseId) return;
@@ -203,7 +209,9 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
     ? "Select one of your annotations to assign a term from the tree."
     : isCurrent
       ? "This is the annotation's current term."
-      : null;
+      : selectedIsModifier
+        ? MODIFIER_IN_CHANGE
+        : null;
 
   return (
     <div className="tree-host" hidden={collapsed}>
@@ -244,6 +252,7 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
                 onCollapse={collapse}
                 onSelect={select}
                 onClose={onClose}
+                isUnavailable={isModifier}
               />
             )}
           </div>
@@ -324,14 +333,17 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
               <Button
                 type="button"
                 variant="primary"
-                disabled={!canUse}
+                // A modifier term stays focusable with its reason (aria-disabled); other states keep `disabled`.
+                disabled={!canUse && !selectedIsModifier}
+                aria-disabled={selectedIsModifier ? true : undefined}
+                aria-describedby={hint ? "tree-use-hint" : undefined}
                 onClick={() => {
                   void assignTerm();
                 }}
               >
                 Use this term
               </Button>
-              {hint && <span className="tree-detail__hint">{hint}</span>}
+              {hint && <span id="tree-use-hint" className="tree-detail__hint">{hint}</span>}
             </div>
           </div>
         </div>

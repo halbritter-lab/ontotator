@@ -479,3 +479,22 @@ describe("TreeBrowser: the docked panel", () => {
     expect(screen.getByRole("region", { name: "Ontology tree" }).contains(document.activeElement)).toBe(false);
   });
 });
+
+describe("TreeBrowser: modifier terms (finding modifiers)", () => {
+  it("modifier nodes are aria-disabled for Change term, with the reason", async () => {
+    const walk = seizureWalk();
+    walk.levels[2].children = [DIALEPTIC, { ...node("HP:12828", "Severe"), role: "modifier" }];
+    vi.spyOn(api, "openTree").mockResolvedValue(walk);
+    vi.spyOn(api, "loadTreeNode").mockResolvedValue({ detail: detail("HP:12828", "Severe"), children: [], path: [], levels: [] });
+    const { props } = renderBrowser();
+    await loaded();
+    expect(item("Severe").getAttribute("aria-disabled")).toBe("true");
+    expect(item("Dialeptic seizure").getAttribute("aria-disabled")).toBeNull();
+    fireEvent.click(item("Severe"));
+    await screen.findByText("Modifier — add it under Modifiers instead.");
+    expect(useButton().getAttribute("aria-disabled")).toBe("true");
+    expect(useButton().disabled).toBe(false);
+    fireEvent.click(useButton());
+    expect(props.onUseTerm).not.toHaveBeenCalled();
+  });
+});

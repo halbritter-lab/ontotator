@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type TermLookup } from "../api/client";
+import type { components } from "../api/generated";
+import type { TermInfo } from "./modifiers";
+
+type ResolvedTerm = components["schemas"]["TermLabel"];
 
 const keyOf = ({ layer_id, term_id }: TermLookup) => JSON.stringify([layer_id, term_id]);
 
 export function useTermLabels(projectKey: string, terms: TermLookup[]) {
   const [labels, setLabels] = useState<Record<string, string | null>>({});
+  const [roles, setRoles] = useState<Record<string, Omit<TermInfo, "label">>>({});
   const [retryTick, setRetryTick] = useState(0);
   const requested = useRef(new Set<string>());
   const attempts = useRef(new Map<string, number>());
@@ -17,6 +22,7 @@ export function useTermLabels(projectKey: string, terms: TermLookup[]) {
     if (retryTimer.current) clearTimeout(retryTimer.current);
     retryTimer.current = null;
     setLabels({});
+    setRoles({});
     return () => {
       generation.current += 1;
       if (retryTimer.current) clearTimeout(retryTimer.current);
@@ -50,6 +56,13 @@ export function useTermLabels(projectKey: string, terms: TermLookup[]) {
         for (const resolved of responses) for (const term of resolved) next[keyOf(term)] = term.label;
         return next;
       });
+      setRoles((current) => {
+        const next = { ...current };
+        for (const resolved of responses) for (const term of resolved as ResolvedTerm[]) {
+          next[keyOf(term)] = { role: term.role ?? "finding", exclusiveClass: term.exclusive_class ?? null };
+        }
+        return next;
+      });
     }).catch(() => {
       if (requestGeneration !== generation.current) return;
       for (const term of missing) requested.current.delete(keyOf(term));
@@ -62,6 +75,14 @@ export function useTermLabels(projectKey: string, terms: TermLookup[]) {
     });
   }, [projectKey, uniqueTerms, retryTick]);
 
-  return (layerId: string | undefined, termId: string) =>
+  const label = (layerId: string | undefined, termId: string) =>
     layerId ? labels[keyOf({ layer_id: layerId, term_id: termId })] ?? null : null;
+  /** Label, role and exclusive class of a term (C10); undefined until resolved. */
+  const info = (layerId: string | undefined, termId: string): TermInfo | undefined => {
+    if (!layerId) return undefined;
+    const key = keyOf({ layer_id: layerId, term_id: termId });
+    const role = roles[key];
+    return role ? { label: labels[key] ?? termId, ...role } : undefined;
+  };
+  return Object.assign(label, { info });
 }

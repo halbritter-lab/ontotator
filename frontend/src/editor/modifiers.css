@@ -1,0 +1,151 @@
+/* Finding modifiers in the editor: Modifiers section, attach mode, findings-list lines (DESIGN.md). Tokens only. */
+
+/* Modifiers section (ModifiersSection.tsx) */
+.mod-heading {
+  margin: 0 0 var(--space-1);
+}
+.mod-chips {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.mod-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 2px var(--space-1) 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  font-size: var(--size-sm);
+}
+.mod-chip--readonly {
+  padding-right: var(--space-2);
+}
+.mod-chip .ui-menu-button .btn {
+  min-height: 24px;
+  padding: 0 var(--space-1);
+}
+.mod-cohort,
+.mod-warning {
+  color: var(--warning);
+  font-weight: var(--weight-strong);
+}
+.mod-warning {
+  margin: 0 0 var(--space-2);
+  font-size: var(--size-sm);
+}
+.mod-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+.mod-status:empty {
+  display: none;
+}
+.mod-search {
+  margin-bottom: var(--space-2);
+}
+
+/* Findings list: one indented line per modifier (FindingRow.tsx, E-b) */
+.mod-lines {
+  list-style: none;
+  margin: 2px 0 4px;
+  padding: 0 0 0 var(--space-2);
+  display: grid;
+  gap: 1px;
+}
+.mod-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+.mod-line .icon {
+  flex: none;
+}
+.mod-line-term {
+  color: var(--text);
+  font-weight: var(--weight-strong);
+}
+.mod-line-id {
+  font-family: var(--font-mono);
+  font-size: var(--size-xs);
+}
+
+/* Attach mode: target rows, the active one, the inspector panel (AttachModePanel.tsx) */
+.doc-item.mod-target {
+  outline: 1px dashed var(--accent);
+  outline-offset: -4px;
+  cursor: pointer;
+}
+.doc-item.mod-target--active {
+  outline: 2px solid var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent);
+  background: var(--surface-sunken);
+}
+.mod-attach-here {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin: 2px 0 4px;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--accent);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-strong);
+}
+.mod-attach-panel p {
+  margin: 0 0 var(--space-2);
+}
+.mod-tag {
+  margin-left: var(--space-1);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-strong);
+  color: var(--text-muted);
+}
+.mod-attach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+@media (forced-colors: active) {
+  .doc-item.mod-target,
+  .doc-item.mod-target--active {
+    outline-color: Highlight;
+  }
+  .mod-attach-here {
+    border-color: CanvasText;
+    color: CanvasText;
+  }
+}
+
+/* Term search: role tags and the reason a modifier hit is not usable in "Change term" (SearchPanel.tsx) */
+.candidate-role {
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: var(--size-xs);
+  font-weight: var(--weight-strong);
+}
+.candidate-reason {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}

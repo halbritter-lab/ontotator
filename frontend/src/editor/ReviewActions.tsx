@@ -10,6 +10,8 @@ import { AiBadge } from "./AiBadge";
 import { IconCheck, IconClose, IconPencil, IconQuestion, IconUndo, IconWarning } from "../ui/icons";
 import { axisOptionLabel, findingAxes } from "./axisLabels";
 import type { AxisDefinition } from "./AnnotationPanel";
+import { ModifiersSection } from "./ModifiersSection";
+import type { TermInfo } from "./modifiers";
 
 export type ReviewDecision = components["schemas"]["ReviewDecision"];
 export type ReviewDecisionOutcome = "confirmed" | "rejected" | "changed" | "uncertain";
@@ -67,6 +69,8 @@ export interface ReviewActionsProps {
   axesConfig?: AxisDefinition[];
   requireChosenAxes?: boolean;
   onDraftUnresolved?: () => void;
+  /** Label and role of a modifier term of the proposal (read-only chips, DN-9 A). */
+  termInfo?: (termId: string) => TermInfo | undefined;
 }
 
 type NoteSaveSession = {
@@ -116,6 +120,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   axesConfig,
   requireChosenAxes = false,
   onDraftUnresolved,
+  termInfo,
 }) => {
   const targetIdentity = JSON.stringify([target.annotation_id, target.version]);
   const [localNote, setLocalNote] = useState({ targetIdentity, value: currentDecision?.note ?? "" });
@@ -214,6 +219,8 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             ));
           })()}
         </dl>
+        {!!source?.annotation.modifiers?.length && <ModifiersSection readOnly finding={termLabel ?? target.term_id ?? target.annotation_id}
+          modifiers={source.annotation.modifiers} text={documentText} termInfo={termInfo ?? (() => undefined)} />}
         {evidence.length ? evidence.map(ev => <p className="review-actions__quote" key={`${ev.mention.evidence_id}:${ev.version}`}>
           {ev.mention.segments.map(seg => Array.from(documentText).slice(seg.start, seg.end).join("")).join(" … ")}
         </p>) : <p className="review-actions__quote">No text mention (spanless)</p>}

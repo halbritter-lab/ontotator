@@ -95,7 +95,9 @@ export class SearchManager {
     k = 10,
     layerId?: string | null,
     /** Translation languages to search besides English; omit to search all loaded ones. */
-    languages?: string[]
+    languages?: string[],
+    /** Subtree roots the hits must lie under ("+ Add modifier…"); omit for an unrestricted search. */
+    within?: readonly string[]
   ): Promise<SearchCandidate[]> {
     const query = rawQuery.trim();
 
@@ -146,6 +148,7 @@ export class SearchManager {
         route,
         k,
         ...(languages ? { languages } : {}),
+        ...(within ? { within: [...within] } : {}),
       };
 
 

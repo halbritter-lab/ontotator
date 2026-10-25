@@ -19,6 +19,8 @@ export interface TermTreeProps {
   onCollapse: (key: string) => void;
   onSelect: (key: string) => void;
   onClose: () => void;
+  /** Terms that cannot be assigned here (modifier terms in "Change term"): the row reads aria-disabled. */
+  isUnavailable?: (termId: string) => boolean;
 }
 
 /** An ARIA tree as a flat list of rows with roving focus. */
@@ -35,6 +37,7 @@ export const TermTree: React.FC<TermTreeProps> = ({
   onCollapse,
   onSelect,
   onClose,
+  isUnavailable,
 }) => {
   const items = useRef(new Map<string, HTMLLIElement>());
   // Exactly one row is in the Tab order: the focused one, or the first while there is none.
@@ -99,6 +102,7 @@ export const TermTree: React.FC<TermTreeProps> = ({
             aria-expanded={row.childCount > 0 ? row.expanded : undefined}
             aria-selected={row.key === selectedKey}
             aria-current={isCurrent ? "true" : undefined}
+            aria-disabled={isUnavailable?.(row.termId) ? true : undefined}
             aria-busy={loadingKeys.has(row.key) ? true : undefined}
             tabIndex={row.key === tabKey ? 0 : -1}
             onFocus={() => onFocusKey(row.key)}

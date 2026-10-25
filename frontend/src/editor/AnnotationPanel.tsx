@@ -75,6 +75,8 @@ export interface AnnotationPanelProps {
   isAttachingMention?: boolean;
   /** Language selection of the term search, when the layer's ontology has translations. */
   searchLanguages?: SearchLanguageControl;
+  /** The Modifiers section, rendered under Values (only for findings on `hpo-phenotype` layers). */
+  modifiersSection?: React.ReactNode;
 }
 
 /** Quote the text covered by codepoint segments; discontinuous parts are joined with " … ". */
@@ -116,6 +118,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   documentText = "",
   isAttachingMention = false,
   searchLanguages,
+  modifiersSection,
 }) => {
   const [showSearch, setShowSearch] = useState(false);
   const changeTermButton = useRef<HTMLButtonElement>(null);
@@ -289,6 +292,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               layerId={layerId ?? ann.layer_id}
               workspaceKey={workspaceKey}
               currentTermId={currentTerm}
+              assignMode="change"
               onSelectCandidate={handleSelectCandidate}
               languages={searchLanguages}
               autoFocus
@@ -379,6 +383,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
           {valuesError && <InlineMessage tone="error">{valuesError}</InlineMessage>}
         </section>
       )}
+
+      {modifiersSection}
 
       <div className="detail-section">
         <Textarea id={`annotation-note-${ann.annotation_id}`} label={noteRequired ? "Reason for no text span" : "Note"}

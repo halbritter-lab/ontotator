@@ -9,7 +9,9 @@ import type { SearchCandidate } from "../api/client";
 import { SearchLanguageButton } from "./SearchLanguageButton";
 import type { SearchLanguageControl } from "./searchLanguages";
 import { SearchManager, type SearchState, type WorkspaceKey } from "./searchState";
-import { firstUsableIndex, matchLine } from "./termSearch";
+import { matchLine } from "./termSearch";
+import { COHORT_TAG, MODIFIER_ROOTS } from "./modifiers";
+import "./modifiers.css";
 
 export interface SearchPanelProps {
   canAssign?: boolean;
@@ -32,7 +34,17 @@ export interface SearchPanelProps {
   /** Language hint ("Names are searched in English…"): replaces the empty-field help line, stays under
    * the field while a query is shown and starts the no-hits message. */
   languageHint?: string;
+  /** "modifier": the "+ Add modifier…" search (label "Search modifier", hits only under MODIFIER_ROOTS). */
+  mode?: "finding" | "modifier";
+  /** "change": a modifier hit cannot become the finding's term (spec "Attach mode" 10). */
+  assignMode?: "new" | "change" | "modifier";
+  /** New mark: a modifier hit is reported here instead of being assigned (attach mode, E-a). */
+  onPickModifier?: (candidate: SearchCandidate, searchId?: string) => void;
 }
+
+/** Reason line of a modifier hit in "Change term". */
+export const MODIFIER_IN_CHANGE = "Modifier — add it under Modifiers instead.";
+const isModifierHit = (c: SearchCandidate) => c.role === "modifier" || c.role === "cohort";
 
 export const SEARCH_DEBOUNCE_MS = 250;
 const DEFAULT_EMPTY_HINT = "Name or code, for example HP:0001250";
@@ -51,7 +63,13 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   autoFocus = false,
   onEscape,
   languageHint,
+  mode = "finding",
+  assignMode = "new",
+  onPickModifier,
 }) => {
+  const within = mode === "modifier" ? MODIFIER_ROOTS : undefined;
+  // "/" focuses #search-input (the term search); the modifier search has its own id.
+  const inputId = mode === "modifier" ? "modifier-search-input" : "search-input";
   const languageControl = languages && languages.options.length > 0 ? languages : undefined;
   // Sent with every request when translations are loaded; English is implied.
   const requestLanguages = languageControl?.active;
@@ -73,14 +91,14 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const runSearch = (val: string, immediate = false) => {
     cancelDebounce();
     if (immediate || debounceMs <= 0 || !val.trim()) {
-      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages);
+      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages, within);
       return;
     }
     setDebouncing(true);
     debounceTimer.current = setTimeout(() => {
       debounceTimer.current = null;
       setDebouncing(false);
-      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages);
+      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages, within);
     }, debounceMs);
   };
   const [state, setState] = useState<SearchState>(searchManager.getState());
@@ -156,7 +174,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
   useShortcutHint(["↓ / ↑", "Enter"], "Move through term hits; add the active hit", { group: "Finding" });
 
-  const isUsable = (c: SearchCandidate): boolean => canAssign && c.obsolete !== true;
+  const isUsable = (c: SearchCandidate): boolean =>
+    canAssign && c.obsolete !== true && !(assignMode === "change" && isModifierHit(c));
   const hasQuery = queryInput.trim() !== "";
   const searching = hasQuery && (debouncing || (state.isLoading && state.query === queryInput));
   const failed = hasQuery && !searching && !!state.error && state.query === queryInput;
@@ -170,7 +189,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const [active, setActive] = useState<{ list: SearchCandidate[]; index: number } | null>(null);
   const activeIndex = active && active.list === state.candidates
     ? active.index
-    : firstUsableIndex(state.candidates, canAssign);
+    : state.candidates.findIndex(isUsable);
   const shownActive = expanded && activeIndex >= 0 && activeIndex < candidates.length ? activeIndex : -1;
   const optionId = (index: number) => `${listboxId}-${index}-${candidates[index].term_id}`;
 
@@ -194,7 +213,9 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   };
 
   const addCandidate = (candidate: SearchCandidate) => {
-    if (isUsable(candidate)) onSelectCandidate(candidate, state.searchId ?? undefined);
+    if (!isUsable(candidate)) return;
+    if (onPickModifier && isModifierHit(candidate)) onPickModifier(candidate, state.searchId ?? undefined);
+    else onSelectCandidate(candidate, state.searchId ?? undefined);
   };
 
   const handleQueryChange = (val: string) => {
@@ -246,17 +267,17 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   return (
     <div className="search-panel">
       <div className="form-group">
-        <label htmlFor="search-input" className="form-label">
-          Search term
+        <label htmlFor={inputId} className="form-label">
+          {mode === "modifier" ? "Search modifier" : "Search term"}
         </label>
         <div className="search-field-row">
           <input
             ref={inputRef}
-            id="search-input"
+            id={inputId}
             type="text"
             role="combobox"
             className="form-control"
-            placeholder="Name or code"
+            placeholder={mode === "modifier" ? "Severity, onset, pattern…" : "Name or code"}
             value={queryInput}
             aria-autocomplete="list"
             aria-expanded={expanded}
@@ -328,6 +349,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 <div className="candidate-header">
                   <strong className="candidate-label">{cand.label}</strong>
                   <span className="candidate-id">{cand.term_id}</span>
+                  {isModifierHit(cand) && <span className="candidate-role">{cand.role === "cohort" ? COHORT_TAG : "Modifier"}</span>}
                   {canAssign && (
                     // Reserved in every row and shown only on the active one, so activity never changes the layout.
                     <span className="candidate-enter" aria-hidden="true"><Kbd>Enter</Kbd></span>
@@ -338,6 +360,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                   // Clamped visually; the full definition stays in the option for screen readers.
                   <div className="candidate-def">{cand.definition}</div>
                 )}
+                {assignMode === "change" && isModifierHit(cand) && <span className="candidate-reason">{MODIFIER_IN_CHANGE}</span>}
                 {cand.obsolete && (
                   <span className="warning-badge">
                     Obsolete term (assignment not allowed)

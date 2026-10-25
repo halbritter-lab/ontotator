@@ -604,3 +604,58 @@ describe("SearchPanel language selection", () => {
     expect(searchOntology).not.toHaveBeenCalled();
   });
 });
+
+describe("SearchPanel: modifier roles (finding modifiers)", () => {
+  afterEach(cleanup);
+  const roleHits = { search_id: "s-r", candidates: [
+    hit("HP:0012828", "Severe", { role: "modifier" }),
+    hit("HP:0040282", "Frequent", { role: "cohort" }),
+    hit("HP:0001250", "Seizure", { role: "finding" }),
+  ] };
+
+  it("tags modifier hits with text, never a finding hit", async () => {
+    const input = renderPanel(vi.fn().mockResolvedValue(roleHits));
+    fireEvent.change(input, { target: { value: "s" } });
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(options()[0].querySelector(".candidate-role")!.textContent).toBe("Modifier");
+    expect(options()[1].querySelector(".candidate-role")!.textContent).toBe("Cohort term");
+    expect(options()[2].querySelector(".candidate-role")).toBeNull();
+  });
+
+  it("Change term: modifier hits are aria-disabled with the reason and Enter skips them", async () => {
+    const onSelectCandidate = vi.fn();
+    const input = renderPanel(vi.fn().mockResolvedValue(roleHits), { assignMode: "change", onSelectCandidate });
+    fireEvent.change(input, { target: { value: "s" } });
+    await waitFor(() => expect(options()).toHaveLength(3));
+    expect(options()[0].getAttribute("aria-disabled")).toBe("true");
+    expect(options()[1].getAttribute("aria-disabled")).toBe("true");
+    expect(options()[0].textContent).toContain("Modifier — add it under Modifiers instead.");
+    expect(activeId(input)).toBe(options()[2].id);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSelectCandidate).toHaveBeenCalledWith(expect.objectContaining({ term_id: "HP:0001250" }), "s-r");
+    fireEvent.click(options()[0]);
+    expect(onSelectCandidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("a new mark reports a modifier hit through onPickModifier", async () => {
+    const onSelectCandidate = vi.fn(), onPickModifier = vi.fn();
+    const input = renderPanel(vi.fn().mockResolvedValue(roleHits), { onSelectCandidate, onPickModifier });
+    fireEvent.change(input, { target: { value: "s" } });
+    await waitFor(() => expect(options()).toHaveLength(3));
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onPickModifier).toHaveBeenCalledWith(expect.objectContaining({ term_id: "HP:0012828" }), "s-r");
+    expect(onSelectCandidate).not.toHaveBeenCalled();
+  });
+
+  it("modifier mode: own label and placeholder, request within the modifier roots", async () => {
+    const searchOntology = vi.fn().mockResolvedValue(roleHits);
+    const manager = new SearchManager({ searchOntology } as any);
+    render(<SearchPanel searchManager={manager} annotationId="a" workspaceKey={key} layerId="phenotype" onSelectCandidate={vi.fn()} debounceMs={0} mode="modifier" />);
+    const input = screen.getByRole("combobox", { name: "Search modifier" }) as HTMLInputElement;
+    expect(input.placeholder).toBe("Severity, onset, pattern…");
+    expect(input.value).toBe("");
+    fireEvent.change(input, { target: { value: "sev" } });
+    await waitFor(() => expect(searchOntology).toHaveBeenCalled());
+    expect(searchOntology.mock.calls[0][0]).toEqual(expect.objectContaining({ within: ["HP:0012823", "HP:0040279"] }));
+  });
+});
