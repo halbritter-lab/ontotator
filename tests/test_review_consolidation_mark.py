@@ -68,6 +68,10 @@ def test_mark_defaults() -> None:
     mark = ConsolidationMark(action="leave_out")
     assert mark.guidelines_unclear is False
     assert mark.content_sha256 is None
+    assert mark.attached_to is None
+    assert "attached_to" not in mark.model_dump()
+    attached = ConsolidationMark(action="leave_out", attached_to="cons-1")
+    assert attached.model_dump()["attached_to"] == "cons-1"
 
 
 def test_mark_forbids_extra_fields_and_unknown_actions() -> None:

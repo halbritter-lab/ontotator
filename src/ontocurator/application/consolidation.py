@@ -36,6 +36,7 @@ from ontocurator.application.document_row_panel import (
     AxisDefaults,
     finding_of,
     project_profile,
+    project_roles,
 )
 from ontocurator.application.people import person_refs
 from ontocurator.authz.policy import Access, Action, can
@@ -53,6 +54,7 @@ from ontocurator.domain.review import ReviewDecision
 from ontocurator.domain.serialization import decode_snapshot
 from ontocurator.domain.work_rounds import WorkRoundView
 from ontocurator.domain.workspace import Submission
+from ontocurator.ontology.modifiers import TermRoles, modifier_layers
 from ontocurator.storage.repository import Repository, _key_str
 from ontocurator.storage.tables import (
     DocumentRow,
@@ -113,6 +115,7 @@ class RoundMembers:
     order: list[str]  # source ids: submissions first, then "draft-<id>"
     authors: dict[str, str]  # source id -> author pseudonym
     members: dict[str, RoundMember]  # by input id
+    roles: TermRoles  # modifier roles of the project's layers
 
 
 def round_members(
@@ -130,8 +133,10 @@ def round_members(
     the exact target text, so every input has a target snapshot; one without
     is skipped. Reads ``WorkRoundRow`` and ``RoundInputRow`` on the caller's
     connection, so it also sees a round created in the caller's open
-    transaction. ``profile`` and ``defaults`` come from ``project_profile``.
+    transaction. ``profile`` and ``defaults`` come from ``project_profile``;
+    the modifier roles (standalone modifier findings) from ``project_roles``.
     """
+    roles = project_roles(conn, pid, profile)
     editable = {
         layer.layer_id for layer in profile.layers if layer.access == "editable"
     }
@@ -194,12 +199,16 @@ def round_members(
             person_id=person,
             snapshot=item,
             finding=finding_of(
-                item, key=row.input_id, order=position[submission], defaults=defaults
+                item,
+                key=row.input_id,
+                order=position[submission],
+                defaults=defaults,
+                roles=roles,
             ),
             source_id=row.payload["source_snapshot"]["annotation"]["annotation_id"],
         )
         position[submission] += 1
-    return RoundMembers(order=order, authors=authors, members=members)
+    return RoundMembers(order=order, authors=authors, members=members, roles=roles)
 
 
 def consolidation_groups(
@@ -343,7 +352,8 @@ class ConsolidationReader:
             ).one()
             people = _people(conn, access, order, found.authors)
             from_proposal = _from_tool_proposal(conn, pid, members)
-            added = _added(members, content, defaults)
+            added = _added(members, content, defaults, found.roles)
+            modifier_layer_ids = modifier_layers(profile, Repository._pins(conn, pid))
             added_by = (
                 _people(conn, access, ["self"], {"self": item.annotator_id})[0]["label"]
                 if added
@@ -361,18 +371,38 @@ class ConsolidationReader:
             "text": document.text,
             "people": people,
             "groups": [
-                _group_view(group, members, content, from_proposal)
+                _group_view(group, members, content, from_proposal, found.roles)
                 for group in _groups(order, members)
             ],
             "added": added,
             "added_by": added_by,
             "workflow_revision": item.workflow_revision,
             "draft_revision": 0 if submitted else content.revision,
+            "modifier_layer_ids": modifier_layer_ids,
         }
 
 
+def _modifiers(annotation: Annotation, roles: TermRoles) -> list[dict[str, Any]]:
+    """A member's modifiers for the read view; ``term_label`` holds the term
+    id (the route fills labels). A term the classifier does not know (old
+    data) reads as a plain modifier."""
+    return [
+        {
+            "term_id": m.term_id,
+            "term_label": m.term_id,
+            "kind": roles.kind(annotation.layer_id, m.term_id) or "modifier",
+            "exclusive_class": roles.exclusive_class(annotation.layer_id, m.term_id),
+            "segments": [[s.start, s.end] for s in m.segments],
+        }
+        for m in annotation.modifiers
+    ]
+
+
 def _added(
-    members: Mapping[str, RoundMember], content: _Content, defaults: AxisDefaults
+    members: Mapping[str, RoundMember],
+    content: _Content,
+    defaults: AxisDefaults,
+    roles: TermRoles,
 ) -> list[dict[str, Any]]:
     """Findings the consolidator added outside every group ("Add finding"):
     the draft's or submission's annotations that are neither a group's
@@ -400,6 +430,7 @@ def _added(
             key=annotation.annotation_id,
             order=len(added),
             defaults=defaults,
+            roles=roles,
         )
         added.append(
             {
@@ -414,6 +445,7 @@ def _added(
                 "spans": [list(span) for span in found.spans],
                 "cues": [list(span) for span in found.cues],
                 "note": annotation.note or None,
+                "modifiers": _modifiers(annotation, roles),
             }
         )
     added.sort(key=lambda item: (item["spans"][:1], item["annotation_id"]))
@@ -511,6 +543,7 @@ def _group_view(
     members: Mapping[str, RoundMember],
     content: _Content,
     from_proposal: set[str],
+    roles: TermRoles,
 ) -> dict[str, Any]:
     inputs = list(group.members.values())
     member_views = []
@@ -533,6 +566,7 @@ def _group_view(
                 "cues": [list(span) for span in member.finding.cues],
                 "note": annotation.note or None,
                 "from_tool_proposal": input_id in from_proposal,
+                "modifiers": _modifiers(annotation, roles),
             }
         )
     state = _state(targets, content)
@@ -608,6 +642,7 @@ def _state(
         "note": next((d.note for d in decided if d.note), None),
         "guidelines_unclear": any(m.guidelines_unclear for m in marks),
         "annotation_ids": sorted(resulting),
+        "attached_to": next((m.attached_to for m in marks if m.attached_to), None),
     }
 
 

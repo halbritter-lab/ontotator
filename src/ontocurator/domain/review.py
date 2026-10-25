@@ -21,6 +21,11 @@ class ConsolidationMark(BaseModel):
     # Hash of the consolidated annotation's content when resolved; None for
     # "leave_out". A differing current hash means "edited in the editor".
     content_sha256: str | None = None
+    # The cons-… annotation a left-out standalone modifier was attached to
+    # (S18); left out of the dump while unset, so decision hashes stay.
+    attached_to: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class ReviewDecision(BaseModel):

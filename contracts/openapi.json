@@ -9961,6 +9961,17 @@
               }
             ],
             "title": "Content Sha256"
+          },
+          "attached_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attached To"
           }
         },
         "additionalProperties": false,
@@ -10143,7 +10154,7 @@
           "kind"
         ],
         "title": "ConsolidationModifierView",
-        "description": "One modifier of a member (filled by M2)."
+        "description": "One modifier of a member; ``kind`` and ``exclusive_class`` from the\nlayer's classifier, ``segments`` as code-point ``[start, end]``."
       },
       "ConsolidationPersonView": {
         "properties": {

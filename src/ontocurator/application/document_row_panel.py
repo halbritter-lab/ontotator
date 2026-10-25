@@ -51,7 +51,9 @@ from ontocurator.domain.agreement import (
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.profiles import TaskProfile
+from ontocurator.domain.project_rules import ModifierRoles
 from ontocurator.domain.workspace import Submission
+from ontocurator.ontology.modifiers import NO_TERM_ROLES, TermRoles, term_roles
 from ontocurator.projects.service import axis_defaults
 from ontocurator.storage.repository import Repository
 from ontocurator.storage.tables import DocumentRow, ProjectRow, SubmissionRow
@@ -69,6 +71,7 @@ __all__ = [
     "finding_of",
     "findings_of",
     "project_profile",
+    "project_roles",
 ]
 
 LabelRule = Literal["accept", "compare"]
@@ -117,19 +120,24 @@ def findings_of(
     submission: Submission,
     profile: TaskProfile,
     defaults: AxisDefaults | None = None,
+    roles: ModifierRoles = NO_TERM_ROLES,
 ) -> list[Finding]:
     """The findings of a submission: its snapshots in editable layers.
 
     Axis values are filled with the layer's defaults (``axis_defaults``);
-    modifiers are not part of the annotation model, so every finding has an
-    empty modifier set. A finding without evidence is spanless.
+    modifiers and standalone modifier findings as ``finding_of``. A finding
+    without evidence is spanless.
     """
     editable = {
         layer.layer_id for layer in profile.layers if layer.access == "editable"
     }
     return [
         finding_of(
-            item, key=item.annotation.annotation_id, order=order, defaults=defaults
+            item,
+            key=item.annotation.annotation_id,
+            order=order,
+            defaults=defaults,
+            roles=roles,
         )
         for order, item in enumerate(submission.snapshots)
         if item.annotation.layer_id in editable
@@ -142,12 +150,16 @@ def finding_of(
     key: str,
     order: int,
     defaults: AxisDefaults | None = None,
+    roles: ModifierRoles = NO_TERM_ROLES,
 ) -> Finding:
     """One snapshot as a ``Finding`` (the one rule the final panel's agreement
     and the consolidation grouping share).
 
-    Axis values are filled with the layer's defaults; ``type_id``, the note
-    and the cue segments are filled for ``groups``; ``compare`` ignores them.
+    Axis values are filled with the layer's defaults; ``type_id``, the note,
+    the cue segments, the modifier segments and ``standalone_modifier`` (a
+    modifier term used as the finding, by ``roles``) are filled for
+    ``groups``; ``compare`` uses only the modifier term ids. The default
+    ``roles`` exist for pure tests; production passes ``project_roles``.
     """
     annotation = item.annotation
     refs = {(ref.evidence_id, ref.version) for ref in annotation.evidence_refs}
@@ -163,12 +175,20 @@ def finding_of(
         axes=with_defaults(
             annotation.axes_values, (defaults or {}).get(annotation.layer_id, {})
         ),
-        modifiers=frozenset(),
+        modifiers=frozenset(m.term_id for m in annotation.modifiers),
         spans=tuple(sorted((s.start, s.end) for m in mentions for s in m.segments)),
         order=order,
         type_id=annotation.type_id,
         note=annotation.note or None,
         cues=tuple(sorted((s.start, s.end) for m in mentions for s in m.cue_segments)),
+        modifier_spans=tuple(
+            sorted(
+                (m.term_id, tuple(sorted((s.start, s.end) for s in m.segments)))
+                for m in annotation.modifiers
+            )
+        ),
+        standalone_modifier=roles.kind(annotation.layer_id, annotation.term_id)
+        is not None,
     )
 
 
@@ -266,6 +286,12 @@ def project_profile(conn: Connection, pid: int) -> tuple[TaskProfile, AxisDefaul
     )
 
 
+def project_roles(conn: Connection, pid: int, profile: TaskProfile) -> TermRoles:
+    """Modifier roles of the project's ``hpo-phenotype`` layers (pins on the
+    caller's connection; ontologies through the installed source, D-a)."""
+    return term_roles(profile, Repository._pins(conn, pid))
+
+
 def _agreement(
     comparable: Sequence[Candidate],
     recorded_at: Mapping[str, datetime],
@@ -283,6 +309,7 @@ def _agreement(
         (item.submission_id for item in comparable),
         key=lambda sid: (recorded_at[sid], sid),
     )
+    # ``compare`` ignores standalone modifiers: no roles (no ontology load).
     findings = {sid: findings_of(payloads[sid], profile, defaults) for sid in order}
     return compare(findings, order)
 
@@ -294,6 +321,7 @@ def _all_match(
     profile: TaskProfile,
     defaults: AxisDefaults,
     submissions: Sequence[Mapping[str, Any]],
+    roles: ModifierRoles,
 ) -> str | None:
     """Full agreement (W1, U7): the earliest eligible compared submission when
     at least two are compared and every consolidation group is ``match``
@@ -312,7 +340,9 @@ def _all_match(
         (item.submission_id for item in comparable),
         key=lambda sid: (recorded_at[sid], sid),
     )
-    findings = {sid: findings_of(payloads[sid], profile, defaults) for sid in order}
+    findings = {
+        sid: findings_of(payloads[sid], profile, defaults, roles) for sid in order
+    }
     if any(group.kinds != {"match"} for group in groups(findings, order)):
         return None
     eligible = {item["submission_id"] for item in submissions if item["eligible"]}
@@ -469,7 +499,15 @@ def final_panel(
         for item in listing["submissions"]
     ]
     all_match_id = (
-        _all_match(comparable, recorded_at, payloads, profile, defaults, submissions)
+        _all_match(
+            comparable,
+            recorded_at,
+            payloads,
+            profile,
+            defaults,
+            submissions,
+            project_roles(conn, pid, profile),
+        )
         if rule == "compare"
         else None
     )

@@ -3171,6 +3171,8 @@ export interface components {
             guidelines_unclear: boolean;
             /** Content Sha256 */
             content_sha256?: string | null;
+            /** Attached To */
+            attached_to?: string | null;
         };
         /** ConsolidationMemberView */
         ConsolidationMemberView: {
@@ -3217,7 +3219,8 @@ export interface components {
         };
         /**
          * ConsolidationModifierView
-         * @description One modifier of a member (filled by M2).
+         * @description One modifier of a member; ``kind`` and ``exclusive_class`` from the
+         *     layer's classifier, ``segments`` as code-point ``[start, end]``.
          */
         ConsolidationModifierView: {
             /** Term Id */

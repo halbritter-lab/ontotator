@@ -37,7 +37,8 @@ class ConsolidationPersonView(_View):
 
 
 class ConsolidationModifierView(_View):
-    """One modifier of a member (filled by M2)."""
+    """One modifier of a member; ``kind`` and ``exclusive_class`` from the
+    layer's classifier, ``segments`` as code-point ``[start, end]``."""
 
     term_id: str
     term_label: str
@@ -131,15 +132,20 @@ def read_consolidation(
         data["workspace_id"] = encode_workspace_id(item.workspace_key)
     ontology = get_ontology(request)
     labels: dict[tuple[str, str], str] = {}
+
+    def label(layer_id: str, term_id: str) -> str:
+        if (layer_id, term_id) not in labels:
+            status = ontology.for_package_layer(
+                repo, item.project_key, layer_id
+            ).validate_term(term_id)
+            labels[(layer_id, term_id)] = status.label or term_id
+        return labels[(layer_id, term_id)]
+
     members = [m for group in data["groups"] for m in group["members"]]
     for member in [*members, *data["added"]]:
-        term = (member["layer_id"], member["term_id"])
-        if term not in labels:
-            status = ontology.for_package_layer(
-                repo, item.project_key, term[0]
-            ).validate_term(term[1])
-            labels[term] = status.label or term[1]
-        member["term_label"] = labels[term]
+        member["term_label"] = label(member["layer_id"], member["term_id"])
+        for modifier in member["modifiers"]:
+            modifier["term_label"] = label(member["layer_id"], modifier["term_id"])
     return ConsolidationView.model_validate(data)
 
 
