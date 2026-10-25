@@ -230,15 +230,15 @@ it("keeps original File identity for stale Check again and does not carry its ov
 
 it("retains an unsaved translation gate when another settings section is saved", async () => {
   vi.spyOn(api, "updateProjectSettings").mockResolvedValue({ ...settings, annotate_accepted_translations_only: false });
-  const view = render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="rules" />);
+  const view = render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="workflow" />);
   fireEvent.click(await screen.findByLabelText("Annotate translations only after an accepted review"));
   view.rerender(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="general" />);
   fireEvent.click(screen.getByRole("button", { name: "Save general" }));
   await screen.findByText("General saved.");
-  view.rerender(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="rules" />);
+  view.rerender(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="workflow" />);
   const gate = screen.getByLabelText("Annotate translations only after an accepted review");
   expect((gate as HTMLInputElement).checked).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save workflow" }));
   await waitFor(() => expect(api.updateProjectSettings).toHaveBeenLastCalledWith("p", expect.objectContaining({ annotate_accepted_translations_only: true })));
 });
 
@@ -285,12 +285,12 @@ it("renders exact preview variant lineage and every failed code", () => {
   expect(table.getByText("negation_changed")).toBeTruthy();
 });
 
-it("loads explicit false annotation gate and saves its changed Rules value", async () => {
+it("loads explicit false annotation gate and saves its changed Workflow value", async () => {
   vi.spyOn(api, "updateProjectSettings").mockResolvedValue({ ...settings, annotate_accepted_translations_only: true });
-  render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="rules" />);
+  render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="workflow" />);
   const gate = await screen.findByLabelText("Annotate translations only after an accepted review");
   expect((gate as HTMLInputElement).checked).toBe(false);
-  fireEvent.click(gate); fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
+  fireEvent.click(gate); fireEvent.click(screen.getByRole("button", { name: "Save workflow" }));
   await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith("p", expect.objectContaining({ annotate_accepted_translations_only: true })));
 });
 

@@ -246,7 +246,7 @@ describe("project settings sections", () => {
     view.show("rules");
     fireEvent.click(screen.getByRole("button", { name: "Save rules" }));
     await screen.findByText("Rules saved.");
-    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, annotate_accepted_translations_only: true, allow_spanless_findings: true, require_spanless_note: true, hidden_axis_values: {} });
+    expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, { require_chosen_axes: false, adjudicator_not_annotator: false, contiguous_mentions_only: false, allow_spanless_findings: true, require_spanless_note: true, hidden_axis_values: {} });
   });
 
   it.each([
@@ -472,7 +472,7 @@ describe("workflow settings", () => {
     vi.mocked(api.updateProjectSettings).mockResolvedValue({ ...settings, import_plan: "nothing", annotations_per_text: 3 });
     fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
     await within(form).findByText("Workflow saved.");
-    expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 3, tool_proposal_mode: "proposals" });
+    expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 3, tool_proposal_mode: "proposals", annotate_accepted_translations_only: true });
   });
 
   it("shows how many rows exceed a lowered target", async () => {
@@ -498,7 +498,7 @@ describe("workflow settings", () => {
     renderSettings("workflow");
     const form = await screen.findByRole("form", { name: "Workflow" });
     fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
-    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 2, tool_proposal_mode: "proposals" }));
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith(settings.project_key, { import_plan: "nothing", annotations_per_text: 2, tool_proposal_mode: "proposals", annotate_accepted_translations_only: true }));
   });
 
   it("saves Texts with tool proposals", async () => {
@@ -514,6 +514,27 @@ describe("workflow settings", () => {
     fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
     await within(form).findByText("Workflow saved.");
     expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, expect.objectContaining({ tool_proposal_mode: "scratch" }));
+  });
+
+  it("the translation rule sits in Workflow below Texts with tool proposals", async () => {
+    const label = "Annotate translations only after an accepted review";
+    const view = renderSettings("rules");
+    const rules = await screen.findByRole("form", { name: "Rules" });
+    expect(within(rules).queryByRole("checkbox", { name: label })).toBeNull();
+    fireEvent.click(within(rules).getByRole("button", { name: "Save rules" }));
+    await screen.findByText("Rules saved.");
+    expect(vi.mocked(api.updateProjectSettings).mock.lastCall![1]).not.toHaveProperty("annotate_accepted_translations_only");
+    view.show("workflow");
+    const form = screen.getByRole("form", { name: "Workflow" });
+    const gate = within(form).getByRole("checkbox", { name: label });
+    expect(gate).toHaveProperty("checked", true);
+    expect(within(form).getByText("Translations can be annotated only after their review is accepted. Native source texts are never held back.")).toBeTruthy();
+    const tools = within(form).getByRole("radiogroup", { name: "Texts with tool proposals" });
+    expect(tools.compareDocumentPosition(gate) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(gate.compareDocumentPosition(within(form).getByRole("spinbutton", { name: /Annotations per text/ })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(gate);
+    fireEvent.click(within(form).getByRole("button", { name: "Save workflow" }));
+    await waitFor(() => expect(api.updateProjectSettings).toHaveBeenLastCalledWith(settings.project_key, expect.objectContaining({ annotate_accepted_translations_only: false })));
   });
 
   it("names the consolidator rule in D2 words", async () => {

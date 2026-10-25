@@ -50,7 +50,7 @@ const SECTION_PARTS: Record<SettingsSection, readonly Section[]> = {
 const settingsRoute = (key: string, section: SettingsSection): Route =>
   section === "general" ? { name: "projectSettings", key } : { name: "projectSettings", key, section };
 const generalOf = (settings: ProjectSettings) => ({ name: settings.name, description: settings.description ?? "", languages: settings.languages ?? [] });
-const rulesOf = (settings: ProjectSettings) => ({ allow_spanless_findings: settings.allow_spanless_findings ?? true, require_spanless_note: settings.require_spanless_note ?? true, require_chosen_axes: settings.require_chosen_axes, adjudicator_not_annotator: settings.adjudicator_not_annotator, contiguous_mentions_only: settings.contiguous_mentions_only, annotate_accepted_translations_only: settings.annotate_accepted_translations_only, hidden_axis_values: settings.hidden_axis_values ?? {} });
+const rulesOf = (settings: ProjectSettings) => ({ allow_spanless_findings: settings.allow_spanless_findings ?? true, require_spanless_note: settings.require_spanless_note ?? true, require_chosen_axes: settings.require_chosen_axes, adjudicator_not_annotator: settings.adjudicator_not_annotator, contiguous_mentions_only: settings.contiguous_mentions_only, hidden_axis_values: settings.hidden_axis_values ?? {} });
 
 function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved, section = "general", onNavigate, routeLeaveRef }: ProjectSettingsPageProps & { initial: ProjectSettings; ontologies: OntologyInfo[] }): JSX.Element {
   const [model, setModel] = useState(initial);
@@ -103,7 +103,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   const work: Record<Section, () => Promise<ProjectSettings>> = {
     General: () => api.updateProjectSettings(projectKey, { name: general.name, description: general.description.trim() ? general.description : null, languages: general.languages }),
     Rules: () => api.updateProjectSettings(projectKey, rules),
-    Workflow: () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text, tool_proposal_mode: workflow.tool_proposal_mode }),
+    Workflow: () => api.updateProjectSettings(projectKey, { import_plan: workflow.import_plan, annotations_per_text: workflow.annotations_per_text, tool_proposal_mode: workflow.tool_proposal_mode, annotate_accepted_translations_only: workflow.annotate_accepted_translations_only }),
     "Creation defaults": () => api.updateProjectSettings(projectKey, { creation_defaults: creationDefaults }),
     Pins: () => api.updatePins(projectKey, serializePins(ids, pins)),
     Profile: () => api.updateProjectProfile(projectKey, uploaded!.profile),
@@ -202,7 +202,6 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
         <Checkbox id="project-rule-chosen" label="Every axis must be chosen before submission" hint="When off, unconfirmed axis values require a submission warning acknowledgement. Acknowledging a warning does not confirm clinical values." checked={rules.require_chosen_axes} onChange={event => { setRules({ ...rules, require_chosen_axes: event.target.checked }); setSaved(null); }} />
         <Checkbox id="project-rule-adjudicator" label="The consolidator of a text may not be one of its annotators" checked={rules.adjudicator_not_annotator} onChange={event => { setRules({ ...rules, adjudicator_not_annotator: event.target.checked }); setSaved(null); }} />
         <Checkbox id="project-rule-contiguous" label="Only contiguous mentions" checked={rules.contiguous_mentions_only} onChange={event => { setRules({ ...rules, contiguous_mentions_only: event.target.checked }); setSaved(null); }} />
-        <Checkbox id="project-rule-translations" label="Annotate translations only after an accepted review" checked={rules.annotate_accepted_translations_only} onChange={event => { setRules({ ...rules, annotate_accepted_translations_only: event.target.checked }); setSaved(null); }} />
         <details className="settings-secondary-rules"><summary>More rule settings: hidden axis values</summary><HiddenAxisValuesField profile={model.profile} axisDefaults={model.axis_defaults} value={rules.hidden_axis_values} onChange={hidden_axis_values => { setRules({ ...rules, hidden_axis_values }); setSaved(null); }} disabled={busy !== null} /></details>
       </fieldset>
     </form>; break;

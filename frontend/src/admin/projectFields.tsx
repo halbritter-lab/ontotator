@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, type OntologyInfo, type ProjectPin, type ProjectSettings, type TaskProfile } from "../api/client";
-import { InlineMessage, Select, TextInput } from "../ui";
+import { Checkbox, InlineMessage, Select, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 
 export type PinDraft = Omit<ProjectPin, "allowed_roots"> & { rootsText: string };
@@ -78,8 +78,8 @@ export function ProfileUpload({ onChange, disabled, id = "project-profile-file" 
 }
 
 export type ToolProposalMode = "proposals" | "scratch";
-export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number; tool_proposal_mode: ToolProposalMode }
-export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1, tool_proposal_mode: settings.tool_proposal_mode ?? "proposals" });
+export interface WorkflowDraft { import_plan: ProjectSettings["import_plan"]; annotations_per_text: number; tool_proposal_mode: ToolProposalMode; annotate_accepted_translations_only: boolean }
+export const workflowOf = (settings: ProjectSettings): WorkflowDraft => ({ import_plan: settings.import_plan ?? "review_and_annotate_translations", annotations_per_text: settings.annotations_per_text ?? 1, tool_proposal_mode: settings.tool_proposal_mode ?? "proposals", annotate_accepted_translations_only: settings.annotate_accepted_translations_only ?? true });
 const toolProposalOptions: { value: ToolProposalMode; label: string; help: string }[] = [
   { value: "proposals", label: "Annotate from proposals", help: "Annotators go through the tool's proposals one by one, confirm, reject or correct each, and add the findings the tool missed." },
   { value: "scratch", label: "Annotate from scratch", help: "Annotators start from the plain text and do not see the proposals." },
@@ -90,8 +90,8 @@ const importPlanOptions: { value: WorkflowDraft["import_plan"]; label: string }[
 ];
 
 /**
- * Settings › Workflow: the work plan of imported texts and the number of independent annotations
- * per text. Lowering the number shows how many rows already have more annotators (server preview).
+ * Settings › Workflow: the work plan of imported texts, how texts with tool proposals are annotated, whether translations
+ * wait for an accepted review, and the number of independent annotations per text. Lowering the number shows how many rows already have more annotators (server preview).
  */
 export function WorkflowFields({ projectKey, value, saved, onChange, disabled }: {
   projectKey: string; value: WorkflowDraft; saved: WorkflowDraft; onChange: (value: WorkflowDraft) => void; disabled?: boolean;
@@ -130,6 +130,9 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
         </label>)}
       </div>
     </div>
+    <Checkbox id={`${prefix}-translation-gate`} label="Annotate translations only after an accepted review"
+      hint="Translations can be annotated only after their review is accepted. Native source texts are never held back."
+      checked={value.annotate_accepted_translations_only} disabled={disabled} onChange={event => onChange({ ...value, annotate_accepted_translations_only: event.target.checked })} />
     <TextInput id={`${prefix}-annotations`} label="Annotations per text" type="number" min={1} max={5} step={1} required hint="How many people annotate each text independently." value={Number.isFinite(target) ? String(target) : ""} disabled={disabled}
       onChange={event => onChange({ ...value, annotations_per_text: event.target.value === "" ? Number.NaN : Number(event.target.value) })} />
     {rows !== null && <p role="status" className="field-hint">{rows > 0 ? `${rows} ${rows === 1 ? "row has" : "rows have"} more annotators than the new target. Nobody is removed.` : "Nobody is removed."}</p>}
