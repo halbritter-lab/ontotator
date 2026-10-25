@@ -53,7 +53,7 @@ test("Mild and Severe: Two severities is listed, the ticked box submits", async 
   const warnings = dialog.getByRole("region", { name: "Modifier warnings (1)" });
   await expect(warnings).toContainText("Seizure: Two severities: Mild, Severe.");
   await expect(warnings.getByRole("button", { name: "Go to Seizure" })).toBeVisible();
-  await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values and 1 modifier warnings$/ }).check();
+  await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values? and 1 modifier warning$/ }).check();
   await dialog.getByRole("checkbox", { name: "Entire text checked for further findings" }).check();
   await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Case successfully submitted/i);

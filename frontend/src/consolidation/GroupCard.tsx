@@ -13,6 +13,7 @@ import type { WorkspaceView } from "../app/CaseScreen";
 import { axisOptionLabel } from "../editor/axisLabels";
 import { COHORT_TAG, type TermInfo } from "../editor/modifiers";
 import { ModifiersSection } from "../editor/ModifiersSection";
+import { useTermLabels } from "../editor/useTermLabels";
 import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from "../ui";
 import { IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
@@ -80,9 +81,21 @@ function EditValues({ group, workspace, text, busy, onKeep, onCancel }: { group:
   const [modifiers, setModifiers] = useState<ModifierView[]>(() => (base.modifiers ?? []).map(value => ({ ...value, exclusive_class: value.exclusive_class ?? null })));
   const search = useTermSearch(workspace, base.layer_id);
   const id = useId();
+  // Added modifiers carry no exclusive class: look it up for "Two severities" / "Two onsets".
+  const added = modifiers.filter(value => !base.modifiers?.some(held => held.term_id === value.term_id));
+  const termLabels = useTermLabels(workspace.key.project_key, added.map(value => ({ layer_id: base.layer_id, term_id: value.term_id })));
+  const [removed, setRemoved] = useState("");
   const termInfo = (termId: string): TermInfo | undefined => {
     const modifier = modifiers.find(value => value.term_id === termId);
-    return modifier && { label: modifier.term_label || termId, role: modifier.kind, exclusiveClass: modifier.exclusive_class };
+    return modifier && { label: modifier.term_label || termId, role: modifier.kind,
+      exclusiveClass: modifier.exclusive_class ?? termLabels.info(base.layer_id, termId)?.exclusiveClass ?? null };
+  };
+  const remove = (termId: string) => {
+    const modifier = modifiers.find(value => value.term_id === termId);
+    setModifiers(current => current.filter(value => value.term_id !== termId));
+    setRemoved(`Removed ${modifier?.term_label || termId}.`);
+    // The chip and its menu are gone: keep focus in the section.
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(".cons-edit-values [data-modifiers-section] .mod-add")?.focus());
   };
   return <div className="cons-edit-values" role="group" aria-label="Edit values">
     {axes.map(axis => <Select key={axis.id} id={`${id}-${axis.id}`} label={axis.label} value={values[axis.id] ?? ""}
@@ -92,11 +105,11 @@ function EditValues({ group, workspace, text, busy, onKeep, onCancel }: { group:
     </Select>)}
     {withModifiers && <ModifiersSection finding={base.term_label || base.term_id} text={text} termInfo={termInfo} chipText={consolidationChip}
       modifiers={modifiers.map(value => ({ term_id: value.term_id, segments: value.segments.map(([start, end]) => ({ start, end })) }))}
-      // shortcut: an added modifier has no class here, so "Two severities" shows only for the members' modifiers; the submit check still warns.
-      onAdd={async (termId, label) => setModifiers(current => current.some(value => value.term_id === termId) ? current
-        : [...current, { term_id: termId, term_label: label, kind: "modifier", exclusive_class: null, segments: [] }])}
-      onRemove={termId => setModifiers(current => current.filter(value => value.term_id !== termId))}
+      onAdd={async (termId, label, role) => { setRemoved(""); setModifiers(current => current.some(value => value.term_id === termId) ? current
+        : [...current, { term_id: termId, term_label: label, kind: role === "cohort" ? "cohort" : "modifier", exclusive_class: null, segments: [] }]); }}
+      onRemove={remove}
       searchProps={search} />}
+    {withModifiers && <p role="status" className="visually-hidden">{removed}</p>}
     <div className="cons-actions">
       <Button variant="primary" loading={busy} onClick={() => onKeep({ axes: Object.fromEntries(Object.entries(values).filter(([, value]) => !!value)),
         modifiers: withModifiers ? modifiers : null })}>Keep with these values</Button>

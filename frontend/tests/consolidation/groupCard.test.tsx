@@ -335,6 +335,38 @@ describe("GroupCard, modifiers", () => {
         "Present, Patient, Current, no modifiers"]);
     });
 
+    it("Remove modifier keeps focus on + Add modifier… and announces it", async () => {
+      const partial = seizure("g-s13", ["partial"], [[ANA, [severe("schwere")]]]);
+      renderCard(partial, { ...mod, workspace: modWorkspace() });
+      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      fireEvent.click(screen.getByRole("button", { name: "Actions, Severe" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Remove modifier" }));
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "+ Add modifier…" })));
+      expect(screen.getAllByRole("status").map(status => status.textContent)).toContain("Removed Severe.");
+    });
+
+    it("an added cohort term shows Cohort term, a second severity warns", async () => {
+      vi.spyOn(api, "searchOntology").mockImplementation(async request => ({ route: "auto", query: request.query, shuffled: false, search_id: "s1",
+        candidates: request.query === "freq" ? [{ term_id: "HP:0040282", label: "Frequent", rank: 1, role: "cohort" }]
+          : [{ term_id: "HP:0012825", label: "Mild", rank: 1, role: "modifier" }] }) as never);
+      vi.spyOn(api, "resolveTermLabels").mockImplementation(async (_project, terms) => terms.map(term => ({ ...term,
+        label: term.term_id, role: term.term_id === "HP:0040282" ? "cohort" : "modifier", exclusive_class: term.term_id === "HP:0012825" ? "severity" : null })) as never);
+      const partial = seizure("g-s13", ["partial"], [[ANA, [severe("schwere")]]]);
+      renderCard(partial, { ...mod, workspace: modWorkspace() });
+      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      const add = async (query: string) => {
+        fireEvent.click(screen.getByRole("button", { name: "+ Add modifier…" }));
+        fireEvent.change(screen.getByRole("combobox", { name: "Search modifier" }), { target: { value: query } });
+        await waitFor(() => expect(within(screen.getByRole("group", { name: "Add modifier to Seizure" })).getAllByRole("option")).toHaveLength(1), { timeout: 3000 });
+        fireEvent.keyDown(screen.getByRole("combobox", { name: "Search modifier" }), { key: "Enter" });
+      };
+      await add("freq");
+      await waitFor(() => expect(chips()).toContain("Frequent Cohort term"));
+      expect(screen.queryByText("Two severities")).toBeNull();
+      await add("mild");
+      await waitFor(() => expect(screen.getByText("Two severities")).toBeTruthy());
+    });
+
     it("a layer without modifiers shows no Modifiers section and sends no modifiers", () => {
       const reopened = seizure("g-s1", ["match"], [[ANA, []], [BEN, []]], { state: "open", annotation_ids: [] });
       const { props } = renderCard(reopened, mod);

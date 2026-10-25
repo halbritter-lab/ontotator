@@ -10,6 +10,7 @@
  */
 import type { ConsolidationGroupView, ConsolidationMemberView, ConsolidationModifierView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import { axisOptionLabel } from "../editor/axisLabels";
+import { sentenceBounds } from "../editor/modifiers";
 import { axisLabel, OVERLAPPING, quoted } from "./consolidationText";
 import { personName } from "./lanes";
 import { chosenModifiers, modifierChoices, modifierKey, modifierText, NO_MODIFIERS, otherTextChosen, press, setText, setWarnings, toggleName, type MemberSet, type ModifierView } from "./modifierSets";
@@ -289,22 +290,13 @@ export function resolvePayload(group: ConsolidationGroupView, choices: Choices):
   } };
 }
 
-/** Code point range of the sentence around `offset`. shortcut: ends at ".", "!" or "?" (also inside "2.5"); upgrade with a sentence splitter if that misleads. */
-function sentenceOf(text: string, offset: number): [number, number] {
-  const chars = Array.from(text);
-  let start = offset, end = offset;
-  while (start > 0 && !/[.!?]/.test(chars[start - 1])) start--;
-  while (end < chars.length && !/[.!?]/.test(chars[end])) end++;
-  return [start, end];
-}
-
 export interface AttachCandidate { groupId: string; annotationId: string; label: string }
 
 /** Resolved findings of the round in the standalone modifier's sentence, nearest first (S18). */
 export function attachCandidates(group: ConsolidationGroupView, groups: readonly ConsolidationGroupView[], text: string): AttachCandidate[] {
   const at = group.start;
   if (at === null) return [];
-  const [from, to] = sentenceOf(text, at);
+  const [from, to] = sentenceBounds(text, at);
   const layerId = group.members[0]?.layer_id;
   return groups
     .filter(other => other.group_id !== group.group_id && other.state !== "open" && other.state !== "leave_out"

@@ -332,7 +332,7 @@ describe("CaseScreen integration", () => {
       return screen.findByRole("dialog", { name: "Submit case" });
     };
     const submitTicked = (dialog: HTMLElement, n: number) => {
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: `Submit with ${n} unconfirmed values` }));
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: `Submit with ${n} unconfirmed value${n === 1 ? "" : "s"}` }));
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
     };
@@ -409,7 +409,7 @@ describe("CaseScreen integration", () => {
       render(<CaseScreen view={view} workspaceId="warning" onClose={vi.fn()} />);
       const dialog = await openSubmit();
       submitTicked(dialog, 1);
-      const box = within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed values" }) as HTMLInputElement;
+      const box = within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }) as HTMLInputElement;
       await waitFor(() => expect(statusOf(dialog)).toBe("The unconfirmed values changed. Check the list again."));
       expect(box.checked).toBe(false);
       expect(submit).toHaveBeenCalledTimes(2);
@@ -2747,7 +2747,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       const section = await within(dialog).findByRole("region", { name: "Modifier warnings (1)" });
       expect(section.textContent).toContain("Seizure: Two severities: Mild, Severe.");
       expect(within(dialog).queryByText(/Turn .* before submitting/)).toBeNull();
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warnings" }));
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warning" }));
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
       await screen.findByRole("dialog", { name: "Case submitted" });
@@ -2762,7 +2762,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValue(modWarning(view, [
         { rule: "exclusive_modifier_class", detail: { class: "severity" } }, { rule: "cohort_modifier", detail: { term_id: "HP:0040283" } }]));
       const dialog = await openSubmit();
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warnings" }));
+      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warning" }));
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
       await waitFor(() => expect(dialog.querySelector("[data-submit-status]")!.textContent).toBe("The warnings changed. Check the list again."));

@@ -73,7 +73,7 @@ describe("ModifiersSection", () => {
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
     expect(searchOntology.mock.calls[0][0].within).toEqual(["HP:0012823", "HP:0040279"]);
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(props.onAdd).toHaveBeenCalledWith("HP:0031796", "Recurrent");
+    expect(props.onAdd).toHaveBeenCalledWith("HP:0031796", "Recurrent", "modifier");
     const status = await screen.findByText("Added Recurrent to Seizure. Link a text span?");
     expect(status.closest('[role="status"]')).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "+ Add modifier…" })));

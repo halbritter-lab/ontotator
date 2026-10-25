@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { plural } from "../app/labels";
 import { Button } from "../ui/Button";
 import { Checkbox } from "../ui/Checkbox";
 import { Dialog } from "../ui/Dialog";
@@ -15,9 +16,10 @@ const LISTED_ITEMS = 5;
 
 /** Label of the acknowledgement checkbox (plan D-f); null when nothing needs acknowledging. */
 export function acknowledgementLabel(values: number, modifierWarnings: number): string | null {
-  if (values && modifierWarnings) return `Submit with ${values} unconfirmed values and ${modifierWarnings} modifier warnings`;
-  if (values) return `Submit with ${values} unconfirmed values`;
-  return modifierWarnings ? `Submit with ${modifierWarnings} modifier warnings` : null;
+  const valuesText = plural(values, "unconfirmed value"), warningsText = plural(modifierWarnings, "modifier warning");
+  if (values && modifierWarnings) return `Submit with ${valuesText} and ${warningsText}`;
+  if (values) return `Submit with ${valuesText}`;
+  return modifierWarnings ? `Submit with ${warningsText}` : null;
 }
 
 export interface SubmitCaseDialogProps {

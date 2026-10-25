@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, type AnnotationSnapshot, type Draft, type RoundInputView } from "../src/api/client";
 import { CaseScreen } from "../src/app/CaseScreen";
-import { SubmitCaseDialog, type SubmitCaseDialogProps } from "../src/editor/SubmitCaseDialog";
+import { acknowledgementLabel, SubmitCaseDialog, type SubmitCaseDialogProps } from "../src/editor/SubmitCaseDialog";
 import { collectOpenItems } from "../src/editor/openItems";
 import { unconfirmedRows, type UnconfirmedRow } from "../src/editor/unconfirmedValues";
 import { historical } from "./variantFixtures";
@@ -103,8 +103,8 @@ describe("submit dialog open items", () => {
       .toBe("Confirm that the entire text was checked before submitting.");
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
     expect(document.getElementById(confirm.getAttribute("aria-describedby")!)?.textContent)
-      .toBe("Confirm the values or tick \u201cSubmit with 1 unconfirmed values\u201d before submitting.");
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed values" }));
+      .toBe("Confirm the values or tick \u201cSubmit with 1 unconfirmed value\u201d before submitting.");
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }));
     expect(confirm.getAttribute("aria-disabled")).toBeNull();
   });
 
@@ -138,13 +138,13 @@ describe("submit dialog open items", () => {
       warnings: [{ annotation_id: "open", rule: "axis_not_chosen", detail: { axis: "temporality" } }],
     }));
     const dialog = await openDialog();
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed values" }));
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }));
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
     await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" })); });
     await waitFor(() => expect(dialog.querySelector("[data-submit-status]")!.textContent).toBe("The unconfirmed values changed. Check the list again."));
     // One resend with the fresh acknowledgement, then the list is shown again.
     expect(submit).toHaveBeenCalledTimes(2);
-    expect((within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed values" }) as HTMLInputElement).checked).toBe(false);
+    expect((within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }) as HTMLInputElement).checked).toBe(false);
     expect(within(dialog).getByText("Temporality: Not specified")).toBeDefined();
     expect(within(dialog).getByRole("button", { name: "Submit case" })).toBeDefined();
     expect(within(dialog).queryByRole("button", { name: "Continue and submit" })).toBeNull();
@@ -465,5 +465,15 @@ describe("Unconfirmed values section", () => {
       expect(reasonOf(submitButton())).toBe("Turn 1 modifier used as a finding into a modifier before submitting.");
       expect(screen.queryByRole("region", { name: /Modifier warnings/ })).toBeNull();
     });
+  });
+});
+
+describe("acknowledgementLabel", () => {
+  it("uses the singular for one value or one warning", () => {
+    expect(acknowledgementLabel(1, 1)).toBe("Submit with 1 unconfirmed value and 1 modifier warning");
+    expect(acknowledgementLabel(2, 1)).toBe("Submit with 2 unconfirmed values and 1 modifier warning");
+    expect(acknowledgementLabel(0, 1)).toBe("Submit with 1 modifier warning");
+    expect(acknowledgementLabel(1, 0)).toBe("Submit with 1 unconfirmed value");
+    expect(acknowledgementLabel(0, 0)).toBeNull();
   });
 });

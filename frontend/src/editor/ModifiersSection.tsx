@@ -16,8 +16,8 @@ export interface ModifiersSectionProps {
   readOnly?: boolean;
   /** Chip text; the editor shows "Severe · “schwere”", the consolidation passes its own wording. */
   chipText?: (label: string, quote: string | null, role: TermInfo["role"]) => string;
-  /** Adds a modifier without a text span; resolves once saved. */
-  onAdd?: (termId: string, label: string) => Promise<unknown>;
+  /** Adds a modifier without a text span; resolves once saved. `role` is the search candidate's. */
+  onAdd?: (termId: string, label: string, role: TermInfo["role"]) => Promise<unknown>;
   onLinkSpan?: (termId: string) => void;
   onRemoveSpan?: (termId: string) => void;
   onRemove?: (termId: string) => void;
@@ -75,7 +75,7 @@ export function ModifiersSection({ finding, modifiers, text, termInfo, readOnly 
           onSelectCandidate={candidate => {
             const label = candidate.label ?? candidate.term_id;
             closeSearch();
-            void onAdd(candidate.term_id, label).then(
+            void onAdd(candidate.term_id, label, candidate.role).then(
               () => setStatus(onLinkSpan ? { text: `Added ${label} to ${finding}. Link a text span?`, linkTermId: candidate.term_id }
                 : { text: `Added ${label} to ${finding}.` }),
               () => undefined, // the caller reports the failure

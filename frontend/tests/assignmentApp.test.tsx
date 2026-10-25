@@ -167,7 +167,7 @@ it.each(["open", "submitted"] as const)("retains the actual submitted dialog aft
   fireEvent.click(await screen.findByRole("button", { name: /Finish & Submit Case/ }));
   const submit = await screen.findByRole("dialog", { name: "Submit case" });
   // The finding's empty assertion is an unconfirmed value (the server warns for empty axes too).
-  fireEvent.click(within(submit).getByRole("checkbox", { name: "Submit with 1 unconfirmed values" }));
+  fireEvent.click(within(submit).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }));
   fireEvent.click(within(submit).getByLabelText("Entire text checked for further findings"));
   expect(within(submit).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
   fireEvent.click(within(submit).getByRole("button", { name: "Submit case" }));

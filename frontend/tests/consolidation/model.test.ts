@@ -300,6 +300,23 @@ describe("standalone modifier (S18)", () => {
     expect(attachCandidates(groups[0], groups, MOD_TEXT).map(c => [c.groupId, c.annotationId])).toEqual([["g-seiz", "cons-g-seiz"]]);
   });
 
+  it("finds the sentence like the editor: no split inside 2.5 or Z.n., none across a line break", () => {
+    const at = (text: string, words: string): [number, number] => {
+      const start = Array.from(text.slice(0, text.indexOf(words))).length;
+      return [start, start + Array.from(words).length];
+    };
+    const ids = (text: string, words: Record<string, string>, mark: string) => {
+      const groups = [group("g-sev", ["partial", "modifier_as_finding"], [member("sev-a", ANA, "HP:0012828", "Severe", [at(text, mark)])]),
+        ...Object.entries(words).map(([id, value]) => group(id, ["partial"], [member(`${id}-b`, BEN, "HP:0001250", "Seizure", [at(text, value)])],
+          { state: "keep", annotation_ids: [`cons-${id}`] }))];
+      return attachCandidates(groups[0], groups, text).map(c => c.groupId);
+    };
+    expect(ids("Seit 2.5 Jahren schwere Anfälle.", { "g-a": "Seit" }, "schwere")).toEqual(["g-a"]);
+    // Only a "." before whitespace ends a sentence (spec), so "Z.n. " still does.
+    expect(ids("Anfälle (Z.n./V.a.) schwere Hypotonie.", { "g-a": "Anfälle" }, "schwere")).toEqual(["g-a"]);
+    expect(ids("- Anfälle\n- schwere Hypotonie", { "g-a": "Anfälle", "g-b": "Hypotonie" }, "schwere")).toEqual(["g-b"]);
+  });
+
   it("an attached group reads attached", () => {
     expect(groupStatus({ state: "leave_out", attached_to: "cons-1" }, 0)).toBe("attached");
   });
