@@ -26,6 +26,12 @@ view and the final panel's full agreement: clusters bucketed by
 overlapping text of the same layer and type merge into one group, then each
 group gets a set of kinds.
 
+Modifiers (finding-modifiers spec "Agreement and grouping"): ``compare``
+compares them as term-id sets (``modifiers``, R4); ``groups`` compares
+``modifier_spans`` exactly (term and segments), so a different modifier text
+is ``modifiers_differ`` too. A standalone modifier (a modifier term used as a
+finding) never joins the term merge and its group is ``modifier_as_finding``.
+
 Which differences are a consolidation *decision* (acceptance 2026-10-22):
 the term and every differing axis always are; the text only when the
 members' spans genuinely conflict (``spans_conflict``); notes never (they
@@ -43,6 +49,7 @@ __all__ = [
     "Finding",
     "Group",
     "GroupKind",
+    "ModifierSpans",
     "Pair",
     "compare",
     "groups",
@@ -52,8 +59,18 @@ __all__ = [
 ]
 
 Span = tuple[int, int]
+ModifierSpans = tuple[
+    tuple[str, tuple[Span, ...]], ...
+]  # sorted (term, sorted segments)
 GroupKind = Literal[
-    "match", "values_differ", "span_differs", "notes_differ", "term_differs", "partial"
+    "match",
+    "values_differ",
+    "span_differs",
+    "notes_differ",
+    "term_differs",
+    "partial",
+    "modifiers_differ",
+    "modifier_as_finding",
 ]
 
 
@@ -71,6 +88,8 @@ class Finding:
     type_id: str = ""  # groups() bucket (layer, type, term); compare() ignores it
     note: str | None = None  # compared by groups() only
     cues: tuple[Span, ...] = ()  # cue segments, compared with spans by groups()
+    modifier_spans: ModifierSpans = ()  # compared exactly by groups() only
+    standalone_modifier: bool = False  # a modifier term used as a finding
 
 
 @dataclass(frozen=True)
@@ -188,7 +207,9 @@ def groups(
         ]
 
     candidates = [
-        i for i, cluster in enumerate(clusters) if len(cluster.members) < len(order)
+        i
+        for i, cluster in enumerate(clusters)
+        if len(cluster.members) < len(order) and not cluster.first.standalone_modifier
     ]
     edges: list[tuple[int, tuple[int, int, str], tuple[int, int, str], int, int]] = []
     for offset, i in enumerate(candidates):
@@ -323,6 +344,10 @@ def _group(members: Sequence[tuple[str, Finding]], submissions: int) -> Group:
         kinds.add("span_differs")
     if notes_differ:
         kinds.add("notes_differ")
+    if len({finding.modifier_spans for finding in findings}) > 1:
+        kinds.add("modifiers_differ")
+    if any(finding.standalone_modifier for finding in findings):
+        kinds.add("modifier_as_finding")
     if not kinds:
         kinds.add("match")
 
