@@ -2,7 +2,7 @@
 import { useMemo, useState, type RefObject } from "react";
 import { api, type SearchCandidate } from "../api/client";
 import type { WorkspaceView } from "../app/CaseScreen";
-import { SearchPanel } from "../editor/SearchPanel";
+import { SearchPanel, type SearchPanelProps } from "../editor/SearchPanel";
 import { SearchManager } from "../editor/searchState";
 import { useSearchLanguages } from "../editor/searchLanguages";
 import { prefillHint } from "../editor/termSearch";
@@ -20,18 +20,23 @@ export interface TermPickerProps {
   onClose: () => void;
 }
 
-export function TermPicker({ open, anchorRef, label, workspace, layerId, initialQuery, onPick, onClose }: TermPickerProps): JSX.Element | null {
+/** Search props of the consolidation's term searches; the Modifiers section of "Edit values…" adds the modifier mode (`within` = MODIFIER_ROOTS). */
+export function useTermSearch(workspace: WorkspaceView, layerId: string): Pick<SearchPanelProps, "searchManager" | "annotationId" | "workspaceKey" | "layerId" | "languages" | "languageHint"> {
   const manager = useMemo(() => new SearchManager(api), []);
   const [searchKey] = useState(() => `search-${randomId()}`);
   // The editor's search languages: the English-only hint shows only when the text's language is not searched (U6, C2).
   const languagesFor = useSearchLanguages(api, workspace.key.annotator_id, workspace.key.project_key, workspace.document.language, workspace.document.document_id);
   const ontologyId = (workspace.layers ?? []).find(layer => layer.layer_id === layerId)?.ontology_id;
   const languages = languagesFor((workspace.ontologies ?? []).find(item => item.ontology_id === ontologyId)?.sha256);
+  return { searchManager: manager, annotationId: searchKey, workspaceKey: workspace.key, layerId, languages,
+    languageHint: prefillHint(workspace.document.language, languages?.active) ?? undefined };
+}
+
+export function TermPicker({ open, anchorRef, label, workspace, layerId, initialQuery, onPick, onClose }: TermPickerProps): JSX.Element | null {
+  const search = useTermSearch(workspace, layerId);
   if (!open) return null;
   return <Popover open anchorRef={anchorRef} label={label} onClose={onClose} width={420}>
-    <SearchPanel searchManager={manager} annotationId={searchKey} workspaceKey={workspace.key} layerId={layerId}
-      initialQuery={initialQuery} autoFocus onEscape={onClose} languages={languages}
-      languageHint={prefillHint(workspace.document.language, languages?.active) ?? undefined}
+    <SearchPanel {...search} initialQuery={initialQuery} autoFocus onEscape={onClose}
       onSelectCandidate={(candidate, searchId) => onPick(candidate, searchId)} />
   </Popover>;
 }

@@ -11,14 +11,16 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { axisOptionLabel } from "../editor/axisLabels";
+import { COHORT_TAG, type TermInfo } from "../editor/modifiers";
+import { ModifiersSection } from "../editor/ModifiersSection";
 import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from "../ui";
 import { IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
 import { axisLabel, groupStatus, keepLabel, namesOf, NO_ATTACH_TARGET, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
 import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, modifiersConflict, needsTerm, presentPeople, resolvePayload, resultLine, standaloneText, takeFinding, type Choices, type OtherTerm } from "./groupModel";
-import { crossLinks } from "./modifierSets";
+import { crossLinks, setText, type ModifierView } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
-import { TermPicker } from "./TermPicker";
+import { TermPicker, useTermSearch } from "./TermPicker";
 import type { GroupOutcome } from "./useConsolidation";
 
 export interface GroupCardProps {
@@ -61,21 +63,43 @@ function Snippet({ group, text }: { group: ConsolidationGroupView; text: string 
     <mark className="cons-snippet-mark">{chars.slice(start, end).join("")}</mark>{chars.slice(end, to).join("")}{to < chars.length && "…"}</p>;
 }
 
-/** "Edit values…": every axis of the finding's type, starting from the kept member's values. */
-function EditValues({ group, workspace, busy, onKeep, onCancel }: { group: ConsolidationGroupView; workspace: WorkspaceView; busy: boolean; onKeep: (axes: Record<string, string>) => void; onCancel: () => void }): JSX.Element {
+/** The edited finding of "Edit values…": its axes and, on a modifier layer, its modifiers (`null`: not a modifier layer). */
+export interface EditedValues { axes: Record<string, string>; modifiers: ModifierView[] | null }
+
+/** Chips without "·" (DN-10): "Severe “schwere”", "Frequent Cohort term". */
+const consolidationChip = (label: string, quote: string | null, role: TermInfo["role"]) =>
+  [quote ? `${label} “${quote}”` : label, role === "cohort" ? COHORT_TAG : null].filter(Boolean).join(" ");
+
+/** "Edit values…": every axis of the finding's type and, on a modifier layer, its Modifiers, starting from the kept member's. */
+function EditValues({ group, workspace, text, busy, onKeep, onCancel }: { group: ConsolidationGroupView; workspace: WorkspaceView; text: string; busy: boolean; onKeep: (values: EditedValues) => void; onCancel: () => void }): JSX.Element {
   const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
   const type = workspace.layers?.find(layer => layer.layer_id === base.layer_id)?.annotation_types.find(value => value.type_id === base.type_id);
   const axes = type?.axes ?? Object.keys(base.axes).map(id => ({ id, label: axisLabel(id), options: [base.axes[id]], allow_empty: false }));
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...base.axes }));
+  const withModifiers = !!workspace.modifier_layer_ids?.includes(base.layer_id);
+  const [modifiers, setModifiers] = useState<ModifierView[]>(() => (base.modifiers ?? []).map(value => ({ ...value, exclusive_class: value.exclusive_class ?? null })));
+  const search = useTermSearch(workspace, base.layer_id);
   const id = useId();
+  const termInfo = (termId: string): TermInfo | undefined => {
+    const modifier = modifiers.find(value => value.term_id === termId);
+    return modifier && { label: modifier.term_label || termId, role: modifier.kind, exclusiveClass: modifier.exclusive_class };
+  };
   return <div className="cons-edit-values" role="group" aria-label="Edit values">
     {axes.map(axis => <Select key={axis.id} id={`${id}-${axis.id}`} label={axis.label} value={values[axis.id] ?? ""}
       onChange={event => setValues(current => ({ ...current, [axis.id]: event.target.value }))}>
       {!values[axis.id] && <option value="">Not specified</option>}
       {axis.options.map(option => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
     </Select>)}
+    {withModifiers && <ModifiersSection finding={base.term_label || base.term_id} text={text} termInfo={termInfo} chipText={consolidationChip}
+      modifiers={modifiers.map(value => ({ term_id: value.term_id, segments: value.segments.map(([start, end]) => ({ start, end })) }))}
+      // shortcut: an added modifier has no class here, so "Two severities" shows only for the members' modifiers; the submit check still warns.
+      onAdd={async (termId, label) => setModifiers(current => current.some(value => value.term_id === termId) ? current
+        : [...current, { term_id: termId, term_label: label, kind: "modifier", exclusive_class: null, segments: [] }])}
+      onRemove={termId => setModifiers(current => current.filter(value => value.term_id !== termId))}
+      searchProps={search} />}
     <div className="cons-actions">
-      <Button variant="primary" loading={busy} onClick={() => onKeep(Object.fromEntries(Object.entries(values).filter(([, value]) => !!value)))}>Keep with these values</Button>
+      <Button variant="primary" loading={busy} onClick={() => onKeep({ axes: Object.fromEntries(Object.entries(values).filter(([, value]) => !!value)),
+        modifiers: withModifiers ? modifiers : null })}>Keep with these values</Button>
       <Button onClick={onCancel}>Cancel</Button>
     </div>
   </div>;
@@ -123,10 +147,13 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     }
   };
   const onChoose = (rowId: string, value: string) => settle(choose(group, choices, rowId, value));
-  const editValues = (axes: Record<string, string>) => {
+  const editValues = ({ axes, modifiers }: EditedValues) => {
     const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
-    resolve({ action: "choose", choice: { term_id: base.term_id, span_from_input_id: base.input_id, axes } },
-      Object.values(axes).map(axisOptionLabel).join(", ") || "decided");
+    const sorted = modifiers && [...modifiers].sort((a, b) => a.term_label.localeCompare(b.term_label, undefined, { sensitivity: "base" }));
+    const summary = [...Object.values(axes).map(axisOptionLabel), ...(sorted ? [sorted.length ? `modifiers: ${setText(sorted, text)}` : "no modifiers"] : [])];
+    resolve({ action: "choose", choice: { term_id: base.term_id, span_from_input_id: base.input_id, axes,
+      ...(sorted ? { modifiers: sorted.map(value => ({ term_id: value.term_id, segments: value.segments.map(([start, end]) => ({ start, end })) })) } : {}) } },
+    summary.join(", ") || "decided");
     setEditing(false);
   };
   const reopen = () => { if (group.edited) setConfirmReopen(true); else void props.onReopen(); };
@@ -201,7 +228,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       <ResultLine line={line} />
       {/* Note and flag go with the decision, so they come before the choices (the last choice resolves). */}
       {noteAndFlag(false)}
-      {editing && workspace ? <EditValues group={group} workspace={workspace} busy={busy} onKeep={editValues} onCancel={() => setEditing(false)} />
+      {editing && workspace ? <EditValues group={group} workspace={workspace} text={text} busy={busy} onKeep={editValues} onCancel={() => setEditing(false)} />
         : <div className="cons-actions">
           {(!conflicts || (waitsForKeep && choicesComplete(rows, choices))) && <Button variant="primary" loading={busy}
             onClick={() => resolve(resolvePayload(group, choices), line.finding)}>{partial && !conflicts ? keepLabel(present) : "Keep"}</Button>}

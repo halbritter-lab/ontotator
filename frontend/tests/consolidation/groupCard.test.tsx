@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ConsolidationGroupView } from "../../src/api/client";
+import { api, type ConsolidationGroupView } from "../../src/api/client";
 import { GroupCard, type GroupCardProps } from "../../src/consolidation/GroupCard";
 import { ANA, BEN, exampleGroups, group, hypotoniaThree, LUC, member, MOD_PEOPLE, MOD_TEXT, modSpan, recurrent, seizure, severe, span, TEXT, THREE, TOM, workspaceView } from "./fixtures";
 
@@ -292,6 +292,57 @@ describe("GroupCard, modifiers", () => {
     fireEvent.click(screen.getByRole("button", { name: "Take Severe from Ana Weber for Modifiers" }));
     fireEvent.click(screen.getByRole("button", { name: "Take Mild from Ben Roth for Modifiers" }));
     expect(screen.getByRole("rowheader", { name: /Modifiers/ }).textContent).toContain("Two severities");
+  });
+
+  describe("Edit values… with modifiers", () => {
+    const modWorkspace = () => ({ ...workspaceView(), modifier_layer_ids: ["phenotype"] });
+    const chips = () => [...screen.getByRole("list", { name: "Modifiers of Seizure" }).querySelectorAll("li")].map(chip => chip.textContent);
+    const searchOntology = () => vi.spyOn(api, "searchOntology").mockResolvedValue({ route: "auto", query: "rec", shuffled: false, search_id: "s1",
+      candidates: [{ term_id: "HP:0031796", label: "Recurrent", rank: 1, role: "modifier" }] } as never);
+    afterEach(() => vi.restoreAllMocks());
+
+    it("S1 reopened: the Modifiers section edits the set and Keep with these values sends it, incl. a modifier nobody had", async () => {
+      const search = searchOntology();
+      const reopened = seizure("g-s1", ["match"], [[ANA, [severe("schwere")]], [BEN, [severe("schwere")]]], { state: "open", annotation_ids: [] });
+      const { props } = renderCard(reopened, { ...mod, workspace: modWorkspace() });
+      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      const section = document.querySelector("[data-modifiers-section]") as HTMLElement;
+      expect(within(section).getByRole("heading", { name: "Modifiers" })).toBeTruthy();
+      // No "·" on the consolidation screen (DN-10).
+      expect(chips()).toEqual(["Severe “schwere”"]);
+      fireEvent.click(screen.getByRole("button", { name: "+ Add modifier…" }));
+      fireEvent.change(screen.getByRole("combobox", { name: "Search modifier" }), { target: { value: "rec" } });
+      await waitFor(() => expect(within(screen.getByRole("group", { name: "Add modifier to Seizure" })).getAllByRole("option")).toHaveLength(1), { timeout: 3000 });
+      expect(search.mock.calls[0][0].within).toEqual(["HP:0012823", "HP:0040279"]);
+      fireEvent.keyDown(screen.getByRole("combobox", { name: "Search modifier" }), { key: "Enter" });
+      await waitFor(() => expect(chips()).toEqual(["Recurrent", "Severe “schwere”"]));
+      fireEvent.click(screen.getByRole("button", { name: "Keep with these values" }));
+      expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["g-s1-0", "g-s1-1"], action: "choose", choice: {
+        term_id: "HP:0001250", span_from_input_id: "g-s1-0", axes: { assertion: "present", experiencer: "patient", temporality: "current" },
+        modifiers: [{ term_id: "HP:0031796", segments: [] }, { term_id: "HP:0012828", segments: [{ start: ss, end: se }] }],
+      } }, "Present, Patient, Current, modifiers: Recurrent, Severe “schwere”");
+    });
+
+    it("S13 partial: removing the only modifier keeps the finding without modifiers", async () => {
+      const partial = seizure("g-s13", ["partial"], [[ANA, [severe("schwere")]]]);
+      const { props } = renderCard(partial, { ...mod, workspace: modWorkspace() });
+      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      fireEvent.click(screen.getByRole("button", { name: "Actions, Severe" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Remove modifier" }));
+      expect(screen.queryByRole("list", { name: "Modifiers of Seizure" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Keep with these values" }));
+      expect(vi.mocked(props.onResolve).mock.calls[0]).toEqual([expect.objectContaining({ choice: expect.objectContaining({ modifiers: [] }) }),
+        "Present, Patient, Current, no modifiers"]);
+    });
+
+    it("a layer without modifiers shows no Modifiers section and sends no modifiers", () => {
+      const reopened = seizure("g-s1", ["match"], [[ANA, []], [BEN, []]], { state: "open", annotation_ids: [] });
+      const { props } = renderCard(reopened, mod);
+      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      expect(document.querySelector("[data-modifiers-section]")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Keep with these values" }));
+      expect(vi.mocked(props.onResolve).mock.calls[0][0].choice).not.toHaveProperty("modifiers");
+    });
   });
 
   describe("standalone modifier card (S18, DN-8 B)", () => {
