@@ -28,6 +28,14 @@ class OldMentionView(BaseModel):
     cue_segments: list[TextWindowView]
 
 
+class OldModifierView(BaseModel):
+    """A modifier of the frozen predecessor (C6 ``OldModifier``)."""
+
+    model_config = ConfigDict(extra="forbid")
+    term_id: str
+    segments: list[TextWindowView] = Field(default_factory=list)
+
+
 class WindowOpcodeView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     op: Literal["equal", "replace", "insert", "delete"]
@@ -69,6 +77,10 @@ class ReanchorItem(BaseModel):
         "changed_modifier_segment",
     ]
     old_mentions: list[OldMentionView]
+    # Left out of the dump while empty, so stored items and hashes stay.
+    old_modifiers: list[OldModifierView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     old_context: TextWindowView
     new_context: TextWindowView
     diff: list[WindowOpcodeView]

@@ -8,6 +8,7 @@ const node = (term_id: string, label: string, child_count = 0) => ({
   term_id,
   label,
   child_count,
+  role: "finding" as const,
   external_url: `https://terms.example/${term_id}`,
 });
 

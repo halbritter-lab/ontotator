@@ -12,7 +12,7 @@ const key = {
   target_set_id: "empty",
 };
 
-const node = (term_id: string, label: string, child_count = 0) => ({ term_id, label, child_count });
+const node = (term_id: string, label: string, child_count = 0) => ({ term_id, label, child_count, role: "finding" as const });
 const detail = (term_id: string, label: string, extra: Partial<TreeTermDetail> = {}): TreeTermDetail => ({
   term_id,
   label,

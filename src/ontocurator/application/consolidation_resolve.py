@@ -71,7 +71,7 @@ from ontocurator.domain.annotations import (
 )
 from ontocurator.domain.axes import validate_axes
 from ontocurator.domain.canonical import canonical_hash
-from ontocurator.domain.documents import Document
+from ontocurator.domain.documents import Document, Segment
 from ontocurator.domain.errors import DomainError, InvalidAnnotation
 from ontocurator.domain.profiles import TaskProfile, resolve_type
 from ontocurator.domain.review import (
@@ -166,6 +166,14 @@ def consolidated_annotation_id(round_id: str, input_ids: Sequence[str], n: int) 
 # --- commands ------------------------------------------------------------ #
 
 
+class ModifierIn(BaseModel):
+    """A chosen modifier of the resolved finding."""
+
+    model_config = ConfigDict(extra="forbid")
+    term_id: str
+    segments: list[Segment] = Field(default_factory=list)
+
+
 class ResolveChoice(BaseModel):
     """One person's span, the chosen term and axis values."""
 
@@ -177,6 +185,8 @@ class ResolveChoice(BaseModel):
     axes: dict[str, str | None] = Field(default_factory=dict)
     # Omitted: the span member's note; null: no note.
     note_from_input_id: str | None = None
+    # Omitted: the span member's modifiers.
+    modifiers: list[ModifierIn] | None = None
 
 
 class ResolveCommand(BaseModel):
@@ -187,6 +197,8 @@ class ResolveCommand(BaseModel):
     choice: ResolveChoice | None = None
     note: str | None = None
     guidelines_unclear: bool = False
+    # A cons-… annotation a left-out standalone modifier is attached to.
+    attach_to: str | None = None
 
 
 class AnnotateCommand(BaseModel):
@@ -474,6 +486,13 @@ class ConsolidationGroupService:
                 " second finding on the text"
             )
         cmd = ResolveCommand.model_validate(envelope.payload)
+        if cmd.attach_to is not None or (
+            cmd.choice is not None and cmd.choice.modifiers is not None
+        ):
+            # shortcut: refused until M2 implements modifier choices and attach_to.
+            raise DomainError(
+                "INVALID_RESOLUTION", "Modifier choices are not supported yet"
+            )
         other_term = self._other_term(key, cmd)
 
         def apply(draft: Draft, item: _Group, document: Document) -> None:

@@ -30,6 +30,16 @@ export type EditorProposal = components["schemas"]["EditorProposal"];
 export type ProposalSetView = components["schemas"]["ProposalSetView"];
 export type AnnotationSnapshot = components["schemas"]["AnnotationSnapshot"];
 export type Modifier = components["schemas"]["Modifier"];
+/** A text segment in Unicode code points. */
+export interface SegmentPayload { start: number; end: number }
+/** Payload of the `add_modifier` command (backend `AddModifierCommand`). */
+export interface AddModifierPayload { command: "add_modifier"; annotation_id: string; term_id: string; segments?: SegmentPayload[] }
+/** Payload of `set_modifier_segments`; `[]` removes the modifier's text span. */
+export interface SetModifierSegmentsPayload { command: "set_modifier_segments"; annotation_id: string; term_id: string; segments: SegmentPayload[] }
+/** Payload of `remove_modifier`. */
+export interface RemoveModifierPayload { command: "remove_modifier"; annotation_id: string; term_id: string }
+/** Payload of `convert_to_modifier` (old data, R3). */
+export interface ConvertToModifierPayload { command: "convert_to_modifier"; annotation_id: string; target_annotation_id: string; link_span?: boolean }
 export type FinalPreflight = components["schemas"]["FinalPreflight"];
 export type FinalSelectionView = components["schemas"]["FinalSelectionView"];
 export type FinalExportRequest = components["schemas"]["FinalExportRequest"];
@@ -148,9 +158,18 @@ export interface ConsolidationResolvePayload {
   input_ids: string[];
   action: "keep" | "choose" | "leave_out";
   /** Only with `choose`. Omit `note_from_input_id` to keep the span member's note; `null` drops it. */
-  choice?: { term_id: string; span_from_input_id: string; axes: Record<string, string | null>; note_from_input_id?: string | null };
+  choice?: {
+    term_id: string;
+    span_from_input_id: string;
+    axes: Record<string, string | null>;
+    note_from_input_id?: string | null;
+    /** Omitted: the span member's modifiers. */
+    modifiers?: { term_id: string; segments: SegmentPayload[] }[];
+  };
   note?: string | null;
   guidelines_unclear?: boolean;
+  /** A cons-… annotation id; only with `leave_out` on a `modifier_as_finding` group. */
+  attach_to?: string;
 }
 /** Payload of `annotateConsolidationGroup` (backend `AnnotateCommand`); omit `note` to keep it. */
 export interface ConsolidationAnnotatePayload {
@@ -164,6 +183,7 @@ export interface ConsolidationReopenPayload {
 }
 export type ConsolidationGroupView = components["schemas"]["ConsolidationGroupView"];
 export type ConsolidationMemberView = components["schemas"]["ConsolidationMemberView"];
+export type ConsolidationModifierView = components["schemas"]["ConsolidationModifierView"];
 export type ConsolidationPersonView = components["schemas"]["ConsolidationPersonView"];
 // Carried review (editor-carried-review plan)
 export type AssignmentSubmissionView = components["schemas"]["AssignmentSubmissionView"];

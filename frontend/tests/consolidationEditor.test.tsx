@@ -50,6 +50,7 @@ const member = (inputId: string, personId: string, annotationId: string, termId:
   input_id: inputId, person_id: personId, annotation_id: annotationId, term_id: termId, term_label: termId,
   layer_id: "phenotype", type_id: "default", axes: { assertion: "present" }, spans: [], cues: [], note: null,
   from_tool_proposal: false,
+  modifiers: [],
 });
 
 const consolidation: ConsolidationView = {
@@ -64,7 +65,7 @@ const consolidation: ConsolidationView = {
     edited: false, note: null, guidelines_unclear: false, annotation_ids: [],
     members: [member("in-1", "ann-0004", "a-luc", "HP:0001252"), member("in-2", "ann-0007", "a-tom", "HP:0001250")],
   }],
-  added: [], added_by: null, workflow_revision: 5, draft_revision: 3,
+  added: [], added_by: null, workflow_revision: 5, draft_revision: 3, modifier_layer_ids: [],
 } as ConsolidationView;
 
 const renderEditor = (roundKind: "consolidation" | "ordinary" = "consolidation") => render(

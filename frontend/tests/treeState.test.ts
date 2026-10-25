@@ -12,7 +12,7 @@ import {
   withRoots,
 } from "../src/editor/treeState";
 
-const node = (term_id: string, label: string, child_count = 0) => ({ term_id, label, child_count });
+const node = (term_id: string, label: string, child_count = 0) => ({ term_id, label, child_count, role: "finding" as const });
 
 // Root > (Alpha > Shared, Beta > Shared): "Shared" sits under two parents.
 // Beta's children are not loaded yet.
@@ -40,7 +40,7 @@ describe("tree keys", () => {
 describe("visibleRows", () => {
   it("carries each node's external page into its row", () => {
     const data = withRoots(emptyTree(), [
-      { term_id: "R", label: "Root", child_count: 0, external_url: "https://terms.example/R" },
+      { term_id: "R", label: "Root", child_count: 0, external_url: "https://terms.example/R", role: "finding" },
     ]);
     expect(visibleRows(data, new Set())[0].externalUrl).toBe("https://terms.example/R");
   });

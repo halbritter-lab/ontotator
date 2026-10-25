@@ -9907,6 +9907,17 @@
             "type": "array",
             "title": "Annotation Ids",
             "default": []
+          },
+          "attached_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attached To"
           }
         },
         "additionalProperties": false,
@@ -10046,6 +10057,14 @@
             "type": "boolean",
             "title": "From Tool Proposal",
             "default": false
+          },
+          "modifiers": {
+            "items": {
+              "$ref": "#/components/schemas/ConsolidationModifierView"
+            },
+            "type": "array",
+            "title": "Modifiers",
+            "default": []
           }
         },
         "additionalProperties": false,
@@ -10063,6 +10082,68 @@
           "cues"
         ],
         "title": "ConsolidationMemberView"
+      },
+      "ConsolidationModifierView": {
+        "properties": {
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "term_label": {
+            "type": "string",
+            "title": "Term Label"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "modifier",
+              "cohort"
+            ],
+            "title": "Kind"
+          },
+          "exclusive_class": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "severity",
+                  "onset"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exclusive Class"
+          },
+          "segments": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Segments",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "term_id",
+          "term_label",
+          "kind"
+        ],
+        "title": "ConsolidationModifierView",
+        "description": "One modifier of a member (filled by M2)."
       },
       "ConsolidationPersonView": {
         "properties": {
@@ -10208,6 +10289,14 @@
             "type": "integer",
             "title": "Draft Revision",
             "default": 0
+          },
+          "modifier_layer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Modifier Layer Ids",
+            "default": []
           }
         },
         "additionalProperties": false,
@@ -14574,6 +14663,28 @@
         ],
         "title": "OldMentionView"
       },
+      "OldModifierView": {
+        "properties": {
+          "term_id": {
+            "type": "string",
+            "title": "Term Id"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/TextWindowView"
+            },
+            "type": "array",
+            "title": "Segments"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "term_id"
+        ],
+        "title": "OldModifierView",
+        "description": "A modifier of the frozen predecessor (C6 ``OldModifier``)."
+      },
       "OntologyDefinition": {
         "properties": {
           "ontology_id": {
@@ -17474,6 +17585,13 @@
             "type": "array",
             "title": "Old Mentions"
           },
+          "old_modifiers": {
+            "items": {
+              "$ref": "#/components/schemas/OldModifierView"
+            },
+            "type": "array",
+            "title": "Old Modifiers"
+          },
           "old_context": {
             "$ref": "#/components/schemas/TextWindowView"
           },
@@ -19072,7 +19190,10 @@
               "hidden_axis_value",
               "axis_not_chosen",
               "spanless_disallowed",
-              "spanless_note_required"
+              "spanless_note_required",
+              "modifier_as_finding",
+              "cohort_modifier",
+              "exclusive_modifier_class"
             ],
             "title": "Rule"
           },
@@ -19219,6 +19340,16 @@
               }
             ],
             "title": "Match Language"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "finding",
+              "modifier",
+              "cohort"
+            ],
+            "title": "Role",
+            "default": "finding"
           }
         },
         "additionalProperties": false,
@@ -19319,6 +19450,22 @@
               }
             ],
             "title": "Languages"
+          },
+          "within": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Within"
           }
         },
         "additionalProperties": false,
@@ -20821,6 +20968,31 @@
             },
             "type": "array",
             "title": "Alt Ids"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "finding",
+              "modifier",
+              "cohort"
+            ],
+            "title": "Role",
+            "default": "finding"
+          },
+          "exclusive_class": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "severity",
+                  "onset"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exclusive Class"
           }
         },
         "type": "object",
@@ -21433,6 +21605,16 @@
               }
             ],
             "title": "External Url"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "finding",
+              "modifier",
+              "cohort"
+            ],
+            "title": "Role",
+            "default": "finding"
           }
         },
         "additionalProperties": false,
@@ -23265,6 +23447,13 @@
             "type": "string",
             "title": "Axes Config Sha256",
             "default": ""
+          },
+          "modifier_layer_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Modifier Layer Ids"
           }
         },
         "additionalProperties": false,

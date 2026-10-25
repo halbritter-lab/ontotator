@@ -3150,6 +3150,8 @@ export interface components {
              * @default []
              */
             annotation_ids: string[];
+            /** Attached To */
+            attached_to?: string | null;
         };
         /**
          * ConsolidationMark
@@ -3207,6 +3209,36 @@ export interface components {
              * @default false
              */
             from_tool_proposal: boolean;
+            /**
+             * Modifiers
+             * @default []
+             */
+            modifiers: components["schemas"]["ConsolidationModifierView"][];
+        };
+        /**
+         * ConsolidationModifierView
+         * @description One modifier of a member (filled by M2).
+         */
+        ConsolidationModifierView: {
+            /** Term Id */
+            term_id: string;
+            /** Term Label */
+            term_label: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "modifier" | "cohort";
+            /** Exclusive Class */
+            exclusive_class?: ("severity" | "onset") | null;
+            /**
+             * Segments
+             * @default []
+             */
+            segments: [
+                number,
+                number
+            ][];
         };
         /**
          * ConsolidationPersonView
@@ -3271,6 +3303,11 @@ export interface components {
              * @default 0
              */
             draft_revision: number;
+            /**
+             * Modifier Layer Ids
+             * @default []
+             */
+            modifier_layer_ids: string[];
         };
         /** CorrectionAssignmentRequest */
         CorrectionAssignmentRequest: {
@@ -4716,6 +4753,16 @@ export interface components {
             cue_segments: components["schemas"]["TextWindowView"][];
         };
         /**
+         * OldModifierView
+         * @description A modifier of the frozen predecessor (C6 ``OldModifier``).
+         */
+        OldModifierView: {
+            /** Term Id */
+            term_id: string;
+            /** Segments */
+            segments?: components["schemas"]["TextWindowView"][];
+        };
+        /**
          * OntologyDefinition
          * @description Definition of an ontology artifact bound to a task profile.
          */
@@ -5837,6 +5884,8 @@ export interface components {
             reason: "source_text_mismatch" | "missing_evidence" | "evidence_version_mismatch" | "ambiguous_evidence" | "evidence_source_mismatch" | "invalid_bounds" | "changed_segment" | "changed_cue" | "changed_modifier_segment";
             /** Old Mentions */
             old_mentions: components["schemas"]["OldMentionView"][];
+            /** Old Modifiers */
+            old_modifiers?: components["schemas"]["OldModifierView"][];
             old_context: components["schemas"]["TextWindowView"];
             new_context: components["schemas"]["TextWindowView"];
             /** Diff */
@@ -6336,7 +6385,7 @@ export interface components {
              * Rule
              * @enum {string}
              */
-            rule: "discontinuous_mention" | "hidden_axis_value" | "axis_not_chosen" | "spanless_disallowed" | "spanless_note_required";
+            rule: "discontinuous_mention" | "hidden_axis_value" | "axis_not_chosen" | "spanless_disallowed" | "spanless_note_required" | "modifier_as_finding" | "cohort_modifier" | "exclusive_modifier_class";
             /** Detail */
             detail: {
                 [key: string]: string;
@@ -6410,6 +6459,12 @@ export interface components {
             route: string;
             /** Match Language */
             match_language?: string | null;
+            /**
+             * Role
+             * @default finding
+             * @enum {string}
+             */
+            role: "finding" | "modifier" | "cohort";
         };
         /** SearchExecution */
         SearchExecution: {
@@ -6448,6 +6503,8 @@ export interface components {
             k: number;
             /** Languages */
             languages?: string[] | null;
+            /** Within */
+            within?: string[] | null;
         };
         /**
          * SearchResult
@@ -6965,6 +7022,14 @@ export interface components {
             consider?: string[];
             /** Alt Ids */
             alt_ids?: string[];
+            /**
+             * Role
+             * @default finding
+             * @enum {string}
+             */
+            role: "finding" | "modifier" | "cohort";
+            /** Exclusive Class */
+            exclusive_class?: ("severity" | "onset") | null;
         };
         /** TermLabelsRequest */
         TermLabelsRequest: {
@@ -7172,6 +7237,12 @@ export interface components {
             child_count: number;
             /** External Url */
             external_url?: string | null;
+            /**
+             * Role
+             * @default finding
+             * @enum {string}
+             */
+            role: "finding" | "modifier" | "cohort";
         };
         /**
          * TreeNodeRequest
@@ -7810,6 +7881,8 @@ export interface components {
              * @default
              */
             axes_config_sha256: string;
+            /** Modifier Layer Ids */
+            modifier_layer_ids?: string[];
         };
     };
     responses: never;

@@ -105,7 +105,7 @@ const reviewView = (annotations: any[], decisions: any[] = []): WorkspaceView =>
 const mockTree = () => {
   let walks = 0;
   const labelOf = (termId: string) => (termId === "HP:B" ? "Beta term" : `Term ${termId}`);
-  const root = { term_id: "HP:R", label: "Root", child_count: 2 };
+  const root = { term_id: "HP:R", label: "Root", child_count: 2, role: "finding" as const };
   const detailOf = (termId: string) => ({
     external_url: `https://hpo.jax.org/browse/term/${termId}`,
 
@@ -127,8 +127,8 @@ const mockTree = () => {
         {
           term_id: "HP:R",
           children: [
-            { term_id: req.term_id, label: labelOf(req.term_id), child_count: 0 },
-            { term_id: "HP:B", label: "Beta term", child_count: 0 },
+            { term_id: req.term_id, label: labelOf(req.term_id), child_count: 0, role: "finding" as const },
+            { term_id: "HP:B", label: "Beta term", child_count: 0, role: "finding" as const },
           ],
         },
         { term_id: req.term_id, children: [] },

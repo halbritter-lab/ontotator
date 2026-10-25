@@ -22,7 +22,7 @@ export function member(inputId: string, person: ConsolidationPersonView, termId:
   extra: Partial<ConsolidationMemberView> = {}): ConsolidationMemberView {
   return {
     input_id: inputId, person_id: person.person_id, annotation_id: `a-${inputId}`, term_id: termId, term_label: termLabel,
-    layer_id: "phenotype", type_id: "default", axes: { ...AXES }, spans, cues: [], note: null, from_tool_proposal: false, ...extra,
+    layer_id: "phenotype", type_id: "default", axes: { ...AXES }, spans, cues: [], note: null, from_tool_proposal: false, modifiers: [], ...extra,
   };
 }
 
@@ -78,7 +78,7 @@ export function exampleView(extra: Partial<ConsolidationView> = {}): Consolidati
   return {
     round_id: "round-c", workspace_id: "ws-c", read_only: false, read_only_reason: null, case_id: "case-107", language: "de",
     document_version: 2, document_id: "doc-1", text: TEXT, people: [LUC, TOM], groups: exampleGroups(), added: [], added_by: null,
-    workflow_revision: 5, draft_revision: 3, ...extra,
+    workflow_revision: 5, draft_revision: 3, modifier_layer_ids: [], ...extra,
   };
 }
 

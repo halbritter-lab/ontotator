@@ -36,6 +36,16 @@ class ConsolidationPersonView(_View):
     lane: int  # 1..4 (lane 4 also for every further person)
 
 
+class ConsolidationModifierView(_View):
+    """One modifier of a member (filled by M2)."""
+
+    term_id: str
+    term_label: str
+    kind: Literal["modifier", "cohort"]
+    exclusive_class: Literal["severity", "onset"] | None = None
+    segments: list[tuple[int, int]] = []
+
+
 class ConsolidationMemberView(_View):
     input_id: str
     person_id: str
@@ -50,6 +60,7 @@ class ConsolidationMemberView(_View):
     note: str | None = None
     # The finding is a confirmed or corrected tool proposal (robot icon).
     from_tool_proposal: bool = False
+    modifiers: list[ConsolidationModifierView] = []
 
 
 class ConsolidationGroupView(_View):
@@ -69,6 +80,8 @@ class ConsolidationGroupView(_View):
     note: str | None = None
     guidelines_unclear: bool = False
     annotation_ids: list[str] = []
+    # A left-out standalone modifier attached to this cons-… finding (S18).
+    attached_to: str | None = None
 
 
 class ConsolidationView(_View):
@@ -97,6 +110,8 @@ class ConsolidationView(_View):
     # The live draft's revision, the ``expected_revision`` of the next group
     # command; 0 in read-only mode.
     draft_revision: int = 0
+    # As ``WorkspaceView``: layers whose findings have modifiers.
+    modifier_layer_ids: list[str] = []
 
 
 @router.get("/rounds/{round_id}/consolidation")
