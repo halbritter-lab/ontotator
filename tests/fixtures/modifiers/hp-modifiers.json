@@ -1,0 +1,395 @@
+{
+ "graphs": [
+  {
+   "id": "http://purl.obolibrary.org/obo/hp.json",
+   "meta": {
+    "version": "http://purl.obolibrary.org/obo/hp/releases/2026-06-23/hp.json"
+   },
+   "nodes": [
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0000001",
+     "lbl": "All",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0000118",
+     "lbl": "Phenotypic abnormality",
+     "type": "CLASS",
+     "meta": {
+      "definition": {
+       "val": "A phenotypic abnormality."
+      }
+     }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0000707",
+     "lbl": "Abnormality of the nervous system",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0001250",
+     "lbl": "Seizure",
+     "type": "CLASS",
+     "meta": {
+      "definition": {
+       "val": "A seizure is an intermittent abnormality of nervous system physiology characterised by a transient occurrence of signs."
+      },
+      "synonyms": [
+       {
+        "pred": "hasExactSynonym",
+        "val": "Seizures"
+       },
+       {
+        "pred": "hasExactSynonym",
+        "val": "Epileptic seizure"
+       },
+       {
+        "pred": "hasRelatedSynonym",
+        "val": "Convulsion"
+       }
+      ]
+     }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0002133",
+     "lbl": "Status epilepticus",
+     "type": "CLASS",
+     "meta": {
+      "definition": {
+       "val": "A prolonged seizure or seizures repeated frequently enough to prevent recovery between episodes."
+      },
+      "synonyms": [
+       {
+        "pred": "hasExactSynonym",
+        "val": "Prolonged seizures"
+       }
+      ]
+     }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0011146",
+     "lbl": "Dialeptic seizure",
+     "type": "CLASS",
+     "meta": {
+      "synonyms": [
+       {
+        "pred": "hasRelatedSynonym",
+        "val": "Absence seizure"
+       }
+      ]
+     }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0001252",
+     "lbl": "Hypotonia",
+     "type": "CLASS",
+     "meta": {
+      "definition": {
+       "val": "Abnormally low muscle tone."
+      },
+      "synonyms": [
+       {
+        "pred": "hasExactSynonym",
+        "val": "Low muscle tone"
+       },
+       {
+        "pred": "hasExactSynonym",
+        "val": "Muscle hypotonia"
+       },
+       {
+        "pred": "hasRelatedSynonym",
+        "val": "Hypotonic"
+       }
+      ]
+     }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0001284",
+     "lbl": "Areflexia",
+     "type": "CLASS",
+     "meta": {
+      "definition": {
+       "val": "Absence of neurologic reflexes."
+      },
+      "synonyms": [
+       {
+        "pred": "hasExactSynonym",
+        "val": "Absent reflexes"
+       }
+      ]
+     }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0000365",
+     "lbl": "Hearing impairment",
+     "type": "CLASS",
+     "meta": {
+      "definition": {
+       "val": "A decreased magnitude of the sensory perception of sound."
+      },
+      "synonyms": [
+       {
+        "pred": "hasExactSynonym",
+        "val": "Hearing loss"
+       },
+       {
+        "pred": "hasExactSynonym",
+        "val": "Hipoacusia"
+       },
+       {
+        "pred": "hasRelatedSynonym",
+        "val": "Deafness"
+       }
+      ]
+     }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0000407",
+     "lbl": "Sensorineural hearing impairment",
+     "type": "CLASS",
+     "meta": {
+      "synonyms": [
+       {
+        "pred": "hasExactSynonym",
+        "val": "Sensorineural hearing loss"
+       }
+      ]
+     }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0000123",
+     "lbl": "Obsolete example term",
+     "type": "CLASS",
+     "meta": {
+      "deprecated": true
+     }
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0012823",
+     "lbl": "Clinical modifier",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0012824",
+     "lbl": "Severity",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0012825",
+     "lbl": "Mild",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0012828",
+     "lbl": "Severe",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0031797",
+     "lbl": "Clinical course",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0003674",
+     "lbl": "Onset",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0410280",
+     "lbl": "Pediatric onset",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0003623",
+     "lbl": "Neonatal onset",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0011008",
+     "lbl": "Temporal pattern",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0031796",
+     "lbl": "Recurrent",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0012830",
+     "lbl": "Position",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0012831",
+     "lbl": "Laterality",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0012832",
+     "lbl": "Bilateral",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0040279",
+     "lbl": "Frequency",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0040282",
+     "lbl": "Frequent",
+     "type": "CLASS",
+     "meta": {}
+    },
+    {
+     "id": "http://purl.obolibrary.org/obo/HP_0007359",
+     "lbl": "Focal-onset seizure",
+     "type": "CLASS",
+     "meta": {}
+    }
+   ],
+   "edges": [
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0000118",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000001"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0000707",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000118"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0001250",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000707"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0002133",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0001250"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0011146",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0001250"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0001252",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000707"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0001284",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000707"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0000365",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000118"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0000407",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000365"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0012823",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000001"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0012824",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0012823"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0012825",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0012824"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0012828",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0012824"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0031797",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0012823"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0003674",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0031797"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0410280",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0003674"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0003623",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0003674"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0011008",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0031797"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0031796",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0011008"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0012830",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0012823"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0012831",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0012830"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0012832",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0012831"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0040279",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0000001"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0040282",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0040279"
+    },
+    {
+     "sub": "http://purl.obolibrary.org/obo/HP_0007359",
+     "pred": "is_a",
+     "obj": "http://purl.obolibrary.org/obo/HP_0001250"
+    }
+   ]
+  }
+ ]
+}
