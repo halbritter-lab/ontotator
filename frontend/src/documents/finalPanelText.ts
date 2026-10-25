@@ -144,7 +144,8 @@ export function agreementText(agreement: AgreementView): string {
 export const AGREEMENT_EXPLANATION = "Two findings match when they are in the same layer, have the same term and the same context "
   + "(every axis value and the set of modifiers), and their evidence overlaps by at least one character or both have no evidence "
   + "in the text. Same term and position with a different context counts as a context difference. Each finding pairs with at most "
-  + "one finding of each other submission; only submissions on the same text version are compared.";
+  + "one finding of each other submission; only submissions on the same text version are compared. "
+  + "Modifier text spans do not count here. “All findings match” also needs the same text spans, notes and modifier text spans.";
 
 /** The Only here cell: the count, "on v1, not compared" for a submission outside the comparison, else "—". */
 export function onlyHereText(submission: FinalPanelSubmissionView, parallel: boolean): string {

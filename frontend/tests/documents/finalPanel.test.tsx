@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { DecisionBlock, type DecisionBlockProps } from "../../src/documents/FinalPanel";
-import { agreementText, barArrows, compareSummary, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
+import { AGREEMENT_EXPLANATION, agreementText, barArrows, compareSummary, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
@@ -144,6 +144,7 @@ describe("choose", () => {
     fireEvent.click(how);
     expect(how.getAttribute("aria-expanded")).toBe("true");
     expect(document.getElementById(how.getAttribute("aria-controls")!)!.textContent).toMatch(/^Two findings match when they are in the same layer/);
+    expect(AGREEMENT_EXPLANATION.endsWith(" Modifier text spans do not count here. “All findings match” also needs the same text spans, notes and modifier text spans.")).toBe(true);
     // Consolidate…: primary (no full agreement, nothing preselected) with its hint.
     const consolidate = screen.getByRole("button", { name: "Consolidate…" });
     expect(consolidate.classList.contains("btn-primary")).toBe(true);
