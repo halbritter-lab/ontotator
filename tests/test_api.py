@@ -82,6 +82,8 @@ def test_term_labels_resolve_from_package_layer_without_search_event(app_client)
             "replaced_by": None,
             "consider": [],
             "alt_ids": [],
+            "role": "finding",
+            "exclusive_class": None,
         },
         {
             "layer_id": "hpo-layer",
@@ -92,6 +94,8 @@ def test_term_labels_resolve_from_package_layer_without_search_event(app_client)
             "replaced_by": None,
             "consider": [],
             "alt_ids": [],
+            "role": "finding",
+            "exclusive_class": None,
         },
     ]
 
