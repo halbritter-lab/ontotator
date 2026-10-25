@@ -79,6 +79,7 @@ const REASON_SENTENCES: Readonly<Record<string, string>> = {
   ambiguous_evidence: "Its text appears more than once in this text, so it could not be placed automatically.",
   changed_segment: "Its text was changed by the correction, so it could not be placed automatically.",
   changed_cue: "Its text was changed by the correction, so it could not be placed automatically.",
+  changed_modifier_segment: "The text of one of its modifiers was changed by the correction, so it could not be placed automatically.",
   missing_evidence: "Its original text span could not be read reliably, so it could not be placed automatically.",
   evidence_version_mismatch: "Its original text span could not be read reliably, so it could not be placed automatically.",
   evidence_source_mismatch: "Its original text span could not be read reliably, so it could not be placed automatically.",

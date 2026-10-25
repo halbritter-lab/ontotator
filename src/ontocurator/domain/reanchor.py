@@ -10,8 +10,8 @@ from difflib import SequenceMatcher
 from hashlib import sha256
 from typing import Literal
 
-from ontocurator.domain.annotations import AnnotationRef, AnnotationSnapshot
-from ontocurator.domain.documents import EvidenceRef, EvidenceSnapshot
+from ontocurator.domain.annotations import AnnotationRef, AnnotationSnapshot, Modifier
+from ontocurator.domain.documents import EvidenceRef, EvidenceSnapshot, Segment
 
 
 @dataclass(frozen=True)
@@ -85,6 +85,17 @@ class Carried:
     source_ref: AnnotationRef
     evidence: tuple[MappedEvidence, ...]
     modifiers: tuple[MappedModifier, ...] = ()
+
+    @property
+    def target_modifiers(self) -> list[Modifier]:
+        """The mapped modifiers as the target annotation's ``modifiers``."""
+        return [
+            Modifier(
+                term_id=m.term_id,
+                segments=[Segment(start=s.start, end=s.end) for s in m.segments],
+            )
+            for m in self.modifiers
+        ]
 
 
 @dataclass(frozen=True)
@@ -201,11 +212,15 @@ def _needs_review(
     old: str,
     new: str,
     m: TextMap,
+    old_modifiers: tuple[OldModifier, ...] = (),
 ) -> NeedsReview:
     valid = [
         span
-        for mention in mentions
-        for span in (*mention.segments, *mention.cue_segments)
+        for spans in (
+            *((*mention.segments, *mention.cue_segments) for mention in mentions),
+            *(modifier.segments for modifier in old_modifiers),
+        )
+        for span in spans
         if 0 <= span.start < span.end <= len(old)
     ]
     left = max(0, min(span.start for span in valid) - 40) if valid else 0
@@ -251,6 +266,7 @@ def _needs_review(
         old_window,
         new_window,
         tuple(diff),
+        old_modifiers,
     )
 
 
@@ -268,10 +284,35 @@ def reanchor_annotation(
     mapped = []
     mentions = []
     failure: ReviewReason | None = None
+
+    def carry(
+        segments: Sequence[Segment], changed: ReviewReason
+    ) -> tuple[tuple[Span, ...], tuple[TextSpan, ...]]:
+        nonlocal failure
+        positions = []
+        old_positions = []
+        for segment in segments:
+            a, b = segment.start, segment.end
+            valid = 0 <= a < b <= len(old_text)
+            old_positions.append(TextSpan(a, b, old_text[a:b] if valid else ""))
+            if not valid:
+                failure = failure or "invalid_bounds"
+                continue
+            target = map_span(m, a, b)
+            if (
+                target is None
+                or not (0 <= target[0] < target[1] <= len(new_text))
+                or old_text[a:b] != new_text[target[0] : target[1]]
+            ):
+                failure = failure or changed
+                continue
+            positions.append(Span(*target))
+        return tuple(positions), tuple(old_positions)
+
     if (
         snapshot.annotation.evidence_refs
-        and sha256(old_text.encode("utf-8")).hexdigest() != snapshot.text_sha256
-    ):
+        or any(modifier.segments for modifier in snapshot.annotation.modifiers)
+    ) and sha256(old_text.encode("utf-8")).hexdigest() != snapshot.text_sha256:
         failure = "source_text_mismatch"
     for ref in snapshot.annotation.evidence_refs:
         candidates = [
@@ -292,36 +333,27 @@ def reanchor_annotation(
             or item.text_sha256 != snapshot.text_sha256
         ):
             failure = failure or "evidence_source_mismatch"
-        groups = []
-        old_groups = []
-        for is_cue, segments in (
-            (False, item.mention.segments),
-            (True, item.mention.cue_segments),
-        ):
-            positions = []
-            old_positions = []
-            for segment in segments:
-                a, b = segment.start, segment.end
-                valid = 0 <= a < b <= len(old_text)
-                old_positions.append(TextSpan(a, b, old_text[a:b] if valid else ""))
-                if not valid:
-                    failure = failure or "invalid_bounds"
-                    continue
-                target = map_span(m, a, b)
-                if (
-                    target is None
-                    or not (0 <= target[0] < target[1] <= len(new_text))
-                    or old_text[a:b] != new_text[target[0] : target[1]]
-                ):
-                    failure = failure or (
-                        "changed_cue" if is_cue else "changed_segment"
-                    )
-                    continue
-                positions.append(Span(*target))
-            groups.append(tuple(positions))
-            old_groups.append(tuple(old_positions))
-        mentions.append(OldMention(ref.model_copy(deep=True), *old_groups))
-        mapped.append(MappedEvidence(ref.model_copy(deep=True), *groups))
+        segments, old_segments = carry(item.mention.segments, "changed_segment")
+        cues, old_cues = carry(item.mention.cue_segments, "changed_cue")
+        mentions.append(OldMention(ref.model_copy(deep=True), old_segments, old_cues))
+        mapped.append(MappedEvidence(ref.model_copy(deep=True), segments, cues))
+    # After the evidence: an evidence reason stays the first failure.
+    modifiers = []
+    old_modifiers = []
+    for modifier in snapshot.annotation.modifiers:
+        spans, old_spans = carry(modifier.segments, "changed_modifier_segment")
+        modifiers.append(MappedModifier(modifier.term_id, spans))
+        old_modifiers.append(OldModifier(modifier.term_id, old_spans))
     if failure is not None:
-        return _needs_review(snapshot, tuple(mentions), failure, old_text, new_text, m)
-    return Carried(snapshot.model_copy(deep=True), source_ref, tuple(mapped))
+        return _needs_review(
+            snapshot,
+            tuple(mentions),
+            failure,
+            old_text,
+            new_text,
+            m,
+            tuple(old_modifiers),
+        )
+    return Carried(
+        snapshot.model_copy(deep=True), source_ref, tuple(mapped), tuple(modifiers)
+    )

@@ -10,6 +10,7 @@ from ontocurator.domain.annotations import (
     ActorRef,
     Annotation,
     AnnotationRef,
+    Modifier,
     Provenance,
     snapshot,
 )
@@ -22,15 +23,19 @@ from ontocurator.domain.documents import (
 )
 from ontocurator.domain.reanchor import (
     Carried,
+    MappedModifier,
     NeedsReview,
+    OldModifier,
+    Span,
     TextMap,
+    TextSpan,
     map_span,
     reanchor_annotation,
     text_map,
 )
 
 
-def source(text, mentions=(((0, 3),),), cues=()):
+def source(text, mentions=(((0, 3),),), cues=(), modifiers=()):
     doc = Document(
         document_id="old",
         text=text,
@@ -63,6 +68,10 @@ def source(text, mentions=(((0, 3),),), cues=()):
             EvidenceRef(evidence_id=e.mention.evidence_id, version=e.version)
             for e in evidence
         ],
+        modifiers=[
+            Modifier(term_id=t, segments=[Segment(start=a, end=b) for a, b in spans])
+            for t, spans in modifiers
+        ],
         provenance=Provenance(
             actor=ActorRef(actor_id="original-tool", kind="tool"),
             method="tool",
@@ -72,8 +81,8 @@ def source(text, mentions=(((0, 3),),), cues=()):
     return snapshot(annotation, evidence, doc, hpo_profile()), evidence
 
 
-def run(old, new, mentions=(((0, 3),),), cues=()):
-    snap, evidence = source(old, mentions, cues)
+def run(old, new, mentions=(((0, 3),),), cues=(), modifiers=()):
+    snap, evidence = source(old, mentions, cues, modifiers)
     return reanchor_annotation(snap, evidence, old, new, text_map(old, new))
 
 
@@ -369,3 +378,76 @@ def test_common_prefix_and_suffix_stay_exact_blocks():
     assert map_span(m, 0, 5) == (0, 5)
     assert map_span(m, 11, 16) == (12, 17)
     assert map_span(m, 5, 11) is None
+
+
+# Modifier segments (modifiers plan M1b, spec "Text versions", R9). Terms of
+# tests/fixtures/modifiers/hp-modifiers.json: Severe HP:0012828, Recurrent HP:0031796.
+SEVERE = "HP:0012828"
+RECURRENT = "HP:0031796"
+
+
+def test_modifier_segment_is_mapped():
+    result = run(
+        "schwere Krampfanfall",
+        "Ein schwere Krampfanfall",
+        (((8, 20),),),
+        modifiers=((SEVERE, ((0, 7),)),),
+    )
+    assert isinstance(result, Carried)
+    assert result.modifiers == (MappedModifier(SEVERE, (Span(4, 11),)),)
+    assert [m.model_dump() for m in result.target_modifiers] == [
+        {"term_id": SEVERE, "segments": [{"start": 4, "end": 11}]}
+    ]
+
+
+def test_changed_modifier_text_sends_the_whole_claim_to_review():
+    result = run(
+        "schwere Krampfanfall",
+        "leichte Krampfanfall",
+        (((8, 20),),),
+        modifiers=((SEVERE, ((0, 7),)),),
+    )
+    assert isinstance(result, NeedsReview)
+    assert result.reason == "changed_modifier_segment"
+    assert result.old_modifiers == (OldModifier(SEVERE, (TextSpan(0, 7, "schwere"),)),)
+    # The context window covers the modifier, not only the mention.
+    assert result.old_context.start == 0
+
+
+def test_evidence_failure_stays_the_reason_when_a_modifier_also_changed():
+    result = run(
+        "schwere Krampfanfall",
+        "leichte Xrampfanfall",
+        (((8, 20),),),
+        modifiers=((SEVERE, ((0, 7),)),),
+    )
+    assert isinstance(result, NeedsReview)
+    assert result.reason == "changed_segment"
+    assert result.old_modifiers[0].segments[0].text == "schwere"
+
+
+def test_spanless_modifiers_are_carried_unchanged():
+    result = run(
+        "Krampfanfall", "XX Krampfanfall", (((0, 12),),), modifiers=((RECURRENT, ()),)
+    )
+    assert isinstance(result, Carried)
+    assert result.modifiers == (MappedModifier(RECURRENT, ()),)
+    assert [m.model_dump() for m in result.target_modifiers] == [{"term_id": RECURRENT}]
+
+
+def test_a_finding_without_modifiers_carries_no_modifiers():
+    result = run("Hypotonie", "Hypotonie", (((0, 9),),))
+    assert isinstance(result, Carried)
+    assert result.modifiers == ()
+    assert result.target_modifiers == []
+
+
+def test_modifier_segments_of_a_document_level_finding_are_checked():
+    snap, evidence = source(
+        "schwere Krampfanfall", (), modifiers=((SEVERE, ((0, 7),)),)
+    )
+    result = reanchor_annotation(
+        snap, evidence, "other text", "other text", text_map("other text", "other text")
+    )
+    assert isinstance(result, NeedsReview)
+    assert result.reason == "source_text_mismatch"

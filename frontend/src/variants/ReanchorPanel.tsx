@@ -70,7 +70,7 @@ const reasons: Record<ReanchorItem['reason'],string> = {
   evidence_version_mismatch: 'The evidence version does not match.', ambiguous_evidence: 'The evidence is ambiguous.',
   evidence_source_mismatch: 'The evidence belongs to another source.', invalid_bounds: 'The evidence offsets are invalid.',
   changed_segment: 'The evidence text changed.', changed_cue: 'The cue text changed.',
-  changed_modifier_segment: 'The modifier text changed.',
+  changed_modifier_segment: 'The text of a modifier changed.',
 };
 export const reanchorKey = (item: PendingReanchorRef) => JSON.stringify([item.proposal_set_id,item.source_ref.annotation_id,item.source_ref.version]);
 export const reanchorRef = (item: ReanchorItem): PendingReanchorRef => ({proposal_set_id:item.proposal_set_id,source_ref:item.source_ref});

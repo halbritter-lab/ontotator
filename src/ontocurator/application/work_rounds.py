@@ -663,6 +663,7 @@ class WorkRoundService:
                                 )
                                 for e in evidence
                             ],
+                            "modifiers": mapped.target_modifiers,
                             "provenance": original.annotation.provenance.model_copy(
                                 update={"source_refs": [f"round-input:{iid}"]}
                             ),

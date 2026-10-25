@@ -35,6 +35,9 @@ describe("inspector lines", () => {
     expect(missingReason("mapping_failed", null)).toBe("Its text span could not be found in this text.");
     expect(missingReason("mapping_failed", "ambiguous_evidence")).toBe("Its text appears more than once in this text, so it could not be placed automatically.");
     expect(missingReason("mapping_failed", "changed_cue")).toBe("Its text was changed by the correction, so it could not be placed automatically.");
+    expect(missingReason("mapping_failed", "changed_modifier_segment")).toBe(
+      "The text of one of its modifiers was changed by the correction, so it could not be placed automatically.",
+    );
     expect(missingReason("mapping_failed", "invalid_bounds")).toBe("Its original text span could not be read reliably, so it could not be placed automatically.");
     expect(missingReason("mapping_failed", "something_new")).toBe("Its text span could not be found in this text.");
   });

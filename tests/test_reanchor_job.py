@@ -1,6 +1,8 @@
 """Actual runtime/producer PostgreSQL regressions; COLLECT ONLY until root token."""
 
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
@@ -9,6 +11,7 @@ from types import SimpleNamespace
 import ontospan
 import pytest
 from auth_harness import logged_in
+from modifier_fixtures import MOD_PATH, MOD_PIN, modifier_profile
 from sqlalchemy import delete, func, select, update
 from t1_builders import bundle, correction_unit
 from t1_fixtures import HP_PATH, TEXT, create_project, run_import, unit
@@ -19,7 +22,22 @@ from test_uploads_api import BASE, _ready, _run
 
 from ontocurator.api.variant_routes import ReanchorItem
 from ontocurator.auth.audit import Actor
+from ontocurator.domain.annotations import (
+    ActorRef,
+    Annotation,
+    Modifier,
+    Provenance,
+    snapshot,
+)
+from ontocurator.domain.documents import (
+    Document,
+    EvidenceMention,
+    EvidenceRef,
+    EvidenceSnapshot,
+    Segment,
+)
 from ontocurator.exchange.jobs import HANDLERS
+from ontocurator.exchange.reanchor_job import ReanchorSource, rebuild_source
 from ontocurator.exchange.t1 import ImportedProposals, ImportedSet, document_to_t1
 from ontocurator.jobs.queue import JobQueue
 from ontocurator.storage.tables import (
@@ -925,3 +943,89 @@ def test_noncorrecting_review_decisions_enqueue_nothing(review_env, decision):
         env.accesses["alice"], env.ids["alice"], expected_revision=revision
     )
     assert children(env) == []
+
+
+# Modifier segments (modifiers plan M1b): rebuild_source writes the mapped
+# modifiers into the target proposals and the delivered T1 unit.
+def _modifier_source(old_text):
+    def doc(document_id, text):
+        return Document(
+            document_id=document_id,
+            text=text,
+            language="de",
+            text_sha256=hashlib.sha256(text.encode()).hexdigest(),
+        )
+
+    old = doc("old", old_text)
+    evidence = EvidenceSnapshot.create(
+        EvidenceMention(evidence_id="e0", segments=[Segment(start=8, end=20)]), old
+    )
+    annotation = Annotation(
+        annotation_id="tool-a1",
+        document_id="old",
+        layer_id="hpo",
+        type_id="phenotype",
+        term_id="HP:0001250",
+        axes_values={"assertion": "present", "experiencer": "patient"},
+        evidence_refs=[EvidenceRef(evidence_id="e0", version=evidence.version)],
+        modifiers=[
+            Modifier(term_id="HP:0012828", segments=[Segment(start=0, end=7)]),
+            Modifier(term_id="HP:0031796"),
+        ],
+        provenance=Provenance(
+            actor=ActorRef(actor_id="tool", kind="tool"),
+            method="tool",
+            source_refs=["urn:tool"],
+        ),
+    )
+    profile = modifier_profile()
+    source = ReanchorSource(
+        row_id=1,
+        annotation_set_id="set-1",
+        bundle_id=None,
+        payload={},
+        annotations=(snapshot(annotation, [evidence], old, profile),),
+        notes={},
+    )
+
+    def rebuild(new_text):
+        return rebuild_source(
+            "proj",
+            source,
+            old,
+            doc("new", new_text),
+            profile,
+            {"hp": MOD_PIN},
+            created_at=datetime(2026, 10, 25, tzinfo=UTC),
+        )
+
+    return rebuild, ontospan.ObographOntology.load(MOD_PATH)
+
+
+def test_reanchored_proposal_keeps_its_mapped_modifiers():
+    rebuild, ontology = _modifier_source("schwere Krampfanfall")
+    built, unit = rebuild("Ein schwere Krampfanfall")
+    assert built is not None and unit is not None
+    assert built.pending_items == []
+    (target,) = built.proposals.annotations
+    assert [m.model_dump() for m in target.annotation.modifiers] == [
+        {"term_id": "HP:0012828", "segments": [{"start": 4, "end": 11}]},
+        {"term_id": "HP:0031796"},
+    ]
+    (delivered,) = unit.annotation_set.annotations
+    assert [(m.term_id, [s.text for s in m.segments]) for m in delivered.modifiers] == [
+        ("HP:0012828", ["schwere"]),
+        ("HP:0031796", []),
+    ]
+    assert ontospan.validate(unit, {"hp": ontology}).ok
+
+
+def test_changed_modifier_text_sends_the_whole_proposal_to_review():
+    rebuild, _ = _modifier_source("schwere Krampfanfall")
+    built, _unit = rebuild("leichte Krampfanfall")
+    assert built is not None
+    assert built.proposals.annotations == []
+    (pending,) = built.pending_items
+    assert pending["reason"] == "changed_modifier_segment"
+    # The stored item stays a valid ReanchorItem (no contract change in M1b).
+    ReanchorItem.model_validate({**pending, "proposal_set_id": 1})

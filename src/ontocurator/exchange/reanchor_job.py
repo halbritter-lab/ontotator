@@ -168,6 +168,7 @@ def rebuild_source(
                 EvidenceRef(evidence_id=e.mention.evidence_id, version=e.version)
                 for e in own_evidence
             ],
+            modifiers=result.target_modifiers,
             provenance=Provenance(
                 actor=ActorRef(actor_id=actor.actor_id, kind="tool"),
                 method="tool",
@@ -193,6 +194,16 @@ def rebuild_source(
                 axes=axes,
                 mentions=mentions,
                 document_level=not mentions,
+                modifiers=tuple(
+                    ontospan.Modifier(
+                        term_id=m.term_id,
+                        segments=tuple(
+                            ontospan.segment(target.text, s.start, s.end)
+                            for s in m.segments
+                        ),
+                    )
+                    for m in annotation.modifiers
+                ),
                 provenance=ontospan.Provenance(
                     actor=actor,
                     method="tool",

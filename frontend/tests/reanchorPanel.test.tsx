@@ -143,3 +143,7 @@ it('shows unknown reason codes literally and never resolves inherited object key
   expect(mounted.container.querySelector('img')).toBeNull();
   expect(screen.getAllByRole('button')).toHaveLength(4);
 });
+it('names a changed modifier text as the reason', () => {
+  render(<ReanchorPanel items={[item({ reason: 'changed_modifier_segment' })]} labelFor={() => null} onContext={() => {}} />);
+  expect(screen.getByText('The text of a modifier changed.')).toBeTruthy();
+});

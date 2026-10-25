@@ -77,7 +77,9 @@ logger = logging.getLogger(__name__)
 SYSTEM_ACTOR = Actor(user_id=None, label="system:text_change")
 
 # Unplaced findings whose marked text the correction changed (preview).
-_CHANGED_REASONS = frozenset({"changed_segment", "changed_cue"})
+_CHANGED_REASONS = frozenset(
+    {"changed_segment", "changed_cue", "changed_modifier_segment"}
+)
 # ``revoke_assignments`` reasons of the text-change operations (audit details).
 MOVED_REASON = "moved_to_version"
 WITHDRAWN_REASON = "text_change_withdrawn"
