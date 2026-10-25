@@ -112,7 +112,13 @@ Worktree `C:/Users/jan-p/Development/ontocurator/.worktrees/modifiers` (Git Bash
 ### C1 Data model (M1a) — `src/ontocurator/domain/annotations.py`
 
 ```python
-from ontocurator.domain.documents import Document, EvidenceRef, EvidenceSnapshot, Segment
+from ontocurator.domain.documents import (
+    Document,
+    EvidenceRef,
+    EvidenceSnapshot,
+    Segment,
+)
+
 
 class Modifier(BaseModel):
     """A clinical modifier of one finding (T1 F6): a term and 0..n segments."""
@@ -124,7 +130,7 @@ class Modifier(BaseModel):
         default_factory=list, exclude_if=lambda value: not value
     )
 
-# Annotation, after `note`:
+    # Annotation, after `note`:
     modifiers: list[Modifier] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
@@ -141,46 +147,73 @@ CLINICAL_MODIFIER = "HP:0012823"
 FREQUENCY = "HP:0040279"
 SEVERITY = "HP:0012824"
 ONSET = "HP:0003674"
-MODIFIER_ROOTS: tuple[str, ...] = (CLINICAL_MODIFIER, FREQUENCY)  # "+ Add modifier…" `within`
+MODIFIER_ROOTS: tuple[str, ...] = (
+    CLINICAL_MODIFIER,
+    FREQUENCY,
+)  # "+ Add modifier…" `within`
 ModifierKind = Literal["modifier", "cohort"]
 ExclusiveClass = Literal["severity", "onset"]
 TermRole = Literal["finding", "modifier", "cohort"]
 
+
 @dataclass(frozen=True)
 class ModifierClassifier:
     clinical: frozenset[str]  # HP:0012823 subtree, root included
-    cohort: frozenset[str]    # HP:0040279 subtree, root included
+    cohort: frozenset[str]  # HP:0040279 subtree, root included
     severity: frozenset[str]
     onset: frozenset[str]
 
-    def kind(self, term_id: str) -> ModifierKind | None: ...      # cohort first, then clinical
+    def kind(
+        self, term_id: str
+    ) -> ModifierKind | None: ...  # cohort first, then clinical
     def exclusive_class(self, term_id: str) -> ExclusiveClass | None: ...
-    def role(self, term_id: str) -> TermRole: ...                 # kind or "finding"
+    def role(self, term_id: str) -> TermRole: ...  # kind or "finding"
+
 
 NO_MODIFIERS = ModifierClassifier(frozenset(), frozenset(), frozenset(), frozenset())
 
-def subtree(service: OntologyService, root: str) -> frozenset[str]: ...
+
+def subtree(service: OntologyService, root: str) -> frozenset[str]:
+    ...
     # root + descendants (children_of, breadth first); unknown root -> frozenset();
     # cached per (service.ref.sha256, root) under a lock
-def classifier_of(service: OntologyService) -> ModifierClassifier: ...  # cached per sha256
+
+
+def classifier_of(
+    service: OntologyService,
+) -> ModifierClassifier: ...  # cached per sha256
+
 
 class TermRoles:
     """Classifiers of a project's layers whose pin has the T1 profile hpo-phenotype."""
+
     def __init__(self, by_layer: Mapping[str, ModifierClassifier]) -> None: ...
     def supports(self, layer_id: str) -> bool: ...
     def kind(self, layer_id: str, term_id: str) -> ModifierKind | None: ...
     def exclusive_class(self, layer_id: str, term_id: str) -> ExclusiveClass | None: ...
-    def role(self, layer_id: str, term_id: str) -> TermRole: ...   # "finding" for other layers
+    def role(
+        self, layer_id: str, term_id: str
+    ) -> TermRole: ...  # "finding" for other layers
+
 
 NO_TERM_ROLES = TermRoles({})
 
-def install_service_source(source: Callable[[str], OntologyService | None]) -> None: ...
+
+def install_service_source(source: Callable[[str], OntologyService | None]) -> None:
+    ...
     # OntologyRegistry.__init__ calls install_service_source(self.get_service)
-def term_roles(profile: TaskProfile, pins: Mapping[str, _PinLike]) -> TermRoles: ...
+
+
+def term_roles(profile: TaskProfile, pins: Mapping[str, _PinLike]) -> TermRoles:
+    ...
     # every layer whose pins[layer.ontology_id].t1_profile == "hpo-phenotype";
     # a sha256 the source cannot load raises DomainError("ONTOLOGY_NOT_FOUND", {"sha256": sha})
+
+
 def term_roles_for_services(
-    profile: TaskProfile, pins: Mapping[str, _PinLike], services: Mapping[str, OntologyService]
+    profile: TaskProfile,
+    pins: Mapping[str, _PinLike],
+    services: Mapping[str, OntologyService],
 ) -> TermRoles: ...  # editing: uses the already resolved per-layer services
 ```
 
@@ -196,6 +229,7 @@ class AddModifierCommand(BaseModel):
     term_id: str
     segments: list[Segment] = Field(default_factory=list)
 
+
 class SetModifierSegmentsCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     command: Literal["set_modifier_segments"] = "set_modifier_segments"
@@ -203,11 +237,13 @@ class SetModifierSegmentsCommand(BaseModel):
     term_id: str
     segments: list[Segment]
 
+
 class RemoveModifierCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     command: Literal["remove_modifier"] = "remove_modifier"
     annotation_id: str
     term_id: str
+
 
 class ConvertToModifierCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -249,15 +285,18 @@ Client payload types (`client.ts`, M1): `AddModifierPayload`, `SetModifierSegmen
 ```python
 ReviewReason = Literal[..., "changed_cue", "changed_modifier_segment"]
 
+
 @dataclass(frozen=True)
 class MappedModifier:
     term_id: str
     segments: tuple[Span, ...]
 
+
 @dataclass(frozen=True)
 class OldModifier:
     term_id: str
     segments: tuple[TextSpan, ...]
+
 
 # Carried: modifiers: tuple[MappedModifier, ...] = ()
 # NeedsReview: old_modifiers: tuple[OldModifier, ...] = ()
@@ -291,13 +330,16 @@ class ConsolidationModifierView(_View):
     exclusive_class: Literal["severity", "onset"] | None = None
     segments: list[tuple[int, int]] = []
 
+
 # ConsolidationMemberView: modifiers: list[ConsolidationModifierView] = []
 # ConsolidationGroupView:  attached_to: str | None = None   # leave_out with attach (S18)
+
 
 class ModifierIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     term_id: str
     segments: list[Segment] = Field(default_factory=list)
+
 
 # ResolveChoice: modifiers: list[ModifierIn] | None = None   (omitted: the span member's)
 # ResolveCommand: attach_to: str | None = None   (a cons-… annotation id; only with leave_out
@@ -699,9 +741,8 @@ MOD_DIR = Path(__file__).parent / "fixtures" / "modifiers"
 MOD_PATH = MOD_DIR / "hp-modifiers.json"
 MOD_DE = MOD_DIR / "hp-de.modifiers.babelon.tsv"
 MOD_SHA = hashlib.sha256(MOD_PATH.read_bytes()).hexdigest()
-MOD_PIN = Pin(
-    sha256=MOD_SHA, allowed_roots=("HP:0000118",), t1_profile="hpo-phenotype"
-)
+MOD_PIN = Pin(sha256=MOD_SHA, allowed_roots=("HP:0000118",), t1_profile="hpo-phenotype")
+
 
 def create_modifier_project(db: Database, key: str = "mods") -> None:
     """Store hp-modifiers.json (and its German file) and create a project pinning MOD_PIN."""
@@ -769,8 +810,13 @@ def at(word: str, nth: int = 0) -> tuple[int, int]:
 
 def f(key, term, spans=(), mods=(), *, standalone=False, order=0, axes=AXES):
     return Finding(
-        key=key, layer_id="hpo", term_id=term, axes=dict(axes),
-        modifiers=frozenset(t for t, _ in mods), spans=tuple(spans), order=order,
+        key=key,
+        layer_id="hpo",
+        term_id=term,
+        axes=dict(axes),
+        modifiers=frozenset(t for t, _ in mods),
+        spans=tuple(spans),
+        order=order,
         type_id="phenotype",
         modifier_spans=tuple(sorted((t, tuple(sorted(s))) for t, s in mods)),
         standalone_modifier=standalone,
@@ -859,9 +905,7 @@ One test per scenario, asserting `kinds` (and where named the number of groups a
       ordered = sorted(modifier.segments, key=lambda s: (s.start, s.end))
       for left, right in zip(ordered, ordered[1:]):
           if left.end > right.start:
-              raise InvalidAnnotation(
-                  f"Modifier segments overlap: {left} and {right}"
-              )
+              raise InvalidAnnotation(f"Modifier segments overlap: {left} and {right}")
       modifier.segments = ordered
   self.modifiers = sorted(self.modifiers, key=lambda m: m.term_id)
   ```
@@ -905,11 +949,13 @@ One test per scenario, asserting `kinds` (and where named the number of groups a
           raise DomainError("MODIFIERS_NOT_SUPPORTED", {"layer_id": layer_id})
       return classifier_of(services[layer_id])
 
+
   def _modifier_term(self, service, classifier, term_id) -> str:
       primary = self._validate_term_for_layer(service, term_id)  # UNKNOWN/OBSOLETE
       if classifier.kind(primary) is None:
           raise DomainError("MODIFIER_NOT_ALLOWED", {"term_id": primary})
       return primary
+
 
   def _replace(self, draft, existing, annotation, doc, profile) -> None:
       new_snap = snapshot(annotation, existing.evidence, doc, profile)
@@ -930,10 +976,16 @@ One test per scenario, asserting `kinds` (and where named the number of groups a
   depth = request.k + len(exact)
   while True:
       fetched = self._similar(query, depth, languages)
-      ranked = [h for h in fetched if h["hpo_id"] not in taken and (allowed is None or h["hpo_id"] in allowed)]
+      ranked = [
+          h
+          for h in fetched
+          if h["hpo_id"] not in taken and (allowed is None or h["hpo_id"] in allowed)
+      ]
       if len(ranked) >= remaining or len(fetched) < depth:
           break
-      depth = depth * 10 if depth < request.k * 10 else len(self.ontology)  # k × 10, then all
+      depth = (
+          depth * 10 if depth < request.k * 10 else len(self.ontology)
+      )  # k × 10, then all
   ranked = ranked[:remaining]
   ```
 
@@ -1098,14 +1150,16 @@ One test per scenario, asserting `kinds` (and where named the number of groups a
 - [ ] `document_row_panel.py`: `finding_of(..., roles: ModifierRoles = NO_TERM_ROLES)` fills
 
   ```python
-  modifiers=frozenset(m.term_id for m in annotation.modifiers),
-  modifier_spans=tuple(
-      sorted(
-          (m.term_id, tuple(sorted((s.start, s.end) for s in m.segments)))
-          for m in annotation.modifiers
-      )
-  ),
-  standalone_modifier=roles.kind(annotation.layer_id, annotation.term_id) is not None,
+  modifiers = (frozenset(m.term_id for m in annotation.modifiers),)
+  modifier_spans = (
+      tuple(
+          sorted(
+              (m.term_id, tuple(sorted((s.start, s.end) for s in m.segments)))
+              for m in annotation.modifiers
+          )
+      ),
+  )
+  standalone_modifier = (roles.kind(annotation.layer_id, annotation.term_id) is not None,)
   ```
 
   `findings_of(..., roles=…)`; new `project_roles(conn, pid, profile) -> TermRoles` (`term_roles(profile, Repository._pins(conn, pid))`). Pass real roles at every production call site: `consolidation.py` ~`:196` (`round_members`), ~`:398` (`_added`), `document_row_panel.py` ~`:286`, ~`:315` (`_all_match` ~`:290` and the compare counts; `grep -rn "finding_of(\|findings_of(\|round_members(" src`: `round_members` is also called by `consolidation_progress`, `consolidation_resolve.py` ~`:274`, ~`:658`, ~`:691` and `document_row_submissions.py` ~`:111`, so `round_members` computes `project_roles(conn, pid, profile)` itself and its callers stay unchanged); the default exists only for pure tests. Update the `findings_of` docstring ("modifiers are not part of the annotation model" is obsolete).
