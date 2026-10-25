@@ -27,6 +27,7 @@ from ontocurator.domain.workspace import (
     WorkspaceKey,
     WorkspaceMode,
 )
+from ontocurator.ontology.modifiers import modifier_layers
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
 from ontocurator.storage.proposal_queries import newest_proposal_refs
@@ -86,6 +87,9 @@ class WorkspaceView(BaseModel):
     axes_definition: str = "editor-axes/v1"
     axes_config: list[AxisDefinition] = Field(default_factory=list)
     axes_config_sha256: str = ""
+    # Layers whose pin has the T1 profile ``hpo-phenotype``: only there a
+    # finding has modifiers.
+    modifier_layer_ids: list[str] = Field(default_factory=list)
 
 
 class WorkspaceService:
@@ -452,4 +456,7 @@ class WorkspaceService:
             axes_definition=axes_profile.definition_name,
             axes_config=axes_profile.axes,
             axes_config_sha256=axes_profile.config_sha256,
+            modifier_layer_ids=modifier_layers(
+                profile, self.repo.project_pins(key.project_key)
+            ),
         )

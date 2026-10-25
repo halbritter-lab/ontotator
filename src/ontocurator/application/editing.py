@@ -16,6 +16,7 @@ from ontocurator.domain.annotations import (
     Annotation,
     AnnotationRef,
     AnnotationSnapshot,
+    Modifier,
     Provenance,
     snapshot,
 )
@@ -41,6 +42,12 @@ from ontocurator.domain.reanchor_resolution import PendingReanchorRef
 from ontocurator.domain.review import ReviewDecision
 from ontocurator.domain.scopes import TaskScope, build_scope, is_review_like
 from ontocurator.domain.workspace import Draft, MutationEnvelope, WorkspaceKey
+from ontocurator.exchange.t1 import Pin
+from ontocurator.ontology.modifiers import (
+    ModifierClassifier,
+    classifier_of,
+    modifier_layers,
+)
 from ontocurator.ontology.registry import OntologyRegistry
 from ontocurator.ontology.service import OntologyService
 from ontocurator.projects.runtime import project_state, require_state
@@ -265,6 +272,58 @@ class CheckLayerCommand(BaseModel):
         return data
 
 
+class AddModifierCommand(BaseModel):
+    """Add a modifier to a finding; segments of a spanless existing one are linked."""
+
+    model_config = ConfigDict(extra="forbid")
+    command: Literal["add_modifier"] = "add_modifier"
+    annotation_id: str
+    term_id: str
+    segments: list[Segment] = Field(default_factory=list)
+
+
+class SetModifierSegmentsCommand(BaseModel):
+    """Link (replace) or, with ``[]``, remove a modifier's text span."""
+
+    model_config = ConfigDict(extra="forbid")
+    command: Literal["set_modifier_segments"] = "set_modifier_segments"
+    annotation_id: str
+    term_id: str
+    segments: list[Segment]
+
+
+class RemoveModifierCommand(BaseModel):
+    """Remove a modifier from a finding."""
+
+    model_config = ConfigDict(extra="forbid")
+    command: Literal["remove_modifier"] = "remove_modifier"
+    annotation_id: str
+    term_id: str
+
+
+class ConvertToModifierCommand(BaseModel):
+    """Old data (R3): a standalone modifier finding becomes a modifier of another."""
+
+    model_config = ConfigDict(extra="forbid")
+    command: Literal["convert_to_modifier"] = "convert_to_modifier"
+    annotation_id: str
+    target_annotation_id: str
+    link_span: bool = True
+
+
+ModifierCommand = (
+    AddModifierCommand
+    | SetModifierSegmentsCommand
+    | RemoveModifierCommand
+    | ConvertToModifierCommand
+)
+MODIFIER_COMMANDS = (
+    AddModifierCommand,
+    SetModifierSegmentsCommand,
+    RemoveModifierCommand,
+    ConvertToModifierCommand,
+)
+
 EditCommand = Annotated[
     CreateAnnotationCommand
     | RecreateReanchorCommand
@@ -275,7 +334,11 @@ EditCommand = Annotated[
     | EditMentionCommand
     | DetachMentionCommand
     | DeleteDraftAnnotationCommand
-    | CheckLayerCommand,
+    | CheckLayerCommand
+    | AddModifierCommand
+    | SetModifierSegmentsCommand
+    | RemoveModifierCommand
+    | ConvertToModifierCommand,
     Field(discriminator="command"),
 ]
 
@@ -370,9 +433,18 @@ class EditingService:
 
         services: dict[str, OntologyService | Exception] = {}
         preparation_error: RevisionConflict | None = None
+        pins: Mapping[str, Pin] | None = None
         if isinstance(
-            cmd, (CreateAnnotationCommand, RecreateReanchorCommand, SetTermCommand)
+            cmd,
+            (
+                CreateAnnotationCommand,
+                RecreateReanchorCommand,
+                SetTermCommand,
+                *MODIFIER_COMMANDS,
+            ),
         ):
+            # Read once, outside the mutation: R2 needs the layer's pin.
+            pins = self.repo.project_pins(key.project_key)
             if self.registry is not None:
                 try:
                     self.registry.ensure_package_conditions(self.repo, key.project_key)
@@ -409,7 +481,9 @@ class EditingService:
             previous_refs = {
                 (s.annotation.annotation_id, s.version) for s in draft.annotations
             }
-            result = self._execute_edit(draft, cmd, doc, profile, scope, services)
+            result = self._execute_edit(
+                draft, cmd, doc, profile, scope, services, pins=pins
+            )
             current_refs = {
                 (s.annotation.annotation_id, s.version) for s in result.annotations
             }
@@ -520,6 +594,8 @@ class EditingService:
         profile: TaskProfile,
         scope: TaskScope,
         services: dict[str, OntologyService | Exception],
+        *,
+        pins: Mapping[str, Pin] | None = None,
     ) -> Draft:
         if isinstance(cmd, RecreateReanchorCommand):
             if (
@@ -552,6 +628,7 @@ class EditingService:
                 scope,
                 services,
                 apply_creation_defaults=False,
+                pins=pins,
             )
             own = next(
                 a
@@ -579,9 +656,15 @@ class EditingService:
         if isinstance(cmd, CheckLayerCommand):
             return self._check_layer(draft, cmd, scope)
         if isinstance(cmd, CreateAnnotationCommand):
-            return self._create_annotation(draft, cmd, doc, profile, scope, services)
+            return self._create_annotation(
+                draft, cmd, doc, profile, scope, services, pins=pins
+            )
         if isinstance(cmd, SetTermCommand):
-            return self._set_term(draft, cmd, doc, profile, scope, services)
+            return self._set_term(draft, cmd, doc, profile, scope, services, pins=pins)
+        if isinstance(cmd, MODIFIER_COMMANDS):
+            return self._edit_modifiers(
+                draft, cmd, doc, profile, scope, services, pins=pins
+            )
         if isinstance(cmd, SetAnnotationNoteCommand):
             return self._set_annotation_note(draft, cmd, doc, profile, scope)
         if isinstance(cmd, SetAxesCommand):
@@ -706,6 +789,7 @@ class EditingService:
         services: dict[str, OntologyService | Exception],
         *,
         apply_creation_defaults: bool = True,
+        pins: Mapping[str, Pin] | None = None,
     ) -> Draft:
         target_layer = cmd.layer_id
         if target_layer is None:
@@ -750,6 +834,9 @@ class EditingService:
             term_id = self._primary_term_id(services[target_layer], cmd.term_id)
         else:
             term_id = self._validate_term_for_layer(services[target_layer], cmd.term_id)
+        self._refuse_modifier_as_finding(
+            draft, profile, pins, target_layer, services, term_id
+        )
 
         if (cmd.source_annotation_id or cmd.source_version) and source is None:
             raise DomainError(
@@ -844,6 +931,10 @@ class EditingService:
             ],
             evidence_refs=evidence_refs,
             note=(cmd.note.strip() or None) if cmd.note is not None else None,
+            # An adopted proposal keeps its modifiers.
+            modifiers=[m.model_copy(deep=True) for m in source.annotation.modifiers]
+            if source is not None
+            else [],
             provenance=prov,
         )
         snap = snapshot(ann, evidence_list, doc, profile)
@@ -867,6 +958,8 @@ class EditingService:
         profile: TaskProfile,
         scope: TaskScope,
         services: dict[str, OntologyService | Exception],
+        *,
+        pins: Mapping[str, Pin] | None = None,
     ) -> Draft:
         existing = next(
             (
@@ -889,6 +982,10 @@ class EditingService:
             )
 
         term_id = self._validate_term_for_layer(services[layer_id], cmd.term_id)
+        self._refuse_modifier_as_finding(
+            draft, profile, pins, layer_id, services, term_id
+        )
+        # The finding keeps its modifiers.
         updated_ann = existing.annotation.model_copy(update={"term_id": term_id})
         new_snap = snapshot(updated_ann, existing.evidence, doc, profile)
         draft.annotations = [
@@ -1272,6 +1369,179 @@ class EditingService:
                 )
         remove_draft_annotation(draft, cmd.annotation_id)
         return draft
+
+    # --- modifiers ------------------------------------------------------- #
+
+    def _classifier(
+        self,
+        draft: Draft,
+        profile: TaskProfile,
+        pins: Mapping[str, Pin] | None,
+        layer_id: str,
+        services: dict[str, OntologyService | Exception],
+    ) -> ModifierClassifier | None:
+        """The layer's classifier; None unless its pin is ``hpo-phenotype`` (R2)."""
+        if pins is None:
+            pins = self.repo.project_pins(draft.key.project_key)
+        if layer_id not in modifier_layers(profile, pins):
+            return None
+        service = services[layer_id]
+        if isinstance(service, Exception):
+            raise service
+        return classifier_of(service)
+
+    def _refuse_modifier_as_finding(
+        self,
+        draft: Draft,
+        profile: TaskProfile,
+        pins: Mapping[str, Pin] | None,
+        layer_id: str,
+        services: dict[str, OntologyService | Exception],
+        term_id: str,
+    ) -> None:
+        """No new standalone modifiers (R3)."""
+        classifier = self._classifier(draft, profile, pins, layer_id, services)
+        if classifier is not None and classifier.kind(term_id) is not None:
+            raise DomainError("MODIFIER_AS_FINDING", {"term_id": term_id})
+
+    @staticmethod
+    def _draft_annotation(draft: Draft, annotation_id: str) -> AnnotationSnapshot:
+        found = next(
+            (
+                a
+                for a in draft.annotations
+                if a.annotation.annotation_id == annotation_id
+            ),
+            None,
+        )
+        if found is None:
+            raise DomainError(
+                "ANNOTATION_NOT_FOUND",
+                f"Annotation '{annotation_id}' not found in current draft",
+            )
+        return found
+
+    def _modifier_term(
+        self,
+        service: OntologyService | Exception,
+        classifier: ModifierClassifier,
+        term_id: str,
+    ) -> str:
+        primary = self._validate_term_for_layer(service, term_id)  # UNKNOWN/OBSOLETE
+        if classifier.kind(primary) is None:
+            raise DomainError("MODIFIER_NOT_ALLOWED", {"term_id": primary})
+        return primary
+
+    def _edit_modifiers(
+        self,
+        draft: Draft,
+        cmd: ModifierCommand,
+        doc: Document,
+        profile: TaskProfile,
+        scope: TaskScope,
+        services: dict[str, OntologyService | Exception],
+        *,
+        pins: Mapping[str, Pin] | None = None,
+    ) -> Draft:
+        target_id = (
+            cmd.target_annotation_id
+            if isinstance(cmd, ConvertToModifierCommand)
+            else cmd.annotation_id
+        )
+        existing = self._draft_annotation(draft, target_id)
+        layer_id = existing.annotation.layer_id
+        if layer_id not in scope.editable_layer_ids:
+            raise DomainError(
+                "REFERENCE_LAYER_READ_ONLY",
+                f"Annotation '{target_id}' belongs to reference layer '{layer_id}'",
+            )
+        classifier = self._classifier(draft, profile, pins, layer_id, services)
+        if classifier is None:
+            raise DomainError("MODIFIERS_NOT_SUPPORTED", {"layer_id": layer_id})
+        service = services[layer_id]
+        current = list(existing.annotation.modifiers)
+
+        if isinstance(cmd, ConvertToModifierCommand):
+            source = self._draft_annotation(draft, cmd.annotation_id)
+            if source.annotation.layer_id != layer_id:
+                raise DomainError(
+                    "LAYER_MISMATCH",
+                    "A finding becomes a modifier only of a finding in its layer",
+                )
+            term_id = self._modifier_term(
+                service, classifier, source.annotation.term_id
+            )
+            if cmd.annotation_id == target_id:
+                raise DomainError("MODIFIER_NOT_ALLOWED", {"term_id": term_id})
+            segments: list[Segment] = []
+            if cmd.link_span and source.annotation.evidence_refs:
+                first = source.annotation.evidence_refs[0]
+                segments = list(
+                    next(
+                        e
+                        for e in source.evidence
+                        if (e.mention.evidence_id, e.version)
+                        == (first.evidence_id, first.version)
+                    ).mention.segments
+                )
+            found = next((m for m in current if m.term_id == term_id), None)
+            if found is not None and found.segments and found.segments != segments:
+                raise DomainError("DUPLICATE_MODIFIER", {"term_id": term_id})
+            modifiers = [m for m in current if m is not found] + [
+                Modifier(
+                    term_id=term_id,
+                    segments=segments or (found.segments if found else []),
+                )
+            ]
+            remove_draft_annotation(draft, cmd.annotation_id)
+        elif isinstance(cmd, AddModifierCommand):
+            term_id = self._modifier_term(service, classifier, cmd.term_id)
+            found = next((m for m in current if m.term_id == term_id), None)
+            if found is not None and (found.segments or not cmd.segments):
+                raise DomainError("DUPLICATE_MODIFIER", {"term_id": term_id})
+            # A spanless modifier already there gets the segments (attach flow).
+            modifiers = [m for m in current if m is not found] + [
+                Modifier(term_id=term_id, segments=cmd.segments)
+            ]
+        else:
+            term_id = self._primary_term_id(service, cmd.term_id)
+            if not any(m.term_id == term_id for m in current):
+                raise DomainError("MODIFIER_NOT_FOUND", {"term_id": term_id})
+            others = [m for m in current if m.term_id != term_id]
+            modifiers = (
+                [*others, Modifier(term_id=term_id, segments=cmd.segments)]
+                if isinstance(cmd, SetModifierSegmentsCommand)
+                else others
+            )
+
+        # Validated anew (sorted, no duplicates): model_copy would skip that.
+        annotation = Annotation.model_validate(
+            {
+                **existing.annotation.model_dump(),
+                "modifiers": [m.model_dump() for m in modifiers],
+            }
+        )
+        self._replace(draft, existing, annotation, doc, profile)
+        return draft
+
+    def _replace(
+        self,
+        draft: Draft,
+        existing: AnnotationSnapshot,
+        annotation: Annotation,
+        doc: Document,
+        profile: TaskProfile,
+    ) -> None:
+        new_snap = snapshot(annotation, existing.evidence, doc, profile)
+        draft.annotations = [
+            new_snap if a.annotation.annotation_id == annotation.annotation_id else a
+            for a in draft.annotations
+        ]
+        layer = annotation.layer_id
+        draft.checked_layer_ids = [
+            lid for lid in draft.checked_layer_ids if lid != layer
+        ]
+        self._update_decision_replacements(draft, annotation.annotation_id, new_snap)
 
     def _update_decision_replacements(
         self,
