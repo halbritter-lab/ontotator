@@ -40,6 +40,7 @@
               "label": "Experiencer",
               "options": [
                 "patient",
+                "family_member",
                 "other"
               ],
               "allow_empty": true

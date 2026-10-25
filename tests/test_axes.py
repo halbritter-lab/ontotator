@@ -130,6 +130,12 @@ def test_standard_axes_have_english_labels_and_stable_ids() -> None:
 
     assert [(axis.id, axis.label, axis.options) for axis in STANDARD_CLINICAL_AXES] == [
         ("assertion", "Assertion", ["present", "absent", "uncertain"]),
-        ("experiencer", "Experiencer", ["patient", "other"]),
+        ("experiencer", "Experiencer", ["patient", "family_member", "other"]),
         ("temporality", "Temporality", ["current", "historical", "future"]),
     ]
+
+
+def test_family_member_is_a_valid_experiencer() -> None:
+    from ontocurator.domain.axes import EDITOR_AXES_CONFIG, validate_axes
+
+    validate_axes({"experiencer": "family_member"}, EDITOR_AXES_CONFIG, complete=False)

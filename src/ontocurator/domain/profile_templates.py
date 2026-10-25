@@ -45,7 +45,7 @@ def hpo_phenotype(ontology: OntologyFile) -> TaskProfile:
                             AxisDefinition(
                                 id="experiencer",
                                 label="Experiencer",
-                                options=["patient", "other"],
+                                options=["patient", "family_member", "other"],
                             ),
                             AxisDefinition(
                                 id="temporality",

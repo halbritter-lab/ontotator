@@ -191,6 +191,7 @@ test("Space on the checked default confirms only that axis", async ({ page }) =>
   await expect(confirm).toBeFocused();
   const experiencer = section(page).locator('[data-axis-field="experiencer"]');
   const checked = experiencer.locator('input[type="radio"]:checked');
+  await expect(experiencer.locator(".axis-option")).toHaveText(["Not specified", /^Patient/, "Family member", "Other person"]);
   // Confirm defaults precedes the rows: Tab reaches Assertion, then Experiencer.
   await page.keyboard.press("Tab");
   await expect(section(page).locator('[data-axis-field="assertion"] input[type="radio"]:checked')).toBeFocused();

@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ontocurator.domain.canonical import canonical_hash
 
 AssertionType = Literal["present", "absent", "uncertain"]
-ExperiencerType = Literal["patient", "other"]
+ExperiencerType = Literal["patient", "family_member", "other"]
 TemporalityType = Literal["current", "historical", "future"]
 
 
@@ -70,7 +70,7 @@ STANDARD_CLINICAL_AXES = [
     AxisDefinition(
         id="experiencer",
         label="Experiencer",
-        options=["patient", "other"],
+        options=["patient", "family_member", "other"],
         allow_empty=True,
     ),
     AxisDefinition(
