@@ -321,7 +321,7 @@ def _all_match(
     profile: TaskProfile,
     defaults: AxisDefaults,
     submissions: Sequence[Mapping[str, Any]],
-    roles: ModifierRoles,
+    roles: ModifierRoles = NO_TERM_ROLES,
 ) -> str | None:
     """Full agreement (W1, U7): the earliest eligible compared submission when
     at least two are compared and every consolidation group is ``match``
