@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AttachModePanel, type AttachModePanelProps } from "../src/editor/AttachModePanel";
 
@@ -19,7 +19,7 @@ describe("AttachModePanel", () => {
   it("names the modifier, the nearest finding and attaches to it", () => {
     const props = renderPanel();
     const region = screen.getByRole("region", { name: "Attach Severe" });
-    expect(region.querySelector("h2")!.textContent).toBe("SevereModifier");
+    expect(within(region).getByRole("heading", { name: "Severe Modifier" })).toBeDefined();
     expect(screen.getByText("HP:0012828 · “schwere”")).toBeDefined();
     expect(screen.getByText("Severe describes a finding. Choose it in the findings list or in the text.")).toBeDefined();
     expect(screen.getByText("Nearest in this sentence:").parentElement!.textContent).toBe("Nearest in this sentence: Seizure · “Krampfanfälle”");
@@ -53,6 +53,7 @@ describe("AttachModePanel", () => {
     const props = renderPanel({ noFindings: true, nearest: null });
     expect(screen.getByText("Severe is a modifier. Create the finding first, then add Severe under Modifiers.")).toBeDefined();
     expect(screen.getAllByRole("button").map(button => button.textContent)).toEqual(["OK"]);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "OK" }));
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(props.onCancel).toHaveBeenCalled();
   });

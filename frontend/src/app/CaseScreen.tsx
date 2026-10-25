@@ -269,6 +269,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   } | null>(null);
   // Segments of the pending mark moved by its handles, readable before the state update lands.
   const pendingSegments = useRef<{ evidenceId: string; segments: SelectionPayload["segments"] } | null>(null);
+  const pendingRef = useRef(pendingAnnotation);
+  pendingRef.current = pendingAnnotation;
   // Reports a keyboard move of a handle that still waits for its pause (set by TextPane).
   const flushTextResize = useRef<(() => void) | null>(null);
   const [activeReanchor, setActiveReanchor] = useState<ReanchorItem | null>(null);
@@ -415,6 +417,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setActiveReanchor(null);
     setActiveCarried(null);
     setIsAttachingMention(false);
+    setAttachModifier(null);
     setSelectionIntent("new_mention");
     setSubmitDialogOpen(false);
     searchManager.clear();
@@ -1201,7 +1204,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     announce: message => announceCarried(message),
     reportError: error => reportError(error),
   });
-  const linkSpan = modifierCommands.linkSpan;
+  // A read-only case has no link-a-span mode (the mode may have started before the case became read-only).
+  const linkSpan = readOnly ? null : modifierCommands.linkSpan;
   /** The chip of a modifier (its actions button when it has one). */
   const chipIn = (root: ParentNode, termId: string) =>
     root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"] button`) ?? root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"]`);
@@ -1669,9 +1673,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       });
       // create_annotation carries no modifiers: a re-created carried finding gets the source's modifiers one by
       // one, without text spans (the carried text may have changed).
+      // One failed copy must not stop the others nor the link to the carried input.
+      const notCopied: string[] = [];
       for (const modifier of pending.carriedInput?.source_snapshot.annotation.modifiers ?? []) {
-        await enqueueMutation({ command: "add_modifier", annotation_id: pending.annotationId, term_id: modifier.term_id });
+        try { await enqueueMutation({ command: "add_modifier", annotation_id: pending.annotationId, term_id: modifier.term_id }); }
+        catch { notCopied.push(termLabel(pending.layerId, modifier.term_id) ?? modifier.term_id); }
       }
+      if (notCopied.length) announceCarried(`Could not copy modifier ${notCopied.join(", ")}.`);
       if (pending.reanchorItem) setResolutionItem(pending.reanchorItem);
       // Linked client-side as the input's result; the input stays "Check needed" (no auto-complete).
       if (pending.carriedInput) {
@@ -2185,9 +2193,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // --- Modifiers: attach mode (E-a), framing, link a text span -------------------------------------
   const ownerOfEvidence = (evidenceId: string) => visibleAnnotations.find(snapshot =>
     (snapshot.annotation.evidence_refs ?? []).some(ref => ref.evidence_id === evidenceId));
+  const draftAnnotationById = new Map((draft.annotations ?? []).map(snapshot => [snapshot.annotation.annotation_id, snapshot]));
   /** Own findings in editable `hpo-phenotype` layers, in list order (spanless ones included). */
   const attachTargets: AttachFinding[] = carriedListOrder.flatMap(key => {
-    const snapshot = key.startsWith("annotation:") ? visibleAnnotationById.get(key.slice("annotation:".length)) : undefined;
+    // From the draft, not the visible layers: a hidden layer's finding is still a target.
+    const snapshot = key.startsWith("annotation:") ? draftAnnotationById.get(key.slice("annotation:".length)) : undefined;
     if (!snapshot || !modifierLayerIds.has(snapshot.annotation.layer_id) || !editableLayerIds.includes(snapshot.annotation.layer_id)) return [];
     const mentions = (snapshot.annotation.evidence_refs ?? []).map(ref => allEvidenceMap[ref.evidence_id]).filter(Boolean);
     return [{
@@ -2205,6 +2215,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setAttachFocusId(null); setAttachReplaceId(null);
     // At <=700 px the list pane holds the targets (the "Create the finding first" state stays in the details pane).
     if (panesLayout && attachTargets.length) setMobilePane("list");
+    // No target: the panel's "Create the finding first" state is announced (its "OK" takes focus).
+    if (!attachTargets.length) announceCarried(attachCopy.noFindings(candidate.label ?? candidate.term_id));
   };
   const cancelAttachModifier = () => { setAttachModifier(null); discardPending(); };
   /** Attach the pending mark (as adjusted by its handles) to a finding; `replace` sends set_modifier_segments. */
@@ -2229,6 +2241,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     } catch { return; } finally { creatingPending.current = false; }
     const finding = findingNameOf(target);
     const end = Math.max(...segments.map(segment => segment.end));
+    // Another mark made while the command ran stays pending.
+    if (pendingRef.current?.evidenceId !== pendingAnnotation.evidenceId) { announceCarried(attachCopy.attached(term, finding)); return; }
     cancelPending();
     setSelectedTargetId(null); setSelectedSourceId(null); setSelectedInputId(null);
     setSelectedAnnotationId(annotationId);

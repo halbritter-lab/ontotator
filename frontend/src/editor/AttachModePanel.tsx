@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "../ui/Button";
 import { Kbd } from "../ui/Kbd";
 import type { AttachCandidate, AttachFinding } from "./modifiers";
@@ -42,11 +42,13 @@ export const attachCopy = {
 export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused, existing, noFindings, onAttach, onReplace, onCancel, note }: AttachModePanelProps): JSX.Element {
   const enter = <span aria-hidden="true"> <Kbd>Enter</Kbd></span>;
   const esc = <span aria-hidden="true"> <Kbd>Esc</Kbd></span>;
+  const ok = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (noFindings) ok.current?.focus({ preventScroll: true }); }, [noFindings]);
   if (noFindings) {
     return <section className="detail-pane" aria-label={`Attach ${termLabel}`}>
       <div className="detail-section mod-attach-panel">
         <p>{attachCopy.noFindings(termLabel)}</p>
-        <div className="mod-attach-actions"><Button variant="primary" onClick={onCancel}>OK</Button></div>
+        <div className="mod-attach-actions"><Button ref={ok} variant="primary" onClick={onCancel}>OK</Button></div>
       </div>
     </section>;
   }
@@ -55,7 +57,7 @@ export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused
   const there = target ? existing(target.annotationId) : undefined;
   return <section className="detail-pane" aria-label={`Attach ${termLabel}`}>
     <div className="detail-section mod-attach-panel">
-      <h2 className="term-heading">{termLabel}<span className="mod-tag">Modifier</span></h2>
+      <h2 className="term-heading">{termLabel}{" "}<span className="mod-tag">Modifier</span></h2>
       <p className="mod-line-id">{termId}{markQuote ? ` · “${markQuote}”` : ""}</p>
       <p>{attachCopy.describes(termLabel)}</p>
       {note}

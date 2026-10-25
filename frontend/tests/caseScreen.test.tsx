@@ -2498,13 +2498,13 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       return current;
     });
   };
-  const setup = async (view: WorkspaceView, hits: unknown = severeHits) => {
+  const setup = async (view: WorkspaceView, hits: unknown = severeHits, waitForList = true) => {
     vi.spyOn(api, "resolveTermLabels").mockImplementation(async (_p, terms) => terms.map(t => ({ ...t, label: LABELS[t.term_id]?.[0] ?? t.term_id,
       role: LABELS[t.term_id]?.[1] ?? "finding", exclusive_class: LABELS[t.term_id]?.[2] ?? null })) as never);
     vi.spyOn(api, "searchOntology").mockResolvedValue(hits as never);
     const apply = commandSpy(view);
     const rendered = render(<CaseScreen view={view} workspaceId="ws-mod" onClose={vi.fn()} />);
-    if (view.draft.annotations?.length) await screen.findAllByText(LABELS[view.draft.annotations[0].annotation.term_id][0]);
+    if (waitForList && view.draft.annotations?.length) await screen.findAllByText(LABELS[view.draft.annotations[0].annotation.term_id][0]);
     return { ...rendered, apply };
   };
   const mark = (container: HTMLElement, word: string) => {
@@ -2648,8 +2648,10 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
   it("without a target the mode does not start: Create the finding first, OK discards", async () => {
     const { container, apply } = await setup(modView([]));
     await chooseSevere(container);
-    expect(await screen.findByText("Severe is a modifier. Create the finding first, then add Severe under Modifiers.")).toBeDefined();
+    expect(within(await screen.findByRole("region", { name: "Attach Severe" })).getByText("Severe is a modifier. Create the finding first, then add Severe under Modifiers.")).toBeDefined();
     expect(container.querySelector(".attach-mention-banner")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "OK" })));
+    expect(announcer(container)).toBe("Severe is a modifier. Create the finding first, then add Severe under Modifiers.");
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await waitFor(() => expect(container.querySelector(".pending-quote")).toBeNull());
     expect(payloads(apply)).toEqual([]);
@@ -2743,5 +2745,70 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       { command: "add_modifier", annotation_id: create.annotation_id, term_id: "HP:0012828" },
       { command: "add_modifier", annotation_id: create.annotation_id, term_id: "HP:0031796" },
     ]);
+  });
+
+  it("a failed modifier copy of a carried re-create does not stop the others or the link to the input", async () => {
+    const view = modView([]);
+    const source = findingSnap(["old", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012828" }, { term_id: "HP:0031796" }, { term_id: "HP:0001252" }]]);
+    const input = { input_id: "in-1", source_submission_id: "sub-1", source_ref: { annotation_id: "old", version: "old-v1" }, source_snapshot: source,
+      target_snapshot: null, mapping_status: "needs_review", source_round_ordinal: 1 };
+    view.key.round_id = "round-2"; view.draft.key = view.key;
+    vi.spyOn(api, "resolveTermLabels").mockImplementation(async (_p, terms) => terms.map(t => ({ ...t, label: LABELS[t.term_id]?.[0] ?? t.term_id })) as never);
+    let created: any = null;
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_ws, envelope) => {
+      const payload = envelope.payload as Record<string, any>;
+      if (payload.command === "add_modifier" && payload.term_id === "HP:0031796") throw new ApiError(422, "Refused", "MODIFIER_NOT_ALLOWED", { term_id: "HP:0031796" });
+      if (payload.command === "create_annotation") created = findingSnap([payload.annotation_id, "HP:0001250", "Krampfanfälle"]);
+      return { ...view.draft, revision: view.draft.revision + apply.mock.calls.length, annotations: created ? [created] : [] } as never;
+    });
+    const { container } = render(<CaseScreen view={view} workspaceId="ws-carry" roundKind="carry_forward" roundInputs={[input as never]} onClose={vi.fn()} />);
+    fireEvent.click(await waitFor(() => container.querySelector<HTMLElement>('[data-list-key="input:in-1"]')!));
+    fireEvent.click(await screen.findByRole("button", { name: "Mark in text" }));
+    mark(container, "Krampfanfälle");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save re-created finding" })); });
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(4));
+    expect(payloads(apply)[3]).toEqual(expect.objectContaining({ command: "add_modifier", term_id: "HP:0001252" }));
+    await waitFor(() => expect(announcer(container)).toBe("Could not copy modifier Recurrent."));
+    // The re-created finding is linked to its input: the pending mark is gone.
+    expect(screen.queryByRole("button", { name: "Save re-created finding" })).toBeNull();
+  });
+
+  it("a case that turns read-only ends the link-a-span mode", async () => {
+    const view = modView([["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0031796" }]]]);
+    const { container, rerender } = await setup(view);
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    fireEvent.click(await screen.findByRole("button", { name: "Actions, Recurrent" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Link a text span…" }));
+    expect(container.querySelector(".attach-mention-banner")).not.toBeNull();
+    rerender(<CaseScreen view={view} workspaceId="ws-mod" onClose={vi.fn()} readOnly />);
+    await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
+  });
+
+  it("a hidden modifier layer's finding is still a target (no “Create the finding first”)", async () => {
+    const view = modView(SEIZURE_HYPO);
+    view.layers![0].default_visible = false;
+    view.layers!.unshift({ ...view.layers![0], layer_id: "notes", label: "Notes", default_visible: true });
+    view.scope.editable_layer_ids = ["notes", "phenotype"];
+    view.modifier_layer_ids = ["notes", "phenotype"];
+    const { container } = await setup(view, severeHits, false);
+    await screen.findByRole("button", { name: "Add finding without a text span" });
+    expect(container.querySelector('[data-list-key="annotation:seizure"]')).toBeNull();
+    await chooseSevere(container);
+    await waitFor(() => expect(container.querySelector(".attach-mention-banner")).not.toBeNull());
+    expect(screen.queryByText("Severe is a modifier. Create the finding first, then add Severe under Modifiers.")).toBeNull();
+  });
+
+  it("a mark made while an attach command runs stays pending", async () => {
+    const { container, apply } = await setup(modView(SEIZURE_HYPO));
+    let release!: () => void;
+    const original = apply.getMockImplementation()!;
+    apply.mockImplementation((...args) => new Promise(resolve => { release = () => resolve(original(...args)); }));
+    await startAttach(container);
+    fireEvent.click(screen.getByRole("button", { name: "Attach to Seizure" }));
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    mark(container, "Wochen");
+    await act(async () => { release(); });
+    await waitFor(() => expect(announcer(container)).toContain("Attached Severe to Seizure."));
+    expect(container.querySelector(".pending-quote")!.textContent).toBe("“Wochen”");
   });
 });
