@@ -1420,6 +1420,9 @@ if __name__ == "__main__":
         from browser_values_scenarios import register_values_scenario_route
 
         register_values_scenario_route(app)
+        from browser_modifier_scenarios import register_modifier_scenario_route
+
+        register_modifier_scenario_route(app)
         from browser_consolidation_scenarios import (
             register_consolidation_scenario_route,
         )
