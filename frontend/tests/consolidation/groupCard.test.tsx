@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConsolidationGroupView } from "../../src/api/client";
 import { GroupCard, type GroupCardProps } from "../../src/consolidation/GroupCard";
-import { exampleGroups, group, hypotoniaThree, LUC, member, span, TEXT, THREE, TOM, workspaceView } from "./fixtures";
+import { ANA, BEN, exampleGroups, group, hypotoniaThree, LUC, member, MOD_PEOPLE, MOD_TEXT, modSpan, recurrent, seizure, severe, span, TEXT, THREE, TOM, workspaceView } from "./fixtures";
 
 afterEach(cleanup);
 
@@ -236,5 +236,95 @@ describe("GroupCard", () => {
     expect(screen.queryByRole("button", { name: /^Take/ })).toBeNull();
     expect(screen.queryByLabelText("Guidelines unclear here")).toBeNull();
     expect(screen.getByText("Flagged: guidelines unclear")).toBeTruthy();
+  });
+});
+
+describe("GroupCard, modifiers", () => {
+  const mod = { people: MOD_PEOPLE, text: MOD_TEXT, workspace: workspaceView(), onEditInEditor: vi.fn() };
+  const [ss, se] = modSpan("schwere"), [rs, re] = modSpan("wiederholt");
+  const s4 = () => seizure("g-s4", ["modifiers_differ"], [[ANA, [severe("schwere")]], [BEN, [recurrent("wiederholt")]]]);
+
+  it("S4: checks send nothing; Keep appears after the first check and sends both modifiers (DN-11)", () => {
+    const { props } = renderCard(s4(), mod);
+    expect(screen.getByRole("button", { expanded: true }).textContent).toContain("1 field to decide");
+    expect(screen.queryByRole("button", { name: "Keep" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Take Ana's finding/ })).toBeNull();
+    expect(screen.queryByRole("rowheader", { name: "Whole finding" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Take Recurrent “wiederholt” from Ben Roth for Modifiers" }));
+    expect(screen.getByRole("button", { name: "Keep" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Take Severe “schwere” from Ana Weber for Modifiers" }));
+    expect(props.onResolve).not.toHaveBeenCalled();
+    expect(result()).toContain("modifiers: Recurrent “wiederholt”, Severe “schwere”");
+    expect(screen.getByRole("button", { name: "Leave out" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit in editor…" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit values…" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Keep" }));
+    expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["g-s4-0", "g-s4-1"], action: "choose", choice: {
+      term_id: "HP:0001250", span_from_input_id: "g-s4-0", axes: {},
+      modifiers: [{ term_id: "HP:0031796", segments: [{ start: rs, end: re }] }, { term_id: "HP:0012828", segments: [{ start: ss, end: se }] }],
+    } }, "Seizure (HP:0001250), Present, Patient, Current, modifiers: Recurrent “wiederholt”, Severe “schwere”");
+  });
+
+  it("S10: Take Ana's finding resolves at once with her values and modifiers", () => {
+    const value = seizure("g", ["values_differ", "modifiers_differ"], [[ANA, [severe("schwere")]],
+      [BEN, [], { axes: { assertion: "uncertain", experiencer: "patient", temporality: "current" } }]], { differing_axes: ["assertion"] });
+    const { props } = renderCard(value, mod);
+    fireEvent.click(screen.getByRole("button", { name: "Take Ana's finding" }));
+    expect(props.onResolve).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(props.onResolve).mock.calls[0][0].choice).toEqual({ term_id: "HP:0001250", span_from_input_id: "g-0", axes: { assertion: "present" },
+      modifiers: [{ term_id: "HP:0012828", segments: [{ start: ss, end: se }] }] });
+  });
+
+  it("S10: checking every row by hand waits for Keep", () => {
+    const value = seizure("g", ["values_differ", "modifiers_differ"], [[ANA, [severe("schwere")]],
+      [BEN, [], { axes: { assertion: "uncertain", experiencer: "patient", temporality: "current" } }]], { differing_axes: ["assertion"] });
+    const { props } = renderCard(value, mod);
+    fireEvent.click(screen.getByRole("button", { name: "Take Uncertain from Ben Roth for Assertion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take No modifiers from Ben Roth for Modifiers" }));
+    expect(props.onResolve).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Keep" }));
+    expect(vi.mocked(props.onResolve).mock.calls[0][0].choice).toMatchObject({ axes: { assertion: "uncertain" }, modifiers: [] });
+  });
+
+  it("shows Two severities in words for the chosen modifiers", () => {
+    const value = seizure("g", ["modifiers_differ"], [[ANA, [severe()]], [BEN, [{ ...severe(), term_id: "HP:0012825", term_label: "Mild" }]]]);
+    renderCard(value, mod);
+    fireEvent.click(screen.getByRole("button", { name: "Take Severe from Ana Weber for Modifiers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take Mild from Ben Roth for Modifiers" }));
+    expect(screen.getByRole("rowheader", { name: /Modifiers/ }).textContent).toContain("Two severities");
+  });
+
+  describe("standalone modifier card (S18, DN-8 B)", () => {
+    const standalone = () => group("g-sev", ["partial", "modifier_as_finding"], [member("sev-a", ANA, "HP:0012828", "Severe", [modSpan("schwere")])]);
+    const seizureKept = group("g-seiz", ["partial"], [member("seiz-b", BEN, "HP:0001250", "Seizure", [modSpan("Krampfanfälle")])],
+      { state: "keep", annotation_ids: ["cons-seiz"] });
+
+    it("explains the card and resolves only with Attach or Leave out", () => {
+      const value = standalone();
+      const { props } = renderCard(value, { ...mod, groups: [value, seizureKept] });
+      expect(screen.getByText(/Ana Weber marked a modifier as a finding\. Severe can only describe another finding\./)).toBeTruthy();
+      expect(result()).toBe("Result: no finding of its own. Severe “schwere” goes to the finding you attach it to, or is left out.");
+      for (const name of ["Keep", "Keep Ana Weber's finding", "Edit values…", "Other term…"]) expect(screen.queryByRole("button", { name })).toBeNull();
+      expect(screen.getByRole("button", { name: "Leave out" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Edit in editor…" }));
+      expect(mod.onEditInEditor).toHaveBeenCalled();
+      expect(props.onResolve).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Attach to a finding…" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Seizure (HP:0001250), “Krampfanfälle”" }));
+      expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["sev-a"], action: "leave_out", attach_to: "cons-seiz" },
+        "Severe “schwere” to Seizure (HP:0001250), “Krampfanfälle”");
+    });
+
+    it("without a resolved finding in the sentence, Attach is unavailable with the reason", () => {
+      const value = standalone();
+      const { props } = renderCard(value, { ...mod, groups: [value, { ...seizureKept, state: "open", annotation_ids: [] }] });
+      const attach = screen.getByRole("button", { name: "Attach to a finding…" });
+      expect(attach.getAttribute("aria-disabled")).toBe("true");
+      expect(document.getElementById(attach.getAttribute("aria-describedby")!)?.textContent).toBe("No resolved finding in this sentence yet.");
+      fireEvent.click(attach);
+      expect(props.onResolve).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Leave out" }));
+      expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["sev-a"], action: "leave_out" }, "left out");
+    });
   });
 });

@@ -1,9 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, type ConsolidationView } from "../../src/api/client";
+import { api, ApiError, type ConsolidationGroupView, type ConsolidationView } from "../../src/api/client";
 import { ConsolidationScreen } from "../../src/consolidation/ConsolidationScreen";
 import { ShortcutHelpHost } from "../../src/ui/ShortcutHelp";
-import { decidedView, draft, exampleView, mockViewport, resetViewport, span, TEXT, withGroup, workspaceView } from "./fixtures";
+import { ANA, BEN, decidedView, draft, exampleView, group, member, mockViewport, MOD_TEXT, modSpan, resetViewport, seizure, severe, span, TEXT, withGroup, workspaceView } from "./fixtures";
 
 beforeEach(() => { vi.restoreAllMocks(); resetViewport(); });
 afterEach(() => { cleanup(); resetViewport(); });
@@ -345,5 +345,119 @@ describe("ConsolidationScreen", () => {
     expect(expandedTitle()).toBe("muscular hypotonia");
     await act(async () => { fireEvent.click(review); });
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("ConsolidationScreen, modifiers", () => {
+  const people = [{ ...ANA, lane: 1 }, BEN];
+  const [ss, se] = modSpan("schwere");
+  const onSeizure = (state: Partial<ConsolidationGroupView> = {}) => seizure("g-seiz", ["modifiers_differ"], [[ANA, [severe("schwere")]], [BEN, []]], state);
+  const onHypotonia = (state: Partial<ConsolidationGroupView> = {}) => group("g-hypo", ["modifiers_differ"], [
+    member("h-a", ANA, "HP:0001252", "Hypotonia", [modSpan("Muskelhypotonie")]),
+    member("h-b", BEN, "HP:0001252", "Hypotonia", [modSpan("Muskelhypotonie")], { modifiers: [severe("schwere")] }),
+  ], state);
+  const s9 = (seiz: Partial<ConsolidationGroupView> = {}) => exampleView({ text: MOD_TEXT, people, groups: [onSeizure(seiz), onHypotonia()] });
+  const standalone = (state: Partial<ConsolidationGroupView> = {}) =>
+    group("g-sev", ["partial", "modifier_as_finding"], [member("sev-a", ANA, "HP:0012828", "Severe", [modSpan("schwere")])], state);
+  const kept = (state: Partial<ConsolidationGroupView> = { state: "keep", annotation_ids: ["cons-seiz"] }) =>
+    group("g-seiz", ["partial"], [member("seiz-b", BEN, "HP:0001250", "Seizure", [modSpan("Krampfanfälle")])], state);
+  const s18 = (sev: Partial<ConsolidationGroupView>, seiz?: Partial<ConsolidationGroupView>) =>
+    exampleView({ text: MOD_TEXT, people, groups: [standalone(sev), kept(seiz)] });
+
+  it("a cross-link hint selects the other group; the text names modifier texts in words (S9, DN-7)", async () => {
+    mockViewport(1440);
+    load(s9());
+    await renderScreen();
+    await waitFor(() => expect(expandedTitle()).toBe("Krampfanfälle"));
+    const piece = [...document.querySelectorAll<HTMLElement>(".cons-mark")].find(element => element.textContent === "schwere")!;
+    expect(piece.title).toBe("Severe, modifier of Seizure (Ana Weber); Severe, modifier of Hypotonia (Ben Roth)");
+    expect(piece.nextElementSibling?.textContent).toBe(" (Severe, modifier of Seizure (Ana Weber); Severe, modifier of Hypotonia (Ben Roth))");
+    expect(piece.classList.contains("cons-selected")).toBe(true);
+    expect(document.body.textContent).not.toContain("·");
+    fireEvent.click(screen.getByRole("link", { name: "Ben Roth linked “schwere” (Severe) to Hypotonia." }));
+    await waitFor(() => expect(expandedTitle()).toBe("Muskelhypotonie"));
+    expect(screen.getByRole("link", { name: "Ana Weber linked “schwere” (Severe) to Seizure." })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(toggle(/Muskelhypotonie/)));
+  });
+
+  it("several holders of one modifier text are named together", async () => {
+    mockViewport(1440);
+    load(exampleView({ text: MOD_TEXT, people, groups: [seizure("g-seiz", ["match"], [[ANA, [severe("schwere")]], [BEN, [severe("schwere")]]])] }));
+    await renderScreen();
+    const piece = [...document.querySelectorAll<HTMLElement>(".cons-mark")].find(element => element.textContent === "schwere")!;
+    expect(piece.title).toBe("Severe, modifier of Seizure (Ana Weber, Ben Roth)");
+  });
+
+  it("Keep collapses to decided with the modifiers and opens the next group; Undo reopens without preselection (S21)", async () => {
+    load(s9(), s9({ state: "choose", annotation_ids: ["cons-1"] }), s9());
+    const resolve = vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
+    const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(5));
+    await renderScreen();
+    await waitFor(() => expect(expandedTitle()).toBe("Krampfanfälle"));
+    fireEvent.click(screen.getByRole("button", { name: "Take Severe “schwere” from Ana Weber for Modifiers" }));
+    expect(resolve).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Keep" }));
+    await waitFor(() => expect(expandedTitle()).toBe("Muskelhypotonie"));
+    expect(resolve.mock.calls[0][1].payload).toEqual({ input_ids: ["g-seiz-0", "g-seiz-1"], action: "choose", choice: {
+      term_id: "HP:0001250", span_from_input_id: "g-seiz-0", axes: {}, modifiers: [{ term_id: "HP:0012828", segments: [{ start: ss, end: se }] }] } });
+    expect(screen.getByRole("button", { name: "Krampfanfälle decided: Seizure (HP:0001250), Present, Patient, Current, modifiers: Severe “schwere”" })).toBeTruthy();
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
+    expect(reopen.mock.calls[0][1].payload).toEqual({ input_ids: ["g-seiz-0", "g-seiz-1"] });
+    await waitFor(() => expect(expandedTitle()).toBe("Krampfanfälle"));
+    expect(screen.getByRole("button", { name: "Take Severe “schwere” from Ana Weber for Modifiers" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Take No modifiers from Ben Roth for Modifiers" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByRole("button", { name: "Keep" })).toBeNull();
+  });
+
+  it("Change on a resolved modifier group sends the reopen (S21)", async () => {
+    load(s9({ state: "choose", annotation_ids: ["cons-1"] }), s9());
+    const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(4));
+    await renderScreen();
+    fireEvent.click(screen.getByRole("button", { name: "Change, Krampfanfälle" }));
+    await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(expandedTitle()).toBe("Krampfanfälle"));
+    expect(screen.getByRole("button", { name: "Take Severe “schwere” from Ana Weber for Modifiers" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("reopening an attach removes the attached modifier from the target (S18, S21)", async () => {
+    load(s18({ state: "leave_out", attached_to: "cons-seiz" }), s18({}));
+    const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(4));
+    await renderScreen({ group: "g-seiz" });
+    expect(screen.getByText("Attached modifier: Severe “schwere” from Ana Weber")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^schwere attached$/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Change, schwere" }));
+    await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
+    expect(reopen.mock.calls[0][1].payload).toEqual({ input_ids: ["sev-a"] });
+    await waitFor(() => expect(screen.queryByText(/^Attached modifier/)).toBeNull());
+  });
+
+  it("reopening the target also reopens the standalone group (S21 B)", async () => {
+    load(s18({ state: "leave_out", attached_to: "cons-seiz" }), s18({}, { state: "open", annotation_ids: [] }));
+    const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(4));
+    await renderScreen();
+    fireEvent.click(screen.getByRole("button", { name: "Change, Krampfanfälle" }));
+    await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
+    expect(reopen.mock.calls[0][1].payload).toEqual({ input_ids: ["seiz-b"] });
+    await waitFor(() => expect(screen.getByRole("button", { name: /^schwere to decide/ })).toBeTruthy());
+  });
+
+  it("the summary names modifier warnings and asks to check values and modifiers (D-f)", async () => {
+    load(decidedView());
+    const warning = new ApiError(409, "Check values", "AXIS_CONFIRMATION_WARNING", {
+      acknowledgement: { draft_revision: 3, policy_revision: 1, warning_digest: "abc" }, warnings: [
+        { annotation_id: "cons-1", rule: "cohort_modifier", detail: { term_id: "HP:0040282" } },
+        { annotation_id: "cons-1", rule: "exclusive_modifier_class", detail: { class: "severity" } },
+        { annotation_id: "cons-2", rule: "cohort_modifier", detail: { term_id: "HP:0040282" } },
+      ],
+    });
+    vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(warning);
+    await renderScreen({ assignmentId: 42 });
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
+    await within(dialog).findByLabelText("I checked these values and modifiers");
+    expect(within(dialog).getByText("2 findings have modifier warnings (cohort term or two of one kind).")).toBeTruthy();
+    expect(within(dialog).queryByText(/filled in by default/)).toBeNull();
   });
 });

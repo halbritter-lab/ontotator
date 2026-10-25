@@ -19,6 +19,8 @@ export interface GroupListProps {
   workspace: WorkspaceView | null;
   summaries: ReadonlyMap<string, string>;
   onSelect: (groupId: string) => void;
+  /** A cross-link hint selects (and focuses) another group. */
+  onSelectGroup?: (groupId: string) => void;
   onResolve: (group: ConsolidationGroupView, payload: ConsolidationResolvePayload, summary: string) => Promise<boolean>;
   onAnnotate: (group: ConsolidationGroupView, payload: ConsolidationAnnotatePayload) => Promise<boolean>;
   onReopen: (group: ConsolidationGroupView) => Promise<boolean>;
@@ -42,6 +44,7 @@ export function GroupList(props: GroupListProps): JSX.Element {
     onReopen={() => props.onReopen(group)}
     onDismissOutcome={() => props.onDismissOutcome(group.group_id)}
     onEditInEditor={props.onEditInEditor}
+    groups={groups} onSelectGroup={props.onSelectGroup ?? props.onSelect}
     toggleRef={props.toggleRef(group.group_id)} />;
   return <div className="cons-groups">
     {groups.length > 0 && <ul className="cons-group-list" aria-label="Groups">{textOrder(groups).map(card)}</ul>}

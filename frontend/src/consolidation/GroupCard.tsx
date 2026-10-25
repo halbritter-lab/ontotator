@@ -3,17 +3,20 @@
  * the group name (the text excerpt) and its state ("2 fields to decide", "agreed", "decided"). Expanded: the
  * comparison table (columns = people, rows = term, axes, text, note, whole finding; a check button takes a value in a
  * conflicting row), the result line that always spells out the one finding, "+ note", "Guidelines unclear here" and
- * the actions. The last missing choice resolves the group; a group without conflicts resolves with "Keep".
+ * the actions. The last missing choice resolves the group; a group without conflicts resolves with "Keep", and so does
+ * a group with a conflicting Modifiers row once every conflicting row has a choice (DN-11). A person's modifier marked
+ * as a finding (S18) resolves only with "Attach to a finding…" or "Leave out" (DN-8).
  */
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { axisOptionLabel } from "../editor/axisLabels";
-import { Button, Checkbox, InlineConfirm, Select, Textarea } from "../ui";
+import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from "../ui";
 import { IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
-import { axisLabel, groupStatus, keepLabel, partialText, REOPEN_EDITED_WARNING } from "./consolidationText";
-import { absentPeople, choicesComplete, comparisonRows, groupName, hasKind, needsTerm, presentPeople, resolvePayload, resultLine, takeFinding, type Choices, type OtherTerm } from "./groupModel";
+import { axisLabel, groupStatus, keepLabel, namesOf, NO_ATTACH_TARGET, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
+import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, modifiersConflict, needsTerm, presentPeople, resolvePayload, resultLine, standaloneText, takeFinding, type Choices, type OtherTerm } from "./groupModel";
+import { crossLinks } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
 import { TermPicker } from "./TermPicker";
 import type { GroupOutcome } from "./useConsolidation";
@@ -38,6 +41,10 @@ export interface GroupCardProps {
   onReopen: () => Promise<boolean>;
   onDismissOutcome: () => void;
   onEditInEditor?: () => void;
+  /** Every group of the round: cross-link hints and the targets of "Attach to a finding…". */
+  groups?: readonly ConsolidationGroupView[];
+  /** Selects another group (the cross-link hint). */
+  onSelectGroup?: (groupId: string) => void;
   toggleRef?: (element: HTMLButtonElement | null) => void;
 }
 
@@ -93,26 +100,29 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const present = presentPeople(group, people), absent = absentPeople(group, people);
   const partial = hasKind(group, "partial");
   const rows = useMemo(() => comparisonRows(group, people, text, choices), [group, people, text, choices]);
-  const line = resultLine(group, people, choices, otherTerm);
-  const conflicts = rows.filter(row => row.conflict).length;
+  const line = resultLine(group, people, text, choices, otherTerm);
+  const standalone = isStandalone(group);
+  const conflicts = standalone ? 0 : rows.filter(row => row.conflict).length;
+  // A conflicting Modifiers row allows several checks: the group waits for "Keep" (DN-11).
+  const waitsForKeep = modifiersConflict(group);
+  const allGroups = useMemo(() => props.groups ?? [group], [props.groups, group]);
+  const links = useMemo(() => crossLinks(group.group_id, allGroups.map(value => ({ groupId: value.group_id,
+    members: memberSets(value, people).map((set, index) => ({ ...set, termLabel: value.members[index].term_label || value.members[index].term_id })) })), text),
+  [group.group_id, allGroups, people, text]);
   const inputIds = group.members.map(member => member.input_id);
   const status = groupStatus(group, conflicts);
   const extras = () => ({ ...(note.trim() ? { note: note.trim() } : {}), ...(flag ? { guidelines_unclear: true } : {}) });
 
   const resolve = (payload: Omit<ConsolidationResolvePayload, "input_ids">, summary: string) =>
     void props.onResolve({ input_ids: inputIds, ...payload, ...extras() }, summary);
-  // The last missing choice resolves the group with the finding the result line spells out.
-  const settle = (next: Choices, other: OtherTerm | null = otherTerm) => {
+  // The last missing choice resolves the group with the finding the result line spells out; "Take … finding" always does.
+  const settle = (next: Choices, other: OtherTerm | null = otherTerm, taken = false) => {
     setChoices(next);
-    if (conflicts && choicesComplete(comparisonRows(group, people, text, next), next)) {
-      resolve(resolvePayload(group, next), resultLine(group, people, next, other).finding);
+    if (conflicts && (taken || !waitsForKeep) && choicesComplete(comparisonRows(group, people, text, next), next)) {
+      resolve(resolvePayload(group, next), resultLine(group, people, text, next, other).finding);
     }
   };
-  // Choosing a value by hand drops the member of an earlier "Take … finding".
-  const onChoose = (rowId: string, value: string) => {
-    const { whole: _taken, ...rest } = choices;
-    settle({ ...rest, [rowId]: value });
-  };
+  const onChoose = (rowId: string, value: string) => settle(choose(group, choices, rowId, value));
   const editValues = (axes: Record<string, string>) => {
     const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
     resolve({ action: "choose", choice: { term_id: base.term_id, span_from_input_id: base.input_id, axes } },
@@ -155,19 +165,46 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   </div>;
 
   const table = (tableReadOnly: boolean) => <ComparisonTable name={name} group={group} people={people} rows={rows} readOnly={tableReadOnly}
-    busy={busy} onChoose={onChoose} onTake={member => settle(takeFinding(group, member))} />;
+    busy={busy} onChoose={onChoose} onTake={member => settle(takeFinding(group, member), otherTerm, true)} />;
+
+  const crossLinkHints = links.map(link => <p key={`${link.personId}-${link.groupId}-${link.termLabel}`} className="cons-muted cons-crosslink">
+    <a href="#" onClick={event => { event.preventDefault(); props.onSelectGroup?.(link.groupId); }}>
+      {`${link.personName} linked “${link.quote}” (${link.termLabel}) to ${link.findingLabel}.`}</a>
+  </p>);
+
+  const attachTargets = standalone ? attachCandidates(group, allGroups, text) : [];
+  const modifier = standalone ? standaloneText(group, text) : "";
+  const standaloneBody = <>
+    <ResultLine line={{ saved: standaloneResult(modifier), notTaken: null }} />
+    {noteAndFlag(false)}
+    <div className="cons-actions">
+      {attachTargets.length
+        ? <MenuButton label="Attach to a finding…" buttonLabel="Attach to a finding…" items={attachTargets.map(target => ({ id: target.annotationId, label: target.label,
+          onSelect: () => { if (!busy) resolve({ action: "leave_out", attach_to: target.annotationId }, `${modifier} to ${target.label}`); } }))} />
+        : <><Button aria-disabled="true" aria-describedby={`${noteId}-attach`}>Attach to a finding…</Button>
+          <span id={`${noteId}-attach`} className="cons-muted">{NO_ATTACH_TARGET}</span></>}
+      <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, "left out"); }}>Leave out</Button>
+      {props.onEditInEditor && <Button onClick={props.onEditInEditor}>Edit in editor…</Button>}
+    </div>
+  </>;
+  // Modifiers attached to this group's finding from a standalone card (S18).
+  const attached = allGroups.filter(value => value.attached_to && group.annotation_ids.includes(value.attached_to));
 
   const openBody = <>
     {partial && <p className="cons-partial">{partialText(present, absent)}</p>}
-    {table(readOnly)}
-    {!readOnly && <>
+    {standalone && <p className="cons-partial"><IconWarning className="cons-conflict-mark" /><span className="visually-hidden">Warning: </span>
+      {standaloneWarning(present, group.members[0].term_label || group.members[0].term_id)}</p>}
+    {table(readOnly || standalone)}
+    {!readOnly && !standalone && crossLinkHints}
+    {!readOnly && standalone && standaloneBody}
+    {!readOnly && !standalone && <>
       <ResultLine line={line} />
       {/* Note and flag go with the decision, so they come before the choices (the last choice resolves). */}
       {noteAndFlag(false)}
       {editing && workspace ? <EditValues group={group} workspace={workspace} busy={busy} onKeep={editValues} onCancel={() => setEditing(false)} />
         : <div className="cons-actions">
-          {!conflicts && <Button variant="primary" loading={busy}
-            onClick={() => resolve(resolvePayload(group, choices), line.finding)}>{partial ? keepLabel(present) : "Keep"}</Button>}
+          {(!conflicts || (waitsForKeep && choicesComplete(rows, choices))) && <Button variant="primary" loading={busy}
+            onClick={() => resolve(resolvePayload(group, choices), line.finding)}>{partial && !conflicts ? keepLabel(present) : "Keep"}</Button>}
           <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, "left out"); }}>Leave out</Button>
           {!conflicts && workspace && <Button onClick={() => setEditing(true)}>Edit values…</Button>}
           {(!conflicts || needsTerm(group)) && workspace && <Button ref={otherTermRef} aria-expanded={picking} onClick={() => setPicking(true)}>Other term…</Button>}
@@ -193,6 +230,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const resolvedBody = <>
     {group.note && !noteOpen && <p className="cons-note-text">Note: {group.note}</p>}
     {readOnly && group.guidelines_unclear && <p className="cons-note-text">Flagged: guidelines unclear</p>}
+    {attached.map(value => <p key={value.group_id} className="cons-note-text">
+      {`Attached modifier: ${standaloneText(value, text)} from ${namesOf(presentPeople(value, people))}`}</p>)}
     {table(true)}
     {!readOnly && <>
       {confirmReopen ? <InlineConfirm title="Reopen this group?" message={REOPEN_EDITED_WARNING} confirmLabel="Reopen" busy={busy}

@@ -138,3 +138,32 @@ export function mockViewport(width: number, reducedMotion = false): void {
 export function resetViewport(): void {
   delete (window as { matchMedia?: unknown }).matchMedia;
 }
+
+// Modifier scenarios (finding-modifiers spec, "Consolidation scenarios"): A = Ana Weber, B = Ben Roth, C = Cem Arslan.
+export const MOD_TEXT = "Seit 2 Wochen wiederholt schwere Krampfanfälle und eine Muskelhypotonie. Kein Fieber.";
+/** Code point range of `words` in MOD_TEXT. */
+export function modSpan(words: string): [number, number] {
+  const index = MOD_TEXT.indexOf(words);
+  if (index < 0) throw new Error(`"${words}" not in the text`);
+  const start = Array.from(MOD_TEXT.slice(0, index)).length;
+  return [start, start + Array.from(words).length];
+}
+export const BEN: ConsolidationPersonView = { person_id: "ann-0010", label: "Ben Roth (ann-0010)", lane: 2 };
+export const CEM: ConsolidationPersonView = { person_id: "ann-0011", label: "Cem Arslan (ann-0011)", lane: 3 };
+export const CHRIS: ConsolidationPersonView = { person_id: "ann-0012", label: "Chris Lee (ann-0012)", lane: 3 };
+export const MOD_PEOPLE = [{ ...ANA, lane: 1 }, BEN, CEM];
+
+type Modifier = ConsolidationMemberView["modifiers"][number];
+const modifier = (term_id: string, term_label: string, extra: Partial<Modifier>, words?: string): Modifier =>
+  ({ term_id, term_label, kind: "modifier", exclusive_class: null, segments: words ? [modSpan(words)] : [], ...extra });
+export const severe = (words?: string) => modifier("HP:0012828", "Severe", { exclusive_class: "severity" }, words);
+export const mild = (words?: string) => modifier("HP:0012825", "Mild", { exclusive_class: "severity" }, words);
+export const recurrent = (words?: string) => modifier("HP:0031796", "Recurrent", {}, words);
+export const frequent = (words?: string) => modifier("HP:0040282", "Frequent", { kind: "cohort" }, words);
+
+/** Seizure on "Krampfanfälle", one member per person with the given modifiers. */
+export function seizure(groupId: string, kinds: string[], sets: [ConsolidationPersonView, Modifier[], Partial<ConsolidationMemberView>?][],
+  extra: Partial<ConsolidationGroupView> = {}): ConsolidationGroupView {
+  return group(groupId, kinds, sets.map(([person, modifiers, more], index) =>
+    member(`${groupId}-${index}`, person, "HP:0001250", "Seizure", [modSpan("Krampfanfälle")], { modifiers, ...more })), extra);
+}

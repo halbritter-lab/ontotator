@@ -15,8 +15,13 @@ export type GroupOutcome =
 
 export type AxisWarning = {
   acknowledgement: { draft_revision: number; policy_revision: number; warning_digest: string };
+  /** Value warnings (`axis_not_chosen`). */
   count: number;
+  /** Findings with a modifier warning (cohort term or two of one kind, D-f). */
+  modifiers: number;
 };
+
+const MODIFIER_RULES = new Set(["cohort_modifier", "exclusive_modifier_class"]);
 
 export type SubmitResult = { kind: "submitted"; submission: Submission } | { kind: "warning"; warning: AxisWarning };
 
@@ -29,14 +34,15 @@ export interface NewFinding {
   axes: Record<string, string | null>;
 }
 
-/** The advisory axis warning of a submit (`AXIS_CONFIRMATION_WARNING`), or null. */
+/** The advisory value and modifier warnings of a submit (`AXIS_CONFIRMATION_WARNING`), or null. */
 export function axisWarningOf(error: unknown): AxisWarning | null {
   if (!(error instanceof ApiError) || error.code !== "AXIS_CONFIRMATION_WARNING" || typeof error.details !== "object" || !error.details) return null;
   const acknowledgement = error.details.acknowledgement as AxisWarning["acknowledgement"] | undefined;
   if (!acknowledgement || !Number.isSafeInteger(acknowledgement.draft_revision) || !Number.isSafeInteger(acknowledgement.policy_revision)
     || typeof acknowledgement.warning_digest !== "string" || !acknowledgement.warning_digest) return null;
-  const warnings = Array.isArray(error.details.warnings) ? error.details.warnings.length : 0;
-  return { acknowledgement, count: warnings };
+  const warnings = (Array.isArray(error.details.warnings) ? error.details.warnings : []) as { annotation_id?: string; rule?: string }[];
+  const modifiers = warnings.filter(warning => MODIFIER_RULES.has(warning?.rule ?? ""));
+  return { acknowledgement, count: warnings.length - modifiers.length, modifiers: new Set(modifiers.map(warning => warning.annotation_id)).size };
 }
 
 const isConflict = (error: unknown) => error instanceof ApiError && error.status === 409;

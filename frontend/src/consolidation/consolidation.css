@@ -454,3 +454,18 @@
     outline: 2px solid CanvasText;
   }
 }
+
+/* Modifiers row: one line per modifier, each with its own check (DN-1). */
+.cons-mod-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cons-row-warning {
+  display: block;
+  font-size: var(--size-sm);
+  font-weight: var(--weight-regular);
+}

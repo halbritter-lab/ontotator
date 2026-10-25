@@ -23,11 +23,11 @@ export const OVERLAPPING = "(overlapping, comes with the chosen finding)";
 export const fieldsToDecide = (count: number) => count === 0 ? "to decide" : count === 1 ? "1 field to decide" : `${count} fields to decide`;
 
 /** The state word of a group card: what is left to decide, or how it was resolved. */
-export function groupStatus(group: Pick<ConsolidationGroupView, "state">, conflicts: number): string {
+export function groupStatus(group: Pick<ConsolidationGroupView, "state" | "attached_to">, conflicts: number): string {
   switch (group.state) {
     case "open": return fieldsToDecide(conflicts);
     case "auto": return "agreed";
-    case "leave_out": return "left out";
+    case "leave_out": return group.attached_to ? "attached" : "left out";
     default: return "decided";
   }
 }
@@ -59,6 +59,16 @@ export function addedHeading(own: boolean, addedBy: string | null | undefined): 
   if (own) return "Added by you";
   return addedBy ? `Added by ${personName(addedBy)}` : "Added findings";
 }
+
+/** A standalone modifier finding (S18): "Ana Weber marked a modifier as a finding. Severe can only describe another finding." */
+export function standaloneWarning(present: readonly ConsolidationPersonView[], term: string): string {
+  return `${namesOf(present)} marked a modifier as a finding. ${term} can only describe another finding.`;
+}
+
+export const standaloneResult = (modifier: string) =>
+  `Result: no finding of its own. ${modifier} goes to the finding you attach it to, or is left out.`;
+
+export const NO_ATTACH_TARGET = "No resolved finding in this sentence yet.";
 
 export const REOPEN_EDITED_WARNING = "Reopening drops your edit from the editor.";
 

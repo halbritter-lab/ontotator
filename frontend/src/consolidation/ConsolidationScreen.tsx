@@ -285,7 +285,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       <div className="cons-side">
         <GroupList groups={groups} people={view.people} text={view.text} selected={selected} readOnly={readOnly} busy={data.busy}
           outcomes={data.outcomes} narrow={narrow} workspace={data.workspace} summaries={summaries}
-          onSelect={groupId => select(groupId)} onResolve={resolve} onAnnotate={annotate} onReopen={reopen}
+          onSelect={groupId => select(groupId)} onSelectGroup={groupId => select(groupId, true)} onResolve={resolve} onAnnotate={annotate} onReopen={reopen}
           onDismissOutcome={data.dismissOutcome} onEditInEditor={editInEditor}
           toggleRef={groupId => element => { if (element) toggles.current.set(groupId, element); else toggles.current.delete(groupId); }} />
         {added.length > 0 && <section className="cons-added-list" aria-label="Added findings">

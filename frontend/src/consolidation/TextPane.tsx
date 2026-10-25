@@ -1,11 +1,12 @@
 /**
  * Read-only clinical text of the consolidation view (acceptance fixes U12, U13, X18): one underline lane per
  * person in a fixed order (lane 1 closest to the text, distinct offset, hue and line style), a neutral background on
- * kept findings, a frame on the selected group. Selecting text offers "Add finding".
+ * kept findings, a frame on the selected group. Selecting text offers "Add finding". A person's modifier texts sit in
+ * their lane with the lane's own line, named in words ("Severe, modifier of Seizure (Ana Weber)", DN-7).
  */
-import { useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import type { ConsolidationGroupView, ConsolidationPersonView } from "../api/client";
-import { laneLegend, laneOf, lanesOf, MAX_LANES } from "./lanes";
+import { laneLegend, laneOf, lanesOf, MAX_LANES, personName } from "./lanes";
 
 export interface AddedFinding {
   annotationId: string;
@@ -69,15 +70,37 @@ interface Piece {
   groupIds: string[];
   kept: boolean;
   added: boolean;
+  /** "Severe, modifier of Seizure (Ana Weber, Ben Roth)" per modifier covering the piece. */
+  modifiers: string[];
+}
+
+interface ModifierNote { term: string; finding: string; person: string }
+
+/** One line per modifier term and finding, naming every person who linked it. */
+function modifierNotes(notes: readonly ModifierNote[]): string[] {
+  const byKey = new Map<string, ModifierNote & { people: string[] }>();
+  for (const note of notes) {
+    const key = `${note.term}|${note.finding}`;
+    const entry = byKey.get(key) ?? { ...note, people: [] };
+    if (!entry.people.includes(note.person)) entry.people.push(note.person);
+    byKey.set(key, entry);
+  }
+  return [...byKey.values()].map(entry => `${entry.term}, modifier of ${entry.finding} (${entry.people.join(", ")})`);
 }
 
 function piecesOf(text: string, groups: readonly ConsolidationGroupView[], people: readonly ConsolidationPersonView[], added: readonly AddedFinding[]): Piece[] {
   const length = Array.from(text).length;
-  const marks: { start: number; end: number; lane?: number; groupId?: string; kept?: boolean; added?: boolean }[] = [];
+  const marks: { start: number; end: number; lane?: number; groupId?: string; kept?: boolean; added?: boolean; modifier?: ModifierNote }[] = [];
+  const nameOf = (personId: string) => personName(people.find(person => person.person_id === personId)?.label ?? personId);
   for (const group of groups) {
     const kept = group.state !== "open" && group.state !== "leave_out";
-    for (const member of group.members) for (const [start, end] of member.spans) {
-      marks.push({ start, end, lane: laneOf(people, member.person_id), groupId: group.group_id, kept });
+    for (const member of group.members) {
+      const lane = laneOf(people, member.person_id);
+      for (const [start, end] of member.spans) marks.push({ start, end, lane, groupId: group.group_id, kept });
+      for (const modifier of member.modifiers ?? []) for (const [start, end] of modifier.segments) {
+        marks.push({ start, end, lane, groupId: group.group_id,
+          modifier: { term: modifier.term_label || modifier.term_id, finding: member.term_label || member.term_id, person: nameOf(member.person_id) } });
+      }
     }
   }
   for (const finding of added) for (const [start, end] of finding.spans) marks.push({ start, end, added: true });
@@ -91,7 +114,8 @@ function piecesOf(text: string, groups: readonly ConsolidationGroupView[], peopl
     const covering = marks.filter(mark => mark.start <= start && mark.end >= end);
     const lanes = [...new Set(covering.flatMap(mark => mark.lane ? [mark.lane] : []))].sort((a, b) => a - b);
     const groupIds = [...new Set(covering.flatMap(mark => mark.groupId ? [mark.groupId] : []))];
-    pieces.push({ start, end, lanes, groupIds, kept: covering.some(mark => mark.kept), added: covering.some(mark => mark.added) });
+    pieces.push({ start, end, lanes, groupIds, kept: covering.some(mark => mark.kept), added: covering.some(mark => mark.added),
+      modifiers: modifierNotes(covering.flatMap(mark => mark.modifier ? [mark.modifier] : [])) });
   }
   return pieces;
 }
@@ -151,9 +175,12 @@ export function TextPane({ text, groups, people, selectedGroupId, onSelectGroup,
           const selected = !!selectedGroupId && piece.groupIds.includes(selectedGroupId);
           const className = ["cons-mark", piece.kept && "cons-kept", piece.added && "cons-added", selected && "cons-selected"].filter(Boolean).join(" ");
           const target = selected ? selectedGroupId! : piece.groupIds[0];
-          return <span key={piece.start} data-start={piece.start} className={className} style={laneStyle(piece.lanes)}
-            data-lanes={piece.lanes.join(" ") || undefined}
+          const note = piece.modifiers.join("; ");
+          const mark = <span data-start={piece.start} className={className} style={laneStyle(piece.lanes)}
+            data-lanes={piece.lanes.join(" ") || undefined} title={note || undefined}
             onClick={target ? () => { if (window.getSelection()?.isCollapsed !== false) onSelectGroup(target); } : undefined}>{value}</span>;
+          // The hidden words sit outside the piece, so text offsets (data-start) stay exact.
+          return <Fragment key={piece.start}>{mark}{note && <span className="visually-hidden"> ({note})</span>}</Fragment>;
         })}
       </div>
     </div>

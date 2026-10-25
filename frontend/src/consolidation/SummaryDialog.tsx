@@ -25,8 +25,9 @@ export function SummaryDialog({ open, summary, busy, warning, error, onSubmit, o
     <p>The lead then accepts the result.</p>
     <p className="cons-summary">{summary}</p>
     {warning && <>
-      <InlineMessage tone="warning">{warning.count === 1 ? "1 finding has" : `${warning.count || "Some"} findings have`} values that were filled in by default, not chosen. Check them before you submit.</InlineMessage>
-      <Checkbox id="cons-axis-ack" label="I checked these values" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />
+      {(warning.count > 0 || !warning.modifiers) && <InlineMessage tone="warning">{warning.count === 1 ? "1 finding has" : `${warning.count || "Some"} findings have`} values that were filled in by default, not chosen. Check them before you submit.</InlineMessage>}
+      {warning.modifiers > 0 && <InlineMessage tone="warning">{warning.modifiers === 1 ? "1 finding has" : `${warning.modifiers} findings have`} modifier warnings (cohort term or two of one kind).</InlineMessage>}
+      <Checkbox id="cons-axis-ack" label={warning.modifiers ? "I checked these values and modifiers" : "I checked these values"} checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />
     </>}
     {!!error && <InlineMessage tone="error">{errorMessage(error)}</InlineMessage>}
   </Dialog>;

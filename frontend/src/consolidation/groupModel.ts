@@ -4,12 +4,15 @@
  * differ, an axis in `differing_axes`, the text only when the spans genuinely conflict, backend
  * `agreement.spans_conflict`; never the note). The group always resolves to exactly one finding, spelled out by the
  * result line. Choices are keyed by row id ("term", an axis id, "text"); "whole" remembers the member taken with
- * "Take … finding" (its span, evidence and note come with it).
+ * "Take … finding" (its span, evidence and note come with it); "modifiers" holds the pressed modifier toggle ids
+ * (modifierSets.ts), joined by spaces. A conflicting Modifiers row is never resolved by a check: the group resolves
+ * with "Keep" (DN-11).
  */
-import type { ConsolidationGroupView, ConsolidationMemberView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
+import type { ConsolidationGroupView, ConsolidationMemberView, ConsolidationModifierView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import { axisOptionLabel } from "../editor/axisLabels";
 import { axisLabel, OVERLAPPING, quoted } from "./consolidationText";
 import { personName } from "./lanes";
+import { chosenModifiers, modifierChoices, modifierKey, modifierText, NO_MODIFIERS, otherTextChosen, press, setText, setWarnings, toggleName, type MemberSet, type ModifierView } from "./modifierSets";
 
 /** A term found with "Other term…": the result's term instead of the members' terms. */
 export interface OtherTerm {
@@ -59,8 +62,23 @@ export function groupName(group: ConsolidationGroupView, text: string): string {
   return [...new Set(group.members.map(member => member.term_label || member.term_id))].join(" / ");
 }
 
-export type RowKind = "term" | "axis" | "text" | "note" | "whole";
-export interface ComparisonCell { inputId: string; value: string; display: string; chosen: boolean }
+export type RowKind = "term" | "axis" | "text" | "modifiers" | "note" | "whole";
+/** One ✓ toggle of a member's modifier (or "No modifiers") in the Modifiers row. */
+export interface ModifierToggleCell {
+  /** Toggle id (modifierSets `modifierKey`) or `NO_MODIFIERS`. */
+  id: string;
+  /** "Severe “schwere”", "Severe (no text)", "No modifiers". */
+  label: string;
+  /** "(2 of 3)" or null. */
+  majority: string | null;
+  cohort: boolean;
+  pressed: boolean;
+  /** Another variant of this term is pressed. */
+  otherText: boolean;
+  /** "Take Severe “schwere” from Ana Weber for Modifiers (2 of 3)". */
+  name: string;
+}
+export interface ComparisonCell { inputId: string; value: string; display: string; chosen: boolean; toggles?: ModifierToggleCell[] }
 export interface ComparisonRow {
   kind: RowKind;
   /** "term", axis id, "text", "note", "whole". */
@@ -73,6 +91,8 @@ export interface ComparisonRow {
   /** Text without conflict: "(overlapping, comes with the chosen finding)". */
   info: string | null;
   cells: ComparisonCell[];
+  /** "Two severities" / "Two onsets" for the chosen (or agreed) modifiers. */
+  warnings?: string[];
 }
 
 const noteOf = (member: ConsolidationMemberView) => member.note?.trim() ?? "";
@@ -112,11 +132,74 @@ export function comparisonRows(group: ConsolidationGroupView, people: readonly C
     row("text", "text", "Text", !!group.span_conflict, member => member.input_id,
       member => member.spans.length ? quoted(passage(text, member.spans)) : "No text span", group.span_conflict ? null : OVERLAPPING),
   ];
+  const modifiers = modifiersRow(group, people, text, choices);
+  if (modifiers) rows.push(modifiers);
   // Notes are information, never a decision: the kept finding keeps its own note.
   if (members.some(noteOf)) rows.push(row("note", "note", "Note", false, noteOf, noteOf));
-  if (members.length > 1) rows.push(row("whole", "whole", "Whole finding", false, member => member.input_id,
+  // "Take X's finding" resolves at once, so it is hidden when only the modifiers conflict (DN-11).
+  if (members.length > 1 && (otherConflicts(group) || !modifiersConflict(group))) rows.push(row("whole", "whole", "Whole finding", false, member => member.input_id,
     member => `Take ${firstName(names[members.indexOf(member)].label)}'s finding`));
   return rows;
+}
+
+const viewOf = (modifier: ConsolidationModifierView): ModifierView => ({ ...modifier, exclusive_class: modifier.exclusive_class ?? null });
+
+/** The members' modifier sets for modifierSets.ts. */
+export function memberSets(group: ConsolidationGroupView, people: readonly ConsolidationPersonView[] = []): MemberSet[] {
+  const names = peopleOf(people, group.members);
+  return group.members.map((member, index) => ({ inputId: member.input_id, personId: member.person_id,
+    personName: personName(names[index].label), modifiers: (member.modifiers ?? []).map(viewOf) }));
+}
+
+/** The group shows a Modifiers row: some member has modifiers. */
+export const hasModifiers = (group: ConsolidationGroupView) => group.members.some(member => !!member.modifiers?.length);
+export const modifiersConflict = (group: ConsolidationGroupView) => hasModifiers(group) && hasKind(group, "modifiers_differ");
+const otherConflicts = (group: ConsolidationGroupView) => needsTerm(group) || group.differing_axes.length > 0 || !!group.span_conflict;
+/** A person marked a modifier term as a finding (S18). */
+export const isStandalone = (group: ConsolidationGroupView) => hasKind(group, "modifier_as_finding");
+
+/** Pressed modifier toggle ids of the choices. */
+export const modifierSelection = (choices: Choices): Set<string> => new Set(choices.modifiers ? choices.modifiers.split(" ") : []);
+const withSelection = (choices: Choices, selection: ReadonlySet<string>): Choices => {
+  const { modifiers: _old, ...rest } = choices;
+  return selection.size ? { ...rest, modifiers: [...selection].join(" ") } : rest;
+};
+
+/** Terms some member linked to a text: their spanless variants read "Severe (no text)". */
+const linkedTerms = (sets: readonly MemberSet[]) =>
+  new Set(sets.flatMap(set => set.modifiers.filter(modifier => modifier.segments.length).map(modifier => modifier.term_id)));
+
+function modifiersRow(group: ConsolidationGroupView, people: readonly ConsolidationPersonView[], text: string, choices: Choices): ComparisonRow | null {
+  if (!hasModifiers(group)) return null;
+  const sets = memberSets(group, people);
+  const options = modifierChoices(sets);
+  const selection = modifierSelection(choices);
+  const other = otherTextChosen(selection, options);
+  const linked = linkedTerms(sets);
+  const conflict = modifiersConflict(group);
+  const cells = sets.map(set => {
+    const own = options.toggles.filter(toggle => toggle.inputIds.includes(set.inputId));
+    const toggles: ModifierToggleCell[] = own.length ? own.map(toggle => {
+      const label = modifierText(toggle.modifier, text, linked);
+      return { id: toggle.id, label, majority: toggle.majority, cohort: toggle.modifier.kind === "cohort", pressed: selection.has(toggle.id),
+        otherText: other.has(toggle.id), name: toggleName(label, set.personName, toggle.majority) };
+    }) : [{ id: NO_MODIFIERS, label: "No modifiers", majority: options.none?.majority ?? null, cohort: false, pressed: selection.has(NO_MODIFIERS),
+      otherText: false, name: toggleName("No modifiers", set.personName, options.none?.majority ?? null) }];
+    return { inputId: set.inputId, value: toggles.map(toggle => toggle.id).join(" "), toggles,
+      display: own.length ? setText(own.map(toggle => toggle.modifier), text, linked) : "No modifiers", chosen: toggles.some(toggle => toggle.pressed) };
+  });
+  const same = cells.every(cell => cell.value === cells[0].value);
+  const shown = conflict ? chosenModifiers(selection, options) ?? [] : sets[0].modifiers;
+  return { kind: "modifiers", id: "modifiers", label: "Modifiers", conflict, info: null, cells,
+    agreed: !conflict && same ? `${cells[0].display} (all agree)` : null, warnings: setWarnings(shown) };
+}
+
+/** Choices after a check in a row: a modifier toggle presses or releases (modifierSets `press`), any other row takes
+ *  the value. A check by hand drops the member of an earlier "Take … finding". */
+export function choose(group: ConsolidationGroupView, choices: Choices, rowId: string, value: string): Choices {
+  const { whole: _taken, ...rest } = choices;
+  if (rowId !== "modifiers") return { ...rest, [rowId]: value };
+  return withSelection(rest, press(modifierSelection(rest), value, modifierChoices(memberSets(group))));
 }
 
 /** Every conflicting row has a choice ("Other term…" may choose a term no member holds). */
@@ -127,6 +210,7 @@ export const choicesComplete = (rows: readonly ComparisonRow[], choices: Choices
 export function takeFinding(group: ConsolidationGroupView, member: ConsolidationMemberView): Record<string, string> {
   const choices: Record<string, string> = { whole: member.input_id, term: member.term_id, text: member.input_id };
   for (const axis of axesOf(group)) choices[axis] = member.axes[axis] ?? "";
+  if (hasModifiers(group)) choices.modifiers = member.modifiers?.length ? member.modifiers.map(modifierKey).join(" ") : NO_MODIFIERS;
   return choices;
 }
 
@@ -137,11 +221,18 @@ export interface ResultText {
   notTaken: string | null;
 }
 
+/** The result's modifiers: the pressed ones when the row conflicts (null: not chosen yet), else the base member's. */
+function resultModifiers(group: ConsolidationGroupView, choices: Choices, base?: ConsolidationMemberView): ModifierView[] | null {
+  if (modifiersConflict(group)) return chosenModifiers(modifierSelection(choices), modifierChoices(memberSets(group)));
+  return ((base ?? group.members[0]).modifiers ?? []).map(viewOf);
+}
+
 /**
  * "Result: 1 finding, Hypotonia (HP:0001252), assertion not chosen yet, Patient, Current" and, when other terms exist,
- * "Not taken: Axial hypotonia (Ali)".
+ * "Not taken: Axial hypotonia (Ali)". With a Modifiers row it ends in ", modifiers: Severe “schwere”", ", no modifiers"
+ * or ", modifiers not chosen yet" (DN-5).
  */
-export function resultLine(group: ConsolidationGroupView, people: readonly ConsolidationPersonView[], choices: Choices,
+export function resultLine(group: ConsolidationGroupView, people: readonly ConsolidationPersonView[], text: string, choices: Choices,
   other?: OtherTerm | null): ResultText {
   const termId = choices.term ?? defaultTerm(group);
   const holder = group.members.find(member => member.term_id === termId);
@@ -151,6 +242,11 @@ export function resultLine(group: ConsolidationGroupView, people: readonly Conso
     else parts.push(choices[axis] === undefined ? `${axisLabel(axis)} not chosen yet` : axisOptionLabel(choices[axis]));
   }
   if (group.span_conflict && choices.text === undefined) parts.push("text not chosen yet");
+  if (hasModifiers(group)) {
+    const chosen = resultModifiers(group, choices, group.members.find(member => member.input_id === group.keep_input_id));
+    parts.push(chosen === null ? "modifiers not chosen yet" : chosen.length
+      ? `modifiers: ${setText(chosen, text, linkedTerms(memberSets(group)))}` : "no modifiers");
+  }
   const names = peopleOf(people, group.members);
   const others = new Map<string, string[]>();
   group.members.forEach((member, index) => {
@@ -172,9 +268,15 @@ export function resultLine(group: ConsolidationGroupView, people: readonly Conso
  */
 export function resolvePayload(group: ConsolidationGroupView, choices: Choices): Omit<ConsolidationResolvePayload, "input_ids"> {
   const taken = group.members.find(member => member.input_id === choices.whole);
-  if (!needsTerm(group) && !group.differing_axes.length && !group.span_conflict) {
+  // With a Modifiers row every `choose` sends the explicit list (the pressed ones, else the base member's).
+  const modifiersOf = (base?: ConsolidationMemberView) => {
+    if (!hasModifiers(group)) return {};
+    const chosen = resultModifiers(group, choices, base) ?? [];
+    return { modifiers: chosen.map(modifier => ({ term_id: modifier.term_id, segments: modifier.segments.map(([start, end]) => ({ start, end })) })) };
+  };
+  if (!otherConflicts(group) && !modifiersConflict(group)) {
     // "Take X's finding" with nothing conflicting: X's span, evidence and note, not the default member's.
-    return taken ? { action: "choose", choice: { term_id: taken.term_id, span_from_input_id: taken.input_id, axes: {} } } : { action: "keep" };
+    return taken ? { action: "choose", choice: { term_id: taken.term_id, span_from_input_id: taken.input_id, axes: {}, ...modifiersOf(taken) } } : { action: "keep" };
   }
   const termId = choices.term ?? defaultTerm(group);
   const base = (group.span_conflict ? group.members.find(member => member.input_id === choices.text) : undefined)
@@ -183,5 +285,39 @@ export function resolvePayload(group: ConsolidationGroupView, choices: Choices):
   return { action: "choose", choice: {
     term_id: termId, span_from_input_id: base?.input_id ?? group.keep_input_id,
     axes: Object.fromEntries(group.differing_axes.map(axis => [axis, choices[axis] || null])),
+    ...modifiersOf(base),
   } };
+}
+
+/** Code point range of the sentence around `offset`. shortcut: ends at ".", "!" or "?" (also inside "2.5"); upgrade with a sentence splitter if that misleads. */
+function sentenceOf(text: string, offset: number): [number, number] {
+  const chars = Array.from(text);
+  let start = offset, end = offset;
+  while (start > 0 && !/[.!?]/.test(chars[start - 1])) start--;
+  while (end < chars.length && !/[.!?]/.test(chars[end])) end++;
+  return [start, end];
+}
+
+export interface AttachCandidate { groupId: string; annotationId: string; label: string }
+
+/** Resolved findings of the round in the standalone modifier's sentence, nearest first (S18). */
+export function attachCandidates(group: ConsolidationGroupView, groups: readonly ConsolidationGroupView[], text: string): AttachCandidate[] {
+  const at = group.start;
+  if (at === null) return [];
+  const [from, to] = sentenceOf(text, at);
+  return groups
+    .filter(other => other.group_id !== group.group_id && other.state !== "open" && other.state !== "leave_out" && other.annotation_ids.length
+      && other.start !== null && other.start >= from && other.start < to)
+    .sort((a, b) => Math.abs(a.start! - at) - Math.abs(b.start! - at))
+    .map(other => {
+      const base = other.members.find(member => member.input_id === other.keep_input_id) ?? other.members[0];
+      return { groupId: other.group_id, annotationId: other.annotation_ids[0], label: `${termLabel(base)}, ${quoted(groupName(other, text))}` };
+    });
+}
+
+/** "Severe “schwere”": the term a person marked as a finding, with its text. */
+export function standaloneText(group: ConsolidationGroupView, text: string): string {
+  const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
+  const label = base.term_label || base.term_id;
+  return base.spans.length ? `${label} ${quoted(passage(text, base.spans))}` : label;
 }
