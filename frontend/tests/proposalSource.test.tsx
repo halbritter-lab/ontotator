@@ -5,6 +5,8 @@ import { api, ApiError, type EditorProposal, type ProposalSetView } from "../src
 import { ProposalMetadataProvider, ProposalSource } from "../src/editor/ProposalSource";
 import { CaseScreen, type WorkspaceView } from "../src/app/CaseScreen";
 import { AiBadge } from "../src/editor/AiBadge";
+import { ReviewActions } from "../src/editor/ReviewActions";
+import { formatTime } from "../src/app/submissionLabels";
 
 export const proposal = (set = 1, kind: "tool" | "human" = "tool"): EditorProposal => ({
   schema_version: "ontocurator-annotation/v3", version: `v${set}`, document_id: "doc", text_sha256: "text", ontology_sha256: "ont", layer_config_sha256: "layer", evidence: [], proposal_set_id: set, notes: ["First note", "Second note"],
@@ -171,4 +173,21 @@ it("isolates the same set ID between projects even with the same workspace token
   expect(await screen.findByText("other-project")).toBeTruthy();
   expect(screen.queryByText("first-project")).toBeNull();
   expect(get.mock.calls.map(call => call.slice(0, 2))).toEqual([["first-project", 1], ["other-project", 1]]);
+});
+
+it("the review panel names the source once, by the tool's declared name, with a locale-neutral import time", async () => {
+  vi.spyOn(api, "getProposalSet").mockResolvedValue(metadata());
+  const p = proposal();
+  const target = {annotation_id: "a1", version: "v1", term_id: "HP:1", provenance: p.annotation.provenance, evidence_count: 0};
+  render(<ProposalMetadataProvider scope="review" projectKey="project" proposals={[p]}>
+    <ReviewActions source={p} target={target} currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()}/>
+  </ProposalMetadataProvider>);
+  const line = document.querySelector<HTMLElement>(".review-actions__origin")!;
+  await waitFor(() => expect(line.textContent).toBe(`AI Source: Phentrieve 1.4 (tool), imported ${formatTime("2026-10-14T12:30:00Z")}`));
+  expect(line.textContent).not.toContain("tool-1");
+  expect(line.querySelector("time")!.getAttribute("dateTime")).toBe("2026-10-14T12:30:00Z");
+  // The collapsed details carry the rest without repeating the tool or the date.
+  const more = screen.getByText("Source and rules").closest("details")!;
+  expect(within(more).queryByText("Phentrieve 1.4")).toBeNull();
+  for (const value of ["run-1", "ann-importer", "set-1", "bundle-1", "First note"]) expect(within(more).getByText(value)).toBeTruthy();
 });

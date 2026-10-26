@@ -1798,6 +1798,26 @@
   margin-bottom: 0;
 }
 
+/* Provenance details and the decision rules stay one click away, below the decision. */
+.review-actions__more {
+  margin-top: var(--space-4);
+  font-size: var(--size-xs);
+  line-height: var(--leading-xs);
+}
+
+.review-actions__more > .detail-section {
+  padding: var(--space-2) 0 0;
+}
+
+.review-actions__more h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-xs);
+}
+
+.review-actions__more p {
+  margin: var(--space-2) 0 0;
+}
+
 .review-actions .field-hint {
   margin-top: var(--space-1);
   color: var(--text-muted);

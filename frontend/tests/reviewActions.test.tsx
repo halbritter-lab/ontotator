@@ -236,7 +236,7 @@ describe("ReviewActions", () => {
       <ReviewActions target={sampleTarget} currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />
     );
     expect(screen.getByLabelText("AI-generated: model-a, automated")).toBeDefined();
-    expect(screen.getByText(/Method: automated/)).toBeDefined();
+    expect(document.querySelector(".review-actions__origin")!.textContent).toBe("AI Source: model-a (tool)");
 
     rerender(
       <ReviewActions
@@ -247,6 +247,16 @@ describe("ReviewActions", () => {
       />
     );
     expect(screen.queryByText("AI")).toBeNull();
+  });
+  it("puts the decision buttons before the collapsed source and rules", () => {
+    render(<ReviewActions target={{ ...sampleTarget, axes_defaulted: ["assertion"] }} currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
+    const confirm = screen.getByRole("button", { name: /Confirm/ });
+    const more = screen.getByText("Source and rules").closest("details")!;
+    expect(more.open).toBe(false);
+    expect(confirm.compareDocumentPosition(more) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(more.textContent).toContain("This proposal is immutable.");
+    expect(more.textContent).toContain("Method");
+    expect(more.textContent).toContain("v-prop-1");
   });
   it("requires and focuses a reviewer note before setting unresolved", () => {
     const decide = vi.fn();
@@ -259,8 +269,7 @@ describe("ReviewActions", () => {
     fireEvent.change(input, { target: { value: "  Need specialist input  " } });
     fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
     expect(decide).toHaveBeenCalledWith({ outcome: "uncertain", replacement: undefined, note: "Need specialist input" });
-    expect(screen.getByText("A reviewer decision, separate from clinical uncertainty. A note is required.")).toBeDefined();
-    expect(screen.getByText("Unresolved proposals are included in exports with a separate reviewer flag and note. Clinical axis values are unchanged.")).toBeDefined();
+    expect(screen.getByText("Source and rules").closest("details")!.textContent).toContain("Unresolved is a reviewer decision, separate from clinical uncertainty; a note is required.");
   });
 
   it("honors a parent note request and preserves the controlled draft on reset", () => {

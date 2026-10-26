@@ -2,7 +2,7 @@ import { IconButton } from "../ui/IconButton";
 import { Textarea } from "../ui/Textarea";
 import { Button } from "../ui/Button";
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ProposalSource } from "./ProposalSource";
+import { ImportedAt, ProposalSource, useProposalMetadata } from "./ProposalSource";
 import type { EditorProposal, AnnotationSnapshot } from "../api/client";
 import type { components } from "../api/generated";
 import { TermName } from "./TermName";
@@ -123,6 +123,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   termInfo,
 }) => {
   const targetIdentity = JSON.stringify([target.annotation_id, target.version]);
+  const { metadata: sourceMetadata, label: sourceLabel } = useProposalMetadata(source);
   const [localNote, setLocalNote] = useState({ targetIdentity, value: currentDecision?.note ?? "" });
   const [attemptedUnresolved, setAttemptedUnresolved] = useState<string | null>(null);
   const note = controlledNote ?? (localNote.targetIdentity === targetIdentity ? localNote.value : currentDecision?.note ?? "");
@@ -224,29 +225,20 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         {evidence.length ? evidence.map(ev => <p className="review-actions__quote" key={`${ev.mention.evidence_id}:${ev.version}`}>
           {ev.mention.segments.map(seg => Array.from(documentText).slice(seg.start, seg.end).join("")).join(" … ")}
         </p>) : <p className="review-actions__quote">No text mention (spanless)</p>}
-        <details className="technical-details">
-          <summary>Technical details</summary>
-          <p>Version: {target.version}</p>
-        </details>
+        {/* One source line: the tool's declared name (as in the AI badge), else the actor id. */}
+        <p className="review-actions__origin">
+          {target.provenance ? (
+            <>
+              <AiBadge provenance={target.provenance} source={source} />{" "}
+              Source: <strong>{sourceLabel ?? target.provenance.actor.actor_id}</strong> ({target.provenance.actor.kind})
+              {sourceMetadata && <>, imported <ImportedAt at={sourceMetadata.imported_at} /></>}
+            </>
+          ) : (
+            <>Source: <strong>unknown</strong></>
+          )}
+        </p>
       </div>
-      <ProposalSource source={source} />
-      {!!target.axes_defaulted?.length && <div className="field-hint">
-        <p>This proposal is immutable. Its defaulted values cannot be confirmed directly. An Unresolved decision and its reviewer note keep the original clinical values.</p>
-        {requireChosenAxes && <p role="alert">This project requires every axis to be chosen. Defaulted values on this immutable proposal still block submission. Ask the project lead to resolve this rule conflict, or make a clinically justified replacement decision.</p>}
-        <p>Edit &amp; Replace is a separate review decision: it creates an editable copy and replaces the existing decision. Use it only when you intend to replace the proposal.</p>
-      </div>}
-      {/* Origin Info */}
-      <div className="review-actions__origin">
-        {target.provenance ? (
-          <>
-            <AiBadge provenance={target.provenance} source={source} />{" "}
-            Source: <strong>{target.provenance.actor.kind}</strong> ({target.provenance.actor.actor_id}) •
-            Method: {target.provenance.method}
-          </>
-        ) : (
-          <>Source: <strong>unknown</strong></>
-        )}
-      </div>
+      {!!target.axes_defaulted?.length && requireChosenAxes && <p className="field-hint" role="alert">This project requires every axis to be chosen. Defaulted values on this immutable proposal still block submission. Ask the project lead to resolve this rule conflict, or make a clinically justified replacement decision.</p>}
 
       {/* Obsolete warning */}
       {target.is_obsolete && (
@@ -318,9 +310,6 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </Button>
       </div>
 
-      <p className="field-hint">A reviewer decision, separate from clinical uncertainty. A note is required.</p>
-      <p className="field-hint">Unresolved proposals are included in exports with a separate reviewer flag and note. Clinical axis values are unchanged.</p>
-
       {/* Reset Decision Button */}
       {currentDecision && (
         <div className="review-actions__row">
@@ -388,6 +377,18 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           }}>Save decision</Button>
         </div>}
       </div>
+
+      <details className="technical-details review-actions__more">
+        <summary>Source and rules</summary>
+        <ProposalSource source={source} compact />
+        <dl className="axis-list">
+          {target.provenance && <><dt>Method</dt><dd>{target.provenance.method}</dd></>}
+          <dt>Version</dt><dd>{target.version}</dd>
+        </dl>
+        {!!target.axes_defaulted?.length && <p>This proposal is immutable. Its defaulted values cannot be confirmed directly. An Unresolved decision and its reviewer note keep the original clinical values.</p>}
+        <p>Edit &amp; Replace is a separate review decision: it creates an editable copy and replaces the existing decision. Use it only when you intend to replace the proposal.</p>
+        <p>Unresolved is a reviewer decision, separate from clinical uncertainty; a note is required. Unresolved proposals are included in exports with a separate reviewer flag and note. Clinical axis values are unchanged.</p>
+      </details>
     </div>
   );
 };
