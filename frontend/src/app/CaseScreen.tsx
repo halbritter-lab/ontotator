@@ -3460,11 +3460,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           resyncToken={textResyncToken}
           scrollRequest={textScrollRequest}
         />
-        {!panesLayout && pendingIsMarkedSpan && !readOnly && pendingAnnotation?.evidenceId && (
+        {/* Attach mode: the banner owns the instruction and Cancel; Esc still cancels and discards. */}
+        {!panesLayout && !attachActive && pendingIsMarkedSpan && !readOnly && pendingAnnotation?.evidenceId && (
           <PendingMarkBar textElement={leftTextElement} evidenceId={pendingAnnotation.evidenceId}
             segmentsKey={JSON.stringify(pendingAnnotation.segments)} onDiscard={discardPending} />
         )}
-        {panesLayout && pendingIsMarkedSpan && !readOnly && mobilePane === "text" && (
+        {panesLayout && !attachActive && pendingIsMarkedSpan && !readOnly && mobilePane === "text" && (
           <div className="pending-bar" role="group" aria-label="New finding">
             <span className="pending-bar__text">New finding “{quoteSegments(view.document.text, pendingAnnotation!.segments, 40)}”</span>
             <Button type="button" variant="primary" size="sm" onClick={chooseTerm}>Choose term</Button>
@@ -3512,6 +3513,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 return modifier ? { segmentsQuote: modifier.segments?.length ? quoteOf(view.document.text, modifier.segments) : null } : undefined;
               }}
               noFindings={attachTargets.length === 0}
+              showCancel={panesLayout}
               onAttach={annotationId => { void attachTo(annotationId); }}
               onReplace={annotationId => { void attachTo(annotationId, true); }}
               onCancel={attachActive || attachModifier.mode === "convert" ? cancelAttachModifier : discardPending} />

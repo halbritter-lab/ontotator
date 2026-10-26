@@ -2542,7 +2542,9 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(banner.getAttribute("role")).toBe("status");
     expect(banner.textContent).toContain("Attach Severe: click its finding in the list or in the text (↑ ↓ Enter in the list). Esc cancels.");
     expect(within(banner).getByRole("button", { name: "Cancel (Esc)" })).toBeDefined();
-    expect(container.querySelector(".pending-mark-bar")).not.toBeNull();
+    // One instruction and one Cancel: no inspector Cancel, no Discard popover on the mark.
+    expect(screen.getAllByRole("button", { name: /^Cancel/ })).toHaveLength(1);
+    expect(container.querySelector(".pending-mark-bar")).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Search term" })).toBeNull();
     const row = screen.getByRole("button", { name: "Attach Severe to Seizure" });
     await waitFor(() => expect(document.activeElement).toBe(row));
@@ -2621,15 +2623,14 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(payloads(apply)[0].segments).toEqual([{ start: pos("schwere").start, end: pos("schwere").end + 2 }]);
   });
 
-  for (const end of ["Escape", "Cancel (Esc)", "Discard"] as const) {
+  for (const end of ["Escape", "Cancel (Esc)"] as const) {
     it(`${end} ends the mode and drops the mark without a command`, async () => {
       const { container, apply } = await setup(modView(SEIZURE_HYPO));
       await startAttach(container);
       const row = screen.getByRole("button", { name: "Attach Severe to Seizure" });
       await waitFor(() => expect(document.activeElement).toBe(row));
       if (end === "Escape") fireEvent.keyDown(row, { key: "Escape" });
-      else if (end === "Cancel (Esc)") fireEvent.click(screen.getByRole("button", { name: "Cancel (Esc)" }));
-      else fireEvent.click(within(container.querySelector<HTMLElement>(".pending-mark-bar")!).getByRole("button", { name: /Discard/ }));
+      else fireEvent.click(screen.getByRole("button", { name: "Cancel (Esc)" }));
       await waitFor(() => expect(container.querySelector(".attach-mention-banner")).toBeNull());
       expect(screen.queryByRole("region", { name: "Attach Severe" })).toBeNull();
       expect(screen.queryByRole("region", { name: "New finding" })).toBeNull();

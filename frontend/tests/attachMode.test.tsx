@@ -21,10 +21,16 @@ describe("AttachModePanel", () => {
     const region = screen.getByRole("region", { name: "Attach Severe" });
     expect(within(region).getByRole("heading", { name: "Severe Modifier" })).toBeDefined();
     expect(screen.getByText("HP:0012828 · “schwere”")).toBeDefined();
-    expect(screen.getByText("Severe describes a finding. Choose it in the findings list or in the text.")).toBeDefined();
     expect(screen.getByText("Nearest in this sentence:").parentElement!.textContent).toBe("Nearest in this sentence: Seizure · “Krampfanfälle”");
     fireEvent.click(screen.getByRole("button", { name: "Attach to Seizure" }));
     expect(props.onAttach).toHaveBeenCalledWith("seizure");
+    // The banner owns the instruction and the one Cancel (desktop).
+    expect(screen.queryByText(/describes a finding/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  });
+
+  it("narrow layout: Cancel in the inspector, since the banner is on the Document tab", () => {
+    const props = renderPanel({ showCancel: true });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(props.onCancel).toHaveBeenCalled();
   });

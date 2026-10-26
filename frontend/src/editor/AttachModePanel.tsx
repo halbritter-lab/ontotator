@@ -22,6 +22,8 @@ export interface AttachModePanelProps {
   /** set_modifier_segments on that finding. */
   onReplace: (annotationId: string) => void;
   onCancel: () => void;
+  /** Narrow layout only: the banner with its Cancel sits on the Document tab, out of sight. */
+  showCancel?: boolean;
   /** An extra line (M7's convert mode). */
   note?: ReactNode;
 }
@@ -29,7 +31,6 @@ export interface AttachModePanelProps {
 /** Copy of the attach mode in one place (spec "Attach mode" 4, 7–9). */
 export const attachCopy = {
   banner: (term: string) => `Attach ${term}: click its finding in the list or in the text (↑ ↓ Enter in the list). Esc cancels.`,
-  describes: (term: string) => `${term} describes a finding. Choose it in the findings list or in the text.`,
   noNearest: "No finding in this sentence. Choose one in the findings list or in the text.",
   noFindings: (term: string) => `${term} is a modifier. Create the finding first, then add ${term} under Modifiers.`,
   replaceLine: (finding: string, term: string, quote: string) => `${finding} already has ${term} (“${quote}”). Attaching replaces its text span.`,
@@ -43,10 +44,10 @@ export const attachCopy = {
   converted: (term: string, finding: string) => `Turned ${term} into a modifier of ${finding}.`,
 };
 
-/** The inspector while the attach mode is on (a labelled region "Attach Severe"). */
-export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused, existing, noFindings, onAttach, onReplace, onCancel, note }: AttachModePanelProps): JSX.Element {
+/** The inspector while the attach mode is on (a labelled region "Attach Severe"). The banner over the text owns the
+ * instruction and the one Cancel (Esc); the inspector only offers the nearest target. */
+export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused, existing, noFindings, onAttach, onReplace, onCancel, showCancel = false, note }: AttachModePanelProps): JSX.Element {
   const enter = <span aria-hidden="true"> <Kbd>Enter</Kbd></span>;
-  const esc = <span aria-hidden="true"> <Kbd>Esc</Kbd></span>;
   const ok = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (noFindings) ok.current?.focus({ preventScroll: true }); }, [noFindings]);
   if (noFindings) {
@@ -64,7 +65,6 @@ export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused
     <div className="detail-section mod-attach-panel">
       <h2 className="term-heading">{termLabel}{" "}<span className="mod-tag">Modifier</span></h2>
       <p className="mod-line-id">{termId}{markQuote ? ` · “${markQuote}”` : ""}</p>
-      <p>{attachCopy.describes(termLabel)}</p>
       {note}
       {nearest
         ? <p><strong>Nearest in this sentence:</strong> {nearest.term}{nearest.quote ? ` · “${nearest.quote}”` : ""}</p>
@@ -76,7 +76,7 @@ export function AttachModePanel({ termLabel, termId, markQuote, nearest, focused
           : there && markQuote
             ? <Button variant="primary" onClick={() => onAttach(target.annotationId)}>Link “{markQuote}” to {termLabel}{enter}</Button>
             : <Button variant="primary" onClick={() => onAttach(target.annotationId)}>Attach to {target.term}{enter}</Button>)}
-        <Button aria-keyshortcuts="Escape" onClick={onCancel}>Cancel{esc}</Button>
+        {showCancel && <Button aria-keyshortcuts="Escape" onClick={onCancel}>Cancel<span aria-hidden="true"> <Kbd>Esc</Kbd></span></Button>}
       </div>
     </div>
   </section>;
