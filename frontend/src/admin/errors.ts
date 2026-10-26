@@ -190,7 +190,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   USERNAME_INVALID: "Use 3–64 lowercase letters, digits, dots, hyphens or underscores, starting and ending with a letter or digit.",
   USERNAME_TAKEN: "This username is already taken. Choose another username.",
   USER_INACTIVE: "This account is deactivated.",
-  USER_NOT_FOUND: "This user no longer exists.",
+  USER_NOT_FOUND: "There is no user with this username. Check the spelling.",
   duplicate_entry: "The archive contains duplicate file entries.",
   invalid_archive: "The archive could not be read. Check the ZIP file.",
   too_large: "The expanded upload exceeds the size limit.",

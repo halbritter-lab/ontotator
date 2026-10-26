@@ -752,3 +752,33 @@ def test_only_removing_a_role_ends_the_members_sessions(app):
     alice = logged_in(app, "alice")
     put(admin, "alice", ["adjudicator"])
     assert alice.get("/api/v1/projects").status_code == 401
+
+
+def test_a_lead_finds_active_non_members_by_name_or_username(app):
+    from auth_harness import ensure_user
+
+    admin = logged_in(app, "root", system_admin=True)
+    create_project(app, admin)
+    lead = logged_in(app, "lead", projects={"phenotypes": ["lead"]})
+    ensure_user(app, "maria.k")
+    ensure_user(app, "mario")
+    ensure_user(app, "marta")
+    app.state.accounts.update_profile(Actor.cli(), "marta", display_name="Marta Ruiz")
+    app.state.accounts.set_active(Actor.cli(), "mario", False)
+    logged_in(app, "markus", projects={"phenotypes": ["annotator"]})
+    path = "/api/v1/projects/phenotypes/member-candidates"
+
+    found = lead.get(path, params={"q": "MAR"})
+    assert found.status_code == 200, found.text
+    # Inactive users and members are left out; only username and name are shown.
+    assert found.json() == [
+        {"username": "maria.k", "display_name": "maria.k"},
+        {"username": "marta", "display_name": "Marta Ruiz"},
+    ]
+    assert [c["username"] for c in lead.get(path, params={"q": "ruiz"}).json()] == [
+        "marta"
+    ]
+    assert lead.get(path, params={"q": "m"}).json() == []
+    assert lead.get(path, params={"q": "%_"}).json() == []
+    annotator = logged_in(app, "markus")
+    assert annotator.get(path, params={"q": "mar"}).status_code == 403

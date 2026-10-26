@@ -4,7 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from ontocurator.api.document_projection import Assignee
 from ontocurator.api.identity import PrincipalDep
@@ -83,6 +83,13 @@ class Member(BaseModel):
     roles: list[str]
     languages: list[str]
     open_tasks: OpenTasksView = Field(default_factory=OpenTasksView)
+
+
+class MemberCandidate(BaseModel):
+    """A person a lead may add: only what the members table shows a lead."""
+
+    username: str
+    display_name: str
 
 
 class ProgressDocument(BaseModel):
@@ -458,6 +465,48 @@ def members(key: str, principal: PrincipalDep, request: Request) -> list[Member]
             # Username order would hint at hidden usernames.
             return sorted(by_id.values(), key=lambda member: member.pseudonym)
         return list(by_id.values())
+
+
+MEMBER_CANDIDATE_LIMIT = 10
+
+
+@router.get("/{key}/member-candidates")
+def member_candidates(
+    key: str, principal: PrincipalDep, request: Request, q: str = ""
+) -> list[MemberCandidate]:
+    """Active users outside the project whose username or name contains ``q``.
+
+    Two characters at least and ten results at most, so a lead finds a
+    person without browsing the whole user list.
+    """
+    _guard(request, Action.MANAGE_MEMBERS, key)
+    query = q.strip().lower()
+    if len(query) < 2:
+        return []
+    accounts = request.app.state.accounts
+    with accounts.db.snapshot() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == key)
+        ).scalar_one_or_none()
+        if project_id is None:
+            raise project_not_found(key)
+        members = select(ProjectMembershipRow.user_id).where(
+            ProjectMembershipRow.project_id == project_id
+        )
+        rows = conn.execute(
+            select(UserRow.username, UserRow.display_name)
+            .where(
+                UserRow.active.is_(True),
+                UserRow.id.not_in(members),
+                or_(
+                    func.strpos(UserRow.username, query) > 0,
+                    func.strpos(func.lower(UserRow.display_name), query) > 0,
+                ),
+            )
+            .order_by(UserRow.username)
+            .limit(MEMBER_CANDIDATE_LIMIT)
+        ).all()
+    return [MemberCandidate(username=r.username, display_name=r.display_name) for r in rows]
 
 
 @router.put("/{key}/members/{username}")

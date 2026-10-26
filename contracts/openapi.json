@@ -5856,6 +5856,63 @@
         }
       }
     },
+    "/api/v1/projects/{key}/member-candidates": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Member Candidates",
+        "description": "Active users outside the project whose username or name contains ``q``.\n\nTwo characters at least and ten results at most, so a lead finds a\nperson without browsing the whole user list.",
+        "operationId": "member_candidates_api_v1_projects__key__member_candidates_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemberCandidate"
+                  },
+                  "title": "Response Member Candidates Api V1 Projects  Key  Member Candidates Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/members/{username}": {
       "put": {
         "tags": [
@@ -14275,6 +14332,25 @@
         ],
         "title": "Member",
         "description": "For non-lead callers ``username`` and ``display_name`` of other people\nare empty (pseudonym only, D1); the caller's own record is complete."
+      },
+      "MemberCandidate": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "display_name"
+        ],
+        "title": "MemberCandidate",
+        "description": "A person a lead may add: only what the members table shows a lead."
       },
       "MemberChange": {
         "properties": {

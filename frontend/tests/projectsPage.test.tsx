@@ -95,6 +95,7 @@ it("says so when the user has no project", () => {
   render(<ProjectsPage projects={[]} onNavigate={vi.fn()} />);
   expect(screen.getByRole("heading", { level: 1, name: "Projects" })).toBeDefined();
   expect(screen.getByText("You are not a member of any project yet.")).toBeDefined();
+  expect(screen.getByText(/Ask your project lead or an administrator/)).toBeDefined();
   expect(screen.queryByRole("table")).toBeNull();
   expect(api.listMyTasks).not.toHaveBeenCalled();
 });

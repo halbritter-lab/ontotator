@@ -90,7 +90,7 @@ export function ProjectsPage({ projects, currentKey, onNavigate }: ProjectsPageP
   ];
   return <section className="projects-page" aria-labelledby="projects-heading">
     <h1 id="projects-heading">Projects</h1>
-    {projects.length === 0 ? <EmptyState title="You are not a member of any project yet." /> : <>
+    {projects.length === 0 ? <EmptyState title="You are not a member of any project yet."><p>Ask your project lead or an administrator to add you to a project, then reload this page.</p></EmptyState> : <>
       {projects.length > PROJECT_SEARCH_THRESHOLD && <TextInput id="projects-search" type="search" label="Find project"
         value={search} onChange={event => setSearch(event.target.value)} />}
       <DataTable label="Projects" className="projects-table" rows={shown} columns={columns} rowKey={item => item.project_key}

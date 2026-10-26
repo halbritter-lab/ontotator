@@ -1579,6 +1579,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{key}/member-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Member Candidates
+         * @description Active users outside the project whose username or name contains ``q``.
+         *
+         *     Two characters at least and ten results at most, so a lead finds a
+         *     person without browsing the whole user list.
+         */
+        get: operations["member_candidates_api_v1_projects__key__member_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/members/{username}": {
         parameters: {
             query?: never;
@@ -4626,6 +4649,16 @@ export interface components {
             /** Languages */
             languages: string[];
             open_tasks?: components["schemas"]["OpenTasksView"];
+        };
+        /**
+         * MemberCandidate
+         * @description A person a lead may add: only what the members table shows a lead.
+         */
+        MemberCandidate: {
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
         };
         /** MemberChange */
         MemberChange: {
@@ -11047,6 +11080,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Member"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    member_candidates_api_v1_projects__key__member_candidates_get: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberCandidate"][];
                 };
             };
             /** @description Validation Error */

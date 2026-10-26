@@ -267,6 +267,7 @@ export type GuidelineWithdrawBody = { reason: string | null; expected_latest_ver
 export type CreateProjectRequest = components["schemas"]["CreateProjectRequest"];
 export type ProjectPin = components["schemas"]["ProjectPin"];
 export type Member = components["schemas"]["Member"];
+export type MemberCandidate = components["schemas"]["MemberCandidate"];
 export type OpenTasksView = components["schemas"]["OpenTasksView"];
 export type AssignmentView = components["schemas"]["AssignmentView"];
 export type AssignmentRow = components["schemas"]["AssignmentRowRequest"];
@@ -459,6 +460,7 @@ export class ApiClient {
   async updatePins(key: string, pins: ProjectPin[]): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/pins`, { method: "PUT", body: JSON.stringify(pins) }); }
   async updateProjectProfile(key: string, profile: TaskProfile): Promise<ProjectSettings> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/profile`, { method: "PUT", body: JSON.stringify(profile) }); }
   async listMembers(key: string): Promise<Member[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members`, { method: "GET" }); }
+  async listMemberCandidates(key: string, query: string): Promise<MemberCandidate[]> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/member-candidates?q=${encodeURIComponent(query)}`, { method: "GET" }); }
   async setMemberRoles(key: string, username: string, roles: string[], revoke = false): Promise<Member> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/members/${encodeURIComponent(username)}`, { method: "PUT", body: JSON.stringify({ roles, revoke_assignments: revoke }) }); }
   async listGuidelines(key: string): Promise<GuidelineListing> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/guidelines`, { method: "GET" }); }
   async getGuideline(key: string, version: number): Promise<GuidelineDocument> { return this.request(`/api/v1/projects/${encodeURIComponent(key)}/guidelines/${version}`, { method: "GET" }); }
