@@ -2873,6 +2873,17 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(option.textContent).toContain("Modifier — add it under Modifiers instead.");
   });
 
+  it("Change term offers Modifiers only and the mod: prefix, as the new-mark search (M-3)", async () => {
+    const { container } = await setup(modView(SEIZURE_HYPO));
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    fireEvent.click(await screen.findByRole("button", { name: /Change term/ }));
+    expect(screen.getByRole("button", { name: "Modifiers only" })).toBeDefined();
+    const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "mod:schwer" } });
+    expect(await screen.findByRole("button", { name: "Remove filter Modifiers only" })).toBeDefined();
+    expect(input.value).toBe("schwer");
+  });
+
   describe("submit with modifier warnings", () => {
     const MILD_SEVERE: Finding[] = [["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012825" }, { term_id: "HP:0012828" }]]];
     const modWarning = (view: WorkspaceView, warnings: { rule: string; detail: Record<string, string> }[], digest = "mod-digest") =>

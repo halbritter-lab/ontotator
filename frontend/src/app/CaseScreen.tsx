@@ -3894,6 +3894,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               isAttachingMention={isAttachingMention}
               layerId={selectedAnnotation?.annotation.layer_id}
               searchLanguages={searchLanguagesFor(selectedAnnotation?.annotation.layer_id)}
+              modifierFilter={!!selectedAnnotation && modifierLayerIds.has(selectedAnnotation.annotation.layer_id)}
               modifierNotice={selectedAnnotation && isModifierTerm(selectedAnnotation) ? <ModifierAsFindingNotice
                 term={findingNameOf(selectedAnnotation)} readOnly={readOnly || !editableLayerIds.includes(selectedAnnotation.annotation.layer_id)}
                 onTurn={() => startConvert(selectedAnnotation)} /> : undefined}

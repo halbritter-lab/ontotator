@@ -67,6 +67,8 @@ export interface AnnotationPanelProps {
   onDetachMention: (evidenceId: string) => void;
   /** M2 M-4 (HPO guide principle 3): the mention leaves the finding and becomes a new finding with the same term and values. */
   onMoveMention?: (evidenceId: string) => void;
+  /** "Change term" offers the "Modifiers only" chip and the `mod:` prefix, as the new-mark search (M2 M-3). */
+  modifierFilter?: boolean;
   onDeleteAnnotation: (annotationId: string) => void;
   /** Text of the delete confirmation; defaults to "Delete this finding and all its mentions?". */
   deleteConfirmMessage?: string;
@@ -117,6 +119,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   axesFlushRef,
   onDetachMention,
   onMoveMention,
+  modifierFilter,
   onDeleteAnnotation,
   deleteConfirmMessage = "Delete this finding and all its mentions?",
   onSetIntent,
@@ -299,6 +302,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               workspaceKey={workspaceKey}
               currentTermId={currentTerm}
               assignMode="change"
+              modifierFilter={modifierFilter}
               onSelectCandidate={handleSelectCandidate}
               languages={searchLanguages}
               autoFocus
