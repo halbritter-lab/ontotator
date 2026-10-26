@@ -42,6 +42,8 @@ export interface GroupCardProps {
   onResolve: (payload: ConsolidationResolvePayload, summary: string) => Promise<boolean>;
   onAnnotate: (payload: ConsolidationAnnotatePayload) => Promise<boolean>;
   onReopen: () => Promise<boolean>;
+  /** The group reopens through an Undo: it starts from the choices of its last decision (F19), not empty. */
+  restoring?: boolean;
   onDismissOutcome: () => void;
   onEditInEditor?: () => void;
   /** Every group of the round: cross-link hints and the targets of "Attach to a finding…". */
@@ -131,8 +133,14 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const otherTermRef = useRef<HTMLButtonElement>(null);
   const noteId = useId();
   const open = group.state === "open";
-  // A reopened group starts over: old choices would resolve it with the first check.
-  useEffect(() => { if (open) { setChoices({}); setOtherTerm(null); } }, [open]);
+  // The choices behind the last decision, for an Undo.
+  const decided = useRef<{ choices: Choices; otherTerm: OtherTerm | null }>({ choices: {}, otherTerm: null });
+  // A reopened group starts over (old choices would resolve it with the first check), unless an Undo restores them.
+  useEffect(() => {
+    if (!open) return;
+    const start = props.restoring ? decided.current : { choices: {}, otherTerm: null };
+    setChoices(start.choices); setOtherTerm(start.otherTerm);
+  }, [open]);
   const name = groupName(group, text);
   const present = presentPeople(group, people), absent = absentPeople(group, people);
   const partial = hasKind(group, "partial");
@@ -150,13 +158,15 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const status = groupStatus(group, conflicts);
   const extras = () => ({ ...(note.trim() ? { note: note.trim() } : {}), ...(flag ? { guidelines_unclear: true } : {}) });
 
-  const resolve = (payload: Omit<ConsolidationResolvePayload, "input_ids">, summary: string) =>
+  const resolve = (payload: Omit<ConsolidationResolvePayload, "input_ids">, summary: string, staged = { choices, otherTerm }) => {
+    decided.current = staged;
     void props.onResolve({ input_ids: inputIds, ...payload, ...extras() }, summary);
+  };
   // The last missing choice resolves the group with the finding the result line spells out; "Take … finding" always does.
   const settle = (next: Choices, other: OtherTerm | null = otherTerm, taken = false) => {
     setChoices(next);
     if (conflicts && (taken || !waitsForKeep) && choicesComplete(comparisonRows(group, people, text, next), next)) {
-      resolve(resolvePayload(group, next), resultLine(group, people, text, next, other).finding);
+      resolve(resolvePayload(group, next), resultLine(group, people, text, next, other).finding, { choices: next, otherTerm: other });
     }
   };
   const onChoose = (rowId: string, value: string) => settle(choose(group, choices, rowId, value));

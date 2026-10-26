@@ -26,6 +26,8 @@ export interface GroupListProps {
   onResolve: (group: ConsolidationGroupView, payload: ConsolidationResolvePayload, summary: string) => Promise<boolean>;
   onAnnotate: (group: ConsolidationGroupView, payload: ConsolidationAnnotatePayload) => Promise<boolean>;
   onReopen: (group: ConsolidationGroupView) => Promise<boolean>;
+  /** The group an Undo reopens: it restores its last choices. */
+  restoring?: string | null;
   onDismissOutcome: (groupId: string) => void;
   onEditInEditor?: () => void;
   toggleRef: (groupId: string) => (element: HTMLButtonElement | null) => void;
@@ -56,7 +58,7 @@ export function GroupList(props: GroupListProps): JSX.Element {
     onExpand={() => props.onSelect(group.group_id)}
     onResolve={(payload, summary) => props.onResolve(group, payload, summary)}
     onAnnotate={payload => props.onAnnotate(group, payload)}
-    onReopen={() => props.onReopen(group)}
+    onReopen={() => props.onReopen(group)} restoring={props.restoring === group.group_id}
     onDismissOutcome={() => props.onDismissOutcome(group.group_id)}
     onEditInEditor={props.onEditInEditor}
     groups={groups} onSelectGroup={props.onSelectGroup ?? props.onSelect}

@@ -70,12 +70,17 @@ describe("ConsolidationScreen", () => {
     expect(screen.getByRole("button", { name: /^muscular hypotonia decided: Hypotonia \(HP:0001252\), Absent, Patient, Current$/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Change, muscular hypotonia" })).toBeTruthy();
     expect(screen.getByText("muscular hypotonia: Hypotonia (HP:0001252), Absent, Patient, Current.")).toBeTruthy();
-    // Ctrl+Z runs the toast's Undo: the group reopens.
-    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    // Ctrl+Z in a text field stays the field's own undo.
+    fireEvent.click(screen.getByRole("button", { name: "+ note" }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Note for the lead" }), { key: "z", ctrlKey: true });
+    expect(reopen).not.toHaveBeenCalled();
+    // Ctrl+Z elsewhere runs the toast's Undo: the group reopens with its previous choice (F19).
+    fireEvent.keyDown(window, { key: "z", metaKey: true });
     await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
     expect(reopen.mock.calls[0][1].payload).toEqual({ input_ids: ["in-hl", "in-ht"] });
     expect(reopen.mock.calls[0][1].expected_revision).toBe(4);
     await waitFor(() => expect(expandedTitle()).toBe("muscular hypotonia"));
+    expect(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("J and K walk the open groups, not while typing, and are listed in the help", async () => {
@@ -404,7 +409,7 @@ describe("ConsolidationScreen, modifiers", () => {
     expect(piece.title).toBe("Severe, modifier of Seizure (Ana Weber, Ben Roth)");
   });
 
-  it("Keep collapses to decided with the modifiers and opens the next group; Undo reopens without preselection (S21)", async () => {
+  it("Keep collapses to decided with the modifiers and opens the next group; Undo reopens with the previous choices (S21, F19)", async () => {
     load(s9(), s9({ state: "choose", annotation_ids: ["cons-1"] }), s9());
     const resolve = vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
     const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(5));
@@ -421,9 +426,9 @@ describe("ConsolidationScreen, modifiers", () => {
     await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
     expect(reopen.mock.calls[0][1].payload).toEqual({ input_ids: ["g-seiz-0", "g-seiz-1"] });
     await waitFor(() => expect(expandedTitle()).toBe("Krampfanfälle"));
-    expect(screen.getByRole("button", { name: "Take Severe “schwere” from Ana Weber for Modifiers" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Take Severe “schwere” from Ana Weber for Modifiers" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "Take No modifiers from Ben Roth for Modifiers" }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.queryByRole("button", { name: "Keep" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Keep" })).toBeTruthy();
   });
 
   it("Change on a resolved modifier group sends the reopen (S21)", async () => {

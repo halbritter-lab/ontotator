@@ -105,6 +105,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   const narrow = !wide && !medium;
   const [selected, setSelected] = useState<string | null>(null);
   const [summaries, setSummaries] = useState<ReadonlyMap<string, string>>(new Map());
+  const [restoring, setRestoring] = useState<string | null>(null);
   const [textHidden, setTextHidden] = useState(false);
   const [range, setRange] = useState<TextRange | null>(null);
   const [adding, setAdding] = useState(false);
@@ -179,7 +180,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     setSelected(next);
     if (next) setFocusRequest({ groupId: next });
     else submitRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    show({ message: `${groupName(group, viewRef.current?.text ?? "")}: ${summary}.`, actionLabel: "Undo", undo: true, onAction: () => { void reopen(group); } });
+    show({ message: `${groupName(group, viewRef.current?.text ?? "")}: ${summary}.`, actionLabel: "Undo", undo: true,
+      onAction: () => { setRestoring(group.group_id); void reopen(group); } });
     return true;
   };
   const annotate = (group: ConsolidationGroupView, payload: ConsolidationAnnotatePayload) => data.annotate(group.group_id, payload);
@@ -287,7 +289,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       <div className="cons-side">
         <GroupList groups={groups} people={view.people} text={view.text} selected={selected} readOnly={readOnly} busy={data.busy}
           outcomes={data.outcomes} narrow={narrow} workspace={data.workspace} summaries={summaries}
-          onSelect={groupId => select(groupId)} onSelectGroup={groupId => select(groupId, true)} onResolve={resolve} onAnnotate={annotate} onReopen={reopen}
+          onSelect={groupId => select(groupId)} onSelectGroup={groupId => select(groupId, true)} onResolve={resolve} onAnnotate={annotate} restoring={restoring}
+          onReopen={group => { setRestoring(null); return reopen(group); }}
           onDismissOutcome={data.dismissOutcome} onEditInEditor={editInEditor}
           toggleRef={groupId => element => { if (element) toggles.current.set(groupId, element); else toggles.current.delete(groupId); }} />
         {added.length > 0 && <section className="cons-added-list" aria-label="Added findings">
