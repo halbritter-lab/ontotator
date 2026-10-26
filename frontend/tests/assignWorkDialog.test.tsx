@@ -315,11 +315,11 @@ it("one text: the person who holds the review shows Already assigned instead of 
   } finally { ana.already_assigned = 0; }
 });
 
-it("offers Random distribution… as a secondary button", async () => {
+it("offers Distribute evenly… as a secondary button", async () => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   render(<AssignWorkDialog {...casesProps()} />); await ready();
-  const link = screen.getByRole("button", { name: "Random distribution…" });
+  const link = screen.getByRole("button", { name: "Distribute evenly…" });
   expect(link.className).toContain("btn-secondary");
   fireEvent.click(link);
   expect(await screen.findByRole("dialog", { name: "Propose distribution" })).toBeDefined();
@@ -436,13 +436,13 @@ it("assigning myself sends the acknowledgement", async () => {
   expect(self).toHaveBeenCalledWith("p/key", expect.objectContaining({ confirm_unreviewed_translation: true }));
 });
 
-it("random distribution waits for the acknowledgement", async () => {
+it("even distribution waits for the acknowledgement", async () => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   annotateCases(); unreviewedOf = () => true;
   render(<AssignWorkDialog {...casesProps()} />); await ready();
   await waitFor(() => expect(acknowledgement()).not.toBeNull());
-  const link = screen.getByRole("button", { name: "Random distribution…" });
+  const link = screen.getByRole("button", { name: "Distribute evenly…" });
   expect(link.getAttribute("aria-disabled")).toBe("true");
   expect(document.getElementById(link.getAttribute("aria-describedby")!)!.textContent).toBe("Confirm annotating before the translation review is accepted.");
   fireEvent.click(link);
@@ -453,12 +453,12 @@ it("random distribution waits for the acknowledgement", async () => {
   expect(await screen.findByRole("dialog", { name: "Propose distribution" })).toBeDefined();
 });
 
-it("one text: Change task only with another task, Random distribution only with more people than places", async () => {
+it("one text: Change task only with another task, Distribute evenly only with more people than places", async () => {
   remainingOf = () => 1;
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
   await ready();
   expect(screen.getByRole("button", { name: "Change task" })).toBeDefined();
-  expect(await screen.findByRole("button", { name: "Random distribution…" })).toBeDefined();
+  expect(await screen.findByRole("button", { name: "Distribute evenly…" })).toBeDefined();
   cleanup();
   // A source text has no translation review to change to; 4 available people for 4 places leave nothing to draw.
   perText = 4; remainingOf = () => 4;
@@ -466,7 +466,7 @@ it("one text: Change task only with another task, Random distribution only with 
   await ready();
   await waitFor(() => expect(screen.queryByText("Calculating…")).toBeNull());
   expect(screen.queryByRole("button", { name: "Change task" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Random distribution…" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Distribute evenly…" })).toBeNull();
 });
 
 it("one text with an unreviewed translation: the acknowledgement is there before the preview; Calculating… only in the footer", async () => {

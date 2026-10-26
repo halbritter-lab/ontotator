@@ -209,7 +209,7 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   await planReviewAndAnnotate(page, clicks, "fr", 30);
   expect(clicks.total).toBe(16);
 
-  // 5. Assign the 30 fr reviews to Ben: Assign…, Ben, Assign 30 (3; total 19). Splitting is "Random distribution…".
+  // 5. Assign the 30 fr reviews to Ben: Assign…, Ben, Assign 30 (3; total 19). Splitting is "Distribute evenly…".
   await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
   dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}30 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Translation review${SEP}fr${SEP}30 versions$`))).toBeVisible();

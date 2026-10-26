@@ -176,7 +176,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
   await importTwoDocuments(page);
   // Plan annotation for "one" if the import left it outside the plan ("Plan…" opens the text card on Text details
-  // with the plan chips, VD2, U3), then assign it through the row's Assign dialog and its seeded "Random distribution…".
+  // with the plan chips, VD2, U3), then assign it through the row's Assign dialog and its seeded "Distribute evenly…".
   if (await rowAction(page, "Plan…", "one", "en").count()) {
     await rowAction(page, "Plan…", "one", "en").click();
     const card = textCard(page, "one", "en");
@@ -188,7 +188,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   }
   await rowAction(page, "Assign annotation…", "one", "en").click();
   const assign = page.getByRole("dialog", { name: "Assign annotation", exact: true });
-  await assign.getByRole("button", { name: "Random distribution…", exact: true }).click();
+  await assign.getByRole("button", { name: "Distribute evenly…", exact: true }).click();
   const distribution = page.getByRole("dialog", { name: "Propose distribution", exact: true });
   await distribution.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(distribution.getByRole("combobox", { name: "one, slot 1", exact: true })).toHaveValue(setup.annotator.username);

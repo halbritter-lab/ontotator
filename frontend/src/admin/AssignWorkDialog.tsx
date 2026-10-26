@@ -148,7 +148,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const order = people.map(person => person.username);
   const usernames = order.filter(name => chosen.includes(name));
   const picked = usernames.length + (self ? 1 : 0);
-  // One rule for one text and many: every ticked person gets every text up to the limit ("each"); "Random distribution…" splits a batch.
+  // One rule for one text and many: every ticked person gets every text up to the limit ("each"); "Distribute evenly…" splits a batch.
   const apiMode: BatchAssignRequest["mode"] = multi ? "each" : "one";
   const request: BatchAssignRequest | null = !task ? null : props.mode === "row"
     ? { task, language, case_ids: [props.row.case_id], mode: apiMode, usernames, ...(props.newReviewOfAccepted && task === "translation_review" ? { review_accepted_translation: true } : {}), ...(sourceChanged ? { review_reason: "source_changed" as const } : {}) }
@@ -415,7 +415,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       <div className="assign-summary" role="status" aria-live="polite" aria-label="Summary">{summaryLines.map(line => <p key={line}>{line}</p>)}</div>
 
       {fresh && fresh.targets.length > 0 && (!isRow || randomUseful) && <p className="assign-random"><Button size="sm" disabled={busy} aria-disabled={unacknowledged ? "true" : undefined} aria-describedby={unacknowledged && reason ? reasonId : undefined}
-        onClick={() => { if (unacknowledged) return; randomChanged.current = false; setRandomOpen(true); }}>Random distribution…</Button></p>}
+        onClick={() => { if (unacknowledged) return; randomChanged.current = false; setRandomOpen(true); }}>Distribute evenly…</Button></p>}
 
       {notice && <p className="assign-notice" role="alert">{notice}</p>}
       {failure && <p className="assign-error" role="alert">{failure}</p>}
@@ -436,7 +436,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       onClose={() => {
         setRandomOpen(false);
         if (!randomChanged.current) return;
-        const message = "Assignments from the random distribution saved.";
+        const message = "Assignments from the even distribution saved.";
         if (props.mode === "row") props.onAssigned(message); else props.onAssigned(message, fresh.skipped.map(item => item.case_id));
       }} />}
   </Dialog>;

@@ -6,7 +6,7 @@ import { personLabel } from "../app/identity";
 import type { CaseSummary } from "../api/client";
 import { ErrorNotice } from "./ErrorNotice";
 type Slot = { document_id: string; language: string; username: string; place: number };
-/** `task` presets the task (the assign dialog's "Random distribution…" link). */
+/** `task` presets the task (the assign dialog's "Distribute evenly…" link). */
 export interface DistributionDialogProps { projectKey: string; documents: readonly TaskDocument[]; cases?: readonly CaseSummary[] | null; task?: Task; confirmUnreviewedTranslation?: boolean; onClose: () => void; onChanged: () => void }
 export function DistributionDialog(props: DistributionDialogProps): JSX.Element { return <DistributionEditor key={JSON.stringify([props.projectKey, props.documents.map(doc => [doc.document_id, doc.language]), props.task])} {...props} />; }
 function DistributionEditor({ projectKey, documents, cases, task: initialTask, confirmUnreviewedTranslation, onClose, onChanged }: DistributionDialogProps): JSX.Element {
