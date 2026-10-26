@@ -101,7 +101,7 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   // en: the source, annotation unassigned, finalization waiting and nothing to decide.
   const en = textRow(page, caseId, "en");
   await expect(rowCell(en, "translation")).toContainText("source text");
-  await expect(rowCell(en, "annotation")).toContainText(/Unassigned|\d+ of \d+ assigned/);
+  await expect(rowCell(en, "annotation")).toContainText(/Unassigned|No annotator yet|\d+ annotators? · max \d+|\d+ · full/);
   await expect(rowCell(en, "finalization")).toContainText("waiting");
   await expect(rowCell(en, "next").getByRole("button")).toHaveAccessibleName(textNamePattern("Assign annotation…, ", caseId, "en"));
   expect(await hasDecisionEdge(en)).toBe(false);
@@ -423,7 +423,7 @@ test("S13 case-0713 en: consolidation and carry-forward kinds, the final is the 
   await expect(await textVersionItems(card, 2)).toHaveText([/^v2\s*Correction of v1/, /^v1\s*Native/]);
 });
 
-test("text card: row click only opens, the bar comes with two checked texts, J / K walk the rows, no layout shift", async ({ page }) => {
+test("text card: a double click opens, a row click selects and brings the bar (R-3, R-4), J / K walk the rows, no layout shift", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await openScenario(page, "S7");
   const table = documentsTable(page);
@@ -433,8 +433,8 @@ test("text card: row click only opens, the bar comes with two checked texts, J /
   const before = await first.boundingBox();
   const tableBefore = await table.boundingBox();
 
-  // The text name opens the card; the selection stays as it is.
-  await textName(page, "case-0001", "en").click();
+  // A double click on the text name opens the card; the selection stays as it is.
+  await textName(page, "case-0001", "en").dblclick();
   const card = textCard(page, "case-0001", "en");
   await expect(card).toBeVisible();
   await expect(first).toHaveAttribute("aria-current", "true");
@@ -444,17 +444,15 @@ test("text card: row click only opens, the bar comes with two checked texts, J /
   await expect(card).toHaveCount(0);
   await expect(textName(page, "case-0001", "en")).toBeFocused();
 
-  // A click on the row's own area opens its card and marks the row current; it never checks the text.
-  await rowCell(first, "waiting").click();
+  // A double click on the row's own area opens its card and marks the row current; it does not check the text.
+  await rowCell(first, "waiting").dblclick();
   await expect(card).toBeVisible();
   await expect(first).toHaveClass(/documents-row--active/);
   await closeCard(card);
   await expect(rowBox(page, "case-0001", "en")).not.toBeChecked();
-  // Selection only via the checkboxes; one text brings no bar.
-  await rowBox(page, "case-0001", "en").check();
-  await expect(selectionBar).toHaveCount(0);
-
-  // A second text: the floating bar arrives at the viewport bottom and moves nothing.
+  // A single click on the row selects it; one text already brings the floating bar, which moves nothing.
+  await rowCell(first, "waiting").click();
+  await expect(rowBox(page, "case-0001", "en")).toBeChecked();
   const second = textRow(page, "case-0002", "en");
   await rowBox(page, "case-0002", "en").check();
   await expect(selectionBar).toBeVisible();
@@ -466,15 +464,16 @@ test("text card: row click only opens, the bar comes with two checked texts, J /
   expect(await first.boundingBox()).toEqual(before);
   expect(await table.boundingBox()).toEqual(tableBefore);
 
-  // A click on a checked row opens its card and keeps it checked; unchecking it lets the bar leave.
-  await rowCell(second, "waiting").click();
+  // A double click on a checked row opens its card and keeps it checked; unchecking both lets the bar leave.
+  await rowCell(second, "waiting").dblclick();
   await closeCard(textCard(page, "case-0002", "en"));
   await expect(rowBox(page, "case-0002", "en")).toBeChecked();
   await rowBox(page, "case-0002", "en").uncheck();
+  await rowBox(page, "case-0001", "en").uncheck();
   await expect(selectionBar).toHaveCount(0);
 
   // J / K walk the table order inside the card; the case lines are skipped (case-0007 also has de).
-  await textName(page, "case-0001", "en").click();
+  await textName(page, "case-0001", "en").dblclick();
   const order = ["case-0002 en", "case-0003 en", "case-0004 en", "case-0005 en", "case-0006 en", "case-0007 en", "case-0007 de", "case-0008 en", "case-0009 en"];
   const open = page.getByRole("dialog");
   for (const name of order) {

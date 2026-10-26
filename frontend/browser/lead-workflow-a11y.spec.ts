@@ -81,7 +81,7 @@ async function showPlanLine(page: Page, caseId: string, language: string) {
   if (!(await target.count())) {
     const card = page.getByRole("article", { name: textNamePattern("", caseId, language) });
     if (await card.count()) await card.getByRole("button", { name: textNamePattern("Details, ", caseId, language) }).click();
-    else await textName(page, caseId, language).click();
+    else await textName(page, caseId, language).dblclick();
   }
   await expect(target).toBeVisible();
   const details = target.getByRole("button", { name: "Details", exact: true });

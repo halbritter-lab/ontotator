@@ -98,8 +98,8 @@ test("the lead assigns themselves in the assign dialog; the consolidator rule is
   await expect(card.getByRole("button", { name: "Annotate from proposals myself", exact: true })).toHaveCount(0);
   await card.getByRole("button", { name: "Assign annotators…", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: /^Assign / });
-  await expect(dialog.getByText(/0 of \d+ assigned/)).toBeVisible();
-  await expect(dialog.getByText(/^0 of \d+ possible/)).toBeVisible();
+  await expect(dialog.getByText(/Nobody assigned yet/)).toBeVisible();
+  await expect(dialog.getByText(/^0 assigned · \d+ more possible \(limit \d+\)/)).toBeVisible();
   await expect(dialog.getByText("If you annotate this text yourself, you cannot consolidate it afterwards (project rule \"the consolidator is not an annotator\").", { exact: true })).toBeVisible();
   await dialog.getByRole("checkbox", { name: new RegExp(`^${s.display_names.lead}.*\\(you\\)`) }).check();
   const saved = page.waitForResponse(r => r.request().method() === "POST" && /\/assignments$/.test(r.url()));
@@ -109,25 +109,25 @@ test("the lead assigns themselves in the assign dialog; the consolidator rule is
   await expect(chipMenu(card, s.display_names.lead)).toBeVisible();
 });
 
-test("row click opens only the card; the checkboxes select and the bar needs two texts", async ({ page }) => {
+test("a row click selects and one text brings the bar; a double click opens the card (R-3, R-4)", async ({ page }) => {
   const s = await proposalCheckScenario(page, "FRESH");
   await loginScenarioUser(page, s, "lead");
   await openDocuments(page, s);
   const card = textCard(page, CASE, "en");
 
   await clickRow(page, CASE);
-  await expect(card).toBeVisible();
-  await expect(rowCheckbox(page, CASE)).not.toBeChecked();
-  await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
+  await expect(rowCheckbox(page, CASE)).toBeChecked();
+  await expect(selectionBar(page)).toBeVisible();
+  await clickRow(page, CASE);
+  await expect(rowCheckbox(page, CASE)).not.toBeChecked();
 
-  await textName(page, CASE, "en").click();
+  await textName(page, CASE, "en").dblclick();
   await expect(card).toBeVisible();
   await expect(rowCheckbox(page, CASE)).not.toBeChecked();
   await page.keyboard.press("Escape");
 
   await rowCheckbox(page, CASE).check();
-  await expect(selectionBar(page)).toHaveCount(0);
   await rowCheckbox(page, "EN100017").check();
   await expect(selectionBar(page)).toBeVisible();
   await expect(selectionBar(page)).toContainText("2");

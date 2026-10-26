@@ -168,7 +168,7 @@ export async function openTextCard(page: Page, caseId: string, language: string)
   const card = textCard(page, caseId, language);
   // A card may be on its way (VD17 moves it to the next decision): give it a moment before opening it by name.
   const open = await card.isVisible() || await card.waitFor({ timeout: 2_000 }).then(() => true, () => false);
-  if (!open) await textName(page, caseId, language).click();
+  if (!open) await textName(page, caseId, language).dblclick();
   await expect(card).toBeVisible();
   return card;
 }

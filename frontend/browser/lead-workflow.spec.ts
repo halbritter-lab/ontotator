@@ -39,6 +39,7 @@ function counter(page: Page) {
   return {
     get total() { return total; },
     async click(target: Locator) { await target.click(); total += 1; },
+    async dblclick(target: Locator) { await target.dblclick(); total += 1; },
     async check(target: Locator) { await target.check(); total += 1; },
     async press(key: string) { await page.keyboard.press(key); total += 1; },
   };
@@ -316,7 +317,7 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   await documentsTab(page, "All").click();
   await expect(documentsTab(page, "All")).toHaveAttribute("aria-selected", "true");
   const clicks = counter(page);
-  await clicks.click(textName(page, caseId, "fr"));
+  await clicks.dblclick(textName(page, caseId, "fr"));
   await clicks.click(textCard(page, caseId, "fr").getByRole("button", { name: "Details", exact: true }));
   await expect(review()).toHaveAttribute("aria-pressed", "true");
   await clicks.click(review());
