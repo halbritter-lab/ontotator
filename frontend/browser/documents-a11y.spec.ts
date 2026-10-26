@@ -144,7 +144,7 @@ test("Tab-only order: tabs, search, Filter, selection tools, then each row's con
     elements.filter(element => (element as HTMLElement).tabIndex < 0).map(element => element.outerHTML.slice(0, 80)));
   expect(removed).toEqual([]);
 
-  // Enter on the text name opens the modal text card with focus inside; Escape returns focus; Space opens it too.
+  // Enter on the text name opens the modal text card with focus inside; Escape returns focus; Space toggles the selection (R-4).
   const card = textCard(page, S0_CASE, "en");
   await enName.focus();
   await page.keyboard.press("Enter");
@@ -154,9 +154,12 @@ test("Tab-only order: tabs, search, Filter, selection tools, then each row's con
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
   await expect(enName).toBeFocused();
+  const enBox = page.getByRole("checkbox", { name: textNamePattern("Select ", S0_CASE, "en") });
   await page.keyboard.press("Space");
-  await expect(card).toBeVisible();
-  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+  await expect(enBox).toBeChecked();
+  await page.keyboard.press("Space");
+  await expect(enBox).not.toBeChecked();
   await expect(enName).toBeFocused();
 
   // Arrows move between the tabs; Enter selects.
