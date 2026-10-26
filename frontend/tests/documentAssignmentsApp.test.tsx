@@ -93,7 +93,6 @@ it("reopens the submitted assignee from its real Text versions menu and reloads 
   vi.spyOn(api, "reopenAssignment").mockResolvedValue(reopened);
   const user = userEvent.setup(); render(<App user={testUser("lead", { is_system_admin: false })} />);
   const versions = await screen.findByRole("list", { name: "Assignments on v1" });
-  await user.click(await within(versions).findByText("Assignment actions"));
   await user.click(await within(versions).findByRole("button", { name: "Reopen", hidden: true }));
   const dialog = await screen.findByRole("dialog", { name: "Reopen z/doc" });
   fireEvent.change(within(dialog).getByLabelText("Reason (optional)"), { target: { value: "Recheck evidence" } });

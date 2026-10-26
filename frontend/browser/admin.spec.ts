@@ -282,7 +282,6 @@ test.describe("Administration through real accounts and jobs", () => {
     await expect(row.getByRole("cell").nth(submittedColumn - headers)).toHaveText("1");
     await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
     const document = await openTextVersions(page, "one");
-    await document.locator('summary[aria-label^="Actions for "]').click();
     await document.getByRole("button", { name: "Reopen", exact: true }).click();
     const reopen = page.getByRole("dialog", { name: "Reopen one", exact: true });
     await reopen.getByLabel("Reason (optional)").fill("Check this finding again.");

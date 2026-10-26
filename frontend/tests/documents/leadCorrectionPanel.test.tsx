@@ -64,7 +64,7 @@ it("shows LEAD_CORRECTION_NOT_AVAILABLE reasons in words", async () => {
   const cases: Array<[string, string]> = [
     ["not_newest", "A newer version of this translation exists. Reload the row to see it."],
     ["not_rejected_or_queried", "This version is no longer rejected or queried. Reload the row to see its current state."],
-    ["review_open", "A translation review of this version is open. Withdraw it under Assignment actions before you correct the translation yourself."],
+    ["review_open", "A translation review of this version is open. Withdraw it with Remove assignment in the version list before you correct the translation yourself."],
   ];
   for (const [reason, text] of cases) {
     vi.mocked(api.startLeadCorrection).mockRejectedValueOnce(new ApiError(409, "nope", "LEAD_CORRECTION_NOT_AVAILABLE", { reason }));
@@ -78,7 +78,7 @@ it("shows LEAD_CORRECTION_NOT_AVAILABLE reasons in words", async () => {
 
 it("explains TASK_HELD, NOT_IN_WORK_PLAN and VARIANT_REVIEW_STALE for the correction", async () => {
   const cases: Array<[string, string]> = [
-    ["TASK_HELD", "Your earlier review of this version is paused. Resume it under Assignment actions before you correct the translation yourself."],
+    ["TASK_HELD", "Your earlier review of this version is paused. Resume it in the version list before you correct the translation yourself."],
     ["NOT_IN_WORK_PLAN", "This translation was discarded. Reload the row to see its current state."],
     ["VARIANT_REVIEW_STALE", "The text of this version changed. Reload the row to see the current text."],
   ];
