@@ -110,7 +110,7 @@ import { IconButton } from "../ui/IconButton";
 import { openShortcutHelp, ShortcutHelpHost } from "../ui/ShortcutHelp";
 import { isTextEntryTarget, isTypingTarget, useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { CaseNavigation } from "./CaseNavigation";
-import { adjacentCase, orderTasks } from "./caseOrder";
+import { adjacentCase, nextOpenTask, orderTasks } from "./caseOrder";
 import type { RouteLeaveGuard } from "./router";
 import { isReviewLike, modeBadge } from "../editor/modes";
 import { LanguageTag } from "../ui/LanguageTag";
@@ -2913,8 +2913,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       readOnlyRef.current = true;
       retryVersions();
       const afterSubmit = assignmentNavigation?.onSubmitted;
+      // Next unsubmitted task of the project, not the neighbour in list order (M-6).
+      const next = assignmentNavigation
+        ? nextOpenTask(assignmentNavigation.tasks, assignmentNavigation.current.assignment_id, assignmentNavigation.current.project_key).next?.assignment_id
+        : undefined;
       if (!afterSubmit) {
-        completedNextAssignment.current = adjacentTask.next;
+        completedNextAssignment.current = next;
         setCompletedSubmission(submission);
       }
       try {
@@ -2923,7 +2927,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         // list refresh is best effort
       }
       afterSubmit?.({ label: assignmentNavigation!.current.external_id || view.document.document_id,
-        assignmentId: assignmentNavigation!.current.assignment_id, next: adjacentTask.next });
+        assignmentId: assignmentNavigation!.current.assignment_id, next });
     } catch (err: unknown) {
       setSubmitDialogOpen(false);
       if (err instanceof DiscardedChangesError) return;
