@@ -63,15 +63,17 @@ export function ModifiersSection({ finding, modifiers, text, termInfo, readOnly 
         const tail = ` · ${COHORT_TAG}`;
         const cohortTag = info?.role === "cohort" && content.endsWith(tail);
         const words = cohortTag ? content.slice(0, -tail.length) : content;
-        // The name in strong text, the rest (quote) muted; the text stays the chip text.
+        // The name in strong text, the quote muted after a space (mockup 01 A, R-6); the cohort tag keeps its " · ".
         const name = words.startsWith(label) ? label : "";
-        const body = <>{name && <span className="mod-row-label">{name}</span>}<span className="mod-row-quote">{words.slice(name.length)}</span>
+        const body = <>{name && <span className="mod-row-label">{name}</span>}<span className="mod-row-quote">{name ? words.slice(name.length).replace(/^ · /, " ") : words}</span>
           {cohortTag && <> · <span className="mod-cohort">{COHORT_TAG}</span></>}</>;
         const selected = selectedTermId === modifier.term_id;
         return <li key={modifier.term_id} className={["mod-row", selected && "is-sel"].filter(Boolean).join(" ")} data-modifier-chip={modifier.term_id} tabIndex={-1}
           aria-current={selected ? "true" : undefined}>
           {onSelectModifier ? <button type="button" className="mod-row-main" aria-pressed={selected} onClick={() => onSelectModifier(modifier.term_id)}>{body}</button>
             : <span className="mod-row-main">{body}</span>}
+          {!linked && !readOnly && onLinkSpan && <span className="mod-row-nospan">no text span ·{" "}
+            <Button size="sm" variant="quiet" className="btn-link" onClick={() => onLinkSpan(modifier.term_id)}>Link a text span</Button></span>}
           {items.length > 0 && <MenuButton label={`Actions, ${label}`} buttonLabel={`Actions, ${label}`} content={<IconMore />} items={items} />}
         </li>;
       })}

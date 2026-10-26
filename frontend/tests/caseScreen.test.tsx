@@ -2602,7 +2602,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     await waitFor(() => expect(payloads(apply)).toEqual([{ command: "add_modifier", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }]));
     await waitFor(() => expect(document.activeElement?.closest('[data-modifier-chip="HP:0012828"]')).not.toBeNull());
     expect(container.querySelector(".attach-mention-banner")).toBeNull();
-    expect(screen.getByRole("list", { name: "Modifiers of Seizure" }).textContent).toContain("Severe · “schwere”");
+    expect(screen.getByRole("list", { name: "Modifiers of Seizure" }).textContent).toContain("Severe “schwere”");
     expect(announcer(container)).toBe("Attached Severe to Seizure. Next: mark more text, or add another modifier with “+ Add modifier…”.");
     expect(container.querySelector('[data-list-key="annotation:seizure"] .mod-lines')!.textContent).toBe("Modifiers: Severe");
     const modRun = runsOf(container, "mod:seizure:HP:0012828")[0];
