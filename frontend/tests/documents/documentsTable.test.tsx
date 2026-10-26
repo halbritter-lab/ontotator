@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DocumentGroupView, DocumentRowsPage, DocumentRowView } from "../../src/api/client";
@@ -64,6 +66,14 @@ describe("structure", () => {
     expect(headers[0].querySelector(".visually-hidden")?.textContent).toBe("Select");
     expect(headers[6].querySelector(".visually-hidden")).toBeNull();
     expect(cellsOf("case-107 de")).toHaveLength(8);
+  });
+
+  it("pins Next step to the right edge so it stays visible when the table scrolls (F15)", () => {
+    renderTable(page([case107()]));
+    expect(screen.getByRole("columnheader", { name: "Next step" }).querySelector(".documents-col-action")).not.toBeNull();
+    expect(cellsOf("case-107 de")[6].querySelector(".documents-col-action")).not.toBeNull();
+    const css = readFileSync(resolve(__dirname, "../../src/styles/screens/documents-table.css"), "utf8");
+    expect(css).toMatch(/:where\(th, td\):has\(\.documents-col-action\) \{ position: sticky; right: 0;/);
   });
 
   it("a flat list: no case lines, the case ID in the Text cell, texts outside the plan hidden behind +n", () => {
