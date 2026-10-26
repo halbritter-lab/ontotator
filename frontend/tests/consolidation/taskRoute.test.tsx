@@ -51,7 +51,7 @@ describe("TaskEditor switch", () => {
     mockTask();
     render(<TaskEditor assignmentId={1} user={user} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
     expect(await screen.findByRole("heading", { name: "Consolidate case-107 de v2" })).toBeTruthy();
-    expect(await screen.findByRole("button", { name: "Edit in editor…" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Open in full editor" })).toBeTruthy();
   });
 
   it("offers the guidelines and Report problem in the consolidation view", async () => {

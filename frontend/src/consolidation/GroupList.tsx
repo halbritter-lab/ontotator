@@ -29,7 +29,8 @@ export interface GroupListProps {
   /** The group an Undo reopens: it restores its last choices. */
   restoring?: string | null;
   onDismissOutcome: (groupId: string) => void;
-  onEditInEditor?: () => void;
+  /** The group of the last decision and its Undo (M2 M-7g). */
+  undo?: { groupId: string; run: () => void } | null;
   toggleRef: (groupId: string) => (element: HTMLButtonElement | null) => void;
 }
 
@@ -60,7 +61,7 @@ export function GroupList(props: GroupListProps): JSX.Element {
     onAnnotate={payload => props.onAnnotate(group, payload)}
     onReopen={() => props.onReopen(group)} restoring={props.restoring === group.group_id}
     onDismissOutcome={() => props.onDismissOutcome(group.group_id)}
-    onEditInEditor={props.onEditInEditor}
+    onUndo={props.undo?.groupId === group.group_id ? props.undo.run : undefined}
     groups={groups} onSelectGroup={props.onSelectGroup ?? props.onSelect}
     toggleRef={props.toggleRef(group.group_id)} />;
   return <div className="cons-groups">

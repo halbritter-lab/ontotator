@@ -7,10 +7,10 @@ import { textOrder } from "../../src/consolidation/GroupList";
 import { ANA, BEN, CEM, decidedView, exampleGroups, exampleView, group, hypotoniaThree, LUC, member, mild, MOD_PEOPLE, MOD_TEXT, modSpan, recurrent, seizure, severe, span, TEXT, THREE, TOM } from "./fixtures";
 
 describe("consolidation copy", () => {
-  it("summarises groups, findings and left out before submitting", () => {
+  it("summarises groups, findings and not in result before submitting (M-7f)", () => {
     const view = decidedView();
-    expect(summaryText(view.groups)).toBe("8 groups, 7 findings, 1 left out");
-    expect(summaryText(view.groups, 1)).toBe("8 groups, 8 findings, 1 left out");
+    expect(summaryText(view.groups)).toBe("8 groups, 7 findings, 1 not in result");
+    expect(summaryText(view.groups, 1)).toBe("8 groups, 8 findings, 1 not in result");
   });
 
   it("titles the view without separators", () => {

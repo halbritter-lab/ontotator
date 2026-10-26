@@ -22,12 +22,15 @@ export const OVERLAPPING = "(overlapping, comes with the chosen finding)";
 /** "2 fields to decide" / "1 field to decide"; "to decide" when nothing conflicts (Keep or Take). */
 export const fieldsToDecide = (count: number) => count === 0 ? "to decide" : count === 1 ? "1 field to decide" : `${count} fields to decide`;
 
+/** "Not in result" (M2 M-7f; was "Leave out"): the finding is not in the consolidated result. */
+export const NOT_IN_RESULT = "not in result";
+
 /** The state word of a group card: what is left to decide, or how it was resolved. */
 export function groupStatus(group: Pick<ConsolidationGroupView, "state" | "attached_to">, conflicts: number): string {
   switch (group.state) {
     case "open": return fieldsToDecide(conflicts);
     case "auto": return "agreed";
-    case "leave_out": return group.attached_to ? "attached" : "left out";
+    case "leave_out": return group.attached_to ? "attached" : NOT_IN_RESULT;
     default: return "decided";
   }
 }
@@ -66,17 +69,17 @@ export function standaloneWarning(present: readonly ConsolidationPersonView[], t
 }
 
 export const standaloneResult = (modifier: string) =>
-  `Result: no finding of its own. ${modifier} goes to the finding you attach it to, or is left out.`;
+  `Result: no finding of its own. ${modifier} goes to the finding you attach it to, or is not in the result.`;
 
 export const NO_ATTACH_TARGET = "No resolved finding in this sentence yet.";
 
 export const REOPEN_EDITED_WARNING = "Reopening drops your edit from the editor.";
 
-/** Summary before submitting: "8 groups, 7 findings, 1 left out"; findings added outside the groups count as findings. */
+/** Summary before submitting: "8 groups, 7 findings, 1 not in result"; findings added outside the groups count as findings. */
 export function summaryText(groups: readonly ConsolidationGroupView[], added = 0): string {
   const findings = groups.filter(group => group.state !== "open" && group.state !== "leave_out").length + added;
   const leftOut = groups.filter(group => group.state === "leave_out").length;
-  return `${plural(groups.length, "group", "groups")}, ${plural(findings, "finding", "findings")}, ${leftOut} left out`;
+  return `${plural(groups.length, "group", "groups")}, ${plural(findings, "finding", "findings")}, ${leftOut} ${NOT_IN_RESULT}`;
 }
 
 export const SUBMIT_LABEL = "Submit consolidation";

@@ -34,7 +34,7 @@ export interface ConsolidationScreenProps {
   group?: string;
   /** The lead's read of a submitted consolidation (U9); the server decides as well. */
   readOnly?: boolean;
-  /** The consolidator's task: enables "Edit in editor…" and "Next task" after submitting. */
+  /** The consolidator's task: enables "Open in full editor" and "Next task" after submitting. */
   assignmentId?: number;
   onNavigate?: (route: Route) => void;
   /** The editor view of the round when the task already opened it (layers, axes, creation defaults). */
@@ -106,6 +106,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   const [selected, setSelected] = useState<string | null>(null);
   const [summaries, setSummaries] = useState<ReadonlyMap<string, string>>(new Map());
   const [restoring, setRestoring] = useState<string | null>(null);
+  /** M-7g: the last decision, undone inline in its row or with Ctrl/Cmd+Z until the next action. */
+  const [lastDecision, setLastDecision] = useState<ConsolidationGroupView | null>(null);
   const [textHidden, setTextHidden] = useState(false);
   const [range, setRange] = useState<TextRange | null>(null);
   const [adding, setAdding] = useState(false);
@@ -165,6 +167,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   useShortcut("k", () => step(-1), { description: "Previous open group", group: "Consolidation", enabled: !!view });
 
   const reopen = async (group: ConsolidationGroupView): Promise<boolean> => {
+    setLastDecision(null);
     const ok = await data.reopen(group.group_id, { input_ids: group.members.map(member => member.input_id) });
     if (ok) {
       setSummaries(current => { const next = new Map(current); next.delete(group.group_id); return next; });
@@ -173,6 +176,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     return ok;
   };
   const resolve = async (group: ConsolidationGroupView, payload: ConsolidationResolvePayload, summary: string): Promise<boolean> => {
+    setLastDecision(null);
     const ok = await data.resolve(group.group_id, payload);
     if (!ok) return false;
     setSummaries(current => new Map(current).set(group.group_id, summary));
@@ -180,11 +184,19 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     setSelected(next);
     if (next) setFocusRequest({ groupId: next });
     else submitRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
-    show({ message: `${groupName(group, viewRef.current?.text ?? "")}: ${summary}.`, actionLabel: "Undo", undo: true,
-      onAction: () => { setRestoring(group.group_id); void reopen(group); } });
+    announce(`${groupName(group, viewRef.current?.text ?? "")}: ${summary}.`);
+    setLastDecision(group);
     return true;
   };
-  const annotate = (group: ConsolidationGroupView, payload: ConsolidationAnnotatePayload) => data.annotate(group.group_id, payload);
+  const undoLast = () => {
+    if (!lastDecision) return;
+    const group = lastDecision;
+    setRestoring(group.group_id);
+    void reopen(group);
+  };
+  // Not in text fields (the shortcut scope "screen" leaves typing targets alone).
+  useShortcut(["Ctrl+z", "Meta+z"], undoLast, { scope: "screen", description: "Undo the last decision", group: "Consolidation", enabled: !!lastDecision && !readOnly });
+  const annotate = (group: ConsolidationGroupView, payload: ConsolidationAnnotatePayload) => { setLastDecision(null); return data.annotate(group.group_id, payload); };
 
   // Findings added outside the groups, as the server lists them (live and after submission).
   const added: AddedFinding[] = useMemo(() => (view?.added ?? []).map(finding => ({
@@ -197,7 +209,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   const pickPassage = (picked: TextRange) => { setRange(picked); setTyping(false); setAdding(true); };
   const addFinding = async (candidate: SearchCandidate, searchId?: string) => {
     if (!range || !addTarget) return;
-    setAdding(false);
+    setAdding(false); setLastDecision(null);
     const ok = await data.addFinding({ ...addTarget, termId: candidate.term_id, searchId, segments: [range], axes: addTarget.axes });
     if (ok) { setRange(null); show({ message: `Finding added: ${candidate.label} (${candidate.term_id}).` }); }
     else show({ message: "Could not add the finding. Nothing changed." });
@@ -220,7 +232,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       if (result.kind === "warning") { setDialog(current => ({ ...current, busy: false, warning: result.warning })); return; }
       setDialog({ open: false, busy: false, warning: null, error: null });
       // A submitted round has nothing left to undo.
-      dismiss();
+      dismiss(); setLastDecision(null);
       setSubmitted(true);
       loadNextTask();
       if (isLead === undefined) api.listProjects().then(projects => {
@@ -265,7 +277,11 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
         ]} />
         <h1 id="cons-title" className="cons-title"><LanguageText text={headerTitle(view, readOnly && !submitted)} code={view.language} /></h1>
       </div>
-      {props.headerActions && <div className="cons-header-actions" role="group" aria-label="Task">{props.headerActions}</div>}
+      {(props.headerActions || editInEditor) && <div className="cons-header-actions" role="group" aria-label="Task">
+        {/* M-7a: one way into the full editor for the whole text, next to the task actions. */}
+        {editInEditor && <Button size="sm" title="For span changes and findings the comparison cannot express" onClick={editInEditor}>Open in full editor</Button>}
+        {props.headerActions}
+      </div>}
       {!readOnly && <div ref={submitRef}><SubmitBar open={open} onSubmit={() => setDialog({ open: true, busy: false, warning: null, error: null })}
         onNextOpen={() => { const next = nextOpenAfter(groups, selected); if (next) select(next, true); }} /></div>}
     </header>
@@ -291,7 +307,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
           outcomes={data.outcomes} narrow={narrow} workspace={data.workspace} summaries={summaries}
           onSelect={groupId => select(groupId)} onSelectGroup={groupId => select(groupId, true)} onResolve={resolve} onAnnotate={annotate} restoring={restoring}
           onReopen={group => { setRestoring(null); return reopen(group); }}
-          onDismissOutcome={data.dismissOutcome} onEditInEditor={editInEditor}
+          onDismissOutcome={data.dismissOutcome} undo={lastDecision && !readOnly ? { groupId: lastDecision.group_id, run: undoLast } : null}
           toggleRef={groupId => element => { if (element) toggles.current.set(groupId, element); else toggles.current.delete(groupId); }} />
         {added.length > 0 && <section className="cons-added-list" aria-label="Added findings">
           <h2 className="cons-subheading">{addedHeading(props.assignmentId !== undefined, view.added_by)}</h2>
@@ -305,6 +321,6 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     <SummaryDialog open={dialog.open} summary={summaryText(groups, added.length)} busy={dialog.busy} warning={dialog.warning} error={dialog.error}
       onSubmit={acknowledged => { void submit(acknowledged); }} onClose={() => setDialog({ open: false, busy: false, warning: null, error: null })} />
     <p className="visually-hidden" role="status" aria-live="polite">{announcement}</p>
-    <Toast toast={toast} onDismiss={dismiss} undoDescription="Undo the last decision" undoGroup="Consolidation" />
+    <Toast toast={toast} onDismiss={dismiss} />
   </section>;
 }

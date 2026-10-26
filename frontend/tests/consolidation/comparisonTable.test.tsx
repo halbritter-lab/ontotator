@@ -3,7 +3,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ConsolidationGroupView } from "../../src/api/client";
 import type { ConsolidationPersonView } from "../../src/api/client";
-import { choose, comparisonRows, resultLine, takeFinding, type Choices } from "../../src/consolidation/groupModel";
+import { choose, comparisonRows, resultLine, type Choices } from "../../src/consolidation/groupModel";
 import { ComparisonTable } from "../../src/consolidation/ComparisonTable";
 import { ResultLine } from "../../src/consolidation/ResultLine";
 import { ANA, BEN, CHRIS, frequent, group, hypotoniaThree, LUC, member, MOD_TEXT, recurrent, seizure, severe, span, TEXT, THREE } from "./fixtures";
@@ -14,8 +14,7 @@ function Harness({ group, people = THREE, text = TEXT, readOnly = false }: { gro
   const [choices, setChoices] = useState<Choices>({});
   return <>
     <ComparisonTable name="muscular hypotonia" group={group} people={people} rows={comparisonRows(group, people, text, choices)} readOnly={readOnly}
-      onChoose={(row, value) => setChoices(current => choose(group, current, row, value))}
-      onTake={member => setChoices(takeFinding(group, member))} />
+      onChoose={(row, value) => setChoices(current => choose(group, current, row, value))} />
     <ResultLine line={resultLine(group, people, text, choices)} />
   </>;
 }
@@ -43,19 +42,21 @@ describe("ComparisonTable", () => {
     expect(screen.getByText("“muscular hypotonia” (overlapping, comes with the chosen finding)")).toBeTruthy();
   });
 
-  it("rows to decide come first; two or more agreed rows fold into one Agreed line that opens on demand", () => {
+  it("every row is visible: rows to decide first and highlighted, agreed rows muted; no Whole finding row (M-7d, M-7e)", () => {
     render(<Harness group={hypotoniaThree()} />);
     const headers = screen.getAllByRole("rowheader").map(header => header.textContent);
     expect(headers.slice(0, 2).every(header => header?.startsWith("Conflict"))).toBe(true);
-    expect(screen.getByRole("rowheader", { name: "Agreed" })).toBeTruthy();
-    expect(screen.getByRole("row", { name: /Agreed/ }).textContent).toContain("Experiencer, Temporality");
-    expect(screen.queryByRole("rowheader", { name: "Experiencer" })).toBeNull();
-    const toggle = screen.getByRole("button", { name: "Show values" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(toggle);
-    expect(screen.getByRole("button", { name: "Hide values" }).getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByRole("rowheader", { name: "Experiencer" })).toBeTruthy();
-    expect(headers.at(-1)).toBe("Whole finding");
+    expect(screen.queryByRole("rowheader", { name: "Agreed" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Show values/ })).toBeNull();
+    for (const name of ["Experiencer", "Temporality"]) {
+      const row = screen.getByRole("rowheader", { name }).closest("tr")!;
+      expect(row.hidden).toBe(false);
+      expect(row.classList.contains("cons-row--agreed")).toBe(true);
+      expect(row.querySelector(".axis-value")).not.toBeNull();
+    }
+    expect(screen.getByRole("rowheader", { name: /Assertion/ }).closest("tr")!.classList.contains("cons-row--conflict")).toBe(true);
+    expect(headers).not.toContain("Whole finding");
+    expect(screen.queryByRole("button", { name: /finding$/ })).toBeNull();
   });
 
   it("a one-person group shows its values without '(all agree)' and without folding", () => {
@@ -88,15 +89,6 @@ describe("ComparisonTable", () => {
     expect(container.querySelector(".cons-chip")).toBeNull();
     expect(container.textContent).not.toContain("·");
     expect(container.textContent).not.toMatch(/both/i);
-  });
-
-  it("taking a whole finding presses every value of that person and updates the result", () => {
-    render(<Harness group={hypotoniaThree()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Take Ali's finding" }));
-    expect(screen.getByRole("button", { name: "Take Ali's finding" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Take Axial hypotonia from Ali Kaya for Term" }).getAttribute("aria-pressed")).toBe("true");
-    expect(result()).toContain("Axial hypotonia (HP:0008936), Present, Patient, Current");
-    expect(result()).toContain("Not taken: Hypotonia (Tom, Mia)");
   });
 
   it("findings from a tool proposal carry the robot icon", () => {

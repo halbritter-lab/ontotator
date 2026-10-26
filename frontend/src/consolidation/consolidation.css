@@ -367,6 +367,21 @@
   color: var(--text-muted);
 }
 
+/* M2 M-7e: agreed rows stay visible, muted. */
+.cons-row--agreed th {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+/* M2 M-7g: the inline Undo of the last decision, next to the row's state. */
+.cons-undo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  flex: none;
+  color: var(--text-muted);
+}
+
 .cons-value {
   display: inline-flex;
   align-items: center;

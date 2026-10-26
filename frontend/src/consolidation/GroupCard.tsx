@@ -3,9 +3,11 @@
  * the group name (the text excerpt) and its state ("2 fields to decide", "agreed", "decided"). Expanded: the
  * comparison table (columns = people, rows = term, axes, text, note, whole finding; a check button takes a value in a
  * conflicting row), the result line that always spells out the one finding, "+ note", "Guidelines unclear here" and
- * the actions. The last missing choice resolves the group; a group without conflicts resolves with "Keep", and so does
- * a group with a conflicting Modifiers row once every conflicting row has a choice (DN-11). A person's modifier marked
- * as a finding (S18) resolves only with "Attach to a finding…" or "Leave out" (DN-8).
+ * the actions. A choice only stages (the result line updates, "Not saved yet."); one "Keep" saves once every
+ * conflicting row has a choice (M2 M-7d, as DN-11 for modifiers). Actions: Keep, "Not in result" and "More…" (Edit
+ * values…, Other term…; M-7c); "Open in full editor" is in the screen header (M-7a). A resolved row has no button of
+ * its own: the row expands, "Change" is inside (M-7b); the last decision offers "Undo" in its row (M-7g). A person's
+ * modifier marked as a finding (S18) resolves only with "Attach to a finding…" or "Not in result" (DN-8).
  */
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
@@ -17,8 +19,8 @@ import { useTermLabels } from "../editor/useTermLabels";
 import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from "../ui";
 import { IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
-import { axisLabel, groupStatus, labelWithQuote, keepLabel, namesOf, NO_ATTACH_TARGET, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
-import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, modifiersConflict, needsTerm, presentPeople, resolvePayload, resultLine, standaloneText, takeFinding, type Choices, type OtherTerm } from "./groupModel";
+import { axisLabel, groupStatus, labelWithQuote, keepLabel, namesOf, NO_ATTACH_TARGET, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
+import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, standaloneText, type Choices, type OtherTerm } from "./groupModel";
 import { crossLinks, setText, type ModifierView } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
 import { TermPicker, useTermSearch } from "./TermPicker";
@@ -45,7 +47,8 @@ export interface GroupCardProps {
   /** The group reopens through an Undo: it starts from the choices of its last decision (F19), not empty. */
   restoring?: boolean;
   onDismissOutcome: () => void;
-  onEditInEditor?: () => void;
+  /** This group holds the last decision: "Undo" in its row (M-7g), until the next action. */
+  onUndo?: () => void;
   /** Every group of the round: cross-link hints and the targets of "Attach to a finding…". */
   groups?: readonly ConsolidationGroupView[];
   /** Selects another group (the cross-link hint). */
@@ -130,7 +133,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [picking, setPicking] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false);
-  const otherTermRef = useRef<HTMLButtonElement>(null);
+  const moreRef = useRef<HTMLSpanElement>(null);
   const noteId = useId();
   const open = group.state === "open";
   // The choices behind the last decision, for an Undo.
@@ -148,8 +151,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const line = resultLine(group, people, text, choices, otherTerm);
   const standalone = isStandalone(group);
   const conflicts = standalone ? 0 : rows.filter(row => row.conflict).length;
-  // A conflicting Modifiers row allows several checks: the group waits for "Keep" (DN-11).
-  const waitsForKeep = modifiersConflict(group);
+  const complete = !conflicts || choicesComplete(rows, choices);
+  const staged = Object.keys(choices).length > 0 || otherTerm !== null;
   const allGroups = useMemo(() => props.groups ?? [group], [props.groups, group]);
   const links = useMemo(() => crossLinks(group.group_id, allGroups.map(value => ({ groupId: value.group_id,
     members: memberSets(value, people).map((set, index) => ({ ...set, termLabel: value.members[index].term_label || value.members[index].term_id })) })), text),
@@ -162,14 +165,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     decided.current = staged;
     void props.onResolve({ input_ids: inputIds, ...payload, ...extras() }, summary);
   };
-  // The last missing choice resolves the group with the finding the result line spells out; "Take … finding" always does.
-  const settle = (next: Choices, other: OtherTerm | null = otherTerm, taken = false) => {
-    setChoices(next);
-    if (conflicts && (taken || !waitsForKeep) && choicesComplete(comparisonRows(group, people, text, next), next)) {
-      resolve(resolvePayload(group, next), resultLine(group, people, text, next, other).finding, { choices: next, otherTerm: other });
-    }
-  };
-  const onChoose = (rowId: string, value: string) => settle(choose(group, choices, rowId, value));
+  // M-7d: a choice only stages; "Keep" saves the finding the result line spells out.
+  const onChoose = (rowId: string, value: string) => setChoices(choose(group, choices, rowId, value));
   const editValues = ({ axes, modifiers }: EditedValues) => {
     const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
     const sorted = modifiers && [...modifiers].sort((a, b) => a.term_label.localeCompare(b.term_label, undefined, { sensitivity: "base" }));
@@ -185,7 +182,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     <button ref={props.toggleRef} type="button" className="cons-group-toggle" aria-expanded={expanded} onClick={props.onExpand}>
       {open && conflicts > 0 && <span className="cons-conflict"><IconWarning /><span className="visually-hidden">Conflict</span></span>}
       <span className="cons-group-title">{name}</span>{" "}
-      <span className={open ? "cons-group-state" : "cons-group-done"}>{status}{!open && props.summary ? `: ${props.summary}` : ""}</span>
+      <span className={open ? "cons-group-state" : "cons-group-done"}>{status}{!open && props.summary && props.summary !== status ? `: ${props.summary}` : ""}</span>
       {group.edited && <>{" "}<span className="cons-tag">edited in editor</span></>}
       {group.guidelines_unclear && <>{" "}<span className="cons-tag">flagged</span></>}
     </button>
@@ -215,9 +212,10 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   </div>;
 
   // A standalone modifier has no axes and cannot be taken as a finding: its table keeps term, text and notes.
-  const tableRows = standalone ? rows.filter(row => row.kind !== "axis" && row.kind !== "whole") : rows;
+  // M-7d: no "Whole finding" shortcut row; a choice per row stages the same result.
+  const tableRows = rows.filter(row => row.kind !== "whole" && !(standalone && row.kind === "axis"));
   const table = (tableReadOnly: boolean) => <ComparisonTable name={name} group={group} people={people} rows={tableRows} readOnly={tableReadOnly}
-    busy={busy} onChoose={onChoose} onTake={member => settle(takeFinding(group, member), otherTerm, true)} />;
+    busy={busy} onChoose={onChoose} />;
 
   const crossLinkHints = links.map(link => <p key={`${link.personId}-${link.groupId}-${link.termLabel}`} className="cons-muted cons-crosslink">
     <a href="#" onClick={event => { event.preventDefault(); props.onSelectGroup?.(link.groupId); }}>
@@ -235,8 +233,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
           onSelect: () => { if (!busy) resolve({ action: "leave_out", attach_to: target.annotationId }, `${modifier} to ${target.label}`); } }))} />
         : <><Button aria-disabled="true" aria-describedby={`${noteId}-attach`}>Attach to a finding…</Button>
           <span id={`${noteId}-attach`} className="cons-muted">{NO_ATTACH_TARGET}</span></>}
-      <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, "left out"); }}>Leave out</Button>
-      {props.onEditInEditor && <Button onClick={props.onEditInEditor}>Edit in editor…</Button>}
+      <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, NOT_IN_RESULT); }}>Not in result</Button>
     </div>
   </>;
   // Modifiers attached to this group's finding from a standalone card (S18).
@@ -250,20 +247,22 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     {!readOnly && !standalone && crossLinkHints}
     {!readOnly && standalone && standaloneBody}
     {!readOnly && !standalone && <>
-      <ResultLine line={line} />
-      {/* Note and flag go with the decision, so they come before the choices (the last choice resolves). */}
+      <ResultLine line={line} staged={staged} />
+      {/* Note and flag go with the decision, so they come before Keep. */}
       {noteAndFlag(false)}
       {editing && workspace ? <EditValues group={group} workspace={workspace} text={text} busy={busy} onKeep={editValues} onCancel={() => setEditing(false)} />
         : <div className="cons-actions">
-          {(!conflicts || (waitsForKeep && choicesComplete(rows, choices))) && <Button variant="primary" loading={busy}
-            onClick={() => resolve(resolvePayload(group, choices), line.finding)}>{partial && !conflicts ? keepLabel(present) : "Keep"}</Button>}
-          <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, "left out"); }}>Leave out</Button>
-          {!conflicts && workspace && <Button onClick={() => setEditing(true)}>Edit values…</Button>}
-          {(!conflicts || needsTerm(group)) && workspace && <Button ref={otherTermRef} aria-expanded={picking} onClick={() => setPicking(true)}>Other term…</Button>}
-          {props.onEditInEditor && <Button onClick={props.onEditInEditor}>Edit in editor…</Button>}
+          <Button variant="primary" loading={busy} aria-disabled={!complete || undefined} aria-describedby={!complete ? `${noteId}-keep` : undefined}
+            onClick={() => { if (complete && !busy) resolve(resolvePayload(group, choices), line.finding); }}>{partial && !conflicts ? keepLabel(present) : "Keep"}</Button>
+          <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, NOT_IN_RESULT); }}>Not in result</Button>
+          {workspace && (!conflicts || needsTerm(group)) && <span ref={moreRef} className="cons-more"><MenuButton label={`More actions, ${name}`} buttonLabel="More…" items={[
+            ...(!conflicts ? [{ id: "edit-values", label: "Edit values…", onSelect: () => setEditing(true) }] : []),
+            { id: "other-term", label: "Other term…", onSelect: () => setPicking(true) },
+          ]} /></span>}
+          {!complete && <span id={`${noteId}-keep`} className="cons-muted">Choose a value in each highlighted row first.</span>}
         </div>}
-      {workspace && <TermPicker open={picking} anchorRef={otherTermRef} label="Other term" workspace={workspace} layerId={group.members[0].layer_id}
-        onClose={() => setPicking(false)} onPick={candidate => {
+      {workspace && <TermPicker open={picking} anchorRef={moreRef} label="Other term" workspace={workspace} layerId={group.members[0].layer_id}
+        onClose={() => { setPicking(false); moreRef.current?.querySelector<HTMLButtonElement>("button")?.focus(); }} onPick={candidate => {
           if (busy) return;
           setPicking(false);
           if (!needsTerm(group)) {
@@ -271,10 +270,9 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
               `${candidate.label} (${candidate.term_id})`);
             return;
           }
-          // Another term replaces the members' terms; the other conflicting fields still need their choice.
-          const other = { termId: candidate.term_id, label: candidate.label };
-          setOtherTerm(other);
-          settle({ ...choices, term: candidate.term_id }, other);
+          // Another term replaces the members' terms (staged); the other conflicting fields still need their choice.
+          setOtherTerm({ termId: candidate.term_id, label: candidate.label });
+          setChoices({ ...choices, term: candidate.term_id });
         }} />}
     </>}
   </>;
@@ -290,7 +288,6 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
         onCancel={() => setConfirmReopen(false)} onConfirm={() => { void props.onReopen().then(() => setConfirmReopen(false)); }} />
         : <div className="cons-actions">
           <Button size="sm" loading={busy} onClick={reopen}>Change</Button>
-          {props.onEditInEditor && <Button size="sm" onClick={props.onEditInEditor}>Edit in editor…</Button>}
         </div>}
       {noteAndFlag(true)}
     </>}
@@ -299,11 +296,10 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   return <li className={["cons-group", expanded && "cons-group-expanded", !open && "cons-group-resolved", group.state === "auto" && "cons-group-agreed"].filter(Boolean).join(" ")} data-group={group.group_id}>
     <div className="cons-group-line">
       {header}
-      {!expanded && !open && !readOnly && <Button size="sm" className="cons-change" loading={busy}
-        aria-label={`Change, ${name}`} onClick={reopen}>Change</Button>}
+      {props.onUndo && !open && !readOnly && <span className="cons-undo"><span aria-hidden="true">·</span>
+        <Button size="sm" variant="quiet" className="btn-link" loading={busy} aria-label={`Undo, ${name}`} aria-keyshortcuts="Control+Z Meta+Z"
+          onClick={props.onUndo}>Undo</Button></span>}
     </div>
-    {!expanded && confirmReopen && <InlineConfirm title="Reopen this group?" message={REOPEN_EDITED_WARNING} confirmLabel="Reopen" busy={busy}
-      onCancel={() => setConfirmReopen(false)} onConfirm={() => { void props.onReopen().then(() => setConfirmReopen(false)); }} />}
     {narrow && <Snippet group={group} text={text} />}
     {expanded && <div className="cons-group-body">
       {open ? openBody : resolvedBody}
