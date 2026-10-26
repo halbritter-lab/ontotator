@@ -74,26 +74,28 @@ describe("PlanDialog", () => {
     expect(keepLabel({ on: 12, off: 8 })).toBe("No change (12 planned, 8 not)");
   });
 
-  it("the quick choice fills every translation language and saves nothing by itself (M-1)", async () => {
-    renderDialog();
-    const quick = await screen.findByRole("group", { name: "Quick choice for every translation" });
+  it("the quick choice fills the selected translations' languages, plans only the selected texts and saves nothing by itself (M-1)", async () => {
+    const rows = [{ case_id: "case-0101", language: "de" }, { case_id: "case-0102", language: "en" }];
+    vi.mocked(api.previewWorkPlans).mockImplementation(async (_key, body) => body.rows
+      ? preview({ cases: 2, languages: [lang("source", 1, null, [0, 1]), lang("de", 1, [0, 1], [0, 1])] }) : preview());
+    renderDialog({ rows });
+    const quick = await screen.findByRole("group", { name: "Quick choice for the selected translations" });
     fireEvent.click(within(quick).getByRole("button", { name: "Translation review and annotation" }));
+    await waitFor(() => expect(lastPreviewBody()).toEqual({ rows, languages: { de: { review: "on", annotate: "on" } } }));
     expect((await radio("de", "Translation review", "On")).checked).toBe(true);
-    expect((await radio("fr", "Annotation", "Annotate")).checked).toBe(true);
-    expect(within(await region("Source (en)")).getByRole("radio", { name: /^No change/ })).toHaveProperty("checked", true);
-    await waitFor(() => expect(lastPreviewBody().languages).toEqual({
-      de: { review: "on", annotate: "on" }, fr: { review: "on", annotate: "on" }, es: { review: "on", annotate: "on" } }));
+    expect(screen.queryByRole("region", { name: /^fr In selection/ })).toBeNull();
     fireEvent.click(within(quick).getByRole("button", { name: "Annotation only, no translation review" }));
-    expect((await radio("de", "Translation review", /^No change/)).checked).toBe(true);
-    await waitFor(() => expect(lastPreviewBody().languages).toEqual({ de: { annotate: "on" }, fr: { annotate: "on" }, es: { annotate: "on" } }));
+    await waitFor(() => expect(lastPreviewBody()).toEqual({ rows, languages: { de: { annotate: "on" } } }));
     expect(api.saveWorkPlans).not.toHaveBeenCalled();
   });
 
-  it("has no quick choice when the selection holds no translation", async () => {
-    vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ languages: [lang("source", 20, null, [0, 20])] }));
-    renderDialog();
-    await region("Source (en)");
-    expect(screen.queryByRole("group", { name: "Quick choice for every translation" })).toBeNull();
+  it("has no quick choice when the selected texts hold no translation, even if their cases do (M-1)", async () => {
+    vi.mocked(api.previewWorkPlans).mockImplementation(async (_key, body) => body.rows
+      ? preview({ cases: 2, languages: [lang("source", 2, null, [0, 2])] }) : preview());
+    renderDialog({ rows: [{ case_id: "case-0101", language: "en" }, { case_id: "case-0102", language: "en" }] });
+    await region("de");
+    await waitFor(() => expect(api.previewWorkPlans).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("group", { name: "Quick choice for the selected translations" })).toBeNull();
   });
 
   it("no lone pills", async () => {

@@ -133,7 +133,8 @@ it("a preset save from the plan dialog shows the Undo toast and keeps the select
   const onRevisions = vi.fn();
   render(<Harness onRevisions={onRevisions} />);
   await planWithPreset("Translation review and annotation");
-  expect(api.saveWorkPlans).toHaveBeenCalledWith("p", expect.objectContaining({ case_ids: caseIds, languages: { de: { review: "on", annotate: "on" } } }));
+  expect(api.saveWorkPlans).toHaveBeenCalledWith("p", expect.objectContaining({ rows, languages: { de: { review: "on", annotate: "on" } } }));
+  expect(vi.mocked(api.saveWorkPlans).mock.calls[0][1]).not.toHaveProperty("case_ids");
   const toast = await screen.findByText("20 texts changed.");
   expect(toast.closest(".ui-toast")?.querySelector("button")?.textContent).toBe("Undo");
   expect(onRevisions).toHaveBeenCalledWith({ "case-0101": 2 });

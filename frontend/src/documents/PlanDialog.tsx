@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { api, ApiError, type BulkPlanRequest, type BulkPreview, type BulkResult, type ConsequencesView, type LanguageChangeRequest } from "../api/client";
+import { api, ApiError, type BulkPlanRequest, type BulkPreview, type BulkResult, type ConsequencesView, type LanguageChangeRequest, type RowRefView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { plural } from "../app/labels";
 import { personLabel, textLabel } from "../app/identity";
@@ -10,6 +10,8 @@ import { ANNOTATION_LABELS, PlanOption, proposalsHelp, REVIEW_HELP, SCRATCH_HELP
 export interface PlanDialogProps {
   projectKey: string;
   caseIds: readonly string[];
+  /** The selected texts; the quick choice plans only these (M2 M-1), and only shows when they hold translations. */
+  rows?: readonly RowRefView[];
   /** Preset cells (selection bar quick action or acceptance entry); missing cells are "keep". */
   initial?: PlanChoices;
   onClose: () => void;
@@ -79,14 +81,19 @@ function consequenceGroups(consequences: ConsequencesView): { language: string; 
 
 /**
  * Plan many cases at once (spec D19, F5): per language the steps in words with "No change", live preview, confirmation
- * inside the dialog. A "Quick choice" row with the two translation presets fills every translation language (M2 M-1);
- * it is left out when the selection holds no translation.
+ * inside the dialog. A "Quick choice" row with the two translation presets fills the languages of the selected
+ * translations and from then on plans the selected texts only, as the former selection bar action did (M2 M-1);
+ * it is left out when the selected texts hold no translation.
  */
-export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: PlanDialogProps): JSX.Element {
+export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSaved }: PlanDialogProps): JSX.Element {
   const ids = useId().replace(/:/g, "");
   const summaryId = `${ids}-summary`;
   const reasonId = `${ids}-save-reason`;
   const caseKey = JSON.stringify(caseIds);
+  const rowsKey = JSON.stringify(rows ?? []);
+  /** Translation languages of the selected texts (not of their whole cases). */
+  const [textLanguages, setTextLanguages] = useState<string[]>([]);
+  const [textsOnly, setTextsOnly] = useState(false);
   const [choices, setChoices] = useState<PlanChoices>(() => ({ ...(initial ?? {}) }));
   const [preview, setPreview] = useState<{ request: string; data: BulkPreview } | null>(null);
   const [previewError, setPreviewError] = useState<unknown>();
@@ -102,6 +109,16 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
   const generation = useRef(0);
   const hasPreview = useRef(false);
   useEffect(() => { alive.current = true; return () => { alive.current = false; generation.current++; }; }, []);
+  useEffect(() => {
+    if (!rows?.length) return;
+    let active = true;
+    api.previewWorkPlans(projectKey, { rows: [...rows], languages: {} }).then(data => {
+      if (active) setTextLanguages(data.languages.map(language => language.key).filter(key => key !== SOURCE_KEY));
+    }, () => undefined); // without it the quick choice stays hidden; the dialog itself still works
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectKey, rowsKey]);
+  const selection = textsOnly && rows?.length ? { rows: [...rows] } : { case_ids: [...caseIds] };
 
   const languages = preview?.data.languages ?? [];
   const totalCases = preview?.data.cases ?? caseIds.length;
@@ -112,7 +129,7 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
   useEffect(() => {
     const id = ++generation.current;
     const run = () => {
-      api.previewWorkPlans(projectKey, { case_ids: [...caseIds], languages: requestLanguages }).then(data => {
+      api.previewWorkPlans(projectKey, { ...selection, languages: requestLanguages }).then(data => {
         if (!alive.current || generation.current !== id) return;
         hasPreview.current = true;
         setPreview({ request: requestKey, data }); setPreviewError(undefined);
@@ -122,7 +139,7 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
     const timer = window.setTimeout(run, DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectKey, caseKey, requestKey, reload]);
+  }, [projectKey, caseKey, requestKey, reload, textsOnly]);
 
   const fresh = preview !== null && preview.request === requestKey;
   const nothing = allKeep(diff);
@@ -148,9 +165,9 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
     setChoices(currentChoices => ({ ...currentChoices, [key]: { ...currentChoices[key], ...cells } }));
     setNotice(null); setError(undefined);
   };
-  const translationKeys = languages.map(language => language.key).filter(key => key !== SOURCE_KEY);
   const applyPreset = (preset: PlanPreset) => {
-    setChoices(currentChoices => ({ ...currentChoices, ...presetChoices(preset, translationKeys) }));
+    setTextsOnly(true);
+    setChoices(currentChoices => ({ ...currentChoices, ...presetChoices(preset, textLanguages) }));
     setNotice(null); setError(undefined);
   };
 
@@ -158,7 +175,7 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
     if (!preview || saving) return;
     setSaving(true); setError(undefined); setNotice(null);
     const body: BulkPlanRequest = {
-      case_ids: [...caseIds],
+      ...selection,
       languages: requestLanguages,
       ...(acceptLanguages.length ? { accept_external_review: { languages: acceptLanguages, reason: reason.trim() } } : {}),
       expected_revisions: preview.data.revisions,
@@ -200,12 +217,12 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
       {notice && <InlineMessage tone="info">{notice}</InlineMessage>}
       {!preview && previewError === undefined && <p className="field-hint">{CHECKING}</p>}
       {previewError !== undefined && <><ErrorNotice error={previewError} /><Button size="sm" onClick={() => setReload(value => value + 1)}>Retry</Button></>}
-      {preview && !confirming && translationKeys.length > 0 && <fieldset className="plan-step plan-quick-choice">
-        <legend>Quick choice for every translation</legend>
+      {preview && !confirming && textLanguages.length > 0 && <fieldset className="plan-step plan-quick-choice">
+        <legend>Quick choice for the selected translations</legend>
         <div className="plan-quick-choice-actions">
           {(Object.keys(PRESET_LABELS) as PlanPreset[]).map(preset => <Button key={preset} onClick={() => applyPreset(preset)}>{PRESET_LABELS[preset]}</Button>)}
         </div>
-        <p className="field-hint">Fills the choices below; nothing is saved until “Save”.</p>
+        <p className="field-hint">Fills the choices below for the selected texts only; nothing is saved until “Save”.</p>
       </fieldset>}
       {preview && !confirming && languages.map(language => {
         const count = language.cases_in_selection === totalCases ? String(language.cases_in_selection) : `${language.cases_in_selection} of ${totalCases}`;

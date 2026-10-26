@@ -184,7 +184,7 @@ export function SelectionBar({
         </InlineConfirm>
       </div>}
     </section>}
-    {plan && <PlanDialog projectKey={projectKey} caseIds={plan} onClose={() => setPlan(null)}
+    {plan && <PlanDialog projectKey={projectKey} caseIds={plan} rows={rows} onClose={() => setPlan(null)}
       onSaved={(result, message) => { setPlan(null); saved(result, message); }} />}
   </>;
 }
