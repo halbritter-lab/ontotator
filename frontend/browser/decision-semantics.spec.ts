@@ -13,13 +13,25 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await importPackage(page, "decisions", "pkg-defaulted-decisions", "defaulted-reviewer", { proposals: true });
   await openCase(page, { task: "annotate" });
   const proposal = page.locator('.sidebar [data-list-key^="target:"]').first();
-  await proposal.click(); await page.keyboard.press("1");
-  await expect(proposal).toContainText("Confirmed");
   await page.locator('.sidebar [data-list-key^="target:"]').nth(1).click();
   await page.keyboard.press("2");
   await expect(page.locator('.sidebar [data-list-key^="target:"]').nth(1)).toContainText("Rejected");
+  // Confirm decides the proposal's defaulted values: no badge, no unconfirmed values to acknowledge.
+  await proposal.click(); await page.keyboard.press("1");
+  await expect(proposal).toContainText("Confirmed");
+  await expect(proposal).not.toContainText("Defaults to confirm");
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   const submitDialog = page.getByRole("dialog", { name: "Submit case" });
+  await expect(submitDialog.getByRole("heading", { name: /^Unconfirmed values/ })).toHaveCount(0);
+  await submitDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  // An unresolved proposal keeps its defaults open.
+  await proposal.click();
+  await page.getByRole("textbox", { name: "Reviewer note" }).fill("Assertion needs a second look");
+  await page.locator(".review-actions__title").click(); await page.keyboard.press("4");
+  await page.getByRole("button", { name: "Save decision", exact: true }).click();
+  await expect(proposal).toContainText("Unresolved");
+  await expect(proposal).toContainText("Defaults to confirm");
+  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   await expect(submitDialog.getByRole("heading", { name: "Unconfirmed values (1 finding)", exact: true })).toBeVisible();
   // The section lists each finding with unconfirmed values and its own "Go to" action.
   await submitDialog.getByRole("button", { name: "Go to Hypotonia", exact: true }).click();
@@ -238,7 +250,6 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
     const dialog = page.getByRole("dialog", { name: "Submit case", exact: true });
     // The finding's empty values are acknowledged too, so the stale rule is what the server answers.
     await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values$/ }).check();
-    await dialog.getByRole("checkbox", { name: "Entire text checked for further findings" }).check();
     await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
     await expect(page.getByText(/Submission failed:/)).toHaveCount(1);
     await expect(page.getByText(/Reload the case to load the current rules/)).toBeVisible();

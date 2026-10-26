@@ -334,7 +334,6 @@ describe("CaseScreen integration", () => {
     };
     const submitTicked = (dialog: HTMLElement, n: number) => {
       fireEvent.click(within(dialog).getByRole("checkbox", { name: `Submit with ${n} unconfirmed value${n === 1 ? "" : "s"}` }));
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
     };
     const statusOf = (dialog: HTMLElement) => dialog.querySelector("[data-submit-status]")!.textContent;
@@ -377,7 +376,6 @@ describe("CaseScreen integration", () => {
       render(<CaseScreen view={view} workspaceId="no-rows" onClose={vi.fn()} />);
       const dialog = await openSubmit();
       expect(within(dialog).queryByRole("checkbox", { name: /unconfirmed values/ })).toBeNull();
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
       await screen.findByRole("dialog", { name: "Case submitted" });
       expect(submit).toHaveBeenCalledTimes(1);
@@ -397,7 +395,7 @@ describe("CaseScreen integration", () => {
         annotation_id: "pending-finding", axes_values: shown, chosen_axis_ids: ["assertion", "experiencer"] }));
       await waitFor(() => expect(within(dialog).getByRole("status").textContent).toBe("All values are confirmed."));
       expect(dialog.querySelector("[data-unconfirmed-values]")).toBeNull();
-      expect(document.activeElement).toBe(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
+      expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Submit case" }));
     });
 
     it("a second warning after the resend clears the checkbox without a third request", async () => {
@@ -1709,7 +1707,6 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const confirm = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(within(confirm).getByRole("checkbox", { name: "Submit with 3 unconfirmed values" }));
-    fireEvent.click(within(confirm).getByRole("checkbox", { name: /Entire text checked/ }));
     fireEvent.click(within(confirm).getByRole("button", { name: "Submit case" }));
     const receipt = await screen.findByRole("dialog", { name: "Case submitted" });
     fireEvent.click(within(receipt).getByRole("button", { name: "Stay in case" }));
@@ -1749,7 +1746,6 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="legacy-rules" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
     expect(within(dialog).getByRole("button", { name: "Submit case" }).getAttribute("aria-disabled")).toBe("true");
     expect(within(dialog).getByText(new RegExp(reason.replace(".", "\\.")))).toBeDefined();
     fireEvent.click(within(dialog).getAllByRole("button", { name: /^Go to / })[0]);
@@ -1808,7 +1804,6 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="invalid-proposal" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     return screen.findByRole("dialog", { name: "Submit case" }).then(async dialog => {
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       expect(within(dialog).getByRole("button", { name: "Submit case" }).getAttribute("aria-disabled")).toBe("true");
       expect(within(dialog).getByText(/Reject this proposal or use Edit & Replace/)).toBeDefined();
       expect(within(dialog).getByText(new RegExp(`term is ${status}`))).toBeDefined();
@@ -1825,7 +1820,6 @@ describe("CaseScreen integration", () => {
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 3 unconfirmed values" }));
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
     await screen.findByText(/Reload the case to load the current rules/);
     expect(screen.getAllByText(/Submission failed:/)).toHaveLength(1);
@@ -1854,7 +1848,6 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="legacy-optional" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
     const dialog = await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
     expect(within(dialog).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
   });
 
@@ -1875,7 +1868,6 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Entire text checked for further findings" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit case" }));
     const dialog = await screen.findByRole("dialog", { name: "Case submitted" });
     fireEvent.keyDown(dialog, { key: "Escape" });
@@ -1892,7 +1884,6 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     await screen.findByRole("dialog", { name: "Submit case" });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Entire text checked for further findings" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit case" }));
     const dialog = await screen.findByRole("dialog", { name: "Case submitted" });
     expect(dialog.textContent).toContain(`Submitted ${formatTime("2026-10-15T10:00:00Z")}.`);
@@ -2265,12 +2256,9 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
-    expect(dialog.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
-    fireEvent.click(screen.getByRole("checkbox", { name: "Entire text checked for further findings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
-    await screen.findByRole("dialog", { name: /Submit case/i });
-    expect((screen.getByRole("checkbox", { name: "Entire text checked for further findings" }) as HTMLInputElement).checked).toBe(false);
+    // The text check is the sentence above "Submit case", not a checkbox.
+    expect(dialog.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+    expect(within(dialog).getByText("Submitting confirms you checked the entire text for further findings.")).toBeDefined();
     expect(screen.queryByText(/Verified layers:/)).toBeNull();
   });
 
@@ -2791,7 +2779,6 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       expect(section.textContent).toContain("Seizure: Two severities: Mild, Severe.");
       expect(within(dialog).queryByText(/Turn .* before submitting/)).toBeNull();
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warning" }));
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
       await screen.findByRole("dialog", { name: "Case submitted" });
       expect(submit).toHaveBeenCalledTimes(2);
@@ -2806,7 +2793,6 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
         { rule: "exclusive_modifier_class", detail: { class: "severity" } }, { rule: "cohort_modifier", detail: { term_id: "HP:0040283" } }]));
       const dialog = await openSubmit();
       fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 modifier warning" }));
-      fireEvent.click(within(dialog).getByRole("checkbox", { name: "Entire text checked for further findings" }));
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
       await waitFor(() => expect(dialog.querySelector("[data-submit-status]")!.textContent).toBe("The warnings changed. Check the list again."));
       expect(submit).toHaveBeenCalledTimes(1);

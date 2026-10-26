@@ -365,7 +365,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   // "Finish & Submit" was clicked and waits for pending saves before it validates.
   const [submitPending, setSubmitPending] = useState(false);
-  const [textCheckedConfirmed, setTextCheckedConfirmed] = useState(false);
   const [axisWarning, setAxisWarning] = useState<AxisWarning | null>(null);
   const [axisWarningAcknowledged, setAxisWarningAcknowledged] = useState(false);
   /** The (finding, axis) pairs listed when "Submit with {n} unconfirmed values" was ticked. */
@@ -2646,17 +2645,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
 
     if (blockInvalidUnresolvedNotes()) return;
-    setTextCheckedConfirmed(false); setAxisWarning(null); setAxisWarningAcknowledged(false);
+    setAxisWarning(null); setAxisWarningAcknowledged(false);
     setAckSeen(null); setSubmitStatus(null);
     setSubmitDialogOpen(true);
   };
 
-  // Step 2: submit after the explicit "entire text checked" confirmation.
+  // Step 2: submit from the dialog; submitting confirms the entire text was checked.
   const confirmSubmit = async () => {
     const rowsRemain = unconfirmed.length > 0;
     if (readOnlyRef.current || submittingWorkspace.current || (rowsRemain && view.require_chosen_axes)) return;
     if (unconfirmedPairs.size > 0 && !axisWarningAcknowledged) return;
-    if (!textCheckedConfirmed || blockInvalidUnresolvedNotes() || submissionIssues.length || unresolvedReanchorCount || pendingCarriedCount) return;
+    if (blockInvalidUnresolvedNotes() || submissionIssues.length || unresolvedReanchorCount || pendingCarriedCount) return;
     if (isReviewLike(view.key.mode)) {
       const missingTargets = reviewTargets.filter((t) => !(latestDraft.current.decisions ?? []).some(d => refKey(d.target) === refKey(t)));
       if (missingTargets.length > 0) {
@@ -2677,7 +2676,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         expected_revision: expectedRevision,
         payload: {
           command: "submit_workspace" as const,
-          // Explicitly confirmed by the user in the submit dialog.
+          // Submitting from the dialog confirms the entire text was checked (its sentence above "Submit case").
           document_checked: true,
           ...(acknowledgement ? { warning_acknowledgement: acknowledgement } : {}),
         },
@@ -3809,10 +3808,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         acknowledged={axisWarningAcknowledged}
         setAcknowledged={setAcknowledged}
         submitStatus={submitStatus}
-        textChecked={textCheckedConfirmed}
         saving={queueState === "saving"}
         readOnly={readOnly}
-        setTextChecked={setTextCheckedConfirmed}
         onGoTo={goToOpenItem}
         onGoToRow={goToRow}
         onConfirm={() => { void confirmSubmit(); }}

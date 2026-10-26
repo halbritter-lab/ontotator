@@ -88,7 +88,6 @@ test("confirm one row, then the rest with Confirm all, and submit without a warn
   await expect(section).toHaveCount(0);
   await expect(dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values$/ })).toHaveCount(0);
 
-  await dialog.getByRole("checkbox", { name: "Entire text checked for further findings" }).check();
   await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
   expect(submits).toHaveLength(1);
@@ -104,7 +103,6 @@ test("one click submits with the ticked unconfirmed values", async ({ page }) =>
   const dialog = submitDialog(page);
   await expect(dialog.getByRole("heading", { name: "Unconfirmed values (2 findings)", exact: true })).toBeVisible();
   const submit = dialog.getByRole("button", { name: "Submit case", exact: true });
-  await dialog.getByRole("checkbox", { name: "Entire text checked for further findings" }).check();
   await expect(submit).toHaveAttribute("aria-disabled", "true");
   await dialog.getByRole("checkbox", { name: "Submit with 6 unconfirmed values", exact: true }).check();
   await expect(dialog.getByText("Acknowledging does not confirm the values; they stay marked as defaults.")).toBeVisible();

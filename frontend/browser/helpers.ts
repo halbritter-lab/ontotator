@@ -99,17 +99,18 @@ export async function importPackage(page: Page, _scenario: string, projectKey: s
   await expect(page.locator("#project-select")).toHaveValue(projectKey);
 }
 
-/** "Finish & Submit Case" (or "Finish & Submit (n open)"), tick "Entire text checked" and confirm. */
+/** "Finish & Submit Case" (or "Finish & Submit (n open)"), acknowledge open values and confirm. */
 export async function submitCase(page: Page) {
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   const dialog = page.getByRole("dialog", { name: "Submit case" });
   await expect(dialog).toBeVisible();
   const submit = dialog.getByRole("button", { name: /^Submit case$/ });
-  await expect(submit).toBeDisabled();
   // Unconfirmed values (defaults or empty) are acknowledged in one tick; the dialog resends once.
   const acknowledgement = dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values$/ });
-  if (await acknowledgement.isVisible()) await acknowledgement.check();
-  await dialog.getByLabel(/Entire text checked for further findings/i).check();
+  if (await acknowledgement.isVisible()) {
+    await expect(submit).toBeDisabled();
+    await acknowledgement.check();
+  }
   await submit.click();
   await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
 }

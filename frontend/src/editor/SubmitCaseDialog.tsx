@@ -49,10 +49,8 @@ export interface SubmitCaseDialogProps {
   /** Polite status from the submit flow, e.g. "The unconfirmed values changed. Check the list again.";
    *  `count` changes on every announcement so a repeated text is read again. */
   submitStatus: { text: string; count: number } | null;
-  textChecked: boolean;
   saving: boolean;
   readOnly: boolean;
-  setTextChecked: (checked: boolean) => void;
   /** Closes the dialog and goes to the item: selects it, scrolls to its mark and focuses its control. */
   onGoTo: (item: OpenItem) => void;
   /** "Go to" of an unconfirmed row: like `onGoTo`, at the row's first open axis. */
@@ -66,18 +64,14 @@ export function SubmitCaseDialog({
   open, documentId, reviewMode, resultCount, confirmedCount, unresolvedDecisionCount, savedFindingsCount,
   reviewTargetCount, openReviewTargetCount, pendingReanchorCount, unresolvedReanchorCount, items: allItems,
   unconfirmed, requireChosenAxes, confirmUnavailableReason, onConfirmValues, acknowledged, setAcknowledged, submitStatus,
-  textChecked, saving, readOnly, setTextChecked, onGoTo, onGoToRow, onConfirm, onCancel,
+  saving, readOnly, onGoTo, onGoToRow, onConfirm, onCancel,
 }: SubmitCaseDialogProps) {
   const reasonId = useId();
   const [announcement, setAnnouncement] = useState<{ text: string; count: number } | null>(null);
   useEffect(() => { if (!open) setAnnouncement(null); }, [open]);
-  const textCheckedInput = useRef<HTMLInputElement>(null);
   const submitButton = useRef<HTMLButtonElement>(null);
-  // No confirmable row left to focus: "Entire text checked" while unchecked, else "Submit case".
-  const focusAfterRows = useCallback(() => {
-    const input = textCheckedInput.current;
-    (input && !input.checked ? input : submitButton.current)?.focus();
-  }, []);
+  // No confirmable row left to focus: "Submit case".
+  const focusAfterRows = useCallback(() => submitButton.current?.focus(), []);
 
   // Defaulted and unconfirmed values have their own section; the generic list keeps the other kinds.
   const items = dialogItems(allItems);
@@ -89,8 +83,7 @@ export function SubmitCaseDialog({
   const showAcknowledgement = ackLabel !== null;
   const blockedReason = readOnly ? "This case is read-only."
     : submitBlockedReason(items, requireChosenAxes ? n : 0)
-    ?? (!textChecked ? "Confirm that the entire text was checked before submitting."
-      : ackLabel && !acknowledged ? (rowsRemain && !requireChosenAxes
+    ?? (ackLabel && !acknowledged ? (rowsRemain && !requireChosenAxes
         ? `Confirm the values or tick “${ackLabel}” before submitting.` : `Tick “${ackLabel}” before submitting.`)
       : null);
   const blocking = items.some(item => item.blocking);
@@ -161,15 +154,7 @@ export function SubmitCaseDialog({
           hint={rowsRemain && !requireChosenAxes ? "Acknowledging does not confirm the values; they stay marked as defaults." : undefined}
           checked={acknowledged} disabled={saving} onChange={event => setAcknowledged(event.target.checked)} />
       </div>}
-      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "0.9rem" }}>
-        <input
-          ref={textCheckedInput}
-          type="checkbox"
-          checked={textChecked}
-          onChange={(e) => setTextChecked(e.target.checked)}
-        />
-        <span>Entire text checked for further findings</span>
-      </label>
+      <p className="form-hint" data-submit-checked-text>Submitting confirms you checked the entire text for further findings.</p>
       {blockedReason && <p id={reasonId} className="form-hint" data-submit-blocked-reason>{blockedReason}</p>}
       <div className="visually-hidden" aria-live="polite" data-submit-status>
         {submitStatus && <span key={submitStatus.count}>{submitStatus.text}</span>}

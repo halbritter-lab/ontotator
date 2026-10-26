@@ -30,7 +30,6 @@ test("stack smoke: log in, open the project, annotate, submit", async ({ page })
   }
   await page.getByRole("button", { name: /Finish & Submit Case/i }).click();
   const submit = page.getByRole("dialog", { name: "Submit case", exact: true });
-  await submit.getByLabel(/Entire text checked for further findings/i).check();
   await submit.getByRole("button", { name: "Submit case", exact: true }).click();
   const completed = page.getByRole("dialog", { name: "Case submitted", exact: true });
   await expect(completed).toContainText("Case successfully submitted");

@@ -62,7 +62,6 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   const blocked=page.getByRole('dialog',{name:'Submit case',exact:true});
   await expect(blocked).toContainText('2 finding(s) after text correction still pending');
   await expect(blocked).toContainText('Re-create or dismiss 2 findings after text correction before submitting.');
-  await blocked.getByLabel(/Entire text checked for further findings/).check();
   await expect(blocked.getByRole('button',{name:'Submit case',exact:true})).toBeDisabled();
   // Each pending item has its own "Go to" action; the first leads to the first pending row.
   await blocked.getByRole('button',{name:/^Go to /}).first().click();

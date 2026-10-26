@@ -292,13 +292,12 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     });
 
     // 5. Complete / Submit workspace
-    // Submitting requires the explicit "entire text checked" confirmation.
+    // Submitting confirms the entire text was checked (a sentence above "Submit case").
     const submitBtn = screen.getByRole("button", { name: /Finish & Submit Case|Fall abschließen & abgeben/i });
     fireEvent.click(submitBtn);
     const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
     // The review proposals keep empty experiencer and temporality: acknowledge them in one tick.
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 4 unconfirmed values" }));
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: /Entire text checked for further findings/i }));
     fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
 
     await waitFor(() => {

@@ -145,7 +145,6 @@ it("submits the API payload and preserves its envelope through a lost-response r
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case|Fall abschließen/i }));
  const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
- fireEvent.click(within(dialog).getByRole("checkbox", { name: /Entire text checked for further findings/i }));
  fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
  await waitFor(() => expect(screen.getByText(/Retry|Erneut versuchen/i)).toBeDefined());
  expect(submit.mock.calls[0][1].payload).toEqual({
