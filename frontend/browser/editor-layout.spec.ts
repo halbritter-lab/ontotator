@@ -221,6 +221,24 @@ test("sidebar transitions at 1024 and 700 px; findings tab label", async ({ page
   await expect(handle).toHaveAttribute("aria-valuenow", "260");
 });
 
+test("390 px: the shell header is one compact row (Sections, breadcrumb, Log out)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openT5(page);
+  const header = page.locator(".shell-header");
+  const sections = header.locator(".shell-reading-navigation > summary");
+  const logout = header.getByRole("button", { name: "Log out", exact: true });
+  await expect(sections).toBeVisible();
+  await expect(logout).toBeVisible();
+  await expect(header.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
+  // Same row: the tops of Sections and Log out line up; the header stays far below the old ~150 px.
+  const [a, b] = await Promise.all([sections.boundingBox(), logout.boundingBox()]);
+  expect(Math.abs(a!.y - b!.y)).toBeLessThan(8);
+  expect((await header.boundingBox())!.height).toBeLessThanOrEqual(80);
+  // The identity is still read out.
+  await expect(page.getByTestId("current-user")).toHaveCount(1);
+  await evidence(page, "shell-header-390");
+});
+
 test("320 px reflow without horizontal scrolling in every pane", async ({ page }) => {
   // 320 × 640: the wrapping toolbar scrolls away; the findings rows stay reachable and clickable.
   await page.setViewportSize({ width: 320, height: 640 });

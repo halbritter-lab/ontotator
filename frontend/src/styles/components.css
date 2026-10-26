@@ -734,6 +734,16 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
   .shell-actions { width: 100%; }
   .shell-body > .app-nav .project-switcher { flex: 1 0 100%; }
   .shell-page { padding: var(--space-5) var(--space-4); }
+  /* Reading shell on phones: one header row (Sections, breadcrumb, Log out) so the text keeps the screen. The product
+     name goes and the identity is only read out; the editor's own line still names the annotator. */
+  .shell-reading .shell-header { flex-wrap: nowrap; align-items: flex-start; gap: var(--space-2); padding-block: var(--space-2); }
+  .shell-reading .shell-heading { flex: 1 1 auto; flex-wrap: nowrap; align-items: flex-start; gap: var(--space-2); }
+  .shell-reading .shell-heading > nav { min-width: 0; padding-top: 2px; }
+  .shell-reading .shell-breadcrumb { font-size: var(--size-sm); line-height: var(--leading-sm); column-gap: var(--space-1); }
+  .shell-reading .shell-breadcrumb li + li::before { margin-right: var(--space-1); }
+  .shell-reading .shell-product { display: none; }
+  .shell-reading .shell-actions { width: auto; flex: none; flex-wrap: nowrap; }
+  .shell-reading .current-user { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 
 /* Documents table primitives (Documents U1): disclosure, final marker, inline confirmation, segments. */
