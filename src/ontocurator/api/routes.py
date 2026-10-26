@@ -686,8 +686,13 @@ def package_ontologies(
 
 
 @router.get("/ontologies")
-def list_ontologies(ontology: OntologyDep) -> list[OntologyInfo]:
-    """List loaded ontologies plus registered files that failed to load."""
+def list_ontologies(
+    ontology: OntologyDep, principal: PrincipalDep
+) -> list[OntologyInfo]:
+    """List loaded ontologies plus registered files that failed to load.
+
+    Server paths and load errors are for system administrators only.
+    """
     ontology.load_registered()
     results = [
         _ontology_info(sha, svc, ontology.registered_path(sha))
@@ -705,4 +710,6 @@ def list_ontologies(ontology: OntologyDep) -> list[OntologyInfo]:
         )
         for failure in ontology.failures()
     )
+    if not principal.is_system_admin:
+        results = [r.model_copy(update={"path": None, "error": None}) for r in results]
     return results
