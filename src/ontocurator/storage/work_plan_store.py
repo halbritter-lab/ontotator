@@ -154,32 +154,19 @@ def language_versions(
             )
         ).scalars()
     )
-    in_review = set(
-        conn.execute(
-            scoped(
-                select(AssignmentRow.document_id).where(
-                    AssignmentRow.project_id == project_id,
-                    AssignmentRow.task == "translation_review",
-                    AssignmentRow.revoked_at.is_(None),
-                    AssignmentRow.status.in_(_OPEN_STATUSES),
-                ),
-                AssignmentRow.document_id,
-            )
-        ).scalars()
-    )
-    # Any live translation review assignment, open or submitted.
-    reviewed = set(
-        conn.execute(
-            scoped(
-                select(AssignmentRow.document_id).where(
-                    AssignmentRow.project_id == project_id,
-                    AssignmentRow.task == "translation_review",
-                    AssignmentRow.revoked_at.is_(None),
-                ),
-                AssignmentRow.document_id,
-            )
-        ).scalars()
-    )
+    # Live translation review assignments, open or submitted (one query).
+    assignments = conn.execute(
+        scoped(
+            select(AssignmentRow.document_id, AssignmentRow.status).where(
+                AssignmentRow.project_id == project_id,
+                AssignmentRow.task == "translation_review",
+                AssignmentRow.revoked_at.is_(None),
+            ),
+            AssignmentRow.document_id,
+        )
+    ).all()
+    reviewed = {row.document_id for row in assignments}
+    in_review = {row.document_id for row in assignments if row.status in _OPEN_STATUSES}
     groups: dict[RowKey, list[rules.Version]] = defaultdict(list)
     for row in documents:
         groups[_key(row)].append(

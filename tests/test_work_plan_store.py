@@ -166,7 +166,10 @@ def test_language_versions_detect_source_accepted_and_parallel_roots(env) -> Non
     got = env.run(store.language_versions)
     assert set(got) == {RowKey("c1", "en"), RowKey("c1", "fr"), RowKey("c2", "en")}
     assert got[RowKey("c1", "en")] == LanguageVersion("c1", "en", True, False, False)
-    assert got[RowKey("c1", "fr")] == LanguageVersion("c1", "fr", False, False, False)
+    # One root's newest version is accepted: the row's review counts as started (R-15).
+    assert got[RowKey("c1", "fr")] == LanguageVersion(
+        "c1", "fr", False, False, False, review_started=True
+    )
 
     with env.db.transaction() as conn:
         conn.execute(
