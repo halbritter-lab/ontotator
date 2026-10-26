@@ -506,7 +506,9 @@ def member_candidates(
             .order_by(UserRow.username)
             .limit(MEMBER_CANDIDATE_LIMIT)
         ).all()
-    return [MemberCandidate(username=r.username, display_name=r.display_name) for r in rows]
+    return [
+        MemberCandidate(username=r.username, display_name=r.display_name) for r in rows
+    ]
 
 
 @router.put("/{key}/members/{username}")

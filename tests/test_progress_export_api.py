@@ -869,3 +869,40 @@ def test_document_list_queries_are_bounded_and_metadata_only(project, count):
     ]
     assert len(document_queries) == 1
     assert "length(ontocurator.documents.text)" in document_queries[0]
+
+
+def test_work_of_an_anonymised_account_still_exports_under_its_pseudonym(
+    project, tmp_path
+):
+    from ontocurator.auth.audit import Actor
+
+    app, lead, _, _ = project
+    db = app.state.repo.db
+    _submit(
+        db,
+        "blind-worker",
+        "independent",
+        [_own(db, "blind-worker", "human-a", (6, 19), {"assertion": "present"})],
+        submission_id="anon-export",
+    )
+    accounts = app.state.accounts
+    accounts.set_active(Actor.cli(), "worker", False)
+    erased = accounts.anonymise(Actor.cli(), "worker")
+    assert erased.pseudonym == "blind-worker" and erased.display_name != "worker"
+
+    queued = lead.post(f"{BASE}/exports", json={"kind": "edit_log"})
+    assert queued.status_code == 200, queued.text
+    job = _run(app, queued.json()["job_id"])
+    downloaded = lead.get(f"/api/v1/jobs/{job.id}/download")
+    assert downloaded.status_code == 200, downloaded.text
+    assert "blind-worker" in downloaded.text
+    bundle_job = _run(
+        app, lead.post(f"{BASE}/exports", json={"kind": "t1"}).json()["job_id"]
+    )
+    target = tmp_path / "after-erasure.zip"
+    target.write_bytes(lead.get(f"/api/v1/jobs/{bundle_job.id}/download").content)
+    _, units = ontospan.read_bundle(
+        target, {"hp": ontospan.ObographOntology.load(HP_PATH)}
+    )
+    assert len(units) == 1
+    assert "blind-worker" in json.dumps(units[0].model_dump(mode="json"))

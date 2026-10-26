@@ -186,9 +186,7 @@ def test_a_code_issued_in_the_former_format_still_redeems(
     services.accounts.create_user(ADMIN, "alice", "Alice")
     legacy = "aB3_-xYzlO0Il1aB3_-xYzlO0Il1aB3_-xYzlO0Il1q"  # token_urlsafe(32) shape
     with services.accounts.db.transaction() as conn:
-        conn.execute(
-            update(OneTimeCodeRow).values(code_sha256=token_digest(legacy))
-        )
+        conn.execute(update(OneTimeCodeRow).values(code_sha256=token_digest(legacy)))
 
     assert services.accounts.redeem_code("alice", legacy, PASSWORD).username == "alice"
 

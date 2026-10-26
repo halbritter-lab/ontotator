@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Connection, insert
+from sqlalchemy import Connection, insert, or_, select
 
-from ontocurator.storage.tables import AuditEventRow
+from ontocurator.storage.tables import AuditEventRow, ProjectRow, UserRow
 
 
 @dataclass(frozen=True)
@@ -67,3 +67,71 @@ def record_audit(
     if at is not None:
         values["at"] = at
     conn.execute(insert(AuditEventRow).values(**values))
+
+
+@dataclass(frozen=True)
+class AuditEvent:
+    """One row of the trail as people read it."""
+
+    at: datetime
+    actor: str
+    action: str
+    target_type: str
+    target_id: str
+    project_key: str | None
+    details: dict[str, Any]
+
+
+def read_audit(
+    conn: Connection,
+    *,
+    username: str | None = None,
+    project_key: str | None = None,
+    since: datetime | None = None,
+    limit: int = 200,
+) -> list[AuditEvent]:
+    """The newest events first, at most ``limit``.
+
+    ``username`` selects what was done to the user and what the user did,
+    under its current username (an anonymised account under
+    ``anonymised-<id>``: its earlier rows still carry the former username).
+    """
+    statement = (
+        select(
+            AuditEventRow.at,
+            AuditEventRow.actor_label,
+            AuditEventRow.action,
+            AuditEventRow.target_type,
+            AuditEventRow.target_id,
+            AuditEventRow.details,
+            ProjectRow.project_key,
+        )
+        .outerjoin(ProjectRow, ProjectRow.id == AuditEventRow.project_id)
+        .order_by(AuditEventRow.at.desc(), AuditEventRow.id.desc())
+        .limit(limit)
+    )
+    if username is not None:
+        user_id = select(UserRow.id).where(UserRow.username == username)
+        statement = statement.where(
+            or_(
+                (AuditEventRow.target_type == "user")
+                & (AuditEventRow.target_id == username),
+                AuditEventRow.actor_user_id.in_(user_id.scalar_subquery()),
+            )
+        )
+    if project_key is not None:
+        statement = statement.where(ProjectRow.project_key == project_key)
+    if since is not None:
+        statement = statement.where(AuditEventRow.at >= since)
+    return [
+        AuditEvent(
+            at=row.at,
+            actor=row.actor_label,
+            action=row.action,
+            target_type=row.target_type,
+            target_id=row.target_id,
+            project_key=row.project_key,
+            details=row.details,
+        )
+        for row in conn.execute(statement)
+    ]

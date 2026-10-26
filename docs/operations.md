@@ -148,7 +148,7 @@ docker compose exec app ontocurator admin projects add-member ward-7 alice --rol
 docker compose exec app ontocurator admin projects members ward-7
 ```
 
-To remove that membership later, use `docker compose exec app ontocurator admin projects remove-member ward-7 alice --role annotator`. Membership changes end the user's sessions. Project roles are `lead`, `annotator` and `adjudicator`; repeat `--role` to assign several.
+To remove that membership later, use `docker compose exec app ontocurator admin projects remove-member ward-7 alice --role annotator`. Membership changes end the user's sessions. Project roles are `lead`, `annotator` and `consolidator` (stored and shown in the API as `adjudicator`, which the CLI also accepts); repeat `--role` to assign several.
 
 Import T1 documents/proposals and export submissions/edit logs, then copy outputs off the container. Choose fresh output filenames: existing outputs are refused.
 

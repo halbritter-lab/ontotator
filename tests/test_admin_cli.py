@@ -134,7 +134,8 @@ def test_reset_deactivate_and_admin_flag(tmp_path: Path) -> None:
     listed = _admin(tmp_path, "users", "list")
     assert listed.exit_code == 0, listed.output
     assert listed.output == (
-        "bob\tbb-7\tBob B.\tinactive, admin\nroot\tann-0001\tR\tactive, admin\n"
+        "bob\tbb-7\tBob B.\tinactive, admin\tbob@example.org\t-\n"
+        "root\tann-0001\tR\tactive, admin, setup pending\t-\t-\n"
     )
     refused = _admin(tmp_path, "users", "reset-code", "bob")
     assert refused.exit_code == 1
@@ -145,7 +146,8 @@ def test_reset_deactivate_and_admin_flag(tmp_path: Path) -> None:
     admin_off = _admin(tmp_path, "users", "set-admin", "bob", "--off")
     assert admin_off.output == "'bob': active=yes, system admin=no.\n"
     assert _admin(tmp_path, "users", "list").output == (
-        "bob\tbb-7\tBob B.\tactive\nroot\tann-0001\tR\tactive, admin\n"
+        "bob\tbb-7\tBob B.\tactive\tbob@example.org\t-\n"
+        "root\tann-0001\tR\tactive, admin, setup pending\t-\t-\n"
     )
 
     unknown = _admin(tmp_path, "users", "deactivate", "nobody")
@@ -167,7 +169,7 @@ def test_the_last_active_admin_is_kept(tmp_path: Path) -> None:
             in refused.output
         )
     listed = _admin(tmp_path, "users", "list")
-    assert listed.output == "root\tann-0001\tR\tactive, admin\n"
+    assert listed.output == "root\tann-0001\tR\tactive, admin, setup pending\t-\t-\n"
 
 
 def test_hash_password_prints_an_argon2id_hash(tmp_path: Path) -> None:
@@ -465,3 +467,111 @@ def test_cli_imports_plain_text(tmp_path: Path) -> None:
     assert "documents_added: 1" in result.output
     doc = Repository(db).get_document("proj", "plain")
     assert doc is not None and doc.language == "de" and doc.text == "Plain text.\n"
+
+
+def test_edit_changes_name_e_mail_and_languages(tmp_path: Path) -> None:
+    _admin(tmp_path, "users", "create", "alice", "--display-name", "A")
+
+    edited = _admin(
+        tmp_path,
+        "users",
+        "edit",
+        "alice",
+        "--display-name",
+        "Alice Weber",
+        "--email",
+        "aw@example.org",
+        "--languages",
+        "de, EN",
+    )
+
+    assert edited.exit_code == 0, edited.output
+    assert edited.output == (
+        "'alice': display name=Alice Weber, e-mail=aw@example.org, languages=de, en.\n"
+    )
+    cleared = _admin(
+        tmp_path, "users", "edit", "alice", "--email", "", "--languages", ""
+    )
+    assert cleared.output.endswith("e-mail=-, languages=-.\n"), cleared.output
+    nothing = _admin(tmp_path, "users", "edit", "alice")
+    assert nothing.exit_code == 1 and "NOTHING_TO_CHANGE" in nothing.output
+
+
+def test_consolidator_is_the_role_word_and_the_list_shows_projects(
+    tmp_path: Path,
+) -> None:
+    from layered_fixtures import make_layered_package
+
+    from ontocurator.storage.repository import Repository
+
+    Repository(database_for(tmp_path / "editor.db")).import_package(
+        make_layered_package("single")
+    )
+    _admin(tmp_path, "users", "create", "alice", "--display-name", "A")
+    for role in ("consolidator", "adjudicator", "annotator"):
+        added = _admin(
+            tmp_path,
+            "projects",
+            "add-member",
+            "pkg-scenario-a",
+            "alice",
+            "--role",
+            role,
+        )
+        assert added.exit_code == 0, added.output
+    assert added.output == "'alice' in 'pkg-scenario-a': annotator, consolidator.\n"
+    members = _admin(tmp_path, "projects", "members", "pkg-scenario-a")
+    assert members.output == "alice\tann-0001\tannotator, consolidator\n"
+    listed = _admin(tmp_path, "users", "list")
+    assert listed.output.endswith("\t-\tpkg-scenario-a (annotator, consolidator)\n")
+    removed = _admin(
+        tmp_path,
+        "projects",
+        "remove-member",
+        "pkg-scenario-a",
+        "alice",
+        "--role",
+        "consolidator",
+    )
+    assert removed.output == "'alice' in 'pkg-scenario-a': annotator.\n"
+
+
+def test_anonymise_needs_the_repeated_username_and_a_deactivated_user(
+    tmp_path: Path,
+) -> None:
+    _admin(tmp_path, "users", "create", "alice", "--display-name", "Alice A.")
+    mismatch = _admin(tmp_path, "users", "anonymise", "alice", "--confirm", "bob")
+    assert mismatch.exit_code == 1 and "CONFIRMATION_MISMATCH" in mismatch.output
+    active = _admin(tmp_path, "users", "anonymise", "alice", "--confirm", "alice")
+    assert active.exit_code == 1 and "USER_ACTIVE" in active.output
+    _admin(tmp_path, "users", "deactivate", "alice")
+
+    done = _admin(tmp_path, "users", "anonymise", "alice", "--confirm", "alice")
+
+    assert done.exit_code == 0, done.output
+    assert re.fullmatch(
+        r"Anonymised: now 'anonymised-\d+', pseudonym ann-0001 kept\.\n", done.output
+    )
+    listed = _admin(tmp_path, "users", "list").output
+    assert "Alice" not in listed and "inactive, anonymised" in listed
+
+
+def test_audit_lists_the_trail_as_text_and_json(tmp_path: Path) -> None:
+    _admin(tmp_path, "users", "create", "alice", "--display-name", "A")
+    _admin(tmp_path, "users", "create", "bob", "--display-name", "B")
+    _admin(tmp_path, "users", "reset-code", "alice")
+
+    text = _admin(tmp_path, "audit", "--user", "alice")
+
+    assert text.exit_code == 0, text.output
+    lines = text.output.splitlines()
+    assert [line.split("\t")[2] for line in lines] == ["user.reset_code", "user.create"]
+    assert all(line.split("\t")[1].startswith("cli:") for line in lines)
+    assert lines[0].split("\t")[3] == "user:alice"
+    as_json = _admin(tmp_path, "audit", "--json", "--limit", "1")
+    event = json.loads(as_json.output)
+    assert event["action"] == "user.reset_code" and event["target_id"] == "alice"
+    later = _admin(tmp_path, "audit", "--since", "2999-01-01")
+    assert later.exit_code == 0 and later.output == ""
+    bad = _admin(tmp_path, "audit", "--since", "yesterday")
+    assert bad.exit_code == 1 and "SINCE_INVALID" in bad.output

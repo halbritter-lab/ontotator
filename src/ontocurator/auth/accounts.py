@@ -13,6 +13,11 @@ activation bumps it and ends all sessions of the user.
 
 The installation always keeps an active system admin: demoting or
 deactivating the last one is refused with ``LAST_SYSTEM_ADMIN``.
+
+Erasure (GDPR Art. 17) anonymises a deactivated account in place: the row and
+its pseudonym stay, so research records keep their author, while every
+personal field, the credential and the login traces are removed. The
+username becomes ``anonymised-<id>``, a prefix new accounts cannot take.
 """
 
 from __future__ import annotations
@@ -63,6 +68,7 @@ from ontocurator.storage.tables import (
     SessionRow,
     SubmissionRow,
     UserLanguageRow,
+    UserPreferencesRow,
     UserRow,
 )
 
@@ -87,6 +93,8 @@ BOOTSTRAP_LOCK = advisory_lock_id("bootstrap-admin")
 # concurrent removals cannot both see the other admin still in place.
 # Lock order: this lock, then the user row.
 SYSTEM_ADMINS_LOCK = advisory_lock_id("system-admins")
+ANONYMISED_PREFIX = "anonymised-"
+ANONYMISED_DISPLAY_NAME = "Anonymised user"
 CODE_INVALID_MESSAGE = (
     "The code is not valid. It may be mistyped, used, expired or replaced;"
     " ask an administrator for a new one."
@@ -110,6 +118,10 @@ class User:
     orcid: str | None = None
     orcid_consent: bool = False
     qualification: str | None = None
+
+    @property
+    def anonymised(self) -> bool:
+        return self.username.startswith(ANONYMISED_PREFIX)
 
 
 @dataclass(frozen=True)
@@ -235,6 +247,12 @@ def _code_invalid() -> DomainError:
     return DomainError("CODE_INVALID", CODE_INVALID_MESSAGE)
 
 
+def _anonymised(username: str) -> DomainError:
+    return DomainError(
+        "USER_ANONYMISED", f"'{username}' is anonymised and cannot be changed."
+    )
+
+
 def _password_rules(exc: PasswordRuleError) -> DomainError:
     return DomainError("PASSWORD_RULES", str(exc))
 
@@ -289,6 +307,8 @@ class AccountService:
         normalized = normalize_languages(languages)
         with self.db.transaction() as conn:
             user = self._lock_user(conn, username)
+            if normalized and _user(user).anonymised:
+                raise _anonymised(user.username)
             conn.execute(
                 delete(UserLanguageRow).where(UserLanguageRow.user_id == user.id)
             )
@@ -347,6 +367,8 @@ class AccountService:
                 for key, value in changes.items()
                 if getattr(user, key) != value
             }
+            if changes and _user(user).anonymised:
+                raise _anonymised(user.username)
             if changes:
                 conn.execute(
                     update(UserRow)
@@ -493,6 +515,11 @@ class AccountService:
                 ``PSEUDONYM_TAKEN``.
         """
         name = normalize_username(username)
+        if name.startswith(ANONYMISED_PREFIX):
+            raise DomainError(
+                "USERNAME_INVALID",
+                f"Usernames starting with '{ANONYMISED_PREFIX}' are reserved.",
+            )
         display = normalize_display_name(display_name)
         given_pseudonym = None
         if pseudonym is not None:
@@ -726,6 +753,8 @@ class AccountService:
             row = self._lock_user(conn, username)
             if getattr(row, column) == value:
                 return _user(row)  # nothing changes, nothing to audit
+            if _user(row).anonymised:
+                raise _anonymised(row.username)
             if (
                 not value
                 and row.active
@@ -751,6 +780,67 @@ class AccountService:
                 at=now,
             )
             return _user(self._lock_user(conn, row.username))
+
+    def anonymise(self, actor: Actor, username: str) -> User:
+        """Erase the personal data of a deactivated account; irreversible.
+
+        Kept: the row, its id and pseudonym, memberships and all work, so
+        exports and the audit trail still resolve the author. Removed: name,
+        e-mail, ORCID, qualification, languages, preferences, the password,
+        open codes, the login attempts under the old username and the client
+        addresses of its sessions. Earlier audit rows are append-only and keep
+        the old username.
+
+        Raises:
+            DomainError: ``USER_NOT_FOUND``, ``USER_ACTIVE`` for an active
+                account or ``USER_ANONYMISED`` when it is anonymised already.
+        """
+        now = self._now()
+        with self.db.transaction() as conn:
+            row = self._lock_user(conn, username)
+            if _user(row).anonymised:
+                raise _anonymised(row.username)
+            if row.active:
+                raise DomainError(
+                    "USER_ACTIVE", f"Deactivate '{row.username}' before anonymising."
+                )
+            new_name = f"{ANONYMISED_PREFIX}{row.id}"
+            conn.execute(
+                update(UserRow)
+                .where(UserRow.id == row.id)
+                .values(
+                    username=new_name,
+                    display_name=ANONYMISED_DISPLAY_NAME,
+                    email=None,
+                    orcid=None,
+                    orcid_consent=False,
+                    qualification=None,
+                    is_system_admin=False,
+                )
+            )
+            for table in (PasswordCredentialRow, UserLanguageRow, UserPreferencesRow):
+                conn.execute(delete(table).where(table.user_id == row.id))
+            conn.execute(delete(OneTimeCodeRow).where(OneTimeCodeRow.user_id == row.id))
+            conn.execute(
+                delete(LoginAttemptRow).where(LoginAttemptRow.username == row.username)
+            )
+            self._new_generation(conn, row.id, now, reason="user.anonymise")
+            # Session rows stay (edit events reference them); their traces go.
+            conn.execute(
+                update(SessionRow)
+                .where(SessionRow.user_id == row.id)
+                .values(client_ip=None, user_agent=None)
+            )
+            record_audit(
+                conn,
+                actor,
+                "user.anonymise",
+                target_type="user",
+                target_id=new_name,
+                details={"pseudonym": row.pseudonym},
+                at=now,
+            )
+            return _user(self._lock_user(conn, new_name))
 
     @staticmethod
     def _other_active_admins(conn: Connection, user_id: int) -> bool:

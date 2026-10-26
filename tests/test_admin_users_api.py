@@ -245,7 +245,11 @@ def test_admin_listing_batches_project_keys_and_roles(app):
     users = admin.get("/api/v1/admin/users/").json()
     alice = next(user for user in users if user["username"] == "alice")
     assert alice["projects"] == [
-        {"project_key": "pkg-scenario-a", "roles": ["annotator", "lead"]}
+        {
+            "project_key": "pkg-scenario-a",
+            "project_name": "pkg-scenario-a",
+            "roles": ["annotator", "lead"],
+        }
     ]
 
 
@@ -360,3 +364,170 @@ def test_invalid_profile_rolls_back_completed_compound_flag_changes(
                 ),
             )
         ).all()
+
+
+def test_the_list_shows_setup_pending_last_login_and_project_names(app):
+    from t1_fixtures import create_project
+
+    create_project(app.state.repo.db)
+    admin = logged_in(app, "root", system_admin=True)
+    logged_in(app, "alice", projects={"proj": ["adjudicator"]}, assignments=[])
+    admin.post("/api/v1/admin/users/", json={"username": "carol", "display_name": "C"})
+
+    users = {
+        user["username"]: user for user in admin.get("/api/v1/admin/users/").json()
+    }
+    assert users["carol"]["setup_pending"] is True
+    assert users["carol"]["last_login_at"] is None
+    assert users["alice"]["setup_pending"] is False
+    assert users["alice"]["last_login_at"] is not None
+    assert users["alice"]["projects"] == [
+        {"project_key": "proj", "project_name": "Project", "roles": ["adjudicator"]}
+    ]
+
+
+def test_a_new_user_joins_projects_at_creation_or_not_at_all(app):
+    from t1_fixtures import create_project
+
+    create_project(app.state.repo.db)
+    admin = logged_in(app, "root", system_admin=True)
+    created = admin.post(
+        "/api/v1/admin/users/",
+        json={
+            "username": "carol",
+            "display_name": "Carol",
+            "projects": [{"project_key": "proj", "roles": ["annotator"]}],
+        },
+    )
+    assert created.status_code == 200, created.text
+    assert [
+        (p["project_key"], p["roles"]) for p in created.json()["user"]["projects"]
+    ] == [("proj", ["annotator"])]
+    # An unknown project rolls the whole creation back.
+    failed = admin.post(
+        "/api/v1/admin/users/",
+        json={
+            "username": "dave",
+            "display_name": "Dave",
+            "projects": [{"project_key": "nope", "roles": ["annotator"]}],
+        },
+    )
+    assert failed.json()["code"] == "PROJECT_NOT_FOUND"
+    assert app.state.accounts.get_by_username("dave") is None
+    bad_role = admin.post(
+        "/api/v1/admin/users/",
+        json={
+            "username": "dave",
+            "display_name": "Dave",
+            "projects": [{"project_key": "proj", "roles": ["boss"]}],
+        },
+    )
+    assert bad_role.json()["code"] == "ROLE_INVALID"
+
+
+def test_anonymising_needs_deactivation_and_the_typed_username(app):
+    from ontocurator.storage.tables import (
+        LoginAttemptRow,
+        PasswordCredentialRow,
+        SessionRow,
+        UserLanguageRow,
+        UserRow,
+    )
+
+    admin = logged_in(app, "root", system_admin=True)
+    logged_in(app, "alice", pseudonym="ann-alice")
+    admin.patch(
+        "/api/v1/admin/users/alice",
+        json={"email": "alice@example.org", "languages": ["de"], "qualification": "MD"},
+    )
+    path = "/api/v1/admin/users/alice/anonymise"
+    active = admin.post(path, json={"confirm_username": "alice"})
+    assert active.json()["code"] == "USER_ACTIVE"
+    admin.patch("/api/v1/admin/users/alice", json={"active": False})
+    wrong = admin.post(path, json={"confirm_username": "alicia"})
+    assert wrong.json()["code"] == "CONFIRMATION_MISMATCH"
+
+    done = admin.post(path, json={"confirm_username": "alice"})
+
+    assert done.status_code == 200, done.text
+    body = done.json()
+    assert body["anonymised"] is True and body["pseudonym"] == "ann-alice"
+    assert body["username"].startswith("anonymised-")
+    with app.state.accounts.db.transaction() as conn:
+        row = conn.execute(
+            select(UserRow).where(UserRow.pseudonym == "ann-alice")
+        ).one()
+        assert (row.display_name, row.email, row.orcid, row.qualification) == (
+            "Anonymised user",
+            None,
+            None,
+            None,
+        )
+        assert "alice" not in json.dumps(dict(row._mapping), default=str).replace(
+            "ann-alice", ""
+        )
+        for table in (PasswordCredentialRow, UserLanguageRow):
+            assert not conn.execute(
+                select(table).where(table.user_id == row.id)
+            ).first()
+        assert not conn.execute(
+            select(LoginAttemptRow).where(LoginAttemptRow.username == "alice")
+        ).first()
+        traces = conn.execute(
+            select(SessionRow.client_ip, SessionRow.user_agent).where(
+                SessionRow.user_id == row.id
+            )
+        ).all()
+        assert traces and all(trace == (None, None) for trace in traces)
+        actions = (
+            conn.execute(
+                select(AuditEventRow.action).where(
+                    AuditEventRow.target_id == body["username"]
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert actions == ["user.anonymise"]
+    # Neither the old nor the new name logs in, and the account stays closed.
+    for username in ("alice", body["username"]):
+        login = TestClient(app).post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": PASSWORD},
+            headers=ORIGIN,
+        )
+        assert login.status_code == 401
+    again = admin.patch(
+        f"/api/v1/admin/users/{body['username']}", json={"active": True}
+    )
+    assert again.json()["code"] == "USER_ANONYMISED"
+    reset = admin.post(f"/api/v1/admin/users/{body['username']}/reset-code")
+    assert reset.json()["code"] == "USER_INACTIVE"
+    assert app.state.accounts.get_by_username("alice") is None
+
+
+def test_new_usernames_cannot_take_the_anonymised_prefix(app):
+    admin = logged_in(app, "root", system_admin=True)
+    response = admin.post(
+        "/api/v1/admin/users/",
+        json={"username": "anonymised-7", "display_name": "Sneaky"},
+    )
+    assert response.json()["code"] == "USERNAME_INVALID"
+
+
+def test_an_admin_reads_the_audit_trail_of_a_user(app):
+    admin = logged_in(app, "root", system_admin=True)
+    admin.post("/api/v1/admin/users/", json={"username": "carol", "display_name": "C"})
+    admin.post("/api/v1/admin/users/carol/reset-code")
+
+    events = admin.get("/api/v1/admin/users/carol/audit")
+
+    assert events.status_code == 200, events.text
+    assert events.json()[0]["action"] == "user.reset_code"  # newest first
+    assert {event["actor"] for event in events.json()} == {"user:root"}
+    assert "user.create" in {event["action"] for event in events.json()}
+    assert admin.get("/api/v1/admin/users/nobody/audit").json()["code"] == (
+        "USER_NOT_FOUND"
+    )
+    alice = logged_in(app, "alice")
+    assert alice.get("/api/v1/admin/users/carol/audit").status_code == 403

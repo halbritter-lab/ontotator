@@ -2888,6 +2888,106 @@
         }
       }
     },
+    "/api/v1/admin/users/{username}/anonymise": {
+      "post": {
+        "tags": [
+          "admin-users"
+        ],
+        "summary": "Anonymise User",
+        "description": "Erase a deactivated account's personal data; the pseudonym and work stay.",
+        "operationId": "anonymise_user_api_v1_admin_users__username__anonymise_post",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Username"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnonymiseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUser"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{username}/audit": {
+      "get": {
+        "tags": [
+          "admin-users"
+        ],
+        "summary": "User Audit",
+        "description": "The newest 200 changes to and by this user.",
+        "operationId": "user_audit_api_v1_admin_users__username__audit_get",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Username"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEventView"
+                  },
+                  "title": "Response User Audit Api V1 Admin Users  Username  Audit Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/ontologies/": {
       "get": {
         "tags": [
@@ -7593,6 +7693,28 @@
               }
             ],
             "title": "Qualification"
+          },
+          "setup_pending": {
+            "type": "boolean",
+            "title": "Setup Pending",
+            "default": false
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "anonymised": {
+            "type": "boolean",
+            "title": "Anonymised",
+            "default": false
           }
         },
         "type": "object",
@@ -7966,6 +8088,20 @@
           "evidence"
         ],
         "title": "AnnotationVersion"
+      },
+      "AnonymiseRequest": {
+        "properties": {
+          "confirm_username": {
+            "type": "string",
+            "title": "Confirm Username"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "confirm_username"
+        ],
+        "title": "AnonymiseRequest"
       },
       "AssignRequest": {
         "properties": {
@@ -8680,6 +8816,58 @@
           "display_name"
         ],
         "title": "AssignmentView"
+      },
+      "AuditEventView": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "actor": {
+            "type": "string",
+            "title": "Actor"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "target_type": {
+            "type": "string",
+            "title": "Target Type"
+          },
+          "target_id": {
+            "type": "string",
+            "title": "Target Id"
+          },
+          "project_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Key"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "actor",
+          "action",
+          "target_type",
+          "target_id",
+          "project_key",
+          "details"
+        ],
+        "title": "AuditEventView"
       },
       "AxisDefinition": {
         "properties": {
@@ -10571,6 +10759,13 @@
             },
             "type": "array",
             "title": "Languages"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/NewMembership"
+            },
+            "type": "array",
+            "title": "Projects"
           }
         },
         "additionalProperties": false,
@@ -14551,6 +14746,28 @@
         ],
         "title": "MutationEnvelope",
         "description": "Request envelope identifying a write attempt across retries."
+      },
+      "NewMembership": {
+        "properties": {
+          "project_key": {
+            "type": "string",
+            "title": "Project Key"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "project_key",
+          "roles"
+        ],
+        "title": "NewMembership"
       },
       "NextStepView": {
         "properties": {
@@ -22394,6 +22611,11 @@
             },
             "type": "array",
             "title": "Roles"
+          },
+          "project_name": {
+            "type": "string",
+            "title": "Project Name",
+            "default": ""
           }
         },
         "type": "object",
