@@ -2,6 +2,7 @@ import { act, render, screen, fireEvent, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
 import { api, ApiError, AuthError, ConflictError, ValidationError, type Draft } from "../src/api/client";
+import { formatTime } from "../src/app/submissionLabels";
 
 it("never pre-fills clinical axis values (no assertion default for HPO terms)", () => {
   const axes = [
@@ -1881,6 +1882,23 @@ describe("CaseScreen integration", () => {
     expect(screen.getByRole("dialog", { name: "Case submitted" })).toBe(dialog);
     fireEvent.click(screen.getByRole("button", { name: "Stay in case" }));
     expect(screen.queryByRole("dialog", { name: "Case submitted" })).toBeNull();
+  });
+
+  it("the case submitted dialog: readable time, the ID under Technical details, one primary action", async () => {
+    vi.spyOn(api, "submitWorkspace").mockResolvedValue({
+      submission_id: "submission-1", created_at: "2026-10-15T10:00:00Z",
+      snapshots: [], decisions: [], checked_layer_ids: [], document_checked: true,
+    } as any);
+    render(<CaseScreen view={sampleView} workspaceId="ws-test" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
+    await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Entire text checked for further findings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit case" }));
+    const dialog = await screen.findByRole("dialog", { name: "Case submitted" });
+    expect(dialog.textContent).toContain(`Submitted ${formatTime("2026-10-15T10:00:00Z")}.`);
+    expect(dialog.textContent).not.toContain("2026-10-15T10:00:00Z");
+    expect(within(dialog).getByText("submission-1").closest("details")!.open).toBe(false);
+    expect(dialog.querySelectorAll(".btn-primary")).toHaveLength(1);
   });
 
   it("the_help_lists_review_keys_only_in_review_mode", () => {

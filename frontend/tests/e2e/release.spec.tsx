@@ -312,7 +312,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // The submitted dialog offers no download: exports are made by an administrator (T2d).
     await waitFor(() => {
-      expect(screen.getByText(/Case successfully submitted|Fall erfolgreich abgegeben/i)).toBeDefined();
+      expect(screen.getByRole("dialog", { name: "Case submitted" })).toBeDefined();
     });
     expect(screen.queryByRole("button", { name: /Download Export|Export herunterladen/i })).toBeNull();
   });

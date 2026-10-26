@@ -111,7 +111,7 @@ export async function submitCase(page: Page) {
   if (await acknowledgement.isVisible()) await acknowledgement.check();
   await dialog.getByLabel(/Entire text checked for further findings/i).check();
   await submit.click();
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Case successfully submitted/i);
+  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
 }
 
 /** Select document text by UTF-16 offsets and fire the mouseup the editor listens to. */

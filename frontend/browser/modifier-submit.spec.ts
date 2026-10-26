@@ -56,7 +56,7 @@ test("Mild and Severe: Two severities is listed, the ticked box submits", async 
   await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values? and 1 modifier warning$/ }).check();
   await dialog.getByRole("checkbox", { name: "Entire text checked for further findings" }).check();
   await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Case successfully submitted/i);
+  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
 });
 
 test("Frequent: the cohort term is listed as a modifier warning", async ({ page }) => {

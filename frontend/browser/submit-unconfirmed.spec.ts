@@ -90,7 +90,7 @@ test("confirm one row, then the rest with Confirm all, and submit without a warn
 
   await dialog.getByRole("checkbox", { name: "Entire text checked for further findings" }).check();
   await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Case successfully submitted/i);
+  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
   expect(submits).toHaveLength(1);
 });
 
@@ -109,7 +109,7 @@ test("one click submits with the ticked unconfirmed values", async ({ page }) =>
   await dialog.getByRole("checkbox", { name: "Submit with 6 unconfirmed values", exact: true }).check();
   await expect(dialog.getByText("Acknowledging does not confirm the values; they stay marked as defaults.")).toBeVisible();
   await submit.click();
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Case successfully submitted/i);
+  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
   // One user action: the advisory warning is answered by one resend with the server's acknowledgement.
   expect(submits).toHaveLength(2);
 });

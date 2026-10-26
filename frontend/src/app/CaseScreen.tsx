@@ -63,7 +63,7 @@ import { isModifierWarningKey, modifierWarningPairs, modifierWarnings, pairKey, 
 import { HistoricalSubmissionDialog } from "../editor/HistoricalSubmissionDialog";
 import { fromSubmission } from "../editor/historicalSubmission";
 import { MySubmissions } from "../editor/MySubmissions";
-import { formatTime } from "./submissionLabels";
+import { formatTime, fullTimestamp } from "./submissionLabels";
 import { axisOptionLabel, findingAxes } from "../editor/axisLabels";
 import { StatusBadge } from "../ui/StatusBadge";
 import { defaultedResults, resultSnapshots } from "../editor/decisionSemantics";
@@ -3758,41 +3758,31 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         documentText={view.document.text} currentDocumentId={view.document.document_id} projectKey={view.key.project_key}
         termLabel={termLabel} onClose={() => setHistorySubmission(null)} />}
 
-      {completedSubmission && <Dialog open title="Case submitted" heading="✓ Case successfully submitted!">
-        <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>
-        <p>Timestamp: {completedSubmission.created_at}</p>
-        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-          <Button type="button" onClick={() => { setHistorySubmission(completedSubmission); setCompletedSubmission(null); }}>View submitted result</Button>
-          {assignmentNavigation && completedNextAssignment.current !== undefined && <Button type="button" variant="primary"
-            onClick={() => navigateAssignment(completedNextAssignment.current!)}>Next task</Button>}
-          {nextDoc && onNavigateCase && (
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => {
-                setCompletedSubmission(null);
-                void leaveCase(() => onNavigateCase(nextDoc.document_id));
-              }}
-            >
-              Review next case (Case {nextDoc.position}) →
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setCompletedSubmission(null)}
-          >
-            Stay in case
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => { if (assignmentNavigation) onClose(); else { setCompletedSubmission(null); void leaveCase(onClose); } }}
-          >
+      {completedSubmission && (() => {
+        // One primary action, last as in every footer: the next piece of work, else the way back.
+        const nextTask = assignmentNavigation && completedNextAssignment.current !== undefined;
+        const nextCase = !!(nextDoc && onNavigateCase);
+        return <Dialog open title="Case submitted" heading="Case submitted" footer={<>
+          <Button type="button" variant="secondary" onClick={() => { setHistorySubmission(completedSubmission); setCompletedSubmission(null); }}>View submitted result</Button>
+          <Button type="button" variant="secondary" onClick={() => setCompletedSubmission(null)}>Stay in case</Button>
+          <Button type="button" variant={nextTask || nextCase ? "secondary" : "primary"}
+            onClick={() => { if (assignmentNavigation) onClose(); else { setCompletedSubmission(null); void leaveCase(onClose); } }}>
             {assignmentNavigation ? "Back to my tasks" : "Back to dashboard"}
           </Button>
-        </div>
-      </Dialog>}
+          {nextCase && <Button type="button" variant={nextTask ? "secondary" : "primary"}
+            onClick={() => { setCompletedSubmission(null); void leaveCase(() => onNavigateCase!(nextDoc!.document_id)); }}>
+            Review next case (Case {nextDoc!.position}) →
+          </Button>}
+          {nextTask && <Button type="button" variant="primary"
+            onClick={() => navigateAssignment(completedNextAssignment.current!)}>Next task</Button>}
+        </>}>
+          <p>Submitted <time dateTime={completedSubmission.created_at} title={fullTimestamp(completedSubmission.created_at)}>{formatTime(completedSubmission.created_at)}</time>.</p>
+          <details className="technical-details">
+            <summary>Technical details</summary>
+            <p>Submission ID: <code>{completedSubmission.submission_id}</code></p>
+          </details>
+        </Dialog>;
+      })()}
 
       <SubmitCaseDialog
         open={submitDialogOpen}

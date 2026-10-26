@@ -153,7 +153,7 @@ it("submits the API payload and preserves its envelope through a lost-response r
    document_checked: true,
  });
  fireEvent.click(screen.getByText(/Retry|Erneut versuchen/i));
- await waitFor(() => expect(screen.getByText(/Case successfully submitted|Fall erfolgreich abgegeben/i)).toBeDefined());
+ await waitFor(() => expect(screen.getByRole("dialog", { name: "Case submitted" })).toBeDefined());
  expect(submit.mock.calls[1][1]).toEqual(submit.mock.calls[0][1]);
 });
 
