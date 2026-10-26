@@ -73,6 +73,7 @@
 /* Coupling notes and the pair line: one wrapping line below the panes, spanning the text columns. */
 .translation-column-hint { display: flex; flex-wrap: wrap; gap: 0 var(--space-3); margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .translation-column-title { margin: 0; font-family: var(--font-sans); font-size: var(--size-md); line-height: var(--leading-md); font-weight: var(--weight-strong); color: var(--text); }
+.translation-column-subtitle { margin-left: var(--space-2); font-weight: var(--weight-regular); color: var(--text-muted); }
 .translation-column-note { flex: none; margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
 .translation-text,
 .translation-review .translation-diff,

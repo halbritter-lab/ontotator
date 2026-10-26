@@ -52,6 +52,15 @@ async function openReview(page: Page, s: Scenario) {
   const projects = await (await authenticatedRequest(page, '/api/v1/projects')).json() as { project_key: string; roles: string[] }[];
   expect(projects.find(p => p.project_key === s.project)?.roles).toEqual(['annotator']);
 }
+/** The Comparison pane starts closed; "Compare with …" in the Translation column opens it. */
+async function openComparison(page: Page) {
+  await expect(page.getByRole('region', { name: 'Comparison', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /^Compare with/ }).click();
+  // Several comparisons: the button is a menu of them.
+  const menu = page.getByRole('menu', { name: 'Compare with…', exact: true });
+  if (await menu.count()) await menu.getByRole('menuitem').first().click();
+  await expect(page.getByRole('button', { name: 'Close comparison', exact: true })).toBeFocused();
+}
 async function saved(page: Page, id: number, text: string, decision: string) {
   await expect(review(page).locator('.translation-save-status')).toHaveText('Saved');
   const current = await workspace(page, id);
@@ -346,7 +355,7 @@ for (const actor of ['reviewer', 'other'] as const) test(`expired review session
 });
 
 for (const width of [1280, 1024, 600]) test(`review source, the one editable translation, its change view and comparison retain codepoint text and reachable controls at ${width}px`, async ({ page }) => {
-  await page.setViewportSize({ width, height: 900 }); const s = await scenario(page, 'target', width === 1280); await openReview(page, s);
+  await page.setViewportSize({ width, height: 900 }); const s = await scenario(page, 'target', width === 1280); await openReview(page, s); await openComparison(page);
   await page.evaluate(() => document.fonts.ready);
   const source = page.getByRole('region', { name: 'Source (en)', exact: true });
   const editor = page.locator('.translation-editor');
@@ -414,7 +423,7 @@ for (const width of [1280, 1024, 600]) test(`review source, the one editable tra
 test('three reading panes preserve positional progress and reject delayed feedback after equal-count merge/split', async ({page})=>{
   await page.setViewportSize({width:1280,height:900});
   const response=await page.request.post('/__test_translation_review__?assignment=target&merge_split=true'); expect(response.ok()).toBeTruthy();
-  const s=await response.json() as Scenario; await openReview(page,s); await page.evaluate(()=>document.fonts.ready);
+  const s=await response.json() as Scenario; await openReview(page,s); await openComparison(page); await page.evaluate(()=>document.fonts.ready);
   const box=page.getByRole('checkbox',{name:'Couple scrolling',exact:true}),show=page.getByRole('checkbox',{name:'Show changes',exact:true});
   const source=page.getByRole('region',{name:'Source (en)',exact:true}),diff=page.getByRole('region',{name:'Text changes',exact:true}),comparison=page.getByRole('region',{name:'Comparison',exact:true});
   // Offered beside the editable translation, off by default.
@@ -505,7 +514,7 @@ for (const [w, h] of [[1440, 900], [800, 900]] as const) test(`coupling while ed
 });
 
 test('Show matching paragraph from the caret and from a source click', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 }); const s = await scenario(page, 'target'); await openReview(page, s);
+  await page.setViewportSize({ width: 1440, height: 900 }); const s = await scenario(page, 'target'); await openReview(page, s); await openComparison(page);
   await page.evaluate(() => document.fonts.ready);
   const source = page.getByRole('region', { name: 'Source (en)', exact: true }), editor = page.locator('.translation-editor');
   const comparison = page.getByRole('region', { name: 'Comparison', exact: true });
@@ -542,7 +551,7 @@ test('Show matching paragraph from the caret and from a source click', async ({ 
 });
 
 test('390x844: checkbox hidden, action works', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 }); const s = await scenario(page, 'target'); await openReview(page, s);
+  await page.setViewportSize({ width: 390, height: 844 }); const s = await scenario(page, 'target'); await openReview(page, s); await openComparison(page);
   await page.evaluate(() => document.fonts.ready);
   const source = page.getByRole('region', { name: 'Source (en)', exact: true });
   await expect(page.getByRole('checkbox', { name: 'Couple scrolling', exact: true })).toHaveCount(0);
@@ -566,7 +575,7 @@ test('390x844: checkbox hidden, action works', async ({ page }) => {
 });
 
 test('axe has no violations in the column head with coupling on', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 }); const s = await scenario(page, 'target'); await openReview(page, s);
+  await page.setViewportSize({ width: 1440, height: 900 }); const s = await scenario(page, 'target'); await openReview(page, s); await openComparison(page);
   await page.getByRole('checkbox', { name: 'Couple scrolling', exact: true }).check();
   await expect(page.getByText(couplingEditingNote, { exact: true })).toBeVisible();
   await placeCaret(page, 'Absatz 3.', 5); await page.keyboard.press('Alt+KeyM');

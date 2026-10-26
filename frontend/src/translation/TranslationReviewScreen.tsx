@@ -3,7 +3,7 @@ import { api, ApiError, type ReviewWorkspace, type TaskSummary, type Translation
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { nextOpenTask } from "../app/caseOrder";
 import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/router";
-import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconRetry, InlineMessage, Kbd, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
+import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconRetry, InlineMessage, Kbd, MenuButton, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
 import { caretInParagraph, paragraphStarts } from "../variants/paragraphs";
 import { useCoupledScroll } from "../variants/useCoupledScroll";
@@ -131,12 +131,23 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
   /** Submit or its reason when one of them was the last focused element; restored when crossing 1100 px. */
   const focusedControl = useRef<"submit" | "reason" | null>(null);
   const [comparisonId, setComparisonId] = useState(workspace.comparisons[0]?.variant.document_id ?? "");
+  // The Comparison pane starts closed (open or closed is remembered per user in this browser).
+  const comparisonOpenKey = `ontocurator.translationReview.comparisonOpen.v1:${props.username}`;
+  const [comparisonOpen, setComparisonOpen] = useState(() => { try { return window.localStorage.getItem(comparisonOpenKey) === "1"; } catch { return false; } });
+  /** Opens (with the chosen comparison) or closes the pane; focus moves to the control that replaces the clicked one. */
+  const showComparison = (open: boolean, id?: string) => {
+    if (id) setComparisonId(id);
+    setComparisonOpen(open);
+    try { window.localStorage.setItem(comparisonOpenKey, open ? "1" : "0"); } catch { /* Blocked storage: not remembered. */ }
+    window.requestAnimationFrame(() => screenRoot.current?.querySelector<HTMLElement>(open ? ".translation-compare-close" : ".translation-compare-open")?.focus());
+  };
   const [sourceElement, setSourceElement] = useState<HTMLDivElement | null>(null), [targetElement, setTargetElement] = useState<HTMLDivElement | null>(null), [comparisonElement, setComparisonElement] = useState<HTMLDivElement | null>(null);
   const record = submitted ?? (immutableReadOnly ? workspace.submitted_record : null);
   const readOnly = immutableReadOnly || submitted !== null || held; readOnlyRef.current = readOnly;
   const text = record?.proposed_text ?? draft.text, rawForm = record ? recordForm(record) : draft.form;
   const form = typedForm(rawForm), issues = form ? checkReview(form, workspace.text, text) : [];
-  const comparison = workspace.comparisons.find(row => row.variant.document_id === comparisonId);
+  const comparison = comparisonOpen ? workspace.comparisons.find(row => row.variant.document_id === comparisonId) : undefined;
+  const comparisonName = (row: ReviewWorkspace["comparisons"][number]) => `${row.variant.external_id} ${row.variant.language}`;
   /** The editable translation is shown: it is the fixed leader and its pairing waits for a recompute (spec 2.2, 2.3). */
   const editing = !readOnly && !showChanges;
   const sourceStarts = useMemo(() => paragraphStarts(workspace.source.text), [workspace.source.text]);
@@ -467,7 +478,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     root.querySelectorAll(".translation-review > .notice, .translation-review-bar, .translation-checks, .translation-pinned-bar, .translation-column-head, .translation-column-note, .translation-column-hint")
       .forEach(element => observer.observe(element));
     return () => observer.disconnect();
-  }, [wide, readOnly, showChanges, comparisonId, coupled]);
+  }, [wide, readOnly, showChanges, comparisonId, comparisonOpen, coupled]);
   const closeDetails = (event: KeyboardEvent<HTMLDetailsElement>) => {
     if (event.key !== "Escape" || !event.currentTarget.open) return;
     event.preventDefault(); event.stopPropagation();
@@ -560,6 +571,10 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
               {pairing.available && <Checkbox id="review-couple" label="Couple scrolling" checked={coupled} onChange={event => setRequestedCoupling(event.target.checked ? couplingIdentity : null)} />}
               <Button ref={matchButton} size="sm" title={showMatchingTitle} aria-keyshortcuts="Alt+M" onMouseDown={event => event.preventDefault()} onClick={showMatching}>
                 {showMatchingLabel}<span aria-hidden="true"> <Kbd>Alt M</Kbd></span></Button>
+              {!comparison && (workspace.comparisons.length === 1
+                ? <Button size="sm" className="translation-compare-open" onClick={() => showComparison(true, workspace.comparisons[0].variant.document_id)}>Compare with {comparisonName(workspace.comparisons[0])}</Button>
+                : workspace.comparisons.length > 1 && <MenuButton className="translation-compare-open" label="Compare with…" buttonLabel="Compare with…"
+                  items={workspace.comparisons.map(row => ({ id: row.variant.document_id, label: comparisonName(row), onSelect: () => showComparison(true, row.variant.document_id) }))} />)}
               </div>
               <span role="status" className="review-sr-only">{matchStatus}</span>
               {/* The text box keeps its full name; the visible title shows the flag instead of the code in brackets. */}
@@ -579,11 +594,10 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
           </div>
           {comparison && <div className="translation-column">
             <div className="translation-column-head density-compact">
-              <h2 className="translation-column-title">Comparison</h2>
-              {/* The heading names the column; the picker keeps its full name for assistive technology only. */}
+              <h2 className="translation-column-title">Comparison <span className="translation-column-subtitle">{comparisonName(comparison)}</span></h2>
+              {/* Another comparison is chosen from "Compare with…" after closing this one. */}
               <div className="translation-column-controls">
-              <select id="review-comparison" className="form-select" aria-label="Comparison translation" value={comparisonId} onChange={event => setComparisonId(event.target.value)}>
-                {workspace.comparisons.map(row => <option key={row.variant.document_id} value={row.variant.document_id}>{row.variant.external_id} {row.variant.language}</option>)}</select>
+              <Button size="sm" className="translation-compare-close" aria-label="Close comparison" onClick={() => showComparison(false)}>Close</Button>
               </div>
             </div>
             <TextView key={comparisonId} ref={setComparisonElement} text={comparison.text} label="Comparison" lang={comparison.variant.language} />
