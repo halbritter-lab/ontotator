@@ -87,7 +87,7 @@ export interface ComparisonRow {
   label: string;
   /** People disagree and a choice is needed. */
   conflict: boolean;
-  /** "Patient (all agree)" when everyone agrees, else null. */
+  /** "Patient (all agree)" when everyone agrees ("Patient" in a one-person group), else null. */
   agreed: string | null;
   /** Text without conflict: "(overlapping, comes with the chosen finding)". */
   info: string | null;
@@ -96,6 +96,8 @@ export interface ComparisonRow {
   warnings?: string[];
 }
 
+/** " (all agree)" only when there is someone to agree with. */
+export const allAgree = (members: readonly ConsolidationMemberView[]) => members.length > 1 ? " (all agree)" : "";
 const noteOf = (member: ConsolidationMemberView) => member.note?.trim() ?? "";
 export const firstName = (label: string) => personName(label).split(" ")[0];
 
@@ -122,7 +124,7 @@ export function comparisonRows(group: ConsolidationGroupView, people: readonly C
       chosen: choices[id] === valueOf(member) }));
     const same = cells.every(cell => cell.value === cells[0].value);
     return { kind, id, label, conflict, info, cells,
-      agreed: !conflict && same && info === null && kind !== "whole" ? `${cells[0].display} (all agree)` : null };
+      agreed: !conflict && same && info === null && kind !== "whole" ? `${cells[0].display}${allAgree(members)}` : null };
   };
   const names = peopleOf(people, members);
   const rows = [
@@ -192,7 +194,7 @@ function modifiersRow(group: ConsolidationGroupView, people: readonly Consolidat
   const same = cells.every(cell => cell.value === cells[0].value);
   const shown = conflict ? chosenModifiers(selection, options) ?? [] : sets[0].modifiers;
   return { kind: "modifiers", id: "modifiers", label: "Modifiers", conflict, info: null, cells,
-    agreed: !conflict && same ? `${cells[0].display} (all agree)` : null, warnings: setWarnings(shown) };
+    agreed: !conflict && same ? `${cells[0].display}${allAgree(group.members)}` : null, warnings: setWarnings(shown) };
 }
 
 /** Choices after a check in a row: a modifier toggle presses or releases (modifierSets `press`), any other row takes

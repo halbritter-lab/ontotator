@@ -67,6 +67,9 @@ test("three people: choose by field, take a whole finding, the result line names
   await expect(toggle).toContainText("2 fields to decide");
   const table = hypotonia.locator("table.cons-compare");
   await expect(table.locator("thead th")).toHaveCount(3);
+  // Agreed rows fold into one "Agreed" line after the rows to decide; "Show values" opens them.
+  await expect(table.getByRole("row", { name: /^Agreed/ })).toContainText("Experiencer, Temporality");
+  await table.getByRole("button", { name: "Show values", exact: true }).click();
   await expect(table.getByRole("cell", { name: "Patient (all agree)", exact: true })).toBeVisible();
   await expect(table.getByRole("cell", { name: "Current (all agree)", exact: true })).toBeVisible();
   const result = hypotonia.locator(".cons-result");

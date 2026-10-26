@@ -201,6 +201,21 @@ describe("ConsolidationScreen", () => {
     expect(expandedTitle()).toBe("Delayed development");
   });
 
+  it("drops the Undo toast once the consolidation is submitted", async () => {
+    load(withGroup(decidedView(), "g-hypo", { state: "open", note: null, annotation_ids: [] }), decidedView());
+    vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
+    vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s-1" } as never);
+    vi.spyOn(api, "listMyTasks").mockResolvedValue([] as never);
+    await renderScreen({ assignmentId: 42 });
+    fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Submit consolidation" }).getAttribute("aria-disabled")).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByRole("button", { name: "Submit" }));
+    await screen.findByText("Consolidation submitted. The lead then accepts the result.");
+    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+  });
+
   it("submits after the summary, acknowledges an axis warning and offers the next task", async () => {
     load(decidedView());
     const warning = new ApiError(409, "Check values", "AXIS_CONFIRMATION_WARNING", {

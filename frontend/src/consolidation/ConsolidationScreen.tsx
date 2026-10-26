@@ -217,6 +217,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       const result = await data.submit(acknowledged && dialog.warning ? dialog.warning.acknowledgement : undefined);
       if (result.kind === "warning") { setDialog(current => ({ ...current, busy: false, warning: result.warning })); return; }
       setDialog({ open: false, busy: false, warning: null, error: null });
+      // A submitted round has nothing left to undo.
+      dismiss();
       setSubmitted(true);
       loadNextTask();
       if (isLead === undefined) api.listProjects().then(projects => {

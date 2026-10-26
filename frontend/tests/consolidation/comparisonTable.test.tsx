@@ -6,7 +6,7 @@ import type { ConsolidationPersonView } from "../../src/api/client";
 import { choose, comparisonRows, resultLine, takeFinding, type Choices } from "../../src/consolidation/groupModel";
 import { ComparisonTable } from "../../src/consolidation/ComparisonTable";
 import { ResultLine } from "../../src/consolidation/ResultLine";
-import { ANA, BEN, CHRIS, frequent, hypotoniaThree, MOD_TEXT, recurrent, seizure, severe, TEXT, THREE } from "./fixtures";
+import { ANA, BEN, CHRIS, frequent, group, hypotoniaThree, LUC, member, MOD_TEXT, recurrent, seizure, severe, span, TEXT, THREE } from "./fixtures";
 
 afterEach(cleanup);
 
@@ -40,6 +40,29 @@ describe("ComparisonTable", () => {
     expect(cells).toHaveLength(1);
     expect(cells[0].getAttribute("colspan")).toBe("3");
     expect(screen.getByText("“muscular hypotonia” (overlapping, comes with the chosen finding)")).toBeTruthy();
+  });
+
+  it("rows to decide come first; two or more agreed rows fold into one Agreed line that opens on demand", () => {
+    render(<Harness group={hypotoniaThree()} />);
+    const headers = screen.getAllByRole("rowheader").map(header => header.textContent);
+    expect(headers.slice(0, 2).every(header => header?.startsWith("Conflict"))).toBe(true);
+    expect(screen.getByRole("rowheader", { name: "Agreed" })).toBeTruthy();
+    expect(screen.getByRole("row", { name: /Agreed/ }).textContent).toContain("Experiencer, Temporality");
+    expect(screen.queryByRole("rowheader", { name: "Experiencer" })).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Show values" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Hide values" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("rowheader", { name: "Experiencer" })).toBeTruthy();
+    expect(headers.at(-1)).toBe("Whole finding");
+  });
+
+  it("a one-person group shows its values without '(all agree)' and without folding", () => {
+    const lone = group("g-micro", ["partial"], [member("in-ml", LUC, "HP:0000252", "Microcephaly", [span("seizures")])]);
+    const { container } = render(<Harness group={lone} people={[LUC]} />);
+    expect(container.textContent).not.toContain("all agree");
+    expect(screen.queryByRole("button", { name: "Show values" })).toBeNull();
+    expect(screen.getByRole("rowheader", { name: "Term" })).toBeTruthy();
   });
 
   it("axis values use the fixed colour slots", () => {

@@ -2,7 +2,37 @@
 
 .cons-screen {
   display: grid;
+  /* One shrinkable column: a wide table scrolls in its own box, never the page sideways (UX audit #7). */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
+  /* Room under the last card, so the Undo toast never has to cover its actions. */
+  padding-block-end: calc(2 * var(--space-7));
+}
+
+/* The task route has no page padding (reading shell): the screen brings its own. */
+.density-reading .cons-screen {
+  padding-block-start: var(--space-4);
+  padding-inline: var(--space-5);
+}
+
+@media (max-width: 699px) {
+  .density-reading .cons-screen {
+    padding-inline: var(--space-3);
+  }
+}
+
+/* Wide layout: the toast sits under the text column, clear of the group cards and their actions. */
+.cons-layout-wide ~ .ui-toast-region {
+  justify-content: flex-start;
+  padding-inline-start: var(--space-5);
+}
+
+.cons-layout-wide ~ .ui-toast-region .ui-toast {
+  max-width: min(40rem, calc(50vw - 2 * var(--space-5)));
+}
+
+.cons-compare-scroll {
+  overflow-x: auto;
 }
 
 .cons-header {
@@ -13,8 +43,14 @@
   gap: var(--space-3);
 }
 
+.cons-heading {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
 .cons-title {
   margin: 0;
+  overflow-wrap: anywhere;
   font-size: var(--size-xl);
   line-height: var(--leading-xl);
 }
