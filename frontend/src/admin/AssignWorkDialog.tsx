@@ -5,7 +5,7 @@ import { assignedText } from "../app/assignedDate";
 import { plural } from "../app/labels";
 import { routeHref } from "../app/router";
 import { versionName } from "../documents/labels";
-import { Button, Checkbox, Dialog, Select } from "../ui";
+import { Button, Checkbox, Dialog, Select, StatusBadge } from "../ui";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { errorMessage } from "./errors";
@@ -100,6 +100,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const shown = preview?.value ?? null;
   const me = props.mode === "row" && task === "annotate" ? props.me ?? null : null;
   const people = shown ? sortMembers(shown.people.filter(person => person.username !== me?.username)) : [];
+  /** One text: people who already hold this task show a status instead of a choice (F24). */
+  const holds = (person: BatchPersonView) => isRow && person.already_assigned > 0;
+  const heldBy = people.filter(holds);
   const order = people.map(person => person.username);
   const usernames = order.filter(name => chosen.includes(name));
   const picked = usernames.length + (self ? 1 : 0);
@@ -216,7 +219,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   };
 
   // One roving tab stop for the member radios; arrow keys skip aria-disabled members.
-  const enabled = people.filter(person => !memberUnavailable(person)).map(person => person.username);
+  const enabled = people.filter(person => !memberUnavailable(person) && !holds(person)).map(person => person.username);
   const tabStop = radios ? (usernames[0] ?? enabled[0]) : undefined;
   const rove = (event: KeyboardEvent<HTMLInputElement>, username: string) => {
     if (!radios || !enabled.length) return;
@@ -284,6 +287,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     <div className="assign-dialog">
       {props.mode === "row" && <div className="assign-context">
         <p><strong>{textLabel({ case_id: props.row.case_id, language: props.row.language, version: newest?.version }, { withVersion: (newest?.version ?? 1) > 1 })}</strong></p>
+        {task === "translation_review" && heldBy.length > 0 && <p>{`${stepName(task)} of ${textLabel(props.row)} is assigned to ${heldBy.map(person => personLabel(person.person)).join(", ")}. Assign it to someone else?`}</p>}
         <p id={limitId} className="assign-muted">{status}{rowMulti && shown && <>{` · limit ${shown.per_text} per text (`}
           <a href={routeHref({ name: "projectSettings", key: props.projectKey, section: "workflow" })}>project setting</a>{")"}</>}</p>
       </div>}
@@ -318,6 +322,11 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
           const atLimit = !radios && !checked && picked >= limit;
           const inputId = `${id}-member-${index}`;
           const addMe = person.unavailable === "role_missing" && person.username === props.me?.username;
+          if (holds(person)) return <tr key={person.username}>
+            <td><span className="assign-member">{personLabel(person.person)} <StatusBadge tone="success">Already assigned</StatusBadge></span></td>
+            <td className="assign-reads"><span className="assign-narrow-label">Reads </span>{person.reads.join(", ") || "None listed"}</td>
+            <td className="assign-open"><span className="assign-narrow-label">Open </span>{person.open_before}</td>
+          </tr>;
           const whyId = `${id}-why-${index}`;
           const describedBy = [why && whyId, atLimit && limitReachedId].filter(Boolean).join(" ") || undefined;
           // Muted only when the row cannot be ticked; a language mismatch stays normal with its warning.

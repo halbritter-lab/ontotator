@@ -301,6 +301,21 @@ it("lists holders with their assignment date", async () => {
   } finally { vi.useRealTimers(); }
 });
 
+it("one text: the person who holds the review shows Already assigned instead of a choice, and the intro names them", async () => {
+  const ana = people.find(item => item.username === "ana")!;
+  ana.already_assigned = 1;
+  try {
+    render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="translation_review" onClose={vi.fn()} onAssigned={vi.fn()} />);
+    await ready();
+    expect(screen.getByText("Translation review of case-0101 de is assigned to Ana Weber (ann-0004). Assign it to someone else?")).toBeDefined();
+    const held = screen.getByText("Already assigned").closest("tr")!;
+    expect(held.textContent).toContain("Ana Weber");
+    expect(within(held).queryByRole("radio")).toBeNull();
+    // The roving tab stop skips the holder.
+    expect(radio(/Ben Roth/).tabIndex).toBe(0);
+  } finally { ana.already_assigned = 0; }
+});
+
 it("offers Random distribution… as a secondary button", async () => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
