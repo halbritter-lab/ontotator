@@ -25,26 +25,9 @@ export function stepLabel(task: AssignTask, language: string, versions: number):
 
 /** Display name, else pseudonym (sentences; tables use `personLabel`). */
 export const personName = (person: PersonRef): string => person.display_name?.trim() || person.pseudonym;
-const firstName = (person: PersonRef): string => person.display_name?.trim().split(/\s+/)[0] || person.pseudonym;
 
 export function onePersonSummary({ person, gets, task, language, openBefore, openAfter }: { person: PersonRef; gets: number; task: AssignTask; language: string; openBefore: number; openAfter: number }): string {
   return `${personName(person)} gets ${taskNoun(task, gets)} (${language}). Open tasks: ${openBefore} → ${openAfter}.`;
-}
-
-/** "case-0101…0110": the last ID keeps only its trailing digits when the rest matches. */
-export function caseRange(first: string, last: string): string {
-  if (first === last) return first;
-  const a = /^(.*?)(\d+)$/.exec(first); const b = /^(.*?)(\d+)$/.exec(last);
-  if (a && b && a[1] === b[1]) return `${first}…${b[2]}`;
-  return `${first}…${last}`;
-}
-
-export function splitSummary(people: readonly { person: PersonRef; first_case: string | null; last_case: string | null; gets: number }[]): string {
-  const getting = people.filter(item => item.gets > 0 && item.first_case && item.last_case);
-  const counts = new Map<string, number>();
-  for (const item of getting) counts.set(firstName(item.person), (counts.get(firstName(item.person)) ?? 0) + 1);
-  const name = (person: PersonRef) => (counts.get(firstName(person)) ?? 0) > 1 ? personName(person) : firstName(person);
-  return `Cases in list order: ${getting.map(item => `${caseRange(item.first_case!, item.last_case!)} → ${name(item.person)}`).join(", ")}.`;
 }
 
 const skipOrder: BatchSkipView["reason"][] = ["waiting_for_review", "not_in_plan", "already_assigned", "step_differs", "discarded", "no_proposals_on_version"];

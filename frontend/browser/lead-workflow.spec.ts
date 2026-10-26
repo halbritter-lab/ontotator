@@ -138,7 +138,7 @@ async function planReviewAndAnnotate(page: Page, clicks: ReturnType<typeof count
   await expect(bar(page)).toContainText(` in ${count} cases selected`);
 }
 
-test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
+test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => {
   const s = await leadScenario(page, "D15");
   const de = s.case_ids.de!;
   const fr = s.case_ids.fr!;
@@ -187,7 +187,6 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
   let dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}20 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Translation review${SEP}de${SEP}20 versions$`))).toBeVisible();
   await expect(dialog.getByText("from the plan", { exact: true })).toBeVisible();
-  await expect(dialog.getByRole("radio", { name: "One person", exact: true })).toBeChecked();
   // Nobody is preselected (D10).
   await expect(dialog.getByRole("table", { name: "Members" }).getByRole("radio", { checked: true })).toHaveCount(0);
   await clicks.click(dialog.getByRole("radio", { name: person(s, "ana"), exact: true }));
@@ -210,24 +209,20 @@ test("D15: import, plan de, assign de, plan fr, split fr", async ({ page }) => {
   await planReviewAndAnnotate(page, clicks, "fr", 30);
   expect(clicks.total).toBe(16);
 
-  // 5. Split the 30 fr reviews between two: Assign…, Split evenly, Ana, Ben, Assign 30 (5; total 21).
+  // 5. Assign the 30 fr reviews to Ben: Assign…, Ben, Assign 30 (3; total 19). Splitting is "Random distribution…".
   await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
   dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}30 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Translation review${SEP}fr${SEP}30 versions$`))).toBeVisible();
-  await clicks.click(dialog.getByRole("radio", { name: "Split evenly", exact: true }));
-  await clicks.click(dialog.getByRole("checkbox", { name: person(s, "ana"), exact: true }));
-  await clicks.click(dialog.getByRole("checkbox", { name: person(s, "ben"), exact: true }));
-  // Contiguous blocks in list order; Ben (no open tasks) sorts before Ana (20 open tasks).
-  await expect(dialog.getByRole("status", { name: "Summary" })).toHaveText(`Cases in list order: ${fr[0]}…0135 → Ben, case-0136…0150 → Ana.`);
-  await expect(dialog.getByRole("columnheader", { name: "Gets", exact: true })).toBeVisible();
-  await evidence(page, "d15-fr-split", dialog);
+  await clicks.click(dialog.getByRole("radio", { name: person(s, "ben"), exact: true }));
+  await expect(dialog.getByRole("status", { name: "Summary" })).toHaveText("Ben Roth gets 30 translation reviews (fr). Open tasks: 0 → 30.");
+  await evidence(page, "d15-fr-assigned", dialog);
   await clicks.click(dialog.getByRole("button", { name: "Assign 30", exact: true }));
-  expect(clicks.total).toBe(21);
+  expect(clicks.total).toBe(19);
   await expect(dialog).toHaveCount(0);
-  await expect(toast(page).locator(".ui-toast-message")).toHaveText("30 translation reviews split between Ben Roth (15) and Ana Weber (15)");
+  await expect(toast(page).locator(".ui-toast-message")).toHaveText("30 translation reviews assigned to Ben Roth");
   await expect(bar(page)).toHaveCount(0);
   await expect(rowCell(row(page, "case-0121", "fr"), "waiting")).toContainText(person(s, "ben"));
-  await expect(rowCell(row(page, "case-0150", "fr"), "waiting")).toContainText(person(s, "ana"));
+  await expect(rowCell(row(page, "case-0150", "fr"), "waiting")).toContainText(person(s, "ben"));
   await expect(documentsTab(page, "In progress", 50)).toBeVisible();
   await expect(documentsTab(page, "To assign", 0)).toBeVisible();
 });
@@ -256,7 +251,7 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
   dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}14 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Annotation${SEP}de${SEP}14 versions$`))).toBeVisible();
-  await clicks.click(dialog.getByRole("radio", { name: person(s, "annotator"), exact: true }));
+  await clicks.click(dialog.getByRole("checkbox", { name: person(s, "annotator"), exact: true }));
   await expect(dialog.getByRole("status", { name: "Summary" })).toHaveText("Cy Annotator gets 14 annotations (de). Open tasks: 0 → 14.");
   await clicks.click(dialog.getByRole("button", { name: "Assign 14", exact: true }));
   expect(clicks.total).toBe(5);

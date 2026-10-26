@@ -8,15 +8,6 @@
 .assign-field .form-group { margin-bottom: 0; flex: 1 1 16rem; }
 .assign-step { font-weight: var(--weight-strong); padding: var(--space-1) var(--space-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-sunken); }
 
-/* "Distribute": a radio group drawn as segments; the checked one is underlined and bold (not by colour alone). */
-.assign-distribute { border: 0; margin: 0; padding: 0; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-.assign-distribute legend { float: left; font-weight: var(--weight-strong); margin-right: var(--space-2); padding: 0; }
-.assign-segments { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; }
-.assign-segments .segment { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 32px; padding: 0 var(--space-3); cursor: pointer; }
-.assign-segments .segment + .segment { border-left: 1px solid var(--border-strong); }
-.assign-segments .segment[data-checked] { background: var(--accent-light); font-weight: var(--weight-strong); text-decoration: underline; border-bottom-color: currentColor; }
-.assign-segments .segment:has(input:focus-visible) { outline: var(--focus-width) solid var(--focus-ring); outline-offset: calc(-1 * var(--focus-width)); }
-
 /* Members table: Person, Reads, Open tasks (+ Gets). */
 .assign-members { width: 100%; border-collapse: collapse; font-size: var(--size-sm); }
 .assign-members th, .assign-members td { text-align: left; vertical-align: middle; padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--border); }
@@ -58,7 +49,7 @@
 }
 
 @media (forced-colors: active) {
-  .assign-segments .segment[data-checked], .assign-members tr.is-chosen td { border: 1px solid CanvasText; }
+  .assign-members tr.is-chosen td { border: 1px solid CanvasText; }
 }
 
 /* Text-change dialogs (Handle text change…, Carry to v2…). */

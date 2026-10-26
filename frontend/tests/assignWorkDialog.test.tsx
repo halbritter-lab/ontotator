@@ -33,6 +33,7 @@ function preview(body: BatchAssignRequest): BatchPreview & { needs_people?: numb
     const size = Math.ceil(ids.length / usernames.length);
     ids.forEach((id, index) => blocks.set(id, [usernames[Math.floor(index / size)]]));
   }
+  if (body.mode === "each") for (const id of ids) blocks.set(id, usernames.slice(0, remainingOf(id)));
   const targets = ids.map(id => ({ case_id: id, language: body.language, document_id: `doc-${id}`, version: 1, remaining: remainingOf(id), usernames: blocks.get(id) ?? [], unreviewed_translation: unreviewedOf(id) }));
   return {
     task: body.task, language: body.language, versions: targets.length, targets, skipped, per_text: perText, digest, needs_people: needsPeople,
@@ -87,15 +88,15 @@ it("shows ineligible members muted with the reason and aria-disabled", async () 
   people.push(person("finn", "Finn Ott", "ann-0013", ["de"], 5, { already_assigned: 3 }));
   try {
     render(<AssignWorkDialog {...casesProps()} />); await ready();
-    const eva = radio(/Eva Klein/);
+    const eva = screen.getByRole("checkbox", { name: /Eva Klein/ });
     expect(eva.getAttribute("aria-disabled")).toBe("true");
     expect(eva.hasAttribute("disabled")).toBe(false);
     expect(document.getElementById(eva.getAttribute("aria-describedby")!)!.textContent).toContain("Not an annotator in this project");
     expect(eva.closest("tr")!.className).toContain("is-unavailable");
     fireEvent.click(eva);
     expect((eva as HTMLInputElement).checked).toBe(false);
-    expect(radio(/Dan Mertens.*does not read de/)).toBeDefined();
-    const finn = radio(/Finn Ott.*Already annotating 3 of these cases/);
+    expect(screen.getByRole("checkbox", { name: /Dan Mertens.*does not read de/ })).toBeDefined();
+    const finn = screen.getByRole("checkbox", { name: /Finn Ott.*Already annotating 3 of these cases/ });
     expect(finn.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(finn);
     expect((finn as HTMLInputElement).checked).toBe(true);
@@ -112,18 +113,27 @@ it("One person: radio per member and live summary", async () => {
   expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ task: "translation_review", language: "de", mode: "one", usernames: ["ana"], expected_preview_digest: "digest-1", confirm_language: false }));
 });
 
-it("Split evenly: checkboxes with Gets and contiguous blocks", async () => {
+it("Annotation for many texts: ticked people each get every text up to the limit", async () => {
+  vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 20, cases: 20 }]));
+  perText = 2; remainingOf = id => id === "case-0101" ? 1 : 2;
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
-  fireEvent.click(screen.getByRole("radio", { name: "Split evenly" }));
+  expect(screen.queryByRole("radio", { name: "Split evenly" })).toBeNull();
+  expect(screen.getByText(/Each ticked person gets every selected text, up to 2 per text/)).toBeDefined();
   expect(screen.getByRole("columnheader", { name: "Gets" })).toBeDefined();
   fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
   fireEvent.click(screen.getByRole("checkbox", { name: /Ben Roth/ }));
   await waitForPreviewOf(["ana", "ben"]);
-  expect(lastPreview().mode).toBe("split");
-  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("Cases in list order: case-0101…0110 → Ana, case-0111…0120 → Ben.");
-  expect(within(screen.getByRole("checkbox", { name: /Ana Weber/ }).closest("tr")!).getByText("10")).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "Assign 20" }));
-  await waitFor(() => expect(props.onAssigned).toHaveBeenCalledWith("20 translation reviews split between Ana Weber (10) and Ben Roth (10)", []));
+  expect(lastPreview().mode).toBe("each");
+  // The limit (2 per text) is reached: a third person cannot be ticked.
+  const clara = screen.getByRole("checkbox", { name: /Clara Diaz.*limit reached/ });
+  fireEvent.click(clara);
+  expect((clara as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("Ana Weber gets 20 annotations (de). Open tasks: 3 → 23.");
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("Ben Roth gets 19 annotations (de).");
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("case-0101 de: 1 of 2 assigned");
+  fireEvent.click(screen.getByRole("button", { name: "Assign 39" }));
+  await waitFor(() => expect(props.onAssigned).toHaveBeenCalledWith("39 annotations assigned to Ana Weber and Ben Roth", []));
+  expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ mode: "each", usernames: ["ana", "ben"] }));
 });
 
 it("keeps Assign unavailable with a reason until a choice exists", async () => {
@@ -131,17 +141,8 @@ it("keeps Assign unavailable with a reason until a choice exists", async () => {
   render(<AssignWorkDialog {...casesProps()} />); await ready();
   const assign = screen.getByRole("button", { name: "Assign 20" });
   expect(assign.getAttribute("aria-disabled")).toBe("true");
-  expect(document.getElementById(assign.getAttribute("aria-describedby")!)!.textContent).toBe("Choose a person first.");
+  expect(document.getElementById(assign.getAttribute("aria-describedby")!)!.textContent).toBe("Choose people first.");
   fireEvent.click(assign);
-  expect(api.commitAssignmentBatch).not.toHaveBeenCalled();
-  perText = 2; remainingOf = () => 2; needsPeople = 2;
-  fireEvent.click(screen.getByRole("radio", { name: "Split evenly" }));
-  fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
-  await waitForPreviewOf(["ana"]);
-  const button = screen.getByRole("button", { name: /^Assign \d+$/ });
-  expect(button.getAttribute("aria-disabled")).toBe("true");
-  expect(document.getElementById(button.getAttribute("aria-describedby")!)!.textContent).toBe("Choose at least 2 annotators for 2 annotations per text.");
-  fireEvent.click(button);
   expect(api.commitAssignmentBatch).not.toHaveBeenCalled();
 });
 
@@ -315,7 +316,7 @@ it("shows remaining assignments for versions already partly assigned", async () 
   perText = 2; remainingOf = () => 1;
   render(<AssignWorkDialog {...casesProps()} caseIds={["case-0101"]} />); await ready();
   expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("case-0101 de: 1 of 2 assigned");
-  fireEvent.click(radio(/Ana Weber/)); await waitForPreviewOf(["ana"]);
+  fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ })); await waitForPreviewOf(["ana"]);
   expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("Ana Weber gets 1 annotation (de).");
 });
 
@@ -348,7 +349,7 @@ const acknowledgement = () => screen.queryByRole("checkbox", { name: "Annotate b
 it("the acknowledgement appears only for unreviewed targets and gates Assign", async () => {
   annotateCases(); unreviewedOf = id => id === "case-0102";
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
-  fireEvent.click(radio(/Ana Weber/));
+  fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
   await waitForPreviewOf(["ana"]);
   const box = acknowledgement()!;
   expect(document.getElementById(box.getAttribute("aria-describedby")!)!.textContent).toBe("Translation review not accepted yet: case-0102 de");
@@ -367,7 +368,7 @@ it("the acknowledgement appears only for unreviewed targets and gates Assign", a
 it("no acknowledgement for reviewed targets", async () => {
   annotateCases();
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
-  fireEvent.click(radio(/Ana Weber/));
+  fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
   await waitForPreviewOf(["ana"]);
   expect(acknowledgement()).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Assign 20" }));

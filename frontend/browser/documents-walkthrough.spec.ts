@@ -139,9 +139,7 @@ test("step 3: Ana accepts unchanged; NEW on the next visit", async () => {
 test("step 4: the lead assigns the annotation to Tom and Luc", async () => {
   await clicks.count(action("Assign annotation…"));
   const dialog = page.getByRole("dialog", { name: /^Assign/ });
-  // Row mode lists people as checkboxes (one per needed annotator); "Split evenly" is the cases mode's choice.
-  const split = dialog.getByRole("radio", { name: "Split evenly", exact: true });
-  if (await split.count()) await clicks.count(split);
+  // Annotation lists people as checkboxes (one per needed annotator).
   await clicks.count(dialog.getByRole("checkbox", { name: new RegExp(`^${TOM}`) }));
   await clicks.count(dialog.getByRole("checkbox", { name: new RegExp(`^${LUC}`) }));
   await clicks.count(dialog.getByRole("button", { name: "Assign 2 people", exact: true }));

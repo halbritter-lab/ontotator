@@ -9,7 +9,7 @@ import { Button, Checkbox, Dialog, Select } from "../ui";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { errorMessage } from "./errors";
-import { memberReason, memberUnavailable, needsPeopleMessage, onePersonSummary, partlyAssignedLines, personName, resultMessage, skippedLines, splitSummary, stepLabel, stepName } from "./assignSummary";
+import { memberReason, memberUnavailable, needsPeopleMessage, onePersonSummary, partlyAssignedLines, personName, resultMessage, skippedLines, stepLabel, stepName } from "./assignSummary";
 
 export type AssignWorkTask = "translation_review" | "annotate";
 export type AssignWorkDialogProps =
@@ -54,7 +54,6 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [stepsRetry, setStepsRetry] = useState(0);
   const [current, setCurrent] = useState<string | null>(props.mode === "row" ? stepKey(props.task, props.row.language) : null);
   const [changingTask, setChangingTask] = useState(false);
-  const [distribute, setDistribute] = useState<"one" | "split">("one");
   const [chosen, setChosen] = useState<string[]>([]);
   const [self, setSelf] = useState(false);
   const [reload, setReload] = useState(0);
@@ -94,7 +93,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
 
   const [taskText, language] = current ? [current.slice(0, current.indexOf(":")), current.slice(current.indexOf(":") + 1)] : ["", ""];
   const task: AssignWorkTask | null = isTask(taskText) ? taskText : null;
-  const rowMulti = isRow && task === "annotate";
+  /** Annotation takes several people per text: tick them (checkboxes) up to the limit; a review takes one (radios). */
+  const multi = task === "annotate";
+  const rowMulti = isRow && multi;
   /** "Assign review…" for a changed source: the review resolves the source-change obligation (spec V5). */
   const sourceChanged = props.mode === "row" && props.reviewReason === "source_changed" && task === "translation_review";
   const shown = preview?.value ?? null;
@@ -103,7 +104,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const order = people.map(person => person.username);
   const usernames = order.filter(name => chosen.includes(name));
   const picked = usernames.length + (self ? 1 : 0);
-  const apiMode: "one" | "split" = isRow ? (usernames.length > 1 ? "split" : "one") : distribute;
+  // Many texts: every ticked person gets every text up to the limit ("each"); "Random distribution…" splits a batch.
+  const apiMode: BatchAssignRequest["mode"] = isRow ? (usernames.length > 1 ? "split" : "one") : multi ? "each" : "one";
   const request: BatchAssignRequest | null = !task ? null : props.mode === "row"
     ? { task, language, case_ids: [props.row.case_id], mode: apiMode, usernames, ...(props.newReviewOfAccepted && task === "translation_review" ? { review_accepted_translation: true } : {}), ...(sourceChanged ? { review_reason: "source_changed" as const } : {}) }
     : { task, language, case_ids: [...props.caseIds], sort: props.sort, filters: props.filters, mode: apiMode, usernames };
@@ -129,13 +131,13 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
 
   const calculating = !!requestKey && preview?.key !== requestKey && previewError?.key !== requestKey;
   const fresh = shown && !calculating ? shown : null;
-  const split = isRow ? usernames.length > 1 : distribute === "split";
-  const radios = isRow ? !rowMulti : distribute === "one";
+  const split = isRow && usernames.length > 1;
+  const radios = !multi;
   const chosenPeople = fresh ? people.filter(person => usernames.includes(person.username)) : [];
   const assignments = fresh ? fresh.targets.reduce((sum, target) => sum + target.usernames.length, 0) : 0;
   const count = assignments || fresh?.versions || shown?.versions || 0;
   const needs = fresh?.needs_people ?? null;
-  const rowLimit = rowMulti ? Math.max(1, shown?.targets[0]?.remaining ?? 1) : Infinity;
+  const limit = rowMulti ? Math.max(1, shown?.targets[0]?.remaining ?? 1) : multi ? shown?.per_text ?? 1 : Infinity;
   // Row mode knows it before the preview, so the acknowledgement is there from the start (no jump).
   const unreviewed = task === "annotate" && shown ? shown.targets.filter(target => target.unreviewed_translation) : [];
   const unreviewedText = unreviewed.length > 0 || (props.mode === "row" && task === "annotate" && props.row.unreviewed_translation);
@@ -150,12 +152,12 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     if (busy) return;
     reset();
     if (radios) setChosen([username]);
-    else setChosen(names => checked ? (names.includes(username) || names.length + (self ? 1 : 0) >= rowLimit ? names : [...names, username]) : names.filter(name => name !== username));
+    else setChosen(names => checked ? (names.includes(username) || names.length + (self ? 1 : 0) >= limit ? names : [...names, username]) : names.filter(name => name !== username));
   };
   const chooseSelf = (checked: boolean) => {
     if (busy) return;
     reset();
-    setSelf(checked && (picked < rowLimit || self));
+    setSelf(checked && (picked < limit || self));
   };
 
   const reason = !task || steps === null ? "Loading…"
@@ -230,8 +232,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     if (!fresh.targets.length) summaryLines.push("No cases in the selection need this task.");
     if (needs !== null) summaryLines.push(needsPeopleMessage(needs, task));
     else if (chosenPeople.length && assignments) {
-      if (split && !isRow) summaryLines.push(splitSummary(sortMembers(chosenPeople)));
-      else for (const person of sortMembers(chosenPeople)) summaryLines.push(onePersonSummary({ person: person.person, gets: person.gets, task, language, openBefore: person.open_before, openAfter: person.open_after }));
+      for (const person of sortMembers(chosenPeople)) summaryLines.push(onePersonSummary({ person: person.person, gets: person.gets, task, language, openBefore: person.open_before, openAfter: person.open_after }));
     }
     for (const person of mismatched) summaryLines.push(`${personName(person.person)} ${person.reads.includes(language) ? "does not read the source language" : `does not read ${language}`}.`);
     if (!isRow) summaryLines.push(...partlyAssignedLines(fresh.targets, fresh.per_text));
@@ -289,15 +290,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         ? <div className="assign-field"><Select id={`${id}-task`} label="Task" hint="from the plan" value={current ?? ""} disabled={busy} onChange={event => changeStep(event.target.value)}>{stepOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></div>
         : <p className="assign-field"><strong>Task</strong> <span className="assign-step">{stepOptions[0]?.label}</span> <span className="assign-muted">from the plan</span></p>)}
 
-      {task && props.mode === "cases" && <fieldset className="assign-distribute" disabled={busy}>
-        <legend>Distribute</legend>
-        <span className="assign-segments">
-          {(["one", "split"] as const).map(value => <label key={value} className="segment" data-checked={distribute === value || undefined}>
-            <input type="radio" name={`${id}-distribute`} value={value} checked={distribute === value} onChange={() => { reset(); setChosen([]); setDistribute(value); }} />
-            {value === "one" ? "One person" : "Split evenly"}
-          </label>)}
-        </span>
-      </fieldset>}
+      {multi && props.mode === "cases" && shown && <p id={limitId} className="assign-muted">Tick everyone who should annotate these texts. Each ticked person gets every selected text, up to {shown.per_text} per text (
+        <a href={routeHref({ name: "projectSettings", key: props.projectKey, section: "workflow" })}>project setting</a>{")."}</p>}
 
       {unreviewedText && <Checkbox id={`${id}-unreviewed`} label="Annotate before the translation review is accepted"
         hint={`Translation review not accepted yet: ${unreviewed.length ? unreviewed.map(rootLabel).join(", ") : props.mode === "row" ? textLabel(props.row) : ""}`}
@@ -306,12 +300,12 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       {task && !shown && previewError === null && <p className="assign-muted">Loading members…</p>}
       {previewError && <><ErrorNotice error={previewError.error} /><Button onClick={() => setReload(value => value + 1)}>Retry</Button></>}
       {task && shown && <table className="assign-members" aria-label="Members">
-        <thead><tr><th scope="col">Person</th><th scope="col">Reads</th><th scope="col">Open tasks</th>{split && !isRow && <th scope="col">Gets</th>}</tr></thead>
+        <thead><tr><th scope="col">Person</th><th scope="col">Reads</th><th scope="col">Open tasks</th>{multi && !isRow && <th scope="col">Gets</th>}</tr></thead>
         <tbody>{people.map((person, index) => {
           const why = memberReason(person, task, language);
           const off = memberUnavailable(person);
           const checked = usernames.includes(person.username);
-          const atLimit = !radios && !checked && picked >= rowLimit;
+          const atLimit = !radios && !checked && picked >= limit;
           const inputId = `${id}-member-${index}`;
           const whyId = `${id}-why-${index}`;
           const describedBy = [why && whyId, atLimit && limitId].filter(Boolean).join(" ") || undefined;
@@ -321,25 +315,25 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
                 id={inputId} type={radios ? "radio" : "checkbox"} name={radios ? `assign-member-${id}` : undefined} checked={checked}
                 tabIndex={radios ? (person.username === tabStop ? 0 : -1) : undefined}
                 aria-disabled={off || atLimit || busy ? "true" : undefined} aria-describedby={describedBy}
-                onClick={event => { if (off || atLimit || busy) event.preventDefault(); }}
+                onClick={event => { if (radios && (off || atLimit || busy)) event.preventDefault(); }}
                 onChange={event => { if (!off && !atLimit) choose(person.username, event.target.checked); }}
                 onKeyDown={event => rove(event, person.username)} />
               <label htmlFor={inputId}>{personLabel(person.person)}{why ? <span id={whyId} className="assign-reason">, {why}</span> : atLimit && <span className="assign-reason">, limit reached</span>}</label>
             </span></td>
             <td className="assign-reads"><span className="assign-narrow-label">Reads </span>{person.reads.length ? person.reads.map((item, at) => <span key={item}>{at > 0 && ", "}{item === language ? <strong>{item}</strong> : item}</span>) : "None listed"}</td>
             <td className="assign-open"><span className="assign-narrow-label">Open </span>{person.open_before}</td>
-            {split && !isRow && <td className="assign-gets">{person.gets > 0 ? <strong>{person.gets}</strong> : "–"}</td>}
+            {multi && !isRow && <td className="assign-gets">{person.gets > 0 ? <strong>{person.gets}</strong> : "–"}</td>}
           </tr>;
         })}
         {me && rowMulti && (() => {
-          const atLimit = !self && picked >= rowLimit;
+          const atLimit = !self && picked >= limit;
           const off = meHolds || atLimit || busy;
           const why = meHolds ? "already annotating this text" : atLimit ? "limit reached" : null;
           return <tr key="me" className={self ? "is-chosen" : undefined}>
             <td><span className="assign-member">
               <input id={`${id}-member-me`} type="checkbox" checked={self} aria-disabled={off ? "true" : undefined}
                 aria-describedby={[why && `${id}-why-me`, props.mode === "row" && props.consolidatorRule && `${id}-rule`].filter(Boolean).join(" ") || undefined}
-                onClick={event => { if (off) event.preventDefault(); }} onChange={event => { if (!off) chooseSelf(event.target.checked); }} />
+                onChange={event => { if (!off) chooseSelf(event.target.checked); }} />
               <label htmlFor={`${id}-member-me`}>{`${me.name} (you)`}{why && <span id={`${id}-why-me`} className="assign-reason">, {why}</span>}</label>
             </span></td>
             <td className="assign-reads" /><td className="assign-open" />

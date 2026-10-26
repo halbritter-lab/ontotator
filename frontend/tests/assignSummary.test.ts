@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { caseRange, memberReason, needsPeopleMessage, onePersonSummary, partlyAssignedLines, resultMessage, skippedLines, splitSummary, stepLabel } from "../src/admin/assignSummary";
+import { memberReason, needsPeopleMessage, onePersonSummary, partlyAssignedLines, resultMessage, skippedLines, stepLabel } from "../src/admin/assignSummary";
 
 const ana = { pseudonym: "ann-0004", display_name: "Ana Weber" };
 const ben = { pseudonym: "ann-0007", display_name: "Ben Roth" };
@@ -11,21 +11,6 @@ describe("assign summary", () => {
       .toBe("Ana Weber gets 20 translation reviews (de). Open tasks: 3 → 23.");
     expect(onePersonSummary({ person: { pseudonym: "ann-0004" }, gets: 1, task: "annotate", language: "fr", openBefore: 0, openAfter: 1 }))
       .toBe("ann-0004 gets 1 annotation (fr). Open tasks: 0 → 1.");
-  });
-
-  it("summarises split blocks in list order", () => {
-    expect(splitSummary([
-      { person: ana, first_case: "case-0101", last_case: "case-0110", gets: 10 },
-      { person: ben, first_case: "case-0111", last_case: "case-0120", gets: 10 },
-      { person: { pseudonym: "ann-0009", display_name: "Clara Diaz" }, first_case: null, last_case: null, gets: 0 },
-    ])).toBe("Cases in list order: case-0101…0110 → Ana, case-0111…0120 → Ben.");
-    expect(caseRange("case-0101", "case-0101")).toBe("case-0101");
-    expect(caseRange("alpha", "beta")).toBe("alpha…beta");
-    // Two people with the same first name keep their full label.
-    expect(splitSummary([
-      { person: ana, first_case: "c1", last_case: "c1", gets: 1 },
-      { person: { pseudonym: "ann-0010", display_name: "Ana Roth" }, first_case: "c2", last_case: "c2", gets: 1 },
-    ])).toBe("Cases in list order: c1 → Ana Weber, c2 → Ana Roth.");
   });
 
   it("states skipped cases", () => {
