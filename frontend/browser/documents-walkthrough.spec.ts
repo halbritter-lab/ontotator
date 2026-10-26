@@ -318,7 +318,8 @@ test("step 10: Compare results… → agreement 5 of 7 → Consolidate… → An
 test("step 11: Ana submits the consolidation", async () => {
   await act({ actor: "ana", action: "submit_consolidation" });
   await revisit(true);
-  await expectStage(cell("finalization"), { state: "ready to compare", who: "" });
+  // The submitted consolidation is preselected: accept it, nothing left to compare.
+  await expectStage(cell("finalization"), { state: "ready to accept", who: "" });
   await expect(newBadge(de())).toHaveCount(1);
   await expectCounterEqualsTab(page);
   record(11);

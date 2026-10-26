@@ -132,7 +132,7 @@ test("S0 synthetic-accepted: the final is on old text after v2 corrected it; en 
   const history = await openCardHistory(page, caseId, "de");
   await expect(activityLines(history).filter({ hasText: /^Finalization: chosen/ })).toHaveCount(1);
   await history.getByRole("button", { name: "Back", exact: true }).click();
-  await expect(await textVersionItems(history, 2)).toHaveText([/^v1\s*Machine translation/, /^v2\s*Correction of v1\s*Ready for review/]);
+  await expect(await textVersionItems(history, 2)).toHaveText([/^v2\s*Correction of v1\s*Ready for review/, /^v1\s*Machine translation/]);
   await closeCard(history);
 
   // The decision category link selects the de row only.
@@ -240,7 +240,7 @@ test("S3 case-0211: final on v1 Round 2, corrections v2 and v3, waiting for the 
   // The final result is on v1: "Open result" opens v1.
   expect(await resultVariant(card)).toBe(s.documents!.v1);
 
-  await expect(await textVersionItems(card, 3)).toHaveText([/^v1\s*Machine translation/, /^v2\s*Correction of v1\s*Accepted/, /^v3\s*Correction of v2\s*Ready for review/]);
+  await expect(await textVersionItems(card, 3)).toHaveText([/^v3\s*Correction of v2\s*Ready for review/, /^v1\s*Machine translation/, /^v2\s*Correction of v1\s*Accepted/]);
 });
 
 test("S4 case-0305 fr: two independent translations, each annotated in its own round", async ({ page }) => {
@@ -420,7 +420,7 @@ test("S13 case-0713 en: consolidation and carry-forward kinds, the final is the 
   await expect(activityLines(card).filter({ hasText: /^Annotation: .*v2/ })).toHaveCount(1);
   await expect(activityLines(card).filter({ hasText: /^Annotation: .*v1/ })).toHaveCount(2);
   await card.getByRole("button", { name: "Back", exact: true }).click();
-  await expect(await textVersionItems(card, 2)).toHaveText([/^v1\s*Native/, /^v2\s*Correction of v1/]);
+  await expect(await textVersionItems(card, 2)).toHaveText([/^v2\s*Correction of v1/, /^v1\s*Native/]);
 });
 
 test("text card: row click only opens, the bar comes with two checked texts, J / K walk the rows, no layout shift", async ({ page }) => {
