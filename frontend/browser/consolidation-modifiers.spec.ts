@@ -62,14 +62,14 @@ test("the modifier acceptance round takes 10 clicks; axe is clean on a card with
   // S9 Seizure: ✓ Ana's Severe, Keep.
   await expect(expandedTitle(page)).toHaveText("seizures");
   await expect(wholeFinding(page)).toHaveCount(0);
-  await click(take(page, "Severe “Severe”", "Ana Weber"));
+  await click(take(page, "Severe", "Ana Weber"));
   await click(expanded(page).getByRole("button", { name: "Keep", exact: true }));
 
   // S9 Hypotonia: the cross-link hint names Ana's Severe on Seizure and links to that group; ✓ Ben's Severe, Keep.
   await expect(expandedTitle(page)).toHaveText("hypotonia");
   await expect(wholeFinding(page)).toHaveCount(0);
   await expect(expanded(page).getByRole("link", { name: "Ana Weber linked “Severe” (Severe) to Seizure.", exact: true })).toBeVisible();
-  await click(take(page, "Severe “Severe”", "Ben Roth"));
+  await click(take(page, "Severe", "Ben Roth"));
   await click(expanded(page).getByRole("button", { name: "Keep", exact: true }));
 
   // S13 (partial): Ana's finding with its spanless Bilateral.
