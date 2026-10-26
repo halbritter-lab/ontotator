@@ -321,6 +321,10 @@
   white-space: nowrap;
 }
 
+/* On the narrow Findings tab the banner sits in the flow and wraps: no text to keep in place there. */
+.attach-mention-banner--list { position: static; height: auto; padding: var(--space-2) var(--space-4); }
+.attach-mention-banner--list > span { white-space: normal; }
+
 .attach-mention-banner .btn,
 .pane-intent .btn {
   flex-shrink: 0;

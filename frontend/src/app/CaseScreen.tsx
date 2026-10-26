@@ -3191,6 +3191,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         style={{ "--sidebar-width": `${sidebarWidth.width}px` } as CSSProperties}>
         {/* Left: Sidebar (Annotations & Review Targets) */}
         <aside className="sidebar density-compact" id="findings-column">
+          {/* Narrow layout: attach mode opens on Findings, where the text pane's banner and its Cancel are out of sight. */}
+          {panesLayout && attachActive && attachModifier && mobilePane === "list" && <div role="status" className="attach-mention-banner attach-mention-banner--list">
+            <span>{attachCopy.banner(attachModifier.termLabel)}</span>
+            <button type="button" className="btn btn-secondary btn-sm" aria-keyshortcuts="Escape" onClick={cancelAttachModifier}>Cancel (Esc)</button>
+          </div>}
           {/* Multi-layer controls (rendered only if >1 layer) */}
           <LayerControls
             readOnly={readOnly}
