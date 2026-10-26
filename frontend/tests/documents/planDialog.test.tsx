@@ -61,17 +61,17 @@ describe("PlanDialog", () => {
     expect(api.previewWorkPlans).toHaveBeenCalledWith("p", { case_ids: caseIds, languages: {} });
   });
 
-  it("shows the current values of the selection beside No change (F27)", async () => {
+  it("shows the current values of the selection beside Leave as is (F27, B1-2)", async () => {
     renderDialog();
-    expect((await radio("es", "Translation review", /^No change/)).labels?.[0].textContent).toBe("No change (12 planned, 8 not)");
-    expect((await radio("de", "Annotation", /^No change/)).labels?.[0].textContent).toBe("No change (20 not planned)");
+    expect((await radio("es", "Translation review", /^Leave as is/)).labels?.[0].textContent).toBe("Leave as is (now on for 12, off for 8)");
+    expect((await radio("de", "Annotation", /^Leave as is/)).labels?.[0].textContent).toBe("Leave as is (now off for 20 texts)");
   });
 
-  it("words No change for every count", () => {
-    expect(keepLabel(null)).toBe("No change");
-    expect(keepLabel({ on: 0, off: 2 })).toBe("No change (2 not planned)");
-    expect(keepLabel({ on: 3, off: 0 })).toBe("No change (3 planned)");
-    expect(keepLabel({ on: 12, off: 8 })).toBe("No change (12 planned, 8 not)");
+  it("words Leave as is for every count", () => {
+    expect(keepLabel(null)).toBe("Leave as is");
+    expect(keepLabel({ on: 0, off: 2 })).toBe("Leave as is (now off for 2 texts)");
+    expect(keepLabel({ on: 3, off: 0 })).toBe("Leave as is (now on for 3 texts)");
+    expect(keepLabel({ on: 12, off: 8 })).toBe("Leave as is (now on for 12, off for 8)");
   });
 
   it("the quick choice fills the selected translations' languages, plans only the selected texts and saves nothing by itself (M-1)", async () => {

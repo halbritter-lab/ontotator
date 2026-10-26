@@ -26,11 +26,11 @@ const CHANGED_MESSAGE = "This plan changed. Reloaded the current plan.";
 const CHECKING = "Checking consequences…";
 
 const hasConsequences = (c: ConsequencesView): boolean => !!(c.withdrawn.length || c.finals_leaving.length || c.restored.length || c.open_reports?.length);
-/** "No change (12 planned, 8 not)" / "No change (2 not planned)": the current values in the selection (M2 F27). */
+/** "Leave as is (now on for 12, off for 8)" / "Leave as is (now off for 2 texts)": the current values in the selection (M2 F27, B1-2). */
 export const keepLabel = (counts: { on: number; off: number } | null): string => {
-  if (!counts || (!counts.on && !counts.off)) return "No change";
-  if (!counts.on) return `No change (${counts.off} not planned)`;
-  return counts.off ? `No change (${counts.on} planned, ${counts.off} not)` : `No change (${counts.on} planned)`;
+  if (!counts || (!counts.on && !counts.off)) return "Leave as is";
+  if (!counts.on) return `Leave as is (now off for ${plural(counts.off, "text")})`;
+  return counts.off ? `Leave as is (now on for ${counts.on}, off for ${counts.off})` : `Leave as is (now on for ${plural(counts.on, "text")})`;
 };
 type AnnotationChoice = "keep" | "off" | "on" | "proposals" | "scratch";
 /** "on" = annotate with each text's mode kept (a quick-action preset); the mode radios set a mode. */
@@ -80,7 +80,7 @@ function consequenceGroups(consequences: ConsequencesView): { language: string; 
 }
 
 /**
- * Plan many cases at once (spec D19, F5): per language the steps in words with "No change", live preview, confirmation
+ * Plan many cases at once (spec D19, F5): per language the steps in words with "Leave as is", live preview, confirmation
  * inside the dialog. A "Quick choice" row with the two translation presets fills the languages of the selected
  * translations and from then on plans the selected texts only, as the former selection bar action did (M2 M-1);
  * it is left out when the selected texts hold no translation.
