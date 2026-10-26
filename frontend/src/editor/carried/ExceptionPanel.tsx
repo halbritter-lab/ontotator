@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { Button } from "../../ui";
+import { AxisValue, Button } from "../../ui";
 import type { CarriedState } from "./checkState";
 import { CarriedStateBadge } from "./CarriedRowExtras";
 import {
@@ -23,7 +23,7 @@ export interface ExceptionPanelProps {
   recordedAt?: string | null;
   /** Why no carried finding exists (`missingReason`). */
   reason: string;
-  original: { term: ReactNode; values: { label: string; value: string }[]; note?: string; quote: string | null };
+  original: { term: ReactNode; values: { label: string; value: string | null | undefined }[]; note?: string; quote: string | null };
   candidates: LinkCandidate[];
   readOnly: CarriedReadOnly;
   onMarkInText?: () => void;
@@ -182,7 +182,7 @@ export function ExceptionPanel({
         <p className="carried-original__term">{original.term}</p>
         {original.values.length > 0 && (
           <ul className="carried-original__values">
-            {original.values.map(value => <li key={value.label}>{`${value.label}: ${value.value}`}</li>)}
+            {original.values.map(value => <li key={value.label}>{value.label}: <AxisValue value={value.value} /></li>)}
           </ul>
         )}
         {original.note && <p className="carried-original__note">{original.note}</p>}

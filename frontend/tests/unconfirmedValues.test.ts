@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationSnapshot } from "../src/api/client";
 import {
-  UNCONFIRMED_REASONS, modifierWarningPairs, modifierWarnings, pairKey, rowPairs, sameSet, unconfirmedRows, valueCount, valuesLine,
+  UNCONFIRMED_REASONS, modifierWarningPairs, modifierWarnings, pairKey, rowPairs, sameSet, unconfirmedRows, valueCount,
   type UnconfirmedAxisDef, type UnconfirmedInput,
 } from "../src/editor/unconfirmedValues";
 
@@ -21,7 +21,6 @@ const input = (snapshots: AnnotationSnapshot[], overrides: Partial<UnconfirmedIn
   snapshots, axes: () => AXES, targetKeyOf: () => undefined, editableLayerIds: ["phenotype"],
   term: s => `Term ${s.annotation.annotation_id}`, quote: () => "quoted", evidenceId: () => "ev-1", ...overrides,
 });
-const label = (value: string | null) => value === null ? "Not specified" : value[0].toUpperCase() + value.slice(1);
 const allDefaults = { assertion: "present", experiencer: "patient", temporality: "current" };
 
 describe("unconfirmedRows", () => {
@@ -36,8 +35,8 @@ describe("unconfirmedRows", () => {
     expect(rows[1].values.map(value => value.axisId)).toEqual(["assertion", "experiencer", "temporality"]);
     expect(rows[1]).toEqual(expect.objectContaining({ term: "Term a", termId: "HP:a", quote: "quoted", listKey: "annotation:a", evidenceId: "ev-1",
       confirmableAxisIds: ["assertion", "experiencer", "temporality"], reason: null }));
-    expect(valuesLine(rows[1], label)).toBe("Assertion: Present, Experiencer: Patient, Temporality: Current");
-    expect(valuesLine(rows[0], label)).toBe("Experiencer: Patient, Temporality: Not specified");
+    expect(rows[1].values.map(value => value.value)).toEqual(["present", "patient", "current"]);
+    expect(rows[0].values.map(value => value.value)).toEqual(["patient", null]);
   });
 
   it("an empty-only row cannot be confirmed in one click", () => {

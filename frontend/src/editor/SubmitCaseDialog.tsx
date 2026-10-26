@@ -4,7 +4,6 @@ import { Button } from "../ui/Button";
 import { Checkbox } from "../ui/Checkbox";
 import { Dialog } from "../ui/Dialog";
 import { InlineMessage } from "../ui/InlineMessage";
-import { axisOptionLabel } from "./axisLabels";
 import { ModifierWarningsSection } from "./ModifierWarningsSection";
 import { dialogItems, MODIFIER_WARNING_KINDS, submitBlockedReason, summaryLine, type OpenItem } from "./openItems";
 import { UnconfirmedValuesSection } from "./UnconfirmedValuesSection";
@@ -145,7 +144,7 @@ export function SubmitCaseDialog({
         </ul>
         {items.length > LISTED_ITEMS && <p>and {items.length - LISTED_ITEMS} more</p>}
       </InlineMessage>}
-      <UnconfirmedValuesSection rows={unconfirmed} optionLabel={axisOptionLabel}
+      <UnconfirmedValuesSection rows={unconfirmed}
         confirmUnavailableReason={confirmUnavailableReason} onConfirmValues={onConfirmValues}
         onGoTo={onGoToRow} onEmpty={focusAfterRows} />
       <ModifierWarningsSection items={modifierWarnings} onGoTo={onGoTo} />

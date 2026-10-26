@@ -8,7 +8,8 @@ import type { components } from "../api/generated";
 import { TermName } from "./TermName";
 import { AiBadge } from "./AiBadge";
 import { IconCheck, IconClose, IconPencil, IconQuestion, IconUndo, IconWarning } from "../ui/icons";
-import { axisOptionLabel, findingAxes } from "./axisLabels";
+import { findingAxes } from "./axisLabels";
+import { AxisValue } from "../ui/AxisValue";
 import type { AxisDefinition } from "./AnnotationPanel";
 import { ModifiersSection } from "./ModifiersSection";
 import type { TermInfo } from "./modifiers";
@@ -218,7 +219,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             return entries.map(({ id, label, value }) => (
               <React.Fragment key={id}>
                 <dt>{label}</dt>
-                <dd>{axisOptionLabel(value)} {target.axes_defaulted?.includes(id) && <span className="badge">Defaulted</span>}</dd>
+                <dd><AxisValue value={value as string | null | undefined} /> {target.axes_defaulted?.includes(id) && <span className="badge">Defaulted</span>}</dd>
               </React.Fragment>
             ));
           })()}

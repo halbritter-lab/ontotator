@@ -202,7 +202,7 @@ describe("Original evidence dialog", () => {
     const box = screen.getByRole("dialog", { name: "Original finding from Round 2" });
     expect(box.querySelector(".round-evidence__meta")!.textContent).toBe("Submitted 19 Oct, 00:57, de v1, ann-0004");
     expect(screen.getByText("Seizure")).toBeDefined();
-    expect(screen.getByText("Assertion: Present")).toBeDefined();
+    expect(screen.getByText((_, el) => el?.tagName === "LI" && el.textContent === "Assertion: Present")).toBeDefined();
     expect(screen.getByText("Note: Seen twice")).toBeDefined();
     await waitFor(() => expect(box.querySelector(".text-container")).not.toBeNull());
     expect(screen.getByText("Quote: seizure")).toBeDefined();
@@ -227,7 +227,7 @@ describe("Original evidence dialog", () => {
     render(<RoundInputEvidenceDialog projectKey="p" input={input()} onClose={vi.fn()} labelFor={labelFor} sourceName="Round 2" />);
     await screen.findByText("The exact original evidence text is unavailable.");
     expect(document.querySelector(".text-container")).toBeNull();
-    expect(screen.getByText("Assertion: Present")).toBeDefined();
+    expect(screen.getByText((_, el) => el?.tagName === "LI" && el.textContent === "Assertion: Present")).toBeDefined();
     expect(screen.getByText("Technical details")).toBeDefined();
   });
 

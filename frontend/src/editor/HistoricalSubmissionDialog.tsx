@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { AxisValue } from "../ui/AxisValue";
 import { api } from "../api/client";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
@@ -65,9 +66,7 @@ export function HistoricalSubmissionDialog({ view, documentText, currentDocument
               <strong><TermName termId={snap.annotation.term_id} label={termLabel(snap.annotation.layer_id, snap.annotation.term_id)} /></strong>
               <p>
                 {axesVal && Object.keys(axesVal).length > 0
-                  ? Object.entries(axesVal)
-                      .map(([k, v]) => `${k}: ${v ?? "Not specified"}`)
-                      .join(", ")
+                  ? Object.entries(axesVal).map(([k, v], index) => <Fragment key={k}>{index > 0 && ", "}{k}: <AxisValue value={v as string | null} /></Fragment>)
                   : "No axes"}
               </p>
               {typeof text === "string" && evidenceOf(view, snap).map(ev => <p key={`${ev.mention.evidence_id}:${ev.version}`}>

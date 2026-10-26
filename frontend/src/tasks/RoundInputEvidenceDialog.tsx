@@ -3,7 +3,7 @@ import { api, type RoundInputView } from "../api/client";
 import { Button, Dialog, InlineMessage } from "../ui";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { ReadOnlyAnnotationView } from "../variants/ReadOnlyAnnotationView";
-import { axisOptionLabel } from "../editor/axisLabels";
+import { AxisValue } from "../ui/AxisValue";
 import { quoteSegments } from "../editor/AnnotationPanel";
 import { Time } from "../app/Time";
 import "./workRounds.css";
@@ -46,7 +46,7 @@ export function RoundInputEvidenceDialog({ projectKey, input, onClose, labelFor,
     <p className="round-evidence__meta">{meta.map((part, index) => <span key={index}>{index > 0 && ", "}{part}</span>)}</p>
     <ul className="round-evidence__facts">
       <li className="round-evidence__term">{labelFor(annotation.layer_id, annotation.term_id) ?? annotation.term_id}</li>
-      {Object.entries(annotation.axes_values ?? {}).map(([axis, value]) => <li key={axis}>{`${axisName(axis)}: ${axisOptionLabel(value)}`}</li>)}
+      {Object.entries(annotation.axes_values ?? {}).map(([axis, value]) => <li key={axis}>{axisName(axis)}: <AxisValue value={value} /></li>)}
       {annotation.note && <li className="round-evidence__note">{`Note: ${annotation.note}`}</li>}
       {spanless ? <li>{`This finding had no text span in ${name ?? "the earlier round"}.`}</li>
         : quotes.map((quote, index) => <li key={index} className="round-evidence__quote">{`Quote: ${quote}`}</li>)}

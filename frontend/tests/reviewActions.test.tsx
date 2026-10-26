@@ -357,6 +357,14 @@ describe("ReviewActions: modifiers of a proposal (DN-9 A)", () => {
       currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
     expect(screen.queryByRole("heading", { name: "Modifiers" })).toBeNull();
   });
+  it("shows the proposal's axis values as colour-coded chips, Defaulted stays a marker (F6)", () => {
+    const { container } = render(<ReviewActions target={{ annotation_id: "prop-1", version: "v1", provenance: null, evidence_count: 0,
+      axes_values: { assertion: "absent", experiencer: "patient" }, axes_defaulted: ["experiencer"] }}
+      currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
+    const chips = [...container.querySelectorAll(".axis-list .axis-value")];
+    expect(chips.map(chip => [chip.textContent, chip.className])).toEqual([["Absent", "axis-value axis-value--absent"], ["Patient", "axis-value axis-value--patient"]]);
+    expect(chips[1].parentElement!.querySelector(".badge")!.textContent).toBe("Defaulted");
+  });
   it("makes each quote of a multi-mention proposal a button that shows its mention (F5)", () => {
     const show = vi.fn();
     const ev = (id: string, start: number, end: number) => ({ version: "e1", mention: { evidence_id: id, annotation_id: "prop-1", segments: [{ start, end }] } }) as any;

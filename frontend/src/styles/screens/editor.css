@@ -1680,6 +1680,12 @@
   line-height: var(--leading-sm);
 }
 
+/* The proposal's values read at the normal text size (F6). */
+.review-actions__proposal .axis-list {
+  font-size: var(--size-base);
+  line-height: var(--leading-base);
+}
+
 .axis-list dt {
   color: var(--text-muted);
   text-transform: capitalize;

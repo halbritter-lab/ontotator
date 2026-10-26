@@ -1059,7 +1059,8 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 }
 
 /* Axis value (spec 2026-10-23 §3, variant B): the word on its fixed colour; colour is a second signal. */
-.axis-value { display: inline-block; padding: 0 var(--space-1); border-radius: var(--radius-sm); font-size: var(--size-sm); }
+/* The chip keeps the size of the text around it (F6). */
+.axis-value { display: inline-block; padding: 0 var(--space-1); border-radius: var(--radius-sm); font-size: inherit; }
 .axis-value--present { color: var(--axis-present-text); background: var(--axis-present-fill); }
 .axis-value--absent { color: var(--axis-absent-text); background: var(--axis-absent-fill); }
 .axis-value--uncertain { color: var(--axis-uncertain-text); background: var(--axis-uncertain-fill); }

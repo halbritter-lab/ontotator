@@ -121,10 +121,6 @@ export function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean
 }
 
 /** "Assertion: Present, Experiencer: Patient"; an empty value reads "{Axis}: Not specified". */
-export function valuesLine(row: UnconfirmedRow, optionLabel: (value: string | null) => string): string {
-  return row.values.map(value => `${value.axisLabel}: ${value.value === null ? "Not specified" : optionLabel(value.value)}`).join(", ");
-}
-
 /** Number of (finding, axis) pairs: the n of "Submit with {n} unconfirmed values". */
 export function valueCount(rows: readonly UnconfirmedRow[]): number {
   return rows.reduce((sum, row) => sum + row.values.length, 0);

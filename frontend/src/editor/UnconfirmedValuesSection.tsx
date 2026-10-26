@@ -1,11 +1,12 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "../ui/Button";
 import { TermName } from "./TermName";
-import { valuesLine, type UnconfirmedRow } from "./unconfirmedValues";
+import { Fragment } from "react";
+import { AxisValue } from "../ui/AxisValue";
+import type { UnconfirmedRow } from "./unconfirmedValues";
 
 export interface UnconfirmedValuesSectionProps {
   rows: readonly UnconfirmedRow[];
-  optionLabel: (value: string | null) => string;
   /** Why "Confirm" is unavailable (queue conflict, error, offline), else null. */
   confirmUnavailableReason: string | null;
   /** One set_axes for the row; resolves false (never rejects) when nothing was confirmed. */
@@ -20,7 +21,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 /** "Unconfirmed values" in the Submit dialog (spec F2): one row per finding, confirmable in place. */
 export function UnconfirmedValuesSection({
-  rows, optionLabel, confirmUnavailableReason, onConfirmValues, onGoTo, onEmpty,
+  rows, confirmUnavailableReason, onConfirmValues, onGoTo, onEmpty,
 }: UnconfirmedValuesSectionProps) {
   const headingId = useId();
   const reasonId = useId();
@@ -141,7 +142,7 @@ export function UnconfirmedValuesSection({
                 <TermName termId={row.termId} label={row.term !== row.termId ? row.term : null} />
               </div>
               {row.quote && <div className="unconfirmed-values__quote">{row.quote}</div>}
-              <div className="unconfirmed-values__values">{valuesLine(row, optionLabel)}</div>
+              <div className="unconfirmed-values__values">{row.values.map((value, index) => <Fragment key={value.axisId}>{index > 0 && ", "}{value.axisLabel}: <AxisValue value={value.value} /></Fragment>)}</div>
               <div className="unconfirmed-values__actions">
                 {isBusy && <span className="unconfirmed-values__busy">Confirming…</span>}
                 {isFailed && <span className="unconfirmed-values__error">Could not confirm. Try again.</span>}

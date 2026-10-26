@@ -283,7 +283,7 @@ describe("ExceptionPanel", () => {
     const region = screen.getByRole("region", { name: "Carried finding" });
     expect(within(region).getByText("Check needed")).toBeTruthy();
     expect(within(region).getByText("Its text span could not be found in this text.")).toBeTruthy();
-    expect(within(region).getByText("Assertion: Present")).toBeTruthy();
+    expect(within(region).getByText((_, el) => el?.tagName === "LI" && el.textContent === "Assertion: Present")).toBeTruthy();
     expect(within(region).getByText("“Krampfanfälle werden beobachtet”")).toBeTruthy();
     const primary = within(region).getByRole("button", { name: "Mark in text" });
     expect(primary.hasAttribute("data-carried-primary")).toBe(true);

@@ -142,7 +142,7 @@ describe("submit dialog open items", () => {
     // One resend with the fresh acknowledgement, then the list is shown again.
     expect(submit).toHaveBeenCalledTimes(2);
     expect((within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }) as HTMLInputElement).checked).toBe(false);
-    expect(within(dialog).getByText("Temporality: Not specified")).toBeDefined();
+    expect(within(dialog).getByText((_, el) => el?.classList.contains("unconfirmed-values__values") === true && el.textContent === "Temporality: Not specified")).toBeDefined();
     expect(within(dialog).getByRole("button", { name: "Submit case" })).toBeDefined();
     expect(within(dialog).queryByRole("button", { name: "Continue and submit" })).toBeNull();
     fireEvent.click(goToButtons(dialog)[0]);
@@ -239,7 +239,8 @@ describe("Unconfirmed values section", () => {
     expect(first.getByText("Hypotonia")).toBeDefined();
     expect(first.getByText("HP:h")).toBeDefined();
     expect(first.getByText("the quoted mark")).toBeDefined();
-    expect(first.getByText("Assertion: Present, Experiencer: Patient")).toBeDefined();
+    expect(items[0].querySelector(".unconfirmed-values__values")!.textContent).toBe("Assertion: Present, Experiencer: Patient");
+    expect(items[0].querySelectorAll(".unconfirmed-values__values .axis-value")).toHaveLength(2);
     expect(first.getByRole("button", { name: "Confirm values of Hypotonia" }).className).toContain("btn-secondary");
     expect(first.getByRole("button", { name: "Go to Hypotonia" }).className).toContain("btn-secondary");
   });
@@ -345,7 +346,7 @@ describe("Unconfirmed values section", () => {
     const item = within(section()).getByRole("listitem");
     expect(within(item).getAllByRole("button").map(button => button.getAttribute("aria-label"))).toEqual(["Go to Edema"]);
     expect(item.lastElementChild!.textContent).toBe("Choose a value in the finding.");
-    expect(within(item).getByText("Assertion: Not specified")).toBeDefined();
+    expect(item.querySelector(".unconfirmed-values__values")!.textContent).toBe("Assertion: Not specified");
     fireEvent.click(within(item).getByRole("button", { name: "Go to Edema" }));
     expect(onGoToRow).toHaveBeenCalledWith(rows[0]);
   });

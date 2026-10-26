@@ -3637,7 +3637,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 reason={missingReason(state.missing ?? "mapping_failed", state.input.review_reason)}
                 original={{
                   term: <TermName termId={source.annotation.term_id} label={termLabel(source.annotation.layer_id, source.annotation.term_id)} />,
-                  values: carriedAxes(source).map(axis => ({ label: axis.label, value: axisOptionLabel(axis.value) })),
+                  values: carriedAxes(source).map(axis => ({ label: axis.label, value: axis.value as string | null | undefined })),
                   note: sourceNote || undefined,
                   quote: carriedSourceQuote(state),
                 }}
