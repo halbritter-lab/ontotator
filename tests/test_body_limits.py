@@ -120,5 +120,7 @@ def test_a_bulk_selection_gets_its_own_larger_limit(team) -> None:
         headers={"content-type": "application/json"},
     )
     assert refused.status_code == 413
-    other = team.lead.post(f"/api/v1/projects/{key}/guidelines/x", json={"x": "y" * 2000})
+    other = team.lead.post(
+        f"/api/v1/projects/{key}/guidelines/x", json={"x": "y" * 2000}
+    )
     assert other.status_code == 413
