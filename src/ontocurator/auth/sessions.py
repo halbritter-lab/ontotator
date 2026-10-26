@@ -21,7 +21,7 @@ from sqlalchemy import Connection, func, insert, select, update
 from ontocurator.auth.accounts import normalize_username
 from ontocurator.auth.login_attempts import SessionPolicy as SessionPolicy
 from ontocurator.auth.login_attempts import address_lock as _address_lock
-from ontocurator.auth.login_attempts import login_locked
+from ontocurator.auth.login_attempts import login_locked, prune_login_attempts
 from ontocurator.auth.login_attempts import username_lock as _username_lock
 from ontocurator.auth.passwords import hash_password, needs_rehash, verify_password
 
@@ -150,8 +150,10 @@ class SessionService:
                     )
                 ).scalar_one_or_none()
             locked = self._locked(conn, name, client_ip, now)
-            # Argon2 runs once in every case, locked or not (index D-j).
-            matches = verify_password(stored_hash, password)
+            # Argon2 runs once for every name, known or not (index D-j). A
+            # locked attempt skips it: the lock is per name and address and
+            # treats unknown names alike, so skipping tells nothing new.
+            matches = not locked and verify_password(stored_hash, password)
             succeeded = matches and not locked and user is not None
             conn.execute(
                 insert(LoginAttemptRow).values(
@@ -162,6 +164,7 @@ class SessionService:
                     at=now,
                 )
             )
+            prune_login_attempts(conn, now, self.policy)
             if succeeded and user is not None and stored_hash is not None:
                 if needs_rehash(stored_hash):
                     conn.execute(

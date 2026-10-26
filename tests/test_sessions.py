@@ -89,20 +89,22 @@ def test_every_failure_looks_the_same(
     )
 
 
-def test_five_failures_lock_the_account_for_the_window(services: Services) -> None:
+def test_five_failures_lock_the_name_from_that_address_for_the_window(
+    services: Services,
+) -> None:
     for _ in range(5):
         with pytest.raises(LoginFailed):
             services.sessions.login("alice", "wrong password!", client_ip="10.0.0.1")
 
     with pytest.raises(LoginFailed):
-        services.sessions.login("alice", PASSWORD, client_ip="10.0.0.2")
+        services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
 
     services.clock.advance(minutes=15, seconds=1)
-    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.2")
+    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
 
 
 def test_many_failures_from_one_address_lock_that_address(services: Services) -> None:
-    for number in range(30):
+    for number in range(services.sessions.policy.failures_per_address):
         with pytest.raises(LoginFailed):
             services.sessions.login(
                 f"nobody{number}", "wrong password!", client_ip="10.0.0.9"
@@ -229,6 +231,7 @@ def test_a_stronger_stored_hash_is_replaced_with_ours_at_login(
 def test_concurrent_failures_from_one_address_stop_at_the_threshold(
     services: Services, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    limit = services.sessions.policy.failures_per_address
     with services.sessions.db.transaction() as conn:
         conn.execute(
             insert(LoginAttemptRow),
@@ -240,7 +243,7 @@ def test_concurrent_failures_from_one_address_stop_at_the_threshold(
                     "throttled": False,
                     "at": services.clock(),
                 }
-                for number in range(29)
+                for number in range(limit - 1)
             ],
         )
     together = threading.Barrier(4)
@@ -267,8 +270,49 @@ def test_concurrent_failures_from_one_address_stop_at_the_threshold(
         thread.join()
 
     throttled = column_values(services.sessions, "login_attempts", "throttled")
-    assert throttled.count(False) == 30
+    assert throttled.count(False) == limit
     assert throttled.count(True) == 3
+
+
+def test_a_lock_holds_only_for_the_address_that_caused_it(
+    services: Services,
+) -> None:
+    for _ in range(5):
+        with pytest.raises(LoginFailed):
+            services.sessions.login("alice", "wrong password!", client_ip="10.6.6.6")
+    with pytest.raises(LoginFailed):
+        services.sessions.login("alice", PASSWORD, client_ip="10.6.6.6")
+
+    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+
+
+def test_a_locked_attempt_skips_argon2(
+    services: Services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("alice", "nobody"):
+        for _ in range(5):
+            with pytest.raises(LoginFailed):
+                services.sessions.login(name, "wrong password!", client_ip="10.0.0.1")
+    calls: list[str] = []
+    monkeypatch.setattr(
+        sessions_module, "verify_password", lambda *_args: calls.append("x") or True
+    )
+
+    for name in ("alice", "nobody"):
+        with pytest.raises(LoginFailed):
+            services.sessions.login(name, PASSWORD, client_ip="10.0.0.1")
+
+    assert calls == []
+
+
+def test_a_login_prunes_attempts_past_the_retention(services: Services) -> None:
+    with pytest.raises(LoginFailed):
+        services.sessions.login("alice", "wrong password!", client_ip="10.0.0.1")
+    services.clock.advance(days=1, seconds=1)
+
+    services.sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
+
+    assert column_values(services.sessions, "login_attempts", "succeeded") == [True]
 
 
 def test_a_failed_login_locks_and_verifies_alike_for_any_username(
