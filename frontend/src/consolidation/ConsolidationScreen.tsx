@@ -15,7 +15,7 @@ import { nextTaskLabel, remainingTasksText } from "../translation/labels";
 import { Button, EmptyState, InlineMessage, Popover, Select, TextInput, Toast, useMediaQuery, useToast } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
 import { StagePath } from "../ui/StagePath";
-import { addedHeading, finalizationState, headerTitle, READ_ONLY_REASONS, READY_TO_SUBMIT, submittedText, summaryText } from "./consolidationText";
+import { addedHeading, finalizationState, headerTitle, READ_ONLY_REASONS, submittedText, summaryText } from "./consolidationText";
 import { groupName, termLabel } from "./groupModel";
 import { GroupList, textOrder } from "./GroupList";
 import { SubmitBar } from "./SubmitBar";
@@ -279,18 +279,16 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
           { id: "finalization", title: "Finalization", state: finalizationState(open, groups.length), tone: "now" },
         ]} />
         <h1 id="cons-title" className="cons-title"><LanguageText text={headerTitle(view, readOnly && !submitted)} code={view.language} /></h1>
+        {/* B5-6: the tools as a quiet row under the title (mockup 02 B). M-7a: one way into the full editor, same tab. */}
+        {(props.headerActions || editInEditor) && <div className="cons-header-actions" role="group" aria-label="Task">
+          {editInEditor && <Button size="sm" variant="quiet" title="For span changes and findings the comparison cannot express" onClick={editInEditor}>Open in full editor</Button>}
+          {props.headerActions}
+        </div>}
       </div>
-      {(props.headerActions || editInEditor) && <div className="cons-header-actions" role="group" aria-label="Task">
-        {/* M-7a: one way into the full editor for the whole text, next to the task actions. */}
-        {editInEditor && <Button size="sm" title="For span changes and findings the comparison cannot express" onClick={editInEditor}>Open in full editor</Button>}
-        {props.headerActions}
-      </div>}
-      {!readOnly && <div ref={submitRef}><SubmitBar open={open} onSubmit={() => setDialog({ open: true, busy: false, warning: null, error: null })}
+      {!readOnly && <div ref={submitRef} className="cons-header-progress"><SubmitBar open={open} total={groups.length} onSubmit={() => setDialog({ open: true, busy: false, warning: null, error: null })}
         onNextOpen={() => { const next = nextOpenAfter(groups, selected); if (next) select(next, true); }} /></div>}
     </header>
     {reason && !submitted && <InlineMessage tone="info">{reason}</InlineMessage>}
-    {/* B5-5: every group decided: say so plainly where the work happened. */}
-    {!readOnly && !submitted && open === 0 && groups.length > 0 && <InlineMessage tone="success">{READY_TO_SUBMIT}</InlineMessage>}
     {submitted && <div className="cons-submitted" role="status">
       <p>{submittedText(!!isLead)}</p>
       <div className="cons-actions">

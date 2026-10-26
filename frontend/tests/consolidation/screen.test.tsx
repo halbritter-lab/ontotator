@@ -227,7 +227,7 @@ describe("ConsolidationScreen", () => {
     expect(document.getElementById(submit.getAttribute("aria-describedby")!)?.textContent).toBe("Resolve the 4 open groups first.");
     fireEvent.click(submit);
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.queryByText("All groups are decided. You can submit the consolidation.")).toBeNull();
+    expect(screen.queryByText("Ready to submit")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Next open group" }));
     expect(expandedTitle()).toBe("Delayed development");
   });
@@ -241,12 +241,14 @@ describe("ConsolidationScreen", () => {
     await takeAbsentAndKeep();
     expect(await screen.findByRole("button", { name: /^Undo/ })).toBeTruthy();
     await waitFor(() => expect(screen.getByRole("button", { name: "Submit consolidation" }).getAttribute("aria-disabled")).toBeNull());
-    // Every group decided: a ready strip says so (B5-5).
-    expect(screen.getByText("All groups are decided. You can submit the consolidation.").closest(".notice-success")).not.toBeNull();
+    // Every group decided: the progress card turns green, reads Ready to submit, Submit is its one primary (B5-5, B5-6).
+    const card = screen.getByText("Ready to submit").closest(".cons-progress")!;
+    expect(card.classList.contains("cons-progress--ready")).toBe(true);
+    expect(within(card as HTMLElement).getAllByRole("button").map(button => [button.textContent, button.className.includes("btn-primary")])).toEqual([["Submit consolidation", true]]);
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByRole("button", { name: "Submit" }));
     await screen.findByText("Consolidation submitted. The lead then accepts the result.");
-    expect(screen.queryByText("All groups are decided. You can submit the consolidation.")).toBeNull();
+    expect(screen.queryByText("Ready to submit")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
   });
 
