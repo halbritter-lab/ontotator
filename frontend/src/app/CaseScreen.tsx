@@ -198,7 +198,11 @@ export interface CaseScreenProps {
   readOnly?: boolean;
   versionContext?: { canBrowseVersions: boolean; username: string; assignmentId: number; onNavigate: (route: Route) => void };
   routeLeaveRef?: React.MutableRefObject<RouteLeaveGuard | null>;
-  assignmentNavigation?: { tasks: TaskSummary[]; current: TaskSummary; onNavigate: (assignmentId: number) => void };
+  assignmentNavigation?: {
+    tasks: TaskSummary[]; current: TaskSummary; onNavigate: (assignmentId: number) => void;
+    /** M2 M-6: after a submit the caller opens the next task (or My tasks) and names the submission; no "Case submitted" dialog. */
+    onSubmitted?: (result: { label: string; assignmentId: number; next?: number }) => void;
+  };
   onReadonlyRequired?: () => void;
   view: WorkspaceView;
   workspaceId: string;
@@ -2908,13 +2912,18 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       setAcceptedSubmission({ identity: versionIdentity, value: structuredClone(submission) });
       readOnlyRef.current = true;
       retryVersions();
-      completedNextAssignment.current = adjacentTask.next;
-      setCompletedSubmission(submission);
+      const afterSubmit = assignmentNavigation?.onSubmitted;
+      if (!afterSubmit) {
+        completedNextAssignment.current = adjacentTask.next;
+        setCompletedSubmission(submission);
+      }
       try {
         await onSubmitted?.();
       } catch {
         // list refresh is best effort
       }
+      afterSubmit?.({ label: assignmentNavigation!.current.external_id || view.document.document_id,
+        assignmentId: assignmentNavigation!.current.assignment_id, next: adjacentTask.next });
     } catch (err: unknown) {
       setSubmitDialogOpen(false);
       if (err instanceof DiscardedChangesError) return;

@@ -112,7 +112,19 @@ export async function submitCase(page: Page) {
     await acknowledgement.check();
   }
   await submit.click();
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
+  await expectSubmitted(page);
+}
+
+/** M-6: no "Case submitted" dialog; the next task (or My tasks) opens and the toast names the submission. */
+export async function expectSubmitted(page: Page) {
+  await expect(page.getByRole("dialog", { name: "Case submitted" })).toHaveCount(0);
+  await expect(page.locator(".ui-toast").getByText(/ submitted\.$/)).toBeVisible();
+}
+
+/** The toast's "View result": back to the submitted task, read-only. */
+export async function viewSubmittedResult(page: Page) {
+  await page.locator(".ui-toast").getByRole("button", { name: "View result", exact: true }).click();
+  await expect(page.getByText("Submitted. The project lead can reopen it for changes.")).toBeVisible();
 }
 
 /** Select document text by UTF-16 offsets and fire the mouseup the editor listens to. */

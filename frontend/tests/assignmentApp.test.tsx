@@ -149,7 +149,7 @@ it("does not commit a pending route after the authenticated App unmounts", async
   expect(window.location.hash).toBe("#/tasks/17");
 });
 
-it.each(["open", "submitted"] as const)("retains the actual submitted dialog after server reordering and navigates to its %s neighbor by assignment", async (status) => {
+it.each(["open", "submitted"] as const)("after a submit opens the %s neighbor by assignment despite server reordering, with a View result toast (M-6)", async (status) => {
   const { first, open, tasks } = editorServer();
   tasks[1] = { ...tasks[1], status };
   open.mockImplementation(async id => assigned(id === 17 ? first : { ...workspaceFixture("a-first"), read_only: status === "submitted" }, id));
@@ -170,16 +170,15 @@ it.each(["open", "submitted"] as const)("retains the actual submitted dialog aft
   fireEvent.click(within(submit).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }));
   expect(within(submit).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
   fireEvent.click(within(submit).getByRole("button", { name: "Submit case" }));
-  const dialog = await screen.findByRole("dialog", { name: "Case submitted" });
-  // Editor list and its refresh after submit, the shell's "My tasks (n)" count and the breadcrumb's task name.
-  await waitFor(() => expect(api.listMyTasks).toHaveBeenCalledTimes(4));
-  expect((screen.getByRole("button", { name: /Finish & Submit Case/ }) as HTMLButtonElement).disabled).toBe(true);
-  expect(open).toHaveBeenCalledTimes(1);
-  expect(first.read_only).toBe(false);
-  fireEvent.click(within(dialog).getByRole("button", { name: "Next task" }));
+  // No second modal: the next task opens by itself.
   await waitFor(() => expect(open).toHaveBeenLastCalledWith(4));
+  expect(screen.queryByRole("dialog", { name: "Case submitted" })).toBeNull();
+  expect(first.read_only).toBe(false);
   await waitFor(() => expect((screen.getByRole("combobox", { name: "Select case" }) as HTMLSelectElement).value).toBe("4"));
   expect(window.location.hash).toBe("#/tasks/4");
+  const toast = (await screen.findByText(/^\S+ submitted\.$/)).closest(".ui-toast") as HTMLElement;
+  fireEvent.click(within(toast).getByRole("button", { name: "View result" }));
+  await waitFor(() => expect(window.location.hash).toBe("#/tasks/17"));
 });
 
 it("reloads a task read-only after another session submitted it, with a visible explanation", async () => {

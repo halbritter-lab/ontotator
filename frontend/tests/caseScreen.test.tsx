@@ -382,6 +382,20 @@ describe("CaseScreen integration", () => {
       expect((submit.mock.calls[0][1] as any).payload.warning_acknowledgement).toBeUndefined();
     });
 
+    it("in a task, a submit hands over to the caller without a Case submitted dialog; no next task: next is undefined (M-6)", async () => {
+      const view = unconfirmedView([]);
+      vi.spyOn(api, "submitWorkspace").mockResolvedValue(submissionOf(view) as any);
+      const current = { assignment_id: 9, project_key: "pkg-1", project_name: "P", document_id: view.document.document_id, external_id: "EN100068",
+        task: "annotate", status: "in_progress", language: "de", updated_at: "2026-10-18T12:00:00Z" } as any;
+      const onSubmitted = vi.fn();
+      render(<CaseScreen view={view} workspaceId="m6" onClose={vi.fn()}
+        assignmentNavigation={{ tasks: [current], current, onNavigate: vi.fn(), onSubmitted }} />);
+      const dialog = await openSubmit();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith({ label: "EN100068", assignmentId: 9, next: undefined }));
+      expect(screen.queryByRole("dialog", { name: "Case submitted" })).toBeNull();
+    });
+
     it("row Confirm sends one set_axes with the row's defaulted axes", async () => {
       const view = unconfirmedView(["assertion", "experiencer"]);
       const confirmed = structuredClone(view.draft); confirmed.revision += 1;

@@ -22,7 +22,7 @@ import { projectDestination } from "./app/ProjectPicker";
 import { ProblemReportDetail } from './tasks/ProblemReportDetail';
 import { GuidelinesPage } from "./guidelines/GuidelinesPage";
 import { ConsolidationScreen } from "./consolidation/ConsolidationScreen";
-import { Button, EmptyState, InlineMessage } from "./ui";
+import { Button, EmptyState, InlineMessage, Toast, useToast } from "./ui";
 
 export interface AppProps { user?: CurrentUser | null; onLogout?: () => void }
 
@@ -56,6 +56,8 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const [taskProject, setTaskProject] = useState<{ identity: string; key: string } | null>(null);
   const taskIdentity = route.name === 'task' ? JSON.stringify([baseUser?.username, route.assignmentId]) : '';
   // The breadcrumb names the open task; until its summary arrives it reads "Task" (never the bare number).
+  // App-wide toast: it outlives a task after a submit (M2 M-6).
+  const appToast = useToast();
   const [crumbTask, setCrumbTask] = useState<{ identity: string; task: TaskSummary | null } | null>(null);
   const crumbAssignmentId = route.name === "task" ? route.assignmentId : null;
   useEffect(() => {
@@ -251,7 +253,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       : <MyTasks project={route.project} status={route.status} projects={projects} onNavigate={go} username={baseUser?.username} />; break;
     // The view is part of the key: switching between the consolidation view and the editor reopens the task fresh.
     case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId, route.view ?? null])} assignmentId={route.assignmentId} view={route.view}
-      user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef}
+      user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef} showToast={appToast.show}
       onProjectContext={key => setTaskProject({ identity: taskIdentity, key })} />; break;
     case "projects": content = projectError ? <></> : projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
       : <ProjectsPage projects={projects} currentKey={landingProject(user.username, projects)} onNavigate={go} />; break;
@@ -296,5 +298,6 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     ] : undefined}>
     {!!projectError && <><ErrorNotice error={projectError} /><Button onClick={() => setRetry(value => value + 1)}>Retry projects</Button></>}
     {content}
+    <Toast toast={appToast.toast} onDismiss={appToast.dismiss} />
   </Shell>;
 }

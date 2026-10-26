@@ -259,8 +259,7 @@ test.describe("Administration through real accounts and jobs", () => {
   test("lead distributes one document, observes submission and reopens it", async ({ page }) => {
     const setup = await createProjectThroughUi(page);
     await distributeAndSubmit(page, setup);
-    await page.getByRole("dialog", { name: "Case submitted", exact: true })
-      .getByRole("button", { name: "Back to my tasks", exact: true }).click();
+    // M-6: without a next task the submit lands on My tasks.
     const tasks = page.getByTestId("task-row");
     await expect(tasks).toHaveCount(1);
     await expect(tasks).toContainText("Submitted");
@@ -303,8 +302,7 @@ test.describe("Administration through real accounts and jobs", () => {
   test("lead downloads real T1 and edit-log exports; annotator access is refused", async ({ page }) => {
     const setup = await createProjectThroughUi(page);
     await distributeAndSubmit(page, setup);
-    await page.getByRole("dialog", { name: "Case submitted", exact: true })
-      .getByRole("button", { name: "Back to my tasks", exact: true }).click();
+    // M-6: without a next task the submit lands on My tasks.
     await logout(page);
     await loginExisting(page, setup.lead);
     await selectProject(page, setup.key);

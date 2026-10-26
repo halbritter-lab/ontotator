@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { importPackage, openCase, submitCase } from "./helpers";
+import { importPackage, openCase, submitCase, viewSubmittedResult } from "./helpers";
 
 const PACKAGE_IDS: Record<string, string> = {
   review_references: "pkg-review-references",
@@ -48,10 +48,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.getByLabel(/Document verified|Dokument vollständig geprüft/i)).toHaveCount(0);
     await submitCase(page);
 
-    // The saved current task is now read-only. Its pre-submit next task remains
-    // available in the dialog even though the server moves submitted tasks last.
-    await expect(page.getByText("Submitted. The project lead can reopen it for changes.")).toBeVisible();
-    await page.getByRole("dialog", { name: "Case submitted" }).getByRole("button", { name: "Next task" }).click();
+    // M-6: the pre-submit next task opens by itself, even though the server moves submitted tasks last.
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2:.*doc-alpha/i);
     await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001252");
     await expect(page.getByRole("button", { name: "Previous Case" })).toBeDisabled();
@@ -133,7 +130,7 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2/i);
     await expect(page.locator(".sidebar-header").filter({ hasText: /Review Proposals/ })).toHaveCount(0);
     await submitCase(page);
-    await page.getByRole("button", { name: /Stay in case/i }).click();
+    await viewSubmittedResult(page);
     await expect(page.locator(".sidebar .doc-item")).toHaveCount(0);
     await page.locator(".case-navigation").getByRole("button", { name: /Previous Case/i }).click();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 1 of 2/i);

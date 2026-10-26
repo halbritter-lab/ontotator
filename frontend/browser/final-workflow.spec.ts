@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
 import { activityLines, documentsReady, documentsScenario, openCardHistory, openDecisionBlock, openTextCard, rowCell, textRow } from './documentsHelpers';
-import { authenticatedRequest, loginExisting, selectText, submitCase } from './helpers';
+import { authenticatedRequest, loginExisting, selectText, submitCase, viewSubmittedResult } from './helpers';
 
 type Assignment = components['schemas']['AssignmentView'];
 type Submission = components['schemas']['SubmissionHistorySummary'];
@@ -71,7 +71,7 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await finding(other.page, second, 'Independent second human note');
     const secondResult = await value<Opened>(other.page, `/api/v1/assignments/${second.id}/open`, 'POST');
     const secondId = secondResult.assignment.last_submission_id!;
-    await author.page.getByRole('dialog', { name: 'Case submitted' }).getByRole('button', { name: 'Stay in case', exact: true }).click();
+    await viewSubmittedResult(author.page);
     await author.page.getByRole('button', { name: 'Work rounds', exact: true }).click();
     const rounds = workRounds(author.page);
     const created = author.page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith(`/assignments/${first.id}/rounds`));
@@ -247,7 +247,7 @@ test('corrected-text private carry preserves submitted history through a reporte
     await submitCase(author.page);
     const submitted = await value<Opened>(author.page, `/api/v1/assignments/${task.id}/open`, 'POST');
     const carriedId = submitted.assignment.last_submission_id!;
-    await author.page.getByRole('dialog', { name: 'Case submitted' }).getByRole('button', { name: 'Stay in case', exact: true }).click();
+    await viewSubmittedResult(author.page);
     await author.page.getByRole('button', { name: /^Report problem/ }).click();
     const form = author.page.getByRole('dialog', { name: 'New problem report', exact: true });
     await form.getByRole('textbox', { name: /What is the problem\?/ }).fill('Review the corrected clinical context before continuing.');

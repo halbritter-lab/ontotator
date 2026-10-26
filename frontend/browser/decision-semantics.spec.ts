@@ -138,7 +138,6 @@ test("unresolved notes are required, survive reload and block submission when lo
   expect(source).toBeDefined();
   const originalAssertion = source.annotation.axes_values.assertion;
   expect(originalAssertion).toBe("present");
-  await page.getByRole("button", { name: "Stay in case" }).click();
   await page.goto("/#/projects/pkg-unresolved-export/export");
   const bundle = page.getByRole("region", { name: "Annotation results", exact: true });
   await bundle.getByRole("button", { name: "Create export", exact: true }).click();
