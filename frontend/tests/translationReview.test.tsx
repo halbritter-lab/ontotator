@@ -24,7 +24,7 @@ vi.mock("../src/variants/useCoupledScroll", async importOriginal => {
   } };
 });
 
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); hook.calls.length = 0; hook.pairs = null; hook.origin = "scroll"; hook.aligns.length = 0; });
+afterEach(() => { cleanup(); window.localStorage.clear(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); hook.calls.length = 0; hook.pairs = null; hook.origin = "scroll"; hook.aligns.length = 0; });
 function setup(workspace = reviewWorkspace(), strict = false, viewport?: { width: number; listeners: Set<() => void> }, reportActions?: JSX.Element, guidelineNotice?: JSX.Element) {
   vi.spyOn(api, 'listSourceObligations').mockResolvedValue([]);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
@@ -282,6 +282,11 @@ it("clinical-off clears categories through the actual controlled form but retain
 });
 const COUPLING_NOTE = "Paragraphs are paired by position, not by meaning. Merged or split paragraphs shift the pairing.";
 const EDITING_NOTE = "While you edit, only the other texts follow your translation.";
+/** The Comparison pane starts closed; "Compare with …" opens it, as a menu of the choices when there are several. */
+const openComparison = (item?: RegExp) => {
+  fireEvent.click(screen.getByRole("button", { name: /^Compare with/ }));
+  if (item) fireEvent.click(screen.getByRole("menuitem", { name: item }));
+};
 const coupleBox = () => screen.queryByRole<HTMLInputElement>("checkbox", { name: "Couple scrolling" });
 const translationBox = () => screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Translation (de)" });
 const typeTranslation = (value: string) => fireEvent.change(translationBox(), { target: { value } });
@@ -319,8 +324,10 @@ it("resets the request on comparison change, reload and submit", async () => {
     { variant: { ...reviewWorkspace().variant, document_id: "comparison-1", external_id: "First MT" }, text: "First comparison" },
     { variant: { ...reviewWorkspace().variant, document_id: "comparison-2", external_id: "Second MT" }, text: "Second comparison" }] });
   const { open } = setup(workspace); await screen.findByRole("textbox", { name: "Translation (de)" });
+  openComparison(/^First MT/);
   fireEvent.click(coupleBox()!);
-  fireEvent.change(screen.getByRole("combobox", { name: "Comparison translation" }), { target: { value: "comparison-2" } });
+  fireEvent.click(screen.getByRole("button", { name: "Close comparison" })); openComparison(/^Second MT/);
+  expect(screen.getByText("Second comparison")).toBeDefined();
   expect(coupleBox()!.checked).toBe(false);
   fireEvent.click(coupleBox()!);
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Reload from server" })); });
@@ -408,7 +415,7 @@ it("shows the always note and the editing note while coupled and editing", async
 it("names both counts when they differ", async () => {
   const workspace = reviewWorkspace({ comparisons: [{ variant: { ...reviewWorkspace().variant, document_id: "comparison-1", external_id: "First MT" }, text: "One\n\nTwo\n\nThree" }] });
   setup(workspace); await screen.findByRole("textbox", { name: "Translation (de)" });
-  fireEvent.click(coupleBox()!);
+  openComparison(); fireEvent.click(coupleBox()!);
   expect(screen.getByText("Paragraphs differ (source 2, translation 1); the other text may show a neighbouring paragraph.")).toBeDefined();
   expect(screen.getByText("Paragraphs differ (translation 1, comparison 3); the other text may show a neighbouring paragraph.")).toBeDefined();
   expect(screen.queryByText(/scrolling is approximate/)).toBeNull();
@@ -507,19 +514,27 @@ it("Show matching paragraph sits after Show changes and Couple scrolling with Kb
   expect(button.getAttribute("aria-disabled")).toBeNull();
   expect(button.getAttribute("aria-keyshortcuts")).toBe("Alt+M");
 });
-it("the three column heads put the titles on one first line and the comparison picker is labelled without a second visible label", async () => {
+it("the Comparison pane starts closed, opens from the Translation controls and is remembered; its head puts the title first", async () => {
   setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" });
-  const heads = [...document.querySelectorAll<HTMLElement>(".translation-column-head")];
-  expect(heads).toHaveLength(3);
-  for (const head of heads) expect(head.firstElementChild!.classList.contains("translation-column-title")).toBe(true);
-  const select = screen.getByRole("combobox", { name: "Comparison translation" });
-  expect(heads[2].querySelector("label")).toBeNull();
-  expect(select.closest(".translation-column-head")).toBe(heads[2]);
-  expect(heads[1].querySelector(".translation-column-controls")).not.toBeNull();
-  expect(heads[2].querySelector(".translation-column-controls")).not.toBeNull();
+  const heads = () => [...document.querySelectorAll<HTMLElement>(".translation-column-head")];
+  expect(heads()).toHaveLength(2);
+  const compare = screen.getByRole("button", { name: "Compare with First MT de" });
+  expect(compare.closest(".translation-column-controls")).toBe(heads()[1].querySelector(".translation-column-controls"));
+  fireEvent.click(compare);
+  expect(heads()).toHaveLength(3);
+  for (const head of heads()) expect(head.firstElementChild!.classList.contains("translation-column-title")).toBe(true);
+  expect(heads()[2].querySelector("label")).toBeNull();
+  const close = screen.getByRole("button", { name: "Close comparison" });
+  expect(close.closest(".translation-column-controls")).toBe(heads()[2].querySelector(".translation-column-controls"));
+  expect(screen.queryByRole("button", { name: /^Compare with/ })).toBeNull();
+  // Remembered for the next review: open again on a new mount.
+  cleanup(); setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" });
+  expect(heads()).toHaveLength(3);
+  fireEvent.click(screen.getByRole("button", { name: "Close comparison" }));
+  expect(heads()).toHaveLength(2);
 });
 it("anchor 1: from the textarea uses the caret paragraph with fresh starts", async () => {
-  setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" });
+  setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" }); openComparison();
   vi.useFakeTimers();
   const edited = `${FIVE}\n\nSix`;
   typeTranslation(edited);
@@ -537,7 +552,7 @@ it("anchor 1: from the textarea uses the caret paragraph with fresh starts", asy
   expect(hook.aligns[1].anchor).toEqual({ paneId: "target", paragraph: 2 });
 });
 it("anchor 2: the last click in the source uses the last marker above the click point", async () => {
-  setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" });
+  setup(matchingWorkspace({ comparisons: [comparisonRow()] })); await screen.findByRole("textbox", { name: "Translation (de)" }); openComparison();
   const source = screen.getByRole("region", { name: "Source (en)" });
   placeMarkers(source, [-50, 50, 150, 250, 350]);
   fireEvent(source.querySelector("[data-diff-op]")!, new MouseEvent("pointerdown", { bubbles: true, clientY: 175 }));
@@ -674,10 +689,12 @@ it("uses only the workspace's comparison choices and shows passed inherited chec
   workspace.translation_ancestor.translation = { ...workspace.translation_ancestor.translation, checks: [{ code: "units_added", passed: false, detail: "A unit changed" }, { code: "numbers", passed: true }] };
   workspace.comparisons = [{ variant: { ...workspace.variant, document_id: "comparison-1", external_id: "First MT" }, text: "First comparison" }, { variant: { ...workspace.variant, document_id: "comparison-2", external_id: "Second MT" }, text: "Second comparison" }];
   setup(workspace); await screen.findByRole("textbox", { name: "Translation (de)" });
-  expect(screen.getByText("First comparison")).toBeDefined();
-  const select = screen.getByRole("combobox", { name: "Comparison translation" });
-  expect(Array.from((select as HTMLSelectElement).options).map(option => option.value)).toEqual(["comparison-1", "comparison-2"]);
-  fireEvent.change(select, { target: { value: "comparison-2" } }); expect(screen.getByText("Second comparison")).toBeDefined();
+  expect(screen.queryByText("First comparison")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Compare with…" }));
+  expect(screen.getAllByRole("menuitem").map(item => item.textContent)).toEqual(["First MT de", "Second MT de"]);
+  fireEvent.click(screen.getByRole("menuitem", { name: "First MT de" })); expect(screen.getByText("First comparison")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Close comparison" })); openComparison(/^Second MT/);
+  expect(screen.getByText("Second comparison")).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "Details" }));
   const all = screen.getByText("Show all checks").closest("details") as HTMLDetailsElement;
   expect(all.open).toBe(false);
