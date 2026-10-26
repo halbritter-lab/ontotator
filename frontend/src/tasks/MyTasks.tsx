@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, onSessionRestored, type ProjectSummary, type TaskSummary } from "../api/client";
-import { routeHref, type Route, type TaskStatusTab } from "../app/router";
+import { routeHref, type NavigateOptions, type Route, type TaskStatusTab } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { assignmentStatusLabels, formatDateTime, taskLabels } from "../app/labels";
 import { textLabel } from "../app/identity";
@@ -17,8 +17,12 @@ export interface MyTasksProps {
   /** Status tab (F7); absent means All. */
   status?: TaskStatusTab;
   projects: ProjectSummary[];
-  onNavigate: (route: Route) => void;
+  onNavigate: (route: Route, options?: NavigateOptions) => void;
+  /** The signed-in user: the last chosen project filter is remembered per user in this browser (F22). */
+  username?: string;
 }
+
+const projectFilterKey = (username: string) => `ontocurator.myTasks.project.v1:${username}`;
 
 /** Status tabs in order; "To do" is the same set as the nav count (every status but submitted, paused included). */
 const statusTabs: { id: TaskStatusTab; label: string; empty: string; matches: (task: TaskSummary) => boolean }[] = [
@@ -52,7 +56,20 @@ const projectLabel = (name: string, key: string): string => name === key ? name 
 export const taskText = (task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language">): string =>
   textLabel({ case_id: task.case_id ?? task.external_id ?? task.document_id, language: task.language });
 
-export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps): JSX.Element {
+export function MyTasks({ project, status, projects, onNavigate, username }: MyTasksProps): JSX.Element {
+  // A visit without a project filter reopens the last chosen project ("" = All my tasks), once per visit,
+  // as soon as the project list is known (a project the user left is not restored).
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || username === undefined || (project === undefined && !projects.length)) return;
+    restored.current = true;
+    if (project !== undefined) return;
+    let stored: string | null = null;
+    try { stored = window.localStorage.getItem(projectFilterKey(username)); } catch { /* Blocked storage: nothing remembered. */ }
+    if (stored && projects.some(item => item.project_key === stored)) onNavigate({ name: "tasks", project: stored, ...(status === undefined ? {} : { status }) }, { replace: true });
+    // Only the first known project list of a visit restores.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
   const [state, setState] = useState<TaskState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
   // Bumped by every successful task load, so the guideline links are re-read with the tasks.
@@ -120,7 +137,11 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
     .map(tab => ({ id: tab.id, label: tab.label, count: filtered.filter(tab.matches).length, href: routeHref(tabRoute(tab.id)) }))
     .filter(tab => tab.id !== "paused" || tab.count > 0 || active === "paused");
   // All projects without a tab keeps an explicit All, so a reload never runs the landing.
-  const selectProject = (value: string) => onNavigate(value === allProjectsValue ? { name: "tasks", status: status ?? "all" }
+  const selectProject = (value: string) => {
+    if (username !== undefined) try { window.localStorage.setItem(projectFilterKey(username), value === allProjectsValue ? "" : value); } catch { /* Blocked storage: not remembered. */ }
+    navigateProject(value);
+  };
+  const navigateProject = (value: string) => onNavigate(value === allProjectsValue ? { name: "tasks", status: status ?? "all" }
     : { name: "tasks", project: value, ...(status === undefined ? {} : { status }) });
   const managed = projects.filter(item => item.can_manage && (project === undefined || item.project_key === project));
   const guidelineVersions = guidelines?.identity === projectIdentity ? guidelines.versions : new Map<string, number>();

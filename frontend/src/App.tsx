@@ -248,7 +248,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   let content: JSX.Element;
   switch (route.name) {
     case "tasks": content = landing || landingSummary ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
-      : <MyTasks project={route.project} status={route.status} projects={projects} onNavigate={go} />; break;
+      : <MyTasks project={route.project} status={route.status} projects={projects} onNavigate={go} username={baseUser?.username} />; break;
     // The view is part of the key: switching between the consolidation view and the editor reopens the task fresh.
     case "task": content = <TaskEditor key={JSON.stringify([user.username, route.assignmentId, route.view ?? null])} assignmentId={route.assignmentId} view={route.view}
       user={user} onNavigate={go} routeLeaveRef={routeLeaveRef} leaveGuardRef={logoutGuardRef}

@@ -90,6 +90,32 @@ describe("My tasks component", () => {
     expect(api.listMyTasks).toHaveBeenCalledTimes(1);
   });
 
+  it("remembers the last chosen project per user and reopens it on the next visit", async () => {
+    window.localStorage.clear();
+    const onNavigate = vi.fn();
+    const projects = [project("p", "Project P"), project("q", "Project Q")];
+    const view = render(<MyTasks projects={projects} onNavigate={onNavigate} username="ana" />);
+    await screen.findAllByTestId("task-row");
+    expect(onNavigate).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter my tasks by project" }), { target: { value: "q" } });
+    expect(window.localStorage.getItem("ontocurator.myTasks.project.v1:ana")).toBe("q");
+    view.unmount();
+    onNavigate.mockClear();
+    // Next visit: the project list arrives after the first render.
+    const next = render(<MyTasks projects={[]} status="all" onNavigate={onNavigate} username="ana" />);
+    expect(onNavigate).not.toHaveBeenCalled();
+    next.rerender(<MyTasks projects={projects} status="all" onNavigate={onNavigate} username="ana" />);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", project: "q", status: "all" }, { replace: true });
+    next.unmount();
+    // Another user and an explicit All are not redirected.
+    onNavigate.mockClear();
+    render(<MyTasks projects={projects} onNavigate={onNavigate} username="ben" />).unmount();
+    window.localStorage.setItem("ontocurator.myTasks.project.v1:ana", "");
+    render(<MyTasks projects={projects} onNavigate={onNavigate} username="ana" />).unmount();
+    expect(onNavigate).not.toHaveBeenCalled();
+    window.localStorage.clear();
+  });
+
   it("counts reopened as To do without altering its visible status", async () => {
     render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
     await screen.findAllByTestId("task-row");
