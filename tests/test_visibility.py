@@ -854,3 +854,40 @@ def test_revocation_waits_for_successful_command_transaction(
             == 1
         )
     assert AssignmentService(app.state.repo.db).list(PROJECT, user="alice") == []
+
+
+def test_request_memo_checks_once_and_a_write_invalidates_it(assigned):
+    from types import SimpleNamespace
+
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    from ontocurator.authz.scoped import ScopedRepository
+
+    app, _client, row = assigned
+    user = app.state.accounts.get_by_username("alice")
+    access = app.state.memberships.access_for(
+        SimpleNamespace(
+            user_id=user.id,
+            pseudonym=user.pseudonym,
+            is_system_admin=user.is_system_admin,
+        )
+    )
+    repo = ScopedRepository(app.state.repo.db, access)
+    repo._document(PROJECT, "doc-beta")
+    statements = []
+
+    def count(*args):
+        statements.append(args[2])
+
+    event.listen(Engine, "before_cursor_execute", count)
+    try:
+        repo._document(PROJECT, "doc-beta")
+        assert statements == []
+        # A write in the same request (here: the revocation) drops the memo.
+        AssignmentService(app.state.repo.db).revoke(HARNESS, row.id)
+    finally:
+        event.remove(Engine, "before_cursor_execute", count)
+    with pytest.raises(DomainError) as refused:
+        repo._document(PROJECT, "doc-beta")
+    assert refused.value.code == "DOCUMENT_NOT_FOUND"
