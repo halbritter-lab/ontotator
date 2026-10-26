@@ -10,12 +10,14 @@ either overridden here or listed in ``PROJECT_FREE``; a test enforces that.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from sqlalchemy import Connection, func, select, update
+from sqlalchemy import Connection, event, func, select, update
+from sqlalchemy.engine import Engine
 
 from ontocurator.assignments.eligibility import require_annotation_gate
 from ontocurator.assignments.service import TASK_FOR_MODE, Assignment, AssignmentService
@@ -85,6 +87,26 @@ from ontocurator.storage.tables import (
 PROJECT_FREE = frozenset({"ontology_resources", "package_manifest_hash"})
 
 
+_writes = threading.local()
+
+
+@event.listens_for(Engine, "before_cursor_execute")
+def _count_writes(*args: Any) -> None:
+    # Any statement but a SELECT (lock reads stay reads) counts as a write.
+    if args[2].lstrip()[:6].upper() != "SELECT":
+        _writes.count = getattr(_writes, "count", 0) + 1
+
+
+@event.listens_for(Engine, "rollback")
+def _count_rollbacks(*args: Any) -> None:
+    # A rollback undoes writes, so a memo built on them must not survive it.
+    _writes.count = getattr(_writes, "count", 0) + 1
+
+
+def _write_stamp() -> tuple[int, int]:
+    return threading.get_ident(), getattr(_writes, "count", 0)
+
+
 def project_not_found(project_key: str) -> DomainError:
     return DomainError("PROJECT_NOT_FOUND", f"There is no project '{project_key}'.")
 
@@ -108,6 +130,31 @@ class ScopedRepository(Repository):
         super().__init__(db)
         self.access = access
         self.actor = actor
+        # Request-scoped memo of authorization lookups (one ``ScopedRepository``
+        # per request). An entry holds only while this thread has executed no
+        # write since it was made, so a write in the request invalidates it.
+        # shortcut: a write the request runs on another thread is not seen;
+        # fine while each request runs its storage calls on one thread.
+        self._memo: dict[tuple[Any, ...], tuple[tuple[int, int], Any]] = {}
+
+    def _memoized(self, key: tuple[Any, ...], compute: Callable[[], Any]) -> Any:
+        stamp = _write_stamp()
+        hit = self._memo.get(key)
+        if hit is not None and hit[0] == stamp:
+            return hit[1]
+        value = compute()
+        self._memo[key] = (stamp, value)
+        return value
+
+    def _require_project(self, conn: Connection, project_key: str) -> int:
+        return int(
+            self._memoized(
+                ("project", project_key),
+                lambda: super(ScopedRepository, self)._require_project(
+                    conn, project_key
+                ),
+            )
+        )
 
     def _visible(self, project_key: str) -> None:
         if not can(self.access, Action.VIEW_PROJECT, project_key):
@@ -115,15 +162,25 @@ class ScopedRepository(Repository):
 
     def _document(self, project_key: str, document_id: str) -> None:
         self._visible(project_key)
-        with self.db.transaction() as conn:
-            project_id = self._require_project(conn, project_key)
-            require_document(conn, self.access, project_id, project_key, document_id)
+
+        def check() -> None:
+            with self.db.transaction() as conn:
+                project_id = self._require_project(conn, project_key)
+                require_document(
+                    conn, self.access, project_id, project_key, document_id
+                )
+
+        self._memoized(("document", project_key, document_id), check)
 
     def _documents(self, project_key: str) -> DocumentFilter:
         self._visible(project_key)
-        with self.db.transaction() as conn:
-            project_id = self._require_project(conn, project_key)
-            return visible_documents(conn, self.access, project_id, project_key)
+
+        def check() -> DocumentFilter:
+            with self.db.transaction() as conn:
+                project_id = self._require_project(conn, project_key)
+                return visible_documents(conn, self.access, project_id, project_key)
+
+        return cast(DocumentFilter, self._memoized(("documents", project_key), check))
 
     def workspace_input_snapshots(self, key: WorkspaceKey) -> list[AnnotationSnapshot]:
         self._document(key.project_key, key.document_id)
@@ -194,8 +251,20 @@ class ScopedRepository(Repository):
         self, conn: Connection, key: WorkspaceKey, *, mutation: bool = False
     ) -> Assignment:
         project_id = self._require_project(conn, key.project_key)
-        access = current_access(conn, self.access, project_id, key.project_key)
-        require_document(conn, access, project_id, key.project_key, key.document_id)
+
+        def check() -> Access:
+            access = current_access(conn, self.access, project_id, key.project_key)
+            require_document(
+                conn, access, project_id, key.project_key, key.document_id, fresh=True
+            )
+            return access
+
+        # Locked paths re-read: ``_before_workspace_locks`` clears the memo once
+        # its locks are held. The assignment (its status) is always read fresh.
+        access = cast(
+            Access,
+            self._memoized(("workable", key.project_key, key.document_id), check),
+        )
         if key.annotator_id != access.pseudonym:
             raise AccessDenied("IDENTITY_MISMATCH")
         if not may_take(access, key.project_key, TASK_FOR_MODE[key.mode]):
@@ -230,6 +299,8 @@ class ScopedRepository(Repository):
         )
         conn.execute(select(project_lock(_lock_id("project", key.project_key))))
         lock_user_authority(conn, self.access.user_id)
+        # Checks made before these locks may be stale; re-read under them.
+        self._memo.clear()
         # Revocation uses project EXCLUSIVE, so this assignment stays valid
         # through commit without a global command mutex.
         assignment = self.require_workable(conn, key)
@@ -741,6 +812,12 @@ class ScopedRepository(Repository):
             )
             if visibility.all or key.document_id in visibility.document_ids
         ]
+
+    def draft_annotation_layer(
+        self, key: WorkspaceKey, annotation_id: str
+    ) -> str | None:
+        self._document(key.project_key, key.document_id)
+        return super().draft_annotation_layer(key, annotation_id)
 
     def open_draft(
         self,

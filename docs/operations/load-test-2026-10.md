@@ -243,3 +243,80 @@ and complete local gate permit the next independent administration plan to
 proceed, without treating this failed acceptance as green. Existing diagnostics
 and a read-only request-read preflight remain available for further investigation.
 No resources, workload or thresholds were relaxed.
+
+## Local profiling 2026-10-26 (not a P9 run)
+
+**This is not a P9 measurement and does not claim a pass.** It is a
+sequential, single-user profiling note made on a shared development machine
+(Windows host, one in-process app, PostgreSQL 16 in Docker without the
+Compose CPU/RAM limits). Base: `feat/ux-calm` at `12d5e3f8`.
+
+Data: the `loadtest/seed.py` corpus (1,000 documents, 30 annotators, real HPO
+2026-06-23), seeded locally through the admin CLI. On this base the seed script
+no longer completes unchanged: `annotations_per_text` (1..5) refuses 30
+assignments per document, new assignments default to the `proposals`
+annotation mode (the Locust `independent` opens are refused), and spanless
+findings need a note. For profiling only, the throwaway database had its
+`annotations_per_text` check removed, assignments set to `scratch`, and
+`require_spanless_note` off. The seeder and Locust file must be updated before
+the next real P9 run.
+
+Method: per endpoint, the Locust request bodies sent sequentially (50 opens,
+50 searches, 100 commands, 17 listings), measuring wall time, executed SQL
+statements (`before_cursor_execute`) and process CPU; plus `cProfile` and a
+per-statement call-site trace.
+
+Findings: request CPU was dominated by SQLAlchemy/psycopg work per statement,
+not by lexical search. Editor requests executed 79–92 statements, mostly
+repeated authorization re-checks; `require_document` loaded every assigned
+document id (~1,000 rows) 5–8 times per request; search opened and locked the
+whole draft only to check an annotation's layer; the documents listing rendered
+IN lists of ~1,000 binds that psycopg re-parsed on every request.
+
+| Endpoint | Before: mean ms / statements / CPU ms | After: mean ms / statements / CPU ms |
+|---|---:|---:|
+| Open | 258 / 92 / 110 | 199 / 68 / 78 |
+| Search | 230 / 90 / 96 | 145 / 50 / 60 |
+| Write | 192 / 79 / 85 | 165 / 65 / 73 |
+| Dashboard | 124 / 16 / 74 | 87 / 14 / 50 |
+
+Wall times include ~1–2 ms Docker Desktop round trips per statement and are
+not comparable with Compose-network latencies; the machine was shared
+(about ±10% noise). Commits: `9705d0c7`, `8266b0b1`, `c6fec5db`, `17e8c7d3`.
+
+Still open: the remaining statements are layered re-checks (`require_workable`
+3–5 times, project-id lookups ~10 times per write). A real P9 run under the
+documented limits is required to know whether the ~25–40% lower per-request
+CPU moves the CPU-saturated stack below its targets.
+
+### Round 2 (same day): seeder repaired, request-scoped authorization memo
+
+The seeder and Locust file now run on this base unchanged: a synthetic lead
+raises `annotations_per_text` to 5 through the settings API, each annotator is
+assigned one sixth of the corpus (every text has five annotators, ~167 texts per
+user), opens use `proposal_check` (the mode the seeded assignments get) on the
+user's own texts, and spanless findings carry a note. The local database was
+re-seeded through `loadtest/seed.py` itself (admin CLI run locally instead of
+`docker compose exec`, HPO 2026-09-01), so the open numbers below are
+proposal-check opens and are not comparable with the round 1 table.
+
+`ScopedRepository` (one per request) now memoizes the project-id lookup, the
+document/visible-documents checks and the role/document part of
+`require_workable` for the rest of the request. An entry is dropped as soon as
+the request's thread executes any non-`SELECT` statement, and
+`_before_workspace_locks` clears the memo once its locks are held, so checks that
+guard a write are still read under the locks; the assignment row (status) is
+always read fresh. Nothing is cached across requests.
+
+| Endpoint | Before: mean ms / statements / CPU ms | After: mean ms / statements / CPU ms |
+|---|---:|---:|
+| Open (proposal check) | 464 / 129 / 164 | 326 / 92 / 125 |
+| Search | 167 / 50 / 62 | 120 / 36 / 46 |
+| Write | 171 / 65 / 66 | 144 / 52 / 62 |
+| Dashboard | 78 / 18 / 24 | 86 / 18 / 38 |
+
+Same method and noise caveats as above (50 opens/searches, 100 commands,
+17 listings). The dashboard path does not use these checks; its change is noise.
+The remaining open statements are mostly not authorization: the proposal-check
+open opens the draft twice and re-reads the task profile and search conditions
+four times each. A real P9 run is still required.

@@ -853,7 +853,7 @@ def test_a_failing_draft_lookup_does_not_skip_the_layer_check(app_client, monkey
     assert created.status_code == 200, created.text
 
     def busy(*args, **kwargs):
-        raise OperationalError("open_draft", {}, Exception("connection lost"))
+        raise OperationalError("draft lookup", {}, Exception("connection lost"))
 
     # ann-1 lives in layer-1. With the draft unreadable nobody can tell, so
     # the request must fail rather than go through for layer-2.
@@ -875,7 +875,7 @@ def test_a_failing_draft_lookup_does_not_skip_the_layer_check(app_client, monkey
     ]
     with monkeypatch.context() as patched:
         # On the class: each request reads through its own scoped repository.
-        patched.setattr(Repository, "open_draft", busy)
+        patched.setattr(Repository, "draft_annotation_layer", busy)
         for send in requests:
             with pytest.raises(OperationalError):
                 send()

@@ -12,6 +12,9 @@ from uuid import uuid4
 from locust import HttpUser, between, events, task
 from locust.exception import StopUser
 
+# Seeded tool proposals make the assignments proposal-check tasks (the
+# project's default annotation mode); a user may open only that mode.
+MODE = "proposal_check"
 TARGETS = {
     "search": ("POST", 150),
     "open": ("POST", 300),
@@ -48,8 +51,13 @@ def initialize(environment, **_kwargs):
         len(manifest["users"]) != 30
         or len(set(manifest["users"])) != 30
         or len(manifest["documents"]) != 1000
+        or set(manifest.get("assignments", {})) != set(manifest["users"])
+        or not set().union(*manifest["assignments"].values())
+        <= set(manifest["documents"])
     ):
-        raise ValueError("Expected 30 distinct users and 1000 documents")
+        raise ValueError(
+            "Expected 30 distinct users, 1000 documents and each user's assignments"
+        )
     if opts.num_users != 30:
         raise ValueError("P9 requires --users 30")
     environment.load_manifest = manifest
@@ -119,13 +127,16 @@ class Annotator(HttpUser):
 
     @task(2)
     def open_document(self):
-        document = self.rng.choice(self.environment.load_manifest["documents"])
+        # Only the user's own assigned texts open (5 annotators per text).
+        document = self.rng.choice(
+            self.environment.load_manifest["assignments"][self.username]
+        )
         with self.client.post(
             "/api/v1/workspaces/open",
             json={
                 "project_key": "load",
                 "document_id": document,
-                "mode": "independent",
+                "mode": MODE,
             },
             name="open",
             catch_response=True,
@@ -190,6 +201,8 @@ class Annotator(HttpUser):
                 "term_id": term,
                 "layer_id": "hpo",
                 "type_id": "phenotype",
+                # A finding without a text span needs a note (project default).
+                "note": "Synthetic finding without a span",
             }
         )
         self.command(
@@ -207,7 +220,7 @@ class Annotator(HttpUser):
     @task(1)
     def dashboard(self):
         with self.client.get(
-            "/api/v1/projects/load/documents?mode=independent",
+            f"/api/v1/projects/load/documents?mode={MODE}",
             name="dashboard",
             catch_response=True,
         ) as response:

@@ -554,18 +554,15 @@ def layer_ontology(
         )
 
     # If the annotation exists in the draft, its layer must be the one asked
-    # for. A workspace that has no draft yet gets an empty one from
-    # ``open_draft``, so "not yet in the draft" raises nothing; a draft that
-    # cannot be read is an error, never a reason to skip this check.
-    draft = repo.open_draft(workspace_key)
-    for snap in draft.annotations:
-        if snap.annotation.annotation_id == annotation_id:
-            if snap.annotation.layer_id != layer_id:
-                raise DomainError(
-                    "LAYER_MISMATCH",
-                    f"Annotation '{annotation_id}' belongs to layer '{snap.annotation.layer_id}', not '{layer_id}'",
-                )
-            break
+    # for; "not yet in the draft" (or no draft yet) raises nothing. A plain
+    # read: locking/creating the draft here cost ~25 statements per search.
+    cast(ScopedRepository, repo).workspace_assignment(workspace_key)
+    found = repo.draft_annotation_layer(workspace_key, annotation_id)
+    if found is not None and found != layer_id:
+        raise DomainError(
+            "LAYER_MISMATCH",
+            f"Annotation '{annotation_id}' belongs to layer '{found}', not '{layer_id}'",
+        )
 
     return get_ontology(request).for_package_layer(
         repo, workspace_key.project_key, layer_id

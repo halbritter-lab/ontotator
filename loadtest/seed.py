@@ -15,6 +15,12 @@ from pathlib import Path
 import httpx
 import ontospan
 
+from ontocurator.projects.service import ProjectSettingsChange
+
+ANNOTATORS_PER_TEXT = 5  # the project setting's maximum
+GROUPS = 30 // ANNOTATORS_PER_TEXT
+LEAD = "load-lead"
+
 
 def read_hpo(path: Path) -> tuple[list[tuple[str, str]], str, str]:
     raw = path.read_bytes()
@@ -186,9 +192,17 @@ def build_assets(
         bundle_id="load-20261014",
         created_at=datetime(2026, 10, 14, tzinfo=UTC),
     )
+    users = [f"load-{i:02d}" for i in range(1, 31)]
     manifest = {
         "documents": documents,
-        "users": [f"load-{i:02d}" for i in range(1, 31)],
+        "users": users,
+        # Six groups of five annotators; group g holds every document whose
+        # index is g modulo 6, so each text has exactly ANNOTATORS_PER_TEXT
+        # annotators (the project maximum) and each user ~167 documents.
+        "assignments": {
+            user: documents[index // ANNOTATORS_PER_TEXT :: GROUPS]
+            for index, user in enumerate(users)
+        },
         "terms": terms,
         "hpo_release": release,
         "hpo_sha256": sha,
@@ -254,7 +268,7 @@ def main() -> None:
         terms, release, sha = read_hpo(args.hpo)
     except (ValueError, KeyError, OSError) as exc:
         parser.error(str(exc))
-    build_assets(args.out, terms, release, sha)
+    manifest = build_assets(args.out, terms, release, sha)
     if args.prepare_only:
         print(
             f"Prepared 1000 documents and 3000 proposals; HPO {release}, SHA256 {sha}"
@@ -304,8 +318,12 @@ def main() -> None:
         "hp=hpo-phenotype",
     )
     admin("import", "load", "/tmp/load-bundle.zip")
-    for i in range(1, 31):
-        username = f"load-{i:02d}"
+
+    def account(username: str, role: str) -> str:
+        """Create a synthetic member and set its password; returns the CSRF token.
+
+        Membership comes first: a role change ends the user's sessions.
+        """
         output = admin(
             "users",
             "create",
@@ -318,28 +336,48 @@ def main() -> None:
         match = re.search(r"UTC\):\s*\n\s*(\S+)", output)
         if not match:
             raise RuntimeError("Could not parse CLI setup code")
-        with httpx.Client(
-            base_url=args.host, headers={"Origin": args.host.rstrip("/")}, timeout=120
-        ) as client:
-            response = client.post(
-                "/api/v1/auth/redeem-code",
-                json={
-                    "username": username,
-                    "code": match[1],
-                    "new_password": args.password,
-                },
-            )
-            response.raise_for_status()
+        admin("projects", "add-member", "load", username, "--role", role)
+        response = client.post(
+            "/api/v1/auth/redeem-code",
+            json={
+                "username": username,
+                "code": match[1],
+                "new_password": args.password,
+            },
+        )
+        response.raise_for_status()
+        return str(response.json()["csrf_token"])
+
+    with httpx.Client(
+        base_url=args.host, headers={"Origin": args.host.rstrip("/")}, timeout=120
+    ) as client:
+        # A synthetic lead raises "annotations per text" (default 1) through
+        # the settings API; the CLI has no such option.
+        client.headers["X-CSRF-Token"] = account(LEAD, "lead")
+        current = client.get("/api/v1/projects/load/settings")
+        current.raise_for_status()
+        change = {
+            name: value
+            for name, value in current.json().items()
+            if name in ProjectSettingsChange.model_fields
+        }
+        change["annotations_per_text"] = ANNOTATORS_PER_TEXT
+        client.patch("/api/v1/projects/load/settings", json=change).raise_for_status()
+        client.post("/api/v1/auth/logout").raise_for_status()
+        del client.headers["X-CSRF-Token"]
+        for username in manifest["users"]:
             client.post(
                 "/api/v1/auth/logout",
-                headers={"X-CSRF-Token": response.json()["csrf_token"]},
+                headers={"X-CSRF-Token": account(username, "annotator")},
             ).raise_for_status()
-        admin("projects", "add-member", "load", username, "--role", "annotator")
-        # Every original user may choose any of the 1000 documents. The real
-        # CLI's omitted --document option provisions that entire working set.
-        admin("assign", "load", username, "--confirm-language")
+            documents = [
+                option
+                for document in manifest["assignments"][username]
+                for option in ("--document", document)
+            ]
+            admin("assign", "load", username, *documents, "--confirm-language")
     print(
-        f"Seeded {args.compose_project}: 30 users, 1000 documents, 3000 proposals; HPO {release}. Workers load uploaded ontologies automatically on first use; warm up before measurement."
+        f"Seeded {args.compose_project}: 30 annotators and a lead, 1000 documents, 3000 proposals, {ANNOTATORS_PER_TEXT} annotators per text; HPO {release}. Workers load uploaded ontologies automatically on first use; warm up before measurement."
     )
 
 

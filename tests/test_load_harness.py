@@ -183,11 +183,20 @@ def test_container_transfer_preserves_binary_stdin(tmp_path):
     assert target.read_bytes() == original
 
 
-def test_every_load_user_keeps_the_original_full_candidate_universe(monkeypatch):
+def test_each_text_has_five_annotators_and_users_open_only_their_own(
+    monkeypatch, tmp_path
+):
     import ast
+    from collections import Counter
     from types import SimpleNamespace
 
-    monkeypatch.syspath_prepend(str(Path(__file__).parents[1]))
+    terms = [(f"HP:{index:07d}", f"Synthetic term {index}") for index in range(10)]
+    manifest = seed_module().build_assets(tmp_path, terms, "2026-06-23", "a" * 64)
+    held = Counter(d for docs in manifest["assignments"].values() for d in docs)
+    assert set(held) == set(manifest["documents"])
+    assert set(held.values()) == {5}
+    assert {len(docs) for docs in manifest["assignments"].values()} == {166, 167}
+
     tree = ast.parse(
         (Path(__file__).parents[1] / "loadtest/locustfile.py").read_text(
             encoding="utf-8"
@@ -204,7 +213,7 @@ def test_every_load_user_keeps_the_original_full_candidate_universe(monkeypatch)
         if isinstance(node, ast.FunctionDef) and node.name == "open_document"
     )
     method.decorator_list = []
-    namespace = {}
+    namespace: dict = {}
     exec(
         compile(
             ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
@@ -213,7 +222,6 @@ def test_every_load_user_keeps_the_original_full_candidate_universe(monkeypatch)
         ),
         namespace,
     )
-    documents = [f"load-{index:04d}" for index in range(1, 1001)]
     pools = []
 
     class StopAtChoice(Exception):
@@ -224,26 +232,27 @@ def test_every_load_user_keeps_the_original_full_candidate_universe(monkeypatch)
             pools.append(pool)
             raise StopAtChoice()
 
-    for index in range(1, 31):
+    for username in manifest["users"]:
         actor = SimpleNamespace(
-            username=f"load-{index:02d}",
+            username=username,
             rng=ObserveChoice(),
-            environment=SimpleNamespace(load_manifest={"documents": documents}),
+            environment=SimpleNamespace(load_manifest=manifest),
         )
         with pytest.raises(StopAtChoice):
             namespace["open_document"](actor)
-    assert len(pools) == 30
-    assert all(pool is documents for pool in pools)
-    assert sum(map(len, pools)) == 30000
+    assert pools == [manifest["assignments"][u] for u in manifest["users"]]
 
 
-def test_load_seed_assigns_the_same_full_pool_through_real_cli(monkeypatch, tmp_path):
+def test_load_seed_raises_the_text_limit_and_assigns_each_users_pool(
+    monkeypatch, tmp_path
+):
     import subprocess
     import sys
     from types import SimpleNamespace
 
     seed = seed_module()
     commands = []
+    patched = []
 
     def run(command, **kwargs):
         tail = command[command.index("admin") + 1 :]
@@ -255,9 +264,11 @@ def test_load_seed_assigns_the_same_full_pool_through_real_cli(monkeypatch, tmp_
         )
         return subprocess.CompletedProcess(command, 0, stdout=output)
 
+    ok = SimpleNamespace(raise_for_status=lambda: None)
+
     class Client:
         def __init__(self, **kwargs):
-            pass
+            self.headers = dict(kwargs.get("headers", {}))
 
         def __enter__(self):
             return self
@@ -270,7 +281,23 @@ def test_load_seed_assigns_the_same_full_pool_through_real_cli(monkeypatch, tmp_
                 raise_for_status=lambda: None, json=lambda: {"csrf_token": "test"}
             )
 
-    documents = [f"load-{index:04d}" for index in range(1, 1001)]
+        def get(self, path):
+            assert path == "/api/v1/projects/load/settings"
+            return SimpleNamespace(
+                raise_for_status=lambda: None,
+                json=lambda: {
+                    "name": "Synthetic load",
+                    "annotations_per_text": 1,
+                    "project_key": "load",
+                },
+            )
+
+        def patch(self, path, json):
+            patched.append(json)
+            return ok
+
+    users = [f"load-{index:02d}" for index in range(1, 31)]
+    assignments = {user: [f"doc-{user}-1", f"doc-{user}-2"] for user in users}
     monkeypatch.setattr(
         sys,
         "argv",
@@ -287,14 +314,37 @@ def test_load_seed_assigns_the_same_full_pool_through_real_cli(monkeypatch, tmp_
         ],
     )
     monkeypatch.setattr(seed, "read_hpo", lambda path: ([], "2026-06-23", "a" * 64))
-    monkeypatch.setattr(seed, "build_assets", lambda *args: {"documents": documents})
+    monkeypatch.setattr(
+        seed,
+        "build_assets",
+        lambda *args: {"users": users, "assignments": assignments},
+    )
     monkeypatch.setattr(seed, "stream_to_container", lambda *args: None)
     monkeypatch.setattr(seed.subprocess, "run", run)
     monkeypatch.setattr(seed.httpx, "Client", Client)
     seed.main()
-    # Omitting --document uses the real CLI's existing all-documents branch,
-    # so the full corpus is provisioned once for each original load user.
+    # Only change fields are sent back (the settings API forbids extras).
+    assert patched == [{"name": "Synthetic load", "annotations_per_text": 5}]
+    members = [c for c in commands if c[:2] == ["projects", "add-member"]]
+    assert members[0] == [
+        "projects",
+        "add-member",
+        "load",
+        "load-lead",
+        "--role",
+        "lead",
+    ]
+    assert len(members) == 31
     assert [command for command in commands if command[0] == "assign"] == [
-        ["assign", "load", f"load-{index:02d}", "--confirm-language"]
-        for index in range(1, 31)
+        [
+            "assign",
+            "load",
+            user,
+            "--document",
+            f"doc-{user}-1",
+            "--document",
+            f"doc-{user}-2",
+            "--confirm-language",
+        ]
+        for user in users
     ]
