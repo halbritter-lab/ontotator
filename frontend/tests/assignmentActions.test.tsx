@@ -52,3 +52,10 @@ it("offers no reassign for a consolidation task", () => {
   expect(screen.queryByRole("button", { name: /^Reassign/ })).toBeNull();
   expect(screen.getAllByRole("button", { name: "Remove assignment", hidden: true })).toHaveLength(2);
 });
+it("beside a direct Reassign… shows Remove assignment plainly, without the Assignment actions disclosure (B8-1)", () => {
+  render(<AssignmentActions assignment={{ ...assignment, status: "in_progress" }} members={members} onChanged={vi.fn()} directReassign />);
+  expect(screen.queryByText("Assignment actions")).toBeNull();
+  expect(screen.getByRole("button", { name: "Reassign…" })).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Remove assignment" }));
+  expect(screen.getByRole("button", { name: "Confirm removal" })).toBeDefined();
+});

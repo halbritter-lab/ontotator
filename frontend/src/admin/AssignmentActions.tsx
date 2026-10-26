@@ -6,7 +6,7 @@ import { ErrorNotice } from "./ErrorNotice";
 import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
 export interface AssignmentActionsProps {
   assignment: AssignmentView; members: Member[]; onChanged: () => void;
-  /** A direct "Reassign…" button before the "Assignment actions" menu (the Documents row panel, S3). */
+  /** A direct "Reassign…" button with the other actions beside it, no "Assignment actions" menu (the Documents row panel, S3, B8-1). */
   directReassign?: boolean;
   /** Only this action's dialog, open at once (no buttons); `onClose` runs when it closes or the action is done. */
   open?: "reassign" | "reopen" | "revoke";
@@ -48,11 +48,15 @@ function Actions({ assignment, members, onChanged, directReassign = false, open,
   return <>
     {!open && <>
     {directReassign && reassignable && <Button size="sm" onClick={() => setAction("reassign")}>Reassign…</Button>}
-    <details><summary aria-label={`Actions for ${assignment.pseudonym}: ${labelFor(taskLabels, assignment.task)}, ${assignment.document_id}`}>Assignment actions</summary>
+    {/* Beside a direct Reassign… the other actions stand plainly, no disclosure (B8-1). */}
+    {directReassign ? <>
+      {assignment.status === "submitted" && <Button size="sm" onClick={() => setAction("reopen")}>Reopen</Button>}
+      <Button size="sm" variant="danger" onClick={() => setAction("revoke")}>Remove assignment</Button>
+    </> : <details><summary aria-label={`Actions for ${assignment.pseudonym}: ${labelFor(taskLabels, assignment.task)}, ${assignment.document_id}`}>Assignment actions</summary>
     {!directReassign && reassignable && <Button onClick={() => setAction("reassign")}>Reassign …</Button>}
     {assignment.status === "submitted" && <Button onClick={() => setAction("reopen")}>Reopen</Button>}
     <Button onClick={() => setAction("revoke")}>Remove assignment</Button>
-    </details>
+    </details>}
     </>}
     <Dialog open={action === "reassign"} title={`Reassign ${assignment.document_id}`} onClose={busy || confirmation ? undefined : close} footer={<><Button disabled={busy || confirmation !== null} onClick={close}>Cancel</Button><Button disabled={!target || confirmation !== null} loading={busy} onClick={() => { if (assignment.status !== "open" && !confirmedStarted) setConfirmation("started"); else void mutate(confirmedStarted, false); }}>Reassign</Button></>}>
       <p>{assignment.pseudonym}: {labelFor(taskLabels, assignment.task)}, {labelFor(assignmentStatusLabels, assignment.status).toLowerCase()}</p>
