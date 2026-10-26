@@ -2531,8 +2531,10 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   gap: var(--space-1);
 }
 
+/* The quote keeps a readable width; the actions wrap below it when the column is narrow (B2-3). */
 .mention-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
@@ -2549,7 +2551,7 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 }
 
 .mention-card__body {
-  flex: 1;
+  flex: 1 1 12rem;
   min-width: 0;
   cursor: pointer;
 }
@@ -2567,6 +2569,7 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 .mention-card__actions,
 .confirm-group {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
 }
