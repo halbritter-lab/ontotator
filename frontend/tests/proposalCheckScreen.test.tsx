@@ -104,6 +104,12 @@ it("1 and 2 move on to the next open proposal and name what was decided; the las
   await waitFor(() => expect(selected()).toBe(2));
   const status = () => document.querySelector("[data-advance-status]")?.textContent;
   expect(status()).toMatch(/^Confirmed .+\. Next open proposal: 3 of 3 K back$/);
+  // K returns to the proposal just decided, past the decided p-2 the advance skipped; J comes forward again.
+  fireEvent.keyDown(window, { key: "k" });
+  expect(selected()).toBe(0);
+  expect(status()).toBe("");
+  fireEvent.keyDown(window, { key: "j" });
+  expect(selected()).toBe(2);
   fireEvent.click(screen.getByRole("button", { name: /^Reject/ }));
   await waitFor(() => expect(selected()).toBe(-1));
   expect(status()).toMatch(/^Rejected .+\. Every proposal is decided\.$/);
@@ -121,7 +127,7 @@ it("a repeated outcome stays on the proposal", async () => {
   fireEvent.keyDown(window, { key: "1" });
   await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
   expect(selected()).toBe(0);
-  expect(document.querySelector("[data-advance-status]")).toBeNull();
+  expect(document.querySelector("[data-advance-status]")!.textContent).toBe("");
 });
 
 it("Submit is unavailable until every proposal has a decision", async () => {

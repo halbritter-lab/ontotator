@@ -343,8 +343,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const lastTargetIdRef = useRef<string | null>(null);
-  /** U-2: what the last decision did; shown while the selection it made (`listKey`, null: none) is unchanged. */
-  const [advanceStatus, setAdvanceStatus] = useState<{ listKey: string | null; text: string } | null>(null);
+  /** U-2: what the last decision did; shown while the selection it made (`listKey`, null: none) is unchanged.
+   *  `decidedKey`: the proposal just decided, where K goes back to. */
+  const [advanceStatus, setAdvanceStatus] = useState<{ listKey: string | null; text: string; decidedKey: string } | null>(null);
   if (selectedTargetId) lastTargetIdRef.current = selectedTargetId;
   // A carried input without a finding on this text (placeholder row); exclusive with the others.
   const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
@@ -2071,12 +2072,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const done = `${{ confirmed: "Confirmed", rejected: "Rejected", uncertain: "Left unresolved" }[outcome]} ${termLabel(target.layer_id, target.term_id ?? target.annotation_id) ?? target.term_id ?? target.annotation_id}${quote}.`;
     if (next === undefined) {
       handleDeselectAll();
-      setAdvanceStatus({ listKey: null, text: `${done} Every proposal is decided.` });
+      setAdvanceStatus({ listKey: null, text: `${done} Every proposal is decided.`, decidedKey: refKey(target) });
       document.querySelector<HTMLButtonElement>("[data-finish-submit]")?.focus();
       return;
     }
     selectProposal(reviewTargets[next]);
-    setAdvanceStatus({ listKey: `target:${refKey(reviewTargets[next])}`, text: `${done} Next open proposal: ${next + 1} of ${n}` });
+    setAdvanceStatus({ listKey: `target:${refKey(reviewTargets[next])}`, text: `${done} Next open proposal: ${next + 1} of ${n}`, decidedKey: refKey(target) });
   };
 
   // Adopt a review target as an editable draft copy and switch to editing it.
@@ -2968,6 +2969,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const start = current < 0 ? (step > 0 ? -1 : n) : current;
     const at = (i: number) => (((start + step * i) % n) + n) % n;
     let index = !selectedTargetId && current >= 0 && step < 0 ? current : at(1);
+    // While the decision status is shown, K goes back to the proposal just decided (the advance may have skipped some).
+    const back = step < 0 && advanceStatus?.listKey === selectedListKey ? reviewTargets.findIndex(t => refKey(t) === advanceStatus.decidedKey) : -1;
+    if (back >= 0) index = back;
     if (step > 0) for (let i = 1; i <= n; i++) if (!decisionsMap[refKey(reviewTargets[at(i)])]) { index = at(i); break; }
     setSelectedTargetId(refKey(reviewTargets[index]));
     setSelectedAnnotationId(null);
@@ -3507,9 +3511,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
         {/* Right: Annotation & Search Panel + Review Actions */}
         <div className="inspector-pane density-compact" ref={inspectorRef}>
-          {advanceStatus?.listKey === selectedListKey && <p role="status" className="form-hint" data-advance-status>
-            {advanceStatus.text}{advanceStatus.listKey && <span aria-hidden="true"> <Kbd>K</Kbd> back</span>}
-          </p>}
+          {/* Always mounted so the text change is announced; aria-live, not role="status", which the save state owns. */}
+          <div aria-live="polite" data-advance-status>
+            {advanceStatus?.listKey === selectedListKey && <p className="form-hint">
+              {advanceStatus.text}{advanceStatus.listKey && <span aria-hidden="true"> <Kbd>K</Kbd> back</span>}
+            </p>}
+          </div>
           {!readOnly && !pendingAnnotation && selectedReanchorItem && selectedAnnotation && <InlineMessage tone="warning">
             <p>This finding is saved. Its current version still needs text-change review. Check the evidence and clinical values, then complete this review. Later changes require completion again.</p>
             <Button disabled={queueState === "saving"} onClick={()=>{void (async()=>{

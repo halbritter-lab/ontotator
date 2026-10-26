@@ -306,7 +306,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
                 tabIndex={radios ? (person.username === tabStop ? 0 : -1) : undefined}
                 aria-disabled={off || atLimit || busy ? "true" : undefined} aria-describedby={describedBy}
                 onClick={event => { if (radios && (off || atLimit || busy)) event.preventDefault(); }}
-                onChange={event => { if (!off && !atLimit) choose(person.username, event.target.checked); }}
+                onChange={event => { if (!off && !atLimit && !busy) choose(person.username, event.target.checked); }}
                 onKeyDown={event => rove(event, person.username)} />
               <label htmlFor={inputId}>{personLabel(person.person)}{why ? <span id={whyId} className="assign-reason">, {why}</span> : atLimit && <span className="assign-reason">, limit reached</span>}</label>
             </span></td>
