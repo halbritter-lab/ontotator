@@ -50,8 +50,12 @@ uv run locust -f loadtest/locustfile.py --headless -u 30 -r 5 -t 5m --host http:
 
 Use one local Locust process; distributed runs are refused to prevent duplicate
 account assignment. Thirty users each log in once with a session cookie, Origin
-and CSRF token. Tasks choose random documents and 4–12 character HPO-label
-substrings using a deterministic per-user RNG. Weights are search 5, open 2,
+and CSRF token. The seed raises the project's annotations per text to five
+(the maximum) through a synthetic lead and assigns each user one sixth of the
+corpus, so every text has five annotators. Tasks open random documents from the
+user's own assignments in `proposal_check` mode (the seeded tool proposals make
+that the assignments' mode), send a note with each spanless finding, and use
+4–12 character HPO-label substrings using a deterministic per-user RNG. Weights are search 5, open 2,
 write 4 and dashboard 1, with 0.5–1.5 seconds think time. Each write task sends
 two commands, `create_annotation` and `set_axes`; the `write` measurement pools
 both command requests, so it has twice as many requests as write task executions.
