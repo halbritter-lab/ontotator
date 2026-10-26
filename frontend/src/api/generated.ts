@@ -1628,10 +1628,13 @@ export interface paths {
         };
         /**
          * Member Candidates
-         * @description Active users outside the project whose username or name contains ``q``.
+         * @description Active users outside the project matching ``q`` (three characters at least).
          *
-         *     Two characters at least and ten results at most, so a lead finds a
-         *     person without browsing the whole user list.
+         *     A lead finds people who share a project with them by part of the name or
+         *     username, and anybody else only by the exact username or e-mail, so the
+         *     search does not browse the installation's user list. System
+         *     administrators are never offered (they manage without membership); an
+         *     administrator caller searches everyone. Ten results at most.
          */
         get: operations["member_candidates_api_v1_projects__key__member_candidates_get"];
         put?: never;

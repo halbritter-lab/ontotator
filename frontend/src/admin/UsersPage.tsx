@@ -278,7 +278,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     </Dialog>}
     {erase && <Dialog open title={`Anonymise ${erase.username}`} size="sm" onClose={busy ? undefined : () => setErase(null)}
       footer={<><Button disabled={busy} onClick={() => setErase(null)}>Cancel</Button><Button variant="danger" loading={busy} disabled={erase.typed.trim().toLowerCase() !== erase.username} onClick={() => { void anonymise(); }}>Anonymise permanently</Button></>}>
-      <p>This erases the person's name, e-mail, ORCID, qualification, languages and password, and the addresses of their past logins. It cannot be undone.</p>
+      <p>This erases the person's name, e-mail, ORCID, qualification, languages, preferences and password, their codes and the addresses of their past logins, and replaces their username with an anonymous one everywhere it is recorded, including the history. It cannot be undone.</p>
       <p>Their pseudonym and all their work stay, so annotations, results and exports remain complete.</p>
       <TextInput id="erase-confirm" label={`Type ${erase.username} to confirm`} value={erase.typed} autoComplete="off" disabled={busy} onChange={event => setErase({ ...erase, typed: event.target.value, error: undefined })} />
       {erase.error !== undefined && <ErrorNotice error={erase.error} />}

@@ -344,6 +344,5 @@ def user_audit(
         if user is None:
             raise DomainError("USER_NOT_FOUND", "The user does not exist.")
         return [
-            AuditEventView(**vars(event))
-            for event in read_audit(conn, username=user.username)
+            AuditEventView(**vars(event)) for event in read_audit(conn, user_id=user.id)
         ]

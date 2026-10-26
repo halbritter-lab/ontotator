@@ -1229,9 +1229,15 @@ def audit_command(
         if start.tzinfo is None:
             start = start.replace(tzinfo=UTC)
     with _open_database(ctx) as db, db.transaction() as conn:
+        user_id = None
+        if user is not None:
+            found = AccountService(db).get_by_username(user)
+            if found is None:
+                raise DomainError("USER_NOT_FOUND", f"There is no user '{user}'.")
+            user_id = found.id
         events = read_audit(
             conn,
-            username=user.strip().lower() if user else None,
+            user_id=user_id,
             project_key=project,
             since=start,
             limit=limit,

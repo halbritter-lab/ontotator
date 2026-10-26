@@ -17,7 +17,9 @@ deactivating the last one is refused with ``LAST_SYSTEM_ADMIN``.
 Erasure (GDPR Art. 17) anonymises a deactivated account in place: the row and
 its pseudonym stay, so research records keep their author, while every
 personal field, the credential and the login traces are removed. The
-username becomes ``anonymised-<id>``, a prefix new accounts cannot take.
+username becomes ``anonymised-<id>``, a prefix new accounts cannot take, and
+the old username is rewritten wherever the account's own rows carry it (audit
+trail, job labels); ``users.anonymised_at`` marks the erasure.
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ from sqlalchemy import (
     func,
     insert,
     select,
+    text,
     union,
     update,
 )
@@ -119,9 +122,7 @@ class User:
     orcid_consent: bool = False
     qualification: str | None = None
 
-    @property
-    def anonymised(self) -> bool:
-        return self.username.startswith(ANONYMISED_PREFIX)
+    anonymised: bool = False
 
 
 @dataclass(frozen=True)
@@ -199,6 +200,7 @@ def _user(row: Row[Any]) -> User:
         orcid=row.orcid,
         orcid_consent=row.orcid_consent,
         qualification=row.qualification,
+        anonymised=row.anonymised_at is not None,
     )
 
 
@@ -249,6 +251,58 @@ def canonical_code(code: str) -> str:
 def _code_invalid() -> DomainError:
     """The one error for every unusable code, so none can be told apart."""
     return DomainError("CODE_INVALID", CODE_INVALID_MESSAGE)
+
+
+def _rewrite_username(
+    conn: Connection, user_id: int, pseudonym: str, old: str, new: str
+) -> None:
+    """Replace an erased username in the rows that carry it; drop its receipts."""
+    from ontocurator.storage.tables import (
+        AuditEventRow,
+        DraftRow,
+        JobRow,
+        MutationReceiptRow,
+    )
+
+    label_old, label_new = f"user:{old}", f"user:{new}"
+    conn.execute(text("SET LOCAL ontocurator.erasure = on"))
+    conn.execute(
+        update(AuditEventRow)
+        .where(AuditEventRow.target_user_id == user_id)
+        .values(target_id=new)
+    )
+    conn.execute(
+        update(AuditEventRow)
+        .where(
+            (AuditEventRow.actor_user_id == user_id)
+            | (AuditEventRow.actor_label == label_old)
+        )
+        .values(actor_label=label_new)
+    )
+    conn.execute(
+        update(AuditEventRow)
+        .where(AuditEventRow.details["username"].astext == old)
+        .values(
+            details=AuditEventRow.details.op("||")(
+                func.jsonb_build_object("username", new)
+            )
+        )
+    )
+    # Only the erasure itself may rewrite history: close the window again.
+    conn.execute(text("SET LOCAL ontocurator.erasure = off"))
+    conn.execute(
+        update(JobRow)
+        .where((JobRow.requested_by == user_id) | (JobRow.requested_label == label_old))
+        .values(requested_label=label_new)
+    )
+    # Receipts only replay a request of the (now closed) account.
+    conn.execute(
+        delete(MutationReceiptRow).where(
+            MutationReceiptRow.workspace_key.in_(
+                select(DraftRow.draft_key).where(DraftRow.annotator_id == pseudonym)
+            )
+        )
+    )
 
 
 def _anonymised(username: str) -> DomainError:
@@ -791,9 +845,11 @@ class AccountService:
         Kept: the row, its id and pseudonym, memberships and all work, so
         exports and the audit trail still resolve the author. Removed: name,
         e-mail, ORCID, qualification, languages, preferences, the password,
-        open codes, the login attempts under the old username and the client
-        addresses of its sessions. Earlier audit rows are append-only and keep
-        the old username.
+        all codes, the login attempts under the old username, the client
+        addresses of its sessions and its idempotency receipts. The old
+        username is replaced by ``anonymised-<id>`` in the audit trail (actor
+        label, target and ``details.username``; the append-only trigger lets
+        this one transaction through) and in job labels.
 
         Raises:
             DomainError: ``USER_NOT_FOUND``, ``USER_ACTIVE`` for an active
@@ -820,8 +876,10 @@ class AccountService:
                     orcid_consent=False,
                     qualification=None,
                     is_system_admin=False,
+                    anonymised_at=now,
                 )
             )
+            _rewrite_username(conn, row.id, row.pseudonym, row.username, new_name)
             for table in (PasswordCredentialRow, UserLanguageRow, UserPreferencesRow):
                 conn.execute(delete(table).where(table.user_id == row.id))
             conn.execute(delete(OneTimeCodeRow).where(OneTimeCodeRow.user_id == row.id))

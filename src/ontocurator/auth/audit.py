@@ -53,7 +53,8 @@ def record_audit(
     """Insert one ``audit_events`` row in the caller's transaction.
 
     ``at`` defaults to the database clock; services pass their own clock, so
-    the trail and the change carry the same time.
+    the trail and the change carry the same time. A ``user`` target also
+    records the account's id, resolved from the username at this moment.
     """
     values: dict[str, Any] = {
         "actor_user_id": actor.user_id,
@@ -64,6 +65,10 @@ def record_audit(
         "project_id": project_id,
         "details": details or {},
     }
+    if target_type == "user":
+        values["target_user_id"] = (
+            select(UserRow.id).where(UserRow.username == str(target_id))
+        ).scalar_subquery()
     if at is not None:
         values["at"] = at
     conn.execute(insert(AuditEventRow).values(**values))
@@ -85,16 +90,15 @@ class AuditEvent:
 def read_audit(
     conn: Connection,
     *,
-    username: str | None = None,
+    user_id: int | None = None,
     project_key: str | None = None,
     since: datetime | None = None,
     limit: int = 200,
 ) -> list[AuditEvent]:
     """The newest events first, at most ``limit``.
 
-    ``username`` selects what was done to the user and what the user did,
-    under its current username (an anonymised account under
-    ``anonymised-<id>``: its earlier rows still carry the former username).
+    ``user_id`` selects what was done to the account and what it did, by
+    id: a username used again later never inherits an earlier history.
     """
     statement = (
         select(
@@ -110,13 +114,11 @@ def read_audit(
         .order_by(AuditEventRow.at.desc(), AuditEventRow.id.desc())
         .limit(limit)
     )
-    if username is not None:
-        user_id = select(UserRow.id).where(UserRow.username == username)
+    if user_id is not None:
         statement = statement.where(
             or_(
-                (AuditEventRow.target_type == "user")
-                & (AuditEventRow.target_id == username),
-                AuditEventRow.actor_user_id.in_(user_id.scalar_subquery()),
+                AuditEventRow.target_user_id == user_id,
+                AuditEventRow.actor_user_id == user_id,
             )
         )
     if project_key is not None:

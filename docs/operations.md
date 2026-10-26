@@ -129,7 +129,13 @@ docker compose exec app ontocurator admin users edit alice --email alice@example
 docker compose exec app ontocurator admin audit --user alice --since 2026-10-01
 ```
 
-`users list` shows e-mail, setup state ("setup pending" until the setup code is redeemed) and projects. `admin audit` prints the audit trail newest first (`--project`, `--limit`, `--json` for JSONL). To erase a person's data on request (GDPR Art. 17), deactivate the account, then run `ontocurator admin users anonymise alice --confirm alice` (or use Anonymise on the Users page): name, e-mail, ORCID, qualification, languages, password, codes and login traces are removed, the username becomes `anonymised-<id>`, and the pseudonym and all work stay. Audit rows written before the erasure are append-only and keep the former username.
+`users list` shows e-mail, setup state ("setup pending" until the setup code is redeemed) and projects. `admin audit` prints the audit trail newest first (`--project`, `--limit`, `--json` for JSONL). To erase a person's data on request (GDPR Art. 17), deactivate the account, then run `ontocurator admin users anonymise alice --confirm alice` (or use Anonymise on the Users page). It cannot be undone.
+
+- Erased: display name (becomes "Anonymised user"), e-mail, ORCID and its consent, qualification, languages, editor preferences, the password hash, all setup/reset codes, the login attempts recorded under the username, the client address and browser of every past session, and the replay receipts of their edits. The username becomes `anonymised-<id>` and is replaced in the audit trail (actor, target and `details.username`) and in job labels. The audit trail is otherwise append-only; only this erasure may rewrite those fields, inside its own transaction.
+- Kept: the account row with its id and pseudonym (`ann-NNNN`), the project memberships, and all research records written under the pseudonym (drafts, submissions, annotation and evidence versions, review decisions, consolidations, edit events) plus the audit events themselves, so exports and history remain complete.
+- Not touched: free text a person typed into research records or problem reports, uploaded source documents, and export files already downloaded or stored. The export writers name people by pseudonym, not by username.
+
+The username can be given to a new account afterwards; the new account does not inherit the erased history, which is tied to the account id.
 
 Stage inputs on writable tmpfs, then register them into persistent storage. Stream incoming files through `exec -T`: the Docker daemon can refuse `docker compose cp` into a container with a read-only root even when the target is writable tmpfs. The helper below writes as app's UID 1001. Only use releases whose licenses permit your intended use.
 

@@ -5962,7 +5962,7 @@
           "projects"
         ],
         "summary": "Member Candidates",
-        "description": "Active users outside the project whose username or name contains ``q``.\n\nTwo characters at least and ten results at most, so a lead finds a\nperson without browsing the whole user list.",
+        "description": "Active users outside the project matching ``q`` (three characters at least).\n\nA lead finds people who share a project with them by part of the name or\nusername, and anybody else only by the exact username or e-mail, so the\nsearch does not browse the installation's user list. System\nadministrators are never offered (they manage without membership); an\nadministrator caller searches everyone. Ten results at most.",
         "operationId": "member_candidates_api_v1_projects__key__member_candidates_get",
         "parameters": [
           {

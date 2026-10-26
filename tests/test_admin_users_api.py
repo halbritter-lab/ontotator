@@ -488,7 +488,8 @@ def test_anonymising_needs_deactivation_and_the_typed_username(app):
             .scalars()
             .all()
         )
-    assert actions == ["user.anonymise"]
+    # The whole history now names the account by its new name.
+    assert {"user.anonymise", "user.active", "user.create"} <= set(actions)
     # Neither the old nor the new name logs in, and the account stays closed.
     for username in ("alice", body["username"]):
         login = TestClient(app).post(
@@ -531,3 +532,79 @@ def test_an_admin_reads_the_audit_trail_of_a_user(app):
     )
     alice = logged_in(app, "alice")
     assert alice.get("/api/v1/admin/users/carol/audit").status_code == 403
+
+
+def test_anonymising_leaves_the_old_username_in_no_row(app):
+    from sqlalchemy import insert
+
+    from ontocurator.storage.tables import (
+        JobRow,
+        OneTimeCodeRow,
+        UserPreferencesRow,
+        UserRow,
+    )
+
+    admin = logged_in(app, "root", system_admin=True)
+    alice = logged_in(app, "alice", pseudonym="ann-x")
+    # Alice acts herself (an audit row with her as actor), owns a job and
+    # preferences, and holds an open code.
+    changed = alice.patch("/api/v1/me/profile", json={"qualification": "MD"})
+    assert changed.status_code == 200, changed.text
+    user_id = app.state.accounts.get_by_username("alice").id
+    with app.state.accounts.db.transaction() as conn:
+        conn.execute(
+            insert(JobRow).values(
+                kind="upload_preview",
+                status="succeeded",
+                requested_by=user_id,
+                requested_label="user:alice",
+                payload={},
+            )
+        )
+        conn.execute(insert(UserPreferencesRow).values(user_id=user_id, preferences={}))
+    admin.post("/api/v1/admin/users/alice/reset-code")
+    admin.patch("/api/v1/admin/users/alice", json={"active": False})
+
+    done = admin.post(
+        "/api/v1/admin/users/alice/anonymise", json={"confirm_username": "alice"}
+    )
+
+    assert done.status_code == 200, done.text
+    new = done.json()["username"]
+    with app.state.accounts.db.transaction() as conn:
+        audits = conn.execute(select(AuditEventRow)).mappings().all()
+        jobs = conn.execute(select(JobRow.requested_label)).scalars().all()
+        assert not conn.execute(select(UserPreferencesRow)).first()
+        assert not conn.execute(
+            select(OneTimeCodeRow).where(OneTimeCodeRow.user_id == user_id)
+        ).first()
+        assert conn.execute(
+            select(UserRow.anonymised_at).where(UserRow.id == user_id)
+        ).scalar_one()
+    assert all(
+        row["actor_label"] != "user:alice"
+        and row["target_id"] != "alice"
+        and row["details"].get("username") != "alice"
+        for row in audits
+    )
+    assert any(row["actor_label"] == f"user:{new}" for row in audits)
+    assert jobs == [f"user:{new}"]
+
+
+def test_a_reused_username_does_not_inherit_the_erased_history(app):
+    admin = logged_in(app, "root", system_admin=True)
+    admin.post("/api/v1/admin/users/", json={"username": "alice", "display_name": "A"})
+    admin.post("/api/v1/admin/users/alice/reset-code")
+    admin.patch("/api/v1/admin/users/alice", json={"active": False})
+    admin.post(
+        "/api/v1/admin/users/alice/anonymise", json={"confirm_username": "alice"}
+    )
+
+    again = admin.post(
+        "/api/v1/admin/users/", json={"username": "alice", "display_name": "New"}
+    )
+
+    assert again.status_code == 200, again.text
+    actions = [e["action"] for e in admin.get("/api/v1/admin/users/alice/audit").json()]
+    assert "user.reset_code" not in actions and "user.anonymise" not in actions
+    assert "user.create" in actions
