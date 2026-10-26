@@ -195,7 +195,9 @@ class ScopedRepository(Repository):
     ) -> Assignment:
         project_id = self._require_project(conn, key.project_key)
         access = current_access(conn, self.access, project_id, key.project_key)
-        require_document(conn, access, project_id, key.project_key, key.document_id)
+        require_document(
+            conn, access, project_id, key.project_key, key.document_id, fresh=True
+        )
         if key.annotator_id != access.pseudonym:
             raise AccessDenied("IDENTITY_MISMATCH")
         if not may_take(access, key.project_key, TASK_FOR_MODE[key.mode]):

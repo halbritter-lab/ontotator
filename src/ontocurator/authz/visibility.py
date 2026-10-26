@@ -85,9 +85,28 @@ def require_document(
     project_id: int,
     project_key: str,
     document_id: str,
+    *,
+    fresh: bool = False,
 ) -> None:
-    visibility = visible_documents(conn, access, project_id, project_key)
-    if not visibility.all and document_id not in visibility.document_ids:
+    """``fresh``: ``access`` was just read by ``current_access``; skip re-reading."""
+    if not fresh:
+        access = current_access(conn, access, project_id, project_key)
+    # Same rule as ``visible_documents``, but probes the one document instead of
+    # fetching every assigned id (hot path: several calls per editor request).
+    if can(access, Action.VIEW_ALL_DOCUMENTS, project_key):
+        return
+    if not any(access.roles_in(project_key) & roles for roles in TASK_ROLES.values()):
+        raise DomainError("DOCUMENT_NOT_FOUND")
+    visible = conn.execute(
+        select(AssignmentRow.id)
+        .where(
+            AssignmentRow.project_id == project_id,
+            AssignmentRow.document_id == document_id,
+            qualifying_assignment(access.user_id),
+        )
+        .limit(1)
+    ).first()
+    if visible is None:
         raise DomainError("DOCUMENT_NOT_FOUND")
 
 
