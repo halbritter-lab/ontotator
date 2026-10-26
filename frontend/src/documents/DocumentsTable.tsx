@@ -119,6 +119,8 @@ export function nextHeaderSort(column: string, sort: DocumentRowsRequest["sort"]
 
 export interface DocumentsTableProps {
   page: DocumentRowsPage;
+  /** False while the project has no translation (U-4): no Translation column. */
+  translations?: boolean;
   /** The rows in display order; default `tableRows(page, showNotInPlan, columnSort)` (the page passes the list ‹ › walk). */
   rows?: readonly DocumentRowView[];
   /** Opens the text card; `opener` gets focus back on close. */
@@ -151,7 +153,7 @@ export interface DocumentsTableProps {
 
 export function DocumentsTable({
   page, rows: givenRows, onOpenPanel, activeKey = null, renderRowNotice, rowBadge, onAction, onNavigate, busy, empty, selection, sort, onSort,
-  showNotInPlan = false, onAddToPlan, columnSort = null, onColumnSort,
+  showNotInPlan = false, onAddToPlan, columnSort = null, onColumnSort, translations = true,
 }: DocumentsTableProps): JSX.Element {
   const rows = useMemo(() => givenRows ?? tableRows(page, showNotInPlan, columnSort), [givenRows, page, showNotInPlan, columnSort]);
   const order = useMemo(() => rows.map(rowKeyOf), [rows]);
@@ -176,7 +178,7 @@ export function DocumentsTable({
       cell: row => <RowHeaderCell row={row} badge={rowBadge?.(row)} onOpenCard={onOpenPanel ? opener => openCard(row, opener) : undefined}
         showCaseId more={hidden.get(row.case_id) ?? 0} sibling={isSibling(row)} />,
     },
-    { id: "review", header: "Translation", sortable: true, cell: row => <RowStageCell row={row} stage="review" /> },
+    ...(translations ? [{ id: "review", header: "Translation", sortable: true, cell: (row: DocumentRowView) => <RowStageCell row={row} stage="review" /> }] : []),
     { id: "annotation", header: "Annotation", sortable: true, cell: row => <RowStageCell row={row} stage="annotation" /> },
     { id: "final", header: "Finalization", sortable: true, cell: row => <RowStageCell row={row} stage="final" /> },
     // `documents-col-wide`: hidden below 900 px (the text card shows it).

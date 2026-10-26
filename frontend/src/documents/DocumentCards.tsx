@@ -31,6 +31,8 @@ export interface DocumentCardsProps {
   me?: string | null;
   /** `"{case}:{language}"` of the row the panel shows (the active card). */
   activeKey?: string | null;
+  /** False while the project has no translation (U-4): no "Translation:" line. */
+  translations?: boolean;
   /** Inline notice under a row (plan confirmations, resolve options). */
   renderRowNotice?: (row: DocumentRowView) => ReactNode | null;
   /** Visit badge of a row, shown next to the card heading. */
@@ -115,7 +117,7 @@ function WaitingOnLine({ row }: { row: DocumentRowView }): JSX.Element {
   return <span className="documents-waiting-on">Waiting on: {value}</span>;
 }
 
-function DocumentCard({ row, group, projectKey, query, active: current, onOpenPanel, stageActions, me, renderRowNotice, rowBadge, onAction, onNavigate, select }: DocumentCardProps): JSX.Element {
+function DocumentCard({ row, group, projectKey, query, active: current, onOpenPanel, stageActions, me, renderRowNotice, rowBadge, onAction, onNavigate, select, translations = true }: DocumentCardProps): JSX.Element {
   const headingId = documentsRowId(row.case_id, row.language, "header");
   const name = rowName(row);
   const badge = rowBadge?.(row);
@@ -139,7 +141,7 @@ function DocumentCard({ row, group, projectKey, query, active: current, onOpenPa
         {active && rowIsNew(row) && <NewBadge />}
         {badge != null && badge !== false && <span className="documents-row-badge">{badge}</span>}
       </div>
-      {STAGE_TITLES.map(([stage, title]) => <StageLine key={stage} row={row} stage={stage} title={title} sourceLanguage={source} projectKey={projectKey}
+      {STAGE_TITLES.filter(([stage]) => translations || stage !== "review").map(([stage, title]) => <StageLine key={stage} row={row} stage={stage} title={title} sourceLanguage={source} projectKey={projectKey}
         onOpenPanel={onOpenPanel} stageActions={stageActions} me={me} />)}
       <div className="document-card-line document-card-owner">
         <WaitingOnLine row={row} />

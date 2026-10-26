@@ -686,6 +686,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     return steps.length ? steps.map((step, index) => <Button key={`${step.code}-${index}`} size="sm"
       onClick={() => { closeCard(); onAction(row, step); }}>{rowActionLabel(step, row)}</Button>) : null;
   };
+  const translatedTexts = !inventory || inventory.cases.some(item => item.variants.some(variant => variant.origin !== "native"));
+  // U-4: the Translation column and filter group show once a translation exists or a language beyond the sources is set up.
+  const translations = translatedTexts || !settings
+    || (settings.languages ?? []).some(language => !inventory.cases.some(item => item.variants.some(variant => variant.language === language)));
   const textCard = panelKey && panelRow ? <TextCard projectKey={projectKey} row={panelRow} rows={pageRows} query={query}
     segment={panelStage ? SEGMENT_OF[panelStage] : decisionKey.current === panelKey ? "finalization" : undefined} view={VIEW_OF[panelTab]}
     onSegment={segment => openCard({ key: panelKey, stage: STAGE_OF[segment] })}
@@ -771,11 +775,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     } else if (page.groups.length === 0) {
       body = emptyState(page.bar);
     } else if (narrow) {
-      body = <DocumentCards page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} onOpenPanel={onOpenPanel} activeKey={panelKey}
+      body = <DocumentCards page={page} projectKey={projectKey} query={tableQuery} selection={tableSelection} onOpenPanel={onOpenPanel} activeKey={panelKey} translations={translations}
         renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
         stageActions={(row, stage) => <StageActions {...stageActionProps} row={row} stage={stage} />} me={currentUser?.pseudonym ?? null} />;
     } else {
-      body = <DocumentsTable page={page} rows={shownRows} selection={tableSelection}
+      body = <DocumentsTable page={page} rows={shownRows} selection={tableSelection} translations={translations}
         onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
         sort={request.sort} onSort={(next: HeaderSort) => { setColumnSort(null); changeFilter({ sort: next === "case" ? undefined : next }); }}
         columnSort={columnSort} onColumnSort={setColumnSort} showNotInPlan={notInPlanShown} onAddToPlan={setPlanFor}
@@ -785,7 +789,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     const selectionBar = <SelectionBar projectKey={projectKey} keys={selection.keys} filters={filters} refresh={page} narrow={narrow} limitNote={limitNote}
       onClear={clearSelection} onAssign={openAssignCases} showToast={showToast} onAnnounce={announce} onChanged={() => reloadAfterAction()}
       onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }}
-      translations={!inventory || inventory.cases.some(item => item.variants.some(variant => variant.origin !== "native"))} />;
+      translations={translatedTexts} />;
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh. <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
@@ -816,7 +820,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     {page && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />}
     <Toolbar label="Document filters" className="documents-filters">
       <DocumentsSearch ref={search} q={query.q} onApply={q => changeFilter({ q })} />
-      <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} onChange={changeFilter} onClearAll={clearAll} people={people} />
+      <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} translations={translations} onChange={changeFilter} onClearAll={clearAll} people={people} />
       {chips.length > 0 && <div ref={chipList} className="documents-filter-chips">
         {chips.map((chip, index) => <FilterChip key={chip.id} label={chip.label} language={chip.language} onRemove={() => removeChip(index)} />)}
       </div>}

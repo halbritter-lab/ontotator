@@ -17,6 +17,8 @@ export interface FilterPopoverProps {
   onClearAll: () => void;
   /** Display names by pseudonym for the Waiting on group. */
   people?: PeopleNames;
+  /** False while the project has no translation (U-4): no Translation review group. */
+  translations?: boolean;
 }
 
 const matchText = (count: number) => `${plural(count, "text")} ${count === 1 ? "matches" : "match"}`;
@@ -29,7 +31,7 @@ const matchText = (count: number) => `${plural(count, "text")} ${count === 1 ? "
  * checkable only while checked. Footer: Order (VD10) and "Clear all";
  * below 700 px a full-height sheet with "Show {n} texts".
  */
-export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAll, people }: FilterPopoverProps): JSX.Element {
+export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAll, people, translations = true }: FilterPopoverProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [showEmpty, setShowEmpty] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
@@ -58,7 +60,7 @@ export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAl
 
   // While counting (no bar) every option shows.
   const empty = (item: FacetOption) => bar != null && optionCount(facets, item) === 0 && !optionChecked(query, item);
-  const allGroups = facetGroups(facets, query, sourceLanguages, people);
+  const allGroups = facetGroups(facets, query, sourceLanguages, people).filter(group => translations || group.id !== "review");
   const emptyCount = allGroups.reduce((sum, group) => sum + group.options.filter(empty).length, 0);
   const groups = showEmpty ? allGroups : allGroups.map(group => ({ ...group, options: group.options.filter(item => !empty(item)) })).filter(group => group.options.length > 0);
 

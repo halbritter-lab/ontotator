@@ -591,6 +591,23 @@ describe("case selection", () => {
   });
 });
 
+it("hides the Translation column and filter group while the project has no translation (U-4)", async () => {
+  const native = { document_id: "d-en", case_id: "case-0101", external_id: "e", language: "en", version: 1, origin: "native", derived_from: null, translation: null, translation_status: null, status_reason: null, text_sha256: "x", assigned_to_me: false };
+  vi.mocked(api.getProjectSettings).mockResolvedValue({ languages: ["en"] } as never);
+  vi.mocked(api.listCases).mockResolvedValue([{ case_id: "case-0101", variants: [native] }] as never);
+  mockRows(casesPage(1));
+  renderPage(); await loaded();
+  const headers = () => within(screen.getByRole("table", { name: "Documents" })).getAllByRole("columnheader").map(header => header.textContent);
+  await waitFor(() => expect(headers()).not.toContain("Translation"));
+  fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+  expect(screen.queryByRole("group", { name: "Translation review" })).toBeNull();
+  cleanup();
+  // A translation language set up brings it back.
+  vi.mocked(api.getProjectSettings).mockResolvedValue({ languages: ["en", "de"] } as never);
+  renderPage(); await loaded();
+  await waitFor(() => expect(within(screen.getByRole("table", { name: "Documents" })).getAllByRole("columnheader").map(header => header.textContent)).toContain("Translation"));
+});
+
 it("renders the new table with stage columns", async () => {
   const progress = stagedRow("case-106", "de", {
     stages: {
