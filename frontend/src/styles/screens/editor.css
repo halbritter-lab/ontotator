@@ -2603,3 +2603,7 @@ details.case-version-controls > .btn { vertical-align: bottom; }
     display: none;
   }
 }
+
+/* M2 M-2: the status strip after a decision moves on (success notice with a check icon). */
+.advance-strip { margin: 0; }
+.advance-strip > .icon { margin-inline-end: var(--space-1); vertical-align: -3px; }

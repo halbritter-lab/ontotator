@@ -104,6 +104,12 @@ it("1 and 2 move on to the next open proposal and name what was decided; the las
   await waitFor(() => expect(selected()).toBe(2));
   const status = () => document.querySelector("[data-advance-status]")?.textContent;
   expect(status()).toMatch(/^Confirmed .+\. Next open proposal: 3 of 3 K back$/);
+  // M-2: a framed success strip with a check icon inside the permanent polite live region, no role of its own.
+  const strip = document.querySelector("[data-advance-status]")!;
+  expect(strip.getAttribute("aria-live")).toBe("polite");
+  const notice = strip.querySelector(".notice.notice-success")!;
+  expect(notice.getAttribute("role")).toBeNull();
+  expect(notice.querySelector("svg.icon")).not.toBeNull();
   // K returns to the proposal just decided, past the decided p-2 the advance skipped; J comes forward again.
   fireEvent.keyDown(window, { key: "k" });
   expect(selected()).toBe(0);

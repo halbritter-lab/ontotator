@@ -3561,11 +3561,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
         {/* Right: Annotation & Search Panel + Review Actions */}
         <div className="inspector-pane density-compact" ref={inspectorRef}>
-          {/* Always mounted so the text change is announced; aria-live, not role="status", which the save state owns. */}
+          {/* Always mounted so the text change is announced; aria-live, not role="status", which the save state owns.
+              M2 M-2: a framed success strip with a check icon, spacing below, so it reads as a status. */}
           <div aria-live="polite" data-advance-status>
-            {advanceStatus?.listKey === selectedListKey && <p className="form-hint">
-              {advanceStatus.text}{advanceStatus.listKey && <span aria-hidden="true"> <Kbd>K</Kbd> back</span>}
-            </p>}
+            {advanceStatus?.listKey === selectedListKey && <InlineMessage tone="success" live={false}>
+              <p className="advance-strip"><IconCheck />{advanceStatus.text}{advanceStatus.listKey && <span aria-hidden="true"> <Kbd>K</Kbd> back</span>}</p>
+            </InlineMessage>}
           </div>
           {!readOnly && !pendingAnnotation && selectedReanchorItem && selectedAnnotation && <InlineMessage tone="warning">
             <p>This finding is saved. Its current version still needs text-change review. Check the evidence and clinical values, then complete this review. Later changes require completion again.</p>
