@@ -67,3 +67,18 @@
 .text-change-person input[aria-disabled="true"], .text-change-person input[aria-disabled="true"] + label { cursor: not-allowed; }
 .text-change-held { margin: 0; }
 .text-change-error { margin: 0 auto 0 0; color: var(--danger); font-size: var(--size-sm); }
+
+/* M2 D5: annotators per text changed inline where the limit is met. */
+.assign-limit-edit {
+  display: grid;
+  gap: var(--space-2);
+  margin-block: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.assign-limit-actions {
+  display: flex;
+  gap: var(--space-2);
+}

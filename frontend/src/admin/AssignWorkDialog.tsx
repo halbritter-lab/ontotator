@@ -3,9 +3,8 @@ import { api, ApiError, type BatchAssignRequest, type BatchPersonView, type Batc
 import { personLabel, textLabel } from "../app/identity";
 import { assignedText } from "../app/assignedDate";
 import { plural } from "../app/labels";
-import { routeHref } from "../app/router";
 import { versionName } from "../documents/labels";
-import { Button, Checkbox, Dialog, Select, StatusBadge } from "../ui";
+import { Button, Checkbox, Dialog, Select, StatusBadge, TextInput } from "../ui";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { errorMessage } from "./errors";
@@ -40,6 +39,47 @@ const rank = (person: BatchPersonView) => memberUnavailable(person) ? 2 : person
 export const sortMembers = (people: readonly BatchPersonView[]): BatchPersonView[] => [...people].sort((a, b) =>
   rank(a) - rank(b) || a.open_before - b.open_before || personName(a.person).localeCompare(personName(b.person)) || a.username.localeCompare(b.username));
 
+/**
+ * M2 D5: "Annotators per text" changed where the limit is met, with the same project setting and target preview as
+ * Settings › Workflow. Saving reloads the member list with the new limit; the selection stays.
+ */
+function PerTextLimit({ projectKey, current, onSaved, onCancel }: { projectKey: string; current: number; onSaved: (value: number) => void; onCancel: () => void }): JSX.Element {
+  const id = useId();
+  const [value, setValue] = useState(String(current));
+  const [over, setOver] = useState<{ target: number; rows: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const target = Number(value);
+  const valid = Number.isInteger(target) && target >= 1 && target <= 5;
+  useEffect(() => {
+    if (!valid || target >= current) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      api.annotationTargetPreview(projectKey, target).then(result => { if (active) setOver({ target, rows: result.rows_over_target }); }, () => { if (active) setOver(null); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [projectKey, target, valid, current]);
+  const rows = valid && target < current && over?.target === target ? over.rows : null;
+  const save = async () => {
+    if (!valid || busy) return;
+    setBusy(true); setError(undefined);
+    try { await api.updateProjectSettings(projectKey, { annotations_per_text: target }); onSaved(target); }
+    catch (failure: unknown) { setError(failure); }
+    finally { setBusy(false); }
+  };
+  return <div className="assign-limit-edit" role="group" aria-label="Annotators per text">
+    <TextInput id={`${id}-per-text`} label="Annotators per text" type="number" min={1} max={5} step={1} required autoFocus value={value} disabled={busy}
+      hint="Project setting: the limit when you assign, and the target on Progress." onChange={event => setValue(event.target.value)}
+      onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void save(); } }} />
+    {rows !== null && <p role="status" className="field-hint">{rows > 0 ? `${rows} ${rows === 1 ? "row has" : "rows have"} more annotators than the new target. Nobody is removed.` : "Nobody is removed."}</p>}
+    {error !== undefined && <ErrorNotice error={error} />}
+    <div className="assign-limit-actions">
+      <Button size="sm" loading={busy} aria-disabled={!valid || undefined} onClick={() => { void save(); }}>Save limit</Button>
+      <Button size="sm" disabled={busy} onClick={onCancel}>Cancel</Button>
+    </div>
+  </div>;
+}
+
 function refusedRows(error: ApiError): Refused[] {
   const rows = error.details && typeof error.details === "object" ? (error.details as { refused?: unknown }).refused : undefined;
   return Array.isArray(rows) ? rows.filter((row): row is Refused => !!row && typeof row === "object" && typeof row.case_id === "string" && typeof row.username === "string" && typeof row.code === "string") : [];
@@ -65,6 +105,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const [notice, setNotice] = useState<string | null>(null);
   const [randomOpen, setRandomOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [editingLimit, setEditingLimit] = useState(false);
+  const [limitSaved, setLimitSaved] = useState<string | null>(null);
   const randomChanged = useRef(false);
   const writing = useRef(false);
   const alive = useRef(true);
@@ -276,6 +318,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     ? (["translation_review", "annotate"] as const).filter(item => item !== "translation_review" || !props.row.is_source).map(item => ({ value: stepKey(item, props.row.language), label: stepName(item) }))
     : (steps ?? []).map(step => ({ value: stepKey(step.task, step.language), label: stepLabel(step.task, step.language, step.versions) }));
   const changeStep = (value: string) => { reset(); setChosen([]); setAcknowledged(false); setCurrent(value); };
+  const changeLimit = <Button size="sm" disabled={busy} aria-expanded={editingLimit} onClick={() => { setLimitSaved(null); setEditingLimit(true); }}>Change…</Button>;
   const closing = busy ? undefined : props.onClose;
 
   return <Dialog open title={title} size="md" onClose={closing} footer={<>
@@ -288,8 +331,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       {props.mode === "row" && <div className="assign-context">
         <p><strong>{textLabel({ case_id: props.row.case_id, language: props.row.language, version: newest?.version }, { withVersion: (newest?.version ?? 1) > 1 })}</strong></p>
         {task === "translation_review" && heldBy.length > 0 && <p>{`${stepName(task)} of ${textLabel(props.row)} is assigned to ${heldBy.map(person => personLabel(person.person)).join(", ")}. Assign it to someone else?`}</p>}
-        <p id={limitId} className="assign-muted">{status}{rowMulti && shown && <>{` · limit ${shown.per_text} per text (`}
-          <a href={routeHref({ name: "projectSettings", key: props.projectKey, section: "workflow" })}>project setting</a>{")"}</>}</p>
+        <p id={limitId} className="assign-muted">{status}{rowMulti && shown && <>{` · limit ${shown.per_text} per text (project setting) `}{changeLimit}</>}</p>
       </div>}
 
       {props.mode === "cases" && stepsError !== undefined && <><ErrorNotice error={stepsError} /><Button onClick={() => setStepsRetry(value => value + 1)}>Retry</Button></>}
@@ -304,8 +346,11 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         ? <div className="assign-field"><Select id={`${id}-task`} label="Task" hint="from the plan" value={current ?? ""} disabled={busy} onChange={event => changeStep(event.target.value)}>{stepOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></div>
         : <p className="assign-field"><strong>Task</strong> <span className="assign-step">{stepOptions[0]?.label}</span> <span className="assign-muted">from the plan</span></p>)}
 
-      {multi && props.mode === "cases" && shown && <p id={limitId} className="assign-muted">Tick everyone who should annotate these texts. Each ticked person gets every selected text, up to {shown.per_text} per text (
-        <a href={routeHref({ name: "projectSettings", key: props.projectKey, section: "workflow" })}>project setting</a>{")."}</p>}
+      {multi && props.mode === "cases" && shown && <p id={limitId} className="assign-muted">Tick everyone who should annotate these texts. Each ticked person gets every selected text, up to {shown.per_text} per text (project setting). {changeLimit}</p>}
+      {editingLimit && shown && <PerTextLimit projectKey={props.projectKey} current={shown.per_text}
+        onCancel={() => setEditingLimit(false)}
+        onSaved={value => { setEditingLimit(false); reset(); setLimitSaved(`Annotators per text: ${value}. Saved for the project.`); setReload(count => count + 1); }} />}
+      {limitSaved && <p className="assign-muted" role="status">{limitSaved}</p>}
 
       {unreviewedText && <Checkbox id={`${id}-unreviewed`} label="Annotate before the translation review is accepted"
         hint={`Translation review not accepted yet: ${unreviewed.length ? unreviewed.map(rootLabel).join(", ") : props.mode === "row" ? textLabel(props.row) : ""}`}
@@ -364,7 +409,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         </tbody>
       </table>}
       {task && limitReached && shown && <p id={limitReachedId} className="assign-limit-reached">{`Limit reached: ${shown.per_text === 1 ? "1 person" : `${shown.per_text} people`} per text. `}
-        <a href={routeHref({ name: "projectSettings", key: props.projectKey, section: "workflow" })}>Change in project settings</a></p>}
+        {!editingLimit && changeLimit}</p>}
       {me && rowMulti && props.mode === "row" && props.consolidatorRule && <p id={`${id}-rule`} className="assign-muted">If you annotate this text yourself, you cannot consolidate it afterwards (project rule "the consolidator is not an annotator").</p>}
 
       <div className="assign-summary" role="status" aria-live="polite" aria-label="Summary">{summaryLines.map(line => <p key={line}>{line}</p>)}</div>
