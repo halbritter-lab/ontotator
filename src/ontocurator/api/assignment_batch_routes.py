@@ -103,7 +103,7 @@ class BatchAssignRequest(BaseModel):
     # The Documents filters of the dialog; the case order depends on ``sort``
     # only, and every selected case keeps its place whatever the filters hide.
     filters: DocumentRowFilters = Field(default_factory=DocumentRowFilters)
-    mode: Literal["one", "split"]
+    mode: Literal["one", "split", "each"]
     usernames: list[str] = Field(default_factory=list, max_length=50)
     # D25: translation review of an externally accepted version.
     review_accepted_translation: bool = False

@@ -118,3 +118,27 @@ def test_no_people_assigns_nothing():
         {},
         [],
     )
+
+
+def test_each_person_gets_every_case_up_to_the_open_slots():
+    cases = CASES[:3]
+    got, skipped = layout(
+        cases,
+        ["ana", "ben", "cy"],
+        mode="each",
+        remaining={cases[0]: 2, cases[1]: 3, cases[2]: 0},
+        already={cases[1]: frozenset({"ben"})},
+    )
+    assert got == {cases[0]: ["ana", "ben"], cases[1]: ["ana", "cy"]}
+    assert skipped == [cases[2]]
+
+
+def test_each_person_skips_a_case_every_chosen_person_holds():
+    got, skipped = layout(
+        CASES[:1],
+        ["ana"],
+        mode="each",
+        remaining=ones(CASES[:1], 2),
+        already={CASES[0]: frozenset({"ana"})},
+    )
+    assert got == {} and skipped == CASES[:1]

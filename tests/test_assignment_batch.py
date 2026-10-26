@@ -502,6 +502,25 @@ def test_remaining_per_case_with_one_of_two_assigned(env):
     assert response.json()["details"] == {"refused": [], "needs_people": 2}
 
 
+def test_each_mode_gives_every_case_to_every_person_up_to_the_limit(env):
+    set_project(env, annotations_per_text=2)
+    set_status(env, "accepted", *CASES[:3])
+    assign(env, de(CASES[0]), "ana", "annotate")
+    assign(env, de(CASES[1]), "ben", "annotate")
+    assign(env, de(CASES[1]), "cyd", "annotate")
+    shown = {"case_ids": CASES[:3], "mode": "each", "usernames": ["ana", "ben"]}
+    result = preview(env, "annotate", **shown)
+    assert {t["case_id"]: t["usernames"] for t in result["targets"]} == {
+        CASES[0]: ["ben"],
+        CASES[2]: ["ana", "ben"],
+    }
+    assert skipped(result) == {CASES[1]: "already_assigned"}
+    assert result["needs_people"] is None
+    response = commit(env, "annotate", **shown)
+    assert response.status_code == 200, response.text
+    assert len(response.json()["created"]) == 3
+
+
 def test_review_accepted_translation_targets_externally_accepted_rows_only(env):
     lead = env.app.state.accounts.get_by_username("leader")
     set_status(env, "accepted", *CASES[:3])

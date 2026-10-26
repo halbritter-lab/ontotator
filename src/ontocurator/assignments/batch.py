@@ -60,7 +60,7 @@ from ontocurator.storage.tables import (
     UserRow,
 )
 
-Mode = Literal["one", "split"]
+Mode = Literal["one", "split", "each"]
 SkipReason = Literal[
     "waiting_for_review",
     "not_in_plan",
