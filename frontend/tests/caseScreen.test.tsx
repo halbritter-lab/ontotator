@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
@@ -2602,7 +2604,7 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(container.querySelector(".attach-mention-banner")).toBeNull();
     expect(screen.getByRole("list", { name: "Modifiers of Seizure" }).textContent).toContain("Severe · “schwere”");
     expect(announcer(container)).toBe("Attached Severe to Seizure. Next: mark more text, or add another modifier with “+ Add modifier…”.");
-    expect(container.querySelector('[data-list-key="annotation:seizure"] .mod-lines')!.textContent).toContain("Severe HP:0012828 “schwere”");
+    expect(container.querySelector('[data-list-key="annotation:seizure"] .mod-lines')!.textContent).toBe("Modifiers: Severe");
     const modRun = runsOf(container, "mod:seizure:HP:0012828")[0];
     expect(modRun.classList.contains("run--modifier")).toBe(true);
     expect(modRun.title).toBe("Severe, modifier of Seizure");
@@ -2841,9 +2843,30 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(row.getAttribute("aria-pressed")).toBe("true");
     // The selected finding keeps its modifier segments framed.
     expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--framed")).toBe(true);
-    // The clicked modifier's own span is the selected mark, not the finding's term (B3-3).
+    // The clicked modifier's own span is the selected mark, not the finding's term (B3-3); its row is the selected one (B3-4).
     expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--hot")).toBe(true);
     expect(runsOf(container, "ev-seizure")[0].classList.contains("run--hot")).toBe(false);
+    expect(container.querySelector('[data-modifier-chip="HP:0012828"]')!.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("a click on a modifier row selects the modifier: its span is marked and scrolled into view if needed (B3-4)", async () => {
+    const { container } = await setup(modView(SEVERE_ON_SEIZURE));
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    const modRun = runsOf(container, "mod:seizure:HP:0012828")[0];
+    const scroll = vi.fn();
+    modRun.scrollIntoView = scroll;
+    fireEvent.click(await screen.findByRole("button", { name: /^Severe/, pressed: false }));
+    await waitFor(() => expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--hot")).toBe(true));
+    expect(runsOf(container, "ev-seizure")[0].classList.contains("run--hot")).toBe(false);
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+    expect(screen.getByRole("button", { name: /^Severe/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Severe · HP:0012828 · in the text: “schwere”")).toBeDefined();
+  });
+
+  it("the selected modifier's frame pulses briefly; under reduced motion it is a static stronger frame (B3-4)", () => {
+    const css = readFileSync(resolve(__dirname, "../src/styles/screens/editor.css"), "utf8");
+    expect(css).toMatch(/\.run--modifier\.run--hot \{[^}]*animation: modifier-attention 300ms ease-out 2;/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.run--modifier\.run--hot \{\s*animation: none;/);
   });
 
   it("“+ Add modifier…” adds without a span; remove shows an Undo toast and Ctrl+Z restores", async () => {

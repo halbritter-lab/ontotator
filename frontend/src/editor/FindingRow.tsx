@@ -7,8 +7,7 @@ import { AiBadge } from "./AiBadge";
 import { axisOptionLabel, type findingAxes } from "./axisLabels";
 import { TermName } from "./TermName";
 import { Kbd } from "../ui/Kbd";
-import { IconTag } from "../ui/icons";
-import { quoteOf, sortByLabel } from "./modifiers";
+import { sortByLabel } from "./modifiers";
 import "./modifiers.css";
 
 /** The row as a target of the attach mode (E-a): its name, and whether it is the focused target. */
@@ -32,8 +31,6 @@ export interface FindingRowProps {
   onActivate: () => void;
   /** Rendered after the axis summary. */
   children?: ReactNode;
-  /** Document text, for the quotes of linked modifiers. */
-  documentText?: string;
   attachTarget?: AttachTarget;
   /** Convert mode (E-c): this row's finding becomes the modifier; it is no target. */
   convertSource?: boolean;
@@ -42,7 +39,7 @@ export interface FindingRowProps {
 }
 
 /** One row of the saved findings list in the editor sidebar. */
-export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel, layerName, showLayer, axes, defaulted, proposal, onActivate, children, documentText = "", attachTarget, convertSource, onFrame }: FindingRowProps) {
+export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel, layerName, showLayer, axes, defaulted, proposal, onActivate, children, attachTarget, convertSource, onFrame }: FindingRowProps) {
   const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
   const termId = annSnap.annotation.term_id;
   const layerId = annSnap.annotation.layer_id;
@@ -89,18 +86,8 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
       </div>
       {convertSource && <div className="mod-attach-here">Becomes a modifier of the finding you choose</div>}
       {attachTarget?.active && <div className="mod-attach-here" aria-hidden="true">Attach {attachTarget.term} here <Kbd>Enter</Kbd></div>}
-      {modifiers.length > 0 && <ul className="mod-lines" aria-label="Modifiers">
-        {modifiers.map(modifier => {
-          const quote = modifier.segments?.length ? quoteOf(documentText, modifier.segments) : "";
-          return <li key={modifier.term_id} className="mod-line">
-            <span aria-hidden="true">↳</span><IconTag />
-            <span className="visually-hidden">Modifier: </span>
-            <span className="mod-line-term">{termLabel(layerId, modifier.term_id) ?? modifier.term_id}</span>
-            {" "}<span className="mod-line-id">{modifier.term_id}</span>
-            {quote && <> <span className="mod-line-span">“{quote}”</span></>}
-          </li>;
-        })}
-      </ul>}
+      {modifiers.length > 0 && <p className="mod-lines">Modifiers: {modifiers.map((modifier, index) => <span key={modifier.term_id}>
+        {index > 0 && ", "}<b>{termLabel(layerId, modifier.term_id) ?? modifier.term_id}</b></span>)}</p>}
       {axes.length > 0 && <dl className="finding-axis-summary" aria-label="Clinical context">
         {axes.map(axis => <div key={axis.id} title={`${axis.label}: ${axisOptionLabel(axis.value)}${annSnap.annotation.axes_defaulted?.includes(axis.id) ? " (defaulted)" : ""}`}>
           <dt>{axis.label}: </dt><dd><AxisValue value={axis.value as string | null | undefined} /></dd>

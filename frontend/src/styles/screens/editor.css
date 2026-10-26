@@ -568,6 +568,38 @@
     var(--run-highlight);
 }
 
+/* B3-4 (mockup 01 A): while its finding is selected a modifier span has a dotted accent underline, no frame;
+   the selected modifier itself gets a tint and a steady accent frame after two short pulses (about 600 ms).
+   Under reduced motion the frame is static and stronger. Never an endless blink. */
+.run--modifier.run--framed:not(.run--hot) {
+  box-shadow: none;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--accent);
+}
+
+.run--modifier.run--hot {
+  --hot: var(--accent);
+  background: var(--accent-light);
+  background-image: none;
+  border-radius: 2px;
+  animation: modifier-attention 300ms ease-out 2;
+}
+
+@keyframes modifier-attention {
+  from { outline: 3px solid var(--accent); outline-offset: 5px; }
+  to { outline: 3px solid transparent; outline-offset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run--modifier.run--hot {
+    animation: none;
+    --hot-rows: 0 -3px 0 var(--hot), 0 3px 0 var(--hot);
+    --hot-left: -3px 0 0 var(--hot), -3px -3px 0 var(--hot), -3px 3px 0 var(--hot);
+    --hot-right: 3px 0 0 var(--hot), 3px -3px 0 var(--hot), 3px 3px 0 var(--hot);
+  }
+}
+
 /* Active / Selected mention */
 
 .mention-span.selected {

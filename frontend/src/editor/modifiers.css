@@ -4,31 +4,60 @@
 .mod-heading {
   margin: 0 0 var(--space-1);
 }
-.mod-chips {
+/* B3-4 (mockup 01 A): plain rows, no borders around each modifier; the selected one is tinted with an accent edge. */
+.mod-rows {
   list-style: none;
   margin: 0 0 var(--space-2);
   padding: 0;
+  border-top: 1px solid var(--border);
+}
+.mod-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-.mod-chip {
-  display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  min-height: 28px;
+  gap: var(--space-2);
+  min-height: 32px;
   padding: 2px var(--space-1) 2px var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface-sunken);
-  font-size: var(--size-sm);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--size-md);
 }
-.mod-chip--readonly {
-  padding-right: var(--space-2);
+.mod-row.is-sel {
+  background: var(--accent-light);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
-.mod-chip .ui-menu-button .btn {
+.mod-row-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.mod-row-main {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+button.mod-row-main:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.mod-row-label {
+  font-weight: var(--weight-strong);
+}
+.mod-row-quote {
+  color: var(--text-muted);
+}
+.mod-row .ui-menu-button .btn {
   min-height: 24px;
   padding: 0 var(--space-1);
+}
+.mod-selected {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--size-sm);
 }
 .mod-cohort,
 .mod-warning {
@@ -55,32 +84,15 @@
   margin-bottom: var(--space-2);
 }
 
-/* Findings list: one indented line per modifier (FindingRow.tsx, E-b) */
+/* Findings list: one grey line names the modifiers (FindingRow.tsx, E-b, B3-4 mockup 01 A) */
 .mod-lines {
-  list-style: none;
   margin: 2px 0 4px;
-  padding: 0 0 0 var(--space-2);
-  display: grid;
-  gap: 1px;
-}
-.mod-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
   color: var(--text-muted);
   font-size: var(--size-sm);
 }
-.mod-line .icon {
-  flex: none;
-}
-.mod-line-term {
+.mod-lines b {
   color: var(--text);
   font-weight: var(--weight-strong);
-}
-.mod-line-id {
-  font-family: var(--font-mono);
-  font-size: var(--size-xs);
 }
 
 /* Attach mode: target rows, the active one, the inspector panel (AttachModePanel.tsx) */

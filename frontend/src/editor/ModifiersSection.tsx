@@ -21,16 +21,20 @@ export interface ModifiersSectionProps {
   onLinkSpan?: (termId: string) => void;
   onRemoveSpan?: (termId: string) => void;
   onRemove?: (termId: string) => void;
+  /** The selected modifier (M1 mockup 01 A): its row is marked and a status line names it with its term ID. */
+  selectedTermId?: string | null;
+  /** A click on a modifier row selects that modifier (its span is marked in the text). */
+  onSelectModifier?: (termId: string) => void;
   /** The term search of "+ Add modifier…" (modifier mode is set here); absent: no add button. */
   searchProps?: Omit<SearchPanelProps, "onSelectCandidate" | "mode" | "assignMode" | "onPickModifier" | "autoFocus" | "onEscape">;
 }
 
 /**
- * Modifiers of one finding (spec "Modifiers section"): chips with an actions menu, the "Two severities" /
+ * Modifiers of one finding (spec "Modifiers section", B3-4 mockup 01 A): plain rows with an actions menu, the "Two severities" /
  * "Two onsets" warning and "+ Add modifier…". Depends on no editor state, so the consolidation can reuse it.
  */
 export function ModifiersSection({ finding, modifiers, text, termInfo, readOnly = false, chipText = editorChipText,
-  onAdd, onLinkSpan, onRemoveSpan, onRemove, searchProps }: ModifiersSectionProps): JSX.Element {
+  onAdd, onLinkSpan, onRemoveSpan, onRemove, selectedTermId = null, onSelectModifier, searchProps }: ModifiersSectionProps): JSX.Element {
   const headingId = useId();
   const [searching, setSearching] = useState(false);
   const [status, setStatus] = useState<{ text: string; linkTermId?: string } | null>(null);
@@ -45,7 +49,7 @@ export function ModifiersSection({ finding, modifiers, text, termInfo, readOnly 
 
   return <section className="detail-section mod-section" data-modifiers-section aria-labelledby={headingId}>
     <h3 id={headingId} className="mod-heading">Modifiers</h3>
-    {sorted.length > 0 && <ul className="mod-chips" aria-label={`Modifiers of ${finding}`}>
+    {sorted.length > 0 && <ul className="mod-rows" aria-label={`Modifiers of ${finding}`}>
       {sorted.map(modifier => {
         const info = termInfo(modifier.term_id);
         const label = info?.label ?? modifier.term_id;
@@ -58,12 +62,26 @@ export function ModifiersSection({ finding, modifiers, text, termInfo, readOnly 
         const content = chipText(label, linked ? quoteOf(text, modifier.segments) : null, info?.role ?? "modifier");
         const tail = ` · ${COHORT_TAG}`;
         const cohortTag = info?.role === "cohort" && content.endsWith(tail);
-        return <li key={modifier.term_id} className={`mod-chip${items.length ? "" : " mod-chip--readonly"}`} data-modifier-chip={modifier.term_id} tabIndex={-1}>
-          {cohortTag ? <>{content.slice(0, -tail.length)} · <span className="mod-cohort">{COHORT_TAG}</span></> : content}
+        const words = cohortTag ? content.slice(0, -tail.length) : content;
+        // The name in strong text, the rest (quote) muted; the text stays the chip text.
+        const name = words.startsWith(label) ? label : "";
+        const body = <>{name && <span className="mod-row-label">{name}</span>}<span className="mod-row-quote">{words.slice(name.length)}</span>
+          {cohortTag && <> · <span className="mod-cohort">{COHORT_TAG}</span></>}</>;
+        const selected = selectedTermId === modifier.term_id;
+        return <li key={modifier.term_id} className={["mod-row", selected && "is-sel"].filter(Boolean).join(" ")} data-modifier-chip={modifier.term_id} tabIndex={-1}
+          aria-current={selected ? "true" : undefined}>
+          {onSelectModifier ? <button type="button" className="mod-row-main" aria-pressed={selected} onClick={() => onSelectModifier(modifier.term_id)}>{body}</button>
+            : <span className="mod-row-main">{body}</span>}
           {items.length > 0 && <MenuButton label={`Actions, ${label}`} buttonLabel={`Actions, ${label}`} content={<IconMore />} items={items} />}
         </li>;
       })}
     </ul>}
+    {(() => {
+      const chosen = selectedTermId ? modifiers.find(modifier => modifier.term_id === selectedTermId) : undefined;
+      if (!chosen) return null;
+      const quote = chosen.segments?.length ? quoteOf(text, chosen.segments) : null;
+      return <p className="mod-selected">{`${termInfo(chosen.term_id)?.label ?? chosen.term_id} · ${chosen.term_id} · ${quote ? `in the text: “${quote}”` : "no text span"}`}</p>;
+    })()}
     {warnings.map(warning => <p key={warning} className="mod-warning">{warning}</p>)}
     <div role="status" className="mod-status">{status && <>
       {status.text}

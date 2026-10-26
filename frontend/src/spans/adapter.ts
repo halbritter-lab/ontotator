@@ -53,8 +53,8 @@ export interface SpanEditorHandle {
   ) => void;
   /** Reports a keyboard resize that still waits for its pause, at once. */
   flushResize: () => void;
-  /** Scrolls the first mark of the evidence to the middle of the text; unknown ids do nothing. */
-  scrollToEvidence: (evidenceId: string) => void;
+  /** Scrolls the first mark of the evidence to the middle of the text (`ifNeeded`: only into view when off-screen); unknown ids do nothing. */
+  scrollToEvidence: (evidenceId: string, ifNeeded?: boolean) => void;
   /** Evidence ids whose runs get the `run--framed` frame (hover, focus, selection of a finding). */
   setFramed: (evidenceIds: string[]) => void;
   destroy: () => void;
@@ -209,11 +209,11 @@ export function mountSpanEditor(
     flushResize: () => {
       editor.flushResize();
     },
-    scrollToEvidence: (evidenceId: string) => {
+    scrollToEvidence: (evidenceId: string, ifNeeded = false) => {
       // The vendor editor renders one `.run` per text run, listing its mention ids in `data-mentions`.
       const mark = Array.from(container.querySelectorAll<HTMLElement>(".run[data-mentions]"))
         .find((node) => (node.dataset.mentions ?? "").split(",").includes(evidenceId));
-      mark?.scrollIntoView?.({ block: "center" });
+      mark?.scrollIntoView?.({ block: ifNeeded ? "nearest" : "center" });
     },
     setFramed: (evidenceIds: string[]) => {
       editor.setFramed(evidenceIds);

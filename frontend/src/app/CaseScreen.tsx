@@ -2769,7 +2769,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // Proposals show their values read-only: focus the values section instead (rendered with tabIndex -1).
     return root.querySelector<HTMLElement>('[data-testid="axes-section"], .review-actions__proposal');
   };
-  const [textScrollRequest, setTextScrollRequest] = useState<{ evidenceId: string; nonce: number } | null>(null);
+  const [textScrollRequest, setTextScrollRequest] = useState<{ evidenceId: string; nonce: number; ifNeeded?: boolean } | null>(null);
   const lastOpenItem = useRef<string | null>(null);
   /** "Go to {term}": close the dialog, select the row, scroll the text to its mark and focus the resolving control. */
   const goToOpenItem = (item: OpenItem) => {
@@ -3649,7 +3649,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       axes={axes}
                       defaulted={defaultedKeys.has(refKey({ annotation_id: annSnap.annotation.annotation_id, version: annSnap.version }))}
                       proposal={proposalFor(annSnap, view.available_inputs ?? [])}
-                      documentText={view.document.text}
                       convertSource={attachActive && convertSourceId === annSnap.annotation.annotation_id}
                       attachTarget={attachActive && attachModifier && attachTargetIds.has(annSnap.annotation.annotation_id) ? {
                         term: attachModifier.termLabel, active: attachFocusId === annSnap.annotation.annotation_id, onMove: moveAttachFocus,
@@ -3949,8 +3948,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               modifiersSection={selectedAnnotation && modifierLayerIds.has(selectedAnnotation.annotation.layer_id) ? (() => {
                 const ann = selectedAnnotation.annotation, id = ann.annotation_id, finding = findingNameOf(selectedAnnotation);
                 const label = (termId: string) => termLabel.info(ann.layer_id, termId)?.label ?? termId;
+                const picked = selectedEvidenceId ? parseModifierDisplayId(selectedEvidenceId) : null;
                 return <ModifiersSection finding={finding} modifiers={ann.modifiers ?? []} text={view.document.text}
                   termInfo={infoFor(ann.layer_id)} readOnly={readOnly || !editableLayerIds.includes(ann.layer_id)}
+                  selectedTermId={picked?.annotationId === id ? picked.termId : null}
+                  // B3-4: a modifier row selects the modifier itself; its span is marked and scrolled into view if needed.
+                  onSelectModifier={termId => {
+                    const evidenceId = modifierDisplayId(id, termId);
+                    setSelectedEvidenceId(evidenceId);
+                    setTextScrollRequest(previous => ({ evidenceId, nonce: (previous?.nonce ?? 0) + 1, ifNeeded: true }));
+                  }}
                   onAdd={termId => modifierCommands.add(id, termId)}
                   onLinkSpan={termId => startLinkSpan(id, termId)}
                   onRemoveSpan={termId => { void modifierCommands.removeSpan(id, termId, label(termId)).catch(() => undefined); }}
