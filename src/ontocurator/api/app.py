@@ -34,7 +34,7 @@ from ontocurator.api.me_routes import router as me_router
 from ontocurator.api.ontology_routes import router as ontology_router
 from ontocurator.api.project_routes import router as project_router
 from ontocurator.api.routes import router
-from ontocurator.api.security import install_security
+from ontocurator.api.security import SecurityHeadersMiddleware, install_security
 from ontocurator.api.submission_history_routes import (
     router as submission_history_router,
 )
@@ -297,8 +297,17 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
     else:
         # Schema export only: no sessions exist, so no API request is answered.
         install_security(app, None, None)
-    # Outermost: an oversized upload is refused before anything reads it.
+    # An oversized body is refused before anything reads it.
     app.add_middleware(BodyLimitMiddleware)
+    # Outside the body limit, so its 413 carries the headers as well.
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        https=bool(
+            config
+            and config.public_origin
+            and config.public_origin.startswith("https://")
+        ),
+    )
 
     # FastAPI's own answer without the rejected input, which may be a
     # password, encoded as ASCII JSON, so even a lone surrogate cannot make it

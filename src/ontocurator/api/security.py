@@ -17,7 +17,9 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import RequestResponseEndpoint
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ontocurator.auth.context import current_principal as current_principal
 from ontocurator.auth.sessions import SessionService
@@ -30,6 +32,56 @@ PUBLIC_PATHS = frozenset(
     {"/api/v1/auth/login", "/api/v1/auth/redeem-code", "/api/v1/auth/demo-logins"}
 )
 CROSS_SITE_MESSAGE = "The request does not come from this site."
+
+# The built frontend loads only same-origin scripts, styles and fonts; its
+# favicon and CSS icons are data: images; React sets styles via the CSSOM,
+# which style-src does not restrict. Markdown images are never loaded.
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; "
+    "img-src 'self' data:; font-src 'self'; connect-src 'self'; "
+    "object-src 'none'; base-uri 'none'; form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+SECURITY_HEADERS = {
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "same-origin",
+    "x-frame-options": "DENY",
+}
+HSTS = "max-age=31536000"
+# FastAPI's Swagger UI and ReDoc (development only) need inline and CDN scripts.
+_CSP_EXEMPT = ("/docs", "/redoc")
+
+
+class SecurityHeadersMiddleware:
+    """Adds the security headers to every HTTP response, not relying on a proxy.
+
+    HSTS is sent only when ``https`` is true (an https public origin).
+    """
+
+    def __init__(self, app: ASGIApp, *, https: bool) -> None:
+        self.app = app
+        self.headers = dict(SECURITY_HEADERS)
+        if https:
+            self.headers["strict-transport-security"] = HSTS
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        csp = not scope["path"].startswith(_CSP_EXEMPT)
+
+        async def with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                for name, value in self.headers.items():
+                    headers.setdefault(name, value)
+                if csp:
+                    headers.setdefault(
+                        "content-security-policy", CONTENT_SECURITY_POLICY
+                    )
+            await send(message)
+
+        await self.app(scope, receive, with_headers)
 
 
 def expected_origin(request: Request, public_origin: str | None) -> str:

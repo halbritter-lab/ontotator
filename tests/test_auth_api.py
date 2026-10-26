@@ -506,3 +506,38 @@ def test_a_route_reached_without_a_principal_answers_401() -> None:
 
     assert answer.status_code == 401
     assert answer.json()["code"] == "NOT_AUTHENTICATED"
+
+
+def test_every_response_carries_the_security_headers(app: FastAPI) -> None:
+    response = TestClient(app).get("/api/v1/projects")
+
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "same-origin"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert "strict-transport-security" not in response.headers
+
+
+def test_hsts_is_sent_behind_an_https_origin(tmp_path: Path) -> None:
+    app = _app(tmp_path, public_origin="https://editor.example")
+
+    response = TestClient(app).get("/api/v1/projects")
+
+    assert response.headers["strict-transport-security"].startswith("max-age=")
+
+
+@pytest.mark.parametrize("path", ["/api/v1/auth/login", "/api/v1/auth/redeem-code"])
+def test_an_oversized_unauthenticated_body_is_refused(
+    tmp_path: Path, path: str
+) -> None:
+    app = _app(tmp_path, max_request_bytes=1024)
+    client = TestClient(app)
+    body = json.dumps({"username": "a", "password": "x" * 2000})
+
+    declared = client.post(path, content=body, headers=ORIGIN)
+    chunked = client.post(path, content=iter([body.encode()]), headers=ORIGIN)
+
+    for response in (declared, chunked):
+        assert response.status_code == 413
+        assert response.json()["code"] == "PAYLOAD_TOO_LARGE"
+        assert response.headers["x-frame-options"] == "DENY"

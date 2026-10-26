@@ -1,4 +1,4 @@
-"""Request body limits for multipart uploads, enforced before any parsing.
+"""Request body limits, enforced before any parsing.
 
 FastAPI parses a whole multipart body (spooling files to disk) before the
 endpoint runs, so the endpoints' bounded reads cannot bound the request.
@@ -9,6 +9,8 @@ without one (chunked): past the limit it ends the body for the app and answers
 
 A limit is the route's content limit plus ``MULTIPART_ALLOWANCE`` for the
 multipart framing and form fields; the endpoints keep their exact checks.
+Every other request (JSON, the unauthenticated login and code redemption
+included) is bounded by ``max_request_bytes``.
 """
 
 import json
@@ -33,6 +35,7 @@ class BodyLimit:
     content_bytes: Callable[[Any], int]
     code: str
     details: Callable[[Any], str | dict[str, Any]]
+    allowance: int = MULTIPART_ALLOWANCE
 
 
 def _config(app: Any, name: str) -> int:
@@ -64,14 +67,23 @@ LIMITS: tuple[BodyLimit, ...] = (
 )
 
 
+# Any request no upload rule names.
+DEFAULT_LIMIT = BodyLimit(
+    "*",
+    re.compile(""),
+    lambda app: _config(app, "max_request_bytes"),
+    "PAYLOAD_TOO_LARGE",
+    lambda _app: "The request body exceeds the configured byte limit.",
+    allowance=0,
+)
+
+
 class BodyLimitMiddleware:
     def __init__(self, app: ASGIApp, limits: Sequence[BodyLimit] = LIMITS) -> None:
         self.app = app
         self.limits = tuple(limits)
 
-    def _limit(self, scope: Scope) -> BodyLimit | None:
-        if scope["type"] != "http":
-            return None
+    def _limit(self, scope: Scope) -> BodyLimit:
         method, path = scope["method"], scope["path"]
         return next(
             (
@@ -79,16 +91,16 @@ class BodyLimitMiddleware:
                 for item in self.limits
                 if item.method == method and item.path.match(path)
             ),
-            None,
+            DEFAULT_LIMIT,
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        rule = self._limit(scope)
         app = scope.get("app")
-        if rule is None or app is None or not hasattr(app.state, "config"):
+        if scope["type"] != "http" or app is None or not hasattr(app.state, "config"):
             await self.app(scope, receive, send)
             return
-        limit = rule.content_bytes(app) + MULTIPART_ALLOWANCE
+        rule = self._limit(scope)
+        limit = rule.content_bytes(app) + rule.allowance
 
         async def refuse() -> None:
             body = json.dumps(

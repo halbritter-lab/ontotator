@@ -45,8 +45,10 @@ class AppConfig(BaseModel):
     demo_logins: tuple[settings.DemoLogin, ...] = ()
     max_upload_bytes: int = 50 * 1024 * 1024
     max_ontology_bytes: int = 300 * 1024 * 1024
+    # Any other request body (JSON etc.), login and code redemption included.
+    max_request_bytes: int = 1024 * 1024
 
-    @field_validator("max_ontology_bytes", "max_upload_bytes")
+    @field_validator("max_ontology_bytes", "max_upload_bytes", "max_request_bytes")
     @classmethod
     def _positive_ontology_limit(cls, value: int) -> int:
         if value <= 0:
