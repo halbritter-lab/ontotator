@@ -39,3 +39,21 @@
   border-top: 0;
   padding-block-start: 0;
 }
+
+/* Save sits at the end of every section form (UX audit G). */
+.project-settings-sections .settings-section-actions {
+  margin-block: var(--space-4) 0;
+}
+
+/* Radio options with a description: the description goes on its own line under the label. */
+.settings-radio-group .form-checkbox-row:has(.field-hint) {
+  align-items: flex-start;
+}
+
+.settings-radio-group .form-checkbox-row:has(.field-hint) input {
+  margin-block-start: 3px;
+}
+
+.settings-radio-group .form-checkbox-row .field-hint {
+  display: block;
+}

@@ -190,7 +190,7 @@ describe("settings section addresses", () => {
 });
 
 describe("project settings sections", () => {
-  it("jumps to rules with scoped save feedback beside the first control and secondary values collapsed", async () => {
+  it("jumps to rules with scoped save feedback at the end of the form and secondary values collapsed", async () => {
     const view = renderSettings();
     await screen.findByRole("navigation", { name: "Settings sections" });
     view.show("rules");
@@ -198,11 +198,14 @@ describe("project settings sections", () => {
     expect(document.activeElement).toBe(form);
     const save = within(form).getByRole("button", { name: "Save rules" });
     const control = within(form).getByRole("combobox", { name: "Findings without a text span" });
-    expect(save.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Save is the primary action and comes last, after the collapsed secondary values (UX audit G).
+    expect(save.className).toContain("btn-primary");
+    expect(save.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     fireEvent.change(control, { target: { value: "optional" } });
-    expect(within(form).getByRole("status").compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(form).getByRole("status").compareDocumentPosition(save) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     const disclosure = within(form).getByText("Hidden axis values").closest("details")!;
     expect(disclosure.open).toBe(false);
+    expect(save.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
     view.show("general");
     view.show("rules");
     expect(screen.getByRole("combobox", { name: "Findings without a text span" })).toHaveProperty("value", "optional");

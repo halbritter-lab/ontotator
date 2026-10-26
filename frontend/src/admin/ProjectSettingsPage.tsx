@@ -181,17 +181,12 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
         <TextInput id="project-name" label="Name" required value={general.name} onChange={event => { setGeneral({ ...general, name: event.target.value }); setSaved(null); }} />
         <Textarea id="project-description" label="Description" value={general.description} onChange={event => { setGeneral({ ...general, description: event.target.value }); setSaved(null); }} />
         <LanguagesField id="project-languages" label="Document languages" value={general.languages} onChange={languages => { setGeneral({ ...general, languages }); setSaved(null); }} disabled={busy !== null} />
-        <Button type="submit" loading={busy === "General"}>Save general</Button>
+        <div className="settings-section-actions"><Button type="submit" variant="primary" loading={busy === "General"}>Save general</Button></div>
       </fieldset>{feedback("General")}
     </form>; break;
     case "guideline": content = <section ref={bindSection} tabIndex={-1} aria-label="Guidelines"><GuidelinesSection projectKey={projectKey} /></section>; break;
     case "rules": content = <form ref={bindSection} tabIndex={-1} aria-label="Rules" onSubmit={event => submit(event, "Rules")}>
       <fieldset disabled={busy !== null}><legend>Rules</legend>
-        <div className="settings-section-actions" role="group" aria-label="Rules save state">
-          <Button type="submit" loading={busy === "Rules"}>Save rules</Button>
-          <Button onClick={() => { setRules(rulesOf(model)); setSaved(null); if (error?.section === "Rules") setError(null); }}>Discard rule changes</Button>
-          {feedback("Rules")}
-        </div>
         <Select id="project-rule-spanless" label="Findings without a text span" hint="Applies to every future submission; completed submissions are unchanged. Profile requirements for text evidence still apply."
           value={!rules.allow_spanless_findings ? "prohibited" : rules.require_spanless_note ? "required" : "optional"}
           onChange={event => { const mode = event.target.value; setRules({ ...rules, allow_spanless_findings: mode !== "prohibited", require_spanless_note: mode === "prohibited" ? rules.require_spanless_note : mode === "required" }); setSaved(null); }}>
@@ -203,12 +198,17 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
         <Checkbox id="project-rule-adjudicator" label="The consolidator of a text may not be one of its annotators" checked={rules.adjudicator_not_annotator} onChange={event => { setRules({ ...rules, adjudicator_not_annotator: event.target.checked }); setSaved(null); }} />
         <Checkbox id="project-rule-contiguous" label="Only contiguous mentions" checked={rules.contiguous_mentions_only} onChange={event => { setRules({ ...rules, contiguous_mentions_only: event.target.checked }); setSaved(null); }} />
         <details className="settings-secondary-rules"><summary>More rule settings: hidden axis values</summary><HiddenAxisValuesField profile={model.profile} axisDefaults={model.axis_defaults} value={rules.hidden_axis_values} onChange={hidden_axis_values => { setRules({ ...rules, hidden_axis_values }); setSaved(null); }} disabled={busy !== null} /></details>
+        <div className="settings-section-actions" role="group" aria-label="Rules save state">
+          <Button type="submit" variant="primary" loading={busy === "Rules"}>Save rules</Button>
+          <Button onClick={() => { setRules(rulesOf(model)); setSaved(null); if (error?.section === "Rules") setError(null); }}>Discard rule changes</Button>
+          {feedback("Rules")}
+        </div>
       </fieldset>
     </form>; break;
     case "workflow": content = <form ref={bindSection} tabIndex={-1} aria-label="Workflow" onSubmit={event => submit(event, "Workflow")}>
       <fieldset disabled={busy !== null}><legend>Workflow</legend>
         <WorkflowFields projectKey={projectKey} value={workflow} saved={workflowOf(model)} disabled={busy !== null} onChange={value => { setWorkflow(value); setSaved(null); }} />
-        <Button type="submit" loading={busy === "Workflow"}>Save workflow</Button>
+        <div className="settings-section-actions"><Button type="submit" variant="primary" loading={busy === "Workflow"}>Save workflow</Button></div>
       </fieldset>{feedback("Workflow")}
     </form>; break;
     case "defaults": content = <form ref={bindSection} tabIndex={-1} aria-label="Creation defaults" onSubmit={event => submit(event, "Creation defaults")}>
@@ -234,8 +234,10 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
           </Select>;
         })))}
         {!model.profile.layers.some(layer => layer.annotation_types.some(type => type.axes?.length)) && <p>This profile has no axes to prefill.</p>}
-        <Button type="submit" loading={busy === "Creation defaults"}>Save creation defaults</Button>
-        <Button onClick={() => { setCreationDefaults(model.creation_defaults ?? {}); setSaved(null); }}>Discard default changes</Button>
+        <div className="settings-section-actions">
+          <Button type="submit" variant="primary" loading={busy === "Creation defaults"}>Save creation defaults</Button>
+          <Button onClick={() => { setCreationDefaults(model.creation_defaults ?? {}); setSaved(null); }}>Discard default changes</Button>
+        </div>
       </fieldset>{feedback("Creation defaults")}
     </form>; break;
     case "profile": content = <section ref={bindSection} tabIndex={-1} aria-label="Ontology and profile"><h2>Ontology and profile</h2>
@@ -247,13 +249,13 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
         <form aria-label="Ontology pins" onSubmit={event => submit(event, "Pins")}>
           <fieldset disabled={busy !== null}><legend>Ontology pins</legend>
             <PinFields ids={ids} ontologies={ontologies} value={pins} onChange={value => { setPins(value); setSaved(null); }} disabled={busy !== null} />
-            <Button type="submit" loading={busy === "Pins"}>Save pins</Button>
+            <div className="settings-section-actions"><Button type="submit" variant="primary" loading={busy === "Pins"}>Save pins</Button></div>
           </fieldset>{feedback("Pins")}
         </form>
         <form aria-label="Task profile" onSubmit={event => { event.preventDefault(); if (uploaded && event.currentTarget.reportValidity()) void save("Profile", work.Profile); }}>
           <fieldset disabled={busy !== null}><legend>Task profile</legend>
             <ProfileUpload key={profileGeneration} onChange={setUploaded} disabled={busy !== null} />
-            <Button type="submit" disabled={!uploaded} loading={busy === "Profile"}>Save profile</Button>
+            <div className="settings-section-actions"><Button type="submit" variant="primary" disabled={!uploaded} loading={busy === "Profile"}>Save profile</Button></div>
           </fieldset>{feedback("Profile")}
         </form>
       </>}
