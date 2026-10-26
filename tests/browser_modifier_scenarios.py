@@ -5,7 +5,9 @@ pinned with ``MOD_PIN`` (``hp-modifiers.json``, T1 profile ``hpo-phenotype``)
 with the lead workflow's four people and one German text planned annotate,
 assigned to the annotator, round 1 started. ``with_finding=1`` adds Seizure
 on "Krampfanfälle" through ``create_annotation``; ``standalone=1`` writes a
-standalone Severe finding on "schwere" past the editing commands (old data).
+standalone Severe finding on "schwere" past the editing commands (old data);
+``proposal=1`` imports a tool proposal Seizure on "Krampfanfälle"; the project
+default "from proposals" makes the round a proposal check (M2 M-5).
 It returns the values scenarios' shape plus ``round_id`` and
 ``workspace_key``. Test server only, never shipped.
 """
@@ -121,11 +123,15 @@ def _insert_standalone(scenario: Scenario, key: Any) -> None:
 
 
 def build_modifiers(
-    app: FastAPI, *, with_finding: bool = False, standalone: bool = False
+    app: FastAPI,
+    *,
+    with_finding: bool = False,
+    standalone: bool = False,
+    proposal: bool = False,
 ) -> dict[str, Any]:
     from modifier_fixtures import MOD_DE, MOD_PATH, MOD_PIN, MOD_SHA, modifier_profile
     from t1_builders import native_unit
-    from t1_fixtures import ADMIN_ACCESS, OPERATOR
+    from t1_fixtures import ADMIN_ACCESS, OPERATOR, annotation
 
     db = app.state.repo.db
     key = f"modifiers-{uuid4().hex[:8]}"
@@ -154,7 +160,11 @@ def build_modifiers(
     person(scenario, "ben", ["annotator"], qualification="Physician")
     person(scenario, "annotator", ["annotator"])
 
-    unit = native_unit(CASE, "de", TEXT, case_id=CASE)
+    seizure = span("Krampfanfälle")
+    tool = [annotation("p-seizure", (seizure.start, seizure.end), text=TEXT)]
+    unit = native_unit(
+        CASE, "de", TEXT, case_id=CASE, annotations=tool if proposal else ()
+    )
     layers = tuple(layers_for(profile, {"hp": MOD_PIN}))
     unit = unit.model_copy(
         update={
@@ -206,10 +216,15 @@ def register_modifier_scenario_route(app: FastAPI) -> None:
 
     @app.post("/__test_modifiers__")
     def modifier_scenario(
-        with_finding: int = Query(0), standalone: int = Query(0)
+        with_finding: int = Query(0),
+        standalone: int = Query(0),
+        proposal: int = Query(0),
     ) -> dict[str, Any]:
         return build_modifiers(
-            app, with_finding=bool(with_finding), standalone=bool(standalone)
+            app,
+            with_finding=bool(with_finding),
+            standalone=bool(standalone),
+            proposal=bool(proposal),
         )
 
     app.router.routes.insert(0, app.router.routes.pop())
