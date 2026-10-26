@@ -412,9 +412,9 @@ def get_review_inputs(
             "REVIEW_MODE_REQUIRED",
             "Review inputs can only be queried in review mode",
         )
-    if req.mode == "proposal_check":
-        # Every annotator may open the mode; only one from proposals sees them.
-        cast(ScopedRepository, repo).require_proposals(req.project_key, req.document_id)
+    # Only a consolidator or an annotator from proposals sees them: holding
+    # the review role does not lift a from-scratch annotate task's blindness.
+    cast(ScopedRepository, repo).require_proposals(req.project_key, req.document_id)
     return ws_svc.get_review_inputs(req.project_key, req.document_id, mode=req.mode)
 
 

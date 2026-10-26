@@ -192,6 +192,31 @@ def test_review_inputs_hide_proposals_from_an_annotator_from_scratch(checker):
     assert response.status_code == 404, response.text
 
 
+def test_review_inputs_in_review_mode_stay_hidden_from_scratch(tmp_path: Path):
+    from auth_harness import logged_in
+    from t1_fixtures import bundle, run_import, unit
+    from test_proposal_queries import _app, create_project
+
+    app = _app(tmp_path)
+    create_project(app.state.repo.db)
+    assert (
+        run_import(app.state.repo.db, bundle(tmp_path / "a.zip", [unit("EN100017")]))
+        .status
+        == "succeeded"
+    )
+    client = logged_in(
+        app,
+        "both",
+        projects={"proj": ["annotator", "adjudicator"]},
+        assignments=[("proj", "EN100017", "annotate")],
+    )
+    response = client.post(
+        "/api/v1/workspaces/review-inputs",
+        json={"project_key": "proj", "document_id": "EN100017", "mode": "review"},
+    )
+    assert response.status_code == 404, response.text
+
+
 def test_review_inputs_offer_the_newest_set_to_an_annotator_from_proposals(checker):
     from_proposals(checker.db)
     response = _review_inputs(checker)
