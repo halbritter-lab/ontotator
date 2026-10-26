@@ -35,6 +35,14 @@ def _export(client: Any, key: Any) -> bytes:
     )
 
 
+def _open(client: Any, key: Any) -> None:
+    """Open the workspace as the editor does before searching; search alone
+    no longer creates the draft that the export lists workspaces from."""
+    fields = ("project_key", "document_id", "annotator_id", "mode")
+    response = client.post("/api/v1/workspaces/open", json={f: key[f] for f in fields})
+    assert response.status_code == 200, response.text
+
+
 def _manifest(data: bytes) -> dict[str, Any]:
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         return json.loads(archive.read("manifest.json"))  # type: ignore[no-any-return]
@@ -97,6 +105,7 @@ def test_roundtrip_uses_captured_bytes_without_ambient_translations(
     imported = upload_package(fresh, files={"file": ("study.zip", data)})
     assert imported.status_code == 200, imported.text
     new_key = dict(key, project_key=imported.json()["project_key"])
+    _open(fresh, new_key)
     after = _search(fresh, new_key, "Muskelhypotonie")
     assert after["ranked_ids"] == before["ranked_ids"]
     assert after["languages"] == ["en", "de"]
@@ -204,6 +213,7 @@ def test_import_preserves_historical_runtime_and_records_current_execution(
     imported = upload_package(fresh, files={"file": ("historical.zip", altered)})
     assert imported.status_code == 200, imported.text
     new_key = dict(key, project_key=imported.json()["project_key"])
+    _open(fresh, new_key)
     after = _search(fresh, new_key, "Muskelhypotonie")
     assert after["runtime_drift"] is True
     assert after["execution"]["runtime"]["python"] != "historical-runtime"
@@ -332,6 +342,7 @@ def test_independent_exports_project_captured_resources_with_profile(
         "mode": "independent",
         "target_set_id": "targets-0",
     }
+    _open(client, key)
     _search(client, key, "Muskelhypotonie", layer_id="target-layer")
     assert len(client.app.state.repo.get_search_conditions(key["project_key"])) == 2
     data = _export(client, key)
