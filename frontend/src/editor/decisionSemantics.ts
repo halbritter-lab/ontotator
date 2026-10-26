@@ -4,7 +4,11 @@ import { isReviewLike } from "./modes";
 const identity = (ref: { annotation_id: string; version: string }) => JSON.stringify([ref.annotation_id, ref.version]);
 const snapshotKey = (snapshot: AnnotationSnapshot) => identity({ annotation_id: snapshot.annotation.annotation_id, version: snapshot.version });
 
-/** Results relevant to completion, including unresolved proposals with reviewer flags. */
+/**
+ * Results relevant to completion, including unresolved proposals with reviewer flags. Confirm decides a
+ * proposal's defaulted values: its result has no `axes_defaulted` (the server's `axis_not_chosen` skips it too;
+ * the export keeps the defaults).
+ */
 export function resultSnapshots(draft: Draft, proposals: AnnotationSnapshot[]): AnnotationSnapshot[] {
   const annotations = draft.annotations ?? [];
   if (!isReviewLike(draft.key.mode)) return unique(annotations);
@@ -21,7 +25,8 @@ export function resultSnapshots(draft: Draft, proposals: AnnotationSnapshot[]): 
   for (const decision of decisions) {
     if (decision.outcome === "confirmed" || decision.outcome === "uncertain") {
       const target = byRef.get(identity(decision.target));
-      if (target) results.push(target);
+      if (target) results.push(decision.outcome === "confirmed" && target.annotation.axes_defaulted?.length
+        ? { ...target, annotation: { ...target.annotation, axes_defaulted: [] } } : target);
     }
   }
   return unique(results);

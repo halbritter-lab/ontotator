@@ -96,8 +96,13 @@ def rule_violations(
     at_submission: bool,
     enforce_spanless: bool = False,
     modifier_findings: frozenset[str] = frozenset(),
+    decided_defaults: frozenset[tuple[str, str]] = frozenset(),
 ) -> list[RuleViolation]:
     """Inspect snapshots without changing content or defaulted-axis provenance.
+
+    ``decided_defaults`` lists (annotation id, version) of confirmed proposals:
+    Confirm decides their defaulted axis values, so ``axis_not_chosen`` skips
+    those defaults (they stay marked as defaults in the snapshot).
 
     Referenced evidence must resolve by both ID and immutable version, even
     when the contiguous rule is disabled. Results follow snapshot order, then
@@ -151,6 +156,7 @@ def rule_violations(
                 )
 
         hidden_axes = rules.hidden_axis_values.get(annotation.layer_id, {})
+        defaults_open = (annotation.annotation_id, item.version) not in decided_defaults
         for axis in annotation_type.axes:
             value = annotation.axes_values.get(axis.id)
             if value is not None and value in hidden_axes.get(axis.id, frozenset()):
@@ -165,7 +171,9 @@ def rule_violations(
                 at_submission
                 and rules.require_chosen_axes
                 and (
-                    value is None or value == "" or axis.id in annotation.axes_defaulted
+                    value is None
+                    or value == ""
+                    or (defaults_open and axis.id in annotation.axes_defaulted)
                 )
             ):
                 violations.append(

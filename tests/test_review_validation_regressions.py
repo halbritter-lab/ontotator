@@ -32,7 +32,12 @@ from ontocurator.storage.repository import Repository
 
 
 def add_proposal(
-    package, *, layer_id="hpo-layer", axes_values=None, with_evidence=False
+    package,
+    *,
+    layer_id="hpo-layer",
+    axes_values=None,
+    with_evidence=False,
+    axes_defaulted=(),
 ):
     evidence = []
     if with_evidence:
@@ -51,6 +56,7 @@ def add_proposal(
         type_id="phenotype",
         term_id="HP:0001250",
         axes_values=axes_values or {},
+        axes_defaulted=list(axes_defaulted),
         evidence_refs=[
             EvidenceRef(evidence_id=e.mention.evidence_id, version=e.version)
             for e in evidence
@@ -204,10 +210,15 @@ def test_invalid_stored_axes_cannot_be_approved(tmp_path, axes_values, operation
     assert repo.get_submissions_for_workspace(key) == []
 
 
-def note_review_workspace(tmp_path, axes_values=None, *, with_evidence=False):
+def note_review_workspace(
+    tmp_path, axes_values=None, *, with_evidence=False, axes_defaulted=()
+):
     package = make_layered_package("single")
     proposal = add_proposal(
-        package, axes_values=axes_values, with_evidence=with_evidence
+        package,
+        axes_values=axes_values,
+        with_evidence=with_evidence,
+        axes_defaulted=axes_defaulted,
     )
     repo = Repository(database_for(tmp_path / "note-review.db"))
     repo.import_package(package)
@@ -369,3 +380,71 @@ def test_confirmed_clinical_uncertainty_does_not_require_reviewer_note(tmp_path)
     assert submission.decisions[0].note is None
     assert submission.decisions[0].outcome == "confirmed"
     assert submission.snapshots[0].annotation.axes_values["assertion"] == "uncertain"
+
+
+DEFAULTED_PROPOSAL = {
+    "assertion": "present",
+    "experiencer": "patient",
+    "temporality": "current",
+}
+
+
+def test_confirm_decides_a_proposals_defaulted_values(tmp_path):
+    repo, key, target = note_review_workspace(
+        tmp_path,
+        DEFAULTED_PROPOSAL,
+        with_evidence=True,
+        axes_defaulted=["experiencer", "temporality"],
+    )
+    ReviewService(repo).decide(
+        key,
+        MutationEnvelope(
+            mutation_id="confirm",
+            expected_revision=0,
+            payload=DecisionCommand(target=target, outcome="confirmed").model_dump(),
+        ),
+    )
+    submission = SubmissionService(repo).submit(
+        key,
+        MutationEnvelope(
+            mutation_id="submit",
+            expected_revision=1,
+            payload={"document_checked": True},
+        ),
+    )
+    # Accepted without an acknowledgement; the export still marks the defaults.
+    assert submission.snapshots[0].annotation.axes_defaulted == [
+        "experiencer",
+        "temporality",
+    ]
+
+
+def test_unresolved_proposal_defaults_still_need_acknowledgement(tmp_path):
+    repo, key, target = note_review_workspace(
+        tmp_path,
+        DEFAULTED_PROPOSAL,
+        with_evidence=True,
+        axes_defaulted=["experiencer"],
+    )
+    ReviewService(repo).decide(
+        key,
+        MutationEnvelope(
+            mutation_id="unresolved",
+            expected_revision=0,
+            payload=DecisionCommand(
+                target=target, outcome="uncertain", note="Needs a second look"
+            ).model_dump(),
+        ),
+    )
+    with pytest.raises(DomainError, match="AXIS_CONFIRMATION_WARNING") as warning:
+        SubmissionService(repo).submit(
+            key,
+            MutationEnvelope(
+                mutation_id="submit",
+                expected_revision=1,
+                payload={"document_checked": True},
+            ),
+        )
+    assert [item["detail"]["axis"] for item in warning.value.details["warnings"]] == [
+        "experiencer"
+    ]

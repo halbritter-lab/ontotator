@@ -350,6 +350,29 @@ def test_same_default_value_is_allowed_when_actually_chosen(
     )
 
 
+def test_confirmed_proposal_defaults_count_as_chosen(
+    profile: TaskProfile, document: Document
+) -> None:
+    item = annotation_snapshot(
+        profile,
+        document,
+        axes={"presence": "yes", "context": "current"},
+        defaulted=["presence"],
+    )
+    check = lambda decided: rule_violations(  # noqa: E731
+        [item],
+        {},
+        profile,
+        ProjectRules(require_chosen_axes=True),
+        at_submission=True,
+        decided_defaults=decided,
+    )
+    assert check(frozenset({("ann", item.version)})) == []
+    assert check(frozenset({("ann", "other-version")})) == [
+        RuleViolation("ann", "axis_not_chosen", {"axis": "presence"})
+    ]
+
+
 def test_required_axes_come_from_actual_nonfirst_type(
     profile: TaskProfile, document: Document
 ) -> None:

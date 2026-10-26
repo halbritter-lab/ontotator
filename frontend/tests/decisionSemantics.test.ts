@@ -70,6 +70,21 @@ describe("result selection", () => {
       expect(resultSnapshots(draft, [source])).toEqual([copy]);
     });
 
+  it("counts a confirmed proposal's defaults as decided; unresolved proposals and replaced copies keep theirs", () => {
+    const confirmed = snap("confirmed", "v1", ["experiencer"]); const uncertain = snap("uncertain", "v1", ["experiencer"]);
+    const changed = snap("changed", "v1", ["experiencer"]);
+    const replacement = snap("replacement", "v1", ["experiencer"]); replacement.annotation.provenance.source_refs = ["changed:v1"];
+    const draft = draftOf("review", [replacement], [ref(confirmed), ref(uncertain), ref(changed)], [
+      { decision_id: "confirm", reviewer_id: "curator", target: ref(confirmed), outcome: "confirmed" },
+      { decision_id: "uncertain", reviewer_id: "curator", target: ref(uncertain), outcome: "uncertain" },
+      { decision_id: "change", reviewer_id: "curator", target: ref(changed), outcome: "changed", replacement: ref(replacement) },
+    ]);
+    const results = resultSnapshots(draft, [confirmed, uncertain, changed]);
+    expect(results.map(ref)).toEqual([ref(replacement), ref(confirmed), ref(uncertain)]);
+    expect(defaultedResults(results).map(ref)).toEqual([ref(replacement), ref(uncertain)]);
+    expect(confirmed.annotation.axes_defaulted).toEqual(["experiencer"]);
+  });
+
   it("counts three defaulted axes on one exact annotation as one result", () => {
     const a = snap("one", "v1", ["assertion", "temporality", "experiencer"]);
     expect(defaultedResults([a, a, snap("two"), snap("one", "v2", ["assertion"])])).toEqual([a, snap("one", "v2", ["assertion"])]);

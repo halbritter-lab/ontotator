@@ -528,6 +528,12 @@ class SubmissionService:
                         evidence_by_id[identity] = evidence
         rules = self.repo.get_project_rules(key.project_key)
         roles = self._term_roles(task_profile, key.project_key)
+        # Confirm decides a proposal's defaulted values; a replaced copy keeps its own.
+        decided_defaults = frozenset(
+            (d.target.annotation_id, d.target.version)
+            for d in decisions
+            if d.outcome == "confirmed"
+        )
         violations = rule_violations(
             deduped_snaps,
             evidence_by_id,
@@ -540,6 +546,7 @@ class SubmissionService:
                 for s in deduped_snaps
                 if roles.kind(s.annotation.layer_id, s.annotation.term_id) is not None
             ),
+            decided_defaults=decided_defaults,
         )
         if violations:
             raise DomainError(
@@ -558,6 +565,7 @@ class SubmissionService:
                     task_profile,
                     replace(rules, require_chosen_axes=True),
                     at_submission=True,
+                    decided_defaults=decided_defaults,
                 )
                 if violation.rule == "axis_not_chosen"
             ]

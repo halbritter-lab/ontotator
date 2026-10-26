@@ -113,11 +113,11 @@ def test_submission_checks_materialized_result(profile, document, branch):
         workspace_input_snapshots=lambda *_: [item],
     )
     service = SubmissionService(repo)
-    if branch == "rejected":
-        assert (
-            service._create_submission(draft, SubmitCommand(), draft.key).snapshots
-            == []
-        )
+    if branch in {"rejected", "confirmed"}:
+        # Confirm decides the proposal's defaults; the snapshot keeps them marked.
+        assert service._create_submission(
+            draft, SubmitCommand(), draft.key
+        ).snapshots == ([] if branch == "rejected" else [item])
     else:
         with pytest.raises(DomainError) as exc:
             service._create_submission(draft, SubmitCommand(), draft.key)
