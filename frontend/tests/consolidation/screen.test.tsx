@@ -18,7 +18,7 @@ const takeAbsentAndKeep = async () => {
 /** M-7b: a resolved row has no Change button; the row expands and Change is inside. */
 const changeRow = async (title: string) => {
   fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${title} `), expanded: false }));
-  fireEvent.click(await within(await waitFor(() => document.querySelector(".cons-group-expanded") as HTMLElement)).findByRole("button", { name: "Change" }));
+  fireEvent.click(await within(await waitFor(() => document.querySelector(".cons-group-expanded") as HTMLElement)).findByRole("button", { name: "Reopen" }));
 };
 
 function load(...views: ConsolidationView[]) {
@@ -94,6 +94,24 @@ describe("ConsolidationScreen", () => {
     expect(reopen.mock.calls[0][1].expected_revision).toBe(4);
     await waitFor(() => expect(expandedTitle()).toBe("muscular hypotonia"));
     expect(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("More… > Reopen all decisions… asks with the count, reopens in one command and offers one Undo (R-10)", async () => {
+    load(decidedView(), exampleView(), decidedView());
+    const reopenAll = vi.spyOn(api, "reopenAllConsolidationGroups").mockResolvedValue(draft(4));
+    const undo = vi.spyOn(api, "undoReopenAllConsolidationGroups").mockResolvedValue(draft(5));
+    await renderScreen();
+    fireEvent.click(screen.getByRole("button", { name: "More task actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Reopen all decisions…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reopen 4 decided groups?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reopen all" }));
+    await waitFor(() => expect(reopenAll).toHaveBeenCalledTimes(1));
+    expect(reopenAll.mock.calls[0][1].payload).toEqual({ command: "consolidation_reopen_all" });
+    const toast = await waitFor(() => document.querySelector(".ui-toast-region .ui-toast") as HTMLElement);
+    expect(toast.textContent).toContain("Reopened 4 decided groups.");
+    fireEvent.click(within(toast).getByRole("button", { name: /Undo/ }));
+    await waitFor(() => expect(undo).toHaveBeenCalledTimes(1));
+    expect(undo.mock.calls[0][1]).toMatchObject({ payload: { command: "consolidation_undo_reopen_all" } });
   });
 
   it("a failed Undo keeps the inline Undo available (M-7g)", async () => {

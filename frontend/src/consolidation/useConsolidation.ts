@@ -128,6 +128,11 @@ export function useConsolidation(roundId: string, options: { workspaceView?: Wor
   const reopen = useCallback((groupId: string, payload: ConsolidationReopenPayload) =>
     command(groupId, (id, envelope) => api.reopenConsolidationGroup(id, envelope), payload), [command]);
 
+  const reopenAll = useCallback(() => command("reopen-all", (id, envelope) => api.reopenAllConsolidationGroups(id, envelope),
+    { command: "consolidation_reopen_all" }), [command]);
+  const undoReopenAll = useCallback(() => command("reopen-all", (id, envelope) => api.undoReopenAllConsolidationGroups(id, envelope),
+    { command: "consolidation_undo_reopen_all" }), [command]);
+
   /** "Add finding": the editor's `create_annotation` command on the same draft. */
   const addFinding = useCallback((finding: NewFinding): Promise<boolean> => command("add-finding", (id, envelope) => api.applyCommand(id, envelope), {
     command: "create_annotation",
@@ -168,7 +173,7 @@ export function useConsolidation(roundId: string, options: { workspaceView?: Wor
 
   const dismissOutcome = useCallback((groupId: string) => setOutcomes(current => { const next = { ...current }; delete next[groupId]; return next; }), []);
 
-  return { view, error, refreshError, workspace, draft, busy, outcomes, reload, refresh, resolve, annotate, reopen, addFinding, submit, dismissOutcome };
+  return { view, error, refreshError, workspace, draft, busy, outcomes, reload, refresh, resolve, annotate, reopen, reopenAll, undoReopenAll, addFinding, submit, dismissOutcome };
 }
 
 export type ConsolidationData = ReturnType<typeof useConsolidation>;

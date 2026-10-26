@@ -46,6 +46,8 @@ export interface GroupCardProps {
   onReopen: () => Promise<boolean>;
   /** The group reopens through an Undo: it starts from the choices of its last decision (F19), not empty. */
   restoring?: boolean;
+  /** The group's resulting finding while it is decided: a reopen preselects its term and values (R-10). */
+  result?: { term_id: string; axes_values?: Readonly<Record<string, string | null>> } | null;
   onDismissOutcome: () => void;
   /** This group holds the last decision: "Undo" in its row (M-7g), until the next action. */
   onUndo?: () => void;
@@ -138,10 +140,20 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const open = group.state === "open";
   // The choices behind the last decision, for an Undo.
   const decided = useRef<{ choices: Choices; otherTerm: OtherTerm | null }>({ choices: {}, otherTerm: null });
-  // A reopened group starts over (old choices would resolve it with the first check), unless an Undo restores them.
+  // The result of the decided group; read again when it is reopened (its annotations are gone then).
+  const lastResult = useRef(props.result ?? null);
+  if (!open && props.result) lastResult.current = props.result;
+  // A bulk reopen starts over (old choices would resolve it with the first check); an Undo or "Reopen" restores
+  // them: this session's choices, else the result's term and set values (R-10).
   useEffect(() => {
     if (!open) return;
-    const start = props.restoring ? decided.current : { choices: {}, otherTerm: null };
+    const result = lastResult.current;
+    const fromResult = (): Choices => !result ? {} : Object.fromEntries([
+      ...(needsTerm(group) && group.members.some(member => member.term_id === result.term_id) ? [["term", result.term_id]] : []),
+      ...group.differing_axes.flatMap(axis => result.axes_values?.[axis] ? [[axis, result.axes_values[axis]!]] : []),
+    ]);
+    const start = !props.restoring ? { choices: {}, otherTerm: null }
+      : Object.keys(decided.current.choices).length || decided.current.otherTerm ? decided.current : { choices: fromResult(), otherTerm: null };
     setChoices(start.choices); setOtherTerm(start.otherTerm);
   }, [open]);
   const name = groupName(group, text);
@@ -287,7 +299,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       {confirmReopen ? <InlineConfirm title="Reopen this group?" message={REOPEN_EDITED_WARNING} confirmLabel="Reopen" busy={busy}
         onCancel={() => setConfirmReopen(false)} onConfirm={() => { void props.onReopen().then(() => setConfirmReopen(false)); }} />
         : <div className="cons-actions">
-          <Button size="sm" loading={busy} onClick={reopen}>Change</Button>
+          <Button size="sm" loading={busy} onClick={reopen}>Reopen</Button>
         </div>}
       {noteAndFlag(true)}
     </>}

@@ -131,7 +131,7 @@ test("a lead without the Consolidator role consolidates the 8-group example in 6
   await expect(page.getByRole("link", { name: "Back to documents", exact: true })).toBeVisible();
   await expect(page.getByText("This consolidation was submitted. You see its final state.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Submit/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Change/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Reopen/ })).toHaveCount(0);
 
   // The lead accepts the consolidation as the result.
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);

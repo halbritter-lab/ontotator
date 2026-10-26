@@ -1321,6 +1321,112 @@
         }
       }
     },
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/reopen-all": {
+      "post": {
+        "tags": [
+          "consolidation"
+        ],
+        "summary": "Reopen All Consolidation Groups",
+        "description": "Reopen every group of the round in one mutation; matching groups are\ntaken over again (payload ``ReopenAllCommand``).",
+        "operationId": "reopen_all_consolidation_groups_api_v1_workspaces__workspace_id__consolidation_groups_reopen_all_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/undo-reopen-all": {
+      "post": {
+        "tags": [
+          "consolidation"
+        ],
+        "summary": "Undo Reopen All Consolidation Groups",
+        "description": "Restore the decisions before \"Reopen all\", directly after it\n(payload ``UndoReopenAllCommand``).",
+        "operationId": "undo_reopen_all_consolidation_groups_api_v1_workspaces__workspace_id__consolidation_groups_undo_reopen_all_post",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MutationEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Draft"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{key}/consolidations": {
       "post": {
         "tags": [

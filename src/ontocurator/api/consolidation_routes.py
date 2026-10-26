@@ -202,3 +202,29 @@ def reopen_consolidation_group(
     ``ReopenCommand``)."""
     key = own_key(principal, decode_workspace_id(workspace_id))
     return _groups_service(request).reopen(key, envelope)
+
+
+@router.post("/workspaces/{workspace_id}/consolidation-groups/reopen-all")
+def reopen_all_consolidation_groups(
+    workspace_id: str,
+    envelope: MutationEnvelope,
+    request: Request,
+    principal: PrincipalDep,
+) -> Draft:
+    """Reopen every group of the round in one mutation; matching groups are
+    taken over again (payload ``ReopenAllCommand``)."""
+    key = own_key(principal, decode_workspace_id(workspace_id))
+    return _groups_service(request).reopen_all(key, envelope)
+
+
+@router.post("/workspaces/{workspace_id}/consolidation-groups/undo-reopen-all")
+def undo_reopen_all_consolidation_groups(
+    workspace_id: str,
+    envelope: MutationEnvelope,
+    request: Request,
+    principal: PrincipalDep,
+) -> Draft:
+    """Restore the decisions before "Reopen all", directly after it
+    (payload ``UndoReopenAllCommand``)."""
+    key = own_key(principal, decode_workspace_id(workspace_id))
+    return _groups_service(request).undo_reopen_all(key, envelope)

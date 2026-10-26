@@ -86,11 +86,11 @@ test("three people: choose by field, Keep saves, the result line names what is n
   expect((await done).ok()).toBeTruthy();
   await expect(toggle).toContainText(`decided: ${OTHER}, Absent, Patient, Current`);
 
-  // The resolved row has no Change button (M-7b): the row expands, Change is inside. Then ann-0003's Present, Keep.
-  await expect(hypotonia.locator(".cons-group-line").getByRole("button", { name: /^Change\b/ })).toHaveCount(0);
+  // The resolved row has no Reopen button (M-7b): the row expands, Reopen is inside. Then ann-0003's Present, Keep.
+  await expect(hypotonia.locator(".cons-group-line").getByRole("button", { name: /^Reopen\b/ })).toHaveCount(0);
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   done = saved(page);
-  await hypotonia.getByRole("button", { name: "Change", exact: true }).click();
+  await hypotonia.getByRole("button", { name: "Reopen", exact: true }).click();
   expect((await done).ok()).toBeTruthy();
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   await table.getByRole("button", { name: new RegExp(`^Take Abnormality of the nervous system from .*ann-0003.* for Term$`) }).click();

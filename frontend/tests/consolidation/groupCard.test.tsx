@@ -210,15 +210,26 @@ describe("GroupCard", () => {
     const edited = { ...byId("g-hypo"), state: "choose" as const, edited: true, annotation_ids: ["cons-1"] };
     const { props } = renderCard(edited, { expanded: false, summary: "Hypotonia (HP:0001252), Absent, Patient, Current" });
     expect(screen.getByRole("button", { name: /muscular hypotonia decided: Hypotonia \(HP:0001252\), Absent, Patient, Current edited in editor/ })).toBeTruthy();
-    // M-7b: the collapsed row has no Change button of its own.
-    expect(screen.queryByRole("button", { name: /^Change/ })).toBeNull();
+    // M-7b: the collapsed row has no Reopen button of its own.
+    expect(screen.queryByRole("button", { name: /^Reopen/ })).toBeNull();
     cleanup();
     renderCard(edited, { expanded: true, onReopen: props.onReopen });
-    fireEvent.click(screen.getByRole("button", { name: "Change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
     expect(props.onReopen).not.toHaveBeenCalled();
     expect(screen.getByText("Reopening drops your edit from the editor.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
     expect(props.onReopen).toHaveBeenCalled();
+  });
+
+  it("Reopen preselects the decided result's values; a bulk reopen (not restoring) does not (R-10)", () => {
+    const decided = { ...byId("g-hypo"), state: "choose" as const, annotation_ids: ["cons-1"] };
+    for (const restoring of [true, false]) {
+      const { props } = renderCard(decided, { result: { term_id: "HP:0001252", axes_values: { assertion: "absent" } } });
+      const view = render(<ul><GroupCard {...props} /></ul>);
+      view.rerender(<ul><GroupCard {...props} group={byId("g-hypo")} result={null} restoring={restoring} /></ul>);
+      expect(within(view.container).getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }).getAttribute("aria-pressed")).toBe(String(restoring));
+      cleanup();
+    }
   });
 
   it("shows a text snippet of the passage below 700 px", () => {
@@ -259,7 +270,7 @@ describe("GroupCard", () => {
 
   it("offers no actions when read-only", () => {
     renderCard({ ...byId("g-hypo"), state: "choose", annotation_ids: ["cons-1"], guidelines_unclear: true }, { readOnly: true });
-    expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reopen" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Take/ })).toBeNull();
     expect(screen.queryByLabelText("Guidelines unclear here")).toBeNull();
     expect(screen.getByText("Flagged: guidelines unclear")).toBeTruthy();
