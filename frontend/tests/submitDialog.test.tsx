@@ -115,7 +115,7 @@ describe("submit dialog open items", () => {
     expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
     expect(pressed(container)).toEqual(["annotation:carried"]);
     expect(container.querySelector(".app-layout")!.className).toContain("mobile-pane-details");
-    expect(scrollToEvidence).toHaveBeenCalledWith("ev-carried");
+    expect(scrollToEvidence).toHaveBeenCalledWith("ev-carried", undefined);
     await waitFor(() => expect((document.activeElement as HTMLElement).textContent).toContain("Mark as checked"));
   });
 
