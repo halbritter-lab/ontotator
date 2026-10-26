@@ -42,6 +42,9 @@ export const attachCopy = {
     ? `The standalone finding ${term} is then deleted; its text “${quote}” goes with the modifier.`
     : `The standalone finding ${term} is then deleted.`,
   converted: (term: string, finding: string) => `Turned ${term} into a modifier of ${finding}.`,
+  /** M2 M-5: attaching to a proposal runs Edit & Replace; named before (panel) and after (status line). */
+  proposalNote: (finding: string) => `${finding} is a tool proposal: attaching replaces it with your copy (Edit & Replace).`,
+  replaced: (finding: string, term: string, quote: string) => `${finding} replaced by your copy with ${term}${quote ? ` “${quote}”` : ""}.`,
 };
 
 /** The inspector while the attach mode is on (a labelled region "Attach Severe"). The banner over the text owns the

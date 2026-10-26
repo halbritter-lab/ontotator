@@ -62,6 +62,8 @@ export interface ReviewActionsProps {
   onRepeatDecision?: (outcome: Exclude<ReviewDecisionOutcome, "changed">) => void;
   /** Scrolls the text to one mention of the proposal and frames it, as a click on its mark does. */
   onShowMention?: (evidence: components["schemas"]["EvidenceSnapshot"]) => void;
+  /** M2 M-4: Edit & Replace, then this mention of the copy becomes a new finding (the proposal itself stays unchanged). */
+  onMoveMention?: (index: number) => void;
   /** Controlled reviewer note (kept by the parent so it survives re-selection and decision resets). */
   note?: string;
   onNoteChange?: (note: string) => void;
@@ -116,6 +118,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   onDeselect,
   onRepeatDecision,
   onShowMention,
+  onMoveMention,
   evidence = [],
   documentText = "",
   note: controlledNote,
@@ -238,6 +241,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           return <p className="review-actions__quote" key={`${ev.mention.evidence_id}:${ev.version}`}>
             {visitable ? <button type="button" className="review-actions__quote-button" aria-label={`Show mention ${index + 1}: “${quote}”`}
               onClick={() => onShowMention(ev)}>{quote}</button> : quote}
+            {onMoveMention && !readOnly && evidence.length > 1 && <>{" "}<Button size="sm" aria-label={`Move mention ${index + 1} to a new finding`}
+              title="Runs Edit & Replace: your copy keeps the other mentions, this one becomes its own finding"
+              onClick={() => onMoveMention(index)}>Move to a new finding</Button></>}
           </p>;
         }) : <p className="review-actions__quote">No text mention (spanless)</p>}
         {/* One source line: the tool's declared name (as in the AI badge), else the actor id. */}
