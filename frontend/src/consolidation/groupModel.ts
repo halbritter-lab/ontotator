@@ -217,9 +217,13 @@ export function takeFinding(group: ConsolidationGroupView, member: Consolidation
   return choices;
 }
 
+/** One comma-separated part of the result line; `axis` holds the raw value of an axis part (shown as `AxisValue`). */
+export interface ResultPart { text: string; axis?: string | null }
+
 export interface ResultText {
   /** "Hypotonia (HP:0001252), Absent, Patient, Current". */
   finding: string;
+  parts?: ResultPart[];
   saved: string;
   notTaken: string | null;
 }
@@ -239,17 +243,19 @@ export function resultLine(group: ConsolidationGroupView, people: readonly Conso
   other?: OtherTerm | null): ResultText {
   const termId = choices.term ?? defaultTerm(group);
   const holder = group.members.find(member => member.term_id === termId);
-  const parts = [holder ? termLabel(holder) : other?.termId === termId ? `${other.label} (${other.termId})` : termId];
+  const parts: ResultPart[] = [{ text: holder ? termLabel(holder) : other?.termId === termId ? `${other.label} (${other.termId})` : termId }];
+  const axisPart = (value: string | null | undefined): ResultPart => ({ text: axisOptionLabel(value), axis: value || null });
   for (const axis of axesOf(group)) {
-    if (!group.differing_axes.includes(axis)) parts.push(axisOptionLabel(group.members[0].axes[axis]));
-    else parts.push(choices[axis] === undefined ? `${axisLabel(axis)} not chosen yet` : axisOptionLabel(choices[axis]));
+    if (!group.differing_axes.includes(axis)) parts.push(axisPart(group.members[0].axes[axis]));
+    else parts.push(choices[axis] === undefined ? { text: `${axisLabel(axis)} not chosen yet` } : axisPart(choices[axis]));
   }
-  if (group.span_conflict && choices.text === undefined) parts.push("text not chosen yet");
+  if (group.span_conflict && choices.text === undefined) parts.push({ text: "text not chosen yet" });
   if (hasModifiers(group)) {
     const chosen = resultModifiers(group, choices, group.members.find(member => member.input_id === group.keep_input_id));
-    parts.push(chosen === null ? "modifiers not chosen yet" : chosen.length
-      ? `modifiers: ${setText(chosen, text, linkedTerms(memberSets(group)))}` : "no modifiers");
+    parts.push({ text: chosen === null ? "modifiers not chosen yet" : chosen.length
+      ? `modifiers: ${setText(chosen, text, linkedTerms(memberSets(group)))}` : "no modifiers" });
   }
+  const finding = parts.map(part => part.text).join(", ");
   const names = peopleOf(people, group.members);
   const others = new Map<string, string[]>();
   group.members.forEach((member, index) => {
@@ -258,8 +264,9 @@ export function resultLine(group: ConsolidationGroupView, people: readonly Conso
     others.set(label, [...(others.get(label) ?? []), firstName(names[index].label)]);
   });
   return {
-    finding: parts.join(", "),
-    saved: `Result: 1 finding, ${parts.join(", ")}`,
+    finding,
+    parts,
+    saved: `Result: 1 finding, ${finding}`,
     notTaken: others.size ? `Not taken: ${[...others].map(([label, who]) => `${label} (${who.join(", ")})`).join(", ")}` : null,
   };
 }

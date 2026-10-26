@@ -47,7 +47,9 @@ describe("GroupCard", () => {
 
   it("agreed rows are one grey line", () => {
     renderCard(hypotoniaThree(), { people: THREE });
-    expect(screen.getAllByText("Patient (all agree)")).toHaveLength(1);
+    const cells = [...document.querySelectorAll(".cons-agreed")].filter(cell => cell.textContent === "Patient (all agree)");
+    expect(cells).toHaveLength(1);
+    expect(cells[0].querySelector(".axis-value--patient")?.textContent).toBe("Patient");
   });
 
   it("axis values use the fixed colour slots", () => {

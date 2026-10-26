@@ -57,6 +57,7 @@ export function ComparisonTable({ name, group, people, rows, readOnly = false, b
       {row.agreed !== null || row.info !== null
         ? <td colSpan={members.length} className="cons-agreed">{row.kind === "modifiers" && row.cells[0].toggles?.some(toggle => toggle.cohort)
           ? <>{row.cells[0].toggles.map((toggle, index) => <span key={toggle.id}>{index > 0 && ", "}{toggle.label}{toggle.cohort && <> <span className="cons-tag">Cohort term</span></>}</span>)}{allAgree(members)}</>
+          : row.kind === "axis" && row.agreed !== null ? <><AxisValue value={row.cells[0].value || null} />{allAgree(members)}</>
           : row.agreed ?? `${row.cells[0].display} ${row.info}`}</td>
         : row.cells.map((cell, index) => <td key={cell.inputId}>
           {row.kind === "modifiers"

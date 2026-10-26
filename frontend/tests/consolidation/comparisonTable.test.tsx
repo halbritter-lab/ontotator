@@ -36,9 +36,10 @@ describe("ComparisonTable", () => {
 
   it("agreed rows are one grey line", () => {
     render(<Harness group={hypotoniaThree()} />);
-    const cells = screen.getAllByText("Patient (all agree)");
+    const cells = [...document.querySelectorAll(".cons-agreed")].filter(cell => cell.textContent === "Patient (all agree)");
     expect(cells).toHaveLength(1);
     expect(cells[0].getAttribute("colspan")).toBe("3");
+    expect(cells[0].querySelector(".axis-value--patient")?.textContent).toBe("Patient");
     expect(screen.getByText("“muscular hypotonia” (overlapping, comes with the chosen finding)")).toBeTruthy();
   });
 
@@ -69,6 +70,16 @@ describe("ComparisonTable", () => {
     render(<Harness group={hypotoniaThree()} />);
     const present = within(screen.getByRole("row", { name: /Assertion/ })).getAllByText("Present");
     expect(present[0].classList.contains("axis-value--present")).toBe(true);
+  });
+
+  it("a one-person group and the result line show axis values as chips (F16)", () => {
+    const lone = group("g-micro", ["partial"], [member("in-ml", LUC, "HP:0000252", "Microcephaly", [span("seizures")])]);
+    const { container } = render(<Harness group={lone} people={[LUC]} />);
+    for (const [label, slot] of [["Assertion", "present"], ["Experiencer", "patient"], ["Temporality", "current"]]) {
+      expect(within(screen.getByRole("row", { name: new RegExp(label) })).getByText(/./, { selector: ".axis-value" }).classList.contains(`axis-value--${slot}`)).toBe(true);
+    }
+    expect(container.querySelectorAll(".cons-result .axis-value")).toHaveLength(3);
+    expect(result()).toBe(resultLine(lone, [LUC], TEXT, {}).saved);
   });
 
   it("no pill buttons, no separators and no differs text", () => {
