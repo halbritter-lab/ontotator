@@ -87,7 +87,7 @@ it('explains a project without adjudicators and links Settings → People', asyn
   expect(options()).toEqual(['Choose a reviewer', 'You (Mia Kühn)']);
   const note = screen.getByText(/No member has the Consolidator role yet\. Give it in/);
   expect(note.textContent).toBe('No member has the Consolidator role yet. Give it in Settings → People.');
-  expect(within(note).getByRole('link', { name: 'Settings → People' }).getAttribute('href')).toBe('#/projects/p/settings');
+  expect(within(note).getByRole('link', { name: 'Settings → People' }).getAttribute('href')).toBe('#/projects/p/settings/people');
 });
 
 it('keeps the missing-language confirmation and reuses an existing review assignment revision', async () => {
