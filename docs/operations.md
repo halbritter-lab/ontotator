@@ -117,7 +117,7 @@ Confirm sign-in still works, then remove `secrets/app/admin-password-hash` using
 
 ## Users, ontologies and projects
 
-Run administrative commands inside app; they inherit its application-role database configuration and `/data`. They act directly on the database and audit the CLI operator. No SMTP service is used. Setup/reset codes are printed once: give them to the user out of band. Setup codes last 24 hours; reset codes last 15 minutes.
+Run administrative commands inside app; they inherit its application-role database configuration and `/data`. They act directly on the database and audit the CLI operator. No SMTP service is used. Setup/reset codes are printed once: give them to the user out of band. Setup codes last 24 hours; reset codes last 2 hours. Codes are groups of four letters and digits without look-alikes (no I, L, O, U); case, spaces and hyphens do not matter when typed.
 
 ```bash
 docker compose exec app ontocurator admin users create alice --display-name 'Alice A.'
@@ -125,7 +125,17 @@ docker compose exec app ontocurator admin users reset-code alice
 docker compose exec app ontocurator admin users deactivate alice
 docker compose exec app ontocurator admin users activate alice
 docker compose exec app ontocurator admin users list
+docker compose exec app ontocurator admin users edit alice --email alice@example.org --languages de,en
+docker compose exec app ontocurator admin audit --user alice --since 2026-10-01
 ```
+
+`users list` shows e-mail, setup state ("setup pending" until the setup code is redeemed) and projects. `admin audit` prints the audit trail newest first (`--project`, `--limit`, `--json` for JSONL). To erase a person's data on request (GDPR Art. 17), deactivate the account, then run `ontocurator admin users anonymise alice --confirm alice` (or use Anonymise on the Users page). It cannot be undone.
+
+- Erased: display name (becomes "Anonymised user"), e-mail, ORCID and its consent, qualification, languages, editor preferences, the password hash, all setup/reset codes, the login attempts recorded under the username, the client address and browser of every past session, and the replay receipts of their edits. The username becomes `anonymised-<id>` and is replaced in the audit trail (actor, target and `details.username`) and in job labels. The audit trail is otherwise append-only; only this erasure may rewrite those fields, inside its own transaction.
+- Kept: the account row with its id and pseudonym (`ann-NNNN`), the project memberships, and all research records written under the pseudonym (drafts, submissions, annotation and evidence versions, review decisions, consolidations, edit events) plus the audit events themselves, so exports and history remain complete.
+- Not touched: free text a person typed into research records or problem reports, uploaded source documents, and export files already downloaded or stored. The export writers name people by pseudonym, not by username.
+
+The username can be given to a new account afterwards; the new account does not inherit the erased history, which is tied to the account id.
 
 Stage inputs on writable tmpfs, then register them into persistent storage. Stream incoming files through `exec -T`: the Docker daemon can refuse `docker compose cp` into a container with a read-only root even when the target is writable tmpfs. The helper below writes as app's UID 1001. Only use releases whose licenses permit your intended use.
 
@@ -148,7 +158,7 @@ docker compose exec app ontocurator admin projects add-member ward-7 alice --rol
 docker compose exec app ontocurator admin projects members ward-7
 ```
 
-To remove that membership later, use `docker compose exec app ontocurator admin projects remove-member ward-7 alice --role annotator`. Membership changes end the user's sessions. Project roles are `lead`, `annotator` and `adjudicator`; repeat `--role` to assign several.
+To remove that membership later, use `docker compose exec app ontocurator admin projects remove-member ward-7 alice --role annotator`. Membership changes end the user's sessions. Project roles are `lead`, `annotator` and `consolidator` (stored and shown in the API as `adjudicator`, which the CLI also accepts); repeat `--role` to assign several.
 
 Import T1 documents/proposals and export submissions/edit logs, then copy outputs off the container. Choose fresh output filenames: existing outputs are refused.
 

@@ -367,7 +367,7 @@ admin_app = typer.Typer(
 )
 users_app = typer.Typer(help="Users and their single-use codes.", no_args_is_help=True)
 projects_app = typer.Typer(
-    help="Projects and their members (roles: lead, annotator, adjudicator).",
+    help="Projects and their members (roles: lead, annotator, consolidator).",
     no_args_is_help=True,
 )
 ontologies_app = typer.Typer(
@@ -531,7 +531,7 @@ def users_create(
 
 @users_app.command("reset-code")
 def users_reset_code(ctx: typer.Context, username: UsernameArgument) -> None:
-    """Print a single-use reset code (valid 15 minutes); older codes end."""
+    """Print a single-use reset code (valid 2 hours); older codes end."""
     with _open_database(ctx) as db:
         issued = AccountService(db).issue_reset_code(Actor.cli(), username)
     _print_code(issued)
@@ -574,14 +574,96 @@ def users_set_admin(
 
 @users_app.command("list")
 def users_list(ctx: typer.Context) -> None:
-    """One line per user: username, pseudonym, display name and state (tabs)."""
+    """One line per user (tabs): username, pseudonym, display name, state,
+    e-mail and projects with roles ('-' when empty)."""
+    from ontocurator.api.admin_routes import admin_users
+
     with _open_database(ctx) as db:
-        users = AccountService(db).list_users()
+        accounts = AccountService(db)
+        users = admin_users(accounts, accounts.list_users())
     for user in users:
         state = "active" if user.active else "inactive"
         if user.is_system_admin:
             state += ", admin"
-        typer.echo(f"{user.username}\t{user.pseudonym}\t{user.display_name}\t{state}")
+        if user.setup_pending:
+            state += ", setup pending"
+        if user.anonymised:
+            state += ", anonymised"
+        projects = "; ".join(
+            f"{project.project_key} ({', '.join(sorted(_role_word(r) for r in project.roles))})"
+            for project in user.projects
+        )
+        typer.echo(
+            f"{user.username}\t{user.pseudonym}\t{user.display_name}\t{state}"
+            f"\t{user.email or '-'}\t{projects or '-'}"
+        )
+
+
+@users_app.command("edit")
+def users_edit(
+    ctx: typer.Context,
+    username: UsernameArgument,
+    display_name: Annotated[
+        str | None, typer.Option("--display-name", help="The name other people see.")
+    ] = None,
+    email: Annotated[
+        str | None,
+        typer.Option("--email", help="Contact address; an empty value clears it."),
+    ] = None,
+    languages: Annotated[
+        str | None,
+        typer.Option(
+            "--languages",
+            help="Two-letter codes, comma-separated (e.g. de,en); empty clears.",
+        ),
+    ] = None,
+) -> None:
+    """Change a user's display name, e-mail or languages; sessions stay."""
+    profile: dict[str, Any] = {}
+    if display_name is not None:
+        profile["display_name"] = display_name
+    if email is not None:
+        profile["email"] = email
+    if not profile and languages is None:
+        _fail("NOTHING_TO_CHANGE", "Give --display-name, --email or --languages.")
+    with _open_database(ctx) as db:
+        accounts = AccountService(db)
+        with db.transaction():
+            user = accounts.update_profile(Actor.cli(), username, **profile)
+            if languages is not None:
+                accounts.set_languages(
+                    Actor.cli(),
+                    user.username,
+                    [code.strip() for code in languages.split(",") if code.strip()],
+                )
+            shown = sorted(accounts.languages_of([user.id])[user.id])
+    typer.echo(
+        f"'{user.username}': display name={user.display_name}, "
+        f"e-mail={user.email or '-'}, languages={', '.join(shown) or '-'}."
+    )
+
+
+@users_app.command("anonymise")
+def users_anonymise(
+    ctx: typer.Context,
+    username: UsernameArgument,
+    confirm: Annotated[
+        str,
+        typer.Option(
+            "--confirm",
+            help="The username again: anonymising cannot be undone.",
+            show_default=False,
+        ),
+    ],
+) -> None:
+    """Erase a deactivated user's personal data (GDPR); the pseudonym and all
+    work stay. Name, e-mail, ORCID, qualification, languages, password, codes
+    and login traces are removed; the username becomes anonymised-<id>."""
+    if confirm.strip().lower() != username.strip().lower():
+        _fail("CONFIRMATION_MISMATCH", "--confirm must repeat the username.")
+    with _open_database(ctx) as db:
+        user = AccountService(db).anonymise(Actor.cli(), username)
+    typer.echo(f"Anonymised: now '{user.username}', pseudonym {user.pseudonym} kept.")
 
 
 ProjectArgument = Annotated[str, typer.Argument(help="The project key.")]
@@ -591,8 +673,20 @@ def _plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
+# The user-facing name of a role; the stored value stays ``adjudicator``.
+_ROLE_WORDS = {"adjudicator": "consolidator"}
+
+
+def _role_word(role: str) -> str:
+    return _ROLE_WORDS.get(role, role)
+
+
+def _role_value(word: str) -> str:
+    return {v: k for k, v in _ROLE_WORDS.items()}.get(word.strip().lower(), word)
+
+
 def _print_roles(username: str, project: str, roles: frozenset[str]) -> None:
-    shown = ", ".join(sorted(roles)) if roles else "no role"
+    shown = ", ".join(sorted(_role_word(r) for r in roles)) if roles else "no role"
     typer.echo(f"'{username}' in '{project}': {shown}.")
 
 
@@ -618,14 +712,15 @@ def projects_members(ctx: typer.Context, project: ProjectArgument) -> None:
     with _open_database(ctx) as db:
         members = MembershipService(db).members(project)
     for username, pseudonym, roles in members:
-        typer.echo(f"{username}\t{pseudonym}\t{', '.join(sorted(roles))}")
+        shown = ", ".join(sorted(_role_word(r) for r in roles))
+        typer.echo(f"{username}\t{pseudonym}\t{shown}")
 
 
 RoleOption = Annotated[
     list[str] | None,
     typer.Option(
         "--role",
-        help="lead, annotator or adjudicator; repeat for several roles.",
+        help="lead, annotator or consolidator; repeat for several roles.",
         show_default=False,
     ),
 ]
@@ -640,7 +735,9 @@ def projects_add_member(
 ) -> None:
     """Give a user roles in a project; a change ends the user's sessions."""
     with _open_database(ctx) as db:
-        roles = MembershipService(db).add(Actor.cli(), project, username, role or [])
+        roles = MembershipService(db).add(
+            Actor.cli(), project, username, [_role_value(r) for r in role or []]
+        )
     _print_roles(username.strip().lower(), project, roles)
 
 
@@ -662,7 +759,7 @@ def projects_remove_member(
             Actor.cli(),
             project,
             username,
-            role or None,
+            [_role_value(r) for r in role] if role else None,
             revoke_assignments=revoke_assignments,
         )
     _print_roles(username.strip().lower(), project, roles)
@@ -1095,6 +1192,66 @@ def ontologies_list(ctx: typer.Context) -> None:
     with _open_database(ctx) as db:
         for item in _ontology_store(db).list():
             _print_ontology_file(item)
+
+
+@admin_app.command("audit")
+def audit_command(
+    ctx: typer.Context,
+    user: Annotated[
+        str | None,
+        typer.Option("--user", help="Changes to and by this username only."),
+    ] = None,
+    project: Annotated[
+        str | None, typer.Option("--project", help="Events of this project key only.")
+    ] = None,
+    since: Annotated[
+        str | None,
+        typer.Option("--since", help="From this date or time on (ISO 8601, UTC)."),
+    ] = None,
+    limit: Annotated[
+        int, typer.Option("--limit", min=1, help="At most this many.")
+    ] = 200,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="One JSON object per line (JSONL).")
+    ] = False,
+) -> None:
+    """The audit trail, newest first: time, actor, action, target, project, details."""
+    from datetime import datetime
+
+    from ontocurator.auth.audit import read_audit
+
+    start = None
+    if since is not None:
+        try:
+            start = datetime.fromisoformat(since)
+        except ValueError:
+            _fail("SINCE_INVALID", "--since takes an ISO date such as 2026-10-01.")
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=UTC)
+    with _open_database(ctx) as db, db.transaction() as conn:
+        user_id = None
+        if user is not None:
+            found = AccountService(db).get_by_username(user)
+            if found is None:
+                raise DomainError("USER_NOT_FOUND", f"There is no user '{user}'.")
+            user_id = found.id
+        events = read_audit(
+            conn,
+            user_id=user_id,
+            project_key=project,
+            since=start,
+            limit=limit,
+        )
+    for event in events:
+        if as_json:
+            typer.echo(json.dumps({**vars(event), "at": event.at.isoformat()}))
+            continue
+        at = event.at.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
+        typer.echo(
+            f"{at}\t{event.actor}\t{event.action}\t"
+            f"{event.target_type}:{event.target_id}\t{event.project_key or '-'}\t"
+            f"{json.dumps(event.details, sort_keys=True)}"
+        )
 
 
 @admin_app.command("hash-password")

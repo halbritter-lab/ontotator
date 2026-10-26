@@ -8,7 +8,7 @@ import { deferred, ontologies, settings } from "./projectFixtures";
 import { group, page, row, version } from "./documents/fixtures";
 
 const user = testUser("root", { username: "root", is_system_admin: true });
-const alex: AdminUser = { qualification: null, username: "alex", display_name: "Alex", email: null, pseudonym: "ann-alex", is_system_admin: false, active: true, languages: [], projects: [] };
+const alex: AdminUser = { qualification: null, username: "alex", display_name: "Alex", email: null, pseudonym: "ann-alex", is_system_admin: false, active: true, languages: [], projects: [], setup_pending: false, anonymised: false };
 const created: CreatedUser = { user: { ...alex, username: "bea" }, code: "setup-secret", expires_at: "2026-10-17T12:30:00Z" };
 const project: ProjectSummary = { project_key: settings.project_key, name: settings.name, can_manage: true, document_count: 0, description: null, roles: ["lead"], allowed_modes: ["independent"] };
 beforeEach(() => {
@@ -183,7 +183,7 @@ it("sends actual Users writes with CSRF and keeps its form through the existing 
   expect(endpoint).toBe("/api/v1/admin/users/");
   expect(options.method).toBe("POST"); expect(options.credentials).toBe("same-origin");
   expect((options.headers as Headers).get("X-CSRF-Token")).toBe("csrf-admin");
-  expect(JSON.parse(options.body as string)).toEqual({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false });
+  expect(JSON.parse(options.body as string)).toEqual({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false, projects: [] });
   const login = screen.getByRole("dialog", { name: "Log in to Ontocurator" });
   fireEvent.change(within(login).getByLabelText(/^Username/), { target: { value: "root" } });
   fireEvent.change(within(login).getByLabelText(/^Password/), { target: { value: "correct-password" } });

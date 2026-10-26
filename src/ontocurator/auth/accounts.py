@@ -13,6 +13,13 @@ activation bumps it and ends all sessions of the user.
 
 The installation always keeps an active system admin: demoting or
 deactivating the last one is refused with ``LAST_SYSTEM_ADMIN``.
+
+Erasure (GDPR Art. 17) anonymises a deactivated account in place: the row and
+its pseudonym stay, so research records keep their author, while every
+personal field, the credential and the login traces are removed. The
+username becomes ``anonymised-<id>``, a prefix new accounts cannot take, and
+the old username is rewritten wherever the account's own rows carry it (audit
+trail, job labels); ``users.anonymised_at`` marks the erasure.
 """
 
 from __future__ import annotations
@@ -33,6 +40,7 @@ from sqlalchemy import (
     func,
     insert,
     select,
+    text,
     union,
     update,
 )
@@ -63,6 +71,7 @@ from ontocurator.storage.tables import (
     SessionRow,
     SubmissionRow,
     UserLanguageRow,
+    UserPreferencesRow,
     UserRow,
 )
 
@@ -71,8 +80,14 @@ BootstrapResult = Literal["created", "already_done", "not_configured"]
 
 CODE_LIFETIME: dict[str, timedelta] = {
     "setup": timedelta(hours=24),
-    "reset": timedelta(minutes=15),
+    # Long enough to reach the person out of band; still single use.
+    "reset": timedelta(hours=2),
 }
+# Crockford base32 (no I, L, O, U): a code read aloud has no look-alikes.
+CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+# 26 symbols of 5 bits: 130 bits, far beyond guessing a single-use code that
+# expires, short enough to read aloud in six groups.
+CODE_GROUPS = (5, 5, 4, 4, 4, 4)
 ADMIN_USERNAME = "admin"
 ADMIN_DISPLAY_NAME = "Administrator"
 BOOTSTRAP_KEY = "admin_bootstrapped"
@@ -81,6 +96,8 @@ BOOTSTRAP_LOCK = advisory_lock_id("bootstrap-admin")
 # concurrent removals cannot both see the other admin still in place.
 # Lock order: this lock, then the user row.
 SYSTEM_ADMINS_LOCK = advisory_lock_id("system-admins")
+ANONYMISED_PREFIX = "anonymised-"
+ANONYMISED_DISPLAY_NAME = "Anonymised user"
 CODE_INVALID_MESSAGE = (
     "The code is not valid. It may be mistyped, used, expired or replaced;"
     " ask an administrator for a new one."
@@ -104,6 +121,8 @@ class User:
     orcid: str | None = None
     orcid_consent: bool = False
     qualification: str | None = None
+
+    anonymised: bool = False
 
 
 @dataclass(frozen=True)
@@ -181,6 +200,7 @@ def _user(row: Row[Any]) -> User:
         orcid=row.orcid,
         orcid_consent=row.orcid_consent,
         qualification=row.qualification,
+        anonymised=row.anonymised_at is not None,
     )
 
 
@@ -206,9 +226,89 @@ def _annotator_ids_in_use(conn: Connection) -> set[str]:
     return {str(value) for value in conn.execute(ids).scalars()}
 
 
+def new_code() -> str:
+    """A fresh code in six groups of five or four symbols, e.g. ``7K3QZ-...``.
+
+    Codes of other lengths (the former 43-character ``token_urlsafe`` codes)
+    still redeem: only the digest is stored and compared.
+    """
+    return "-".join(
+        "".join(secrets.choice(CODE_ALPHABET) for _ in range(size))
+        for size in CODE_GROUPS
+    )
+
+
+def canonical_code(code: str) -> str:
+    """The stored form of a typed code: no separators, upper case, I/L as 1, O as 0."""
+    return (
+        "".join(code.split())
+        .replace("-", "")
+        .upper()
+        .translate(str.maketrans("ILO", "110"))
+    )
+
+
 def _code_invalid() -> DomainError:
     """The one error for every unusable code, so none can be told apart."""
     return DomainError("CODE_INVALID", CODE_INVALID_MESSAGE)
+
+
+def _rewrite_username(
+    conn: Connection, user_id: int, pseudonym: str, old: str, new: str
+) -> None:
+    """Replace an erased username in the rows that carry it; drop its receipts."""
+    from ontocurator.storage.tables import (
+        AuditEventRow,
+        DraftRow,
+        JobRow,
+        MutationReceiptRow,
+    )
+
+    label_old, label_new = f"user:{old}", f"user:{new}"
+    conn.execute(text("SET LOCAL ontocurator.erasure = on"))
+    conn.execute(
+        update(AuditEventRow)
+        .where(AuditEventRow.target_user_id == user_id)
+        .values(target_id=new)
+    )
+    conn.execute(
+        update(AuditEventRow)
+        .where(
+            (AuditEventRow.actor_user_id == user_id)
+            | (AuditEventRow.actor_label == label_old)
+        )
+        .values(actor_label=label_new)
+    )
+    conn.execute(
+        update(AuditEventRow)
+        .where(AuditEventRow.details["username"].astext == old)
+        .values(
+            details=AuditEventRow.details.op("||")(
+                func.jsonb_build_object("username", new)
+            )
+        )
+    )
+    # Only the erasure itself may rewrite history: close the window again.
+    conn.execute(text("SET LOCAL ontocurator.erasure = off"))
+    conn.execute(
+        update(JobRow)
+        .where((JobRow.requested_by == user_id) | (JobRow.requested_label == label_old))
+        .values(requested_label=label_new)
+    )
+    # Receipts only replay a request of the (now closed) account.
+    conn.execute(
+        delete(MutationReceiptRow).where(
+            MutationReceiptRow.workspace_key.in_(
+                select(DraftRow.draft_key).where(DraftRow.annotator_id == pseudonym)
+            )
+        )
+    )
+
+
+def _anonymised(username: str) -> DomainError:
+    return DomainError(
+        "USER_ANONYMISED", f"'{username}' is anonymised and cannot be changed."
+    )
 
 
 def _password_rules(exc: PasswordRuleError) -> DomainError:
@@ -265,6 +365,8 @@ class AccountService:
         normalized = normalize_languages(languages)
         with self.db.transaction() as conn:
             user = self._lock_user(conn, username)
+            if normalized and _user(user).anonymised:
+                raise _anonymised(user.username)
             conn.execute(
                 delete(UserLanguageRow).where(UserLanguageRow.user_id == user.id)
             )
@@ -323,6 +425,8 @@ class AccountService:
                 for key, value in changes.items()
                 if getattr(user, key) != value
             }
+            if changes and _user(user).anonymised:
+                raise _anonymised(user.username)
             if changes:
                 conn.execute(
                     update(UserRow)
@@ -469,6 +573,11 @@ class AccountService:
                 ``PSEUDONYM_TAKEN``.
         """
         name = normalize_username(username)
+        if name.startswith(ANONYMISED_PREFIX):
+            raise DomainError(
+                "USERNAME_INVALID",
+                f"Usernames starting with '{ANONYMISED_PREFIX}' are reserved.",
+            )
         display = normalize_display_name(display_name)
         given_pseudonym = None
         if pseudonym is not None:
@@ -596,13 +705,13 @@ class AccountService:
                 OneTimeCodeRow.user_id == user.id, OneTimeCodeRow.used_at.is_(None)
             )
         )
-        code = secrets.token_urlsafe(32)
+        code = new_code()
         expires_at = now + CODE_LIFETIME[purpose]
         conn.execute(
             pg_insert(OneTimeCodeRow).values(
                 user_id=user.id,
                 purpose=purpose,
-                code_sha256=token_digest(code),
+                code_sha256=token_digest(canonical_code(code)),
                 issued_by=actor.user_id,
                 credential_generation=user.credential_generation,
                 created_at=now,
@@ -635,11 +744,13 @@ class AccountService:
                 raise _code_invalid() from None
             # The user row is locked first, as in every account change, then
             # the code row: one code cannot be redeemed twice at once.
+            # Codes issued before the grouped format are matched verbatim.
+            digests = {token_digest(code), token_digest(canonical_code(code))}
             row = conn.execute(
                 select(OneTimeCodeRow)
-                .where(OneTimeCodeRow.code_sha256 == token_digest(code))
+                .where(OneTimeCodeRow.code_sha256.in_(digests))
                 .with_for_update()
-            ).one_or_none()
+            ).first()
             if (
                 not user.active
                 or row is None
@@ -700,6 +811,8 @@ class AccountService:
             row = self._lock_user(conn, username)
             if getattr(row, column) == value:
                 return _user(row)  # nothing changes, nothing to audit
+            if _user(row).anonymised:
+                raise _anonymised(row.username)
             if (
                 not value
                 and row.active
@@ -725,6 +838,71 @@ class AccountService:
                 at=now,
             )
             return _user(self._lock_user(conn, row.username))
+
+    def anonymise(self, actor: Actor, username: str) -> User:
+        """Erase the personal data of a deactivated account; irreversible.
+
+        Kept: the row, its id and pseudonym, memberships and all work, so
+        exports and the audit trail still resolve the author. Removed: name,
+        e-mail, ORCID, qualification, languages, preferences, the password,
+        all codes, the login attempts under the old username, the client
+        addresses of its sessions and its idempotency receipts. The old
+        username is replaced by ``anonymised-<id>`` in the audit trail (actor
+        label, target and ``details.username``; the append-only trigger lets
+        this one transaction through) and in job labels.
+
+        Raises:
+            DomainError: ``USER_NOT_FOUND``, ``USER_ACTIVE`` for an active
+                account or ``USER_ANONYMISED`` when it is anonymised already.
+        """
+        now = self._now()
+        with self.db.transaction() as conn:
+            row = self._lock_user(conn, username)
+            if _user(row).anonymised:
+                raise _anonymised(row.username)
+            if row.active:
+                raise DomainError(
+                    "USER_ACTIVE", f"Deactivate '{row.username}' before anonymising."
+                )
+            new_name = f"{ANONYMISED_PREFIX}{row.id}"
+            conn.execute(
+                update(UserRow)
+                .where(UserRow.id == row.id)
+                .values(
+                    username=new_name,
+                    display_name=ANONYMISED_DISPLAY_NAME,
+                    email=None,
+                    orcid=None,
+                    orcid_consent=False,
+                    qualification=None,
+                    is_system_admin=False,
+                    anonymised_at=now,
+                )
+            )
+            _rewrite_username(conn, row.id, row.pseudonym, row.username, new_name)
+            for table in (PasswordCredentialRow, UserLanguageRow, UserPreferencesRow):
+                conn.execute(delete(table).where(table.user_id == row.id))
+            conn.execute(delete(OneTimeCodeRow).where(OneTimeCodeRow.user_id == row.id))
+            conn.execute(
+                delete(LoginAttemptRow).where(LoginAttemptRow.username == row.username)
+            )
+            self._new_generation(conn, row.id, now, reason="user.anonymise")
+            # Session rows stay (edit events reference them); their traces go.
+            conn.execute(
+                update(SessionRow)
+                .where(SessionRow.user_id == row.id)
+                .values(client_ip=None, user_agent=None)
+            )
+            record_audit(
+                conn,
+                actor,
+                "user.anonymise",
+                target_type="user",
+                target_id=new_name,
+                details={"pseudonym": row.pseudonym},
+                at=now,
+            )
+            return _user(self._lock_user(conn, new_name))
 
     @staticmethod
     def _other_active_admins(conn: Connection, user_id: int) -> bool:

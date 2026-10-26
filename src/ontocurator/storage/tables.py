@@ -497,6 +497,8 @@ class UserRow(Base):
     is_system_admin: Mapped[bool] = mapped_column(server_default=text("false"))
     active: Mapped[bool] = mapped_column(server_default=text("true"))
     credential_generation: Mapped[int] = mapped_column(server_default=text("1"))
+    # Set once by the erasure (GDPR Art. 17); the account is then closed for good.
+    anonymised_at: Mapped[datetime | None]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
@@ -582,6 +584,10 @@ class AuditEventRow(Base):
     action: Mapped[str]
     target_type: Mapped[str]
     target_id: Mapped[str]
+    # The account behind a ``user`` target, so its history survives a rename.
+    target_user_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey(UserRow.id), index=True
+    )
     project_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey(ProjectRow.id)
     )

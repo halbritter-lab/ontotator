@@ -4,7 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from ontocurator.api.document_projection import Assignee
 from ontocurator.api.identity import PrincipalDep
@@ -83,6 +83,13 @@ class Member(BaseModel):
     roles: list[str]
     languages: list[str]
     open_tasks: OpenTasksView = Field(default_factory=OpenTasksView)
+
+
+class MemberCandidate(BaseModel):
+    """A person a lead may add: only what the members table shows a lead."""
+
+    username: str
+    display_name: str
 
 
 class ProgressDocument(BaseModel):
@@ -458,6 +465,65 @@ def members(key: str, principal: PrincipalDep, request: Request) -> list[Member]
             # Username order would hint at hidden usernames.
             return sorted(by_id.values(), key=lambda member: member.pseudonym)
         return list(by_id.values())
+
+
+MEMBER_CANDIDATE_LIMIT = 10
+
+
+@router.get("/{key}/member-candidates")
+def member_candidates(
+    key: str, principal: PrincipalDep, request: Request, q: str = ""
+) -> list[MemberCandidate]:
+    """Active users outside the project matching ``q`` (three characters at least).
+
+    A lead finds people who share a project with them by part of the name or
+    username, and anybody else only by the exact username or e-mail, so the
+    search does not browse the installation's user list. System
+    administrators are never offered (they manage without membership); an
+    administrator caller searches everyone. Ten results at most.
+    """
+    _guard(request, Action.MANAGE_MEMBERS, key)
+    query = q.strip().lower()
+    if len(query) < 3:
+        return []
+    accounts = request.app.state.accounts
+    with accounts.db.snapshot() as conn:
+        project_id = conn.execute(
+            select(ProjectRow.id).where(ProjectRow.project_key == key)
+        ).scalar_one_or_none()
+        if project_id is None:
+            raise project_not_found(key)
+        members = select(ProjectMembershipRow.user_id).where(
+            ProjectMembershipRow.project_id == project_id
+        )
+        partial = or_(
+            func.strpos(UserRow.username, query) > 0,
+            func.strpos(func.lower(UserRow.display_name), query) > 0,
+        )
+        exact = or_(UserRow.username == query, func.lower(UserRow.email) == query)
+        if not principal.is_system_admin:
+            mine = select(ProjectMembershipRow.project_id).where(
+                ProjectMembershipRow.user_id == principal.user_id
+            )
+            colleagues = select(ProjectMembershipRow.user_id).where(
+                ProjectMembershipRow.project_id.in_(mine)
+            )
+            partial = partial & UserRow.id.in_(colleagues)
+        rows = conn.execute(
+            select(UserRow.username, UserRow.display_name)
+            .where(
+                UserRow.active.is_(True),
+                UserRow.anonymised_at.is_(None),
+                UserRow.is_system_admin.is_(False),
+                UserRow.id.not_in(members),
+                or_(partial, exact),
+            )
+            .order_by(UserRow.username)
+            .limit(MEMBER_CANDIDATE_LIMIT)
+        ).all()
+    return [
+        MemberCandidate(username=r.username, display_name=r.display_name) for r in rows
+    ]
 
 
 @router.put("/{key}/members/{username}")

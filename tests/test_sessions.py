@@ -85,7 +85,8 @@ def test_every_failure_looks_the_same(
 
     assert error.value.code == "LOGIN_FAILED"
     assert error.value.details == (
-        "Username or password is wrong, or the account is locked for 15 minutes."
+        "Username or password is wrong, or the account is deactivated or locked"
+        " for 15 minutes."
     )
 
 

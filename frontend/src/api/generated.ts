@@ -975,6 +975,46 @@ export interface paths {
         patch: operations["patch_user_api_v1_admin_users__username__patch"];
         trace?: never;
     };
+    "/api/v1/admin/users/{username}/anonymise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anonymise User
+         * @description Erase a deactivated account's personal data; the pseudonym and work stay.
+         */
+        post: operations["anonymise_user_api_v1_admin_users__username__anonymise_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{username}/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * User Audit
+         * @description The newest 200 changes to and by this user.
+         */
+        get: operations["user_audit_api_v1_admin_users__username__audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/ontologies/": {
         parameters: {
             query?: never;
@@ -1613,6 +1653,32 @@ export interface paths {
          *     people by pseudonym only (D1) and only their own open tasks.
          */
         get: operations["members_api_v1_projects__key__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{key}/member-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Member Candidates
+         * @description Active users outside the project matching ``q`` (three characters at least).
+         *
+         *     A lead finds people who share a project with them by part of the name or
+         *     username, and anybody else only by the exact username or e-mail, so the
+         *     search does not browse the installation's user list. System
+         *     administrators are never offered (they manage without membership); an
+         *     administrator caller searches everyone. Ten results at most.
+         */
+        get: operations["member_candidates_api_v1_projects__key__member_candidates_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2290,6 +2356,18 @@ export interface components {
             projects: components["schemas"]["UserProject"][];
             /** Qualification */
             qualification: string | null;
+            /**
+             * Setup Pending
+             * @default false
+             */
+            setup_pending: boolean;
+            /** Last Login At */
+            last_login_at?: string | null;
+            /**
+             * Anonymised
+             * @default false
+             */
+            anonymised: boolean;
         };
         /** AffectedTask */
         AffectedTask: {
@@ -2443,6 +2521,11 @@ export interface components {
             annotations: components["schemas"]["AnnotationSnapshot"][];
             /** Evidence */
             evidence: components["schemas"]["EvidenceSnapshot"][];
+        };
+        /** AnonymiseRequest */
+        AnonymiseRequest: {
+            /** Confirm Username */
+            confirm_username: string;
         };
         /** AssignRequest */
         AssignRequest: {
@@ -2715,6 +2798,28 @@ export interface components {
             annotation_mode?: ("proposals" | "scratch") | null;
             guideline?: components["schemas"]["AssignmentGuidelineView"] | null;
             guideline_notice?: components["schemas"]["GuidelineNoticeView"] | null;
+        };
+        /** AuditEventView */
+        AuditEventView: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Actor */
+            actor: string;
+            /** Action */
+            action: string;
+            /** Target Type */
+            target_type: string;
+            /** Target Id */
+            target_id: string;
+            /** Project Key */
+            project_key: string | null;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
         };
         /**
          * AxisDefinition
@@ -3421,6 +3526,8 @@ export interface components {
             system_admin: boolean;
             /** Languages */
             languages?: string[];
+            /** Projects */
+            projects?: components["schemas"]["NewMembership"][];
         };
         /** CreatedUser */
         CreatedUser: {
@@ -4669,6 +4776,16 @@ export interface components {
             languages: string[];
             open_tasks?: components["schemas"]["OpenTasksView"];
         };
+        /**
+         * MemberCandidate
+         * @description A person a lead may add: only what the members table shows a lead.
+         */
+        MemberCandidate: {
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+        };
         /** MemberChange */
         MemberChange: {
             /** Roles */
@@ -4757,6 +4874,13 @@ export interface components {
             payload: {
                 [key: string]: unknown;
             };
+        };
+        /** NewMembership */
+        NewMembership: {
+            /** Project Key */
+            project_key: string;
+            /** Roles */
+            roles: string[];
         };
         /** NextStepView */
         NextStepView: {
@@ -7535,6 +7659,11 @@ export interface components {
             project_key: string;
             /** Roles */
             roles: string[];
+            /**
+             * Project Name
+             * @default
+             */
+            project_name: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -9833,6 +9962,72 @@ export interface operations {
             };
         };
     };
+    anonymise_user_api_v1_admin_users__username__anonymise_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnonymiseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    user_audit_api_v1_admin_users__username__audit_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_ontologies_api_v1_admin_ontologies__get: {
         parameters: {
             query?: never;
@@ -11159,6 +11354,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Member"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    member_candidates_api_v1_projects__key__member_candidates_get: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberCandidate"][];
                 };
             };
             /** @description Validation Error */
