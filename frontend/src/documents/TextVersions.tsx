@@ -23,6 +23,8 @@ export interface TextVersionsTools {
   onAssignmentsChanged: () => void;
   /** Opens the translation review history of a version. */
   onShowTranslationReviews?: (documentId: string) => void;
+  /** Opens the page's "Request translation correction" dialog for an accepted version (else the inline form). */
+  onRequestCorrection?: (row: DocumentRowView, variant: VariantSummary) => void;
   /** Per-version bulk selection (rows that show "Choose in Text versions"). */
   bulkSelected?: ReadonlySet<string>;
   onToggleBulk?: (documentId: string) => void;
@@ -114,14 +116,18 @@ export interface TextVersionsProps {
   now?: Date;
   /** Text card: open current work is shown as chips with its actions beside them; list only submitted and moved work. */
   hideOpenWork?: boolean;
+  /** Text card: the newest version of each chain stays visible, older ones sit in a closed "Older versions (n)". */
+  collapseOlder?: boolean;
 }
 
 /** Child rows per text version of a row: origin, status with review decision, chain name, work and version actions. */
-export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(function TextVersions({ row, projectKey, query, onNavigate, tools, now, hideOpenWork = false }, ref) {
+export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(function TextVersions({ row, projectKey, query, onNavigate, tools, now, hideOpenWork = false, collapseOlder = false }, ref) {
   const documents = Object.keys(query).length ? { documents: query } : {};
   const chooseInVersions = row.bulk.mode === "choose_in_versions";
-  return <ul ref={ref} className="text-versions">
-    {row.versions.map(version => {
+  const newest = collapseOlder ? row.versions.filter(version => version.is_newest_in_chain) : [];
+  const current = newest.length ? newest : row.versions;
+  const older = newest.length ? row.versions.filter(version => !version.is_newest_in_chain) : [];
+  const renderVersion = (version: DocumentVersionView): JSX.Element => {
       const name = versionName(version.version, version.chain_name, row.parallel_roots);
       const badge = statusBadgeText(version.translation_status, version.latest_review_decision, version.accepted_without_review);
       const view: Route = { name: "projectCase", key: projectKey, caseId: row.case_id, variant: version.document_id, ...documents };
@@ -136,7 +142,9 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
       let actions: ReactNode = null;
       if (tools) {
         actions = <>
-          {variant && <TranslationCorrectionAction projectKey={projectKey} variant={variant} username={tools.username} requiredLanguages={tools.requiredLanguages(version.document_id)} />}
+          {variant && (tools.onRequestCorrection
+            ? variant.translation_status === "accepted" && <Button size="sm" onClick={() => tools.onRequestCorrection?.(row, variant)}>Request correction…</Button>
+            : <TranslationCorrectionAction projectKey={projectKey} variant={variant} username={tools.username} requiredLanguages={tools.requiredLanguages(version.document_id)} />)}
           {version.translation_status != null && tools.onShowTranslationReviews && <Button size="sm" aria-label={`Translation reviews for ${name}`} onClick={() => tools.onShowTranslationReviews?.(version.document_id)}>Translation reviews</Button>}
         </>;
       }
@@ -172,6 +180,11 @@ export const TextVersions = forwardRef<HTMLUListElement, TextVersionsProps>(func
           {actions}
         </div>
       </li>;
-    })}
+  };
+  return <ul ref={ref} className="text-versions">
+    {current.map(renderVersion)}
+    {older.length > 0 && <li className="text-version-older">
+      <details><summary>{`Older versions (${older.length})`}</summary><ul className="text-versions">{older.map(renderVersion)}</ul></details>
+    </li>}
   </ul>;
 });

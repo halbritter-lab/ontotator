@@ -26,6 +26,8 @@ export interface StageActionsProps {
   onChangeFinal?: (row: DocumentRowView) => void;
   canChangeFinal?: (row: DocumentRowView) => boolean;
   textVersionTools?: TextVersionsTools;
+  /** The text card: its Translation part carries the reviewers' Reassign / Remove (chip menus) and Request correction (versions). */
+  inCard?: boolean;
 }
 
 /**
@@ -33,19 +35,19 @@ export interface StageActionsProps {
  * task, S3); Translation "Request correction…", "Assign a new review…"; Finalization "Change final…" of a
  * decided row.
  */
-export function StageActions({ row, stage, onAssign, onRequestCorrection, canRequestCorrection, onChangeFinal, canChangeFinal, textVersionTools }: StageActionsProps): JSX.Element | null {
+export function StageActions({ row, stage, onAssign, onRequestCorrection, canRequestCorrection, onChangeFinal, canChangeFinal, textVersionTools, inCard = false }: StageActionsProps): JSX.Element | null {
   const show = (name: PanelStage) => !stage || stage === name;
   const documents = new Set(row.versions.map(version => version.document_id));
   // Open work of the stage (reviewers under Translation, annotators under Annotation): Reassign… and the assignment actions.
   const workIds = new Set(row.work.filter(item => item.status !== "submitted" && item.moved_to_version == null
-    && (item.task === "translation_review" ? show("review") : show("annotation"))).map(item => item.assignment_id));
+    && (item.task === "translation_review" ? show("review") && !inCard : show("annotation"))).map(item => item.assignment_id));
   const reassignable: AssignmentView[] = textVersionTools
     ? textVersionTools.assignments.filter(assignment => workIds.has(assignment.id) && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
   // Submitted annotations: "Reopen…" with the stage (the version list's Assignment actions offer it too).
   const reopenable: AssignmentView[] = textVersionTools && show("annotation")
     ? textVersionTools.assignments.filter(assignment => assignment.task === "annotate" && assignment.status === "submitted" && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
   const [reopening, setReopening] = useState<number | null>(null);
-  const correction = show("review") && onRequestCorrection && canRequestCorrection?.(row);
+  const correction = show("review") && !inCard && onRequestCorrection && canRequestCorrection?.(row);
   const newReview = show("review") && onAssign && canAssignNewReview(row);
   const changeFinal = show("final") && onChangeFinal && canChangeFinal?.(row);
   if (!reassignable.length && !reopenable.length && !correction && !newReview && !changeFinal) return null;

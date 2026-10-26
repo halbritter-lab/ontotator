@@ -109,9 +109,16 @@ export async function openCardHistory(page: Page, caseId: string, language: stri
 /** History lines of an open card (newest first; each starts with its stage, e.g. "Annotation: …"). */
 export const activityLines = (card: Locator): Locator => card.getByRole("list", { name: "Activity", exact: true }).getByRole("listitem");
 
-/** Show the card's Translation part; returns its version items (``count`` is checked). */
+/** Open the Translation part's collapsed "Older versions (n)", when there is one. */
+export async function openOlderVersions(card: Locator): Promise<void> {
+  const older = card.locator(".text-version-older > details");
+  if (await older.count() && !(await older.evaluate(element => (element as HTMLDetailsElement).open))) await older.locator("summary").click();
+}
+
+/** Show the card's Translation part; returns its version items, older ones opened (``count`` is checked). */
 export async function textVersionItems(card: Locator, count: number): Promise<Locator> {
   await showSegment(card, "Translation");
+  await openOlderVersions(card);
   const items = card.locator("ul.text-versions > li.text-version");
   await expect(items).toHaveCount(count);
   return items;

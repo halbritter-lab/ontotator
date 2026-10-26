@@ -9,7 +9,7 @@ export interface AssignmentActionsProps {
   /** A direct "Reassign…" button before the "Assignment actions" menu (the Documents row panel, S3). */
   directReassign?: boolean;
   /** Only this action's dialog, open at once (no buttons); `onClose` runs when it closes or the action is done. */
-  open?: "reassign" | "reopen";
+  open?: "reassign" | "reopen" | "revoke";
   onClose?: () => void;
 }
 export function AssignmentActions(props: AssignmentActionsProps): JSX.Element { return <Actions key={JSON.stringify([props.assignment.project_key, props.assignment.id, props.assignment.updated_at, props.assignment.status, props.assignment.revoked_at])} {...props} />; }

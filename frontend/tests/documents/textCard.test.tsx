@@ -246,21 +246,51 @@ describe("annotation part", () => {
 });
 
 describe("translation part", () => {
-  it("names the version, the automatic check, the reviewers and the actions", () => {
+  it("names the open reviewers and the actions, without a separate version line", () => {
     const row = assignRow({
+      versions: [version({ document_id: "case-200-de", origin: "machine_translation", derived_from: "case-200-en", translation_status: "ready_for_review" })],
       work: [work({ assignment_id: 5, document_id: "case-200-de", task: "translation_review", status: "in_progress", author_label: "ann-0003", person: ana })],
     });
-    const onRequestCorrection = vi.fn();
-    const { onAssign, onNavigate } = renderCard({ row, initialSegment: "translation", sourceLanguage: "en", onRequestCorrection });
-    expect(within(card()).getByText("Version 1, machine translation from English")).toBeTruthy();
-    expect(within(card()).getByText("Automatic check passed")).toBeTruthy();
+    const { onAssign, onNavigate } = renderCard({ row, initialSegment: "translation" });
+    expect(within(card()).queryByText(/^Version 1/)).toBeNull();
+    expect(within(card()).queryByText("Automatic check passed")).toBeNull();
+    expect(within(card()).getByText("Ready for review")).toBeTruthy();
     expect(within(card()).getByText("Ana Weber").closest(".assignment-chip")!.textContent).toContain("in progress");
     fireEvent.click(within(card()).getByRole("button", { name: "Assign reviewer…" }));
     expect(onAssign).toHaveBeenCalledWith(row, "translation_review");
     fireEvent.click(within(card()).getByRole("link", { name: "Compare with source" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "projectCase", key: "p", caseId: "case-200", variant: "case-200-de", compare: "case-200-en", documents: query });
-    fireEvent.click(within(card()).getByRole("button", { name: "Request correction…" }));
-    expect(onRequestCorrection).toHaveBeenCalledWith(row);
+  });
+
+  it("after a review: the newest version per chain, older ones collapsed, one Request correction…, submitted reviews under their version", () => {
+    const versions = [
+      version({ document_id: "case-200-de", origin: "machine_translation", derived_from: "case-200-en", translation_status: "reviewed", chain_name: "m1", is_newest_in_chain: false }),
+      version({ document_id: "case-200-de-v2", version: 2, origin: "correction", derived_from: "case-200-de", chain_id: "case-200-de", chain_name: "m1", translation_status: "accepted" }),
+      version({ document_id: "case-200-mt", origin: "machine_translation", derived_from: "case-200-en", chain_name: "mt", translation_status: "ready_for_review" }),
+    ];
+    const reviewed = work({ assignment_id: 5, document_id: "case-200-de", task: "translation_review", status: "submitted", author_label: "ann-0003", person: ana });
+    const open = work({ assignment_id: 6, document_id: "case-200-mt", task: "translation_review", status: "open", author_label: "ann-0004", person: tom });
+    const variant = { document_id: "case-200-de-v2", translation_status: "accepted" } as never;
+    const onRequestCorrection = vi.fn();
+    const assignment = (id: number, documentId: string, status: string) => ({ id, document_id: documentId, status, task: "translation_review", pseudonym: "ann-0004", username: "tom", project_key: "p", revoked_at: null }) as never;
+    const textVersionTools = { username: "lead", members: [], assignments: [assignment(6, "case-200-mt", "open"), assignment(5, "case-200-de", "submitted")],
+      variants: new Map([["case-200-de-v2", variant]]), requiredLanguages: () => ["de"], onAssignmentsChanged: vi.fn(), onRequestCorrection };
+    const row = assignRow({ versions, parallel_roots: true, work: [reviewed, open] });
+    renderCard({ row, initialSegment: "translation", textVersionTools });
+    const part = within(card()).getByRole("heading", { name: "Translation" }).closest("section")!;
+    // Only the open reviewer is a chip; its menu holds Reassign and Remove.
+    expect(within(part).queryByText("Ana Weber")?.closest(".assignment-chip") ?? null).toBeNull();
+    fireEvent.click(within(part).getByRole("button", { name: "Tom Reis, not started: actions" }));
+    expect(screen.getByRole("menuitem", { name: /^Reassign to someone else…/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Remove assignment…" })).toBeTruthy();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    const older = within(part).getByText("Older versions (1)").closest("details")!;
+    expect(older.open).toBe(false);
+    expect(within(older).getByText("m1 v1")).toBeTruthy();
+    expect(within(part).getAllByRole("button", { name: "Request correction…" })).toHaveLength(1);
+    fireEvent.click(within(part).getByRole("button", { name: "Request correction…" }));
+    expect(onRequestCorrection).toHaveBeenCalledWith(row, variant);
+    expect(within(part).queryByRole("button", { name: "Request translation correction" })).toBeNull();
   });
 
   it("calls a native text the source text and a failed check failed", () => {
@@ -269,7 +299,7 @@ describe("translation part", () => {
     expect(within(card()).queryByRole("button", { name: "Assign reviewer…" })).toBeNull();
     cleanup();
     renderCard({ row: assignRow({ versions: [version({ document_id: "case-200-de", origin: "machine_translation", translation_status: "automatic_check_failed" })] }), initialSegment: "translation" });
-    expect(within(card()).getByText("Automatic check failed")).toBeTruthy();
+    expect(within(card()).getByText("Check failed")).toBeTruthy();
   });
 });
 

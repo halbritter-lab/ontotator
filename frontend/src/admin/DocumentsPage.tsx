@@ -319,6 +319,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const [uploadOpen, setUploadOpen] = useState(false);
   const [reviewDocument, setReviewDocument] = useState<string | null>(null);
 
+  const [correctionFor, setCorrectionFor] = useState<{ row: DocumentRowView; variant: VariantSummary } | null>(null);
   const textVersionTools = useMemo<TextVersionsTools | undefined>(() => {
     if (!inventory) return undefined;
     const variants = new Map<string, VariantSummary>(inventory.cases.flatMap(item => item.variants).map(variant => [variant.document_id, variant]));
@@ -330,6 +331,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       requiredLanguages: documentId => reviewLanguages(documentId, variants),
       onAssignmentsChanged: refreshAll,
       onShowTranslationReviews: setReviewDocument,
+      onRequestCorrection: (row, variant) => setCorrectionFor({ row, variant }),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inventory, currentUser?.username, rows.reload]);
@@ -602,7 +604,6 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   };
   /** Text name and stage cells: the panel unfiltered or filtered to the stage, on Activity. */
   const onOpenPanel: OpenTextCard = (row, { stage, opener }) => openCard({ key: rowKeyOf(row), stage }, { opener, focus: true });
-  const panelSource = panelRow ? groupOf(panelRow.case_id)?.rows.find(entry => entry.is_source)?.language ?? null : null;
   // Rows without a final decision step still offer "Consolidate…" once two submissions exist on one version.
   const decisionOptional = !(panelKey && decisionKey.current === panelKey) && panelRow != null && !panelRow.final && isActiveRow(panelRow);
   const decision = panelKey && releasedKey !== panelKey && (decisionKey.current === panelKey || decisionOptional) ? <DecisionBlock optional={decisionOptional} projectKey={projectKey} rowKey={panelKey} page={page} query={query} refreshError={rows.error}
@@ -643,8 +644,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     closePanel(resolveOptions.rowKey);
   }, { allowInInputs: true, enabled: resolveOptions != null });
 
-  // "Request correction…" from the text card's Translation part (StageActions).
-  const [correctionFor, setCorrectionFor] = useState<{ row: DocumentRowView; variant: VariantSummary } | null>(null);
+  // "Request correction…" of an accepted version (the card's versions, the cards' stage popover).
   /** The accepted newest translation a correction can be requested for (Text versions offers the same). */
   const correctionVariant = (row: DocumentRowView): VariantSummary | null => {
     if (row.is_source || !textVersionTools) return null;
@@ -695,9 +695,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     onChangePlan={row => setPlanFor(row)} onOpenText={entry => openCard({ key: rowKeyOf(entry), tab: panelTab })} onChanged={reloadAfterAction}
     decision={decision} textVersionTools={textVersionTools} canManage me={currentUser ?? null}
     reportRoute={reportId => ({ name: "projectProblemReport", key: projectKey, reportId, documents: query })}
-    sourceLanguage={panelSource}
     plan={<><PlanChips row={panelRow} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} size={narrow ? "card" : "table"} /><PlanRowNotice row={panelRow} saves={planSaves} /></>}
-    stageActions={stage => <StageActions {...stageActionProps} row={panelRow} stage={stage} />}
+    stageActions={stage => <StageActions {...stageActionProps} row={panelRow} stage={stage} inCard />}
     steps={cardSteps(panelRow)}
     planControl={step => <CardPlanSelect row={panelRow} step={step} groupRevision={groupOf(panelRow.case_id)?.plan_revision ?? 1} saves={planSaves} />}
     returnFocus={() => { const opener = panelOpenedKey.current === panelKey ? panelOpener.current : null; return opener?.isConnected ? opener : rowElement(panelKey, "header"); }}

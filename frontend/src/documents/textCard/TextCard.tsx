@@ -48,7 +48,6 @@ export interface TextCardProps {
   onNavigate: (route: Route) => void;
   /** Task review only via Consolidate… (D1). */
   onAssign: (row: DocumentRowView, task: "translation_review" | "annotate") => void;
-  onRequestCorrection?: (row: DocumentRowView) => void;
   onChangePlan: (row: DocumentRowView) => void;
   /** Switches the card to another text of the case (the "Other languages" list). */
   onOpenText?: (row: DocumentRowView) => void;
@@ -63,13 +62,11 @@ export interface TextCardProps {
   now?: Date;
   /** Route of a problem report (banner, History, Text details). */
   reportRoute: (reportId: string) => Route;
-  /** Source language of the case ("machine translation from English"). */
-  sourceLanguage?: string | null;
   /** The row's plan chips (Text details). */
   plan?: ReactNode;
   /** Current plan revision of the case (Text details). */
   planRevision?: number;
-  /** Admin actions of a stage (Reassign…, Request correction…, Assign a new review…, Change final…), under its part. */
+  /** Admin actions of a stage (Reassign…, Reopen…, Assign a new review…, Change final…), under its part. */
   stageActions?: (stage: PanelStage) => ReactNode;
   /** Focus target when the card closes (asked at close time); default: the element focused on open. */
   returnFocus?: () => HTMLElement | null | undefined;
@@ -189,8 +186,8 @@ export function TextCard(props: TextCardProps): JSX.Element {
         <p>This text is not worked on.</p>
         {canManage && <Button variant="primary" size="sm" onClick={() => props.onChangePlan(row)}>Add to plan…</Button>}
       </div>}
-      {segment === "translation" && <><TranslationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} sourceLanguage={props.sourceLanguage} canManage={canManage}
-        onAssign={props.onAssign} onRequestCorrection={props.onRequestCorrection} onNavigate={onNavigate} onChanged={props.onChanged} textVersionTools={props.textVersionTools} now={now}
+      {segment === "translation" && <><TranslationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} canManage={canManage}
+        onAssign={props.onAssign} onNavigate={onNavigate} onChanged={props.onChanged} textVersionTools={props.textVersionTools} now={now}
         planControl={plannable ? props.planControl?.("review") : undefined} />{props.stageActions && <div className="text-card-actions">{props.stageActions("review")}</div>}</>}
       {segment === "annotation" && <><AnnotationPart key={rowKeyOf(row)} row={row} projectKey={projectKey} query={query} submissions={list} canManage={canManage}
         onAssign={props.onAssign} onNavigate={onNavigate} onChanged={props.onChanged} onHistory={() => onView("history")} tools={props.textVersionTools} now={now}

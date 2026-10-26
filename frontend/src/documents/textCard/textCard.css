@@ -139,6 +139,8 @@
 .text-version-origin,
 .text-version-chain { color: var(--text-muted); }
 .text-version-actions a { white-space: nowrap; }
+.text-version-older > details > summary { color: var(--text-muted); cursor: pointer; }
+.text-version-older > details > .text-versions { margin-top: var(--space-2); }
 
 .technical-details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
 .technical-details dt { color: var(--text-muted); }

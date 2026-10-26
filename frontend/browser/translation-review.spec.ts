@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { openTextCard, rowAction, showSegment, textCard, textNamePattern } from './documentsHelpers';
+import { openOlderVersions, openTextCard, rowAction, showSegment, textCard, textNamePattern } from './documentsHelpers';
 import { authenticatedRequest, loginExisting, TEST_PASSWORD } from './helpers';
 
 test.setTimeout(90_000);
@@ -73,7 +73,7 @@ async function documentRow(page: Page, id: string) {
   const other = page.locator('.text-card[role="dialog"]');
   if (!await card.count() && await other.count()) await other.getByRole('button', { name: 'Close', exact: true }).first().click();
   await openTextCard(page, doc.case_id, doc.language);
-  await showSegment(card, 'Translation');
+  await showSegment(card, 'Translation'); await openOlderVersions(card);
   const version = card.locator('li.text-version').filter({ has: page.locator(`a[href*="${new URLSearchParams({ variant: id })}&"], a[href$="${new URLSearchParams({ variant: id })}"]`) });
   await expect(version).toHaveCount(1);
   return version;

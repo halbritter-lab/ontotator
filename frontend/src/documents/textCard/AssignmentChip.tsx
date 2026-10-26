@@ -25,6 +25,8 @@ export interface ChipMenu {
   mode?: "proposals" | "scratch";
   /** Submitted work: the menu only opens the history. */
   onHistory?: () => void;
+  /** A translation reviewer: Remove revokes the assignment (no draft is discarded) and Reassign names no annotation mode. */
+  review?: boolean;
 }
 
 /**
@@ -42,7 +44,7 @@ export function AssignmentChip({ item, caseId, menu, onChanged, link, onNavigate
   onNavigate?: (route: Route) => void;
   now?: Date;
 }): JSX.Element {
-  const [dialog, setDialog] = useState<"remove" | "reassign" | null>(null);
+  const [dialog, setDialog] = useState<"remove" | "reassign" | "revoke" | null>(null);
   const name = workerName(item);
   const submitted = item.status === "submitted";
   const details = <>
@@ -54,8 +56,10 @@ export function AssignmentChip({ item, caseId, menu, onChanged, link, onNavigate
     // Submitted work counts: nothing to change; its name opens the person's layer, else the chip opens the history.
     ? (menu.onHistory && !link ? [{ id: "history", label: "Open history", onSelect: menu.onHistory }] : [])
     : [
-      ...(assignment ? [{ id: "reassign", label: "Reassign to someone else…", description: `They start fresh ${menu.mode === "scratch" ? "from scratch" : "from proposals"}. ${name} can no longer continue; the draft stays in the history.`, onSelect: () => setDialog("reassign") }] : []),
-      { id: "remove", label: "Remove (draft is discarded)", description: "Frees the slot.", onSelect: () => setDialog("remove") },
+      ...(assignment ? [{ id: "reassign", label: "Reassign to someone else…", description: menu.review ? `${name} can no longer continue.`
+        : `They start fresh ${menu.mode === "scratch" ? "from scratch" : "from proposals"}. ${name} can no longer continue; the draft stays in the history.`, onSelect: () => setDialog("reassign") }] : []),
+      ...(!menu.review ? [{ id: "remove", label: "Remove (draft is discarded)", description: "Frees the slot.", onSelect: () => setDialog("remove") }]
+        : assignment ? [{ id: "remove", label: "Remove assignment…", onSelect: () => setDialog("revoke") }] : []),
       ...(menu.onAssignAnother ? [{ id: "another", label: `Assign another person (${name} keeps working)`, onSelect: menu.onAssignAnother }] : []),
     ];
   if (!items.length) {
@@ -69,7 +73,7 @@ export function AssignmentChip({ item, caseId, menu, onChanged, link, onNavigate
       content={<><span className="assignment-chip-name">{name}</span>{details}<IconSortDown className="assignment-chip-chevron" /></>} />
     {dialog === "remove" && <RemoveAssignmentDialog assignmentId={item.assignment_id} name={name} caseId={caseId}
       onCancel={() => setDialog(null)} onRemoved={() => { setDialog(null); onChanged(); }} />}
-    {dialog === "reassign" && assignment && menu?.tools && <AssignmentActions assignment={assignment} members={menu.tools.members} open="reassign"
+    {(dialog === "reassign" || dialog === "revoke") && assignment && menu?.tools && <AssignmentActions assignment={assignment} members={menu.tools.members} open={dialog}
       onChanged={() => { menu.tools?.onAssignmentsChanged(); onChanged(); }} onClose={() => setDialog(null)} />}
   </>;
 }
