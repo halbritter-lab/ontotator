@@ -3,8 +3,8 @@
  * for bulk work, so it shows from two selected texts on): "3 texts in 2 cases selected", the common next step,
  * "{k} not shown with these filters" (from the selection summary with the current filters) and
  * "Clear selection"; primary "Assign…" (the page's only primary button) and the plan actions
- * "Translation review and annotation", "Annotation only, no translation review" (one click when no existing work is affected)
- * and "Plan…". Every plan save keeps the selection and shows an Undo toast (D22). The summary and
+ * "Translation review and annotation", "Annotation only, no translation review" (one click when no existing work is affected;
+ * only in projects with translations) and "Plan…". Every plan save keeps the selection and shows an Undo toast (D22). The summary and
  * the quick plan actions send the selected texts (`rows`); the plan dialog still edits whole cases.
  * The bar floats at the bottom of the viewport over the content (`useFloatingBar`): its arrival never moves the
  * table; the page reserves its height as bottom padding. Its place in the DOM keeps the focus order.
@@ -44,6 +44,8 @@ export interface SelectionBarProps {
   onChanged: () => void;
   /** Plan revisions returned by a save or undo (chips use them for their next save). */
   onRevisions?: (revisions: Record<string, number>) => void;
+  /** The project has translations; without them the two translation plan actions are left out. */
+  translations?: boolean;
 }
 
 /** One selected text is the open card's text, not bulk work. */
@@ -70,7 +72,7 @@ function presetChoices(preset: Preset, languages: readonly string[]): PlanChoice
 type Undo = { kind: "conflict"; undo: UndoView; consequences: ConsequencesView } | { kind: "changed" };
 
 export function SelectionBar({
-  projectKey, keys, filters, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions,
+  projectKey, keys, filters, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions, translations = true,
 }: SelectionBarProps): JSX.Element | null {
   const id = useId().replace(/:/g, "");
   const latest = useRef({ showToast, onAnnounce, onChanged, onRevisions });
@@ -190,9 +192,11 @@ export function SelectionBar({
         </p>
         <div className="selection-bar-actions">
           <Button variant="primary" onClick={onAssign}>Assign…</Button>
-          <Button loading={busy === "review_and_annotate_translations"} aria-disabled={busy ? true : undefined}
-            onClick={() => { void quick("review_and_annotate_translations"); }}>Translation review and annotation</Button>
-          <Button loading={busy === "annotate_only"} aria-disabled={busy ? true : undefined} onClick={() => { void quick("annotate_only"); }}>Annotation only, no translation review</Button>
+          {translations && <>
+            <Button loading={busy === "review_and_annotate_translations"} aria-disabled={busy ? true : undefined}
+              onClick={() => { void quick("review_and_annotate_translations"); }}>Translation review and annotation</Button>
+            <Button loading={busy === "annotate_only"} aria-disabled={busy ? true : undefined} onClick={() => { void quick("annotate_only"); }}>Annotation only, no translation review</Button>
+          </>}
           <Button aria-disabled={busy ? true : undefined} onClick={() => { if (!busy) setPlan({ caseIds }); }}>Plan…</Button>
           <Button onClick={onClear}>Clear selection</Button>
         </div>

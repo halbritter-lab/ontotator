@@ -142,18 +142,17 @@ describe("My tasks component", () => {
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "task", assignmentId: 12 });
   });
 
-  it("distinguishes duplicate project names in all-managed empty-state Documents links", async () => {
+  it("several managed projects without tasks get one Go to Projects, not a button per project", async () => {
     const onNavigate = vi.fn();
     vi.mocked(api.listMyTasks).mockResolvedValue([]);
     render(<MyTasks projects={[project("p", "Research", true), project("q", "Research", true)]} onNavigate={onNavigate} />);
-    const first = await screen.findByRole("link", { name: "Go to Documents in Research (p)" });
-    const second = screen.getByRole("link", { name: "Go to Documents in Research (q)" });
-    expect(screen.getByText(/As a project lead, you assign documents/)).toBeDefined();
-    expect(first.className).toBe("btn btn-secondary");
-    expect(first.getAttribute("href")).toBe("#/projects/p/documents");
-    expect(second.getAttribute("href")).toBe("#/projects/q/documents");
-    fireEvent.click(second);
-    expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "q" });
+    const link = await screen.findByRole("link", { name: "Go to Projects" });
+    expect(screen.queryByRole("link", { name: /Go to Documents/ })).toBeNull();
+    expect(screen.getByText("You assign documents to people, yourself included, on a project's Documents page.")).toBeDefined();
+    expect(link.className).toBe("btn btn-secondary");
+    expect(link.getAttribute("href")).toBe("#/projects");
+    fireEvent.click(link);
+    expect(onNavigate).toHaveBeenCalledWith({ name: "projects" });
   });
 
   it("keeps a selected empty project visible by its current project summary name", async () => {
@@ -193,19 +192,14 @@ describe("My tasks component", () => {
     expect(onNavigate).toHaveBeenCalledWith({ name: "tasks", status: "all" });
   });
 
-  it("offers every managed empty project with real links and callback navigation", async () => {
+  it("the one empty-state entry is a real link: modified clicks keep browser behaviour", async () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([]);
     const onNavigate = vi.fn();
     render(<MyTasks projects={[project("p", "Project P", true), project("q", "Project Q", true), project("r", "Other")]} onNavigate={onNavigate} />);
-    const first = await screen.findByRole("link", { name: "Go to Documents in Project P (p)" });
-    const second = screen.getByRole("link", { name: "Go to Documents in Project Q (q)" });
-    expect(screen.getAllByRole("link")).toHaveLength(2);
-    fireEvent.click(first);
-    expect(onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "p" });
-    onNavigate.mockClear();
-    fireEvent.click(second, { ctrlKey: true });
+    const link = await screen.findByRole("link", { name: "Go to Projects" });
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    fireEvent.click(link, { ctrlKey: true });
     expect(onNavigate).not.toHaveBeenCalled();
-    expect(second.getAttribute("href")).toBe("#/projects/q/documents");
   });
 
   it("refreshes only when a visibility change makes the tab visible", async () => {

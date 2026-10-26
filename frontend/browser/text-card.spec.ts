@@ -98,7 +98,7 @@ test("the lead assigns themselves in the assign dialog; the consolidator rule is
   await expect(card.getByRole("button", { name: "Annotate from proposals myself", exact: true })).toHaveCount(0);
   await card.getByRole("button", { name: "Assign annotators…", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: /^Assign / });
-  await expect(dialog.getByText(/^0 of \d+ chosen\. Limit: \d+ annotations? per text/)).toBeVisible();
+  await expect(dialog.getByText(/0 of \d+ assigned · limit \d+ per text/)).toBeVisible();
   await expect(dialog.getByText("If you annotate this text yourself, you cannot consolidate it afterwards (project rule \"the consolidator is not an annotator\").", { exact: true })).toBeVisible();
   await dialog.getByRole("checkbox", { name: new RegExp(`^${s.display_names.lead}.*\\(you\\)`) }).check();
   const saved = page.waitForResponse(r => r.request().method() === "POST" && /\/assignments$/.test(r.url()));

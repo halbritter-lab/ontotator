@@ -29,6 +29,7 @@
    The body scrolls so every option stays reachable (V7). */
 .documents-filter-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: var(--space-3) var(--space-4); }
 .ui-popover-sheet .documents-filter-groups { grid-template-columns: minmax(0, 1fr); }
+.documents-filter-empty { grid-column: 1 / -1; margin: 0; }
 .ui-popover-body:has(> .documents-filter-groups) { max-height: min(70vh, 32rem); overflow-y: auto; }
 /* Below 900 px (V7): one filter column; the table drops Waiting on and Last activity (both in the text card)
    so it fits 768 px without horizontal scroll. */

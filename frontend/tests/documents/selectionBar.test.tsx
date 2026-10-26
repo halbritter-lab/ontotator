@@ -84,6 +84,11 @@ it("labels name the task and its context", () => {
   expect(bar().textContent).not.toMatch(/\bReview\b|Annotation review|Independent annotation/);
 });
 
+it("a project without translations leaves out the translation plan actions", () => {
+  render(<Harness initial={["case-0101:de", "case-0102:de"]} translations={false} />);
+  expect(within(bar()).getAllByRole("button").map(button => button.textContent)).toEqual(["Assign…", "Plan…", "Clear selection"]);
+});
+
 it("sends rows to selection-summary and bulk plan", async () => {
   render(<Harness initial={["case-0101:en", "case-0101:de", "case-0102:de"]} />);
   const selected = [{ case_id: "case-0101", language: "en" }, { case_id: "case-0101", language: "de" }, { case_id: "case-0102", language: "de" }];

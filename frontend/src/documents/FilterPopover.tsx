@@ -25,11 +25,13 @@ const matchText = (count: number) => `${plural(count, "text")} ${count === 1 ? "
  * "Filter" button and its non-modal popover (spec "Filter popover", V4): fieldsets Language,
  * Review, Annotation, Final, Origin, Plan and Waiting on, each checkbox with its count under the
  * current tab, search and the other groups. Checking applies at once and the popover stays open;
- * a zero facet is muted and checkable only while checked. Footer: Order (VD10) and "Clear all";
+ * zero facets are collapsed behind "Show n empty filters" (a checked one stays); shown, they are muted and
+ * checkable only while checked. Footer: Order (VD10) and "Clear all";
  * below 700 px a full-height sheet with "Show {n} texts".
  */
 export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAll, people }: FilterPopoverProps): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [showEmpty, setShowEmpty] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   const narrow = useMediaQuery("(max-width: 699px)");
   const id = useId();
@@ -54,6 +56,12 @@ export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAl
     </label>;
   };
 
+  // While counting (no bar) every option shows.
+  const empty = (item: FacetOption) => bar != null && optionCount(facets, item) === 0 && !optionChecked(query, item);
+  const allGroups = facetGroups(facets, query, sourceLanguages, people);
+  const emptyCount = allGroups.reduce((sum, group) => sum + group.options.filter(empty).length, 0);
+  const groups = showEmpty ? allGroups : allGroups.map(group => ({ ...group, options: group.options.filter(item => !empty(item)) })).filter(group => group.options.length > 0);
+
   const footer = <>
     <fieldset className="documents-filter-order">
       <legend>Order</legend>
@@ -76,10 +84,14 @@ export function FilterPopover({ query, bar, sourceLanguages, onChange, onClearAl
     </Button>
     <Popover open={open} anchorRef={anchor} label="Filter" onClose={() => setOpen(false)} footer={footer}>
       <div id={contentId} className="documents-filter-groups">
-        {facetGroups(facets, query, sourceLanguages, people).map(group => <fieldset key={group.id} className="documents-filter-group">
+        {groups.map(group => <fieldset key={group.id} className="documents-filter-group">
           <legend>{group.legend}</legend>
           {group.options.map(facet)}
         </fieldset>)}
+        {emptyCount > 0 && <p className="documents-filter-empty">
+          <Button size="sm" variant="quiet" className="btn-link" aria-expanded={showEmpty} onClick={() => setShowEmpty(value => !value)}>
+            {showEmpty ? "Hide empty filters" : `Show ${plural(emptyCount, "empty filter")}`}</Button>
+        </p>}
         <p className="visually-hidden" role="status" aria-live="polite">{bar ? matchText(shown) : ""}</p>
       </div>
     </Popover>

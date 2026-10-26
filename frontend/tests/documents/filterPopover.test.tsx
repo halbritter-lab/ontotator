@@ -39,6 +39,20 @@ function renderPopover(initial: ProjectDocumentsQuery = {}, view: DecisionBarVie
   return { onChange, onClearAll, open: () => fireEvent.click(screen.getByRole("button", { name: /^Filter/ })) };
 }
 
+it("zero facets are collapsed behind Show n empty filters; a checked one stays", () => {
+  const { open } = renderPopover({ final_state: "final" });
+  open();
+  const dialog = screen.getByRole("dialog", { name: "Filter" });
+  expect(within(dialog).queryByRole("checkbox", { name: "In progress, 0 texts" })).toBeNull();
+  expect(within(dialog).getByRole("checkbox", { name: "Final, 0 texts" })).toBeTruthy();
+  const toggle = within(dialog).getByRole("button", { name: /^Show \d+ empty filters$/ });
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(toggle);
+  expect(within(dialog).getByRole("checkbox", { name: "In progress, 0 texts" })).toBeTruthy();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Hide empty filters" }));
+  expect(within(dialog).queryByRole("checkbox", { name: "In progress, 0 texts" })).toBeNull();
+});
+
 it("four fieldsets with counts, muted zero facets stay checkable when checked", () => {
   const { open, onChange } = renderPopover({ final_state: "final" });
   const button = screen.getByRole("button", { name: "Filter, 1 active" });
@@ -47,6 +61,7 @@ it("four fieldsets with counts, muted zero facets stay checkable when checked", 
   expect(button.getAttribute("aria-expanded")).toBe("true");
   const dialog = screen.getByRole("dialog", { name: "Filter" });
   expect(button.getAttribute("aria-controls")).toBe(dialog.querySelector("[id]")!.id);
+  fireEvent.click(within(dialog).getByRole("button", { name: /^Show \d+ empty filters$/ }));
   // Language, Translation review, Annotation, Final, Origin, Plan, Flags, Tool proposals; Waiting on when someone has open work.
   expect(within(dialog).getAllByRole("group").map(group => group.querySelector("legend")!.textContent))
     .toEqual(["Language", "Translation review", "Annotation", "Final", "Origin", "Plan", "Flags", "Tool proposals", "Waiting on", "Order"]);

@@ -34,7 +34,10 @@
 .assign-narrow-label { display: none; }
 
 .assign-summary { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--size-sm); }
-.assign-summary:not(:empty) { padding: var(--space-2) var(--space-3); border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--accent-light); }
+/* The one-line box is reserved while empty, so the first summary does not push the dialog down. */
+.assign-summary { box-sizing: border-box; min-height: calc(1lh + 2 * var(--space-2) + 2px); padding: var(--space-2) var(--space-3); border: 1px solid transparent; border-radius: var(--radius-sm); }
+.assign-summary:not(:empty) { border-color: var(--accent); background: var(--accent-light); }
+.assign-summary > p { margin: 0; }
 .assign-random { align-self: flex-start; }
 .assign-notice, .assign-error { font-size: var(--size-sm); }
 .assign-error { color: var(--danger); }

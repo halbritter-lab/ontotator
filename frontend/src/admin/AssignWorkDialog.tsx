@@ -2,9 +2,9 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { api, ApiError, type BatchAssignRequest, type BatchPersonView, type BatchPreview, type DocumentRowFilters, type DocumentRowView } from "../api/client";
 import { personLabel, textLabel } from "../app/identity";
 import { assignedText } from "../app/assignedDate";
-import { annotationTaskName } from "../editor/modes";
 import { plural } from "../app/labels";
 import { routeHref } from "../app/router";
+import { versionName } from "../documents/labels";
 import { Button, Checkbox, Dialog, Select } from "../ui";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
@@ -136,8 +136,13 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const count = assignments || fresh?.versions || shown?.versions || 0;
   const needs = fresh?.needs_people ?? null;
   const rowLimit = rowMulti ? Math.max(1, shown?.targets[0]?.remaining ?? 1) : Infinity;
-  const unreviewed = task === "annotate" && fresh ? fresh.targets.filter(target => target.unreviewed_translation) : [];
-  const unacknowledged = unreviewed.length > 0 && !acknowledged;
+  // Row mode knows it before the preview, so the acknowledgement is there from the start (no jump).
+  const unreviewed = task === "annotate" && shown ? shown.targets.filter(target => target.unreviewed_translation) : [];
+  const unreviewedText = unreviewed.length > 0 || (props.mode === "row" && task === "annotate" && props.row.unreviewed_translation);
+  const unacknowledged = unreviewedText && !acknowledged;
+  // One text: a random draw needs more available people than open places.
+  const randomUseful = !!fresh && fresh.targets.some(item => item.remaining > 0)
+    && fresh.people.filter(person => !memberUnavailable(person)).length > Math.max(...fresh.targets.map(item => item.remaining));
   const meHolds = !!me && props.mode === "row" && props.row.work.some(item => item.task === "annotate" && item.is_me && item.moved_to_version == null);
 
   const reset = () => { setConfirming(false); setRefused([]); setFailure(null); setNotice(null); };
@@ -219,9 +224,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     : props.newReviewOfAccepted && task === "translation_review" ? "Assign a new review"
     : sourceChanged ? "Assign review after source change" : `Assign ${(task ? stepName(task) : "task").toLowerCase()}`;
 
+  // "Calculating…" is the footer's reason only.
   const summaryLines: string[] = [];
-  if (calculating) summaryLines.push("Calculating…");
-  else if (fresh && task) {
+  if (fresh && task) {
     if (!fresh.targets.length) summaryLines.push("No cases in the selection need this task.");
     if (needs !== null) summaryLines.push(needsPeopleMessage(needs, task));
     else if (chosenPeople.length && assignments) {
@@ -239,8 +244,18 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     return item.assigned_at ? `${name}, ${assignedText(new Date(item.assigned_at), now)}` : name;
   }) : [];
   const textMode = props.mode === "row" && task === "annotate" ? props.row.annotation_mode ?? null : null;
+  /** One status line: mode, who holds the task (of the limit), the limit. */
+  const status = [
+    textMode && (textMode.mode === "proposals" ? "From proposals" : `From scratch${textMode.source === "no_proposals" ? " (no tool proposals)" : ""}`),
+    task === "annotate" && shown?.targets[0] ? `${shown.per_text - shown.targets[0].remaining} of ${shown.per_text} assigned${holders.length ? `: ${holders.join("; ")}` : ""}`
+      : holders.length ? `Assigned: ${holders.join("; ")}` : "Nobody assigned yet",
+  ].filter(Boolean).join(" · ");
+  /** Parallel roots of one text share its label: name the chain. */
+  const rootLabel = (item: { case_id: string; language: string; document_id: string }) => {
+    const version = props.mode === "row" && props.row.parallel_roots ? props.row.versions.find(entry => entry.document_id === item.document_id) : undefined;
+    return version ? `${textLabel(item)} (${versionName(version.version, version.chain_name, true)})` : textLabel(item);
+  };
   const newest = props.mode === "row" ? props.row.versions.filter(version => version.is_newest_in_chain).at(-1) ?? props.row.versions.at(-1) : undefined;
-  const target = shown?.targets[0];
   const reasonId = `${id}-assign-reason`;
   const limitId = `${id}-limit`;
   const stepOptions = props.mode === "row"
@@ -258,18 +273,15 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     <div className="assign-dialog">
       {props.mode === "row" && <div className="assign-context">
         <p><strong>{textLabel({ case_id: props.row.case_id, language: props.row.language, version: newest?.version }, { withVersion: (newest?.version ?? 1) > 1 })}</strong></p>
-        {textMode && <p>{annotationTaskName(textMode.mode)}{textMode.source === "no_proposals" && <span className="assign-muted"> This text has no tool proposals, so it is annotated from scratch.</span>}</p>}
-        <p className="assign-muted">Currently: {holders.length ? holders.join("; ") : "nobody"}</p>
-        {task === "annotate" && target && shown && <p className="assign-muted">{`${shown.per_text - target.remaining} of ${shown.per_text} annotators assigned`}</p>}
-        {rowMulti && shown && <p id={limitId} className="assign-limit">{`${picked} of ${rowLimit} chosen. Limit: ${shown.per_text === 1 ? "1 annotation" : `${shown.per_text} annotations`} per text (`}
-          <a href={routeHref({ name: "projectSettings", key: props.projectKey, section: "workflow" })}>project setting</a>{")."}</p>}
+        <p id={limitId} className="assign-muted">{status}{rowMulti && shown && <>{` · limit ${shown.per_text} per text (`}
+          <a href={routeHref({ name: "projectSettings", key: props.projectKey, section: "workflow" })}>project setting</a>{")"}</>}</p>
       </div>}
 
       {props.mode === "cases" && stepsError !== undefined && <><ErrorNotice error={stepsError} /><Button onClick={() => setStepsRetry(value => value + 1)}>Retry</Button></>}
       {props.mode === "cases" && steps === null && stepsError === undefined && <p className="assign-muted">Loading members…</p>}
       {props.mode === "cases" && steps !== null && !steps.length && <p>No cases in the selection need this task.</p>}
 
-      {task && (props.mode === "row" ? <div className="assign-field">
+      {task && (props.mode === "row" ? stepOptions.length > 1 && <div className="assign-field">
         {changingTask
           ? <Select id={`${id}-task`} label="Task" value={current ?? ""} disabled={busy} onChange={event => changeStep(event.target.value)}>{stepOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select>
           : <p><strong>Task</strong> <span>{props.newReviewOfAccepted && task === "translation_review" ? "New review of the accepted translation" : sourceChanged ? "Review after a source change" : stepName(task)}</span> <Button size="sm" disabled={busy} onClick={() => setChangingTask(true)}>Change task</Button></p>}
@@ -286,6 +298,10 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
           </label>)}
         </span>
       </fieldset>}
+
+      {unreviewedText && <Checkbox id={`${id}-unreviewed`} label="Annotate before the translation review is accepted"
+        hint={`Translation review not accepted yet: ${unreviewed.length ? unreviewed.map(rootLabel).join(", ") : props.mode === "row" ? textLabel(props.row) : ""}`}
+        checked={acknowledged} disabled={busy} onChange={event => { reset(); setAcknowledged(event.target.checked); }} />}
 
       {task && !shown && previewError === null && <p className="assign-muted">Loading members…</p>}
       {previewError && <><ErrorNotice error={previewError.error} /><Button onClick={() => setReload(value => value + 1)}>Retry</Button></>}
@@ -333,13 +349,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       </table>}
       {me && rowMulti && props.mode === "row" && props.consolidatorRule && <p id={`${id}-rule`} className="assign-muted">If you annotate this text yourself, you cannot consolidate it afterwards (project rule "the consolidator is not an annotator").</p>}
 
-      {unreviewed.length > 0 && <Checkbox id={`${id}-unreviewed`} label="Annotate before the translation review is accepted"
-        hint={`Translation review not accepted yet: ${unreviewed.map(item => textLabel(item)).join(", ")}`}
-        checked={acknowledged} disabled={busy} onChange={event => { reset(); setAcknowledged(event.target.checked); }} />}
-
       <div className="assign-summary" role="status" aria-live="polite" aria-label="Summary">{summaryLines.map(line => <p key={line}>{line}</p>)}</div>
 
-      {fresh && fresh.targets.length > 0 && <p className="assign-random"><Button size="sm" disabled={busy} aria-disabled={unacknowledged ? "true" : undefined} aria-describedby={unacknowledged && reason ? reasonId : undefined}
+      {fresh && fresh.targets.length > 0 && (!isRow || randomUseful) && <p className="assign-random"><Button size="sm" disabled={busy} aria-disabled={unacknowledged ? "true" : undefined} aria-describedby={unacknowledged && reason ? reasonId : undefined}
         onClick={() => { if (unacknowledged) return; randomChanged.current = false; setRandomOpen(true); }}>Random distribution…</Button></p>}
 
       {notice && <p className="assign-notice" role="alert">{notice}</p>}

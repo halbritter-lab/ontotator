@@ -6,7 +6,7 @@ import { assignmentStatusLabels, formatDateTime, taskLabels } from "../app/label
 import { textLabel } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
 import { IconWarning } from "../ui/icons";
-import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, tabId, Tabs, Toolbar, type Column } from "../ui";
+import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, tabId, Tabs, type Column } from "../ui";
 import { LanguageText } from "../ui/LanguageTag";
 import { AssignedDate } from "../ui/AssignedDate";
 import { onSpaceActivate } from "../ui/spaceActivates";
@@ -152,16 +152,15 @@ export function MyTasks({ project, status, projects, onNavigate }: MyTasksProps)
       event.preventDefault(); onNavigate({ name: "task", assignmentId: task.assignment_id });
     }}>{task.held ? "View paused task" : taskActionLabels[task.status]}</a> },
   ];
-  const empty = <EmptyState title="No documents are assigned to you yet." action={managed.length > 0 &&
-    <Toolbar label="Assignment actions">{managed.map(item => {
-      const route: Route = { name: "projectDocuments", key: item.project_key };
-      return <a key={item.project_key} className="btn btn-secondary" href={routeHref(route)} onKeyDown={onSpaceActivate} onClick={event => {
-        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-        event.preventDefault();
-        onNavigate(route);
-      }}>{managed.length > 1 ? `Go to Documents in ${projectLabel(item.name, item.project_key)}` : "Go to Documents"}</a>;
-    })}</Toolbar>
-  }>{managed.length > 0 && "As a project lead, you assign documents to people, yourself included, on the Documents page."}</EmptyState>;
+  // One entry: the project's Documents, or with several managed projects the Projects page (it lists them with their open decisions).
+  const emptyRoute: Route | null = managed.length === 1 ? { name: "projectDocuments", key: managed[0].project_key } : managed.length > 1 ? { name: "projects" } : null;
+  const empty = <EmptyState title="No documents are assigned to you yet." action={emptyRoute &&
+    <a className="btn btn-secondary" href={routeHref(emptyRoute)} onKeyDown={onSpaceActivate} onClick={event => {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      onNavigate(emptyRoute);
+    }}>{managed.length > 1 ? "Go to Projects" : "Go to Documents"}</a>
+  }>{managed.length > 0 && `You assign documents to people, yourself included, on ${managed.length > 1 ? "a project's" : "the"} Documents page.`}</EmptyState>;
   const allRoute = tabRoute("all");
   const tabEmpty = <EmptyState title={activeTab.empty} action={<a className="btn btn-secondary" href={routeHref(allRoute)} onKeyDown={onSpaceActivate} onClick={event => {
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;

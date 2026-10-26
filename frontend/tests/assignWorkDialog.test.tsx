@@ -207,18 +207,19 @@ it("annotation: the limit up front, names past it say limit reached, the lead is
   const self = vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [created], refused: [] } as unknown as Awaited<ReturnType<typeof api.createAssignments>>);
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={{ ...row, open: { document_id: "doc-case-0101" } } as DocumentRowView} task="annotate" me={{ username: "lead", name: "Pat Lead" }} consolidatorRule onClose={vi.fn()} onAssigned={onAssigned} />);
   await ready();
-  expect(screen.getByText(/^0 of 1 chosen\. Limit: 2 annotations per text/).textContent).toBe("0 of 1 chosen. Limit: 2 annotations per text (project setting).");
+  // One status line: who holds it of the limit, and the limit.
+  expect(screen.getByText(/^1 of 2 assigned/).textContent).toBe("1 of 2 assigned: Ana Weber (ann-0004) · limit 2 per text (project setting)");
   expect(screen.getByRole("link", { name: "project setting" }).getAttribute("href")).toContain("settings/workflow");
   const me = screen.getByRole("checkbox", { name: /^Pat Lead \(you\)/ });
   expect(document.getElementById(me.getAttribute("aria-describedby")!)!.textContent).toBe("If you annotate this text yourself, you cannot consolidate it afterwards (project rule \"the consolidator is not an annotator\").");
   fireEvent.click(me);
-  expect(screen.getByText(/^1 of 1 chosen/)).toBeDefined();
+  expect(screen.getByRole("button", { name: "Assign 1 person" })).toBeDefined();
   // The limit is reached by the tick: every other name is unavailable and says why.
   const ben = screen.getByRole("checkbox", { name: /Ben Roth/ });
   expect(ben.getAttribute("aria-disabled")).toBe("true");
   expect(ben.closest("label, .assign-member")!.textContent).toContain("limit reached");
   fireEvent.click(ben);
-  expect(screen.getByText(/^1 of 1 chosen/)).toBeDefined();
+  expect(screen.getByRole("button", { name: "Assign 1 person" })).toBeDefined();
   expect(lastPreview().usernames ?? []).toEqual([]);
   fireEvent.click(screen.getByRole("button", { name: "Assign 1 person" }));
   await waitFor(() => expect(onAssigned).toHaveBeenCalledWith("You annotate case-0101 de."));
@@ -226,15 +227,15 @@ it("annotation: the limit up front, names past it say limit reached, the lead is
   expect(api.commitAssignmentBatch).not.toHaveBeenCalled();
 });
 
-it("row mode shows context, Currently and Change task", async () => {
+it("row mode shows context in one line and Change task", async () => {
   perText = 2; remainingOf = () => 1;
   const onAssigned = vi.fn();
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={onAssigned} />);
   expect(screen.getByRole("dialog", { name: "Assign annotation" })).toBeDefined();
   expect(screen.getByText("case-0101 de")).toBeDefined();
   await ready();
-  expect(screen.getByText(/Currently: Ana Weber \(ann-0004\)/)).toBeDefined();
-  expect(screen.getByText("1 of 2 annotators assigned")).toBeDefined();
+  expect(screen.getByText(/^1 of 2 assigned: Ana Weber \(ann-0004\)/)).toBeDefined();
+  expect(screen.queryByText(/Currently:/)).toBeNull();
   expect(lastPreview()).toMatchObject({ task: "annotate", language: "de", case_ids: ["case-0101"] });
   // Nobody chosen yet: no count on the button, the reason beside it.
   expect(screen.getByRole("button", { name: "Assign" }).getAttribute("aria-disabled")).toBe("true");
@@ -255,12 +256,11 @@ it("shows the annotation mode of the text", async () => {
   const withMode = (mode: "proposals" | "scratch", source: "project" | "no_proposals") => ({ ...row, annotation_mode: { mode, source, locked: false, override: null, proposal_count: mode === "proposals" ? 4 : 0 } }) as unknown as DocumentRowView;
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={withMode("proposals", "project")} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
   await ready();
-  expect(screen.getByText("Annotation, from proposals")).toBeDefined();
+  expect(screen.getByText(/^From proposals · /)).toBeDefined();
   cleanup();
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={withMode("scratch", "no_proposals")} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
   await ready();
-  expect(screen.getByText("Annotation, from scratch")).toBeDefined();
-  expect(screen.getByText("This text has no tool proposals, so it is annotated from scratch.")).toBeDefined();
+  expect(screen.getByText(/^From scratch \(no tool proposals\) · /)).toBeDefined();
 });
 
 it("lists holders with their assignment date", async () => {
@@ -270,7 +270,7 @@ it("lists holders with their assignment date", async () => {
     const dated = { ...row, work: row.work.map(item => ({ ...item, assigned_at: new Date(2026, 9, 23, 10, 40).toISOString() })) } as DocumentRowView;
     render(<AssignWorkDialog mode="row" projectKey="p/key" row={dated} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
     await ready();
-    expect(screen.getByText("Currently: Ana Weber (ann-0004), assigned today 10:40")).toBeDefined();
+    expect(screen.getByText(/assigned: Ana Weber \(ann-0004\), assigned today 10:40/)).toBeDefined();
   } finally { vi.useRealTimers(); }
 });
 
@@ -410,4 +410,31 @@ it("random distribution waits for the acknowledgement", async () => {
   expect(link.getAttribute("aria-disabled")).toBeNull();
   fireEvent.click(link);
   expect(await screen.findByRole("dialog", { name: "Propose distribution" })).toBeDefined();
+});
+
+it("one text: Change task only with another task, Random distribution only with more people than places", async () => {
+  remainingOf = () => 1;
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
+  await ready();
+  expect(screen.getByRole("button", { name: "Change task" })).toBeDefined();
+  expect(await screen.findByRole("button", { name: "Random distribution…" })).toBeDefined();
+  cleanup();
+  // A source text has no translation review to change to; 4 available people for 4 places leave nothing to draw.
+  perText = 4; remainingOf = () => 4;
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={{ ...row, is_source: true } as DocumentRowView} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
+  await ready();
+  await waitFor(() => expect(screen.queryByText("Calculating…")).toBeNull());
+  expect(screen.queryByRole("button", { name: "Change task" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Random distribution…" })).toBeNull();
+});
+
+it("one text with an unreviewed translation: the acknowledgement is there before the preview; Calculating… only in the footer", async () => {
+  let release: () => void = () => undefined;
+  vi.mocked(api.previewAssignmentBatch).mockImplementation((_key, body) => new Promise(resolve => { release = () => resolve(preview(body)); }));
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={{ ...row, unreviewed_translation: true } as DocumentRowView} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
+  expect(screen.getByRole("checkbox", { name: "Annotate before the translation review is accepted" })).toBeDefined();
+  expect(screen.getAllByText("Calculating…")).toHaveLength(1);
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).toBe("");
+  release();
+  await ready();
 });

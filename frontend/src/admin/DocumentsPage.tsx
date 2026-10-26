@@ -784,7 +784,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     // Floats at the bottom of the viewport; placed above the table (below 700 px after the cards) to keep the focus order.
     const selectionBar = <SelectionBar projectKey={projectKey} keys={selection.keys} filters={filters} refresh={page} narrow={narrow} limitNote={limitNote}
       onClear={clearSelection} onAssign={openAssignCases} showToast={showToast} onAnnounce={announce} onChanged={() => reloadAfterAction()}
-      onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }} />;
+      onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }}
+      translations={!inventory || inventory.cases.some(item => item.variants.some(variant => variant.origin !== "native"))} />;
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh. <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
