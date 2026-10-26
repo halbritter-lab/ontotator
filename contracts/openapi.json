@@ -14141,7 +14141,8 @@
             "enum": [
               "keep",
               "on",
-              "off"
+              "off",
+              "off_unstarted"
             ],
             "title": "Review",
             "default": "keep"
@@ -14231,6 +14232,10 @@
           "mode_no_proposals": {
             "type": "integer",
             "title": "Mode No Proposals"
+          },
+          "review_kept_started": {
+            "type": "integer",
+            "title": "Review Kept Started"
           }
         },
         "type": "object",

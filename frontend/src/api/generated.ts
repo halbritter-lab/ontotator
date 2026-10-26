@@ -4563,7 +4563,7 @@ export interface components {
              * @default keep
              * @enum {string}
              */
-            review: "keep" | "on" | "off";
+            review: "keep" | "on" | "off" | "off_unstarted";
             /**
              * Annotate
              * @default keep
@@ -4607,6 +4607,8 @@ export interface components {
             mode_locked?: number;
             /** Mode No Proposals */
             mode_no_proposals?: number;
+            /** Review Kept Started */
+            review_kept_started?: number;
         };
         /**
          * LayerDefinition

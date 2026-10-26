@@ -86,9 +86,23 @@ def test_presets_expand_over_translation_rows():
         "fr": LanguageChange("on", "on"),
     }
     assert preset_changes("annotate_only", rows) == {
-        "de": LanguageChange("keep", "on"),
-        "fr": LanguageChange("keep", "on"),
+        "de": LanguageChange("off_unstarted", "on"),
+        "fr": LanguageChange("off_unstarted", "on"),
     }
+
+
+def test_off_unstarted_keeps_started_reviews_only():
+    rows = {
+        RowKey("c1", "de"): LanguageVersion("c1", "de", False, False, False),
+        RowKey("c1", "fr"): LanguageVersion(
+            "c1", "fr", False, False, False, review_started=True
+        ),
+    }
+    current = dict.fromkeys(rows, ON_OFF)
+    merged = merge(
+        current, rows, ["c1"], preset_changes("annotate_only", rows.values())
+    )
+    assert merged == {RowKey("c1", "de"): OFF_ON, RowKey("c1", "fr"): ON_ON}
 
 
 def test_consequences_cover_the_editing_table():
@@ -148,5 +162,5 @@ def test_discarded_translation_rows_are_ignored_by_defaults_merge_and_presets():
     )
     assert de not in merged and merged[fr] == ON_ON
     assert preset_changes("annotate_only", rows.values()) == {
-        "fr": LanguageChange("keep", "on")
+        "fr": LanguageChange("off_unstarted", "on")
     }

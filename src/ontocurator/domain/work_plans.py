@@ -23,10 +23,12 @@ __all__ = [
     "OpenTask",
     "PlanFlags",
     "Preset",
+    "ReviewState",
     "RowKey",
     "TriState",
     "consequences",
     "import_defaults",
+    "keeps_started_review",
     "merge",
     "mixed_counts",
     "preset_changes",
@@ -35,6 +37,9 @@ __all__ = [
 
 ImportPlanSetting = Literal["nothing", "review_and_annotate_translations"]
 TriState = Literal["keep", "on", "off"]
+# Review only: "off_unstarted" turns a planned review off unless it has started
+# or is done (``LanguageVersion.review_started``); those rows keep their flag.
+ReviewState = Literal["keep", "on", "off", "off_unstarted"]
 Preset = Literal["review_and_annotate_translations", "annotate_only"]
 InvalidReason = Literal["source_review", "annotate_not_accepted", "not_acceptable"]
 
@@ -71,6 +76,9 @@ class LanguageVersion:
     # A root's newest version is rejected/queried or has an open translation
     # review (not acceptable externally).
     review_blocked: bool = False
+    # A translation review is assigned, submitted or decided, or the translation
+    # is accepted: "off_unstarted" keeps such a row's review flag.
+    review_started: bool = False
 
     @property
     def key(self) -> RowKey:
@@ -79,7 +87,7 @@ class LanguageVersion:
 
 @dataclass(frozen=True)
 class LanguageChange:
-    review: TriState = "keep"
+    review: ReviewState = "keep"
     annotate: TriState = "keep"
 
 
@@ -171,8 +179,18 @@ def validate(
     return invalid
 
 
-def _apply(state: TriState, current: bool) -> bool:
+def _apply(state: ReviewState, current: bool) -> bool:
     return current if state == "keep" else state == "on"
+
+
+def keeps_started_review(change: LanguageChange | None, row: LanguageVersion) -> bool:
+    """True when ``off_unstarted`` leaves the row's review as it is (started or done)."""
+    return (
+        change is not None
+        and change.review == "off_unstarted"
+        and not row.is_source
+        and row.review_started
+    )
 
 
 def merge(
@@ -196,7 +214,11 @@ def merge(
         if change is None:
             continue
         cur = current.get(key, OFF)
-        review = cur.review if row.is_source else _apply(change.review, cur.review)
+        review = (
+            cur.review
+            if row.is_source or keeps_started_review(change, row)
+            else _apply(change.review, cur.review)
+        )
         result[key] = PlanFlags(review, _apply(change.annotate, cur.annotate))
     return result
 
@@ -211,7 +233,7 @@ def preset_changes(
     change = (
         LanguageChange("on", "on")
         if preset == "review_and_annotate_translations"
-        else LanguageChange("keep", "on")
+        else LanguageChange("off_unstarted", "on")
     )
     languages = sorted(
         {row.language for row in rows if not row.is_source and not row.discarded}

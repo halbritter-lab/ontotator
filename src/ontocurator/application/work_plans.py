@@ -38,6 +38,7 @@ from ontocurator.domain.work_plans import (
     PlanFlags,
     RowKey,
     consequences,
+    keeps_started_review,
     merge,
     preset_changes,
     validate,
@@ -380,6 +381,8 @@ class _Plan:
     skipped: list[RowKey] = field(default_factory=list)
     # Annotation-mode overrides; their rows are in ``new`` (flags kept).
     modes: _Modes = field(default_factory=_Modes)
+    # The per-language change set (preset expanded).
+    changes: dict[str, LanguageChange] = field(default_factory=dict)
 
 
 class WorkPlanService:
@@ -845,6 +848,7 @@ class WorkPlanService:
             store.revisions(conn, pid, cases),
             accepting,
             skipped=skipped,
+            changes=changes,
         )
         plan.invalid = validate(new, versions, rule_on=rule_on, accepting=accepting)
         requested: dict[RowKey, AnnotationMode | None] = {}
@@ -920,6 +924,13 @@ class WorkPlanService:
                             "off": sum(not f.annotate for f in before),
                         },
                         "will_change": sum(k in plan.new for k in keys),
+                        "review_kept_started": sum(
+                            plan.current.get(k, OFF).review
+                            and keeps_started_review(
+                                plan.changes.get(group), plan.versions[k]
+                            )
+                            for k in keys
+                        ),
                         "not_accepted": len(not_accepted),
                         "not_acceptable": len(blocked),
                         "in_review": sum(k in in_review for k in blocked),

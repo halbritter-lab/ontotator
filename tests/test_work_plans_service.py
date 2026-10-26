@@ -150,6 +150,25 @@ def test_patch_without_consequences_saves_and_returns_undo(env):
     assert flags_of(env, "c1", "de") == PlanFlags(True, False)
 
 
+def test_annotate_only_switches_off_unstarted_reviews_and_keeps_started(env):
+    """R-15: "Annotation only" turns a planned review off; an assigned one stays."""
+    set_rule(env.db, False)
+    write(env, {RowKey(case, "de"): PlanFlags(True, False) for case in ("c1", "c2")})
+    aid = assign(env, doc("c1", "de"), "ana", "translation_review")
+    request = BulkPlanRequest(
+        case_ids=["c1", "c2"],
+        languages={"de": LanguageChangeView(review="off_unstarted", annotate="on")},
+    )
+    preview = service(env).bulk_preview("proj", request)
+    de = next(item for item in preview["languages"] if item["key"] == "de")
+    assert de["review_kept_started"] == 1
+    assert preview["consequences"]["withdrawn"] == []
+    service(env).bulk_save("proj", request)
+    assert flags_of(env, "c1", "de") == PlanFlags(True, True)
+    assert flags_of(env, "c2", "de") == PlanFlags(False, True)
+    assert not revoked(env, aid)
+
+
 def test_patch_with_open_review_requires_confirmation(env):
     write(env, {RowKey("c1", "de"): PlanFlags(True, False)})
     aid = assign(env, doc("c1", "de"), "ana", "translation_review")
@@ -362,9 +381,11 @@ def test_bulk_preset_annotate_only_with_rule_on_reports_invalid(env):
     )
     request = BulkPlanRequest(case_ids=["c1", "c2"], preset="annotate_only")
     preview = service(env).bulk_preview("proj", request)
+    # R-15: the planned, unstarted de review turns off too, so de needs acceptance.
     assert preview["invalid"] == [
-        {"case_id": "c1", "language": "fr"},
-        {"case_id": "c2", "language": "fr"},
+        {"case_id": case, "language": language}
+        for case in ("c1", "c2")
+        for language in ("de", "fr")
     ]
     fr = next(item for item in preview["languages"] if item["key"] == "fr")
     assert fr["not_accepted"] == 2 and fr["not_acceptable"] == 0
@@ -376,7 +397,7 @@ def test_bulk_preset_annotate_only_with_rule_on_reports_invalid(env):
         request.model_copy(
             update={
                 "accept_external_review": BulkAcceptance(
-                    languages=["fr"], reason="Reviewed by the pipeline team"
+                    languages=["de", "fr"], reason="Reviewed by the pipeline team"
                 )
             }
         ),
@@ -385,10 +406,11 @@ def test_bulk_preset_annotate_only_with_rule_on_reports_invalid(env):
     with env.db.transaction() as conn:
         records = store.acceptances(conn, env.pid)
     assert {d: r["source"] for d, r in records.items()} == {
-        doc("c1", "fr"): "lead",
-        doc("c2", "fr"): "lead",
+        doc(case, language): "lead"
+        for case in ("c1", "c2")
+        for language in ("de", "fr")
     }
-    assert flags_of(env, "c1", "de") == PlanFlags(True, True)
+    assert flags_of(env, "c1", "de") == PlanFlags(False, True)
     assert flags_of(env, "c2", "fr") == PlanFlags(False, True)
 
 

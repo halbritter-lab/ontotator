@@ -6,8 +6,11 @@
 import { plural } from "../app/labels";
 import type { TriState } from "../ui/TriStateButton";
 
+/** Review choice; "off_unstarted" (the "Annotation only" preset) leaves started or done reviews on (R-15). */
+export type ReviewChoice = TriState | "off_unstarted";
+
 /** Choices per language key ("source" = each case's source row). Missing cells are "keep". */
-export type PlanChoices = Record<string, { review?: TriState; annotate?: TriState; annotation_mode?: "keep" | "proposals" | "scratch" | "project" }>;
+export type PlanChoices = Record<string, { review?: ReviewChoice; annotate?: TriState; annotation_mode?: "keep" | "proposals" | "scratch" | "project" }>;
 
 export const SOURCE_KEY = "source";
 
@@ -63,7 +66,7 @@ export const PRESET_LABELS: Readonly<Record<PlanPreset, string>> = {
 /** Plan cells of a preset for the given languages; the source key is skipped (presets apply to translations only). */
 export function presetChoices(preset: PlanPreset, languages: readonly string[]): PlanChoices {
   const cell: PlanChoices[string] = preset === "annotate_only"
-    ? { review: "keep", annotate: "on", annotation_mode: "keep" }
+    ? { review: "off_unstarted", annotate: "on", annotation_mode: "keep" }
     : { review: "on", annotate: "on", annotation_mode: "keep" };
   return Object.fromEntries(languages.filter(language => language !== SOURCE_KEY).map(language => [language, { ...cell }]));
 }
@@ -74,7 +77,7 @@ export function savedSummary(caseCount: number, choices: PlanChoices): string {
   const parts = Object.keys(active).sort(compareKeys).map(key => {
     const { review, annotate } = active[key];
     const on = review === "on" && annotate === "on" ? "translation review and annotation" : review === "on" ? "translation review" : annotate === "on" ? "annotate" : "";
-    const off = [review === "off" && "translation review off", annotate === "off" && "annotate off"].filter(Boolean);
+    const off = [(review === "off" || review === "off_unstarted") && "translation review off", annotate === "off" && "annotate off"].filter(Boolean);
     return `${key}: ${[on, ...off].filter(Boolean).join(", ")}`;
   });
   return [`Plan saved for ${plural(caseCount, "case")}`, ...parts].join(", ");

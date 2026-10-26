@@ -14,7 +14,7 @@ from ontocurator.auth.audit import Actor
 from ontocurator.authz.policy import Action, Task, can
 from ontocurator.domain.annotation_modes import AnnotationMode
 from ontocurator.domain.errors import AccessDenied, DomainError
-from ontocurator.domain.work_plans import Preset, TriState
+from ontocurator.domain.work_plans import Preset, ReviewState, TriState
 
 router = APIRouter(prefix="/api/v1/projects/{key}", tags=["work-plans"])
 
@@ -128,7 +128,8 @@ class PlanRowResult(BaseModel):
 
 class LanguageChangeView(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    review: TriState = "keep"
+    # "off_unstarted": off where no review has started; started or done stay on.
+    review: ReviewState = "keep"
     annotate: TriState = "keep"
     annotation_mode: Literal["keep", "proposals", "scratch", "project"] = "keep"
 
@@ -176,6 +177,8 @@ class LanguagePreviewView(BaseModel):
     # Rows whose mode change is refused: locked, or "proposals" without any.
     mode_locked: int = Field(default_factory=lambda: 0)
     mode_no_proposals: int = Field(default_factory=lambda: 0)
+    # Rows "off_unstarted" leaves on: their review has started or is done.
+    review_kept_started: int = Field(default_factory=lambda: 0)
 
 
 class BulkPreview(BaseModel):

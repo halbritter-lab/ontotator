@@ -167,6 +167,19 @@ def language_versions(
             )
         ).scalars()
     )
+    # Any live translation review assignment, open or submitted.
+    reviewed = set(
+        conn.execute(
+            scoped(
+                select(AssignmentRow.document_id).where(
+                    AssignmentRow.project_id == project_id,
+                    AssignmentRow.task == "translation_review",
+                    AssignmentRow.revoked_at.is_(None),
+                ),
+                AssignmentRow.document_id,
+            )
+        ).scalars()
+    )
     groups: dict[RowKey, list[rules.Version]] = defaultdict(list)
     for row in documents:
         groups[_key(row)].append(
@@ -194,6 +207,7 @@ def language_versions(
             if not any(v.document_id in dropped for v in chain.versions)
         ]
         targets = [[v for v in c.versions if not v.not_newer][-1] for c in live]
+        newest = [chain.newest for chain in live]
         result[key] = LanguageVersion(
             case_id=key.case_id,
             language=key.language,
@@ -215,6 +229,12 @@ def language_versions(
                 )
                 or any(v.document_id in in_review for v in chain.versions)
                 for chain in live
+            ),
+            review_started=not is_source
+            and any(
+                v.document_id in reviewed
+                or v.translation_status in ("reviewed", "accepted")
+                for v in newest
             ),
         )
     return result
