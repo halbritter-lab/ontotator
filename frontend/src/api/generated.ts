@@ -2715,7 +2715,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "one" | "split";
+            mode: "one" | "split" | "each";
             /** Usernames */
             usernames?: string[];
             /**
@@ -2762,7 +2762,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "one" | "split";
+            mode: "one" | "split" | "each";
             /** Usernames */
             usernames?: string[];
             /**

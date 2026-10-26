@@ -8704,7 +8704,8 @@
             "type": "string",
             "enum": [
               "one",
-              "split"
+              "split",
+              "each"
             ],
             "title": "Mode"
           },
@@ -8805,7 +8806,8 @@
             "type": "string",
             "enum": [
               "one",
-              "split"
+              "split",
+              "each"
             ],
             "title": "Mode"
           },
