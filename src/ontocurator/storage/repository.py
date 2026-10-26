@@ -2333,6 +2333,38 @@ class Repository:
             ).where(DraftRow.project_id == project_id, DraftRow.draft_key == key_string)
         ).one_or_none()
 
+    def draft_annotation_layer(
+        self, key: WorkspaceKey, annotation_id: str
+    ) -> str | None:
+        """The layer of ``annotation_id`` in the workspace's draft, if it is there.
+
+        A single read: unlike ``open_draft`` it neither locks nor creates the draft.
+        """
+        with self.db.transaction() as conn:
+            project_id = self._project_id(conn, key.project_key)
+            if project_id is None:
+                return None
+            return conn.execute(
+                select(AnnotationSnapshotRow.payload["annotation"]["layer_id"].astext)
+                .join(
+                    DraftAnnotationRow,
+                    and_(
+                        DraftAnnotationRow.annotation_id
+                        == AnnotationSnapshotRow.annotation_id,
+                        DraftAnnotationRow.version == AnnotationSnapshotRow.version,
+                    ),
+                )
+                .join(DraftRow, DraftRow.id == DraftAnnotationRow.draft_id)
+                .where(
+                    DraftRow.project_id == project_id,
+                    DraftRow.draft_key == _key_str(key),
+                    AnnotationSnapshotRow.project_id == project_id,
+                    DraftAnnotationRow.annotation_id == annotation_id,
+                )
+                .order_by(DraftAnnotationRow.version)
+                .limit(1)
+            ).scalar_one_or_none()
+
     def open_draft(
         self,
         key: WorkspaceKey,

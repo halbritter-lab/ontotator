@@ -186,6 +186,7 @@ CALLS: dict[str, Callable[[Repository], object]] = {
     ),
     "list_workspace_keys": lambda r: r.list_workspace_keys("B", "ann-0001"),
     "open_draft": lambda r: r.open_draft(_key("B")),
+    "draft_annotation_layer": lambda r: r.draft_annotation_layer(_key("B"), "a"),
     "run_mutation": lambda r: r.run_mutation(
         _key("B"),
         MutationEnvelope(mutation_id="m", expected_revision=0, payload={}),

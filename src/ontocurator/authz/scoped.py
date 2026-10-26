@@ -744,6 +744,12 @@ class ScopedRepository(Repository):
             if visibility.all or key.document_id in visibility.document_ids
         ]
 
+    def draft_annotation_layer(
+        self, key: WorkspaceKey, annotation_id: str
+    ) -> str | None:
+        self._document(key.project_key, key.document_id)
+        return super().draft_annotation_layer(key, annotation_id)
+
     def open_draft(
         self,
         key: WorkspaceKey,

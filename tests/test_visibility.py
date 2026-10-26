@@ -569,6 +569,7 @@ def test_document_method_enumeration_uses_central_guard(assigned, monkeypatch):
             evidence.evidence_id, evidence.version, PROJECT
         ),
         "open_draft": lambda: repo.open_draft(key),
+        "draft_annotation_layer": lambda: repo.draft_annotation_layer(key, "owned"),
         "run_mutation": lambda: repo.run_mutation(
             key,
             MutationEnvelope(mutation_id="forbidden", expected_revision=2, payload={}),
