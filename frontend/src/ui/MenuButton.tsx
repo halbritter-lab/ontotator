@@ -19,6 +19,8 @@ export interface MenuButtonProps {
   /** Visible button content instead of `buttonLabel` (e.g. a person chip). */
   content?: ReactNode;
   className?: string;
+  /** Button size; "md" beside full-size buttons (default "sm"). */
+  size?: "sm" | "md";
 }
 
 /**
@@ -26,7 +28,7 @@ export interface MenuButtonProps {
  * arrows (wrapping), Home and End move; Enter, Space or click choose; Escape closes; focus returns to the button.
  * Tab and a pointer down outside close the menu without moving focus.
  */
-export function MenuButton({ label, items, buttonLabel, icon, content, className }: MenuButtonProps): JSX.Element {
+export function MenuButton({ label, items, buttonLabel, icon, content, className, size = "sm" }: MenuButtonProps): JSX.Element {
   const [open, setOpen] = useState<null | "first" | "last">(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -87,7 +89,7 @@ export function MenuButton({ label, items, buttonLabel, icon, content, className
   };
 
   return <span className="ui-menu-button">
-    <Button ref={button} size="sm" className={className} aria-label={label} aria-haspopup="menu" aria-expanded={open !== null} aria-controls={open ? menuId : undefined}
+    <Button ref={button} size={size} className={className} aria-label={label} aria-haspopup="menu" aria-expanded={open !== null} aria-controls={open ? menuId : undefined}
       onClick={() => open ? setOpen(null) : setOpen("first")} onKeyDown={onButtonKeyDown}>{content ?? (icon ? <>{icon}<span>{buttonLabel}</span></> : buttonLabel)}</Button>
     {open && <div ref={menu} id={menuId} role="menu" aria-label={label} className="ui-menu" onKeyDown={onMenuKeyDown}
       style={{ position: "fixed", top: `${position.top}px`, right: `${position.right}px` }}>

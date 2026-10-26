@@ -65,6 +65,10 @@ export interface AnnotationPanelProps {
   searchRequest?: number;
   onAttachMention: (segments: CodepointSegment[]) => void;
   onDetachMention: (evidenceId: string) => void;
+  /** M2 M-4 (HPO guide principle 3): the mention leaves the finding and becomes a new finding with the same term and values. */
+  onMoveMention?: (evidenceId: string) => void;
+  /** "Change term" offers the "Modifiers only" chip and the `mod:` prefix, as the new-mark search (M2 M-3). */
+  modifierFilter?: boolean;
   onDeleteAnnotation: (annotationId: string) => void;
   /** Text of the delete confirmation; defaults to "Delete this finding and all its mentions?". */
   deleteConfirmMessage?: string;
@@ -114,6 +118,8 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
   searchRequest,
   axesFlushRef,
   onDetachMention,
+  onMoveMention,
+  modifierFilter,
   onDeleteAnnotation,
   deleteConfirmMessage = "Delete this finding and all its mentions?",
   onSetIntent,
@@ -296,6 +302,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
               workspaceKey={workspaceKey}
               currentTermId={currentTerm}
               assignMode="change"
+              modifierFilter={modifierFilter}
               onSelectCandidate={handleSelectCandidate}
               languages={searchLanguages}
               autoFocus
@@ -459,6 +466,14 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     </div>
                   ) : (
                   <div className="mention-card__actions">
+                    {onMoveMention && linkedEvidence.length > 1 && <Button
+                      type="button"
+                      variant="secondary" size="sm"
+                      disabled={readOnly} onClick={() => { if (!readOnly) onMoveMention(ev.mention.evidence_id); }}
+                      title="This mention gets its own finding with the same term and values, which you can then change"
+                    >
+                      Move to a new finding
+                    </Button>}
                     <Button
                       type="button"
                       variant="secondary" size="sm"

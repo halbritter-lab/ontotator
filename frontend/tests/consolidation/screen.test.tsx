@@ -10,6 +10,16 @@ afterEach(() => { cleanup(); resetViewport(); });
 
 const toggle = (name: RegExp) => screen.getByRole("button", { name, expanded: true });
 const expandedTitle = () => document.querySelector(".cons-group-expanded .cons-group-title")?.textContent;
+/** M-7d: a choice stages, Keep saves. */
+const takeAbsentAndKeep = async () => {
+  fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+  fireEvent.click(within(document.querySelector(".cons-group-expanded") as HTMLElement).getByRole("button", { name: "Keep" }));
+};
+/** M-7b: a resolved row has no Change button; the row expands and Change is inside. */
+const changeRow = async (title: string) => {
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${title} `), expanded: false }));
+  fireEvent.click(await within(await waitFor(() => document.querySelector(".cons-group-expanded") as HTMLElement)).findByRole("button", { name: "Reopen" }));
+};
 
 function load(...views: ConsolidationView[]) {
   const spy = vi.spyOn(api, "getConsolidation");
@@ -53,14 +63,14 @@ describe("ConsolidationScreen", () => {
     expect(screen.queryByRole("region", { name: "Kept automatically" })).toBeNull();
   });
 
-  it("collapses a resolved group, opens the next open one and offers Undo", async () => {
+  it("collapses a resolved group, opens the next open one and offers Undo inline in its row (M-7g)", async () => {
     const after = withGroup(exampleView(), "g-hypo", { state: "choose", annotation_ids: ["cons-1"] });
     load(exampleView(), after, exampleView());
     const resolve = vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
     const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(5));
     await renderScreen();
     // The first open group is selected by an effect after the heading renders: wait for its check.
-    fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    await takeAbsentAndKeep();
     await waitFor(() => expect(expandedTitle()).toBe("Delayed development"));
     expect(resolve).toHaveBeenCalledTimes(1);
     const [workspaceId, envelope] = resolve.mock.calls[0];
@@ -68,19 +78,52 @@ describe("ConsolidationScreen", () => {
     expect(envelope.expected_revision).toBe(3);
     expect(envelope.payload).toEqual({ input_ids: ["in-hl", "in-ht"], action: "choose", choice: { term_id: "HP:0001252", span_from_input_id: "in-hl", axes: { assertion: "absent" } } });
     expect(screen.getByRole("button", { name: /^muscular hypotonia decided: Hypotonia \(HP:0001252\), Absent, Patient, Current$/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Change, muscular hypotonia" })).toBeTruthy();
-    expect(screen.getByText("muscular hypotonia: Hypotonia (HP:0001252), Absent, Patient, Current.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Change/ })).toBeNull();
+    // No toast: the Undo sits in the decided row; the live region names the decision.
+    expect(document.querySelector(".ui-toast-region .ui-toast")).toBeNull();
+    expect(screen.getByRole("button", { name: "Undo, muscular hypotonia" })).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("muscular hypotonia: Hypotonia (HP:0001252), Absent, Patient, Current.")).toBeTruthy());
     // Ctrl+Z in a text field stays the field's own undo.
     fireEvent.click(screen.getByRole("button", { name: "+ note" }));
     fireEvent.keyDown(screen.getByRole("textbox", { name: "Note for the lead" }), { key: "z", ctrlKey: true });
     expect(reopen).not.toHaveBeenCalled();
-    // Ctrl+Z elsewhere runs the toast's Undo: the group reopens with its previous choice (F19).
+    // Ctrl+Z elsewhere runs the inline Undo: the group reopens with its previous choice (F19).
     fireEvent.keyDown(window, { key: "z", metaKey: true });
     await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
     expect(reopen.mock.calls[0][1].payload).toEqual({ input_ids: ["in-hl", "in-ht"] });
     expect(reopen.mock.calls[0][1].expected_revision).toBe(4);
     await waitFor(() => expect(expandedTitle()).toBe("muscular hypotonia"));
     expect(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("More… > Reopen all decisions… asks with the count, reopens in one command and offers one Undo (R-10)", async () => {
+    load(decidedView(), exampleView(), decidedView());
+    const reopenAll = vi.spyOn(api, "reopenAllConsolidationGroups").mockResolvedValue(draft(4));
+    const undo = vi.spyOn(api, "undoReopenAllConsolidationGroups").mockResolvedValue(draft(5));
+    await renderScreen();
+    fireEvent.click(screen.getByRole("button", { name: "More task actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Reopen all decisions…" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reopen 4 decided groups?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reopen all" }));
+    await waitFor(() => expect(reopenAll).toHaveBeenCalledTimes(1));
+    expect(reopenAll.mock.calls[0][1].payload).toEqual({ command: "consolidation_reopen_all" });
+    const toast = await waitFor(() => document.querySelector(".ui-toast-region .ui-toast") as HTMLElement);
+    expect(toast.textContent).toContain("Reopened 4 decided groups.");
+    fireEvent.click(within(toast).getByRole("button", { name: /Undo/ }));
+    await waitFor(() => expect(undo).toHaveBeenCalledTimes(1));
+    expect(undo.mock.calls[0][1]).toMatchObject({ payload: { command: "consolidation_undo_reopen_all" } });
+  });
+
+  it("a failed Undo keeps the inline Undo available (M-7g)", async () => {
+    const after = withGroup(exampleView(), "g-hypo", { state: "choose", annotation_ids: ["cons-1"] });
+    load(exampleView(), after);
+    vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
+    const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockRejectedValue(new Error("offline"));
+    await renderScreen();
+    await takeAbsentAndKeep();
+    fireEvent.click(await screen.findByRole("button", { name: "Undo, muscular hypotonia" }));
+    await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("button", { name: "Undo, muscular hypotonia" })).toBeTruthy();
   });
 
   it("J and K walk the open groups, not while typing, and are listed in the help", async () => {
@@ -122,8 +165,8 @@ describe("ConsolidationScreen", () => {
     load(exampleView(), after);
     vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
     await renderScreen();
-    fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
-    await screen.findByRole("button", { name: "Undo" });
+    await takeAbsentAndKeep();
+    await screen.findByRole("button", { name: "Undo, muscular hypotonia" });
     fireEvent.keyDown(window, { key: "?" });
     const help = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
     expect(within(help).getByText("Undo the last decision")).toBeTruthy();
@@ -132,8 +175,8 @@ describe("ConsolidationScreen", () => {
 
   it("shows header actions (guidelines, problem report) next to the title", async () => {
     load(exampleView());
-    await renderScreen({ headerActions: <button type="button">Report problem</button> });
-    expect(within(document.querySelector(".cons-header") as HTMLElement).getByRole("button", { name: "Report problem" })).toBeTruthy();
+    await renderScreen({ headerActions: <button type="button">Report a text problem</button> });
+    expect(within(document.querySelector(".cons-header") as HTMLElement).getByRole("button", { name: "Report a text problem" })).toBeTruthy();
   });
 
   it("lists added findings with their label: by you live, by the consolidator for the lead", async () => {
@@ -148,7 +191,7 @@ describe("ConsolidationScreen", () => {
     expect(list.textContent).toContain("Seizure (HP:0001250), “last week”");
     expect(document.querySelector(".cons-added")?.textContent).toBe("last week");
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
-    expect(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByText("8 groups, 8 findings, 1 left out")).toBeTruthy();
+    expect(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByText("8 groups, 8 findings, 1 not in result")).toBeTruthy();
     cleanup();
     load({ ...decidedView(), read_only: true, read_only_reason: "submitted", workspace_id: null, added, added_by: "Ana Weber (ann-0005)" });
     await renderScreen({ readOnly: true });
@@ -202,23 +245,29 @@ describe("ConsolidationScreen", () => {
     expect(document.getElementById(submit.getAttribute("aria-describedby")!)?.textContent).toBe("Resolve the 4 open groups first.");
     fireEvent.click(submit);
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByText("Ready to submit")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Next open group" }));
     expect(expandedTitle()).toBe("Delayed development");
   });
 
-  it("drops the Undo toast once the consolidation is submitted", async () => {
+  it("drops the inline Undo once the consolidation is submitted", async () => {
     load(withGroup(decidedView(), "g-hypo", { state: "open", note: null, annotation_ids: [] }), decidedView());
     vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
     vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s-1" } as never);
     vi.spyOn(api, "listMyTasks").mockResolvedValue([] as never);
     await renderScreen({ assignmentId: 42 });
-    fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
-    expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
+    await takeAbsentAndKeep();
+    expect(await screen.findByRole("button", { name: /^Undo/ })).toBeTruthy();
     await waitFor(() => expect(screen.getByRole("button", { name: "Submit consolidation" }).getAttribute("aria-disabled")).toBeNull());
+    // Every group decided: the progress card turns green, reads Ready to submit, Submit is its one primary (B5-5, B5-6).
+    const card = screen.getByText("Ready to submit").closest(".cons-progress")!;
+    expect(card.classList.contains("cons-progress--ready")).toBe(true);
+    expect(within(card as HTMLElement).getAllByRole("button").map(button => [button.textContent, button.className.includes("btn-primary")])).toEqual([["Submit consolidation", true]]);
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByRole("button", { name: "Submit" }));
     await screen.findByText("Consolidation submitted. The lead then accepts the result.");
-    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    expect(screen.queryByText("Ready to submit")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
   });
 
   it("submits after the summary, acknowledges an axis warning and offers the next task", async () => {
@@ -234,7 +283,7 @@ describe("ConsolidationScreen", () => {
     const { onNavigate } = await renderScreen({ assignmentId: 42 });
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
-    expect(within(dialog).getByText("8 groups, 7 findings, 1 left out")).toBeTruthy();
+    expect(within(dialog).getByText("8 groups, 7 findings, 1 not in result")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
     await within(dialog).findByLabelText("I checked these values");
     expect(submit.mock.calls[0][1].payload).toEqual({ command: "submit_workspace", document_checked: true });
@@ -255,7 +304,7 @@ describe("ConsolidationScreen", () => {
     await renderScreen({ group: "g-dd" });
     expect(expandedTitle()).toBe("Delayed development");
     expect(screen.getByText("This consolidation was submitted. You see its final state.")).toBeTruthy();
-    for (const name of [/^Submit/, /^Change/, "Leave out", "Edit in editor…"]) expect(screen.queryByRole("button", { name })).toBeNull();
+    for (const name of [/^Submit/, /^Change/, "Not in result", "Open in full editor"]) expect(screen.queryByRole("button", { name })).toBeNull();
     expect(screen.queryByLabelText("Guidelines unclear here")).toBeNull();
     expect(api.openWorkRound).not.toHaveBeenCalled();
   });
@@ -316,10 +365,15 @@ describe("ConsolidationScreen", () => {
     rect.mockRestore();
   });
 
-  it("opens the editor for the consolidation task from Edit in editor…", async () => {
+  it("opens the editor for the consolidation task from the header's Open in full editor (M-7a)", async () => {
     load(exampleView());
-    const { onNavigate } = await renderScreen({ assignmentId: 42 });
-    fireEvent.click(screen.getByRole("button", { name: "Edit in editor…" }));
+    const { onNavigate } = await renderScreen({ assignmentId: 42, headerActions: <button type="button">Report a text problem</button> });
+    expect(screen.queryByRole("button", { name: "Edit in editor…" })).toBeNull();
+    const header = within(screen.getByRole("group", { name: "Task" }));
+    expect(header.getAllByRole("button").map(button => button.textContent)).toEqual(["Open in full editor", "Report a text problem"]);
+    const open = header.getByRole("button", { name: "Open in full editor" });
+    expect(open.getAttribute("title")).toBe("For span changes and findings the comparison cannot express");
+    fireEvent.click(open);
     expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 42, view: "editor" });
   });
 
@@ -361,7 +415,7 @@ describe("ConsolidationScreen", () => {
     const spy = load(exampleView());
     vi.spyOn(api, "resolveConsolidationGroup").mockRejectedValue(new ApiError(409, "conflict", "REVISION_CONFLICT"));
     await renderScreen();
-    fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    await takeAbsentAndKeep();
     const review = await screen.findByRole("button", { name: "Review again" });
     expect(expandedTitle()).toBe("muscular hypotonia");
     await act(async () => { fireEvent.click(review); });
@@ -435,7 +489,7 @@ describe("ConsolidationScreen, modifiers", () => {
     load(s9({ state: "choose", annotation_ids: ["cons-1"] }), s9());
     const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(4));
     await renderScreen();
-    fireEvent.click(screen.getByRole("button", { name: "Change, Krampfanfälle" }));
+    await changeRow("Krampfanfälle");
     await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(expandedTitle()).toBe("Krampfanfälle"));
     expect(screen.getByRole("button", { name: "Take Severe “schwere” from Ana Weber for Modifiers" }).getAttribute("aria-pressed")).toBe("false");
@@ -447,7 +501,7 @@ describe("ConsolidationScreen, modifiers", () => {
     await renderScreen({ group: "g-seiz" });
     expect(screen.getByText("Attached modifier: Severe “schwere” from Ana Weber")).toBeTruthy();
     expect(screen.getByRole("button", { name: /^schwere attached$/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Change, schwere" }));
+    await changeRow("schwere");
     await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
     expect(reopen.mock.calls[0][1].payload).toEqual({ input_ids: ["sev-a"] });
     await waitFor(() => expect(screen.queryByText(/^Attached modifier/)).toBeNull());
@@ -457,7 +511,7 @@ describe("ConsolidationScreen, modifiers", () => {
     load(s18({ state: "leave_out", attached_to: "cons-seiz" }), s18({}, { state: "open", annotation_ids: [] }));
     const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockResolvedValue(draft(4));
     await renderScreen();
-    fireEvent.click(screen.getByRole("button", { name: "Change, Krampfanfälle" }));
+    await changeRow("Krampfanfälle");
     await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
     expect(reopen.mock.calls[0][1].payload).toEqual({ input_ids: ["seiz-b"] });
     await waitFor(() => expect(screen.getByRole("button", { name: /^schwere to decide/ })).toBeTruthy());

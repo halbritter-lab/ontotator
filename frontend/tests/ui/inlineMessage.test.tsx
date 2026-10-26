@@ -19,3 +19,9 @@ it("passes_the_aria_label", () => {
   render(<InlineMessage tone="info" aria-label="Import result">Imported</InlineMessage>);
   expect(screen.getByRole("status", { name: "Import result" }).textContent).toBe("Imported");
 });
+
+it("live_false_leaves_the_role_to_the_callers_live_region", () => {
+  render(<div aria-live="polite"><InlineMessage tone="success" live={false}>Confirmed</InlineMessage></div>);
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(screen.getByText("Confirmed").closest(".notice-success")).not.toBeNull();
+});

@@ -34,7 +34,7 @@ from ontocurator.authz.policy import Access
 from ontocurator.domain.annotations import AnnotationSnapshot
 from ontocurator.domain.workspace import Draft
 from ontocurator.storage.repository import Repository, _key_str
-from ontocurator.storage.tables import DraftRow
+from ontocurator.storage.tables import DraftRow, EditEventRow
 
 FIRST = "sub-first-res"
 SECOND = "sub-second-res"
@@ -785,3 +785,71 @@ def test_choose_with_a_null_axis_writes_it_as_not_set(cons):
     assert chosen.annotation.axes_values.get("temporality") is None
     assert "temporality" not in chosen.annotation.axes_defaulted
     assert group(cons, "values_differ")["state"] == "choose"
+
+
+def test_reopen_all_restarts_the_groups_and_undo_restores_them(cons):
+    """R-10: one mutation reopens every group, matches are taken over again;
+    the undo directly after it restores the exact previous decisions."""
+    resolve_all(cons)
+    ok(
+        mutate(
+            cons,
+            "resolve",
+            {"input_ids": inputs(group(cons, "match")), "action": "leave_out"},
+        )
+    )
+    before = view(cons)
+    decided = ok(
+        mutate(
+            cons,
+            "annotate",
+            {
+                "input_ids": inputs(group(cons, "partial")),
+                "note": "n",
+                "guidelines_unclear": True,
+            },
+        )
+    )
+    assert {g["state"] for g in view(cons)["groups"]} != {"open", "auto"}
+    reopened = ok(mutate(cons, "reopen-all", {"command": "consolidation_reopen_all"}))
+    assert reopened.revision == decided.revision + 1
+    assert [g["state"] for g in view(cons)["groups"]] == [
+        "auto",
+        "open",
+        "open",
+        "open",
+    ]
+    restored = ok(
+        mutate(cons, "undo-reopen-all", {"command": "consolidation_undo_reopen_all"})
+    )
+    assert [d.model_dump() for d in restored.decisions] == [
+        d.model_dump() for d in decided.decisions
+    ]
+    assert restored.annotations == decided.annotations
+    assert restored.checked_layer_ids == decided.checked_layer_ids
+    after = view(cons)
+    assert [(g["state"], g["note"]) for g in after["groups"]] == [
+        (g["state"], "n" if "partial" in g["kinds"] else g["note"])
+        for g in before["groups"]
+    ]
+    # Only directly after Reopen all: a second undo has nothing to restore.
+    again = mutate(
+        cons, "undo-reopen-all", {"command": "consolidation_undo_reopen_all"}
+    )
+    assert again.status_code == 409, again.text
+    with cons.env.db.transaction() as conn:
+        commands = [
+            row.command.get("command")
+            for row in conn.execute(
+                select(EditEventRow.command)
+                .join(DraftRow, DraftRow.id == EditEventRow.draft_id)
+                .where(DraftRow.draft_key == _key_str(cons.round.workspace_key))
+                .order_by(EditEventRow.id)
+            )
+        ][-2:]
+    assert commands == ["consolidation_reopen_all", "consolidation_undo_reopen_all"]
+
+
+def test_reopen_all_refuses_another_payload(cons):
+    response = mutate(cons, "reopen-all", {"input_ids": inputs(group(cons, "match"))})
+    assert response.status_code == 422, response.text

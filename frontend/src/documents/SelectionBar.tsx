@@ -1,27 +1,24 @@
 /**
- * Selection bar of Documents (spec "Selection bar"; documents overview VD4, VD21; spec 2026-10-23 §2: only
- * for bulk work, so it shows from two selected texts on): "3 texts in 2 cases selected", the common next step,
+ * Selection bar of Documents (spec "Selection bar"; documents overview VD4, VD21; owner decision R-3 of
+ * 2026-10-26: it shows from one selected text on): "3 texts in 2 cases selected", the common next step,
  * "{k} not shown with these filters" (from the selection summary with the current filters) and
- * "Clear selection"; primary "Assign…" (the page's only primary button) and the plan actions
- * "Translation review and annotation", "Annotation only, no translation review" (one click when no existing work is affected;
- * only in projects with translations) and "Plan…". Every plan save keeps the selection and shows an Undo toast (D22); a save that changes nothing says why instead. The summary and
- * the quick plan actions send the selected texts (`rows`); the plan dialog still edits whole cases.
+ * "Clear selection"; primary "Assign…" (the page's only primary button) and "Plan…" (M2 decision M-1: the two
+ * translation plan presets live in the plan dialog's quick choice). Every plan save keeps the selection and shows an
+ * Undo toast (D22); a save that changes nothing says why instead. The summary sends the selected texts (`rows`); the
+ * plan dialog edits whole cases.
  * The bar floats at the bottom of the viewport over the content (`useFloatingBar`): its arrival never moves the
  * table; the page reserves its height as bottom padding. Its place in the DOM keeps the focus order.
  */
 import { useEffect, useId, useRef, useState } from "react";
-import { api, ApiError, type BulkResult, type ConsequencesView, type DocumentRowFilters, type RowRefView, type SelectionSummary, type UndoView } from "../api/client";
+import { api, type BulkResult, type ConsequencesView, type DocumentRowFilters, type RowRefView, type SelectionSummary, type UndoView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { plural } from "../app/labels";
-import { Button, Checkbox, InlineConfirm, InlineMessage, type ToastMessage, type TriState } from "../ui";
+import { Button, Checkbox, InlineConfirm, InlineMessage, type ToastMessage } from "../ui";
 import { PLAN_CHANGED_MESSAGE, UNDO_WITHDRAWN_NOTE, WITHDRAW_CHECKBOX, withdrawnSummary } from "./PlanChips";
 import { PlanDialog } from "./PlanDialog";
-import { savedSummary, SOURCE_KEY, type PlanChoices } from "./planSummary";
 import { runPlanUndo } from "./planUndo";
 import { useFloatingBar } from "./useFloatingBar";
 import { caseOfTextKey, rowRefOf } from "./useTextSelection";
-
-type Preset = "review_and_annotate_translations" | "annotate_only";
 
 export interface SelectionBarProps {
   projectKey: string;
@@ -44,12 +41,10 @@ export interface SelectionBarProps {
   onChanged: () => void;
   /** Plan revisions returned by a save or undo (chips use them for their next save). */
   onRevisions?: (revisions: Record<string, number>) => void;
-  /** The project has translations; without them the two translation plan actions are left out. */
-  translations?: boolean;
 }
 
-/** One selected text is the open card's text, not bulk work. */
-const MIN_TEXTS = 2;
+/** One checked text already shows the bar (owner decision R-3, 2026-10-26). */
+const MIN_TEXTS = 1;
 
 /** Delay before the selection summary is requested (Shift+Arrow can change the selection quickly). */
 export const SUMMARY_DELAY_MS = 150;
@@ -63,13 +58,7 @@ const ASSIGN_STEP: Readonly<Record<string, string>> = {
 export const commonStepText = (step: { task: string; language: string }): string =>
   `next step: ${ASSIGN_STEP[step.task] ?? step.task} (${step.language})`;
 
-/** Plan dialog cells of a quick action for the given translation languages. */
-function presetChoices(preset: Preset, languages: readonly string[]): PlanChoices {
-  const cell: PlanChoices[string] = preset === "annotate_only" ? { annotate: "on" as TriState } : { review: "on", annotate: "on" };
-  return Object.fromEntries(languages.filter(language => language !== SOURCE_KEY).map(language => [language, { ...cell }]));
-}
-
-/** Why a plan save changed nothing: the quick actions skip source texts (`skipped_rows`), the rest already had the plan. */
+/** Why a plan save changed nothing: presets skip source texts (`skipped_rows`), the rest already had the plan. */
 export function nothingChangedText(result: BulkResult, selected: number): string {
   const skipped = result.skipped_rows?.length ?? 0;
   if (skipped && skipped >= selected) return "Nothing changed: the selected texts are source texts; these plan actions apply to translations only.";
@@ -80,7 +69,7 @@ export function nothingChangedText(result: BulkResult, selected: number): string
 type Undo = { kind: "conflict"; undo: UndoView; consequences: ConsequencesView } | { kind: "changed" };
 
 export function SelectionBar({
-  projectKey, keys, filters, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions, translations = true,
+  projectKey, keys, filters, refresh, narrow = false, limitNote, onClear, onAssign, showToast, onAnnounce, onChanged, onRevisions,
 }: SelectionBarProps): JSX.Element | null {
   const id = useId().replace(/:/g, "");
   const latest = useRef({ showToast, onAnnounce, onChanged, onRevisions });
@@ -107,9 +96,8 @@ export function SelectionBar({
   }, [projectKey, idsKey, filtersKey, refresh]);
   const current = summary?.key === idsKey + filtersKey ? summary.value : null;
 
-  const [busy, setBusy] = useState<Preset | null>(null);
   const [error, setError] = useState<unknown>();
-  const [plan, setPlan] = useState<{ caseIds: string[]; initial?: PlanChoices } | null>(null);
+  const [plan, setPlan] = useState<string[] | null>(null);
   const [undoState, setUndoState] = useState<Undo | null>(null);
   const [undoBusy, setUndoBusy] = useState(false);
   const [understood, setUnderstood] = useState(false);
@@ -164,35 +152,6 @@ export function SelectionBar({
     latest.current.onChanged();
   };
 
-  const quick = async (preset: Preset) => {
-    if (busy || !rows.length) return;
-    const selected = rows;
-    const cases = caseIds;
-    setBusy(preset); setError(undefined); setUndoState(null); setNothing(null);
-    latest.current.onAnnounce("Saving…");
-    try {
-      const result = await api.saveWorkPlans(projectKey, { rows: selected, preset, confirm: false });
-      if (!alive.current) return;
-      const languages = [...new Set(result.undo.rows.map(row => row.language))];
-      saved(result, savedSummary(cases.length, presetChoices(preset, languages)));
-    } catch (failure: unknown) {
-      if (!alive.current) return;
-      const needsDialog = failure instanceof ApiError && (failure.code === "WORK_PLAN_CONFIRMATION_REQUIRED" || failure.code === "WORK_PLAN_INVALID");
-      if (!needsDialog) { latest.current.onAnnounce(""); setError(failure); return; }
-      // Existing work is affected or translations need an acceptance: the plan dialog with the preset.
-      try {
-        const preview = await api.previewWorkPlans(projectKey, { rows: selected, preset, confirm: false });
-        if (!alive.current) return;
-        latest.current.onAnnounce("");
-        setPlan({ caseIds: cases, initial: presetChoices(preset, preview.languages.map(language => language.key)) });
-      } catch (previewFailure: unknown) {
-        if (alive.current) { latest.current.onAnnounce(""); setError(previewFailure); }
-      }
-    } finally {
-      if (alive.current) setBusy(null);
-    }
-  };
-
   const visible = keys.size >= MIN_TEXTS || undoState !== null;
   useFloatingBar(section, visible);
   if (!visible && !plan) return null;
@@ -208,12 +167,7 @@ export function SelectionBar({
         </p>
         <div className="selection-bar-actions">
           <Button variant="primary" onClick={onAssign}>Assign…</Button>
-          {translations && <>
-            <Button loading={busy === "review_and_annotate_translations"} aria-disabled={busy ? true : undefined}
-              onClick={() => { void quick("review_and_annotate_translations"); }}>Translation review and annotation</Button>
-            <Button loading={busy === "annotate_only"} aria-disabled={busy ? true : undefined} onClick={() => { void quick("annotate_only"); }}>Annotation only, no translation review</Button>
-          </>}
-          <Button aria-disabled={busy ? true : undefined} onClick={() => { if (!busy) setPlan({ caseIds }); }}>Plan…</Button>
+          <Button onClick={() => setPlan(caseIds)}>Plan…</Button>
           <Button onClick={onClear}>Clear selection</Button>
         </div>
       </div>}
@@ -230,7 +184,7 @@ export function SelectionBar({
         </InlineConfirm>
       </div>}
     </section>}
-    {plan && <PlanDialog projectKey={projectKey} caseIds={plan.caseIds} initial={plan.initial} onClose={() => setPlan(null)}
+    {plan && <PlanDialog projectKey={projectKey} caseIds={plan} rows={rows} onClose={() => setPlan(null)}
       onSaved={(result, message) => { setPlan(null); saved(result, message); }} />}
   </>;
 }

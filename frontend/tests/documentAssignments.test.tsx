@@ -83,8 +83,8 @@ it("wires actual assignment IDs through the card's stage actions and refreshes a
   render(<DocumentsPage projectKey="p/key" canManage query={{ panel: "z/doc:en", panel_stage: "annotation" }} onNavigate={vi.fn()} />);
   // Open work is a chip with its actions beside it, not a second line in Text versions.
   const card = await screen.findByRole("dialog", { name: "z/doc en" });
-  fireEvent.click(await within(card).findByText("Assignment actions"));
-  fireEvent.click(await within(card).findByRole("button", { name: "Remove assignment", hidden: true }));
+  // Remove stands beside Reassign…, no disclosure (B8-1).
+  fireEvent.click(await within(card).findByRole("button", { name: "Remove assignment" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirm removal" }));
   await waitFor(() => expect(api.listAssignments).toHaveBeenCalledTimes(2)); expect(api.revokeAssignment).toHaveBeenCalledWith(3);
 });

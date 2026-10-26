@@ -261,11 +261,20 @@ describe("Documents deep-link parameters", () => {
 describe("settings section addresses", () => {
   it("parses and builds settings section addresses", () => {
     expect(parseRoute("#/projects/a/settings")).toEqual({ name: "projectSettings", key: "a" });
-    expect(parseRoute("#/projects/a/settings/rules")).toEqual({ name: "projectSettings", key: "a", section: "rules" });
+    expect(parseRoute("#/projects/a/settings/annotation")).toEqual({ name: "projectSettings", key: "a", section: "annotation" });
     expect(parseRoute("#/projects/a/settings/unknown").name).toBe("notFound");
+    // General is the default tab (B6-1); the People address keeps working.
     expect(routeHref({ name: "projectSettings", key: "a", section: "general" })).toBe("#/projects/a/settings");
-    expect(routeHref({ name: "projectSettings", key: "a", section: "defaults" })).toBe("#/projects/a/settings/defaults");
+    expect(routeHref({ name: "projectSettings", key: "a", section: "people" })).toBe("#/projects/a/settings/people");
+    expect(parseRoute("#/projects/a/settings/members")).toEqual({ name: "projectSettings", key: "a", section: "people" });
+    expect(SETTINGS_SECTIONS).toEqual(["general", "annotation", "workflow", "guidelines", "people", "ontology"]);
     for (const section of SETTINGS_SECTIONS) expect(parseRoute(routeHref({ name: "projectSettings", key: "a", section }))).toMatchObject({ key: "a" });
+  });
+
+  it("keeps the earlier section addresses as aliases (M-8a)", () => {
+    for (const [old, section] of [["members", "people"], ["rules", "annotation"], ["defaults", "annotation"], ["guideline", "guidelines"], ["profile", "ontology"], ["general", "general"], ["workflow", "workflow"]]) {
+      expect(parseRoute(`#/projects/a/settings/${old}`)).toEqual({ name: "projectSettings", key: "a", section });
+    }
   });
 });
 

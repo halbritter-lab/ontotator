@@ -39,6 +39,7 @@ function counter(page: Page) {
   return {
     get total() { return total; },
     async click(target: Locator) { await target.click(); total += 1; },
+    async dblclick(target: Locator) { await target.dblclick(); total += 1; },
     async check(target: Locator) { await target.check(); total += 1; },
     async press(key: string) { await page.keyboard.press(key); total += 1; },
   };
@@ -209,7 +210,7 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   await planReviewAndAnnotate(page, clicks, "fr", 30);
   expect(clicks.total).toBe(16);
 
-  // 5. Assign the 30 fr reviews to Ben: Assign…, Ben, Assign 30 (3; total 19). Splitting is "Random distribution…".
+  // 5. Assign the 30 fr reviews to Ben: Assign…, Ben, Assign 30 (3; total 19). Splitting is "Distribute evenly…".
   await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
   dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}30 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Translation review${SEP}fr${SEP}30 versions$`))).toBeVisible();
@@ -316,7 +317,7 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
   await documentsTab(page, "All").click();
   await expect(documentsTab(page, "All")).toHaveAttribute("aria-selected", "true");
   const clicks = counter(page);
-  await clicks.click(textName(page, caseId, "fr"));
+  await clicks.dblclick(textName(page, caseId, "fr"));
   await clicks.click(textCard(page, caseId, "fr").getByRole("button", { name: "Details", exact: true }));
   await expect(review()).toHaveAttribute("aria-pressed", "true");
   await clicks.click(review());
@@ -684,7 +685,7 @@ test("lead corrects a rejected translation and annotation becomes assignable", a
   await expect(page.getByText("You are correcting this translation as project lead.", { exact: true })).toBeVisible();
   await expect(page.getByRole("radio")).toHaveCount(1);
   await expect(page.getByRole("radio", { name: "Accepted with corrections", exact: true })).toBeChecked();
-  await expect(page.getByRole("button", { name: /Report a problem/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Report a text problem/ })).toHaveCount(0);
   const before = await text.inputValue();
   const corrected = `${before} The second seizure episode is included.`;
   await text.fill(corrected);

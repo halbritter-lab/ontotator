@@ -6,15 +6,13 @@ import { ErrorNotice } from "./ErrorNotice";
 import { assignmentStatusLabels, labelFor, taskLabels } from "../app/labels";
 export interface AssignmentActionsProps {
   assignment: AssignmentView; members: Member[]; onChanged: () => void;
-  /** A direct "Reassign…" button before the "Assignment actions" menu (the Documents row panel, S3). */
-  directReassign?: boolean;
   /** Only this action's dialog, open at once (no buttons); `onClose` runs when it closes or the action is done. */
   open?: "reassign" | "reopen" | "revoke";
   onClose?: () => void;
 }
 export function AssignmentActions(props: AssignmentActionsProps): JSX.Element { return <Actions key={JSON.stringify([props.assignment.project_key, props.assignment.id, props.assignment.updated_at, props.assignment.status, props.assignment.revoked_at])} {...props} />; }
 const startedMessage = "Work has started. The previous draft stays with its author; the new person starts from the document's inputs.";
-function Actions({ assignment, members, onChanged, directReassign = false, open, onClose }: AssignmentActionsProps): JSX.Element {
+function Actions({ assignment, members, onChanged, open, onClose }: AssignmentActionsProps): JSX.Element {
   const [action, setAction] = useState<"reassign" | "reopen" | "revoke" | null>(open ?? null);
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
@@ -46,13 +44,11 @@ function Actions({ assignment, members, onChanged, directReassign = false, open,
   // D1: a consolidation task (task review) cannot be handed to someone else.
   const reassignable = assignment.task !== "review";
   return <>
+    {/* The actions stand plainly side by side, no disclosure (B8-1). */}
     {!open && <>
-    {directReassign && reassignable && <Button size="sm" onClick={() => setAction("reassign")}>Reassign…</Button>}
-    <details><summary aria-label={`Actions for ${assignment.pseudonym}: ${labelFor(taskLabels, assignment.task)}, ${assignment.document_id}`}>Assignment actions</summary>
-    {!directReassign && reassignable && <Button onClick={() => setAction("reassign")}>Reassign …</Button>}
-    {assignment.status === "submitted" && <Button onClick={() => setAction("reopen")}>Reopen</Button>}
-    <Button onClick={() => setAction("revoke")}>Remove assignment</Button>
-    </details>
+      {reassignable && <Button size="sm" onClick={() => setAction("reassign")}>Reassign…</Button>}
+      {assignment.status === "submitted" && <Button size="sm" onClick={() => setAction("reopen")}>Reopen</Button>}
+      <Button size="sm" variant="danger" onClick={() => setAction("revoke")}>Remove assignment</Button>
     </>}
     <Dialog open={action === "reassign"} title={`Reassign ${assignment.document_id}`} onClose={busy || confirmation ? undefined : close} footer={<><Button disabled={busy || confirmation !== null} onClick={close}>Cancel</Button><Button disabled={!target || confirmation !== null} loading={busy} onClick={() => { if (assignment.status !== "open" && !confirmedStarted) setConfirmation("started"); else void mutate(confirmedStarted, false); }}>Reassign</Button></>}>
       <p>{assignment.pseudonym}: {labelFor(taskLabels, assignment.task)}, {labelFor(assignmentStatusLabels, assignment.status).toLowerCase()}</p>

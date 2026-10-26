@@ -98,20 +98,20 @@ it("shows ineligible members muted with the reason and aria-disabled", async () 
   } finally { people.pop(); }
 });
 
-it("annotation at the limit: a line under the table names it, blocked rows are muted with that reason, a language mismatch is not muted", async () => {
+it("annotation at the limit: the hint above the table names it, blocked rows are muted with that reason, a language mismatch is not muted", async () => {
   vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 20, cases: 20 }]));
   render(<AssignWorkDialog {...casesProps()} />); await ready();
   const dan = screen.getByRole("checkbox", { name: /Dan Mertens.*does not read de/ });
   expect(dan.closest("tr")!.className).not.toContain("is-unavailable");
-  expect(screen.queryByText(/Limit reached/)).toBeNull();
   fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
   await waitForPreviewOf(["ana"]);
-  const line = screen.getByText(/^Limit reached: 1 person per text\./);
-  expect(within(line).getByRole("link", { name: "Change in project settings" }).getAttribute("href")).toContain("settings/workflow");
+  // One hint with the (i), no inline Change… (B7-4, B7-5).
+  expect(screen.getByText("Up to 1 per text")).toBeDefined();
+  expect(screen.queryByRole("button", { name: /^Change…/ })).toBeNull();
   const ben = screen.getByRole("checkbox", { name: /Ben Roth/ });
   expect(ben.getAttribute("aria-disabled")).toBe("true");
   expect(ben.closest("tr")!.className).toContain("is-unavailable");
-  expect(ben.getAttribute("aria-describedby")!.split(" ").map(item => document.getElementById(item)!.textContent).join(" ")).toContain("Limit reached: 1 person per text.");
+  expect(ben.getAttribute("aria-describedby")!.split(" ").map(item => document.getElementById(item)!.textContent).join(" ")).toContain("Up to 1 per text");
 });
 
 it("the lead without the annotator role adds it inline and the preview reloads", async () => {
@@ -142,7 +142,8 @@ it("Annotation for many texts: ticked people each get every text up to the limit
   perText = 2; remainingOf = id => id === "case-0101" ? 1 : 2;
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
   expect(screen.queryByRole("radio", { name: "Split evenly" })).toBeNull();
-  expect(screen.getByText(/Each ticked person gets every selected text, up to 2 per text/)).toBeDefined();
+  expect(screen.getByText("Each ticked person gets every selected text.", { exact: false })).toBeDefined();
+  expect(screen.getByText("Up to 2 per text")).toBeDefined();
   expect(screen.getByRole("columnheader", { name: "Gets" })).toBeDefined();
   fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
   fireEvent.click(screen.getByRole("checkbox", { name: /Ben Roth/ }));
@@ -154,7 +155,7 @@ it("Annotation for many texts: ticked people each get every text up to the limit
   expect((clara as HTMLInputElement).checked).toBe(false);
   expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("Ana Weber gets 20 annotations (de). Open tasks: 3 → 23.");
   expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("Ben Roth gets 19 annotations (de).");
-  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("case-0101 de: 1 of 2 assigned");
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("case-0101 de: 1 assigned (limit 2)");
   fireEvent.click(screen.getByRole("button", { name: "Assign 39" }));
   await waitFor(() => expect(props.onAssigned).toHaveBeenCalledWith("39 annotations assigned to Ana Weber and Ben Roth", []));
   expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ mode: "each", usernames: ["ana", "ben"] }));
@@ -232,13 +233,14 @@ it("annotation: the limit up front, names past it say limit reached, the lead is
   const self = vi.spyOn(api, "createAssignments").mockResolvedValue({ created: [created], refused: [] } as unknown as Awaited<ReturnType<typeof api.createAssignments>>);
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={{ ...row, open: { document_id: "doc-case-0101" } } as DocumentRowView} task="annotate" me={{ username: "lead", name: "Pat Lead" }} consolidatorRule onClose={vi.fn()} onAssigned={onAssigned} />);
   await ready();
-  // One status line: who holds it of the limit, and the limit.
-  expect(screen.getByText(/^1 of 2 assigned/).textContent).toBe("1 of 2 assigned: Ana Weber (ann-0004) · limit 2 per text (project setting)");
-  expect(screen.getByRole("link", { name: "project setting" }).getAttribute("href")).toContain("settings/workflow");
+  // One status line: who holds it of the limit; the hint above the table: what is still possible (B7-5).
+  expect(screen.getByText(/^Assigned: /).textContent).toBe("Assigned: Ana Weber (ann-0004)");
+  expect(screen.getByText("1 assigned · 1 more possible (limit 2)").querySelector("button")?.getAttribute("aria-label")).toBe("About the limit: 2 annotators per text");
   const me = screen.getByRole("checkbox", { name: /^Pat Lead \(you\)/ });
   expect(document.getElementById(me.getAttribute("aria-describedby")!)!.textContent).toBe("If you annotate this text yourself, you cannot consolidate it afterwards (project rule \"the consolidator is not an annotator\").");
   fireEvent.click(me);
   expect(screen.getByRole("button", { name: "Assign 1 person" })).toBeDefined();
+  expect(screen.getByText("1 assigned · 1 selected · limit reached")).toBeDefined();
   // The limit is reached by the tick: every other name is unavailable and says why.
   const ben = screen.getByRole("checkbox", { name: /Ben Roth/ });
   expect(ben.getAttribute("aria-disabled")).toBe("true");
@@ -259,7 +261,7 @@ it("row mode shows context in one line and Change task", async () => {
   expect(screen.getByRole("dialog", { name: "Assign annotation" })).toBeDefined();
   expect(screen.getByText("case-0101 de")).toBeDefined();
   await ready();
-  expect(screen.getByText(/^1 of 2 assigned: Ana Weber \(ann-0004\)/)).toBeDefined();
+  expect(screen.getByText(/^Assigned: Ana Weber \(ann-0004\)/)).toBeDefined();
   expect(screen.queryByText(/Currently:/)).toBeNull();
   expect(lastPreview()).toMatchObject({ task: "annotate", language: "de", case_ids: ["case-0101"] });
   // Nobody chosen yet: no count on the button, the reason beside it.
@@ -297,7 +299,7 @@ it("lists holders with their assignment date", async () => {
     const dated = { ...row, work: row.work.map(item => ({ ...item, assigned_at: new Date(2026, 9, 23, 10, 40).toISOString() })) } as DocumentRowView;
     render(<AssignWorkDialog mode="row" projectKey="p/key" row={dated} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
     await ready();
-    expect(screen.getByText(/assigned: Ana Weber \(ann-0004\), assigned today 10:40/)).toBeDefined();
+    expect(screen.getByText(/Assigned: Ana Weber \(ann-0004\), assigned today 10:40/)).toBeDefined();
   } finally { vi.useRealTimers(); }
 });
 
@@ -316,11 +318,11 @@ it("one text: the person who holds the review shows Already assigned instead of 
   } finally { ana.already_assigned = 0; }
 });
 
-it("offers Random distribution… as a secondary button", async () => {
+it("offers Distribute evenly… as a secondary button", async () => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   render(<AssignWorkDialog {...casesProps()} />); await ready();
-  const link = screen.getByRole("button", { name: "Random distribution…" });
+  const link = screen.getByRole("button", { name: "Distribute evenly…" });
   expect(link.className).toContain("btn-secondary");
   fireEvent.click(link);
   expect(await screen.findByRole("dialog", { name: "Propose distribution" })).toBeDefined();
@@ -356,7 +358,7 @@ it("shows remaining assignments for versions already partly assigned", async () 
   vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 1, cases: 1 }]));
   perText = 2; remainingOf = () => 1;
   render(<AssignWorkDialog {...casesProps()} caseIds={["case-0101"]} />); await ready();
-  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("case-0101 de: 1 of 2 assigned");
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("case-0101 de: 1 assigned (limit 2)");
   fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ })); await waitForPreviewOf(["ana"]);
   expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("Ana Weber gets 1 annotation (de).");
 });
@@ -437,13 +439,13 @@ it("assigning myself sends the acknowledgement", async () => {
   expect(self).toHaveBeenCalledWith("p/key", expect.objectContaining({ confirm_unreviewed_translation: true }));
 });
 
-it("random distribution waits for the acknowledgement", async () => {
+it("even distribution waits for the acknowledgement", async () => {
   vi.spyOn(api, "listMembers").mockResolvedValue([]);
   vi.spyOn(api, "listCases").mockResolvedValue([]);
   annotateCases(); unreviewedOf = () => true;
   render(<AssignWorkDialog {...casesProps()} />); await ready();
   await waitFor(() => expect(acknowledgement()).not.toBeNull());
-  const link = screen.getByRole("button", { name: "Random distribution…" });
+  const link = screen.getByRole("button", { name: "Distribute evenly…" });
   expect(link.getAttribute("aria-disabled")).toBe("true");
   expect(document.getElementById(link.getAttribute("aria-describedby")!)!.textContent).toBe("Confirm annotating before the translation review is accepted.");
   fireEvent.click(link);
@@ -454,12 +456,12 @@ it("random distribution waits for the acknowledgement", async () => {
   expect(await screen.findByRole("dialog", { name: "Propose distribution" })).toBeDefined();
 });
 
-it("one text: Change task only with another task, Random distribution only with more people than places", async () => {
+it("one text: Change task only with another task, Distribute evenly only with more people than places", async () => {
   remainingOf = () => 1;
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
   await ready();
   expect(screen.getByRole("button", { name: "Change task" })).toBeDefined();
-  expect(await screen.findByRole("button", { name: "Random distribution…" })).toBeDefined();
+  expect(await screen.findByRole("button", { name: "Distribute evenly…" })).toBeDefined();
   cleanup();
   // A source text has no translation review to change to; 4 available people for 4 places leave nothing to draw.
   perText = 4; remainingOf = () => 4;
@@ -467,7 +469,7 @@ it("one text: Change task only with another task, Random distribution only with 
   await ready();
   await waitFor(() => expect(screen.queryByText("Calculating…")).toBeNull());
   expect(screen.queryByRole("button", { name: "Change task" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Random distribution…" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Distribute evenly…" })).toBeNull();
 });
 
 it("one text with an unreviewed translation: the acknowledgement is there before the preview; Calculating… only in the footer", async () => {
@@ -479,4 +481,73 @@ it("one text with an unreviewed translation: the acknowledgement is there before
   expect(screen.getByRole("status", { name: "Summary" }).textContent).toBe("");
   release();
   await ready();
+});
+
+it("the (i) popover changes annotators per text for all texts; the dialog and its selection stay (M2 D5, B7-5)", async () => {
+  vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 20, cases: 20 }]));
+  const update = vi.spyOn(api, "updateProjectSettings").mockImplementation(async () => { perText = 2; return {} as never; });
+  const target = vi.spyOn(api, "annotationTargetPreview").mockResolvedValue({ rows_over_target: 3 });
+  render(<AssignWorkDialog {...casesProps()} />); await ready();
+  fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
+  await waitForPreviewOf(["ana"]);
+  fireEvent.click(screen.getByRole("button", { name: "About the limit: 1 annotator per text" }));
+  const popover = screen.getByRole("dialog", { name: "Annotators per text" });
+  expect(within(popover).getByText(/^Changing it changes the limit for/).textContent).toContain("all texts");
+  const field = within(popover).getByRole("spinbutton", { name: /Annotators per text/ });
+  expect(field).toHaveProperty("value", "1");
+  fireEvent.change(field, { target: { value: "0" } });
+  expect(within(popover).getByRole("button", { name: "Change for all texts" }).getAttribute("aria-disabled")).toBe("true");
+  fireEvent.change(field, { target: { value: "2" } });
+  fireEvent.click(within(popover).getByRole("button", { name: "Change for all texts" }));
+  await waitFor(() => expect(update).toHaveBeenCalledWith("p/key", { annotations_per_text: 2 }));
+  expect(target).not.toHaveBeenCalled();
+  expect(await screen.findByText("Annotators per text: 2, for all texts.")).toBeDefined();
+  expect(screen.queryByRole("dialog", { name: "Annotators per text" })).toBeNull();
+  await waitFor(() => expect(screen.getByText("Up to 2 per text")).toBeDefined());
+  expect((screen.getByRole("checkbox", { name: /Ana Weber/ }) as HTMLInputElement).checked).toBe(true);
+});
+
+it("lowering the limit in the popover only warns that existing assignments stay (B7-5)", async () => {
+  perText = 2;
+  vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 20, cases: 20 }]));
+  const update = vi.spyOn(api, "updateProjectSettings").mockResolvedValue({} as never);
+  vi.spyOn(api, "annotationTargetPreview").mockResolvedValue({ rows_over_target: 12 });
+  render(<AssignWorkDialog {...casesProps()} />); await ready();
+  fireEvent.click(screen.getByRole("button", { name: "About the limit: 2 annotators per text" }));
+  const popover = screen.getByRole("dialog", { name: "Annotators per text" });
+  fireEvent.change(within(popover).getByRole("spinbutton", { name: /Annotators per text/ }), { target: { value: "1" } });
+  expect(await within(popover).findByText("12 texts already have more; their assignments stay.")).toBeDefined();
+  expect(update).not.toHaveBeenCalled();
+  expect(within(popover).getByRole("button", { name: "Change for all texts" }).getAttribute("aria-disabled")).toBeNull();
+});
+
+it("one text: saving 2 in the popover shows the new room and a second person can be ticked (R-12, R-13)", async () => {
+  perText = 1; remainingOf = () => 1;
+  vi.spyOn(api, "updateProjectSettings").mockImplementation(async () => { perText = 2; remainingOf = () => 2; return {} as never; });
+  const empty = { ...row, work: [] } as unknown as DocumentRowView;
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={empty} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
+  await ready();
+  expect(screen.getByText("0 assigned · 1 more possible (limit 1)")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "About the limit: 1 annotator per text" }));
+  const popover = screen.getByRole("dialog", { name: "Annotators per text" });
+  fireEvent.change(within(popover).getByRole("spinbutton", { name: /Annotators per text/ }), { target: { value: "2" } });
+  fireEvent.click(within(popover).getByRole("button", { name: "Change for all texts" }));
+  expect(await screen.findByText("0 assigned · 2 more possible (limit 2)")).toBeDefined();
+  fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
+  const ben = screen.getByRole("checkbox", { name: /Ben Roth/ });
+  expect(ben.getAttribute("aria-disabled")).toBeNull();
+  fireEvent.click(ben);
+  expect(screen.getByText("0 assigned · 2 selected · limit reached")).toBeDefined();
+});
+
+it("one text the preview cannot assign says why instead of a made-up limit (R-12)", async () => {
+  perText = 2; skipped = [{ case_id: "case-0101", language: "de", reason: "waiting_for_review" }];
+  render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
+  await ready();
+  const why = "This text is still in translation review. Annotation can be assigned once the review is accepted.";
+  expect(screen.getByText(why, { selector: ".assign-limit-hint" })).toBeDefined();
+  expect(screen.queryByText(/possible/)).toBeNull();
+  expect(screen.getByText(why, { selector: ".assign-footer-reason" })).toBeDefined();
+  expect(screen.getByRole("checkbox", { name: /Ana Weber/ }).getAttribute("aria-disabled")).toBe("true");
+  expect(screen.queryByText(/limit reached/)).toBeNull();
 });

@@ -19,6 +19,7 @@ function renderCard(value: ConsolidationGroupView, extra: Partial<GroupCardProps
 }
 
 const result = () => document.querySelector(".cons-result")?.textContent ?? "";
+const keep = () => fireEvent.click(screen.getByRole("button", { name: "Keep" }));
 
 describe("GroupCard", () => {
   it("the card shows the conflict marker, the name and the count of fields to decide", () => {
@@ -29,16 +30,24 @@ describe("GroupCard", () => {
     expect(within(toggle).getByText("Conflict")).toBeTruthy();
   });
 
-  it("a conflicting row has a check per person and takes the value", () => {
+  it("a choice only stages; Keep saves once every conflicting row has a choice (M-7d)", () => {
     const { props } = renderCard(hypotoniaThree(), { people: THREE });
     const take = screen.getByRole("button", { name: "Take Absent from Mia Berg for Assertion" });
+    expect(result()).not.toContain("Not saved yet.");
     fireEvent.click(take);
     expect(take.getAttribute("aria-pressed")).toBe("true");
     expect(result()).toContain("Absent");
+    expect(result()).toContain("Not saved yet.");
     expect(result()).toContain("Not taken: Axial hypotonia (Ali)");
-    // The term is still open: nothing is saved yet.
+    // The term is still open: Keep is unavailable with its reason.
+    const button = screen.getByRole("button", { name: "Keep" });
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    expect(document.getElementById(button.getAttribute("aria-describedby")!)!.textContent).toBe("Choose a value in each highlighted row first.");
+    keep();
     expect(props.onResolve).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Take Hypotonia from Tom Reis for Term" }));
+    expect(props.onResolve).not.toHaveBeenCalled();
+    keep();
     expect(props.onResolve).toHaveBeenCalledWith({
       input_ids: ["in-tom", "in-mia", "in-ali"], action: "choose",
       choice: { term_id: "HP:0001252", span_from_input_id: "in-tom", axes: { assertion: "absent" } },
@@ -73,29 +82,28 @@ describe("GroupCard", () => {
     const { props } = renderCard(value);
     expect(screen.getByRole("button", { expanded: true }).textContent).toContain("2 fields to decide");
     fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
-    expect(props.onResolve).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Take Current from Luc Martin for Temporality" }));
+    expect(props.onResolve).not.toHaveBeenCalled();
+    keep();
     expect(props.onResolve).toHaveBeenCalledTimes(1);
     expect(vi.mocked(props.onResolve).mock.calls[0][0].choice?.axes).toEqual({ assertion: "absent", temporality: "current" });
   });
 
-  it("takes one person's whole finding", () => {
-    const { props } = renderCard(hypotoniaThree(), { people: THREE });
-    fireEvent.click(screen.getByRole("button", { name: "Take Ali's finding" }));
-    expect(props.onResolve).toHaveBeenCalledWith({
-      input_ids: ["in-tom", "in-mia", "in-ali"], action: "choose",
-      choice: { term_id: "HP:0008936", span_from_input_id: "in-ali", axes: { assertion: "present" } },
-    }, "Axial hypotonia (HP:0008936), Present, Patient, Current");
+  it("has no per-person whole-finding shortcut (M-7d)", () => {
+    renderCard(hypotoniaThree(), { people: THREE });
+    expect(screen.queryByRole("button", { name: /'s finding$/ })).toBeNull();
+    expect(screen.queryByRole("rowheader", { name: "Whole finding" })).toBeNull();
   });
 
-  it("asks to keep or leave out a finding only one person marked", () => {
+  it("asks to keep a finding only one person marked or to leave it out of the result (M-7f)", () => {
     const { props } = renderCard(byId("g-micro"));
     expect(screen.getByText("Luc Martin marked this. Tom Reis has nothing here.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Take/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Keep Luc Martin's finding" }));
     expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["in-ml"], action: "keep" }, "Microcephaly (HP:0000252), Present, Patient, Current");
-    fireEvent.click(screen.getByRole("button", { name: "Leave out" }));
-    expect(props.onResolve).toHaveBeenLastCalledWith({ input_ids: ["in-ml"], action: "leave_out" }, "left out");
+    fireEvent.click(screen.getByRole("button", { name: "Not in result" }));
+    expect(props.onResolve).toHaveBeenLastCalledWith({ input_ids: ["in-ml"], action: "leave_out" }, "not in result");
+    expect(screen.queryByRole("button", { name: "Leave out" })).toBeNull();
   });
 
   it("shows each person's colour key next to their column", () => {
@@ -112,11 +120,18 @@ describe("GroupCard", () => {
     expect(within(named("Tom Reis")).queryByRole("img", { name: "From a tool proposal" })).toBeNull();
   });
 
-  it("offers Keep, Leave out, Edit values… and Other term… on a reopened match", () => {
+  it("offers Keep, Not in result and More… (Edit values…, Other term…) on a reopened match (M-7c)", () => {
     const reopened = { ...byId("g-seiz"), state: "open" as const, annotation_ids: [] };
-    const { props } = renderCard(reopened, { workspace: workspaceView() });
-    for (const name of ["Keep", "Leave out", "Edit values…", "Other term…"]) expect(screen.getByRole("button", { name })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+    const { props, container } = renderCard(reopened, { workspace: workspaceView() });
+    const actions = container.querySelector(".cons-group-body > .cons-actions")!;
+    expect(within(actions as HTMLElement).getAllByRole("button").map(button => button.textContent)).toEqual(["Keep", "Not in result", "More…"]);
+    expect(actions.querySelector(".btn-primary")?.textContent).toBe("Keep");
+    // One size across the row (B5-3).
+    expect(within(actions as HTMLElement).getAllByRole("button").filter(button => button.classList.contains("btn-sm"))).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /Edit in editor/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^More actions/ }));
+    expect(screen.getAllByRole("menuitem").map(item => item.textContent)).toEqual(["Edit values…", "Other term…"]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit values…" }));
     fireEvent.change(screen.getByLabelText("Assertion"), { target: { value: "absent" } });
     fireEvent.click(screen.getByRole("button", { name: "Keep with these values" }));
     expect(props.onResolve).toHaveBeenCalledWith({
@@ -132,6 +147,7 @@ describe("GroupCard", () => {
     fireEvent.click(screen.getByLabelText("Guidelines unclear here"));
     expect(props.onAnnotate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    keep();
     expect(props.onResolve).toHaveBeenCalledWith(expect.objectContaining({ note: "Negated in the text.", guidelines_unclear: true, action: "choose" }),
       "Hypotonia (HP:0001252), Absent, Patient, Current");
   });
@@ -150,8 +166,9 @@ describe("GroupCard", () => {
 
   it("asks the text when the spans conflict", () => {
     const { props } = renderCard({ ...byId("g-dd"), span_conflict: true });
-    expect(screen.queryByRole("button", { name: "Keep" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Keep" }).getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Take “development” from Tom Reis for Text" }));
+    keep();
     expect(props.onResolve).toHaveBeenCalledWith({
       input_ids: ["in-dl", "in-dt"], action: "choose", choice: { term_id: "HP:0001263", span_from_input_id: "in-dt", axes: {} },
     }, "Global developmental delay (HP:0001263), Present, Patient, Current");
@@ -193,11 +210,26 @@ describe("GroupCard", () => {
     const edited = { ...byId("g-hypo"), state: "choose" as const, edited: true, annotation_ids: ["cons-1"] };
     const { props } = renderCard(edited, { expanded: false, summary: "Hypotonia (HP:0001252), Absent, Patient, Current" });
     expect(screen.getByRole("button", { name: /muscular hypotonia decided: Hypotonia \(HP:0001252\), Absent, Patient, Current edited in editor/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Change, muscular hypotonia" }));
+    // M-7b: the collapsed row has no Reopen button of its own.
+    expect(screen.queryByRole("button", { name: /^Reopen/ })).toBeNull();
+    cleanup();
+    renderCard(edited, { expanded: true, onReopen: props.onReopen });
+    fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
     expect(props.onReopen).not.toHaveBeenCalled();
     expect(screen.getByText("Reopening drops your edit from the editor.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Reopen" }));
     expect(props.onReopen).toHaveBeenCalled();
+  });
+
+  it("Reopen preselects the decided result's values; a bulk reopen (not restoring) does not (R-10)", () => {
+    const decided = { ...byId("g-hypo"), state: "choose" as const, annotation_ids: ["cons-1"] };
+    for (const restoring of [true, false]) {
+      const { props } = renderCard(decided, { result: { term_id: "HP:0001252", axes_values: { assertion: "absent" } } });
+      const view = render(<ul><GroupCard {...props} /></ul>);
+      view.rerender(<ul><GroupCard {...props} group={byId("g-hypo")} result={null} restoring={restoring} /></ul>);
+      expect(within(view.container).getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }).getAttribute("aria-pressed")).toBe(String(restoring));
+      cleanup();
+    }
   });
 
   it("shows a text snippet of the passage below 700 px", () => {
@@ -216,6 +248,7 @@ describe("GroupCard", () => {
     rerender("choose");
     rerender("open");
     fireEvent.click(screen.getByRole("button", { name: "Take Hypotonia from Tom Reis for Term" }));
+    keep();
     expect(props.onResolve).not.toHaveBeenCalled();
   });
 
@@ -223,7 +256,10 @@ describe("GroupCard", () => {
     const value = hypotoniaThree({ differing_axes: ["assertion", "temporality"] }, { ali: { axes: { assertion: "present", experiencer: "patient" } } });
     const { props } = renderCard(value, { people: THREE });
     expect(within(screen.getByRole("row", { name: /Temporality/ })).getByText("Not specified")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Take Ali's finding" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take Axial hypotonia from Ali Kaya for Term" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take Present from Ali Kaya for Assertion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take Not specified from Ali Kaya for Temporality" }));
+    keep();
     expect(vi.mocked(props.onResolve).mock.calls[0][0].choice?.axes).toEqual({ assertion: "present", temporality: null });
   });
 
@@ -234,47 +270,54 @@ describe("GroupCard", () => {
 
   it("offers no actions when read-only", () => {
     renderCard({ ...byId("g-hypo"), state: "choose", annotation_ids: ["cons-1"], guidelines_unclear: true }, { readOnly: true });
-    expect(screen.queryByRole("button", { name: "Change" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reopen" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Take/ })).toBeNull();
     expect(screen.queryByLabelText("Guidelines unclear here")).toBeNull();
     expect(screen.getByText("Flagged: guidelines unclear")).toBeTruthy();
   });
 });
 
+describe("GroupCard, inline Undo (M-7g)", () => {
+  it("the row of the last decision offers Undo; other rows do not", () => {
+    const onUndo = vi.fn();
+    renderCard({ ...byId("g-hypo"), state: "choose", annotation_ids: ["cons-1"] }, { expanded: false, summary: "Hypotonia (HP:0001252), Absent, Patient, Current", onUndo });
+    const undo = screen.getByRole("button", { name: "Undo, muscular hypotonia" });
+    expect(undo.getAttribute("aria-keyshortcuts")).toBe("Control+Z Meta+Z");
+    // In the row, in the look of the app's toast (B5-4).
+    expect(undo.closest(".ui-toast")?.textContent).toBe("Decision savedUndo");
+    fireEvent.click(undo);
+    expect(onUndo).toHaveBeenCalled();
+    cleanup();
+    renderCard({ ...byId("g-hypo"), state: "choose", annotation_ids: ["cons-1"] }, { expanded: false });
+    expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
+  });
+});
+
 describe("GroupCard, modifiers", () => {
-  const mod = { people: MOD_PEOPLE, text: MOD_TEXT, workspace: workspaceView(), onEditInEditor: vi.fn() };
+  const mod = { people: MOD_PEOPLE, text: MOD_TEXT, workspace: workspaceView() };
+  const editValues = () => { fireEvent.click(screen.getByRole("button", { name: /^More actions/ })); fireEvent.click(screen.getByRole("menuitem", { name: "Edit values…" })); };
   const [ss, se] = modSpan("schwere"), [rs, re] = modSpan("wiederholt");
   const s4 = () => seizure("g-s4", ["modifiers_differ"], [[ANA, [severe("schwere")]], [BEN, [recurrent("wiederholt")]]]);
 
-  it("S4: checks send nothing; Keep appears after the first check and sends both modifiers (DN-11)", () => {
+  it("S4: checks send nothing; Keep becomes available after the first check and sends both modifiers (DN-11)", () => {
     const { props } = renderCard(s4(), mod);
     expect(screen.getByRole("button", { expanded: true }).textContent).toContain("1 field to decide");
-    expect(screen.queryByRole("button", { name: "Keep" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Keep" }).getAttribute("aria-disabled")).toBe("true");
     expect(screen.queryByRole("button", { name: /^Take Ana's finding/ })).toBeNull();
     expect(screen.queryByRole("rowheader", { name: "Whole finding" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Take Recurrent “wiederholt” from Ben Roth for Modifiers" }));
-    expect(screen.getByRole("button", { name: "Keep" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Keep" }).getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Take Severe “schwere” from Ana Weber for Modifiers" }));
     expect(props.onResolve).not.toHaveBeenCalled();
     expect(result()).toContain("modifiers: Recurrent “wiederholt”, Severe “schwere”");
-    expect(screen.getByRole("button", { name: "Leave out" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Edit in editor…" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Edit values…" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Not in result" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit in editor…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^More actions/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Keep" }));
     expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["g-s4-0", "g-s4-1"], action: "choose", choice: {
       term_id: "HP:0001250", span_from_input_id: "g-s4-0", axes: {},
       modifiers: [{ term_id: "HP:0031796", segments: [{ start: rs, end: re }] }, { term_id: "HP:0012828", segments: [{ start: ss, end: se }] }],
     } }, "Seizure (HP:0001250), Present, Patient, Current, modifiers: Recurrent “wiederholt”, Severe “schwere”");
-  });
-
-  it("S10: Take Ana's finding resolves at once with her values and modifiers", () => {
-    const value = seizure("g", ["values_differ", "modifiers_differ"], [[ANA, [severe("schwere")]],
-      [BEN, [], { axes: { assertion: "uncertain", experiencer: "patient", temporality: "current" } }]], { differing_axes: ["assertion"] });
-    const { props } = renderCard(value, mod);
-    fireEvent.click(screen.getByRole("button", { name: "Take Ana's finding" }));
-    expect(props.onResolve).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(props.onResolve).mock.calls[0][0].choice).toEqual({ term_id: "HP:0001250", span_from_input_id: "g-0", axes: { assertion: "present" },
-      modifiers: [{ term_id: "HP:0012828", segments: [{ start: ss, end: se }] }] });
   });
 
   it("S10: checking every row by hand waits for Keep", () => {
@@ -307,7 +350,7 @@ describe("GroupCard, modifiers", () => {
       const search = searchOntology();
       const reopened = seizure("g-s1", ["match"], [[ANA, [severe("schwere")]], [BEN, [severe("schwere")]]], { state: "open", annotation_ids: [] });
       const { props } = renderCard(reopened, { ...mod, workspace: modWorkspace() });
-      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      editValues();
       const section = document.querySelector("[data-modifiers-section]") as HTMLElement;
       expect(within(section).getByRole("heading", { name: "Modifiers" })).toBeTruthy();
       // No "·" on the consolidation screen (DN-10).
@@ -328,7 +371,7 @@ describe("GroupCard, modifiers", () => {
     it("S13 partial: removing the only modifier keeps the finding without modifiers", async () => {
       const partial = seizure("g-s13", ["partial"], [[ANA, [severe("schwere")]]]);
       const { props } = renderCard(partial, { ...mod, workspace: modWorkspace() });
-      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      editValues();
       fireEvent.click(screen.getByRole("button", { name: "Actions, Severe" }));
       fireEvent.click(await screen.findByRole("menuitem", { name: "Remove modifier" }));
       expect(screen.queryByRole("list", { name: "Modifiers of Seizure" })).toBeNull();
@@ -340,7 +383,7 @@ describe("GroupCard, modifiers", () => {
     it("Remove modifier keeps focus on + Add modifier… and announces it", async () => {
       const partial = seizure("g-s13", ["partial"], [[ANA, [severe("schwere")]]]);
       renderCard(partial, { ...mod, workspace: modWorkspace() });
-      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      editValues();
       fireEvent.click(screen.getByRole("button", { name: "Actions, Severe" }));
       fireEvent.click(await screen.findByRole("menuitem", { name: "Remove modifier" }));
       await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "+ Add modifier…" })));
@@ -355,7 +398,7 @@ describe("GroupCard, modifiers", () => {
         label: term.term_id, role: term.term_id === "HP:0040282" ? "cohort" : "modifier", exclusive_class: term.term_id === "HP:0012825" ? "severity" : null })) as never);
       const partial = seizure("g-s13", ["partial"], [[ANA, [severe("schwere")]]]);
       renderCard(partial, { ...mod, workspace: modWorkspace() });
-      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      editValues();
       const add = async (query: string) => {
         fireEvent.click(screen.getByRole("button", { name: "+ Add modifier…" }));
         fireEvent.change(screen.getByRole("combobox", { name: "Search modifier" }), { target: { value: query } });
@@ -372,7 +415,7 @@ describe("GroupCard, modifiers", () => {
     it("a layer without modifiers shows no Modifiers section and sends no modifiers", () => {
       const reopened = seizure("g-s1", ["match"], [[ANA, []], [BEN, []]], { state: "open", annotation_ids: [] });
       const { props } = renderCard(reopened, mod);
-      fireEvent.click(screen.getByRole("button", { name: "Edit values…" }));
+      editValues();
       expect(document.querySelector("[data-modifiers-section]")).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Keep with these values" }));
       expect(vi.mocked(props.onResolve).mock.calls[0][0].choice).not.toHaveProperty("modifiers");
@@ -384,15 +427,14 @@ describe("GroupCard, modifiers", () => {
     const seizureKept = group("g-seiz", ["partial"], [member("seiz-b", BEN, "HP:0001250", "Seizure", [modSpan("Krampfanfälle")])],
       { state: "keep", annotation_ids: ["cons-seiz"] });
 
-    it("explains the card and resolves only with Attach or Leave out", () => {
+    it("explains the card and resolves only with Attach or Not in result", () => {
       const value = standalone();
       const { props } = renderCard(value, { ...mod, groups: [value, seizureKept] });
       expect(screen.getByText(/Ana Weber marked a modifier as a finding\. Severe can only describe another finding\./)).toBeTruthy();
-      expect(result()).toBe("Result: no finding of its own. Severe “schwere” goes to the finding you attach it to, or is left out.");
+      expect(result()).toBe("Result: no finding of its own. Severe “schwere” goes to the finding you attach it to, or is not in the result.");
       for (const name of ["Keep", "Keep Ana Weber's finding", "Edit values…", "Other term…"]) expect(screen.queryByRole("button", { name })).toBeNull();
-      expect(screen.getByRole("button", { name: "Leave out" })).toBeTruthy();
-      fireEvent.click(screen.getByRole("button", { name: "Edit in editor…" }));
-      expect(mod.onEditInEditor).toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Not in result" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Edit in editor…" })).toBeNull();
       expect(props.onResolve).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Attach to a finding…" }));
       fireEvent.click(screen.getByRole("menuitem", { name: "Seizure (HP:0001250), “Krampfanfälle”" }));
@@ -416,8 +458,8 @@ describe("GroupCard, modifiers", () => {
       expect(document.getElementById(attach.getAttribute("aria-describedby")!)?.textContent).toBe("No resolved finding in this sentence yet.");
       fireEvent.click(attach);
       expect(props.onResolve).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole("button", { name: "Leave out" }));
-      expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["sev-a"], action: "leave_out" }, "left out");
+      fireEvent.click(screen.getByRole("button", { name: "Not in result" }));
+      expect(props.onResolve).toHaveBeenCalledWith({ input_ids: ["sev-a"], action: "leave_out" }, "not in result");
     });
   });
 });

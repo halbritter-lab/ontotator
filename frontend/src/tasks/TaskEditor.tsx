@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, ApiError, type AssignmentOpenRequest, type AssignmentView, type AssignmentWorkspace, type CurrentUser, type RoundInputView, type TaskSummary, type WorkRoundView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { Button, Dialog, EmptyState, InlineMessage, Select } from "../ui";
+import { Button, Dialog, EmptyState, InlineMessage, Select, type ToastMessage } from "../ui";
 import { CaseScreen } from "../app/CaseScreen";
 import { CaseErrorBoundary } from "../app/ErrorBoundary";
 import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/router";
@@ -24,6 +24,8 @@ interface TaskEditorProps {
   onProjectContext?: (projectKey: string) => void;
   /** `"editor"`: the editor even for an active consolidation round, which otherwise opens the consolidation view. */
   view?: "editor";
+  /** The app's toast, which outlives this task (M2 M-6: "EN100068 submitted. View result" after opening the next task). */
+  showToast?: (toast: Omit<ToastMessage, "id">) => void;
 }
 
 export function TaskEditor(props: TaskEditorProps): JSX.Element {
@@ -58,7 +60,7 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
   return <AnnotationTaskEditor key={identity} {...props} />;
 }
 
-function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, leaveGuardRef, view }: TaskEditorProps): JSX.Element {
+function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, leaveGuardRef, view, showToast }: TaskEditorProps): JSX.Element {
   const [workspace, setWorkspace] = useState<AssignmentWorkspace | null>(null);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const versionAccess = useVersionAccess(workspace?.assignment.project_key ?? "", user.username);
@@ -144,7 +146,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   const assignment = workspace.assignment;
   // An active consolidation round opens the consolidation view (acceptance fixes WP-E); "Edit in editor…" adds view=editor.
   if (roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor") {
-    // The task's guidelines and "Report problem" stay at hand: the consolidator decides guideline questions.
+    // The task's guidelines and "Report a text problem" stay at hand: the consolidator decides guideline questions.
     return <TaskGuidelines assignment={assignment} readOnly={workspace.read_only || assignment.held}>{guidelines => <>
       {guidelines.notice}
       <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId}
@@ -188,7 +190,12 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       held={assignment.held} holdReason={assignment.hold_reason} saveBeforeReportRef={saveBeforeReportRef} guidelineNotice={guidelines.notice}
       versionContext={{ username: user.username, assignmentId, onNavigate, canBrowseVersions: versionAccess.allowed }}
       readOnly={workspace.read_only} routeLeaveRef={routeLeaveRef} leaveGuardRef={leaveGuardRef}
-      assignmentNavigation={{ tasks, current, onNavigate: id => onNavigate({ name: "task", assignmentId: id }) }}
+      assignmentNavigation={{ tasks, current, onNavigate: id => onNavigate({ name: "task", assignmentId: id }),
+        // M2 M-6: no second modal; the next task opens (same order as My tasks), else My tasks.
+        onSubmitted: ({ label, assignmentId: submitted, next }) => {
+          showToast?.({ message: `${label} submitted.`, actionLabel: "View result", onAction: () => onNavigate({ name: "task", assignmentId: submitted }) });
+          onNavigate(next !== undefined ? { name: "task", assignmentId: next } : MY_TASKS);
+        } }}
       onClose={back} onReload={() => load()} onReadonlyRequired={() => { if (active.current) { setSubmittedElsewhere(true); void load(); } }} onSubmitted={() => {
         setWorkspace(value => value ? { ...value, read_only: true } : value);
         // CaseScreen owns the successful-submission dialog; retain its mounted state.

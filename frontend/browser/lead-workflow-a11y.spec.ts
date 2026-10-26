@@ -53,7 +53,7 @@ const caseBox = (page: Page, caseId: string) => page.getByRole("checkbox", { nam
 const chip = (page: Page, flag: "Translation review" | "Annotate", caseId: string, language: string) =>
   page.getByRole("button", { name: textNamePattern(`${flag}, `, caseId, language) });
 /** The selection bar's actions (U4). */
-const BAR_ACTIONS = ["Assign…", "Translation review and annotation", "Annotation only, no translation review", "Plan…", "Clear selection"];
+const BAR_ACTIONS = ["Assign…", "Plan…", "Clear selection"];
 /** The bulk "Plan…" dialog "Work plan · 1 case" (separator per U9). */
 const planDialog = (page: Page) => page.getByRole("dialog", { name: /^Work plan\W+1 case$/ });
 /** The "Translation review" radio group of one language in the bulk plan dialog. */
@@ -81,7 +81,8 @@ async function showPlanLine(page: Page, caseId: string, language: string) {
   if (!(await target.count())) {
     const card = page.getByRole("article", { name: textNamePattern("", caseId, language) });
     if (await card.count()) await card.getByRole("button", { name: textNamePattern("Details, ", caseId, language) }).click();
-    else await textName(page, caseId, language).click();
+    // Enter on the text name opens the card (R-4); a double click near the viewport bottom could land on the selection bar.
+    else { await textName(page, caseId, language).focus(); await page.keyboard.press("Enter"); }
   }
   await expect(target).toBeVisible();
   const details = target.getByRole("button", { name: "Details", exact: true });

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseScreen, initialAxisValues, type WorkspaceView } from "../src/app/CaseScreen";
@@ -380,6 +382,34 @@ describe("CaseScreen integration", () => {
       await screen.findByRole("dialog", { name: "Case submitted" });
       expect(submit).toHaveBeenCalledTimes(1);
       expect((submit.mock.calls[0][1] as any).payload.warning_acknowledgement).toBeUndefined();
+    });
+
+    it("in a task, a submit hands over to the caller without a Case submitted dialog; no next task: next is undefined (M-6)", async () => {
+      const view = unconfirmedView([]);
+      vi.spyOn(api, "submitWorkspace").mockResolvedValue(submissionOf(view) as any);
+      const current = { assignment_id: 9, project_key: "pkg-1", project_name: "P", document_id: view.document.document_id, external_id: "EN100068",
+        task: "annotate", status: "in_progress", language: "de", updated_at: "2026-10-18T12:00:00Z" } as any;
+      const onSubmitted = vi.fn();
+      render(<CaseScreen view={view} workspaceId="m6" onClose={vi.fn()}
+        assignmentNavigation={{ tasks: [current], current, onNavigate: vi.fn(), onSubmitted }} />);
+      const dialog = await openSubmit();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith({ label: "EN100068", assignmentId: 9, next: undefined }));
+      expect(screen.queryByRole("dialog", { name: "Case submitted" })).toBeNull();
+    });
+
+    it("in a task, next is the first open task of the project, skipping submitted ones, even when the current task is last (M-6)", async () => {
+      const view = unconfirmedView([]);
+      vi.spyOn(api, "submitWorkspace").mockResolvedValue(submissionOf(view) as any);
+      const task = (id: number, status: string) => ({ assignment_id: id, project_key: "pkg-1", project_name: "P", document_id: view.document.document_id,
+        external_id: `EN${id}`, task: "annotate", status, language: "de", updated_at: "2026-10-18T12:00:00Z" }) as any;
+      const current = task(9, "in_progress");
+      const onSubmitted = vi.fn();
+      render(<CaseScreen view={view} workspaceId="m6-next" onClose={vi.fn()}
+        assignmentNavigation={{ tasks: [task(7, "submitted"), task(8, "assigned"), current], current, onNavigate: vi.fn(), onSubmitted }} />);
+      const dialog = await openSubmit();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith({ label: "EN9", assignmentId: 9, next: 8 }));
     });
 
     it("row Confirm sends one set_axes with the row's defaulted axes", async () => {
@@ -2572,9 +2602,9 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     await waitFor(() => expect(payloads(apply)).toEqual([{ command: "add_modifier", annotation_id: "seizure", term_id: "HP:0012828", segments: [pos("schwere")] }]));
     await waitFor(() => expect(document.activeElement?.closest('[data-modifier-chip="HP:0012828"]')).not.toBeNull());
     expect(container.querySelector(".attach-mention-banner")).toBeNull();
-    expect(screen.getByRole("list", { name: "Modifiers of Seizure" }).textContent).toContain("Severe · “schwere”");
+    expect(screen.getByRole("list", { name: "Modifiers of Seizure" }).textContent).toContain("Severe “schwere”");
     expect(announcer(container)).toBe("Attached Severe to Seizure. Next: mark more text, or add another modifier with “+ Add modifier…”.");
-    expect(container.querySelector('[data-list-key="annotation:seizure"] .mod-lines')!.textContent).toContain("Severe HP:0012828 “schwere”");
+    expect(container.querySelector('[data-list-key="annotation:seizure"] .mod-lines')!.textContent).toBe("Modifiers: Severe");
     const modRun = runsOf(container, "mod:seizure:HP:0012828")[0];
     expect(modRun.classList.contains("run--modifier")).toBe(true);
     expect(modRun.title).toBe("Severe, modifier of Seizure");
@@ -2813,6 +2843,30 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(row.getAttribute("aria-pressed")).toBe("true");
     // The selected finding keeps its modifier segments framed.
     expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--framed")).toBe(true);
+    // The clicked modifier's own span is the selected mark, not the finding's term (B3-3); its row is the selected one (B3-4).
+    expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--hot")).toBe(true);
+    expect(runsOf(container, "ev-seizure")[0].classList.contains("run--hot")).toBe(false);
+    expect(container.querySelector('[data-modifier-chip="HP:0012828"]')!.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("a click on a modifier row selects the modifier: its span is marked and scrolled into view if needed (B3-4)", async () => {
+    const { container } = await setup(modView(SEVERE_ON_SEIZURE));
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    const modRun = runsOf(container, "mod:seizure:HP:0012828")[0];
+    const scroll = vi.fn();
+    modRun.scrollIntoView = scroll;
+    fireEvent.click(await screen.findByRole("button", { name: /^Severe/, pressed: false }));
+    await waitFor(() => expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--hot")).toBe(true));
+    expect(runsOf(container, "ev-seizure")[0].classList.contains("run--hot")).toBe(false);
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+    expect(screen.getByRole("button", { name: /^Severe/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Severe · HP:0012828 · in the text: “schwere”")).toBeDefined();
+  });
+
+  it("the selected modifier's frame pulses briefly; under reduced motion it is a static stronger frame (B3-4)", () => {
+    const css = readFileSync(resolve(__dirname, "../src/styles/screens/editor.css"), "utf8");
+    expect(css).toMatch(/\.run--modifier\.run--hot \{[^}]*animation: modifier-attention 300ms ease-out 2;/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.run--modifier\.run--hot \{\s*animation: none;/);
   });
 
   it("“+ Add modifier…” adds without a span; remove shows an Undo toast and Ctrl+Z restores", async () => {
@@ -2843,6 +2897,17 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     const option = (await screen.findAllByRole("option"))[0];
     expect(option.getAttribute("aria-disabled")).toBe("true");
     expect(option.textContent).toContain("Modifier — add it under Modifiers instead.");
+  });
+
+  it("Change term offers Modifiers only and the mod: prefix, as the new-mark search (M-3)", async () => {
+    const { container } = await setup(modView(SEIZURE_HYPO));
+    fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+    fireEvent.click(await screen.findByRole("button", { name: /Change term/ }));
+    expect(screen.getByRole("button", { name: "Modifiers only" })).toBeDefined();
+    const input = screen.getByRole("combobox", { name: "Search term" }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "mod:schwer" } });
+    expect(await screen.findByRole("button", { name: "Remove filter Modifiers only" })).toBeDefined();
+    expect(input.value).toBe("schwer");
   });
 
   describe("submit with modifier warnings", () => {
@@ -3115,6 +3180,172 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       await waitFor(() => expect(payloads(apply)).toEqual([expect.objectContaining({ command: "add_modifier", annotation_id: "seizure" })]));
       await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-mod", expect.objectContaining({ payload: expect.objectContaining({
         target, outcome: "changed", replacement: expect.objectContaining({ annotation_id: "seizure" }) }) })));
+    });
+
+    /** applyCommand and recordDecision that keep one draft: findings, mentions, modifiers and decisions. */
+    const draftSpy = (view: WorkspaceView) => {
+      let current = structuredClone(view.draft);
+      const find = (id: string) => current.annotations!.find(a => a.annotation.annotation_id === id)!.annotation as any;
+      const evidence = (id: string, segments: unknown) => { current.evidence = [...(current.evidence ?? []), { version: "ev-1", mention: { evidence_id: id, segments } }] as never; };
+      const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_ws, envelope) => {
+        const p = envelope.payload as Record<string, any>;
+        current = structuredClone(current); current.revision += 1;
+        if (p.command === "create_annotation") {
+          const snap = findingSnap([p.annotation_id, p.term_id, null]) as any;
+          Object.assign(snap.annotation, { layer_id: p.layer_id, axes_values: p.axes_values, evidence_refs: [{ evidence_id: p.evidence_id, version: "ev-1" }] });
+          if (p.source_annotation_id) snap.annotation.provenance = { ...snap.annotation.provenance, source_refs: [`${p.source_annotation_id}:${p.source_version}`] };
+          current.annotations = [...(current.annotations ?? []), snap];
+          evidence(p.evidence_id, p.segments);
+        } else if (p.command === "attach_mention") {
+          find(p.annotation_id).evidence_refs.push({ evidence_id: p.evidence_id, version: "ev-1" });
+          evidence(p.evidence_id, p.segments);
+        } else if (p.command === "detach_mention") {
+          const ann = find(p.annotation_id); ann.evidence_refs = ann.evidence_refs.filter((ref: { evidence_id: string }) => ref.evidence_id !== p.evidence_id);
+        } else if (p.command === "add_modifier") {
+          const ann = find(p.annotation_id);
+          ann.modifiers = [...(ann.modifiers ?? []).filter((m: Mod) => m.term_id !== p.term_id), { term_id: p.term_id, ...(p.segments ? { segments: p.segments } : {}) }];
+        }
+        return current;
+      });
+      const decide = vi.spyOn(api, "recordDecision").mockImplementation(async (_ws, envelope) => {
+        const payload = envelope.payload as Record<string, any>;
+        current = structuredClone(current); current.revision += 1;
+        current.decisions = [...(current.decisions ?? []).filter(d => d.target.annotation_id !== payload.target.annotation_id),
+          ...(payload.outcome ? [{ decision_id: "d", target: payload.target, outcome: payload.outcome, replacement: payload.replacement, reviewer_id: "ann" }] : [])] as never;
+        return current;
+      });
+      return { apply, decide };
+    };
+    const strip = (container: HTMLElement) => container.querySelector("[data-advance-status]")!.textContent;
+
+    it("a proposal is an attach target: attaching runs Edit & Replace, named before and after (M-5)", async () => {
+      const { view, target } = reviewView([{ term_id: "HP:0031796" }], false);
+      const { container } = await setup(view, severeHits, false);
+      const { apply, decide } = draftSpy(view);
+      await startAttach(container);
+      expect(screen.getByText("Seizure is a tool proposal: attaching replaces it with your copy (Edit & Replace).")).toBeDefined();
+      const row = screen.getByRole("button", { name: "Attach Severe to Seizure" });
+      expect(row.dataset.listKey).toBe('target:["prop-seizure","prop-v"]');
+      await waitFor(() => expect(document.activeElement).toBe(row));
+      expect(row.textContent).toContain("Attach Severe here, as your copy");
+      const proposalRun = [...container.querySelectorAll<HTMLElement>(".text-container .run")].find(run => run.textContent === "Krampfanfälle")!;
+      expect(proposalRun.title).toBe("Attach Severe to Seizure");
+      fireEvent.keyDown(row, { key: "Enter" });
+      await waitFor(() => expect(payloads(apply).map(p => p.command)).toEqual(["create_annotation", "add_modifier", "add_modifier"]));
+      const [create, copied, attached] = payloads(apply);
+      expect(create).toEqual(expect.objectContaining({ source_annotation_id: "prop-seizure", term_id: "HP:0001250", segments: [pos("Krampfanfälle")] }));
+      expect(copied).toEqual({ command: "add_modifier", annotation_id: create.annotation_id, term_id: "HP:0031796" });
+      expect(attached).toEqual({ command: "add_modifier", annotation_id: create.annotation_id, term_id: "HP:0012828", segments: [pos("schwere")] });
+      await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-mod", expect.objectContaining({ payload: expect.objectContaining({
+        target, outcome: "changed", replacement: expect.objectContaining({ annotation_id: create.annotation_id }) }) })));
+      await waitFor(() => expect(strip(container)).toBe("Seizure replaced by your copy with Severe “schwere”."));
+      expect(announcer(container)).toBe("Seizure replaced by your copy with Severe “schwere”.");
+      expect(container.querySelector(".attach-mention-banner")).toBeNull();
+    });
+
+    it("a confirmed proposal is a target without a confirm dialog; a click on its mark attaches (M-5)", async () => {
+      const { view, target } = reviewView([], false);
+      view.draft.decisions = [{ decision_id: "d0", target, outcome: "confirmed", reviewer_id: "ann" }] as never;
+      const { container } = await setup(view, severeHits, false);
+      const { apply, decide } = draftSpy(view);
+      await startAttach(container);
+      const proposalRun = [...container.querySelectorAll<HTMLElement>(".text-container .run")].find(run => run.textContent === "Krampfanfälle")!;
+      fireEvent.click(proposalRun);
+      await waitFor(() => expect(payloads(apply).map(p => p.command)).toEqual(["create_annotation", "add_modifier"]));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(decide.mock.calls.map(call => (call[1].payload as { outcome: string | null }).outcome)).toEqual([null, "changed"]);
+    });
+
+    it("a rejected proposal is no target (M-5)", async () => {
+      const { view, target } = reviewView([], false);
+      view.draft.decisions = [{ decision_id: "d0", target, outcome: "rejected", reviewer_id: "ann" }] as never;
+      const { container } = await setup(view, severeHits, false);
+      await chooseSevere(container);
+      expect(await screen.findByRole("region", { name: "Attach Severe" })).toBeDefined();
+      expect(screen.getByRole("button", { name: "OK" })).toBeDefined();
+      expect(screen.queryByRole("button", { name: "Attach Severe to Seizure" })).toBeNull();
+    });
+
+    it("Move to a new finding: the mention leaves the finding with the same term and values, the modifiers stay (M-4)", async () => {
+      const view = modView([["seizure", "HP:0001250", "Krampfanfälle", [{ term_id: "HP:0012828", segments: [pos("schwere")] }]]]);
+      view.draft.annotations![0].annotation.evidence_refs!.push({ evidence_id: "ev-seizure-2", version: "ev-1" });
+      view.draft.annotations![0].annotation.axes_defaulted = ["assertion"];
+      view.draft.evidence!.push({ version: "ev-1", mention: { evidence_id: "ev-seizure-2", segments: [pos("Muskelhypotonie")] } } as never);
+      const { container } = await setup(view);
+      const { apply } = draftSpy(view);
+      fireEvent.click(container.querySelector('[data-list-key="annotation:seizure"]')!);
+      const moves = await screen.findAllByRole("button", { name: "Move to a new finding" });
+      expect(moves).toHaveLength(2);
+      fireEvent.click(moves[1]);
+      await waitFor(() => expect(payloads(apply).map(p => p.command)).toEqual(["create_annotation", "detach_mention"]));
+      const [create, detach] = payloads(apply);
+      expect(create).toEqual(expect.objectContaining({ layer_id: "phenotype", type_id: "default", term_id: "HP:0001250",
+        axes_values: { assertion: "present" }, chosen_axis_ids: [], segments: [pos("Muskelhypotonie")] }));
+      expect(create).not.toHaveProperty("source_annotation_id");
+      expect(detach).toEqual({ command: "detach_mention", annotation_id: "seizure", evidence_id: "ev-seizure-2" });
+      await waitFor(() => expect(strip(container)).toBe("Moved mention 2 “Muskelhypotonie” to a new finding Seizure. Severe stays with this finding."));
+      // One mention left: nothing to move.
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Move to a new finding" })).toBeNull());
+    });
+
+    it("Move to a new finding on a proposal runs Edit & Replace first; the proposal stays unchanged (M-4)", async () => {
+      const { view } = reviewView([], false);
+      const proposal = view.available_inputs![0] as any;
+      proposal.annotation.evidence_refs.push({ evidence_id: "ev-prop-2", version: "ev-1" });
+      proposal.evidence.push({ version: "ev-1", mention: { evidence_id: "ev-prop-2", segments: [pos("Muskelhypotonie")] } });
+      const { container } = await setup(view, severeHits, false);
+      const { apply } = draftSpy(view);
+      fireEvent.click(container.querySelector('[data-list-key^="target:"]')!);
+      fireEvent.click(await screen.findByRole("button", { name: "Move mention 2 to a new finding" }));
+      await waitFor(() => expect(payloads(apply).map(p => p.command)).toEqual(["create_annotation", "attach_mention", "create_annotation", "detach_mention"]));
+      const [copy, second, moved, detach] = payloads(apply);
+      expect(copy).toEqual(expect.objectContaining({ source_annotation_id: "prop-seizure" }));
+      expect(moved).toEqual(expect.objectContaining({ term_id: "HP:0001250", segments: [pos("Muskelhypotonie")] }));
+      expect(moved).not.toHaveProperty("source_annotation_id");
+      expect(detach).toEqual({ command: "detach_mention", annotation_id: copy.annotation_id, evidence_id: second.evidence_id });
+      expect(proposal.annotation.evidence_refs).toHaveLength(2);
+    });
+
+    it("a proposal whose copy gave a mention its own finding is replaced by 2 findings, both linked (B2-4)", async () => {
+      const { view, target } = reviewView([], true);
+      const proposal = view.available_inputs![0] as any;
+      proposal.evidence.push({ version: "ev-1", mention: { evidence_id: "ev-prop-2", segments: [pos("Muskelhypotonie")] } });
+      view.draft.annotations!.push(findingSnap(["split", "HP:0001250", "Muskelhypotonie"]) as never);
+      view.draft.evidence!.push({ version: "ev-1", mention: { evidence_id: "ev-split", segments: [pos("Muskelhypotonie")] } } as never);
+      view.draft.decisions = [{ decision_id: "d0", target, outcome: "changed", replacement: { annotation_id: "seizure", version: "seizure-v1" }, reviewer_id: "ann" }] as never;
+      const { container } = await setup(view, severeHits, false);
+      const row = container.querySelector<HTMLElement>('[data-list-key^="target:"]')!;
+      expect(row.textContent).toContain("Replaced by 2 findings");
+      fireEvent.click(within(row).getByRole("button", { name: "“Muskelhypotonie”" }));
+      await waitFor(() => expect(container.querySelector('[data-list-key="annotation:split"]')?.classList.contains("selected")).toBe(true));
+    });
+
+    it("a proposal whose copy has a single mention left offers no Move (R-7)", async () => {
+      const { view, target } = reviewView([], true);
+      const proposal = view.available_inputs![0] as any;
+      proposal.annotation.evidence_refs.push({ evidence_id: "ev-prop-2", version: "ev-1" });
+      proposal.evidence.push({ version: "ev-1", mention: { evidence_id: "ev-prop-2", segments: [pos("Muskelhypotonie")] } });
+      view.draft.decisions = [{ decision_id: "d0", target, outcome: "changed", replacement: { annotation_id: "seizure", version: "seizure-v1" }, reviewer_id: "ann" }] as never;
+      const { container } = await setup(view, severeHits, false);
+      fireEvent.click(container.querySelector('[data-list-key^="target:"]')!);
+      await screen.findByRole("button", { name: /Show mention 2/ });
+      expect(screen.queryByRole("button", { name: /^Move mention \d to a new finding$/ })).toBeNull();
+    });
+
+    it("Move on a proposal with an existing copy moves the copy's mention with the same span, not the same index (M-4)", async () => {
+      const { view } = reviewView([], true);
+      const proposal = view.available_inputs![0] as any;
+      proposal.annotation.evidence_refs.push({ evidence_id: "ev-prop-2", version: "ev-1" });
+      proposal.evidence.push({ version: "ev-1", mention: { evidence_id: "ev-prop-2", segments: [pos("Muskelhypotonie")] } });
+      // The copy lists the same two mentions in the other order.
+      view.draft.annotations![0].annotation.evidence_refs!.unshift({ evidence_id: "ev-copy-hypo", version: "ev-1" });
+      view.draft.evidence!.push({ version: "ev-1", mention: { evidence_id: "ev-copy-hypo", segments: [pos("Muskelhypotonie")] } } as never);
+      const { container } = await setup(view, severeHits, false);
+      const { apply } = draftSpy(view);
+      fireEvent.click(container.querySelector('[data-list-key^="target:"]')!);
+      fireEvent.click(await screen.findByRole("button", { name: "Move mention 2 to a new finding" }));
+      await waitFor(() => expect(payloads(apply).map(p => p.command)).toEqual(["create_annotation", "detach_mention"]));
+      expect(payloads(apply)[1]).toEqual({ command: "detach_mention", annotation_id: "seizure", evidence_id: "ev-copy-hypo" });
     });
 
     it("the copy keeps the proposal's modifiers and records no decision while it equals the proposal", async () => {

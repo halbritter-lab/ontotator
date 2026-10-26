@@ -2,7 +2,7 @@
  * Finding groups of the consolidation view (spec §3): one list in text order, agreed (automatically kept) groups in
  * the same list, marked "agreed". Exactly one group is expanded.
  */
-import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
+import type { ConsolidationAnnotatePayload, ConsolidationGroupView, ConsolidationPersonView, ConsolidationResolvePayload, Draft } from "../api/client";
 import type { WorkspaceView } from "../app/CaseScreen";
 import { GroupCard } from "./GroupCard";
 import { isStandalone } from "./groupModel";
@@ -28,8 +28,11 @@ export interface GroupListProps {
   onReopen: (group: ConsolidationGroupView) => Promise<boolean>;
   /** The group an Undo reopens: it restores its last choices. */
   restoring?: string | null;
+  /** The consolidator's draft: a group's result gives its preselection when it is reopened (R-10). */
+  draft?: Draft | null;
   onDismissOutcome: (groupId: string) => void;
-  onEditInEditor?: () => void;
+  /** The group of the last decision and its Undo (M2 M-7g). */
+  undo?: { groupId: string; run: () => void } | null;
   toggleRef: (groupId: string) => (element: HTMLButtonElement | null) => void;
 }
 
@@ -59,8 +62,9 @@ export function GroupList(props: GroupListProps): JSX.Element {
     onResolve={(payload, summary) => props.onResolve(group, payload, summary)}
     onAnnotate={payload => props.onAnnotate(group, payload)}
     onReopen={() => props.onReopen(group)} restoring={props.restoring === group.group_id}
+    result={props.draft?.annotations?.find(item => group.annotation_ids.includes(item.annotation.annotation_id))?.annotation ?? null}
     onDismissOutcome={() => props.onDismissOutcome(group.group_id)}
-    onEditInEditor={props.onEditInEditor}
+    onUndo={props.undo?.groupId === group.group_id ? props.undo.run : undefined}
     groups={groups} onSelectGroup={props.onSelectGroup ?? props.onSelect}
     toggleRef={props.toggleRef(group.group_id)} />;
   return <div className="cons-groups">

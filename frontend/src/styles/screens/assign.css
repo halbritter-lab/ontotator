@@ -23,7 +23,6 @@
 .assign-member input[aria-disabled="true"], .assign-member input[aria-disabled="true"] + label { cursor: not-allowed; }
 .assign-reason { color: var(--text-muted); }
 .assign-narrow-label { display: none; }
-.assign-limit-reached { font-size: var(--size-sm); }
 
 .assign-summary { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--size-sm); }
 /* The one-line box is reserved while empty, so the first summary does not push the dialog down. */
@@ -67,3 +66,14 @@
 .text-change-person input[aria-disabled="true"], .text-change-person input[aria-disabled="true"] + label { cursor: not-allowed; }
 .text-change-held { margin: 0; }
 .text-change-error { margin: 0 auto 0 0; color: var(--danger); font-size: var(--size-sm); }
+
+/* M2 D5, B7-5: one hint in normal text with the (i) that opens the limit popover (mockup 03 A). */
+.assign-limit-hint { display: flex; align-items: center; gap: var(--space-1); margin: var(--space-2) 0 var(--space-1); font-size: var(--size-md); font-weight: var(--weight-strong); }
+.assign-limit-info { color: var(--accent); border-radius: 50%; }
+.assign-limit-info[aria-expanded="true"] { background: var(--accent-light); border-color: var(--accent); }
+.assign-limit-popover { display: grid; gap: var(--space-2); }
+.assign-limit-popover h3 { margin: 0; font-size: var(--size-base); }
+.assign-limit-popover p { margin: 0; }
+.assign-limit-field { display: flex; align-items: center; gap: var(--space-2); }
+.assign-limit-input.form-control { width: 4.5rem; min-height: 0; height: 30px; padding: 2px 6px; font-size: var(--size-sm); }
+.assign-limit-warn { padding: var(--space-2) var(--space-3); border-left: 3px solid var(--warning); background: var(--warning-light); }

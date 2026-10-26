@@ -37,8 +37,15 @@ describe("ModifiersSection", () => {
     renderSection({ modifiers: [SEVERE, { term_id: "HP:0031796" }, { term_id: "HP:0040282", segments: [{ start: 34, end: 37 }] }] });
     const section = document.querySelector("[data-modifiers-section]") as HTMLElement;
     expect(within(section).getByRole("heading", { level: 3, name: "Modifiers" })).toBeDefined();
-    expect(chips().map(chip => chip.textContent)).toEqual(["Frequent · “oft” · Cohort term", "Recurrent", "Severe · “schwere”"]);
+    expect(chips().map(chip => chip.textContent)).toEqual(["Frequent “oft” · Cohort term", "Recurrent" + "no text span · Link a text span", "Severe “schwere”"]);
     expect(chips()[0].querySelector(".mod-cohort")!.textContent).toBe("Cohort term");
+  });
+
+  it("an unlinked row offers Link a text span inline (mockup 01 A)", () => {
+    const props = renderSection({ modifiers: [SEVERE, { term_id: "HP:0031796" }] });
+    fireEvent.click(within(chips()[0]).getByRole("button", { name: "Link a text span" }));
+    expect(props.onLinkSpan).toHaveBeenCalledWith("HP:0031796");
+    expect(within(chips()[1]).queryByRole("button", { name: "Link a text span" })).toBeNull();
   });
 
   it("warns about two of one exclusive class", () => {
@@ -96,7 +103,7 @@ describe("ModifiersSection", () => {
 
   it("read-only shows the chips without actions", () => {
     renderSection({ readOnly: true });
-    expect(chips().map(chip => chip.textContent)).toEqual(["Severe · “schwere”"]);
+    expect(chips().map(chip => chip.textContent)).toEqual(["Severe “schwere”"]);
     expect(screen.queryByRole("button", { name: /Actions/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "+ Add modifier…" })).toBeNull();
   });

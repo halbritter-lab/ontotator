@@ -115,7 +115,7 @@ Commit: `feat(authz): one policy for system and project roles`.
 - `src/ontocurator/authz/memberships.py`:
   - `MembershipService(db, *, now=…)` with `add(actor, project_key, username, roles: Iterable[Role])`, `remove(actor, project_key, username, roles=None)`, `members(project_key) -> list[(username, pseudonym, frozenset[Role])]` and `access_for(principal) -> Access`;
   - `add` and `remove` audit `project.member_add` / `project.member_remove` with the `project_id` and the details `{username, roles}`;
-  - they **revoke the user's sessions** (D2: a role change revokes the affected sessions);
+  - a **removal revokes the user's sessions** (D2: a role removal revokes the affected sessions; adding a role keeps them, M2 2026-10-26, F23 follow-up);
   - unknown project: `PROJECT_NOT_FOUND`; unknown user: `USER_NOT_FOUND`; unknown role: `ROLE_INVALID`.
 - `src/ontocurator/authz/scoped.py`: `class ScopedRepository(Repository)`, constructed as `ScopedRepository(db, access)`.
   - It overrides every public method that takes a `package_id`, a `WorkspaceKey` or a `SearchEventRecord`. Each first calls `self._visible(package_id)`, which raises `DomainError("PROJECT_NOT_FOUND")` unless `can(access, VIEW_PROJECT, package_id)`, then delegates.
@@ -255,7 +255,7 @@ All use `MembershipService` with `Actor.cli()`.
 | P5 / E3: every project query scoped by membership; isolation test (A never reads B) | 3 |
 | P5: audit hook records every write (administrative: `audit_events`; editing: `edit_events`) | 3, 4 |
 | D6: every editing command in `edit_events` in the same transaction; user, session, time, draft, revisions, command, resulting snapshot versions; INSERT/SELECT only; reconstruction; submission references its last event | 1, 4 |
-| D2: role changes revoke the affected sessions | 3 |
+| D2: role removals revoke the affected sessions (adding a role keeps them, M2 F23 follow-up) | 3 |
 | E9: roles combine freely | 2 |
 | D5: memberships via CLI until T3 | 5 |
 | Edit-log export (pseudonymised JSONL), T1 import/export, ontologies, jobs | T2d |

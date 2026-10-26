@@ -71,6 +71,8 @@ export function ProjectsPage({ projects, currentKey, onNavigate }: ProjectsPageP
       <span className="projects-page__name">{item.name}</span>
       {item.project_key === currentKey && <span className="projects-page__current"><span aria-hidden="true"><IconCheck /></span> Current</span>}
       {item.name !== item.project_key && <span className="cell-secondary">{item.project_key}</span>}
+      {/* M2 D4: the description set in Settings › General. */}
+      {item.description?.trim() && <span className="cell-secondary projects-page__description">{item.description.trim()}</span>}
     </> },
     { id: "roles", header: "Your roles", cell: projectRoles },
     { id: "decision", header: "Needs your decision", cell: item => {

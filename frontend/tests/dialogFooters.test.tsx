@@ -44,8 +44,8 @@ describe("B2 task problem reports: footer actions", () => {
     vi.spyOn(api, "listTaskProblemReports").mockResolvedValue([report]);
     vi.spyOn(api, "getAssignmentMetadata").mockReturnValue(never());
     render(<TaskProblemActions assignment={assignment} onSaveBeforeReport={vi.fn()} onRefresh={vi.fn()} />);
-    await screen.findByRole("button", { name: /^Report problem.*1 open report$/ });
-    fireEvent.click(screen.getByRole("button", { name: /^Report problem/ }));
+    await screen.findByRole("button", { name: /^Report a text problem.*1 open report$/ });
+    fireEvent.click(screen.getByRole("button", { name: /^Report a text problem/ }));
     const dialog = screen.getByRole("dialog", { name: "Problems with Task 7" });
     const create = footer(dialog).getByRole("button", { name: "New report" });
     const close = footer(dialog).getByRole("button", { name: "Close" });

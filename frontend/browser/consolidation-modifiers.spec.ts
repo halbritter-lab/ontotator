@@ -80,7 +80,7 @@ test("the modifier acceptance round takes 10 clicks; axe is clean on a card with
 
   await click(page.getByRole("button", { name: "Submit consolidation", exact: true }));
   const dialog = page.getByRole("dialog", { name: "Submit consolidation?" });
-  await expect(dialog.getByText("5 groups, 5 findings, 0 left out", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("5 groups, 5 findings, 0 not in result", { exact: true })).toBeVisible();
   await click(dialog.getByRole("button", { name: "Submit", exact: true }));
   await expect(page.getByText("Consolidation submitted. Accept the result in Documents.", { exact: true })).toBeVisible();
   expect(clicks).toBe(10);

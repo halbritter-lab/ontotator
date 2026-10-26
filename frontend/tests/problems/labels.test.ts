@@ -75,7 +75,7 @@ describe("problem report labels", () => {
     expect(historyItems(report({ events: [event({ action: "extend_hold", actor_label: "lead-0002", own_task: false })] }))).toHaveLength(1);
   });
   it("toolbar_entry_states", () => {
-    expect(toolbarEntry([], false)).toEqual({ badge: null, paused: false, accessibleSuffix: "Report a problem with this task" });
+    expect(toolbarEntry([], false)).toEqual({ badge: null, paused: false, accessibleSuffix: "for this task" });
     expect(toolbarEntry([report({ holds: [hold({ active: false })] })], false)).toEqual({ badge: "1 open", paused: false, accessibleSuffix: "1 open report" });
     expect(toolbarEntry([report()], true)).toEqual({ badge: "Paused, 1 open", paused: true, accessibleSuffix: "Task paused, 1 open report" });
     expect(toolbarEntry(null, true).accessibleSuffix).toBe("Task paused");

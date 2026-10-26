@@ -2,7 +2,7 @@
 import type { DocumentRowView } from "../../api/client";
 import type { ProjectDocumentsQuery, Route } from "../../app/router";
 import type { PathSegment, PathTone } from "../../ui/StagePath";
-import { shortName, stageText } from "../stageLabels";
+import { annotatorCount, shortName, stageText } from "../stageLabels";
 
 export type SegmentId = "translation" | "annotation" | "finalization";
 export type CardView = "path" | "history" | "details";
@@ -51,7 +51,7 @@ export function annotationState(row: DocumentRowView): State {
     case "undecided": {
       // Never "0 of 0 assigned"; the proposal count is in the Annotation part (and the table's robot icon), not here.
       const assigned = detail.assigned ?? 0;
-      return { state: assigned === 0 ? "Unassigned" : target > 0 ? `${assigned} of ${target} assigned` : `${assigned} assigned`, tone: "now" };
+      return { state: target > 1 ? annotatorCount(assigned, target) : assigned === 0 ? "Unassigned" : `${assigned} assigned`, tone: "now" };
     }
     case "in_progress":
     case "paused": return { state: submitted, tone: "now" };

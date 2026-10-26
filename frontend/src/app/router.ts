@@ -95,10 +95,18 @@ function documentsEntries(query: ProjectDocumentsQuery | undefined, prefix = "")
   return entries;
 }
 
-/** Project settings sections; each one has its own address (`…/settings/{section}`). */
-export type SettingsSection = "general" | "guideline" | "rules" | "workflow" | "defaults" | "profile" | "members";
-export const SETTINGS_SECTIONS: readonly SettingsSection[] = ["general", "guideline", "rules", "workflow", "defaults", "profile", "members"];
-const isSettingsSection = (value: string): value is SettingsSection => (SETTINGS_SECTIONS as readonly string[]).includes(value);
+/**
+ * Project settings tabs (M2 M-8a, order B6-1); each one has its own address (`…/settings/{section}`), and
+ * `…/settings` opens the first tab, General. The addresses of the earlier sections stay as aliases.
+ */
+export type SettingsSection = "people" | "workflow" | "annotation" | "guidelines" | "general" | "ontology";
+export const SETTINGS_SECTIONS: readonly SettingsSection[] = ["general", "annotation", "workflow", "guidelines", "people", "ontology"];
+export const DEFAULT_SETTINGS_SECTION: SettingsSection = "general";
+const SETTINGS_ALIASES: Readonly<Record<string, SettingsSection>> = {
+  members: "people", rules: "annotation", defaults: "annotation", guideline: "guidelines", profile: "ontology",
+};
+const settingsSectionOf = (value: string): SettingsSection | undefined =>
+  (SETTINGS_SECTIONS as readonly string[]).includes(value) ? value as SettingsSection : SETTINGS_ALIASES[value];
 
 /** Status tabs of My tasks (route `status`); absent means All. */
 export type TaskStatusTab = "todo" | "paused" | "submitted" | "all";
@@ -197,7 +205,8 @@ export function parseRoute(hash: string): Route {
     if (settings) {
       const key = decodeURIComponent(settings[1]);
       if (settings[2] === undefined) return { name: "projectSettings", key };
-      return isSettingsSection(settings[2]) ? { name: "projectSettings", key, section: settings[2] } : notFound;
+      const section = settingsSectionOf(settings[2]);
+      return section ? { name: "projectSettings", key, section } : notFound;
     }
     const guidelines = /^#\/projects\/([^/]+)\/guidelines(?:\/v([1-9]\d*))?$/.exec(path);
     if (guidelines) {
@@ -243,7 +252,7 @@ export function routeHref(route: Route): string {
     case "adminOntologies": return "#/admin/ontologies";
     case "projectNew": return "#/projects/new";
     case "projects": return "#/projects";
-    case "projectSettings": return `#/projects/${encodeURIComponent(route.key)}/settings${route.section && route.section !== "general" ? `/${route.section}` : ""}`;
+    case "projectSettings": return `#/projects/${encodeURIComponent(route.key)}/settings${route.section && route.section !== DEFAULT_SETTINGS_SECTION ? `/${route.section}` : ""}`;
     case "projectDocuments":
       return `#/projects/${encodeURIComponent(route.key)}/documents${querySuffix(documentsEntries(route))}`;
     case "projectCase": return `#/projects/${encodeURIComponent(route.key)}/cases/${encodeURIComponent(route.caseId)}${querySuffix([

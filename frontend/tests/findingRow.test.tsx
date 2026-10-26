@@ -47,23 +47,18 @@ describe("FindingRow axis values", () => {
 });
 
 describe("FindingRow modifier lines (E-b)", () => {
-  const TEXT = "Wiederholt schwere Krampfanfälle.";
   const LABELS: Record<string, string> = { "HP:0001250": "Seizure", "HP:0012828": "Severe", "HP:0031796": "Recurrent" };
   const withModifiers = (modifiers: unknown[]) => { const s = snapshot(1); s.annotation.modifiers = modifiers; return s; };
   const renderRow = (modifiers: unknown[], extra: Record<string, unknown> = {}) => render(<ul><FindingRow snapshot={withModifiers(modifiers)} selected={false}
-    termLabel={(_l, id) => LABELS[id] ?? null} showLayer={false} axes={[]} defaulted={false} onActivate={vi.fn()} documentText={TEXT} {...extra} /></ul>);
+    termLabel={(_l, id) => LABELS[id] ?? null} showLayer={false} axes={[]} defaulted={false} onActivate={vi.fn()} {...extra} /></ul>);
 
-  it("lists one line per modifier in label order, the quote only when linked", () => {
-    const { getByRole } = renderRow([{ term_id: "HP:0031796" }, { term_id: "HP:0012828", segments: [{ start: 11, end: 18 }] }]);
-    const lines = getByRole("list", { name: "Modifiers" }).querySelectorAll("li");
-    expect([...lines].map(line => line.textContent)).toEqual(["↳Modifier: Recurrent HP:0031796", "↳Modifier: Severe HP:0012828 “schwere”"]);
-    expect(lines[1].querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
-    expect(lines[1].querySelector('[aria-hidden="true"]')!.textContent).toBe("↳");
-    expect(lines[1].querySelector(".visually-hidden")!.textContent).toBe("Modifier: ");
+  it("names the modifiers in one grey line, in label order (B3-4)", () => {
+    const { container } = renderRow([{ term_id: "HP:0031796" }, { term_id: "HP:0012828", segments: [{ start: 11, end: 18 }] }]);
+    expect(container.querySelector(".mod-lines")!.textContent).toBe("Modifiers: Recurrent, Severe");
   });
 
   it("has no modifier list without modifiers", () => {
-    expect(renderRow([]).queryByRole("list", { name: "Modifiers" })).toBeNull();
+    expect(renderRow([]).container.querySelector(".mod-lines")).toBeNull();
   });
 
   it("as an attach target: accessible name, the active one shows the hint, arrows move", () => {

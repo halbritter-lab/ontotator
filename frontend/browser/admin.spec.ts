@@ -101,9 +101,9 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   await page.getByLabel("Allowed roots for HP", { exact: true }).fill("HP:0000118");
   await page.getByLabel("T1 profile for HP", { exact: true }).selectOption("hpo-phenotype");
   await page.getByRole("button", { name: "Create project", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings$`));
-  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Members", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings/members$`));
+  // A new project opens its settings on People (M-8a, B6-1).
+  await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings/people$`));
+  await expect(page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "People", exact: true })).toHaveAttribute("aria-current", "page");
   await page.getByRole("button", { name: "Add member…", exact: true }).click();
   const members = page.getByRole("form", { name: "Add member", exact: true });
   for (const [actor, role] of [[lead, "Lead"], [annotator, "Annotator"]] as const) {
@@ -176,7 +176,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
   await importTwoDocuments(page);
   // Plan annotation for "one" if the import left it outside the plan ("Plan…" opens the text card on Text details
-  // with the plan chips, VD2, U3), then assign it through the row's Assign dialog and its seeded "Random distribution…".
+  // with the plan chips, VD2, U3), then assign it through the row's Assign dialog and its seeded "Distribute evenly…".
   if (await rowAction(page, "Plan…", "one", "en").count()) {
     await rowAction(page, "Plan…", "one", "en").click();
     const card = textCard(page, "one", "en");
@@ -188,7 +188,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   }
   await rowAction(page, "Assign annotation…", "one", "en").click();
   const assign = page.getByRole("dialog", { name: "Assign annotation", exact: true });
-  await assign.getByRole("button", { name: "Random distribution…", exact: true }).click();
+  await assign.getByRole("button", { name: "Distribute evenly…", exact: true }).click();
   const distribution = page.getByRole("dialog", { name: "Propose distribution", exact: true });
   await distribution.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(distribution.getByRole("combobox", { name: "one, slot 1", exact: true })).toHaveValue(setup.annotator.username);
@@ -259,8 +259,7 @@ test.describe("Administration through real accounts and jobs", () => {
   test("lead distributes one document, observes submission and reopens it", async ({ page }) => {
     const setup = await createProjectThroughUi(page);
     await distributeAndSubmit(page, setup);
-    await page.getByRole("dialog", { name: "Case submitted", exact: true })
-      .getByRole("button", { name: "Back to my tasks", exact: true }).click();
+    // M-6: without a next task the submit lands on My tasks.
     const tasks = page.getByTestId("task-row");
     await expect(tasks).toHaveCount(1);
     await expect(tasks).toContainText("Submitted");
@@ -283,7 +282,6 @@ test.describe("Administration through real accounts and jobs", () => {
     await expect(row.getByRole("cell").nth(submittedColumn - headers)).toHaveText("1");
     await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
     const document = await openTextVersions(page, "one");
-    await document.locator('summary[aria-label^="Actions for "]').click();
     await document.getByRole("button", { name: "Reopen", exact: true }).click();
     const reopen = page.getByRole("dialog", { name: "Reopen one", exact: true });
     await reopen.getByLabel("Reason (optional)").fill("Check this finding again.");
@@ -303,8 +301,7 @@ test.describe("Administration through real accounts and jobs", () => {
   test("lead downloads real T1 and edit-log exports; annotator access is refused", async ({ page }) => {
     const setup = await createProjectThroughUi(page);
     await distributeAndSubmit(page, setup);
-    await page.getByRole("dialog", { name: "Case submitted", exact: true })
-      .getByRole("button", { name: "Back to my tasks", exact: true }).click();
+    // M-6: without a next task the submit lands on My tasks.
     await logout(page);
     await loginExisting(page, setup.lead);
     await selectProject(page, setup.key);

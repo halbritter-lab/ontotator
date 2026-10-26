@@ -58,7 +58,7 @@ describe("cards", () => {
     expect(cardOf("case-106 en").className).toContain("document-card--muted");
     const de = cardOf("case-106 de");
     expect(de.textContent).toContain("Translation: ✓ Accepted, unchanged");
-    expect(de.textContent).toContain("Annotation: ○ 0 of 2 assigned");
+    expect(de.textContent).toContain("Annotation: ○ No annotator yet · max 2");
     expect(de.textContent).toContain("Finalization: —");
     expect(de.textContent).toContain("Waiting on: You");
     const action = within(de).getByRole("button", { name: "Assign annotation…, case-106 de" });
@@ -114,7 +114,7 @@ describe("cards", () => {
     // Deep links and the panel focus the card heading like the table's row header.
     expect(heading.id).toBe("documents-row-case-106-de-header");
     const lines = [...de.querySelectorAll<HTMLElement>(".document-card-stage")];
-    expect(lines.map(line => line.textContent)).toEqual(["Translation: ✓ Accepted, unchanged", "Annotation: ○ 0 of 2 assigned", "Finalization: —"]);
+    expect(lines.map(line => line.textContent)).toEqual(["Translation: ✓ Accepted, unchanged", "Annotation: ○ No annotator yet · max 2", "Finalization: —"]);
     // Glyphs are decorative: never read aloud.
     for (const line of lines) {
       const glyph = line.querySelector(".stage-cell-symbol");
@@ -175,11 +175,11 @@ describe("cards", () => {
     const stageActions = vi.fn((_row: DocumentRowView, stage: StageName) => (stage === "annotation" ? <button type="button">Reassign…</button> : null));
     renderCards(page([case106()]), { onOpenPanel, stageActions });
     const de = cardOf("case-106 de");
-    const stageButton = within(de).getByRole("button", { name: "Annotation: 0 of 2 assigned. Show history, case-106 de" });
+    const stageButton = within(de).getByRole("button", { name: "Annotation: No annotator yet · max 2. Show history, case-106 de" });
     expect(stageButton.getAttribute("aria-haspopup")).toBe("dialog");
     expect(stageButton.getAttribute("aria-expanded")).toBe("false");
     // The status word is the button; the stage title and detail stay plain text.
-    expect(stageButton.closest(".document-card-stage")?.textContent).toBe("Annotation: ○ 0 of 2 assigned");
+    expect(stageButton.closest(".document-card-stage")?.textContent).toBe("Annotation: ○ No annotator yet · max 2");
     fireEvent.click(stageButton);
     const dialog = screen.getByRole("dialog", { name: "Annotation activity, case-106 de" });
     expect(stageButton.getAttribute("aria-expanded")).toBe("true");

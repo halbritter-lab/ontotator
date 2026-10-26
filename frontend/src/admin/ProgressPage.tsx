@@ -35,14 +35,12 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
   const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-  const [perText, setPerText] = useState<number | null>(null);
   useEffect(() => {
     let active = true;
     setLoading(true); setError(undefined);
     void api.getProgress(projectKey).then(value => {
       if (active) { setProgress(value); setUpdatedAt(new Date()); setLoading(false); }
     }, err => { if (active) { setProgress(null); setError(err); setLoading(false); } });
-    void api.getProjectSettings(projectKey).then(value => { if (active) setPerText(value.annotations_per_text); }, () => {});
     return () => { active = false; };
   }, [projectKey, revision]);
   const documents = (query: ProjectDocumentsQuery): Route => ({ name: "projectDocuments", key: projectKey, ...query });
@@ -103,7 +101,7 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
       {progress.stages && <section aria-labelledby="progress-pipeline-heading">
         <h2 id="progress-pipeline-heading" className="visually-hidden">Pipeline</h2>
         <ol className="progress-pipeline" aria-labelledby="progress-pipeline-heading">
-          {stageCards(progress.stages, perText).map((card, index, all) => stageCard(card, index === all.length - 1))}
+          {stageCards(progress.stages).map((card, index, all) => stageCard(card, index === all.length - 1))}
         </ol>
       </section>}
       <section className="progress-people" aria-labelledby="progress-people-heading">

@@ -9,7 +9,7 @@ import { ProblemReportForm } from "./ProblemReportForm";
 import "../problems/problems.css";
 
 /**
- * The editor's "Report problem" toolbar entry and its dialog: the reporter's own reports on this task,
+ * The editor's "Report a text problem" toolbar entry and its dialog: the reporter's own reports on this task,
  * a new report, resume and withdraw. Mounted by the annotation editor and the translation review screen.
  */
 export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }: { assignment: AssignmentView; onSaveBeforeReport: () => Promise<void>; onRefresh: (assignment: AssignmentView) => void }): JSX.Element {
@@ -61,7 +61,7 @@ export function TaskProblemActions({ assignment, onSaveBeforeReport, onRefresh }
 
   return <>
     <Button size="sm" className="problem-entry" onClick={openDialog}>
-      Report problem
+      Report a text problem
       {entry.badge && <> <span className="problem-badge" aria-hidden="true">{entry.paused && <IconWarning />}{entry.badge}</span></>}
       <span className="visually-hidden"> {entry.accessibleSuffix}</span>
     </Button>

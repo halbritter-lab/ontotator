@@ -106,3 +106,9 @@ it("scopes the forced-colours card border to the narrow card layout", () => {
   expect(wide).not.toContain(".projects-table tbody tr {");
   expect(css).toMatch(/@media \(forced-colors: active\) and \(max-width: 699px\)\s*\{\s*\.projects-table tbody tr \{ border-color: CanvasText; \}/);
 });
+
+it("shows the project description under its name (M2 D4)", () => {
+  render(<ProjectsPage projects={[{ ...project("p1", ["annotator"]), description: "E3C clinical cases, tool proposals by phentrieve." }, project("p2", ["annotator"])]} currentKey="p1" onNavigate={vi.fn()} />);
+  expect(within(rowOf("Project p1")).getByText("E3C clinical cases, tool proposals by phentrieve.")).toBeDefined();
+  expect(rowOf("Project p2").querySelector(".projects-page__description")).toBeNull();
+});

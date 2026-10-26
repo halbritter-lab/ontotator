@@ -32,6 +32,12 @@ event). ``input_ids`` must name exactly one group of the round
 * **Annotate** changes note and flag on the decisions of a resolved group;
   annotations stay untouched, so every ``content_sha256`` stays valid.
 * **Reopen** deletes the group's decisions and resulting annotations.
+* **Reopen all** (R-10, "re-merge") does that for every group of the round in
+  one mutation, then takes over the ``match`` groups again (``auto``), so the
+  groups read as when the round started; findings added outside the groups
+  stay. **Undo reopen all**, only directly after it, restores the draft's
+  annotations, evidence, decisions and checked layers of the revision before
+  (``edit_events.state``). Both are logged like every draft command.
 * **Automatic take-over** (``take_over_matches``, called by
   ``WorkRoundService.create_in`` for consolidation rounds): every ``match``
   group gets the result of ``keep`` (the ``cons-…`` annotation with
@@ -79,7 +85,7 @@ from ontocurator.domain.annotations import (
 from ontocurator.domain.axes import validate_axes
 from ontocurator.domain.canonical import canonical_hash
 from ontocurator.domain.documents import Document, Segment
-from ontocurator.domain.errors import DomainError, InvalidAnnotation
+from ontocurator.domain.errors import DomainError, InvalidAnnotation, RevisionConflict
 from ontocurator.domain.profiles import TaskProfile, resolve_type
 from ontocurator.domain.review import (
     ConsolidationAction,
@@ -94,6 +100,7 @@ from ontocurator.storage.tables import (
     DraftAnnotationRow,
     DraftEvidenceRow,
     DraftRow,
+    EditEventRow,
     ReviewDecisionRow,
 )
 from ontocurator.storage.workflow_tables import WorkRoundRow
@@ -102,9 +109,11 @@ __all__ = [
     "AnnotateCommand",
     "ConsolidationGroupService",
     "ModifierIn",
+    "ReopenAllCommand",
     "ReopenCommand",
     "ResolveChoice",
     "ResolveCommand",
+    "UndoReopenAllCommand",
     "consolidated_annotation_id",
     "merged_annotation",
     "release_group_of",
@@ -225,6 +234,18 @@ class ReopenCommand(BaseModel):
     input_ids: list[str] = Field(min_length=1)
 
 
+class ReopenAllCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command: Literal["consolidation_reopen_all"]
+
+
+class UndoReopenAllCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command: Literal["consolidation_undo_reopen_all"]
+
+
 class TermValidator(Protocol):
     """The canonical id of ``term_id`` in the layer, ``None`` when the
     term is unknown or obsolete there (may load the ontology)."""
@@ -273,10 +294,8 @@ def _note(value: str | None) -> str | None:
     return value if value and value.strip() else None
 
 
-def _find_group(
-    conn: Connection, repo: Repository, key: WorkspaceKey, input_ids: Sequence[str]
-) -> _Group:
-    """The consolidation group whose members are exactly ``input_ids``."""
+def _round_items(conn: Connection, repo: Repository, key: WorkspaceKey) -> list[_Group]:
+    """Every group of the consolidation round of ``key``."""
     pid = repo._require_project(conn, key.project_key)
     kind = (
         conn.execute(
@@ -290,20 +309,30 @@ def _find_group(
     if kind != "consolidation":
         raise DomainError("ROUND_KIND_INVALID")
     assert key.round_id is not None
-    if len(set(input_ids)) != len(input_ids):
-        raise _invalid("Repeated input")
     profile, defaults = project_profile(conn, pid)
     found = round_members(conn, pid, key.round_id, profile, defaults)
+    return [
+        _Group(
+            round_id=key.round_id,
+            group=group,
+            members={iid: found.members[iid] for iid in group.members.values()},
+            profile=profile,
+            roles=found.roles,
+        )
+        for group in round_groups(found)
+    ]
+
+
+def _find_group(
+    conn: Connection, repo: Repository, key: WorkspaceKey, input_ids: Sequence[str]
+) -> _Group:
+    """The consolidation group whose members are exactly ``input_ids``."""
+    if len(set(input_ids)) != len(input_ids):
+        raise _invalid("Repeated input")
     wanted = set(input_ids)
-    for group in round_groups(found):
-        if set(group.members.values()) == wanted:
-            return _Group(
-                round_id=key.round_id,
-                group=group,
-                members={iid: found.members[iid] for iid in group.members.values()},
-                profile=profile,
-                roles=found.roles,
-            )
+    for item in _round_items(conn, repo, key):
+        if set(item.input_ids) == wanted:
+            return item
     raise _invalid("The inputs are not exactly one consolidation group")
 
 
@@ -851,6 +880,94 @@ class ConsolidationGroupService:
             _uncheck(draft, item)
 
         return self._run(key, envelope, cmd.input_ids, apply)
+
+    def reopen_all(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
+        ReopenAllCommand.model_validate(envelope.payload)
+
+        def operation(draft: Draft) -> Draft:
+            with self.repo.db.transaction() as conn:
+                items = _round_items(conn, self.repo, key)
+            document = self.repo.get_document(key.project_key, key.document_id)
+            assert document is not None
+            for item in items:
+                _detach(draft, item, document)
+                _clear_group(draft, item)
+                _uncheck(draft, item)
+            # As at the round's start (``take_over_matches``).
+            for item in items:
+                if item.group.kinds == frozenset({"match"}):
+                    keep = item.members[item.group.members[item.group.keep]]
+                    _add_result(
+                        draft,
+                        key,
+                        consolidated_annotation_id(item.round_id, item.input_ids, 0),
+                        keep,
+                        keep.snapshot.annotation,
+                        item.refs,
+                        ConsolidationMark(action="auto"),
+                        document,
+                        item.profile,
+                    )
+            return draft
+
+        # Loads the ontology before the draft lock is taken (as ``_run``).
+        with self.repo.db.transaction() as conn:
+            _round_items(conn, self.repo, key)
+        result = self.repo.run_mutation(key, envelope, operation)
+        assert isinstance(result, Draft)
+        return result
+
+    def undo_reopen_all(self, key: WorkspaceKey, envelope: MutationEnvelope) -> Draft:
+        UndoReopenAllCommand.model_validate(envelope.payload)
+
+        def operation(draft: Draft) -> Draft:
+            with self.repo.db.transaction() as conn:
+                last = conn.execute(
+                    self.repo._draft_events(key)
+                    .where(EditEventRow.revision_after == draft.revision)
+                    .order_by(EditEventRow.id.desc())
+                    .limit(1)
+                ).one_or_none()
+            if (
+                last is None
+                or (last.command or {}).get("command") != "consolidation_reopen_all"
+            ):
+                raise RevisionConflict(
+                    "Nothing to undo: the last change was not Reopen all decisions"
+                )
+            before = self.repo.draft_state_at(key, int(last.revision_before))
+            # The pairs come from this workspace's own state (``draft_state_at``
+            # checks the access), so they are read unscoped: the scoped read
+            # refuses snapshots no current draft or submission names.
+            have = {
+                (a.annotation.annotation_id, a.version): a for a in draft.annotations
+            }
+            have_evidence = {
+                (e.mention.evidence_id, e.version): e for e in draft.evidence
+            }
+            annotations = [
+                have.get(pair)
+                or Repository.get_annotation_snapshot(self.repo, *pair, key.project_key)
+                for pair in before.annotations
+            ]
+            evidence = [
+                have_evidence.get(pair)
+                or Repository.get_evidence_snapshot(self.repo, *pair, key.project_key)
+                for pair in before.evidence
+            ]
+            if None in annotations or None in evidence:
+                raise RevisionConflict("The previous decisions can no longer be read")
+            draft.annotations = [a for a in annotations if a is not None]
+            draft.evidence = [e for e in evidence if e is not None]
+            draft.decisions = [
+                ReviewDecision.model_validate(d) for d in before.decisions
+            ]
+            draft.checked_layer_ids = list(before.checked_layer_ids)
+            return draft
+
+        result = self.repo.run_mutation(key, envelope, operation)
+        assert isinstance(result, Draft)
+        return result
 
 
 def release_group_of(

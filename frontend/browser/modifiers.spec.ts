@@ -90,9 +90,9 @@ test("two keys after marking attach Severe; a click on the mark attaches the nex
   await page.keyboard.press("Enter");
   expect((await added).ok()).toBeTruthy();
   const chip = page.locator('[data-modifier-chip="HP:0012828"]');
-  await expect(chip).toContainText("Severe · “schwere”");
+  await expect(chip).toContainText("Severe “schwere”");
   await expect(chip.getByRole("button", { name: "Actions, Severe" })).toBeFocused();
-  await expect(seizureRow(page).getByRole("list", { name: "Modifiers" })).toContainText("Modifier: Severe HP:0012828 “schwere”");
+  await expect(seizureRow(page).locator(".mod-lines")).toHaveText("Modifiers: Severe");
   await expect(banner(page)).toHaveCount(0);
 
   // A second modifier, attached by clicking the Seizure mark in the text.
@@ -100,7 +100,7 @@ test("two keys after marking attach Severe; a click on the mark attaches the nex
   const second = commandResponse(page, "add_modifier");
   await runsOf(page, "ev-seizure").first().click();
   expect((await second).ok()).toBeTruthy();
-  await expect(page.getByRole("list", { name: "Modifiers of Seizure" })).toContainText("Recurrent · “wiederholt”");
+  await expect(page.getByRole("list", { name: "Modifiers of Seizure" })).toContainText("Recurrent “wiederholt”");
 
   // Hover the Seizure mark: the modifier runs are framed, the text block does not move.
   await page.getByRole("button", { name: "Clear selection" }).first().click();
@@ -163,5 +163,5 @@ test("at 600 px the attach mode works through the list", async ({ page }) => {
   const added = commandResponse(page, "add_modifier");
   await page.keyboard.press("Enter");
   expect((await added).ok()).toBeTruthy();
-  await expect(page.locator('[data-modifier-chip="HP:0012828"]')).toContainText("Severe · “schwere”");
+  await expect(page.locator('[data-modifier-chip="HP:0012828"]')).toContainText("Severe “schwere”");
 });

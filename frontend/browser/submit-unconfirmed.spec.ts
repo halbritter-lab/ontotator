@@ -10,7 +10,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { loginScenarioUser, reviewFlowScenario, type ReviewFlowScenario } from "./reviewFlowHelpers";
-import { selectText } from "./helpers";
+import { expectSubmitted, selectText } from "./helpers";
 
 test.setTimeout(120_000);
 test.use({ actionTimeout: 15_000 });
@@ -89,7 +89,7 @@ test("confirm one row, then the rest with Confirm all, and submit without a warn
   await expect(dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values?$/ })).toHaveCount(0);
 
   await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
+  await expectSubmitted(page);
   expect(submits).toHaveLength(1);
 });
 
@@ -107,7 +107,7 @@ test("one click submits with the ticked unconfirmed values", async ({ page }) =>
   await dialog.getByRole("checkbox", { name: "Submit with 6 unconfirmed values", exact: true }).check();
   await expect(dialog.getByText("Acknowledging does not confirm the values; they stay marked as defaults.")).toBeVisible();
   await submit.click();
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
+  await expectSubmitted(page);
   // One user action: the advisory warning is answered by one resend with the server's acknowledgement.
   expect(submits).toHaveLength(2);
 });

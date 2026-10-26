@@ -35,7 +35,7 @@ describe("assign summary", () => {
     expect(memberReason({ unavailable: "role_missing", already_assigned: 0, reads: ["de"] }, "translation_review", "de")).toBe("Cannot review translations in this project");
     expect(memberReason({ unavailable: null, already_assigned: 3, reads: ["de"] }, "annotate", "de")).toBe("Already annotating 3 of these cases");
     expect(memberReason({ unavailable: null, already_assigned: 0, reads: ["de"] }, "annotate", "de")).toBeNull();
-    expect(partlyAssignedLines([{ case_id: "case-0101", language: "de", remaining: 1 }, { case_id: "case-0102", language: "de", remaining: 2 }], 2)).toEqual(["case-0101 de: 1 of 2 assigned"]);
+    expect(partlyAssignedLines([{ case_id: "case-0101", language: "de", remaining: 1 }, { case_id: "case-0102", language: "de", remaining: 2 }], 2)).toEqual(["case-0101 de: 1 assigned (limit 2)"]);
     expect(resultMessage("translation_review", 20, [{ person: ana, count: 20 }])).toBe("20 translation reviews assigned to Ana Weber");
     expect(resultMessage("annotate", 2, [{ person: ana, count: 1 }, { person: ben, count: 1 }])).toBe("2 annotations assigned to Ana Weber and Ben Roth");
   });

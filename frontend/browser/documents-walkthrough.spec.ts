@@ -128,7 +128,7 @@ test("step 3: Ana accepts unchanged; NEW on the next visit", async () => {
   await act({ actor: "ana", action: "accept_review" });
   await revisit(true);
   await expectStage(cell("translation"), { state: "accepted", who: "" });
-  await expectStage(cell("annotation"), { state: "Unassigned", who: "" });
+  await expectStage(cell("annotation"), { state: /No annotator yet · max \d+/, who: "" });
   await expect(newBadge(de())).toHaveCount(1);
   await expect(documentsTab(page, "To assign", 1)).toBeVisible();
   await expectCounterEqualsTab(page);
@@ -165,7 +165,8 @@ test("step 5: Tom submits (Luc keeps a draft)", async () => {
 
 test("step 6: the lead requests a correction, Ana corrects → v2", async () => {
   // The text card's Translation part: "Request correction…" opens the correction dialog.
-  await clicks.count(textName(page, CASE, "de"));
+  // A double click on the text name opens the card (R-4); one activation.
+  await clicks.count(textName(page, CASE, "de"), { clickCount: 2 });
   const area = textCard(page, CASE, "de");
   await expect(area).toBeVisible();
   const translation = area.getByRole("navigation", { name: "Text path", exact: true }).getByRole("button", { name: /^Translation / });
@@ -192,7 +193,7 @@ test("step 6: the lead requests a correction, Ana corrects → v2", async () => 
   await expect(rowCell(de(), "next").getByRole("button").first()).toHaveAccessibleName(namePattern("Handle text change…, ", CASE, "de"));
   // One button per row; the other lead step is in the text card.
   await expect(rowCell(de(), "next").getByRole("button")).toHaveCount(1);
-  await textName(page, CASE, "de").click();
+  await textName(page, CASE, "de").dblclick();
   await expect(textCard(page, CASE, "de").getByRole("button", { name: "Carry to v2…", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(textCard(page, CASE, "de")).toHaveCount(0);
@@ -217,7 +218,7 @@ test("step 7: Handle text change… → Move to v2 (preselected) → Apply", asy
 
   // Check along the way: the card's version list shows Luc's v1 assignment as moved; Tom's v1 submission stays.
   const area = textCard(page, CASE, "de");
-  if (!(await area.isVisible())) await textName(page, CASE, "de").click();
+  if (!(await area.isVisible())) await textName(page, CASE, "de").dblclick();
   const translation = area.getByRole("navigation", { name: "Text path", exact: true }).getByRole("button", { name: /^Translation / });
   if ((await translation.getAttribute("aria-current")) !== "step") await translation.click();
   await openOlderVersions(area);

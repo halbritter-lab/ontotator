@@ -110,7 +110,7 @@ import { IconButton } from "../ui/IconButton";
 import { openShortcutHelp, ShortcutHelpHost } from "../ui/ShortcutHelp";
 import { isTextEntryTarget, isTypingTarget, useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { CaseNavigation } from "./CaseNavigation";
-import { adjacentCase, orderTasks } from "./caseOrder";
+import { adjacentCase, nextOpenTask, orderTasks } from "./caseOrder";
 import type { RouteLeaveGuard } from "./router";
 import { isReviewLike, modeBadge } from "../editor/modes";
 import { LanguageTag } from "../ui/LanguageTag";
@@ -134,6 +134,8 @@ const normalizeAxes = (axes: Record<string, string | null | undefined> | null | 
       .sort(([a], [b]) => a.localeCompare(b)),
   );
 
+/** One mention's span, for matching mentions across a proposal and draft findings. */
+const spanKeyOf = (segments: readonly { start: number; end: number }[]) => segments.map(seg => `${seg.start}-${seg.end}`).join(",");
 const segmentsKey = (evidence: { mention: { segments: { start: number; end: number }[] } }[]) =>
   JSON.stringify(
     evidence
@@ -161,6 +163,9 @@ interface ConfirmRequest {
   confirmLabel: string;
   resolve: (ok: boolean) => void;
 }
+
+/** A target of the attach mode: its findings-list row, and the proposal when attaching runs Edit & Replace (M-5). */
+type AttachEntry = AttachFinding & { listKey: string; proposal?: TargetProposal };
 
 type AxisWarning = {
   acknowledgement: { draft_revision: number; policy_revision: number; warning_digest: string };
@@ -195,7 +200,11 @@ export interface CaseScreenProps {
   readOnly?: boolean;
   versionContext?: { canBrowseVersions: boolean; username: string; assignmentId: number; onNavigate: (route: Route) => void };
   routeLeaveRef?: React.MutableRefObject<RouteLeaveGuard | null>;
-  assignmentNavigation?: { tasks: TaskSummary[]; current: TaskSummary; onNavigate: (assignmentId: number) => void };
+  assignmentNavigation?: {
+    tasks: TaskSummary[]; current: TaskSummary; onNavigate: (assignmentId: number) => void;
+    /** M2 M-6: after a submit the caller opens the next task (or My tasks) and names the submission; no "Case submitted" dialog. */
+    onSubmitted?: (result: { label: string; assignmentId: number; next?: number }) => void;
+  };
   onReadonlyRequired?: () => void;
   view: WorkspaceView;
   workspaceId: string;
@@ -1088,6 +1097,29 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     (view.available_inputs ?? []).find(
       (snap) => snap.annotation.annotation_id === t.annotation_id && snap.version === t.version,
     );
+  /**
+   * B2-4 (display only): findings split off a proposal's copy by "Move to a new finding" (M-4), so the proposal
+   * names every finding that replaced it. shortcut: nothing stores the link, so a split-off is a fresh draft finding
+   * of the copy's term whose mentions are mentions of the proposal the copy no longer has; one whose term changed
+   * later drops out. Upgrade when the split stores a source ref.
+   */
+  const splitOffsOf = (target: { annotation_id: string; version: string }, replacementId: string | undefined): AnnotationSnapshot[] => {
+    const annotations = draft.annotations ?? [];
+    const copy = annotations.find(a => a.annotation.annotation_id === replacementId)?.annotation;
+    const proposalSpans = new Set((targetSnapshotOf(target)?.evidence ?? []).map(ev => spanKeyOf(ev.mention.segments)));
+    if (!copy || proposalSpans.size < 2) return [];
+    const spansOf = (refs: { evidence_id: string }[] | undefined) => (refs ?? []).map(ref =>
+      spanKeyOf((draft.evidence ?? []).find(ev => ev.mention.evidence_id === ref.evidence_id)?.mention.segments ?? []));
+    const copySpans = new Set(spansOf(copy.evidence_refs));
+    return annotations.filter(({ annotation: a }) => {
+      if (a.annotation_id === copy.annotation_id || a.layer_id !== copy.layer_id || a.term_id !== copy.term_id || a.provenance.source_refs?.length) return false;
+      const spans = spansOf(a.evidence_refs);
+      return spans.length > 0 && spans.every(span => proposalSpans.has(span) && !copySpans.has(span));
+    });
+  };
+  /** A draft finding's first mention, quoted short (the split-off buttons, B2-4). */
+  const firstQuoteOf = (snap: AnnotationSnapshot) => quoteSegments(view.document.text,
+    (draft.evidence ?? []).find(ev => ev.mention.evidence_id === snap.annotation.evidence_refs?.[0]?.evidence_id)?.mention.segments ?? [], 40);
   /** Review target an annotation was adopted from (via provenance.source_refs). */
   const sourceTargetOf = (snap: AnnotationSnapshot) => {
     const refs = snap.annotation.provenance.source_refs ?? [];
@@ -1257,7 +1289,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const linkSpan = readOnly ? null : modifierCommands.linkSpan;
   /** The chip of a modifier (its actions button when it has one). */
   const chipIn = (root: ParentNode, termId: string) =>
-    root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"] button`) ?? root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"]`);
+    root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"] button[aria-haspopup]`) ?? root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"]`);
   const findingNameOf = (snapshot: { annotation: { layer_id: string; term_id: string } }) =>
     termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id) ?? snapshot.annotation.term_id;
   const carriedTermText = (snapshot: SnapshotLike) =>
@@ -1761,13 +1793,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const pickedModifier = parseModifierDisplayId(evidenceId);
     if (attachActive) {
       // A finding's mark is a target of the attach mode: a click attaches instead of selecting.
-      const owner = pickedModifier?.annotationId ?? ownerOfEvidence(evidenceId)?.annotation.annotation_id;
+      const owner = pickedModifier?.annotationId ?? ownerOfEvidence(evidenceId)?.annotation.annotation_id ?? targetOfEvidence(evidenceId)?.annotation_id;
       if (owner && attachTargets.some(target => target.annotationId === owner)) void attachTo(owner);
       return;
     }
     if (pickedModifier) {
-      // A modifier segment selects its finding and focuses the chip.
+      // A modifier segment selects its finding, marks its own span as the selected one (B3-3) and focuses the chip.
       selectListKey(`annotation:${pickedModifier.annotationId}`);
+      setSelectedEvidenceId(evidenceId);
       setFocusRequest({ key: `annotation:${pickedModifier.annotationId}`, find: root => chipIn(root, pickedModifier.termId) });
       return;
     }
@@ -2109,8 +2142,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   // Adopt a review target as an editable draft copy and switch to editing it.
   // The "changed" decision is recorded only once the copy actually differs.
-  const handleAdoptAndEditTarget = async (target: TargetProposal, reason?: string, supportingSegments?: SelectionPayload["segments"]) => {
-    if (readOnlyRef.current) return;
+  // Resolves with the copy's id once it is open (null when nothing was copied).
+  const handleAdoptAndEditTarget = async (target: TargetProposal, reason?: string, supportingSegments?: SelectionPayload["segments"],
+    { implicit = false }: { implicit?: boolean } = {}): Promise<string | null> => {
+    if (readOnlyRef.current) return null;
     setActionError(null);
     const key = targetKeyOf(target);
     const existingDecision = (latestDraft.current.decisions ?? []).find((d) => refKey(d.target) === key);
@@ -2127,7 +2162,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const replacementId = existingDecision?.outcome === "changed" ? existingDecision.replacement?.annotation_id : undefined;
     if (replacementId && (latestDraft.current.annotations ?? []).some((a) => a.annotation.annotation_id === replacementId)) {
       openCopy(replacementId);
-      return;
+      return replacementId;
     }
     const existingCopy = (latestDraft.current.annotations ?? []).find((a) => {
       const src = sourceTargetOf(a);
@@ -2136,26 +2171,26 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
     const sourceSnapshot = targetSnapshotOf(target);
     if (!existingCopy && view.enforce_spanless_rules && !sourceSnapshot?.annotation.evidence_refs?.length && !supportingSegments?.length) {
-      if (!view.allow_spanless_findings) { setPendingEvidenceAdoption(target); setMobilePane("text"); return; }
-      if (spanlessNotesRequired && !(reason ?? sourceSnapshot?.annotation.note ?? "").trim()) { setPendingAdoption(target); return; }
+      if (!view.allow_spanless_findings) { setPendingEvidenceAdoption(target); setMobilePane("text"); return null; }
+      if (spanlessNotesRequired && !(reason ?? sourceSnapshot?.annotation.note ?? "").trim()) { setPendingAdoption(target); return null; }
     }
 
-    // 2. An explicit decision exists: ask before replacing it.
+    // 2. An explicit decision exists: ask before replacing it (an implicit Edit & Replace was announced already, M-5).
     if (existingDecision && existingDecision.outcome !== "changed") {
-      const ok = await askConfirm(
+      const ok = implicit || await askConfirm(
         "Replace existing decision?",
         `This proposal is already marked as ${existingDecision.outcome}. Editing a copy resets that decision; it becomes "changed" once the copy differs from the proposal.`,
         "Reset decision and edit copy",
       );
-      if (!ok) return;
+      if (!ok) return null;
       try {
         await enqueueDecision(target, null);
-      } catch (error) { reportError(error); return; }
+      } catch (error) { reportError(error); return null; }
     }
 
     if (existingCopy && (latestDraft.current.annotations ?? []).some((a) => a.annotation.annotation_id === existingCopy.annotation.annotation_id)) {
       openCopy(existingCopy.annotation.annotation_id);
-      return;
+      return existingCopy.annotation.annotation_id;
     }
 
     // 3. Clone the target proposal into the draft.
@@ -2163,7 +2198,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const targetLayer = target.layer_id ?? snap?.annotation.layer_id ?? layerSelection.activeLayerId;
     if (!targetLayer) {
       setActionError("No layer found for proposal.");
-      return;
+      return null;
     }
     const layerDef = (view.layers ?? []).find((l) => l.layer_id === targetLayer);
     const targetType = target.type_id ?? snap?.annotation.type_id ?? layerSelection.activeTypeId ?? layerDef?.annotation_types?.[0]?.type_id ?? "default";
@@ -2224,7 +2259,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       copiedModifiers.current.set(newAnnId, modifiersKey(latestDraft.current.annotations
         ?.find((a) => a.annotation.annotation_id === newAnnId)?.annotation.modifiers));
     } catch (error) {
-      if (error instanceof DiscardedChangesError) return;
+      if (error instanceof DiscardedChangesError) return null;
       let rolledBack = false;
       if (created && queueRef.current.getState() !== "conflict") {
         try {
@@ -2238,7 +2273,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           ? `Adopting the proposal failed (${message}). ${rolledBack ? "The incomplete copy was removed." : "An incomplete copy may remain in the draft - please check or delete it."}`
           : `Adopting the proposal failed: ${message}`,
       );
-      return;
+      return null;
     }
     if (reason?.trim() || supportingSegments?.length) {
       try { await syncReplacementDecision(newAnnId); } catch (error) { reportError(error); }
@@ -2246,7 +2281,72 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (notCopied.length) setActionError(`Copied without modifier ${notCopied.join("; ")}.`);
     setPendingEvidenceAdoption(null);
     openCopy(newAnnId);
+    return newAnnId;
   };
+
+  /**
+   * M2 M-4 (HPO guide principle 3: one term and one set of attributes per annotation): one mention leaves the finding
+   * and becomes a new finding with the same term and values; the modifiers stay with the finding. Created first, then
+   * detached, so a failure never loses the mention.
+   */
+  const moveMentionToNewFinding = async (annotationId: string, evidenceId: string) => {
+    if (readOnlyRef.current) return;
+    const source = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === annotationId);
+    const refs = source?.annotation.evidence_refs ?? [];
+    const index = refs.findIndex(ref => ref.evidence_id === evidenceId);
+    const segments = (latestDraft.current.evidence ?? []).find(ev => ev.mention.evidence_id === evidenceId)?.mention.segments ?? [];
+    if (!source || index < 0 || refs.length < 2 || !segments.length) return;
+    const ann = source.annotation;
+    const type = view.layers?.find(layer => layer.layer_id === ann.layer_id)?.annotation_types.find(item => item.type_id === ann.type_id);
+    const axisIds = (type?.axes ?? view.axes_config ?? []).map(axis => axis.id);
+    const newId = `ann-${crypto.randomUUID()}`;
+    setActionError(null);
+    try {
+      await enqueueMutation({
+        command: "create_annotation",
+        annotation_id: newId,
+        evidence_id: newEvidenceId(),
+        layer_id: ann.layer_id,
+        type_id: ann.type_id,
+        term_id: ann.term_id,
+        axes_values: { ...(ann.axes_values ?? {}) },
+        chosen_axis_ids: carriedChosenAxisIds(ann, axisIds),
+        segments,
+      });
+      await mutateAnnotationAndSyncDecision(annotationId, () => enqueueMutation({ command: "detach_mention", annotation_id: annotationId, evidence_id: evidenceId }));
+    } catch (error) {
+      if (!(error instanceof DiscardedChangesError)) reportError(error);
+      return;
+    }
+    const finding = findingNameOf(source);
+    const modifiers = (ann.modifiers ?? []).map(modifier => termLabel(ann.layer_id, modifier.term_id) ?? modifier.term_id);
+    const stays = modifiers.length ? ` ${modifiers.join(", ")} ${modifiers.length === 1 ? "stays" : "stay"} with this finding.` : "";
+    setSelectedTargetId(null); setSelectedSourceId(null); setSelectedInputId(null);
+    setSelectedAnnotationId(annotationId);
+    setSelectedEvidenceId(refs.find(ref => ref.evidence_id !== evidenceId)?.evidence_id ?? null);
+    setAdvanceStatus({ listKey: `annotation:${annotationId}`, decidedKey: "",
+      text: `Moved mention ${index + 1} “${quoteSegments(view.document.text, segments, 40)}” to a new finding ${finding}.${stays}` });
+  };
+  /** R-7: a proposal replaced by a copy with a single mention has nothing left to move (the move acts on the copy). */
+  const proposalCopyCanMove = (target: TargetProposal) => {
+    const decision = decisionsMap[refKey(target)];
+    const copyId = decision?.outcome === "changed" ? decision.replacement?.annotation_id : undefined;
+    const copy = copyId ? draft.annotations?.find(a => a.annotation.annotation_id === copyId) : undefined;
+    return !copy || (copy.annotation.evidence_refs?.length ?? 0) > 1;
+  };
+  /** M-4 on a proposal: proposals stay immutable, so Edit & Replace runs first and the copy's mention moves. */
+  const moveProposalMention = async (target: TargetProposal, index: number) => {
+    const wanted = targetSnapshotOf(target)?.evidence?.[index]?.mention.segments;
+    const copyId = await handleAdoptAndEditTarget(target);
+    if (!copyId || !wanted) return;
+    // An existing edited copy may order its mentions differently: match by span, not by index.
+    const evidenceId = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === copyId)?.annotation.evidence_refs
+      ?.find(ref => (latestDraft.current.evidence ?? []).some(ev => ev.mention.evidence_id === ref.evidence_id && spanKeyOf(ev.mention.segments) === spanKeyOf(wanted)))?.evidence_id;
+    if (!evidenceId) { setActionError("Your copy no longer has this mention. Move it from your copy instead."); return; }
+    await moveMentionToNewFinding(copyId, evidenceId);
+  };
+
+
 
   // Layer state handlers
   const handleSetActiveLayer = async (layerId: string) => {
@@ -2296,8 +2396,30 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const ownerOfEvidence = (evidenceId: string) => visibleAnnotations.find(snapshot =>
     (snapshot.annotation.evidence_refs ?? []).some(ref => ref.evidence_id === evidenceId));
   const draftAnnotationById = new Map((draft.annotations ?? []).map(snapshot => [snapshot.annotation.annotation_id, snapshot]));
-  /** Own findings in editable `hpo-phenotype` layers, in list order (spanless ones included). */
-  const attachTargets: AttachFinding[] = carriedListOrder.flatMap(key => {
+  /** Proposals of the case whose marks match an evidence id (`target:{id}:{version}:…`). */
+  const targetOfEvidence = (evidenceId: string) => evidenceId.startsWith("target:")
+    ? reviewTargets.find(t => evidenceId.startsWith(`target:${t.annotation_id}:${t.version}:`)) : undefined;
+  /**
+   * M2 M-5 (F12): open or confirmed proposals with a text span in editable modifier layers, in list order. Attaching to
+   * one runs Edit & Replace implicitly (the copy takes the proposal's modifiers, then the new one). Not in convert mode:
+   * convert_to_modifier needs a draft finding.
+   */
+  const attachProposals: AttachEntry[] = !isReviewLike(view.key.mode) || attachModifier?.mode === "convert" ? [] : reviewTargets.flatMap(t => {
+    const outcome = decisionsMap[refKey(t)]?.outcome;
+    const snapshot = targetSnapshotOf(t);
+    if ((outcome && outcome !== "confirmed") || !snapshot || !snapshot.evidence?.length) return [];
+    // A copy made already (F25: no decision until it differs) is the target instead.
+    if ((draft.annotations ?? []).some(a => { const src = sourceTargetOf(a); return src !== null && refKey(src) === refKey(t); })) return [];
+    if (!modifierLayerIds.has(snapshot.annotation.layer_id) || !editableLayerIds.includes(snapshot.annotation.layer_id)) return [];
+    return [{
+      annotationId: t.annotation_id, term: findingNameOf(snapshot), termId: snapshot.annotation.term_id,
+      segments: snapshot.evidence.flatMap(evidence => evidence.mention.segments),
+      quote: quoteSegments(view.document.text, snapshot.evidence[0].mention.segments, 40),
+      listKey: `target:${refKey(t)}`, proposal: t,
+    }];
+  });
+  /** Own findings in editable `hpo-phenotype` layers, in list order (spanless ones included); proposals first (M-5). */
+  const attachTargets: AttachEntry[] = [...attachProposals, ...carriedListOrder.flatMap(key => {
     // From the draft, not the visible layers: a hidden layer's finding is still a target.
     const snapshot = key.startsWith("annotation:") ? draftAnnotationById.get(key.slice("annotation:".length)) : undefined;
     if (!snapshot || !modifierLayerIds.has(snapshot.annotation.layer_id) || !editableLayerIds.includes(snapshot.annotation.layer_id)) return [];
@@ -2309,15 +2431,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       annotationId: snapshot.annotation.annotation_id, term: findingNameOf(snapshot), termId: snapshot.annotation.term_id,
       segments: mentions.flatMap(evidence => evidence.mention.segments),
       quote: mentions[0] ? quoteSegments(view.document.text, mentions[0].mention.segments, 40) : "",
+      listKey: `annotation:${snapshot.annotation.annotation_id}`,
     }];
-  });
+  })];
   const attachActive = !!attachModifier && (attachModifier.mode === "convert" || pendingIsMarkedSpan) && !readOnly && attachTargets.length > 0;
   const attachSegments = attachModifier?.mode === "convert" ? attachModifier.mark : pendingAnnotation?.segments ?? [];
   const attachMark = attachSegments.length
     ? { start: Math.min(...attachSegments.map(s => s.start)), end: Math.max(...attachSegments.map(s => s.end)) } : null;
   const attachNearest = attachActive && attachMark ? attachCandidates(view.document.text, attachMark, attachTargets)[0] ?? null : null;
   /** Hidden layers of the targets become visible: their rows render and take keyboard focus. */
-  const showLayersOf = (targets: readonly AttachFinding[]) => setLayerSelection(previous => ({ ...previous, visibleLayerIds: [...new Set([
+  const showLayersOf = (targets: readonly AttachEntry[]) => setLayerSelection(previous => ({ ...previous, visibleLayerIds: [...new Set([
     ...previous.visibleLayerIds, ...targets.flatMap(target => draftAnnotationById.get(target.annotationId)?.annotation.layer_id ?? [])])] }));
   const startAttach = (candidate: { term_id: string; label?: string | null }) => {
     showLayersOf(attachTargets);
@@ -2383,12 +2506,24 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const attachTo = async (annotationId: string, replace = false) => {
     if (attachModifier?.mode === "convert") { await convertTo(annotationId, replace); return; }
     if (!attachModifier || !pendingAnnotation || readOnlyRef.current || creatingPending.current) return;
-    const target = latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === annotationId);
-    if (!target) return;
     flushTextResize.current?.();
     const adjusted = pendingSegments.current;
     const segments = adjusted && adjusted.evidenceId === pendingAnnotation.evidenceId ? adjusted.segments : pendingAnnotation.segments;
     const { termId, termLabel: term } = attachModifier;
+    // M-5: a proposal becomes the annotator's copy first (Edit & Replace with its modifiers); the modifier goes on the copy.
+    const proposal = attachTargets.find(entry => entry.annotationId === annotationId)?.proposal;
+    let replaced: string | null = null;
+    if (proposal) {
+      creatingPending.current = true;
+      let copyId: string | null;
+      try { copyId = await handleAdoptAndEditTarget(proposal, undefined, undefined, { implicit: true }); }
+      catch (error) { reportError(error); return; } finally { creatingPending.current = false; }
+      if (!copyId) return;
+      replaced = termLabel(proposal.layer_id, proposal.term_id ?? proposal.annotation_id) ?? proposal.term_id ?? proposal.annotation_id;
+      annotationId = copyId;
+    }
+    const target = latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === annotationId);
+    if (!target) return;
     const existing = target.annotation.modifiers?.find(modifier => modifier.term_id === termId);
     if (existing?.segments?.length && !replace) {
       // add_modifier would refuse DUPLICATE_MODIFIER: only focus the target; the inspector offers "Replace text span".
@@ -2409,7 +2544,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setSelectedAnnotationId(annotationId);
     setSelectedEvidenceId(target.annotation.evidence_refs?.[0]?.evidence_id ?? null);
     if (panesLayout) setMobilePane("details");
-    announceCarried(existing && !replace ? attachCopy.linked(quoteSegments(view.document.text, segments, 40), term, finding) : attachCopy.attached(term, finding));
+    if (replaced) {
+      const line = attachCopy.replaced(replaced, term, quoteSegments(view.document.text, segments, 40));
+      announceCarried(line);
+      setAdvanceStatus({ listKey: `annotation:${annotationId}`, text: line, decidedKey: "" });
+    } else announceCarried(existing && !replace ? attachCopy.linked(quoteSegments(view.document.text, segments, 40), term, finding) : attachCopy.attached(term, finding));
     setFocusRequest({ key: `annotation:${annotationId}`, find: root => {
       const chip = chipIn(root, termId);
       if (!chip) setTextFocusRequest({ offset: end });
@@ -2428,7 +2567,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       setAttachFocusId(attachNearest?.annotationId ?? attachTargets[0].annotationId);
       return;
     }
-    rootRef.current?.querySelector<HTMLElement>(`[data-list-key="annotation:${attachFocusId}"]`)?.focus({ preventScroll: true });
+    const listKey = attachTargets.find(target => target.annotationId === attachFocusId)?.listKey;
+    [...rootRef.current?.querySelectorAll<HTMLElement>("[data-list-key]") ?? []].find(row => row.dataset.listKey === listKey)?.focus({ preventScroll: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attachActive, attachFocusId]);
 
@@ -2454,6 +2594,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
   /** Mention ids (`mentions`) and modifier display ids of a finding, for `run--framed`. */
   const framingIds = (annotationId: string, mentions: boolean): string[] => {
+    const proposal = attachActive ? attachTargets.find(target => target.annotationId === annotationId)?.proposal : undefined;
+    if (proposal) return (targetSnapshotOf(proposal)?.evidence ?? [])
+      .map(ev => `target:${proposal.annotation_id}:${proposal.version}:${ev.mention.evidence_id}:${ev.version}`);
     const snapshot = visibleAnnotationById.get(annotationId);
     if (!snapshot) return [];
     return [...(mentions ? (snapshot.annotation.evidence_refs ?? []).map(ref => ref.evidence_id) : []),
@@ -2633,7 +2776,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // Proposals show their values read-only: focus the values section instead (rendered with tabIndex -1).
     return root.querySelector<HTMLElement>('[data-testid="axes-section"], .review-actions__proposal');
   };
-  const [textScrollRequest, setTextScrollRequest] = useState<{ evidenceId: string; nonce: number } | null>(null);
+  const [textScrollRequest, setTextScrollRequest] = useState<{ evidenceId: string; nonce: number; ifNeeded?: boolean } | null>(null);
   const lastOpenItem = useRef<string | null>(null);
   /** "Go to {term}": close the dialog, select the row, scroll the text to its mark and focus the resolving control. */
   const goToOpenItem = (item: OpenItem) => {
@@ -2807,13 +2950,22 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       setAcceptedSubmission({ identity: versionIdentity, value: structuredClone(submission) });
       readOnlyRef.current = true;
       retryVersions();
-      completedNextAssignment.current = adjacentTask.next;
-      setCompletedSubmission(submission);
+      const afterSubmit = assignmentNavigation?.onSubmitted;
+      // Next unsubmitted task of the project, not the neighbour in list order (M-6).
+      const next = assignmentNavigation
+        ? nextOpenTask(assignmentNavigation.tasks, assignmentNavigation.current.assignment_id, assignmentNavigation.current.project_key).next?.assignment_id
+        : undefined;
+      if (!afterSubmit) {
+        completedNextAssignment.current = next;
+        setCompletedSubmission(submission);
+      }
       try {
         await onSubmitted?.();
       } catch {
         // list refresh is best effort
       }
+      afterSubmit?.({ label: assignmentNavigation!.current.external_id || view.document.document_id,
+        assignmentId: assignmentNavigation!.current.assignment_id, next });
     } catch (err: unknown) {
       setSubmitDialogOpen(false);
       if (err instanceof DiscardedChangesError) return;
@@ -3116,7 +3268,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         colorIndex: markColourSlot({ termId: ann.term_id, layerId: ann.layer_id, kind: "own" }), modifiers: ann.modifiers }],
       view.document.text, infoFor(ann.layer_id));
     }),
-    ...targetMentions,
+    ...targetMentions.map(mention => {
+      const proposal = attachActive && attachModifier ? targetOfEvidence(mention.evidence_id) : undefined;
+      const entry = proposal && attachTargets.find(target => target.proposal === proposal);
+      return entry ? { ...mention, label: attachCopy.targetName(attachModifier!.termLabel, entry.term) } : mention;
+    }),
     ...sourceMentions,
     ...(pendingAnnotation && !pendingAnnotation.isSpanless && pendingAnnotation.evidenceId
       ? [{ evidence_id: pendingAnnotation.evidenceId, segments: pendingAnnotation.segments }]
@@ -3323,12 +3479,24 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                     const isSelected = refKey(t) === selectedTargetId;
                     const dec = decisionsMap[refKey(t)];
                     const isResolved = dec?.outcome === "changed" || dec?.outcome === "rejected";
+                    // M-5: in the attach mode an open or confirmed proposal is a target row (roving tab stop, ↑ ↓ Enter).
+                    const attachEntry = attachActive && attachModifier ? attachTargets.find(target => target.proposal === t) : undefined;
+                    const attachHere = !!attachEntry && attachFocusId === attachEntry.annotationId;
                     return (
                       <li
                         key={refKey(t)}
                         data-list-key={`target:${refKey(t)}`}
-                        className={`doc-item ${isSelected ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}`}
+                        className={`doc-item ${isSelected && !attachEntry ? "selected" : ""} ${isResolved ? "doc-item--resolved" : ""}${attachEntry ? " mod-target" : ""}${attachHere ? " mod-target--active" : ""}`}
+                        {...(attachEntry ? {
+                          role: "button", tabIndex: attachHere ? 0 : -1, "aria-label": attachCopy.targetName(attachModifier!.termLabel, attachEntry.term),
+                          onKeyDown: (event: React.KeyboardEvent<HTMLLIElement>) => {
+                            if (event.target !== event.currentTarget) return;
+                            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void attachTo(attachEntry.annotationId); }
+                            else if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); moveAttachFocus(event.key === "ArrowDown" ? 1 : -1); }
+                          },
+                        } : {})}
                         onClick={() => {
+                          if (attachEntry) { void attachTo(attachEntry.annotationId); return; }
                           const targetKey = refKey(t);
                           if (selectedTargetId === targetKey) {
                             handleDeselectAll();
@@ -3360,6 +3528,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                               const replTermId = replSnap?.annotation.term_id ?? dec.replacement?.annotation_id ?? "";
                               const replLabel = replSnap ? termLabel(replSnap.annotation.layer_id, replTermId) : null;
                               const displayText = replLabel ? `${replLabel} (${replTermId})` : replTermId;
+                              const splitOffs = splitOffsOf(t, dec.replacement?.annotation_id);
+                              if (splitOffs.length) return (
+                                <div className="doc-meta__line">
+                                  Replaced by {splitOffs.length + 1} findings, <strong>{displayText}</strong>:{" "}
+                                  {[replSnap, ...splitOffs].map((snap, index) => snap && <React.Fragment key={snap.annotation.annotation_id}>
+                                    {index > 0 && " "}
+                                    <Button type="button" size="sm" title="Jump to this finding in the draft" onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedTargetId(null); setSelectedSourceId(null);
+                                      setSelectedAnnotationId(snap.annotation.annotation_id);
+                                      setSelectedEvidenceId(snap.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+                                      setMobilePane("details");
+                                    }}>“{firstQuoteOf(snap)}”</Button>
+                                  </React.Fragment>)}
+                                  {" "}<AiBadge provenance={t.provenance} source={sourceForTarget(t)} />
+                                </div>
+                              );
                               return (
                                 <div className="doc-meta__line">
                                   <Button
@@ -3399,6 +3584,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           )}
                         </div>
                         {entryAuthorOf(t.annotation_id) && <div className="doc-meta">{entryAuthorOf(t.annotation_id)}</div>}
+                        {attachHere && <div className="mod-attach-here" aria-hidden="true">Attach {attachModifier!.termLabel} here, as your copy <Kbd>Enter</Kbd></div>}
                       </li>
                     );
                   })}
@@ -3470,7 +3656,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       axes={axes}
                       defaulted={defaultedKeys.has(refKey({ annotation_id: annSnap.annotation.annotation_id, version: annSnap.version }))}
                       proposal={proposalFor(annSnap, view.available_inputs ?? [])}
-                      documentText={view.document.text}
                       convertSource={attachActive && convertSourceId === annSnap.annotation.annotation_id}
                       attachTarget={attachActive && attachModifier && attachTargetIds.has(annSnap.annotation.annotation_id) ? {
                         term: attachModifier.termLabel, active: attachFocusId === annSnap.annotation.annotation_id, onMove: moveAttachFocus,
@@ -3561,11 +3746,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
         {/* Right: Annotation & Search Panel + Review Actions */}
         <div className="inspector-pane density-compact" ref={inspectorRef}>
-          {/* Always mounted so the text change is announced; aria-live, not role="status", which the save state owns. */}
+          {/* Always mounted so the text change is announced; aria-live, not role="status", which the save state owns.
+              M2 M-2: a framed success strip with a check icon, spacing below, so it reads as a status. */}
           <div aria-live="polite" data-advance-status>
-            {advanceStatus?.listKey === selectedListKey && <p className="form-hint">
-              {advanceStatus.text}{advanceStatus.listKey && <span aria-hidden="true"> <Kbd>K</Kbd> back</span>}
-            </p>}
+            {advanceStatus?.listKey === selectedListKey && <InlineMessage tone="success" live={false}>
+              <p className="advance-strip"><IconCheck />{advanceStatus.text}{advanceStatus.listKey && advanceStatus.decidedKey && <span aria-hidden="true"> <Kbd>K</Kbd> back</span>}</p>
+            </InlineMessage>}
           </div>
           {!readOnly && !pendingAnnotation && selectedReanchorItem && selectedAnnotation && <InlineMessage tone="warning">
             <p>This finding is saved. Its current version still needs text-change review. Check the evidence and clinical values, then complete this review. Later changes require completion again.</p>
@@ -3597,7 +3783,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               markQuote={attachSegments.length ? quoteSegments(view.document.text, attachSegments, 40) : null}
               note={attachModifier.mode === "convert"
                 ? <p>{attachCopy.convertNote(attachModifier.termLabel, attachSegments.length ? quoteSegments(view.document.text, attachSegments, 40) : null)}</p>
-                : undefined}
+                : attachNearest && attachTargets.find(target => target.annotationId === attachNearest.annotationId)?.proposal
+                  ? <p>{attachCopy.proposalNote(attachNearest.term)}</p> : undefined}
               nearest={attachNearest} focused={attachTargets.find(target => target.annotationId === attachReplaceId) ?? null}
               existing={annotationId => {
                 const modifier = draft.annotations?.find(a => a.annotation.annotation_id === annotationId)?.annotation.modifiers
@@ -3656,6 +3843,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   languages={searchLanguagesFor(pendingAnnotation.layerId)}
                   {...pendingSearchProps(pendingAnnotation)}
                   onPickModifier={pendingIsMarkedSpan && modifierLayerIds.has(pendingAnnotation.layerId) ? startAttach : undefined}
+                  modifierFilter={modifierLayerIds.has(pendingAnnotation.layerId)}
                   onSelectCandidate={(candidate, searchId) => {
                     if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId } });
                     else void createPendingAnnotation(candidate.term_id, searchId, candidate.label ?? undefined);
@@ -3700,6 +3888,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               resolveTermLabel={termLabel}
               termInfo={termId => selectedTarget.layer_id ? termLabel.info(selectedTarget.layer_id, termId) : undefined}
               evidence={targetSnapshot?.evidence ?? []}
+              replacedBy={(() => {
+                const replacementId = decisionsMap[refKey(selectedTarget)]?.replacement?.annotation_id;
+                const splitOffs = splitOffsOf(selectedTarget, replacementId);
+                const copy = (draft.annotations ?? []).find(a => a.annotation.annotation_id === replacementId);
+                return splitOffs.length && copy ? [copy, ...splitOffs].map(snap => ({ annotationId: snap.annotation.annotation_id, quote: firstQuoteOf(snap) })) : [];
+              })()}
               documentText={view.document.text}
               currentDecision={decisionsMap[refKey(selectedTarget)] ?? null}
               draftAnnotations={draft.annotations ?? []}
@@ -3727,6 +3921,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               }}
               onDeselect={handleDeselectAll}
               onRepeatDecision={outcome => { repeatDecision(selectedTarget, outcome); }}
+              onMoveMention={proposalCopyCanMove(selectedTarget) ? index => { void moveProposalMention(selectedTarget, index).catch(reportError); } : undefined}
               onShowMention={ev => {
                 const evidenceId = `target:${selectedTarget.annotation_id}:${selectedTarget.version}:${ev.mention.evidence_id}:${ev.version}`;
                 setSelectedEvidenceId(evidenceId);
@@ -3753,14 +3948,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               isAttachingMention={isAttachingMention}
               layerId={selectedAnnotation?.annotation.layer_id}
               searchLanguages={searchLanguagesFor(selectedAnnotation?.annotation.layer_id)}
+              modifierFilter={!!selectedAnnotation && modifierLayerIds.has(selectedAnnotation.annotation.layer_id)}
               modifierNotice={selectedAnnotation && isModifierTerm(selectedAnnotation) ? <ModifierAsFindingNotice
                 term={findingNameOf(selectedAnnotation)} readOnly={readOnly || !editableLayerIds.includes(selectedAnnotation.annotation.layer_id)}
                 onTurn={() => startConvert(selectedAnnotation)} /> : undefined}
               modifiersSection={selectedAnnotation && modifierLayerIds.has(selectedAnnotation.annotation.layer_id) ? (() => {
                 const ann = selectedAnnotation.annotation, id = ann.annotation_id, finding = findingNameOf(selectedAnnotation);
                 const label = (termId: string) => termLabel.info(ann.layer_id, termId)?.label ?? termId;
+                const picked = selectedEvidenceId ? parseModifierDisplayId(selectedEvidenceId) : null;
                 return <ModifiersSection finding={finding} modifiers={ann.modifiers ?? []} text={view.document.text}
                   termInfo={infoFor(ann.layer_id)} readOnly={readOnly || !editableLayerIds.includes(ann.layer_id)}
+                  selectedTermId={picked?.annotationId === id ? picked.termId : null}
+                  // B3-4: a modifier row selects the modifier itself; its span is marked and scrolled into view if needed.
+                  onSelectModifier={termId => {
+                    const evidenceId = modifierDisplayId(id, termId);
+                    setSelectedEvidenceId(evidenceId);
+                    setTextScrollRequest(previous => ({ evidenceId, nonce: (previous?.nonce ?? 0) + 1, ifNeeded: true }));
+                  }}
                   onAdd={termId => modifierCommands.add(id, termId)}
                   onLinkSpan={termId => startLinkSpan(id, termId)}
                   onRemoveSpan={termId => { void modifierCommands.removeSpan(id, termId, label(termId)).catch(() => undefined); }}
@@ -3809,6 +4013,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 handleSelection({ segments, intent: "new_mention" })
               }
               onDetachMention={(id) => { void handleDetachMention(id).catch(reportError); }}
+              onMoveMention={selectedAnnotationId && editableLayerIds.includes(selectedAnnotation?.annotation.layer_id ?? "")
+                ? (id) => { void moveMentionToNewFinding(selectedAnnotationId, id).catch(reportError); } : undefined}
               onDeleteAnnotation={(id) => { void deleteAnnotation(id).catch(reportError); }}
               deleteConfirmMessage={carriedDeleteMessage}
               onSetIntent={(intent) => {

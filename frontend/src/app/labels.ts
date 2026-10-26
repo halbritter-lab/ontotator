@@ -19,6 +19,8 @@ export const taskLabels: Readonly<Record<"annotate" | "review" | "translation_re
 
 /** Breadcrumb name of a task: "failed-translation, Translation review (de)"; the document id when there is no external id. */
 export function taskCrumbLabel(task: { external_id?: string | null; document_id: string; task: string; language: string }): string {
+  // The consolidation view's title names the text already (B5-6): its crumb is the task alone.
+  if (task.task === "review") return `${labelFor(taskLabels, task.task)} (${task.language})`;
   return `${task.external_id || task.document_id}, ${labelFor(taskLabels, task.task)} (${task.language})`;
 }
 

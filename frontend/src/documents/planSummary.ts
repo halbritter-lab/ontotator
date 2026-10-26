@@ -52,6 +52,22 @@ export function planReport(head: string, locked: number, noProposals: number): s
   return `${parts.join("; ")}.`;
 }
 
+/** Quick choice of the plan dialog (M2 decision M-1): the two translation presets. */
+export type PlanPreset = "review_and_annotate_translations" | "annotate_only";
+
+export const PRESET_LABELS: Readonly<Record<PlanPreset, string>> = {
+  review_and_annotate_translations: "Translation review and annotation",
+  annotate_only: "Annotation only, no translation review",
+};
+
+/** Plan cells of a preset for the given languages; the source key is skipped (presets apply to translations only). */
+export function presetChoices(preset: PlanPreset, languages: readonly string[]): PlanChoices {
+  const cell: PlanChoices[string] = preset === "annotate_only"
+    ? { review: "keep", annotate: "on", annotation_mode: "keep" }
+    : { review: "on", annotate: "on", annotation_mode: "keep" };
+  return Object.fromEntries(languages.filter(language => language !== SOURCE_KEY).map(language => [language, { ...cell }]));
+}
+
 /** Toast line after a quick action: "Plan saved for 20 cases, de: translation review and annotation". */
 export function savedSummary(caseCount: number, choices: PlanChoices): string {
   const active = changedChoices(choices);

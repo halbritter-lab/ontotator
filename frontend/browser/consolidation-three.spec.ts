@@ -25,13 +25,12 @@ async function threeScenario(page: Page): Promise<ThreeScenario> {
   return await response.json() as ThreeScenario;
 }
 
-const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const OTHER = "Abnormality of the nervous system (HP:0000707)";
 const group = (page: Page, name: string) => page.locator(".cons-group").filter({ has: page.locator(".cons-group-title", { hasText: name }) });
-const submitButton = (page: Page) => page.locator(".cons-submit").getByRole("button", { name: "Submit consolidation", exact: true });
+const submitButton = (page: Page) => page.locator(".cons-progress").getByRole("button", { name: "Submit consolidation", exact: true });
 const saved = (page: Page) => page.waitForResponse(r => r.request().method() !== "GET" && /consolidation/.test(r.url()));
 
-/** Resolve every remaining open group: keep where nothing conflicts, else take a whole finding. */
+/** Resolve every remaining open group: a ✓ in each conflicting row (first person), then Keep (M-7d). */
 async function resolveRest(page: Page): Promise<void> {
   const groups = page.locator(".cons-group");
   const count = await groups.count();
@@ -40,17 +39,18 @@ async function resolveRest(page: Page): Promise<void> {
     if (!(await group.locator(".cons-group-state").count())) continue;
     const toggle = group.locator(".cons-group-toggle");
     if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-    const take = group.getByRole("button", { name: /^Take \S+'s finding$/ });
     const keep = group.getByRole("button", { name: /^Keep/ });
-    await expect(take.or(keep).first()).toBeVisible();
-    await (await keep.count() ? keep : take).first().click();
+    await expect(keep.first()).toBeVisible();
+    const conflicts = group.locator("tr.cons-row--conflict");
+    for (let row = 0; row < await conflicts.count(); row += 1) await conflicts.nth(row).locator("button.cons-take").first().click();
+    await keep.first().click();
     // Saved: the group's line reads "decided: …".
     await expect(group.locator(".cons-group-done")).toBeVisible();
   }
   await expect(submitButton(page)).not.toHaveAttribute("aria-disabled", "true");
 }
 
-test("three people: choose by field, take a whole finding, the result line names what is not taken", async ({ page }) => {
+test("three people: choose by field, Keep saves, the result line names what is not taken", async ({ page }) => {
   const s = await threeScenario(page);
   await loginExisting(page, s.users.lead);
   await page.goto(`/#/tasks/${s.assignment_id}`);
@@ -67,31 +67,36 @@ test("three people: choose by field, take a whole finding, the result line names
   await expect(toggle).toContainText("2 fields to decide");
   const table = hypotonia.locator("table.cons-compare");
   await expect(table.locator("thead th")).toHaveCount(3);
-  // Agreed rows fold into one "Agreed" line after the rows to decide; "Show values" opens them.
-  await expect(table.getByRole("row", { name: /^Agreed/ })).toContainText("Experiencer, Temporality");
-  await table.getByRole("button", { name: "Show values", exact: true }).click();
-  await expect(table.getByRole("cell", { name: "Patient (all agree)", exact: true })).toBeVisible();
-  await expect(table.getByRole("cell", { name: "Current (all agree)", exact: true })).toBeVisible();
+  // Every row is visible (M-7e): agreed rows muted after the rows to decide, the value under every person (B5-2).
+  await expect(table.getByRole("row", { name: /^Agreed/ })).toHaveCount(0);
+  await expect(table.locator("tr.cons-row--agreed").first()).toBeVisible();
+  await expect(table.getByRole("row", { name: /^Experiencer/ }).getByRole("cell", { name: "Patient", exact: true })).toHaveCount(3);
+  await expect(table.getByRole("row", { name: /^Temporality/ }).getByRole("cell", { name: "Current", exact: true })).toHaveCount(3);
   const result = hypotonia.locator(".cons-result");
 
   // ✓ on the other term (Term row): the result names it and lists what is not taken.
   await table.getByRole("button", { name: new RegExp(`^Take Abnormality of the nervous system from .*ann-0003.* for Term$`) }).click();
   await expect(result).toContainText(`Result: 1 finding, ${OTHER}, Assertion not chosen yet, Patient, Current`);
   await expect(result).toContainText(new RegExp(`Not taken: Hypotonia \\(.*ann-0001.*, .*ann-0002.*\\)`));
-  // ✓ on ann-0002's Absent completes the group with that value.
-  let done = saved(page);
+  // ✓ on ann-0002's Absent stages that value; Keep saves the group (M-7d).
   await table.getByRole("button", { name: new RegExp(`^Take Absent from .*ann-0002.* for Assertion$`) }).click();
+  await expect(result).toContainText("Not saved yet.");
+  let done = saved(page);
+  await hypotonia.getByRole("button", { name: "Keep", exact: true }).click();
   expect((await done).ok()).toBeTruthy();
   await expect(toggle).toContainText(`decided: ${OTHER}, Absent, Patient, Current`);
 
-  // Change, then one click takes ann-0003's whole finding (its Present comes with it).
-  done = saved(page);
-  await hypotonia.getByRole("button", { name: /^Change\b/ }).first().click();
-  expect((await done).ok()).toBeTruthy();
+  // The resolved row has no Reopen button (M-7b): the row expands, Reopen is inside. Then ann-0003's Present, Keep.
+  await expect(hypotonia.locator(".cons-group-line").getByRole("button", { name: /^Reopen\b/ })).toHaveCount(0);
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   done = saved(page);
-  // "Take {first name}'s finding"; the scenario's people are named by their pseudonym "{project}-ann-0003".
-  await table.getByRole("button", { name: new RegExp(`^Take ${esc(s.users["ann-0003"])}'s finding$`) }).click();
+  await hypotonia.getByRole("button", { name: "Reopen", exact: true }).click();
+  expect((await done).ok()).toBeTruthy();
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await table.getByRole("button", { name: new RegExp(`^Take Abnormality of the nervous system from .*ann-0003.* for Term$`) }).click();
+  await table.getByRole("button", { name: new RegExp(`^Take Present from .*ann-0003.* for Assertion$`) }).click();
+  done = saved(page);
+  await hypotonia.getByRole("button", { name: "Keep", exact: true }).click();
   expect((await done).ok()).toBeTruthy();
   await expect(toggle).toContainText(`decided: ${OTHER}, Present, Patient, Current`);
 

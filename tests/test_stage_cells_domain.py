@@ -625,6 +625,7 @@ def test_final_cell_before_decision() -> None:
         )
     )
     assert (c.annotation.state, c.annotation.detail.people) == ("consolidating", (LUC,))
+    assert (c.annotation.detail.submitted, c.annotation.detail.total) == (2, 2)
     # Confirm: a final with an unacknowledged cause on the newest version.
     c = cells(
         facts(

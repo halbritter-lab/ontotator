@@ -25,6 +25,14 @@ it("shows the matching tool, version, model, run, import, set, bundle and notes"
   expect(screen.getByText("AI").title).toBe("Phentrieve 1.4");
 });
 
+it("starts collapsed to one line naming the tool and the import (B3-1)", async () => {
+  vi.spyOn(api, "getProposalSet").mockResolvedValue(metadata());
+  render(show());
+  const details = (await screen.findByText(/^Phentrieve 1\.4, imported/)).closest("details")!;
+  expect(details.open).toBe(false);
+  expect(within(details.querySelector("summary")!).getByRole("heading", {name: "Source"})).toBeTruthy();
+});
+
 it("deduplicates inflight detail and badge requests, then successful rerenders", async () => {
   let resolve!: (value: ProposalSetView) => void;
   const get = vi.spyOn(api, "getProposalSet").mockReturnValue(new Promise(r => {resolve = r;}));

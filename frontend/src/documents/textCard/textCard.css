@@ -142,9 +142,10 @@
 .text-version-older > details > summary { color: var(--text-muted); cursor: pointer; }
 .text-version-older > details > .text-versions { margin-top: var(--space-2); }
 
-.technical-details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
-.technical-details dt { color: var(--text-muted); }
-.technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
+/* The text card's footer list only; editor <details class="technical-details"> stay blocks (R-5). */
+dl.technical-details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
+dl.technical-details dt { color: var(--text-muted); }
+dl.technical-details dd { margin: 0; overflow-wrap: anywhere; font-family: var(--font-mono); }
 
 /* Decision block (the former final-result panel, V6): choose, compare, review changes */
 .final-panel { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
@@ -172,8 +173,8 @@
 .final-panel-text-change { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-left: 3px solid var(--warning); background: var(--surface-sunken); }
 @media (max-width: 699px) {
   .final-panel-row-actions { white-space: normal; text-align: start; }
-  .technical-details { grid-template-columns: minmax(0, 1fr); }
-  .technical-details dd { margin-bottom: var(--space-1); }
+  dl.technical-details { grid-template-columns: minmax(0, 1fr); }
+  dl.technical-details dd { margin-bottom: var(--space-1); }
 }
 
 @media (forced-colors: active) {

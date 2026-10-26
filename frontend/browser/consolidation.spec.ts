@@ -84,7 +84,7 @@ test("a lead without the Consolidator role consolidates the 8-group example in 6
   await expect(page).toHaveURL(new RegExp(`#/tasks/${round.assignment_id}$`));
   await expectOpened(page);
   // The task's guidelines and problem report stay at hand; the path names the open groups.
-  await expect(page.getByRole("group", { name: "Task", exact: true }).getByRole("button", { name: /^Report problem/ })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Task", exact: true }).getByRole("button", { name: /^Report a text problem/ })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Text path", exact: true })).toContainText("consolidating, 4 of 8 groups open");
   // A person label on every member: the comparison names both people; no internal ids anywhere.
   await expect(expanded(page).locator("thead th")).toHaveCount(2);
@@ -93,8 +93,10 @@ test("a lead without the Consolidator role consolidates the 8-group example in 6
   expect(body).toContain("HP:0001252");
   await evidence(page, "e2a-consolidation-open-1280");
 
-  // 1: value. 2: span. 3: partial. 4: term (whole finding). 5: Submit. 6: confirm.
+  // 1: value (✓ stages, Keep saves, M-7d). 2: span. 3: partial. 4: term and assertion. 5: Submit. 6: confirm.
   await take(page, "absent", "Assertion").click();
+  await expect(expanded(page).locator(".cons-result")).toContainText("Not saved yet.");
+  await expanded(page).getByRole("button", { name: "Keep", exact: true }).click();
   await expect(expandedGroup(page)).toHaveText("Absent reflexes");
   await expect(page.getByRole("button", { name: /^muscular hypotonia decided: Hypotonia \(HP:0001252\), Absent/ })).toBeVisible();
   // The reflex spans overlap: no text decision, the text comes with the kept finding; "Keep" takes it.
@@ -103,19 +105,22 @@ test("a lead without the Consolidator role consolidates the 8-group example in 6
   await expect(expandedGroup(page)).toHaveText("Reduced hearing");
   await page.getByRole("button", { name: /^Keep .+'s finding$/ }).click();
   await expect(expandedGroup(page)).toHaveText("Prolonged seizure activity");
-  // The term group also differs in the assertion: "Take {name}'s finding" takes a whole finding at once.
+  // The term group also differs in the assertion: one ✓ per row, then Keep (no whole-finding shortcut, M-7d).
   const table = expanded(page).getByRole("table");
   await expect(table.getByRole("rowheader", { name: /Assertion$/ })).toBeVisible();
   await evidence(page, "consolidation-term-and-assertion-1280");
   const terms = await table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: /Term$/ }) }).getByRole("cell").allTextContents();
   const epilepticus = terms.findIndex(text => text.includes("Status epilepticus"));
   expect(epilepticus, terms.join(" | ")).toBeGreaterThanOrEqual(0);
-  await table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Whole finding" }) }).getByRole("cell").nth(epilepticus).getByRole("button").click();
+  await expect(table.getByRole("rowheader", { name: "Whole finding" })).toHaveCount(0);
+  await take(page, "Status epilepticus", "Term").click();
+  await take(page, "present", "Assertion").click();
+  await expanded(page).getByRole("button", { name: "Keep", exact: true }).click();
   await expect(expandedGroup(page)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Prolonged seizure activity decided: Status epilepticus \(HP:0002133\), Present/ })).toBeVisible();
   await page.getByRole("button", { name: "Submit consolidation", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Submit consolidation?" });
-  await expect(dialog.getByText("8 groups, 8 findings, 0 left out", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("8 groups, 8 findings, 0 not in result", { exact: true })).toBeVisible();
   await evidence(page, "e2a-consolidation-summary-1280");
   await dialog.getByRole("button", { name: "Submit", exact: true }).click();
   await expect(page.getByText("Consolidation submitted. Accept the result in Documents.", { exact: true })).toBeVisible();
@@ -126,7 +131,7 @@ test("a lead without the Consolidator role consolidates the 8-group example in 6
   await expect(page.getByRole("link", { name: "Back to documents", exact: true })).toBeVisible();
   await expect(page.getByText("This consolidation was submitted. You see its final state.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Submit/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Change/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Reopen/ })).toHaveCount(0);
 
   // The lead accepts the consolidation as the result.
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
@@ -150,23 +155,27 @@ test("keyboard only: J/K, the ✓ choices, Submit and the summary", async ({ pag
   await expect(page.getByRole("button", { name: /muscular hypotonia/, expanded: true })).toBeFocused();
   await tabTo(page, take(page, "absent", "Assertion"));
   await page.keyboard.press("Enter");
+  await tabTo(page, expanded(page).getByRole("button", { name: "Keep", exact: true }));
+  await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: /^Absent reflexes/, expanded: true })).toBeFocused();
   await tabTo(page, expanded(page).getByRole("button", { name: "Keep", exact: true }));
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: /^Reduced hearing/, expanded: true })).toBeFocused();
-  await tabTo(page, expanded(page).getByRole("button", { name: "Leave out", exact: true }));
+  await tabTo(page, expanded(page).getByRole("button", { name: "Not in result", exact: true }));
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: /Prolonged seizure activity/, expanded: true })).toBeFocused();
-  // No "Keep both" (D1): one ✓ per conflicting field, the last choice resolves the group.
+  // No "Keep both" (D1): one ✓ per conflicting field, then Keep saves (M-7d).
   await tabTo(page, take(page, "Status epilepticus", "Term"));
   await page.keyboard.press("Enter");
   await tabTo(page, take(page, "present", "Assertion"));
+  await page.keyboard.press("Enter");
+  await tabTo(page, expanded(page).getByRole("button", { name: "Keep", exact: true }));
   await page.keyboard.press("Enter");
   const submit = page.getByRole("button", { name: "Submit consolidation", exact: true });
   await expect(submit).toBeFocused();
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Submit consolidation?" });
-  await expect(dialog.getByText("8 groups, 7 findings, 1 left out", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("8 groups, 7 findings, 1 not in result", { exact: true })).toBeVisible();
   await tabTo(page, dialog.getByRole("button", { name: "Submit", exact: true }));
   await page.keyboard.press("Enter");
   await expect(page.getByText("Consolidation submitted. Accept the result in Documents.", { exact: true })).toBeVisible();

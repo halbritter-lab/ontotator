@@ -40,7 +40,7 @@ describe("progress labels", () => {
       annotation: { ...stages.annotation, links: { paused: { plan: ["annotate", "review_and_annotate"], paused: "yes" }, submitted: { plan: ["annotate", "review_and_annotate"], stage: ["final", "done"], paused: "no" } } },
       final: { ...stages.final, links: { final: { plan: ["annotate", "review_and_annotate"], final: "any" } } },
     };
-    const cards = stageCards(linked, null);
+    const cards = stageCards(linked);
     const query = (card: number, key: string) => cards[card].rows.find(row => row.key === key)?.query;
     expect(query(0, "to_assign")).toEqual({ plan: "review,review_and_annotate", step: "assign_translation_review" });
     expect(query(0, "rejected_or_queried")).toEqual({ plan: "review,review_and_annotate", step: "resolve_rejected,resolve_queried" });
@@ -50,16 +50,16 @@ describe("progress labels", () => {
     expect(query(2, "final")).toEqual({ plan: "annotate,review_and_annotate", final: "any" });
     // A count the server sends no query for has no link (no local query table).
     expect(query(0, "accepted")).toBeUndefined();
-    expect(stageCards(stages, null).flatMap(card => card.rows).every(row => row.query === undefined)).toBe(true);
+    expect(stageCards(stages).flatMap(card => card.rows).every(row => row.query === undefined)).toBe(true);
   });
 
   it("describes the three stage cards", () => {
-    const cards = stageCards(stages, 2);
+    const cards = stageCards(stages);
     expect(cards.map(card => card.title)).toEqual(["Translation review", "Annotation", "Final result"]);
-    expect(cards.map(card => card.done)).toEqual(["2 of 7 accepted", "2 of 11 fully submitted", "1 of 11 final"]);
+    expect(cards.map(card => card.done)).toEqual(["2 of 7 accepted", "2 of 11 annotated", "1 of 11 final"]);
     expect(cards.map(card => card.scope)).toEqual([
       "7 translations selected for review",
-      "11 language versions selected, 2 annotations per text",
+      "11 language versions selected",
       "11 language versions selected for annotation",
     ]);
     expect(cards[0].rows.map(row => [row.label, row.count])).toEqual([
@@ -83,8 +83,5 @@ describe("progress labels", () => {
       ["Final", 1],
     ]);
     expect(cards[2].footer).toBe("(1 final, 10 would be omitted)");
-    expect(cards[1].scope).toContain("2 annotations per text");
-    expect(stageCards(stages, 1)[1].scope).toBe("11 language versions selected, 1 annotation per text");
-    expect(stageCards(stages, null)[1].scope).toBe("11 language versions selected");
   });
 });

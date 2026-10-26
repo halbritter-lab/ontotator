@@ -43,7 +43,7 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
     && (item.task === "translation_review" ? show("review") && !inCard : show("annotation"))).map(item => item.assignment_id));
   const reassignable: AssignmentView[] = textVersionTools
     ? textVersionTools.assignments.filter(assignment => workIds.has(assignment.id) && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
-  // Submitted annotations: "Reopen…" with the stage (the version list's Assignment actions offer it too).
+  // Submitted annotations: "Reopen…" with the stage (the version list's assignment actions offer it too).
   const reopenable: AssignmentView[] = textVersionTools && show("annotation")
     ? textVersionTools.assignments.filter(assignment => assignment.task === "annotate" && assignment.status === "submitted" && documents.has(assignment.document_id) && !assignment.revoked_at) : [];
   const [reopening, setReopening] = useState<number | null>(null);
@@ -58,7 +58,7 @@ export function StageActions({ row, stage, onAssign, onRequestCorrection, canReq
   return <>
     {reassignable.map(assignment => <div key={assignment.id} className="stage-actions-reassign">
       <span>{personOf(assignment.pseudonym)}</span>
-      {textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} onChanged={textVersionTools.onAssignmentsChanged} directReassign />}
+      {textVersionTools && <AssignmentActions assignment={assignment} members={textVersionTools.members} onChanged={textVersionTools.onAssignmentsChanged} />}
     </div>)}
     {reopenable.map(assignment => <div key={assignment.id} className="stage-actions-reassign">
       <span>{personOf(assignment.pseudonym)}</span>

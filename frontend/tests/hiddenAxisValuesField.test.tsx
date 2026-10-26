@@ -1,10 +1,10 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { components } from "../src/api/generated";
-import { HiddenAxisValuesField, type HiddenAxisValuesFieldProps } from "../src/admin/HiddenAxisValuesField";
+import { hiddenCount, HiddenAxisValuesField, type HiddenAxisValuesFieldProps } from "../src/admin/HiddenAxisValuesField";
 
 type Axis = components["schemas"]["AxisDefinition"];
-const axis = (id: string, options: string[]): Axis => ({ id, label: "Status", options, allow_empty: true });
+const axis = (id: string, options: string[], label = id === "assertion" ? "Status" : "Confidence"): Axis => ({ id, label, options, allow_empty: true });
 const profile: HiddenAxisValuesFieldProps["profile"] = {
   schema: "ontocurator-task-profile/v1", profile_id: "test/v1", version: "1",
   ontologies: [{ ontology_id: "hp", label: "HPO", release: "2026", sha256: "a".repeat(64), format: "obo-graph-json" }],
@@ -21,44 +21,46 @@ const profile: HiddenAxisValuesFieldProps["profile"] = {
 };
 
 const layerGroup = (id: string) => screen.getByRole("group", { name: `Findings (${id})` });
-const axisGroup = (layer: string, id: string) => within(layerGroup(layer)).getByRole("group", { name: `Status (${id})` });
+const axisGroup = (layer: string, id: string) => within(layerGroup(layer)).getByRole("group", { name: id === "assertion" ? "Status" : "Confidence" });
+/** The toggle of a value: pressed = shown (D7 B). */
+const toggle = (group: HTMLElement, name: string) => within(group).getByRole("button", { name }) as HTMLButtonElement;
+const shown = (button: HTMLElement) => button.getAttribute("aria-pressed") === "true";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-describe("hidden axis values controlled field", () => {
+describe("values annotators can choose (shown-value toggles, M-8c)", () => {
   it("enumerates all layers/types and unions shared-axis options once in profile order", () => {
     render(<HiddenAxisValuesField profile={profile} axisDefaults={{}} value={{}} onChange={vi.fn()} />);
     const first = axisGroup("layer-a", "assertion");
-    expect(within(first).getAllByRole("checkbox").map(input => input.getAttribute("id"))).toHaveLength(3);
-    expect(within(first).getAllByRole("checkbox").map(input => input.closest("label")?.textContent)).toEqual(["present", "absent", "uncertain"]);
-    expect(within(axisGroup("layer-a", "confidence")).getAllByRole("checkbox")).toHaveLength(2);
-    expect(within(axisGroup("layer-b", "assertion")).getAllByRole("checkbox")).toHaveLength(2);
-    const inputs = screen.getAllByRole("checkbox") as HTMLInputElement[];
-    expect(new Set(inputs.map(input => input.id)).size).toBe(inputs.length);
-    expect(screen.getByRole("group", { name: "Hidden axis values" })).toBeDefined();
+    expect(within(first).getAllByRole("button").map(button => button.textContent)).toEqual(["Present", "Absent", "Uncertain"]);
+    expect(within(first).getAllByRole("button").every(shown)).toBe(true);
+    expect(within(axisGroup("layer-a", "confidence")).getAllByRole("button")).toHaveLength(2);
+    expect(within(axisGroup("layer-b", "assertion")).getAllByRole("button")).toHaveLength(2);
+    // Several layers: one heading each.
+    expect(screen.getAllByRole("heading", { level: 4 }).map(heading => heading.textContent)).toEqual(["Findings", "Findings"]);
   });
 
   it("protects only the actual server-resolved default, which need not be the first option", () => {
     const change = vi.fn();
     render(<HiddenAxisValuesField profile={profile} axisDefaults={{ "layer-a": { assertion: "absent" } }} value={{}} onChange={change} />);
-    const group = within(axisGroup("layer-a", "assertion"));
-    const actualDefault = group.getByRole("checkbox", { name: "absent" }) as HTMLInputElement;
+    const group = axisGroup("layer-a", "assertion");
+    const actualDefault = toggle(group, "Absent");
     expect(actualDefault.disabled).toBe(true);
     expect(actualDefault.title).toBe("The default value cannot be hidden");
     fireEvent.click(actualDefault);
     expect(change).not.toHaveBeenCalled();
-    expect((group.getByRole("checkbox", { name: "present" }) as HTMLInputElement).disabled).toBe(false);
-    expect((within(axisGroup("layer-b", "assertion")).getByRole("checkbox", { name: "possible" }) as HTMLInputElement).disabled).toBe(false);
+    expect(toggle(group, "Present").disabled).toBe(false);
+    expect(toggle(axisGroup("layer-b", "assertion"), "Possible").disabled).toBe(false);
   });
 
   it("lets generic profiles hide their first option without guessing a default", () => {
     const change = vi.fn();
     render(<HiddenAxisValuesField profile={profile} axisDefaults={{}} value={{}} onChange={change} />);
-    fireEvent.click(within(axisGroup("layer-a", "assertion")).getByRole("checkbox", { name: "present" }));
+    fireEvent.click(toggle(axisGroup("layer-a", "assertion"), "Present"));
     expect(change).toHaveBeenCalledWith({ "layer-a": { assertion: ["present"] } });
   });
 
-  it("toggles options on and off using controlled props and immutable map copies", () => {
+  it("toggles options off and on using controlled props and immutable map copies", () => {
     const change = vi.fn();
     const original = Object.freeze({
       "layer-a": Object.freeze({ assertion: Object.freeze(["legacy"]), confidence: Object.freeze(["low"]) }),
@@ -70,9 +72,9 @@ describe("hidden axis values controlled field", () => {
     const value = original as unknown as HiddenAxisValuesFieldProps["value"];
     const props = { profile, axisDefaults: {}, onChange: change };
     const view = render(<HiddenAxisValuesField {...props} value={value} />);
-    const checkbox = within(axisGroup("layer-a", "assertion")).getByRole("checkbox", { name: "uncertain" }) as HTMLInputElement;
-    expect(checkbox.checked).toBe(false);
-    fireEvent.click(checkbox);
+    const button = () => toggle(axisGroup("layer-a", "assertion"), "Uncertain");
+    expect(shown(button())).toBe(true);
+    fireEvent.click(button());
     const added = change.mock.calls[0][0] as HiddenAxisValuesFieldProps["value"];
     expect(added).toEqual({ ...value, "layer-a": { assertion: ["legacy", "uncertain"], confidence: ["low"] } });
     expect(added).not.toBe(value);
@@ -80,10 +82,11 @@ describe("hidden axis values controlled field", () => {
     expect(added["layer-b"]).toBe(value["layer-b"]);
     expect(added["unknown-layer"]).toBe(value["unknown-layer"]);
     expect(value["layer-a"].assertion).toEqual(["legacy"]);
-    expect(checkbox.checked).toBe(false);
+    expect(shown(button())).toBe(true);
     view.rerender(<HiddenAxisValuesField {...props} value={added} />);
-    expect(checkbox.checked).toBe(true);
-    fireEvent.click(checkbox);
+    expect(shown(button())).toBe(false);
+    expect(hiddenCount(added)).toBe(5);
+    fireEvent.click(button());
     expect(change.mock.calls[1][0]).toEqual(value);
     expect(added["layer-a"].assertion).toEqual(["legacy", "uncertain"]);
   });
@@ -92,8 +95,8 @@ describe("hidden axis values controlled field", () => {
     const change = vi.fn();
     const value = { "layer-a": { assertion: ["present"], "unknown-axis": ["custom"] } };
     render(<HiddenAxisValuesField profile={profile} axisDefaults={{}} value={value} onChange={change} />);
-    expect((within(axisGroup("layer-a", "assertion")).getByRole("checkbox", { name: "present" }) as HTMLInputElement).checked).toBe(true);
-    fireEvent.click(within(axisGroup("layer-a", "confidence")).getByRole("checkbox", { name: "high" }));
+    expect(shown(toggle(axisGroup("layer-a", "assertion"), "Present"))).toBe(false);
+    fireEvent.click(toggle(axisGroup("layer-a", "confidence"), "High"));
     expect(change).toHaveBeenCalledWith({ "layer-a": { assertion: ["present"], "unknown-axis": ["custom"], confidence: ["high"] } });
     expect(value).toEqual({ "layer-a": { assertion: ["present"], "unknown-axis": ["custom"] } });
   });
@@ -101,9 +104,9 @@ describe("hidden axis values controlled field", () => {
   it("disables every option and prevents changes when the field is disabled", () => {
     const change = vi.fn();
     render(<HiddenAxisValuesField profile={profile} axisDefaults={{}} value={{}} onChange={change} disabled />);
-    for (const input of screen.getAllByRole("checkbox") as HTMLInputElement[]) {
-      expect(input.disabled).toBe(true);
-      fireEvent.click(input);
+    for (const button of screen.getAllByRole("button") as HTMLButtonElement[]) {
+      expect(button.disabled).toBe(true);
+      fireEvent.click(button);
     }
     expect(change).not.toHaveBeenCalled();
   });
@@ -113,7 +116,7 @@ describe("hidden axis values controlled field", () => {
     { layers: profile.layers.map(layer => ({ ...layer, annotation_types: [{ type_id: "no-axes", label: "No axes", evidence_policy: "optional" as const }] })) },
   ])("explains when the profile has no available axis options", ({ layers }) => {
     render(<HiddenAxisValuesField profile={{ ...profile, layers }} axisDefaults={{}} value={{}} onChange={vi.fn()} />);
-    expect(screen.getByText("This profile has no axis values to hide.")).toBeDefined();
-    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.getByText("This profile has no values to limit.")).toBeDefined();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

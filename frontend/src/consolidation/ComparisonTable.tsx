@@ -1,8 +1,7 @@
 /** The comparison table of one group (spec §3, mockup variant B): people as columns, fields as rows. */
-import type { ConsolidationGroupView, ConsolidationMemberView, ConsolidationPersonView } from "../api/client";
+import type { ConsolidationGroupView, ConsolidationPersonView } from "../api/client";
 import { AxisValue } from "../ui/AxisValue";
 import { IconBot, IconCheck, IconWarning } from "../ui/icons";
-import { useState } from "react";
 import { allAgree, type ComparisonRow, type ModifierToggleCell, peopleOf } from "./groupModel";
 import { personName } from "./lanes";
 import { LaneKey } from "./TextPane";
@@ -15,12 +14,11 @@ export interface ComparisonTableProps {
   group: ConsolidationGroupView;
   people: readonly ConsolidationPersonView[];
   rows: readonly ComparisonRow[];
-  /** Resolved or read-only: values only, no take buttons and no "Whole finding" row. */
+  /** Resolved or read-only: values only, no take buttons. */
   readOnly?: boolean;
   /** Saving: the buttons stay focusable but do nothing. */
   busy?: boolean;
   onChoose: (rowId: string, value: string) => void;
-  onTake: (member: ConsolidationMemberView) => void;
 }
 
 /** A member's modifiers, one line each; in a conflicting row each carries its ✓ toggle (DN-1). No "·" (DN-10). */
@@ -34,28 +32,30 @@ function ModifierList({ owner, toggles, interactive, busy, onPress }: { owner: s
   </span></li>)}</ul>;
 }
 
-/** Rows to decide first; agreed rows fold into one "Agreed" line when there are two or more (a one-person group shows all). */
-export function orderRows(rows: readonly ComparisonRow[], members: number): { top: ComparisonRow[]; agreed: ComparisonRow[]; whole: ComparisonRow[] } {
-  const agreed = members > 1 ? rows.filter(row => row.agreed !== null) : [];
-  const folded = agreed.length > 1 ? agreed : [];
-  const rest = rows.filter(row => !folded.includes(row) && row.kind !== "whole");
-  return { top: [...rest.filter(row => row.conflict), ...rest.filter(row => !row.conflict)], agreed: folded, whole: rows.filter(row => row.kind === "whole") };
+/** Every row is shown (M2 M-7e): rows to decide first and highlighted, then the rest; agreed rows muted. */
+export function orderRows(rows: readonly ComparisonRow[]): ComparisonRow[] {
+  const shown = rows.filter(row => row.kind !== "whole");
+  return [...shown.filter(row => row.conflict), ...shown.filter(row => !row.conflict)];
 }
 
-export function ComparisonTable({ name, group, people, rows, readOnly = false, busy = false, onChoose, onTake }: ComparisonTableProps): JSX.Element {
+export function ComparisonTable({ name, group, people, rows, readOnly = false, busy = false, onChoose }: ComparisonTableProps): JSX.Element {
   const members = group.members;
   const names = peopleOf(people, members);
-  const [showAgreed, setShowAgreed] = useState(false);
-  const { top, agreed, whole } = orderRows(rows, members.length);
-  const line = (row: ComparisonRow) => <tr key={row.id} hidden={agreed.includes(row) && !showAgreed || undefined}
-    className={row.conflict && !readOnly ? "cons-row--conflict" : undefined}>
+  const line = (row: ComparisonRow) => <tr key={row.id}
+    className={row.conflict && !readOnly ? "cons-row--conflict" : row.agreed !== null && members.length > 1 ? "cons-row--agreed" : undefined}>
       <th scope="row">
         {row.conflict && !readOnly && <><IconWarning className="cons-conflict-mark" /><span className="visually-hidden">Conflict: </span></>}
         {row.label}
         {row.warnings?.map(warning => <span key={warning} className="cons-row-warning"><IconWarning className="cons-conflict-mark" />{warning}</span>)}
       </th>
+      {/* B5-2: an agreed value stands under every person, so agreement is obvious; a narrow table shows it once across. */}
+      {row.agreed !== null && members.length > 1 && row.cells.map(cell => <td key={cell.inputId} className="cons-agreed cons-agreed-each">
+        {row.kind === "modifiers" && cell.toggles?.some(toggle => toggle.cohort)
+          ? cell.toggles.map((toggle, index) => <span key={toggle.id}>{index > 0 && ", "}{toggle.label}{toggle.cohort && <> <span className="cons-tag">Cohort term</span></>}</span>)
+          : row.kind === "axis" ? <AxisValue value={cell.value || null} /> : cell.display}
+      </td>)}
       {row.agreed !== null || row.info !== null
-        ? <td colSpan={members.length} className="cons-agreed">{row.kind === "modifiers" && row.cells[0].toggles?.some(toggle => toggle.cohort)
+        ? <td colSpan={members.length} className={row.agreed !== null && members.length > 1 ? "cons-agreed cons-agreed-once" : "cons-agreed"}>{row.kind === "modifiers" && row.cells[0].toggles?.some(toggle => toggle.cohort)
           ? <>{row.cells[0].toggles.map((toggle, index) => <span key={toggle.id}>{index > 0 && ", "}{toggle.label}{toggle.cohort && <> <span className="cons-tag">Cohort term</span></>}</span>)}{allAgree(members)}</>
           : row.kind === "axis" && row.agreed !== null ? <><AxisValue value={row.cells[0].value || null} />{allAgree(members)}</>
           : row.agreed ?? `${row.cells[0].display} ${row.info}`}</td>
@@ -63,9 +63,6 @@ export function ComparisonTable({ name, group, people, rows, readOnly = false, b
           {row.kind === "modifiers"
             ? <ModifierList owner={personName(names[index].label)} toggles={cell.toggles ?? []} interactive={row.conflict && !readOnly} busy={busy}
               onPress={id => onChoose(row.id, id)} />
-            : row.kind === "whole"
-            ? <button type="button" className="btn btn-secondary btn-sm" aria-pressed={cell.chosen} aria-disabled={busy || undefined}
-              onClick={() => { if (!busy) onTake(members[index]); }}>{cell.display}</button>
             : <span className="cons-value">
               {row.kind === "axis" ? <AxisValue value={cell.value} /> : cell.display}
               {row.conflict && !readOnly && <button type="button" className="cons-take" aria-pressed={cell.chosen} aria-disabled={busy || undefined}
@@ -80,18 +77,6 @@ export function ComparisonTable({ name, group, people, rows, readOnly = false, b
       <LaneKey people={people} personId={member.person_id} />{personName(names[index].label)}
       {member.from_tool_proposal && <span className="cons-bot" role="img" aria-label={TOOL_PROPOSAL} title={TOOL_PROPOSAL}><IconBot /></span>}
     </th>)}</tr></thead>
-    <tbody>
-      {top.map(line)}
-      {agreed.length > 0 && <tr className="cons-agreed-summary">
-        <th scope="row">Agreed</th>
-        <td colSpan={members.length} className="cons-agreed">
-          <span className="cons-value">{agreed.map(row => row.label).join(", ")}
-            <button type="button" className="btn btn-quiet btn-link btn-sm" aria-expanded={showAgreed}
-              onClick={() => setShowAgreed(value => !value)}>{showAgreed ? "Hide values" : "Show values"}</button></span>
-        </td>
-      </tr>}
-      {agreed.map(line)}
-      {!readOnly && whole.map(line)}
-    </tbody>
+    <tbody>{orderRows(rows).map(line)}</tbody>
   </table></div>;
 }

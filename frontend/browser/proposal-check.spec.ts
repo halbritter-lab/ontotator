@@ -66,9 +66,9 @@ async function decideProposals(page: Page, keys: readonly ("1" | "2" | "3")[], w
   }
 }
 
-/** Resolve every open group: keep where nothing conflicts, else take a whole finding. */
+/** Resolve every open group: a ✓ in each conflicting row, then Keep. */
 async function consolidateAll(page: Page): Promise<void> {
-  const submit = page.locator(".cons-submit").getByRole("button", { name: "Submit consolidation", exact: true });
+  const submit = page.locator(".cons-progress").getByRole("button", { name: "Submit consolidation", exact: true });
   const groups = page.locator(".cons-group");
   const count = await groups.count();
   for (let index = 0; index < count; index += 1) {
@@ -76,10 +76,12 @@ async function consolidateAll(page: Page): Promise<void> {
     if (!(await group.locator(".cons-group-state").count())) continue;
     const toggle = group.locator(".cons-group-toggle");
     if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-    const take = group.getByRole("button", { name: /^Take \S+'s finding$/ });
     const keep = group.getByRole("button", { name: /^Keep/ });
-    await expect(take.or(keep).first()).toBeVisible();
-    await (await keep.count() ? keep : take).first().click();
+    await expect(keep.first()).toBeVisible();
+    // A ✓ in each conflicting row (first person) stages the choice; Keep saves (M-7d).
+    const conflicts = group.locator("tr.cons-row--conflict");
+    for (let row = 0; row < await conflicts.count(); row += 1) await conflicts.nth(row).locator("button.cons-take").first().click();
+    await keep.first().click();
     // Saved: the group's line reads "decided: …".
     await expect(group.locator(".cons-group-done")).toBeVisible();
   }

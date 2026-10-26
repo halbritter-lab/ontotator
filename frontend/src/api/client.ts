@@ -1005,6 +1005,14 @@ export class ApiClient {
   async reopenConsolidationGroup(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
     return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/consolidation-groups/reopen`, { method: "POST", body: JSON.stringify(envelope) });
   }
+  /** R-10: every group open again, matches taken over again; one mutation. */
+  async reopenAllConsolidationGroups(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/consolidation-groups/reopen-all`, { method: "POST", body: JSON.stringify(envelope) });
+  }
+  /** R-10: restores the decisions before "Reopen all decisions…", only directly after it. */
+  async undoReopenAllConsolidationGroups(workspaceId: string, envelope: MutationEnvelope): Promise<Draft> {
+    return this.request(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/consolidation-groups/undo-reopen-all`, { method: "POST", body: JSON.stringify(envelope) });
+  }
 
   async listRoundSources(assignmentId: number): Promise<RoundSourceView[]> {
     return this.request(`/api/v1/assignments/${assignmentId}/round-sources`, { method: "GET" });

@@ -22,7 +22,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-/** case-200 de: 17 proposals, 1 of 2 assigned (Tom, not started), translation not reviewed (optional). */
+/** case-200 de: 17 proposals, 1 annotator · max 2 (Tom, not started), translation not reviewed (optional). */
 function assignRow(overrides: Partial<DocumentRowView> = {}): DocumentRowView {
   return cardRow({
     review: cell("not_planned", "none"),
@@ -61,7 +61,7 @@ describe("path", () => {
   it("opens on the segment that needs work now", () => {
     renderCard();
     expect(segmentButton("Annotation").getAttribute("aria-current")).toBe("step");
-    expect(segmentButton("Annotation").textContent).toContain("1 of 2 assigned");
+    expect(segmentButton("Annotation").textContent).toContain("1 annotator · max 2");
     expect(segmentButton("Translation").textContent).toContain("not reviewed, optional");
     expect(segmentButton("Finalization").textContent).toContain("waiting");
     expect(within(card()).getByRole("heading", { name: "Annotation" })).toBeTruthy();

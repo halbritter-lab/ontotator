@@ -1,20 +1,26 @@
-import { useId } from "react";
 import type { components } from "../api/generated";
-import { Checkbox, InlineMessage } from "../ui";
+import { axisOptionLabel } from "../editor/axisLabels";
+import { Button, InlineMessage } from "../ui";
 
 type Settings = components["schemas"]["ProjectSettings"];
+type HiddenValues = NonNullable<Settings["hidden_axis_values"]>;
 export interface HiddenAxisValuesFieldProps {
   profile: components["schemas"]["TaskProfile"];
   axisDefaults: Settings["axis_defaults"];
-  value: NonNullable<Settings["hidden_axis_values"]>;
-  onChange: (value: NonNullable<Settings["hidden_axis_values"]>) => void;
+  value: HiddenValues;
+  onChange: (value: HiddenValues) => void;
   disabled?: boolean;
 }
 
-const groupLabel = (label: string, id: string): string => label === id ? label : `${label} (${id})`;
+/** How many values are hidden ("Values annotators can choose (1 hidden)"). */
+export const hiddenCount = (value: HiddenValues): number =>
+  Object.values(value).reduce((total, axes) => total + Object.values(axes ?? {}).reduce((sum, hidden) => sum + (hidden?.length ?? 0), 0), 0);
 
+/**
+ * Settings › Annotation › Values annotators can choose (M2 M-8c, D7 B): one row of toggles per axis, pressed = shown.
+ * A layer heading only when the profile has several layers; the default value cannot be hidden.
+ */
 export function HiddenAxisValuesField({ profile, axisDefaults, value, onChange, disabled = false }: HiddenAxisValuesFieldProps): JSX.Element {
-  const fieldId = useId();
   const groups = profile.layers.map(layer => {
     const axes = new Map<string, { definition: components["schemas"]["AxisDefinition"]; options: Set<string> }>();
     for (const kind of layer.annotation_types) {
@@ -30,28 +36,25 @@ export function HiddenAxisValuesField({ profile, axisDefaults, value, onChange, 
     return { layer, axes: [...axes.values()].filter(axis => axis.options.size > 0) };
   }).filter(group => group.axes.length > 0);
 
-  return <fieldset disabled={disabled}>
-    <legend>Hidden axis values</legend>
-    <p>Hiding a value removes it from new selections; it does not rewrite existing annotations. An annotation using a hidden value must be updated before it can be saved or submitted.</p>
-    {groups.length === 0 ? <InlineMessage tone="info">This profile has no axis values to hide.</InlineMessage> : groups.map(({ layer, axes }, layerIndex) =>
-      <fieldset key={layer.layer_id}>
-        <legend>{groupLabel(layer.label, layer.layer_id)}</legend>
-        {axes.map(({ definition: axis, options }, axisIndex) => <fieldset key={axis.id}>
-          <legend>{groupLabel(axis.label, axis.id)}</legend>
-          {[...options].map((option, optionIndex) => {
-            const isDefault = axisDefaults[layer.layer_id]?.[axis.id] === option;
-            const hidden = value[layer.layer_id]?.[axis.id] ?? [];
-            return <Checkbox key={option} id={`${fieldId}-${layerIndex}-${axisIndex}-${optionIndex}`} label={option}
-              checked={hidden.includes(option)} disabled={disabled || isDefault}
-              title={isDefault ? "The default value cannot be hidden" : undefined}
-              onChange={event => {
-                if (disabled || isDefault) return;
-                const next = event.target.checked ? [...hidden, option] : hidden.filter(item => item !== option);
-                onChange({ ...value, [layer.layer_id]: { ...value[layer.layer_id], [axis.id]: next } });
-              }} />;
-          })}
-        </fieldset>)}
-      </fieldset>
-    )}
-  </fieldset>;
+  if (!groups.length) return <InlineMessage tone="info">This profile has no values to limit.</InlineMessage>;
+  return <div className="axis-shown-values">
+    {groups.map(({ layer, axes }) => <div key={layer.layer_id} role="group" aria-label={layer.label === layer.layer_id ? layer.label : `${layer.label} (${layer.layer_id})`} className="axis-shown-layer">
+      {groups.length > 1 && <h4 className="settings-subheading">{layer.label}</h4>}
+      {axes.map(({ definition: axis, options }) => <div key={axis.id} role="group" aria-label={axis.label} className="axis-shown-row">
+        <span className="form-label">{axis.label}</span>
+        {[...options].map(option => {
+          const isDefault = axisDefaults[layer.layer_id]?.[axis.id] === option;
+          const hidden = value[layer.layer_id]?.[axis.id] ?? [];
+          const shown = !hidden.includes(option);
+          return <Button key={option} size="sm" aria-pressed={shown} disabled={disabled || isDefault}
+            className={shown ? undefined : "axis-shown-off"} title={isDefault ? "The default value cannot be hidden" : undefined}
+            onClick={() => {
+              if (disabled || isDefault) return;
+              const next = shown ? [...hidden, option] : hidden.filter(item => item !== option);
+              onChange({ ...value, [layer.layer_id]: { ...value[layer.layer_id], [axis.id]: next } });
+            }}>{axisOptionLabel(option)}</Button>;
+        })}
+      </div>)}
+    </div>)}
+  </div>;
 }

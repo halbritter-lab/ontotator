@@ -81,13 +81,13 @@ it('disables people who annotated this text with the reason, while the consolida
   expect(options()).toContain('Luc Martin (ann-0004)');
 });
 
-it('explains a project without adjudicators and links Settings → Members', async () => {
+it('explains a project without adjudicators and links Settings → People', async () => {
   vi.mocked(api.listMembers).mockResolvedValue([lead, reader]);
   await openForm();
   expect(options()).toEqual(['Choose a reviewer', 'You (Mia Kühn)']);
   const note = screen.getByText(/No member has the Consolidator role yet\. Give it in/);
-  expect(note.textContent).toBe('No member has the Consolidator role yet. Give it in Settings → Members.');
-  expect(within(note).getByRole('link', { name: 'Settings → Members' }).getAttribute('href')).toBe('#/projects/p/settings/members');
+  expect(note.textContent).toBe('No member has the Consolidator role yet. Give it in Settings → People.');
+  expect(within(note).getByRole('link', { name: 'Settings → People' }).getAttribute('href')).toBe('#/projects/p/settings/people');
 });
 
 it('keeps the missing-language confirmation and reuses an existing review assignment revision', async () => {
@@ -101,6 +101,19 @@ it('keeps the missing-language confirmation and reuses an existing review assign
   fireEvent.click(start);
   await screen.findByText(/Consolidation assigned to Rita Rev/);
   expect(api.startConsolidation).toHaveBeenCalledWith('p', expect.objectContaining({ reviewer: 'rita', confirm_language: true, expected_workflow_revision: 7 }));
+});
+
+it('a consolidator with a consolidation in progress gets Continue instead of Start (R-8)', async () => {
+  vi.mocked(api.listAssignments).mockResolvedValue([{ ...reviewerTask, id: 77, username: 'lead', status: 'open', active_round_id: 'r1' }, { ...reviewerTask, status: 'in_progress' }]);
+  await openForm();
+  fireEvent.change(reviewerSelect(), { target: { value: 'lead' } });
+  expect(screen.getByText('You already have a consolidation in progress on this text.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Start consolidation' })).toBeNull();
+  expect(screen.getByRole('link', { name: 'Continue consolidation' }).getAttribute('href')).toBe('#/tasks/77');
+  fireEvent.change(reviewerSelect(), { target: { value: 'rita' } });
+  expect(screen.getByText('Rita Rev (rev-0009) already has a consolidation in progress on this text.')).toBeTruthy();
+  expect(screen.queryByRole('link', { name: 'Continue consolidation' })).toBeNull();
+  expect(api.startConsolidation).not.toHaveBeenCalled();
 });
 
 it('requires at least two selected inputs and a reviewer', async () => {

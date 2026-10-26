@@ -6,7 +6,7 @@ import {
   mentionWithOffsets,
   openCase,
   selectText,
-  submitCase,
+  submitCase, viewSubmittedResult,
   TEST_PASSWORD,
 } from "./helpers";
 
@@ -85,6 +85,8 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
   await page.getByRole("button", { name: /Confirm/i }).first().click();
   await expect(page.locator(".status-badge")).toHaveAttribute("title", "Revision 2");
   await submitCase(page);
+  // M-6: the submit opens the next task or My tasks; "View result" in the toast returns to the submitted case.
+  await viewSubmittedResult(page);
 
   await expect(page.getByRole("button", { name: /Download export/i })).toHaveCount(0);
   await page.reload();

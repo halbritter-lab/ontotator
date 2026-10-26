@@ -19,10 +19,13 @@ export interface AppShellProps {
   density?: "reading" | "compact";
   /** Muted second line under the user's identity, e.g. "Lead". */
   role?: string;
+  /** The product name links to the user's start page (R-1); `onHome` handles plain clicks in the app. */
+  homeHref?: string;
+  onHome?: () => void;
   children: ReactNode;
 }
 
-export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = "Sections", density = "compact", role, children }: AppShellProps): JSX.Element {
+export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = "Sections", density = "compact", role, homeHref, onHome, children }: AppShellProps): JSX.Element {
   const mainRef = useRef<HTMLElement>(null);
   const hasNav = nav != null && nav !== false;
   const navigation = hasNav ? <nav className="app-nav" aria-label={navLabel}>{nav}</nav> : null;
@@ -42,7 +45,13 @@ export function AppShell({ user, onLogout, breadcrumb, actions, nav, navLabel = 
           <summary>{navLabel}</summary>
           {navigation}
         </details>}
-        <span className="shell-product">Ontocurator</span>
+        {homeHref
+          ? <a className="shell-product" href={homeHref} onClick={event => {
+            if (!onHome || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            onHome();
+          }}>Ontocurator</a>
+          : <span className="shell-product">Ontocurator</span>}
         <span className="shell-subtitle">Clinical Curation Workbench</span>
         {!!breadcrumb?.length && <nav aria-label="Breadcrumb"><ol className="shell-breadcrumb">
           {breadcrumb.map((crumb, index) => <li key={index}>

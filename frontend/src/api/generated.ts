@@ -448,6 +448,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/reopen-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen All Consolidation Groups
+         * @description Reopen every group of the round in one mutation; matching groups are
+         *     taken over again (payload ``ReopenAllCommand``).
+         */
+        post: operations["reopen_all_consolidation_groups_api_v1_workspaces__workspace_id__consolidation_groups_reopen_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/consolidation-groups/undo-reopen-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Reopen All Consolidation Groups
+         * @description Restore the decisions before "Reopen all", directly after it
+         *     (payload ``UndoReopenAllCommand``).
+         */
+        post: operations["undo_reopen_all_consolidation_groups_api_v1_workspaces__workspace_id__consolidation_groups_undo_reopen_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/consolidations": {
         parameters: {
             query?: never;
@@ -8734,6 +8776,76 @@ export interface operations {
         };
     };
     reopen_consolidation_group_api_v1_workspaces__workspace_id__consolidation_groups_reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MutationEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_all_consolidation_groups_api_v1_workspaces__workspace_id__consolidation_groups_reopen_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MutationEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_reopen_all_consolidation_groups_api_v1_workspaces__workspace_id__consolidation_groups_undo_reopen_all_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -167,11 +167,12 @@ class MembershipService:
     def add(
         self, actor: Actor, project_key: str, username: str, roles: Iterable[str]
     ) -> frozenset[Role]:
-        """Give ``username`` these roles in the project; their sessions end.
+        """Give ``username`` these roles in the project; their sessions stay.
 
         Roles the user holds already change nothing; when no role is new,
-        nothing is audited and no session ends. Returns the user's roles in
-        the project afterwards.
+        nothing is audited. Adding roles never ends a session (only a removal
+        does, see ``set_roles``). Returns the user's roles in the project
+        afterwards.
 
         Raises:
             DomainError: ``ROLE_INVALID``, ``PROJECT_NOT_FOUND``,
@@ -192,11 +193,8 @@ class MembershipService:
                 target_user_id=user_id,
             )
             user = _lock_user(conn, username)
-            added = grant_roles(
-                conn, actor, project_id, user.id, user.username, wanted, now
-            )
-            if added:
-                revoke_user_sessions(conn, user.id, "project.member_add", now)
+            # Only a privilege reduction ends sessions (as in ``set_roles``).
+            grant_roles(conn, actor, project_id, user.id, user.username, wanted, now)
             return self._roles(conn, project_id, user.id)
 
     def remove(

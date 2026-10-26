@@ -261,7 +261,7 @@ test("reporter dialog at 390 x 844: a full-height sheet, the footer Close stays 
   await expect(page.locator(".text-container")).toBeVisible();
   await expect(entry(page)).toBeVisible();
   // The toolbar entry keeps its text at this width (never icon-only).
-  await expect(entry(page)).toContainText("Report problem");
+  await expect(entry(page)).toContainText("Report a text problem");
   await expect(entry(page).locator(".problem-badge")).toHaveText(/^Paused\W+6 open$/);
 
   await entry(page).click();
@@ -331,8 +331,8 @@ test("axe: reporter dialog (list and new report views) and lead page (default an
   await loginExisting(page, s.users.reporter);
   await page.goto(`/#/tasks/${task}`);
   await expect(page.locator(".text-container")).toBeVisible();
-  await expect(entry(page)).toHaveAccessibleName("Report problem Task paused, 1 open report");
-  await expect(entry(page)).toHaveAccessibleName(/Report problem/);
+  await expect(entry(page)).toHaveAccessibleName("Report a text problem Task paused, 1 open report");
+  await expect(entry(page)).toHaveAccessibleName(/Report a text problem/);
   await expect(entry(page)).toHaveAccessibleName(/Task paused/);
   await expect(entry(page).locator(".problem-badge")).toHaveText(/^Paused\W+1 open$/);
   // The badge's shape is decorative.

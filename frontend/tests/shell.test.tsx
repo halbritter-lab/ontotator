@@ -52,6 +52,17 @@ describe("role-based shell", () => {
     expect(nav.closest("details")?.open).toBe(false);
     expect(document.activeElement).toBe(summary);
   });
+  it("the logo links to the start page: a lead's Documents, an annotator's My tasks (R-1)", () => {
+    const lead = props({ projects: [project("managed", true)], route: { name: "projectProgress", key: "managed" } });
+    render(<Shell {...lead} />);
+    const logo = within(screen.getByRole("banner")).getByRole("link", { name: "Ontocurator" });
+    fireEvent.click(logo);
+    expect(lead.onNavigate).toHaveBeenCalledWith({ name: "projectDocuments", key: "managed" });
+    cleanup();
+    const annotator = props({ route: { name: "me" } });
+    render(<Shell {...annotator} />);
+    expect(within(screen.getByRole("banner")).getByRole("link", { name: "Ontocurator" }).getAttribute("href")).toBe(routeHref({ name: "tasks", status: "all" }));
+  });
   it("shows an annotator only My tasks and Profile, using the real AppShell once", () => {
     render(<Shell {...props({ projects: [project("assigned", false)] })} />);
     const nav = screen.getByRole("navigation", { name: "Sections" });

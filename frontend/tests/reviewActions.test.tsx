@@ -347,7 +347,7 @@ describe("ReviewActions: modifiers of a proposal (DN-9 A)", () => {
     render(<ReviewActions target={target} termLabel="Seizure" source={source([{ term_id: "HP:0012828", segments: [{ start: 5, end: 12 }] }])}
       documentText={TEXT} termInfo={info} currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
     const list = screen.getByRole("list", { name: "Modifiers of Seizure" });
-    expect(list.textContent).toBe("Severe · “schwere”");
+    expect(list.textContent).toBe("Severe “schwere”");
     expect(screen.queryByRole("button", { name: /Actions, Severe/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "+ Add modifier…" })).toBeNull();
   });

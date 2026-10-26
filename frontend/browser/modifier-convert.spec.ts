@@ -42,8 +42,7 @@ test("Turn into modifier… converts the standalone Severe onto Seizure", async 
   await page.keyboard.press("Enter");
   expect((await converted).ok()).toBeTruthy();
   await expect(source).toHaveCount(0);
-  await expect(page.locator('[data-modifier-chip="HP:0012828"]')).toContainText("Severe · “schwere”");
-  await expect(page.locator('[data-list-key="annotation:seizure"]').getByRole("list", { name: "Modifiers" }))
-    .toContainText("Modifier: Severe HP:0012828 “schwere”");
+  await expect(page.locator('[data-modifier-chip="HP:0012828"]')).toContainText("Severe “schwere”");
+  await expect(page.locator('[data-list-key="annotation:seizure"] .mod-lines')).toHaveText("Modifiers: Severe");
   await expect(page.locator(".attach-mention-banner")).toHaveCount(0);
 });

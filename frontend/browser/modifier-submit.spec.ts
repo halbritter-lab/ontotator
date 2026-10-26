@@ -8,6 +8,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 import { loginScenarioUser, type ReviewFlowScenario } from "./reviewFlowHelpers";
+import { expectSubmitted } from "./helpers";
 
 test.setTimeout(120_000);
 test.use({ actionTimeout: 15_000 });
@@ -55,7 +56,7 @@ test("Mild and Severe: Two severities is listed, the ticked box submits", async 
   await expect(warnings.getByRole("button", { name: "Go to Seizure" })).toBeVisible();
   await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values? and 1 modifier warning$/ }).check();
   await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);
+  await expectSubmitted(page);
 });
 
 test("Frequent: the cohort term is listed as a modifier warning", async ({ page }) => {

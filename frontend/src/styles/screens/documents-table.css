@@ -57,8 +57,10 @@
 /* :where keeps this below the active and sibling tints (same specificity, earlier). */
 .documents-table .documents-row > :where(th[scope="row"]) { background: transparent; font-weight: var(--weight-regular); }
 .documents-row-case { margin-inline-end: var(--space-2); color: var(--text-muted); font-variant-numeric: tabular-nums; }
-/* "+n": texts of the case not shown (not in plan); information, not a control. */
+/* "+n": texts of the case not shown (not in plan); in the All tab a button that shows them. */
 .documents-more { padding: 0 var(--space-1); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--size-xs); line-height: var(--leading-xs); white-space: nowrap; }
+button.documents-more { background: transparent; font-family: inherit; cursor: pointer; }
+button.documents-more:hover { border-color: var(--text-muted); color: var(--text); }
 .documents-row-header { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1) var(--space-3); font-weight: var(--weight-regular); }
 .documents-language { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: var(--weight-strong); }
 /* Row header name: a focus target of deep links and "Next decision"; in the table a button in plain
@@ -97,11 +99,6 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 /* A click on a row's empty area selects it and opens its card (a second click deselects): pointer cursor; the checkbox cell keeps its own. */
 .documents-table .documents-row--clickable { cursor: pointer; }
 .documents-table .documents-row--clickable > .data-table-select-cell { cursor: auto; }
-/* Next step stays in view at any width (F15): the cell sticks to the scroll area's right edge, the columns after it
-   scroll beneath. :where keeps the row tints below (same specificity, later rules win); the shadow marks the edge. */
-.documents-table :where(th, td):has(.documents-col-action) { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: inset 1px 0 var(--border), -8px 0 8px -8px var(--pinned-column-shadow-colour); }
-.documents-table thead :where(th):has(.documents-col-action) { z-index: 3; background: var(--surface-sunken); }
-.documents-table .is-selected > :where(td):has(.documents-col-action) { background: var(--accent-light); }
 /* The row the card shows: a light accent background, a 2 px accent edge above and below every cell
    (visible beside the panel, never colour alone) and its text name in strong weight; the first cell keeps
    the decision edge of decision rows; `aria-current` names it. Box shadows only: no layout shift. */

@@ -687,9 +687,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     return steps.length ? steps.map((step, index) => <Button key={`${step.code}-${index}`} size="sm"
       onClick={() => { closeCard(); onAction(row, step); }}>{rowActionLabel(step, row)}</Button>) : null;
   };
-  const translatedTexts = !inventory || inventory.cases.some(item => item.variants.some(variant => variant.origin !== "native"));
   // U-4: the Translation column and filter group show once a translation exists or a language beyond the sources is set up.
-  const translations = translatedTexts || !settings
+  const translations = !inventory || inventory.cases.some(item => item.variants.some(variant => variant.origin !== "native")) || !settings
     || (settings.languages ?? []).some(language => !inventory.cases.some(item => item.variants.some(variant => variant.language === language)));
   const textCard = panelKey && panelRow ? <TextCard projectKey={projectKey} row={panelRow} rows={pageRows} query={query}
     segment={panelStage ? SEGMENT_OF[panelStage] : decisionKey.current === panelKey ? "finalization" : undefined} view={VIEW_OF[panelTab]}
@@ -784,13 +783,13 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
         sort={request.sort} onSort={(next: HeaderSort) => { setColumnSort(null); changeFilter({ sort: next === "case" ? undefined : next }); }}
         columnSort={columnSort} onColumnSort={setColumnSort} showNotInPlan={notInPlanShown} onAddToPlan={setPlanFor}
+        onShowNotInPlan={tab === "all" ? () => changeShowNotInPlan(true) : undefined}
         empty={<EmptyState title="No texts in plan on this page." action={notInPlanCount > 0 ? <Button size="sm" onClick={() => changeShowNotInPlan(true)}>Show texts not in plan</Button> : undefined} />} />;
     }
     // Floats at the bottom of the viewport; placed above the table (below 700 px after the cards) to keep the focus order.
     const selectionBar = <SelectionBar projectKey={projectKey} keys={selection.keys} filters={filters} refresh={page} narrow={narrow} limitNote={limitNote}
       onClear={clearSelection} onAssign={openAssignCases} showToast={showToast} onAnnounce={announce} onChanged={() => reloadAfterAction()}
-      onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }}
-      translations={translatedTexts} />;
+      onRevisions={revisions => { for (const [caseId, value] of Object.entries(revisions)) planSaves.noteRevision(caseId, value); }} />;
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh. <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
