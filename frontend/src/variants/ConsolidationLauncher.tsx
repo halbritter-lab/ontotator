@@ -78,9 +78,16 @@ function ConsolidationContent(props: Props): JSX.Element {
   const chosen = candidates.find(row => row.username === reviewer && row.reason === null);
   const missingLanguage = !!chosen?.member && !chosen.member.languages.includes(language);
   const noConsolidator = current != null && !current.members.some(member => member.roles.includes('adjudicator'));
+  // An existing review assignment of the reviewer on this text is reused at its revision; none means "new".
+  const existing = chosen && current?.assignments.find(row => row.project_key === projectKey && row.document_id === documentId
+    && row.username === chosen.username && row.task === 'review' && !row.revoked_at);
+  // R-8: an unsubmitted review with a round (or started work) is a consolidation in progress; the server refuses a new one (ROUND_ACTIVE).
+  const ongoing = existing && existing.status !== 'submitted' && (!!existing.active_round_id || existing.status === 'in_progress' || existing.status === 'reopened')
+    ? existing : undefined;
+  const ongoingText = chosen && `${chosen.self ? 'You already have' : `${chosen.label} already has`} a consolidation in progress on this text.`;
   const getsRole = !!chosen?.self && !chosen.member?.roles.includes('adjudicator');
   /** Why Start is unavailable, shown inline (never a silent disabled button). */
-  const missing = selectedIds.length < 2 ? 'Select at least two submissions.'
+  const missing = ongoing ? ongoingText : selectedIds.length < 2 ? 'Select at least two submissions.'
     : !chosen ? 'Choose a reviewer.'
       : missingLanguage && !confirmLanguage ? `Confirm the reviewer despite missing ${language}.` : null;
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
@@ -97,9 +104,6 @@ function ConsolidationContent(props: Props): JSX.Element {
     if (!current || !chosen || missing || writing.current) return;
     writing.current = true; setBusy(true); setError(undefined);
     try {
-      // An existing review assignment of the reviewer on this text is reused at its revision; none means "new".
-      const existing = current.assignments.find(row => row.project_key === projectKey && row.document_id === documentId && row.username === reviewer
-        && row.task === 'review' && !row.revoked_at);
       const trimmed = reason.trim();
       const confirm = missingLanguage && confirmLanguage;
       const intent = JSON.stringify([reviewer, selectedIds, trimmed, confirm, existing?.workflow_revision ?? null]);
@@ -115,7 +119,7 @@ function ConsolidationContent(props: Props): JSX.Element {
       if (active.current) setError(failure instanceof ApiError && failure.code === 'ROUND_INPUT_STALE'
         ? new Error('Selected submissions are no longer current. Refresh submission history and choose the exact inputs again.')
         : failure instanceof ApiError && failure.code === 'ROUND_ACTIVE'
-          ? new Error('This reviewer has unfinished work on this text. Finish or deliberately restart that work before starting consolidation.')
+          ? new Error(ongoingText ?? 'The reviewer already has a consolidation in progress on this text.')
           : failure);
     } finally { writing.current = false; if (active.current) setBusy(false); }
   };
@@ -143,8 +147,8 @@ function ConsolidationContent(props: Props): JSX.Element {
       <Textarea id={`${fieldId}-reason`} label="Consolidation reason (optional)" value={reason} disabled={busy} onChange={event => setReason(event.target.value)} />
       {error != null && <><ErrorNotice error={error} /><Button disabled={busy} onClick={() => { setError(undefined); setAttempt(value => value + 1); }}>Reload reviewer tasks</Button></>}
       {missing && <p id={`${fieldId}-missing`} className="action-reason">{missing}</p>}
-      <Button aria-disabled={missing || busy ? true : undefined} aria-describedby={missing ? `${fieldId}-missing` : undefined} loading={busy}
-        onClick={() => { if (!missing && !busy) void start(); }}>Start consolidation</Button>
+      {ongoing ? chosen?.self && <a className="btn btn-secondary" href={`#/tasks/${ongoing.id}`} onKeyDown={onSpaceActivate}>Continue consolidation</a> : <Button aria-disabled={missing || busy ? true : undefined} aria-describedby={missing ? `${fieldId}-missing` : undefined} loading={busy}
+        onClick={() => { if (!missing && !busy) void start(); }}>Start consolidation</Button>}
     </>}
     {created && <InlineMessage tone="success">
       {created.self ? 'Consolidation assigned to you.' : `Consolidation assigned to ${created.name}.`}

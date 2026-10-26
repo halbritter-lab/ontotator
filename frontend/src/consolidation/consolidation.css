@@ -56,7 +56,7 @@
 
 /* The arrow steps keep their content width, never stretched. */
 .cons-heading > .stage-path > li { flex: 0 0 auto; }
-.cons-heading > .stage-path .stage-path-seg { min-width: 10rem; }
+.cons-heading > .stage-path .stage-path-seg { min-width: 11.5rem; }
 .cons-heading > .stage-path .stage-path-state { white-space: nowrap; }
 
 .cons-header-progress { width: 340px; max-width: 100%; }
