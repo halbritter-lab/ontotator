@@ -48,7 +48,7 @@ describe("project creation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create project" }));
     await screen.findByLabelText(/^Built-in template/);
     expect(api.createProject).toHaveBeenCalledWith({ key: "project-1", name: "Research", description: null, languages: [], template: "template", pins: [{ ontology_id: "HP", sha256: "b".repeat(64), allowed_roots: ["HP:1", "HP:2"], t1_profile: "hpo-phenotype" }] });
-    expect(navigate).toHaveBeenCalledWith({ name: "projectSettings", key: settings.project_key });
+    expect(navigate).toHaveBeenCalledWith({ name: "projectSettings", key: settings.project_key, section: "people" });
   });
 
   it("retains the uploaded JSON object while previewing actual layer labels", async () => {
