@@ -2419,6 +2419,8 @@ describe("CaseScreen integration", () => {
       expect(title.textContent).toBe("accepted-translation");
       expect(title.classList.contains("case-title")).toBe(true);
       expect(screen.getByText("Case 1 of 1")).toBeDefined();
+      // Below 700 px the CSS hides a one-case navigation through this class.
+      expect(title.parentElement!.classList.contains("app-title--single-case")).toBe(true);
       rendered.unmount();
       render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} />);
       expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("doc-test-1");

@@ -3050,7 +3050,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       {modifierLayerIds.size > 0 && <Toast toast={modifierCommands.toast} onDismiss={modifierCommands.dismissToast} undoDescription="Undo removing the modifier" undoGroup="Finding" />}
       {/* Header */}
       <Toolbar className="case-toolbar" label="Case">
-        <div className="app-title">
+        <div className={(assignmentNavigation ? assignmentTasks?.length ?? 0 : documentList?.length ?? 0) <= 1 ? "app-title app-title--single-case" : "app-title"}>
           {/* Assignment routes go back through the shell breadcrumb; only the legacy path keeps its own way back. */}
           {!assignmentNavigation && (
             <Button type="button" size="sm" onClick={() => { void leaveCase(onClose); }} title="Back to dashboard">
