@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import cast
 
-from sqlalchemy import Connection, and_, exists, or_, select
+from sqlalchemy import Connection, and_, exists, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 
 from ontocurator.authz.policy import TASK_ROLES, Access, Action, Role, can
@@ -34,22 +34,26 @@ class DocumentFilter:
 def current_access(
     conn: Connection, access: Access, project_id: int, project_key: str
 ) -> Access:
-    user = conn.execute(
-        select(UserRow.active, UserRow.is_system_admin, UserRow.pseudonym).where(
-            UserRow.id == access.user_id
+    # One statement: this runs several times per editor request.
+    roles_of = (
+        select(func.array_agg(ProjectMembershipRow.role))
+        .where(
+            ProjectMembershipRow.project_id == project_id,
+            ProjectMembershipRow.user_id == access.user_id,
         )
-    ).one_or_none()
-    roles = frozenset(
-        cast(Role, role)
-        for role in conn.execute(
-            select(ProjectMembershipRow.role).where(
-                ProjectMembershipRow.project_id == project_id,
-                ProjectMembershipRow.user_id == access.user_id,
-            )
-        ).scalars()
+        .scalar_subquery()
     )
+    user = conn.execute(
+        select(
+            UserRow.active,
+            UserRow.is_system_admin,
+            UserRow.pseudonym,
+            roles_of.label("roles"),
+        ).where(UserRow.id == access.user_id)
+    ).one_or_none()
     if user is None or not user.active:
         return Access(access.user_id, access.pseudonym, False)
+    roles = frozenset(cast(Role, role) for role in user.roles or ())
     return Access(
         access.user_id, user.pseudonym, user.is_system_admin, {project_key: roles}
     )
