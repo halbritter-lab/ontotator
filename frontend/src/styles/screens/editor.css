@@ -1536,7 +1536,18 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* Name and status share the first line; a warning pill wraps below instead of squeezing the name. */
+.doc-row > .term-name {
+  flex: 1 1 0;
+  min-width: 6rem;
+}
+
+.doc-row > .status-pill {
+  order: 1;
 }
 
 .doc-meta__line {
