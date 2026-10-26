@@ -1,9 +1,10 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, type AdminUser, type CodeResponse, type CreatedUser, type CurrentUser } from "../src/api/client";
-import { UsersPage } from "../src/admin/UsersPage";
+import { auditDetails, UsersPage } from "../src/admin/UsersPage";
+import { formatDateTime } from "../src/app/labels";
 
 const currentUser: CurrentUser = { username: "root", display_name: "Root", pseudonym: "ann-root", is_system_admin: true, csrf_token: "csrf" };
 const root: AdminUser = { qualification: null, username: "root", display_name: "Root", email: null, pseudonym: "ann-root", is_system_admin: true, active: true, languages: ["de"], projects: [], setup_pending: false, anonymised: false };
@@ -20,6 +21,7 @@ beforeEach(() => {
   vi.spyOn(api, "adminCreateUser").mockResolvedValue(created);
   vi.spyOn(api, "adminIssueResetCode").mockResolvedValue(reset);
   vi.spyOn(api, "adminUpdateUser").mockResolvedValue(alex);
+  vi.spyOn(api, "listProjects").mockResolvedValue([]);
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -32,7 +34,7 @@ describe("users administration", () => {
   it("lists server fields and filters by username or display name", async () => {
     render(<UsersPage currentUser={currentUser} />); await load();
     const table = within(screen.getByRole("table", { name: "Users" }));
-    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("study-one: Lead, Annotator")).toBeTruthy();
+    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("Study One: Lead, Annotator")).toBeTruthy();
     expect(table.getByText("en")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "SMITH" } }); expect(table.queryByText("Root")).toBeNull();
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "root" } }); expect(table.queryByText("Alex Smith")).toBeNull();
@@ -44,7 +46,7 @@ describe("users administration", () => {
     fireEvent.click(newForm().getByRole("button", { name: "Create user" }));
     const dialog = await screen.findByRole("dialog", { name: "Setup code" });
     expect(within(dialog).getByText(created.code)).toBeTruthy();
-    expect(api.adminCreateUser).toHaveBeenCalledWith({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false });
+    expect(api.adminCreateUser).toHaveBeenCalledWith({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false, projects: [] });
     expect(await leave.current?.()).toBe(false);
     expect((within(dialog.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }) as HTMLButtonElement).disabled).toBe(true);
     await userEvent.setup().click(within(dialog).getByLabelText("I have handed over or stored the code"));
@@ -181,5 +183,76 @@ describe("users page access", () => {
     render(<UsersPage currentUser={currentUser} />);
     await screen.findByText(/Only system administrators can see and manage user accounts/);
     expect(screen.queryByRole("form", { name: "New user" })).toBeNull();
+  });
+});
+
+describe("account status, projects at creation, history and erasure", () => {
+  const project = { project_key: "study-one", name: "Study One", description: null, roles: [], allowed_modes: [], document_count: 0, can_manage: true } as unknown as import("../src/api/client").ProjectSummary;
+
+  it("shows setup pending and last login, and disables reset for a deactivated user", async () => {
+    vi.mocked(api.adminListUsers).mockResolvedValue([{ ...root, last_login_at: "2026-10-20T08:00:00Z" }, { ...alex, active: false, setup_pending: true }]);
+    render(<UsersPage currentUser={currentUser} />); await load();
+    const table = within(screen.getByRole("table", { name: "Users" }));
+    expect(table.getByRole("columnheader", { name: /Setup/ })).toBeTruthy();
+    expect(table.getByText("Pending")).toBeTruthy();
+    expect(table.getByText("Never")).toBeTruthy();
+    expect(table.getByText(formatDateTime("2026-10-20T08:00:00Z"))).toBeTruthy();
+    const reset = screen.getByRole("button", { name: "Reset code for alex" }) as HTMLButtonElement;
+    expect(reset.disabled).toBe(true);
+    expect(reset.title).toBe("Activate the account before issuing a reset code.");
+  });
+
+  it("adds the new user to the chosen projects with roles", async () => {
+    vi.mocked(api.listProjects).mockResolvedValue([project]);
+    render(<UsersPage currentUser={currentUser} />); await load(); await fillCreate();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Study One: Consolidator" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Study One: Annotator" }));
+    fireEvent.click(newForm().getByRole("button", { name: "Create user" }));
+    await screen.findByRole("dialog", { name: "Setup code" });
+    expect(api.adminCreateUser).toHaveBeenCalledWith(expect.objectContaining({ projects: [{ project_key: "study-one", roles: ["adjudicator", "annotator"] }] }));
+  });
+
+  it("shows a user's history in words", async () => {
+    vi.spyOn(api, "adminUserAudit").mockResolvedValue([
+      { at: "2026-10-20T08:00:00Z", actor: "user:root", action: "project.member_add", target_type: "user", target_id: "alex", project_key: "study-one", details: { username: "alex", roles: ["adjudicator"] } },
+      { at: "2026-10-19T08:00:00Z", actor: "cli:ops", action: "user.create", target_type: "user", target_id: "alex", project_key: null, details: { pseudonym: "ann-alex", system_admin: false } },
+    ]);
+    render(<UsersPage currentUser={currentUser} />); await load();
+    fireEvent.click(screen.getByRole("button", { name: "History of alex" }));
+    const dialog = await screen.findByRole("dialog", { name: "History of alex" });
+    await within(dialog).findByText("Roles added");
+    expect(within(dialog).getByText("Consolidator")).toBeTruthy();
+    expect(within(dialog).getByText("Account created")).toBeTruthy();
+    expect(api.adminUserAudit).toHaveBeenCalledWith("alex");
+  });
+
+  it("anonymises a deactivated user only after the username is typed", async () => {
+    const erased = { ...alex, username: "anonymised-7", display_name: "Anonymised user", email: null, active: false, anonymised: true, languages: [] };
+    vi.mocked(api.adminListUsers).mockResolvedValue([root, { ...alex, active: false }]);
+    vi.spyOn(api, "adminAnonymiseUser").mockResolvedValue(erased);
+    render(<UsersPage currentUser={currentUser} />); await load();
+    expect(screen.queryByRole("button", { name: "Anonymise root" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Anonymise alex" }));
+    const dialog = screen.getByRole("dialog", { name: "Anonymise alex" });
+    expect(dialog.textContent).toContain("cannot be undone");
+    const confirm = within(dialog).getByRole("button", { name: "Anonymise permanently" }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText(/Type alex to confirm/), { target: { value: "alex" } });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(api.adminAnonymiseUser).toHaveBeenCalledWith("alex", "alex");
+    const table = within(screen.getByRole("table", { name: "Users" }));
+    expect(table.getByText("anonymised-7")).toBeTruthy();
+    expect(table.queryByText("Alex Smith")).toBeNull();
+    expect(table.getByText("Anonymised")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit anonymised-7" })).toBeNull();
+  });
+
+  it("words audit details", () => {
+    const base = { at: "", actor: "", action: "", target_type: "user", target_id: "x", project_key: null };
+    expect(auditDetails({ ...base, details: { active: false } })).toBe("Deactivated");
+    expect(auditDetails({ ...base, details: { fields: ["email"] } })).toBe("email");
+    expect(auditDetails({ ...base, details: {} })).toBe("");
   });
 });

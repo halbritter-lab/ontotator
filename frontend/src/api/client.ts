@@ -253,6 +253,7 @@ export type PasswordChange = components["schemas"]["PasswordChange"];
 export type AdminUser = components["schemas"]["AdminUser"];
 export type CreateUserRequest = components["schemas"]["CreateUserRequest"];
 export type CreatedUser = components["schemas"]["CreatedUser"];
+export type AuditEvent = components["schemas"]["AuditEventView"];
 export type CodeResponse = components["schemas"]["CodeResponse"];
 export type AdminUserPatch = Partial<components["schemas"]["PatchUserRequest"]>;
 export type TaskProfile = components["schemas"]["TaskProfile"];
@@ -582,6 +583,14 @@ export class ApiClient {
 
   async adminIssueResetCode(username: string): Promise<CodeResponse> {
     return this.request<CodeResponse>(`/api/v1/admin/users/${encodeURIComponent(username)}/reset-code`, { method: "POST" });
+  }
+
+  async adminAnonymiseUser(username: string, confirmUsername: string): Promise<AdminUser> {
+    return this.request<AdminUser>(`/api/v1/admin/users/${encodeURIComponent(username)}/anonymise`, { method: "POST", body: JSON.stringify({ confirm_username: confirmUsername }) });
+  }
+
+  async adminUserAudit(username: string): Promise<AuditEvent[]> {
+    return this.request<AuditEvent[]>(`/api/v1/admin/users/${encodeURIComponent(username)}/audit`, { method: "GET" });
   }
 
   async adminUpdateUser(username: string, change: AdminUserPatch): Promise<AdminUser> {

@@ -183,7 +183,7 @@ it("sends actual Users writes with CSRF and keeps its form through the existing 
   expect(endpoint).toBe("/api/v1/admin/users/");
   expect(options.method).toBe("POST"); expect(options.credentials).toBe("same-origin");
   expect((options.headers as Headers).get("X-CSRF-Token")).toBe("csrf-admin");
-  expect(JSON.parse(options.body as string)).toEqual({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false });
+  expect(JSON.parse(options.body as string)).toEqual({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false, projects: [] });
   const login = screen.getByRole("dialog", { name: "Log in to Ontocurator" });
   fireEvent.change(within(login).getByLabelText(/^Username/), { target: { value: "root" } });
   fireEvent.change(within(login).getByLabelText(/^Password/), { target: { value: "correct-password" } });
