@@ -1688,6 +1688,13 @@
   padding: var(--space-4) var(--cell-pad-x);
 }
 
+/* The review fills the inspector pane so "Source and rules" sits at its very bottom (R-17). */
+.inspector-pane > .review-actions {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .review-actions__head {
   display: flex;
   justify-content: space-between;
@@ -1881,8 +1888,12 @@
 }
 
 /* Provenance details and the decision rules stay one click away, below the decision. */
+.review-actions__main {
+  margin-bottom: var(--space-4);
+}
+
 .review-actions__more {
-  margin-top: var(--space-4);
+  margin-top: auto;
   font-size: var(--size-xs);
   line-height: var(--leading-xs);
 }

@@ -201,6 +201,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
 
   return (
     <div className="review-actions">
+      <div className="review-actions__main">
       {/* Current Decision Header */}
       <div className="review-actions__head">
         <h4 className="review-actions__title">Review decision for this proposal</h4>
@@ -405,7 +406,9 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
           }}>Save decision</Button>
         </div>}
       </div>
+      </div>
 
+      {/* Rarely needed while working: at the very bottom of the pane, collapsed, opens downwards (R-17). */}
       <details className="technical-details review-actions__more">
         <summary>Source and rules</summary>
         <ProposalSource source={source} compact />

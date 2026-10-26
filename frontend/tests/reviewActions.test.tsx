@@ -257,6 +257,8 @@ describe("ReviewActions", () => {
     expect(more.textContent).toContain("This proposal is immutable.");
     expect(more.textContent).toContain("Method");
     expect(more.textContent).toContain("v-prop-1");
+    // R-17: the last block of the review, pinned to the pane's bottom by CSS.
+    expect(more.parentElement!.lastElementChild).toBe(more);
   });
   it("requires and focuses a reviewer note before setting unresolved", () => {
     const decide = vi.fn();
