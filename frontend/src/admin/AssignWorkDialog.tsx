@@ -249,6 +249,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const newest = props.mode === "row" ? props.row.versions.filter(version => version.is_newest_in_chain).at(-1) ?? props.row.versions.at(-1) : undefined;
   const reasonId = `${id}-assign-reason`;
   const limitId = `${id}-limit`;
+  const limitReachedId = `${id}-limit-reached`;
+  /** Every further tick is blocked: one line under the table says why (F3). */
+  const limitReached = !radios && !!shown && picked >= limit;
   const stepOptions = props.mode === "row"
     ? (["translation_review", "annotate"] as const).filter(item => item !== "translation_review" || !props.row.is_source).map(item => ({ value: stepKey(item, props.row.language), label: stepName(item) }))
     : (steps ?? []).map(step => ({ value: stepKey(step.task, step.language), label: stepLabel(step.task, step.language, step.versions) }));
@@ -298,8 +301,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
           const atLimit = !radios && !checked && picked >= limit;
           const inputId = `${id}-member-${index}`;
           const whyId = `${id}-why-${index}`;
-          const describedBy = [why && whyId, atLimit && limitId].filter(Boolean).join(" ") || undefined;
-          return <tr key={person.username} className={[person.unavailable ? "is-unavailable" : "", checked ? "is-chosen" : ""].filter(Boolean).join(" ") || undefined}>
+          const describedBy = [why && whyId, atLimit && limitReachedId].filter(Boolean).join(" ") || undefined;
+          // Muted only when the row cannot be ticked; a language mismatch stays normal with its warning.
+          return <tr key={person.username} className={[off || atLimit ? "is-unavailable" : "", checked ? "is-chosen" : ""].filter(Boolean).join(" ") || undefined}>
             <td><span className="assign-member">
               <input ref={element => { if (element) inputs.current.set(person.username, element); else inputs.current.delete(person.username); }}
                 id={inputId} type={radios ? "radio" : "checkbox"} name={radios ? `assign-member-${id}` : undefined} checked={checked}
@@ -319,10 +323,10 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
           const atLimit = !self && picked >= limit;
           const off = meHolds || atLimit || busy;
           const why = meHolds ? "already annotating this text" : atLimit ? "limit reached" : null;
-          return <tr key="me" className={self ? "is-chosen" : undefined}>
+          return <tr key="me" className={[meHolds || atLimit ? "is-unavailable" : "", self ? "is-chosen" : ""].filter(Boolean).join(" ") || undefined}>
             <td><span className="assign-member">
               <input id={`${id}-member-me`} type="checkbox" checked={self} aria-disabled={off ? "true" : undefined}
-                aria-describedby={[why && `${id}-why-me`, props.mode === "row" && props.consolidatorRule && `${id}-rule`].filter(Boolean).join(" ") || undefined}
+                aria-describedby={[why && `${id}-why-me`, atLimit && limitReachedId, props.mode === "row" && props.consolidatorRule && `${id}-rule`].filter(Boolean).join(" ") || undefined}
                 onChange={event => { if (!off) chooseSelf(event.target.checked); }} />
               <label htmlFor={`${id}-member-me`}>{`${me.name} (you)`}{why && <span id={`${id}-why-me`} className="assign-reason">, {why}</span>}</label>
             </span></td>
@@ -331,6 +335,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         })()}
         </tbody>
       </table>}
+      {task && limitReached && shown && <p id={limitReachedId} className="assign-limit-reached">{`Limit reached: ${shown.per_text === 1 ? "1 person" : `${shown.per_text} people`} per text. `}
+        <a href={routeHref({ name: "projectSettings", key: props.projectKey, section: "workflow" })}>Change in project settings</a></p>}
       {me && rowMulti && props.mode === "row" && props.consolidatorRule && <p id={`${id}-rule`} className="assign-muted">If you annotate this text yourself, you cannot consolidate it afterwards (project rule "the consolidator is not an annotator").</p>}
 
       <div className="assign-summary" role="status" aria-live="polite" aria-label="Summary">{summaryLines.map(line => <p key={line}>{line}</p>)}</div>

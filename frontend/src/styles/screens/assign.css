@@ -23,6 +23,7 @@
 .assign-member input[aria-disabled="true"], .assign-member input[aria-disabled="true"] + label { cursor: not-allowed; }
 .assign-reason { color: var(--text-muted); }
 .assign-narrow-label { display: none; }
+.assign-limit-reached { font-size: var(--size-sm); }
 
 .assign-summary { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--size-sm); }
 /* The one-line box is reserved while empty, so the first summary does not push the dialog down. */

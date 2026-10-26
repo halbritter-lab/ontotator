@@ -98,6 +98,22 @@ it("shows ineligible members muted with the reason and aria-disabled", async () 
   } finally { people.pop(); }
 });
 
+it("annotation at the limit: a line under the table names it, blocked rows are muted with that reason, a language mismatch is not muted", async () => {
+  vi.mocked(api.selectionSummary).mockResolvedValue(summary([{ task: "annotate", language: "de", versions: 20, cases: 20 }]));
+  render(<AssignWorkDialog {...casesProps()} />); await ready();
+  const dan = screen.getByRole("checkbox", { name: /Dan Mertens.*does not read de/ });
+  expect(dan.closest("tr")!.className).not.toContain("is-unavailable");
+  expect(screen.queryByText(/Limit reached/)).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox", { name: /Ana Weber/ }));
+  await waitForPreviewOf(["ana"]);
+  const line = screen.getByText(/^Limit reached: 1 person per text\./);
+  expect(within(line).getByRole("link", { name: "Change in project settings" }).getAttribute("href")).toContain("settings/workflow");
+  const ben = screen.getByRole("checkbox", { name: /Ben Roth/ });
+  expect(ben.getAttribute("aria-disabled")).toBe("true");
+  expect(ben.closest("tr")!.className).toContain("is-unavailable");
+  expect(ben.getAttribute("aria-describedby")!.split(" ").map(item => document.getElementById(item)!.textContent).join(" ")).toContain("Limit reached: 1 person per text.");
+});
+
 it("One person: radio per member and live summary", async () => {
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
   fireEvent.click(radio(/Ana Weber/));
