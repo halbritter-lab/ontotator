@@ -370,20 +370,20 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     })}
                   </div>
                 ) : (
-                  <Select label={null} id={`axis-select-${axis.id}`} aria-label={axis.label}
+                  <Select label={null} id={`axis-select-${axis.id}`} aria-label={unconfirmed ? `${axis.label} (default)` : axis.label}
                     disabled={readOnly} value={val} onChange={(e) => updateAxis(e.target.value)}>
                     {axis.allow_empty && <option value="">Not specified</option>}
                     {!axis.allow_empty && <option value="" disabled>Please select</option>}
                     {unavailable && <option value={val} disabled>{unavailableLabel}</option>}
-                    {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}{unconfirmed && option === val ? " (default)" : ""}</option>)}
+                    {axis.options.map((option) => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
                   </Select>
                 )}
               </fieldset>
             );
           })}
-          {confirmableDefaults.length > 0 && (!readOnly && onConfirmDefaults
-            ? <p className="form-hint">Highlighted values are defaults. Click a highlighted value or “Confirm defaults” to confirm, or choose another value.</p>
-            : <p className="form-hint">Highlighted values are defaults that were not confirmed.</p>)}
+          {/* The "Default" tag marks each axis; one short line says how to confirm. */}
+          {confirmableDefaults.length > 0 && !readOnly && onConfirmDefaults
+            && <p className="form-hint">Click a highlighted default or “Confirm defaults” to confirm it.</p>}
           {valuesError && <InlineMessage tone="error">{valuesError}</InlineMessage>}
         </section>
       )}

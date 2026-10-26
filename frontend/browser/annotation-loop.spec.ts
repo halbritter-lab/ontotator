@@ -99,7 +99,7 @@ async function caretOffset(page: Page): Promise<number | null> {
 /** Axes that show an unconfirmed default: "(default)" on the checked radio or the selected option (long lists). */
 const defaultedAxes = (page: Page) => page.locator(".values-section [data-axis-field]").evaluateAll(fields => fields
   .filter(field => !!field.querySelector(".axis-option.is-default")
-    || (field.querySelector("select")?.selectedOptions[0]?.textContent ?? "").includes("(default)"))
+    || (field.querySelector("select")?.getAttribute("aria-label") ?? "").endsWith("(default)"))
   .map(field => (field as HTMLElement).dataset.axisField));
 
 const focusIsTextPane =(page: Page) => page.evaluate(() => document.activeElement?.classList.contains("text-container") ?? false);

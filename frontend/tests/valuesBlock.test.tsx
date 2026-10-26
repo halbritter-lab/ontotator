@@ -92,7 +92,7 @@ describe("Values block", () => {
     const { container } = render(<AnnotationPanel {...props({ onConfirmDefaults: vi.fn() })} />);
     const section = container.querySelector<HTMLElement>("[data-values-section]")!;
     const hint = section.querySelector<HTMLElement>(".form-hint")!;
-    expect(hint.textContent).toBe("Highlighted values are defaults. Click a highlighted value or “Confirm defaults” to confirm, or choose another value.");
+    expect(hint.textContent).toBe("Click a highlighted default or “Confirm defaults” to confirm it.");
     expect(hint.querySelector("kbd")).toBeNull();
     expect(screen.queryByText(/Defaults are not confirmed/)).toBeNull();
   });
@@ -172,11 +172,9 @@ describe("Values block", () => {
     expect(onConfirmDefaults).not.toHaveBeenCalled();
   });
 
-  it("shows the read-only hint without a key or button", () => {
+  it("read-only: the Default tags alone, without a hint, key or button", () => {
     const { container } = render(<AnnotationPanel {...props({ readOnly: true, onConfirmDefaults: vi.fn() })} />);
-    const hint = container.querySelector<HTMLElement>("[data-values-section] .form-hint")!;
-    expect(hint.textContent).toBe("Highlighted values are defaults that were not confirmed.");
-    expect(hint.querySelector("kbd")).toBeNull();
+    expect(container.querySelector("[data-values-section] .form-hint")).toBeNull();
     expect(screen.queryByRole("button", { name: /Confirm defaults/ })).toBeNull();
     expect(container.querySelectorAll(".axis-default-tag")).toHaveLength(3);
   });
@@ -203,13 +201,14 @@ describe("Values block", () => {
     expect(container.querySelector("select")).toBeNull();
   });
 
-  it("keeps the Select with ' (default)' for more than four options and shows the Default tag", () => {
+  it("a Select for more than four options: the Default tag, and ' (default)' only in its accessible name", () => {
     const config = axesConfig.map(axis => axis.id === "experiencer"
       ? { ...axis, options: ["patient", "family_member", "other", "unknown"] } : axis);
     const { container } = render(<AnnotationPanel {...props({ axesConfig: config }, ["experiencer"])} />);
     const field = container.querySelector<HTMLElement>('[data-axis-field="experiencer"]')!;
     expect(field.querySelector(".axis-options")).toBeNull();
-    expect(within(field).getByRole("option", { name: "Patient (default)" })).toBeDefined();
+    expect(within(field).getByRole("option", { name: "Patient" })).toBeDefined();
+    expect(within(field).getByRole("combobox", { name: "Subject (default)" })).toBeDefined();
     expect(field.querySelector(".axis-legend .axis-default-tag")!.textContent).toBe("Default");
   });
 

@@ -103,7 +103,7 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
       </ul>}
       {axes.length > 0 && <dl className="finding-axis-summary" aria-label="Clinical context">
         {axes.map(axis => <div key={axis.id} title={`${axis.label}: ${axisOptionLabel(axis.value)}${annSnap.annotation.axes_defaulted?.includes(axis.id) ? " (defaulted)" : ""}`}>
-          <dt>{axis.label}: </dt><dd><AxisValue value={axis.value as string | null | undefined} />{annSnap.annotation.axes_defaulted?.includes(axis.id) && " (defaulted)"}</dd>
+          <dt>{axis.label}: </dt><dd><AxisValue value={axis.value as string | null | undefined} /></dd>
         </div>)}
       </dl>}
       {children}
