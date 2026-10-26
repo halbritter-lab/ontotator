@@ -565,7 +565,7 @@ describe("SearchPanel language selection", () => {
   it("stores a deselection, repeats the pending query at once and sends the new languages", async () => {
     const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
     const onStore = vi.fn();
-    render(<Harness searchOntology={searchOntology} initial={undefined} onStore={onStore} />);
+    render(<Harness searchOntology={searchOntology} initial={["de", "es"]} onStore={onStore} />);
     const input = screen.getByRole("combobox", { name: "Search term" });
 
     fireEvent.change(input, { target: { value: "krampf" } });
@@ -594,7 +594,7 @@ describe("SearchPanel language selection", () => {
   it("does not search when the selection changes while the box is empty", async () => {
     const searchOntology = vi.fn().mockResolvedValue({ search_id: "s", candidates: [] });
     const onStore = vi.fn();
-    render(<Harness searchOntology={searchOntology} initial={undefined} onStore={onStore} />);
+    render(<Harness searchOntology={searchOntology} initial={["de", "es"]} onStore={onStore} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Search languages/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: "DE" }));
