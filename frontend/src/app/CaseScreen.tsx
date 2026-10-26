@@ -2068,14 +2068,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   /** Selects the next open proposal after `target` (wrapping), or "Finish & Submit" when none is left. */
-  const advanceAfterDecision = (target: TargetProposal, outcome: "confirmed" | "rejected" | "uncertain") => {
+  const advanceAfterDecision = (target: TargetProposal, outcome: "confirmed" | "rejected" | "uncertain", repeated = false) => {
     const decided = new Set((latestDraft.current.decisions ?? []).map(d => refKey(d.target)));
     const n = reviewTargets.length, from = reviewTargets.findIndex(t => refKey(t) === refKey(target));
     const next = Array.from({ length: n - 1 }, (_, i) => (from + 1 + i) % n).find(index => !decided.has(refKey(reviewTargets[index])));
     const snapshot = targetSnapshotOf(target);
     const segments = snapshot?.evidence?.[0]?.mention.segments ?? [];
     const quote = segments.length ? ` “${quoteSegments(view.document.text, segments, 40)}”` : "";
-    const done = `${{ confirmed: "Confirmed", rejected: "Rejected", uncertain: "Left unresolved" }[outcome]} ${termLabel(target.layer_id, target.term_id ?? target.annotation_id) ?? target.term_id ?? target.annotation_id}${quote}.`;
+    const done = repeated ? `Already ${{ confirmed: "confirmed", rejected: "rejected", uncertain: "left unresolved" }[outcome]}.`
+      : `${{ confirmed: "Confirmed", rejected: "Rejected", uncertain: "Left unresolved" }[outcome]} ${termLabel(target.layer_id, target.term_id ?? target.annotation_id) ?? target.term_id ?? target.annotation_id}${quote}.`;
     if (next === undefined) {
       handleDeselectAll();
       setAdvanceStatus({ listKey: null, text: `${done} Every proposal is decided.`, decidedKey: refKey(target) });
@@ -2084,6 +2085,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     }
     selectProposal(reviewTargets[next]);
     setAdvanceStatus({ listKey: `target:${refKey(reviewTargets[next])}`, text: `${done} Next open proposal: ${next + 1} of ${n}`, decidedKey: refKey(target) });
+  };
+
+  /** F7: the outcome the proposal already has moves on like a new decision; nothing is saved. */
+  const repeatDecision = (target: TargetProposal, outcome: "confirmed" | "rejected" | "uncertain") => {
+    if (readOnlyRef.current || decisionsMap[targetKeyOf(target)]?.outcome !== outcome) return false;
+    advanceAfterDecision(target, outcome, true);
+    return true;
   };
 
   // Adopt a review target as an editable draft copy and switch to editing it.
@@ -2996,10 +3004,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && isReviewLike(view.key.mode) && !!selectedTarget, group: "Decisions" };
   useShortcut("1", () => {
     if (!selectedTarget || selectedTarget.is_obsolete || selectedTarget.is_unknown) return false;
+    if (repeatDecision(selectedTarget, "confirmed")) return;
     void handleReviewDecision({ outcome: "confirmed" });
   }, { ...reviewShortcutOptions, description: "Confirm selected proposal" });
   useShortcut("2", () => {
     if (!selectedTarget) return false;
+    if (repeatDecision(selectedTarget, "rejected")) return;
     void handleReviewDecision({ outcome: "rejected" });
   }, { ...reviewShortcutOptions, description: "Reject selected proposal" });
   useShortcut("3", () => {
@@ -3008,6 +3018,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   }, { ...reviewShortcutOptions, description: "Adopt proposal as editable copy" });
   useShortcut("4", () => {
     if (!selectedTarget) return false;
+    if (repeatDecision(selectedTarget, "uncertain")) return;
     requestReviewerNote(selectedTarget, true);
   }, { ...reviewShortcutOptions, description: "Mark selected proposal as unresolved (note required)" });
   useShortcut("0", () => { void handleReviewDecision({ outcome: null }); }, { ...reviewShortcutOptions, description: "Reset selected review decision to open" });
@@ -3691,6 +3702,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 setMobilePane("details");
               }}
               onDeselect={handleDeselectAll}
+              onRepeatDecision={outcome => { repeatDecision(selectedTarget, outcome); }}
               onShowMention={ev => {
                 const evidenceId = `target:${selectedTarget.annotation_id}:${selectedTarget.version}:${ev.mention.evidence_id}:${ev.version}`;
                 setSelectedEvidenceId(evidenceId);

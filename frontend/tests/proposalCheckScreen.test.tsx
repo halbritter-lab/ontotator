@@ -116,18 +116,27 @@ it("1 and 2 move on to the next open proposal and name what was decided; the las
   expect(document.activeElement).toBe(document.querySelector("[data-finish-submit]"));
 });
 
-it("a repeated outcome stays on the proposal", async () => {
+it("a repeated outcome moves on like a new decision and saves nothing (F7)", async () => {
   const view = proposalView();
-  view.draft.decisions = [{ decision_id: "d", target: { annotation_id: "p-1", version: "p-1-v1" }, outcome: "confirmed", reviewer_id: "user-test" }] as never;
+  view.draft.decisions = [
+    { decision_id: "d1", target: { annotation_id: "p-1", version: "p-1-v1" }, outcome: "confirmed", reviewer_id: "user-test" },
+    { decision_id: "d2", target: { annotation_id: "p-2", version: "p-2-v1" }, outcome: "rejected", reviewer_id: "user-test" },
+  ] as never;
   const record = recordDecisions(view);
   render(<CaseScreen view={view} workspaceId="ws-pc" onClose={vi.fn()} />);
   const rows = () => Array.from(document.querySelectorAll('[data-list-key^="target:"]'));
   const selected = () => rows().findIndex(row => row.classList.contains("selected"));
+  const status = () => document.querySelector("[data-advance-status]")?.textContent;
   fireEvent.click(rows()[0]);
   fireEvent.keyDown(window, { key: "1" });
-  await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
-  expect(selected()).toBe(0);
-  expect(document.querySelector("[data-advance-status]")!.textContent).toBe("");
+  expect(selected()).toBe(2);
+  expect(status()).toBe("Already confirmed. Next open proposal: 3 of 3 K back");
+  // The button of the outcome the proposal already has does the same.
+  fireEvent.click(rows()[1]);
+  fireEvent.click(screen.getByRole("button", { name: /^Reject/ }));
+  expect(selected()).toBe(2);
+  expect(status()).toBe("Already rejected. Next open proposal: 3 of 3 K back");
+  expect(record).not.toHaveBeenCalled();
 });
 
 it("Submit is unavailable until every proposal has a decision", async () => {

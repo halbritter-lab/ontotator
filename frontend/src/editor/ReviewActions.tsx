@@ -58,6 +58,8 @@ export interface ReviewActionsProps {
   onAdoptAndEdit?: () => void;
   onEditReplacement?: (annotationId: string) => void;
   onDeselect?: () => void;
+  /** The outcome the proposal already has, chosen again with an unchanged note: move on, save nothing. */
+  onRepeatDecision?: (outcome: Exclude<ReviewDecisionOutcome, "changed">) => void;
   /** Scrolls the text to one mention of the proposal and frames it, as a click on its mark does. */
   onShowMention?: (evidence: components["schemas"]["EvidenceSnapshot"]) => void;
   /** Controlled reviewer note (kept by the parent so it survives re-selection and decision resets). */
@@ -112,6 +114,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   onAdoptAndEdit,
   onEditReplacement,
   onDeselect,
+  onRepeatDecision,
   onShowMention,
   evidence = [],
   documentText = "",
@@ -161,6 +164,8 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
 
   const handleOutcomeClick = (outcome: ReviewDecisionOutcome) => {
     if (readOnly) return;
+    if (onRepeatDecision && outcome !== "changed" && currentDecision?.outcome === outcome
+      && (note.trim() || undefined) === (currentDecision.note ?? undefined)) { onRepeatDecision(outcome); return; }
     cancelNoteSave(noteSession);
     if (outcome === "uncertain") {
       noteSession.drafting = true;
