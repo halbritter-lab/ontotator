@@ -357,4 +357,16 @@ describe("ReviewActions: modifiers of a proposal (DN-9 A)", () => {
       currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
     expect(screen.queryByRole("heading", { name: "Modifiers" })).toBeNull();
   });
+  it("makes each quote of a multi-mention proposal a button that shows its mention (F5)", () => {
+    const show = vi.fn();
+    const ev = (id: string, start: number, end: number) => ({ version: "e1", mention: { evidence_id: id, annotation_id: "prop-1", segments: [{ start, end }] } }) as any;
+    const evidence = [ev("m1", 0, 8), ev("m2", 13, 21)];
+    const { rerender } = render(<ReviewActions target={{ annotation_id: "prop-1", version: "v1", provenance: null, evidence_count: 2 }} evidence={evidence} documentText="bleeding and bleeding" onShowMention={show}
+      currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show mention 2: “bleeding”" }));
+    expect(show).toHaveBeenCalledWith(evidence[1]);
+    rerender(<ReviewActions target={{ annotation_id: "prop-1", version: "v1", provenance: null, evidence_count: 2 }} evidence={[evidence[0]]} documentText="bleeding and bleeding" onShowMention={show}
+      currentDecision={null} draftAnnotations={[]} onDecide={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /^Show mention/ })).toBeNull();
+  });
 });

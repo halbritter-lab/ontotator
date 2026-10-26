@@ -1705,6 +1705,16 @@
   line-height: var(--leading-base);
 }
 
+.review-actions__quote-button {
+  all: unset;
+  cursor: pointer;
+  text-decoration: underline dotted var(--border-strong);
+  text-underline-offset: 3px;
+}
+
+.review-actions__quote-button:hover { text-decoration-color: currentColor; }
+.review-actions__quote-button:focus-visible { outline: var(--focus-width) solid var(--focus-ring); outline-offset: 2px; }
+
 .review-actions__origin {
   margin: var(--space-3) 0;
   color: var(--text-muted);

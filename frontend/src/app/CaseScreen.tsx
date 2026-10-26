@@ -3691,6 +3691,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                 setMobilePane("details");
               }}
               onDeselect={handleDeselectAll}
+              onShowMention={ev => {
+                const evidenceId = `target:${selectedTarget.annotation_id}:${selectedTarget.version}:${ev.mention.evidence_id}:${ev.version}`;
+                setSelectedEvidenceId(evidenceId);
+                setTextScrollRequest(previous => ({ evidenceId, nonce: (previous?.nonce ?? 0) + 1 }));
+              }}
             />
           ) : (<>
             {carriedSection}

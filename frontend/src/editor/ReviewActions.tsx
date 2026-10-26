@@ -57,6 +57,8 @@ export interface ReviewActionsProps {
   onAdoptAndEdit?: () => void;
   onEditReplacement?: (annotationId: string) => void;
   onDeselect?: () => void;
+  /** Scrolls the text to one mention of the proposal and frames it, as a click on its mark does. */
+  onShowMention?: (evidence: components["schemas"]["EvidenceSnapshot"]) => void;
   /** Controlled reviewer note (kept by the parent so it survives re-selection and decision resets). */
   note?: string;
   onNoteChange?: (note: string) => void;
@@ -109,6 +111,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   onAdoptAndEdit,
   onEditReplacement,
   onDeselect,
+  onShowMention,
   evidence = [],
   documentText = "",
   note: controlledNote,
@@ -222,9 +225,15 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
         </dl>
         {!!source?.annotation.modifiers?.length && <ModifiersSection readOnly finding={termLabel ?? target.term_id ?? target.annotation_id}
           modifiers={source.annotation.modifiers} text={documentText} termInfo={termInfo ?? (() => undefined)} />}
-        {evidence.length ? evidence.map(ev => <p className="review-actions__quote" key={`${ev.mention.evidence_id}:${ev.version}`}>
-          {ev.mention.segments.map(seg => Array.from(documentText).slice(seg.start, seg.end).join("")).join(" … ")}
-        </p>) : <p className="review-actions__quote">No text mention (spanless)</p>}
+        {evidence.length ? evidence.map((ev, index) => {
+          const quote = ev.mention.segments.map(seg => Array.from(documentText).slice(seg.start, seg.end).join("")).join(" … ");
+          // Several mentions or spans: each quote visits its own mark in the text.
+          const visitable = onShowMention && (evidence.length > 1 || ev.mention.segments.length > 1);
+          return <p className="review-actions__quote" key={`${ev.mention.evidence_id}:${ev.version}`}>
+            {visitable ? <button type="button" className="review-actions__quote-button" aria-label={`Show mention ${index + 1}: “${quote}”`}
+              onClick={() => onShowMention(ev)}>{quote}</button> : quote}
+          </p>;
+        }) : <p className="review-actions__quote">No text mention (spanless)</p>}
         {/* One source line: the tool's declared name (as in the AI badge), else the actor id. */}
         <p className="review-actions__origin">
           {target.provenance ? (
