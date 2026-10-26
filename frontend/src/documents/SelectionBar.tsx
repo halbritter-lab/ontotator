@@ -1,6 +1,6 @@
 /**
- * Selection bar of Documents (spec "Selection bar"; documents overview VD4, VD21; spec 2026-10-23 §2: only
- * for bulk work, so it shows from two selected texts on): "3 texts in 2 cases selected", the common next step,
+ * Selection bar of Documents (spec "Selection bar"; documents overview VD4, VD21; owner decision R-3 of
+ * 2026-10-26: it shows from one selected text on): "3 texts in 2 cases selected", the common next step,
  * "{k} not shown with these filters" (from the selection summary with the current filters) and
  * "Clear selection"; primary "Assign…" (the page's only primary button) and "Plan…" (M2 decision M-1: the two
  * translation plan presets live in the plan dialog's quick choice). Every plan save keeps the selection and shows an
@@ -43,8 +43,8 @@ export interface SelectionBarProps {
   onRevisions?: (revisions: Record<string, number>) => void;
 }
 
-/** One selected text is the open card's text, not bulk work. */
-const MIN_TEXTS = 2;
+/** One checked text already shows the bar (owner decision R-3, 2026-10-26). */
+const MIN_TEXTS = 1;
 
 /** Delay before the selection summary is requested (Shift+Arrow can change the selection quickly). */
 export const SUMMARY_DELAY_MS = 150;

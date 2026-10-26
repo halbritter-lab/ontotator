@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { useState } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { api, ApiError, type BulkPreview, type BulkResult, type ConsequencesView, type DocumentRowFilters, type SelectionSummary } from "../../src/api/client";
-import { SelectionBar, SUMMARY_DELAY_MS, type SelectionBarProps } from "../../src/documents/SelectionBar";
+import { SelectionBar, type SelectionBarProps } from "../../src/documents/SelectionBar";
 import { Toast, useToast } from "../../src/ui";
 
 type LanguagePreview = BulkPreview["languages"][number];
@@ -65,16 +65,15 @@ it("counts texts in cases", () => {
   expect(within(bar()).getByText("3 texts in 2 cases selected")).toBeTruthy();
 });
 
-it("hidden with one selected text", async () => {
-  render(<Harness initial={["case-0101:de"]} />);
+it("hidden without a selected text", () => {
+  render(<Harness initial={[]} />);
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
-  await new Promise(resolve => setTimeout(resolve, SUMMARY_DELAY_MS + 20));
-  expect(api.selectionSummary).not.toHaveBeenCalled();
 });
 
-it("shown with two", () => {
-  render(<Harness initial={["case-0101:de", "case-0102:de"]} />);
-  expect(within(bar()).getByText("2 texts in 2 cases selected")).toBeTruthy();
+it("shown with one selected text (R-3)", () => {
+  render(<Harness initial={["case-0101:de"]} />);
+  expect(within(bar()).getByText("1 text in 1 case selected")).toBeTruthy();
+  expect(within(bar()).getByRole("button", { name: "Assign…" })).toBeTruthy();
 });
 
 it("keeps three stable actions; the plan presets live in Plan… (M-1)", () => {
