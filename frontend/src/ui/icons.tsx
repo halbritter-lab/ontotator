@@ -88,6 +88,12 @@ export const IconTrash = (p: IconProps) => (
   </Icon>
 );
 
+export const IconInfo = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="8" cy="8" r="6.25" />
+    <path d="M8 7.25v4M8 4.75v.01" />
+  </Icon>
+);
 export const IconWarning = (p: IconProps) => (
   <Icon {...p}>
     <path d="M8 2.5 14 13H2zM8 6.5v3M8 11.25h.01" />
