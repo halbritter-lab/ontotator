@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { authenticatedRequest, loginExisting, openCase, selectText, submitCase, TASKS_HOME } from './helpers';
+import { authenticatedRequest, loginExisting, openCase, selectText, submitCase, viewSubmittedResult, TASKS_HOME } from './helpers';
 
 test.setTimeout(90_000);
 
@@ -156,6 +156,8 @@ test('own history is genuinely submitted, read-only and return-to-draft preserve
   await expect(temporality).toBeChecked();
   await expect(page.locator('.status-badge')).toContainText('Saved');
   await submitCase(page);
+  // M-6: back to the submitted case through the toast's "View result".
+  await viewSubmittedResult(page);
   await page.reload();
   const refs = await offered(page, s);
   const own = refs.find(ref => ref.kind === 'own');

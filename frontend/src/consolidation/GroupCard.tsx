@@ -296,7 +296,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   return <li className={["cons-group", expanded && "cons-group-expanded", !open && "cons-group-resolved", group.state === "auto" && "cons-group-agreed"].filter(Boolean).join(" ")} data-group={group.group_id}>
     <div className="cons-group-line">
       {header}
-      {props.onUndo && !open && !readOnly && <span className="cons-undo"><span aria-hidden="true">·</span>
+      {props.onUndo && !open && !readOnly && <span className="cons-undo">
         <Button size="sm" variant="quiet" className="btn-link" loading={busy} aria-label={`Undo, ${name}`} aria-keyshortcuts="Control+Z Meta+Z"
           onClick={props.onUndo}>Undo</Button></span>}
     </div>

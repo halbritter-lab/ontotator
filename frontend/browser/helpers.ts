@@ -111,7 +111,11 @@ export async function submitCase(page: Page) {
     await expect(submit).toBeDisabled();
     await acknowledgement.check();
   }
+  // The successful submit (the first answer may be the unconfirmed-values warning). A toast of an earlier submit
+  // can still be on screen, so the toast alone does not prove this one.
+  const accepted = page.waitForResponse(r => r.request().method() === "POST" && /\/workspaces\/[^/]+\/submit$/.test(new URL(r.url()).pathname) && r.ok());
   await submit.click();
+  await accepted;
   await expectSubmitted(page);
 }
 
