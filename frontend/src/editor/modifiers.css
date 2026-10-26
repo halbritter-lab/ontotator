@@ -22,7 +22,6 @@
 }
 .mod-row.is-sel {
   background: var(--accent-light);
-  box-shadow: inset 3px 0 0 var(--accent);
 }
 .mod-row-main {
   flex: 1;
