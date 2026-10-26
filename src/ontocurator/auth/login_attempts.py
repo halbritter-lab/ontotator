@@ -69,7 +69,9 @@ def login_locked(
     return bool(address >= policy.failures_per_address)
 
 
-def prune_login_attempts(conn: Connection, now: datetime, policy: SessionPolicy) -> None:
+def prune_login_attempts(
+    conn: Connection, now: datetime, policy: SessionPolicy
+) -> None:
     """Delete attempts older than the retention, unless another login does."""
     # One pruner at a time: concurrent deletes of the same rows could deadlock.
     if conn.execute(

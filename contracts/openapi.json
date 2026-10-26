@@ -7240,7 +7240,7 @@
     "/api/v1/ontologies": {
       "get": {
         "summary": "List Ontologies",
-        "description": "List loaded ontologies plus registered files that failed to load.",
+        "description": "List loaded ontologies plus registered files that failed to load.\n\nServer paths and load errors are for system administrators only.",
         "operationId": "list_ontologies_api_v1_ontologies_get",
         "responses": {
           "200": {

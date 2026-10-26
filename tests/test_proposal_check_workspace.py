@@ -200,8 +200,9 @@ def test_review_inputs_in_review_mode_stay_hidden_from_scratch(tmp_path: Path):
     app = _app(tmp_path)
     create_project(app.state.repo.db)
     assert (
-        run_import(app.state.repo.db, bundle(tmp_path / "a.zip", [unit("EN100017")]))
-        .status
+        run_import(
+            app.state.repo.db, bundle(tmp_path / "a.zip", [unit("EN100017")])
+        ).status
         == "succeeded"
     )
     client = logged_in(
