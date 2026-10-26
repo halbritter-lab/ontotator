@@ -4,7 +4,9 @@ from collections import defaultdict
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Connection, exists, func, select
+from sqlalchemy import Connection, any_, exists, func, literal, select
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.sql.elements import ColumnElement
 
 from ontocurator.api.job_routes import authorized_project
 from ontocurator.auth.audit import Actor
@@ -75,6 +77,12 @@ class ProjectDocumentSummary(BaseModel):
     assignees: list[Assignee] | None = None
 
 
+def _in_ids(column, ids) -> ColumnElement[bool]:
+    """``column = ANY(:ids)``: one array parameter instead of an IN list of
+    ~1,000 binds, which dominated dashboard CPU (rendering and query parsing)."""
+    return column == any_(literal(list(ids), ARRAY(column.type)))
+
+
 def _legacy_statuses(
     db: Database,
     conn: Connection,
@@ -103,7 +111,7 @@ def _legacy_statuses(
             ).label("has_content"),
         ).where(
             DraftRow.project_id == project_id,
-            DraftRow.document_id.in_(documents),
+            _in_ids(DraftRow.document_id, documents),
             DraftRow.annotator_id == annotator,
             DraftRow.mode == mode,
         )
@@ -115,7 +123,7 @@ def _legacy_statuses(
             SubmissionRow.payload["origin_key"].label("origin"),
         ).where(
             SubmissionRow.project_id == project_id,
-            SubmissionRow.document_id.in_(documents),
+            _in_ids(SubmissionRow.document_id, documents),
             SubmissionRow.annotator_id == annotator,
             SubmissionRow.mode == mode,
         )
@@ -149,7 +157,7 @@ def _legacy_statuses(
             .join(AssignmentRow, AssignmentRow.active_round_id == WorkRoundRow.round_id)
             .where(
                 WorkRoundRow.project_id == project_id,
-                WorkRoundRow.document_id.in_(documents),
+                _in_ids(WorkRoundRow.document_id, documents),
                 WorkRoundRow.annotator_id == annotator,
                 WorkRoundRow.mode == mode,
                 AssignmentRow.revoked_at.is_(None),
@@ -257,7 +265,7 @@ def project_documents(
             func.length(DocumentRow.text).label("text_length"),
         ).where(DocumentRow.project_id == project_id)
         if not visibility.all:
-            query = query.where(DocumentRow.document_id.in_(visibility.document_ids))
+            query = query.where(_in_ids(DocumentRow.document_id, visibility.document_ids))
         if language is not None:
             query = query.where(DocumentRow.language == language)
         if origin is not None:
@@ -303,7 +311,7 @@ def project_documents(
                     .where(
                         AuditEventRow.project_id == project_id,
                         AuditEventRow.target_type == "document",
-                        AuditEventRow.target_id.in_(accepted_ids),
+                        _in_ids(AuditEventRow.target_id, accepted_ids),
                         AuditEventRow.action.in_(
                             ["variant.status_override", "translation.review"]
                         ),
@@ -333,7 +341,7 @@ def project_documents(
                 .join(UserRow, UserRow.id == AssignmentRow.user_id)
                 .where(
                     AssignmentRow.project_id == project_id,
-                    AssignmentRow.document_id.in_(ids),
+                    _in_ids(AssignmentRow.document_id, ids),
                     AssignmentRow.revoked_at.is_(None),
                 )
                 .order_by(UserRow.username, AssignmentRow.task, AssignmentRow.id)
