@@ -98,8 +98,7 @@ export function ProposalSource({source, compact = false}: {source?: EditorPropos
   const {metadata, tool} = useProposalMetadata(source ?? undefined);
   if (!source || !metadata || source.proposal_set_id == null) return null;
   const name = toolLabel(tool);
-  return <section className="detail-section" aria-label="Proposal source">
-    <h3>Source</h3>
+  const body = <>
     {metadata.origin === "reanchor" && metadata.source_version !== null && <p>Carried over from version {metadata.source_version}</p>}
     <dl className="axis-list">
       {!compact && name && <><dt>Tool</dt><dd>{name}</dd></>}
@@ -112,5 +111,12 @@ export function ProposalSource({source, compact = false}: {source?: EditorPropos
       {metadata.bundle_id && <><dt>Bundle</dt><dd>{metadata.bundle_id}</dd></>}
     </dl>
     {!!source.notes?.length && <><h4>Notes</h4><ul>{source.notes.map((note, index) => <li key={index}>{note}</li>)}</ul></>}
+  </>;
+  // Rarely needed while working: collapsed to one line, expandable (B3-1); compact sits in a disclosure already.
+  return <section className="detail-section proposal-source" aria-label="Proposal source">
+    {compact ? <><h3>Source</h3>{body}</> : <details>
+      <summary><h3>Source</h3> <span className="proposal-source__line">{name ?? metadata.annotation_set_id}, imported <ImportedAt at={metadata.imported_at}/></span></summary>
+      {body}
+    </details>}
   </section>;
 }
