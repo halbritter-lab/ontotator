@@ -64,9 +64,9 @@ const row = (stage: Stage, key: string, label: string, warning?: boolean): Stage
   return { key, label, count: stage.counts[key] ?? 0, ...(link ? { query: linkQuery(link) } : {}), ...(warning ? { warning } : {}) };
 };
 
-export function stageCards(stages: ProgressStagesView, annotationsPerText: number | null): StageCard[] {
+/** R-13: annotation "done" is a text with at least one submitted annotation; the per-text limit is no target. */
+export function stageCards(stages: ProgressStagesView): StageCard[] {
   const review = stages.translation_review, annotation = stages.annotation, final = stages.final;
-  const perText = annotationsPerText == null ? "" : `, ${countLabel(annotationsPerText, "annotation per text", "annotations per text")}`;
   return [
     {
       id: "translation_review", title: "Translation review",
@@ -82,8 +82,8 @@ export function stageCards(stages: ProgressStagesView, annotationsPerText: numbe
     },
     {
       id: "annotation", title: "Annotation",
-      scope: `${countLabel(annotation.total, "language version")} selected${perText}`,
-      done: doneSentence(annotation.done, annotation.total, "fully submitted"), doneCount: annotation.done, total: annotation.total,
+      scope: `${countLabel(annotation.total, "language version")} selected`,
+      done: doneSentence(annotation.done, annotation.total, "annotated"), doneCount: annotation.done, total: annotation.total,
       rows: [
         row(annotation, "waiting_for_review", "Waiting for translation review"),
         row(annotation, "to_assign", "To assign"),

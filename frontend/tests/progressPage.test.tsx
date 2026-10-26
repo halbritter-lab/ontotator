@@ -80,8 +80,8 @@ it("renders three stage cards as an ordered list with decorative arrows", async 
   arrows.forEach(arrow => expect(arrow.getAttribute("aria-hidden")).toBe("true"));
   expect(within(card("Translation review")).getByText("7 translations selected for review")).toBeTruthy();
   expect(within(card("Translation review")).getByText("2 of 7", { exact: false }).closest("p")?.textContent).toBe("2 of 7 accepted");
-  expect(within(card("Annotation")).getByText("11 language versions selected, 1 annotation per text")).toBeTruthy();
-  expect(within(card("Annotation")).getByText("2 of 11", { exact: false }).closest("p")?.textContent).toBe("2 of 11 fully submitted");
+  expect(within(card("Annotation")).getByText("11 language versions selected")).toBeTruthy();
+  expect(within(card("Annotation")).getByText("2 of 11", { exact: false }).closest("p")?.textContent).toBe("2 of 11 annotated");
   expect(within(card("Final result")).getByText("1 of 11", { exact: false }).closest("p")?.textContent).toBe("1 of 11 final");
   for (const meter of list.querySelectorAll(".progress-meter")) expect(meter.getAttribute("aria-hidden")).toBe("true");
 });

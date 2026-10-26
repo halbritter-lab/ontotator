@@ -94,9 +94,21 @@ def _card(context: RowContext, name: str) -> dict[str, Any]:
         count: sum(1 for row in rows if row_matches(context, row, RowQuery(**link)))
         for count, link in links.items()
     }
+    done_count = counts[done]
+    if name == "annotation":
+        # R-13: the per-text limit is an upper bound, not a target: a text
+        # counts as annotated with one submitted annotation.
+        done_count = sum(
+            1
+            for row in rows
+            if any(
+                item["task"] == "annotate" and item["status"] == "submitted"
+                for item in row["work"]
+            )
+        )
     return {
         "scope": scope,
-        "done": counts[done],
+        "done": done_count,
         "total": len(rows),
         "counts": counts,
         "links": {count: _link_view(link) for count, link in links.items()},

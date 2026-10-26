@@ -158,9 +158,9 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
     <Checkbox id={`${prefix}-translation-gate`} label="Wait for an accepted translation review before annotating"
       hint="Native source texts are never held back. The Assign dialog can override this for one assignment."
       checked={value.annotate_accepted_translations_only} disabled={disabled} onChange={event => onChange({ ...value, annotate_accepted_translations_only: event.target.checked })} />
-    <TextInput id={`${prefix}-annotations`} label="Annotators per text" type="number" min={1} max={5} step={1} required hint="The limit when you assign, and the target on Progress." value={Number.isFinite(target) ? String(target) : ""} disabled={disabled}
+    <TextInput id={`${prefix}-annotations`} label="Annotators per text" type="number" min={1} max={5} step={1} required hint="An upper limit per text when you assign; fewer is fine." value={Number.isFinite(target) ? String(target) : ""} disabled={disabled}
       onChange={event => onChange({ ...value, annotations_per_text: event.target.value === "" ? Number.NaN : Number(event.target.value) })} />
-    {rows !== null && <p role="status" className="field-hint">{rows > 0 ? `${rows} ${rows === 1 ? "row has" : "rows have"} more annotators than the new target. Nobody is removed.` : "Nobody is removed."}</p>}
+    {rows !== null && <p role="status" className="field-hint">{rows > 0 ? `${rows} ${rows === 1 ? "row has" : "rows have"} more annotators than the new limit. Nobody is removed.` : "Nobody is removed."}</p>}
     <Checkbox id={`${prefix}-consolidator`} label="The consolidator of a text may not be one of its annotators" hint="Checked when you assign consolidation."
       checked={value.adjudicator_not_annotator} disabled={disabled} onChange={event => onChange({ ...value, adjudicator_not_annotator: event.target.checked })} />
   </>;

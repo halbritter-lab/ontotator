@@ -87,7 +87,7 @@ describe("project creation", () => {
 });
 
 describe("settings section addresses", () => {
-  const labels = ["General", "Ontology", "Annotation", "Workflow", "Guidelines", "People"];
+  const labels = ["General", "Annotation", "Workflow", "Guidelines", "People", "Ontology"];
   const saveIn = (form: string) => within(screen.getByRole("form", { name: form })).getByRole("button", { name: "Save changes" });
 
   it("opens General at the default address with six job tabs (M-8a, B6-1)", async () => {
@@ -95,7 +95,7 @@ describe("settings section addresses", () => {
     const navigation = await screen.findByRole("navigation", { name: "Settings sections" });
     const links = within(navigation).getAllByRole("link");
     expect(links.map(link => link.textContent)).toEqual(labels);
-    expect(links.map(link => link.getAttribute("href"))).toEqual(["", "/ontology", "/annotation", "/workflow", "/guidelines", "/people"].map(suffix => `#/projects/p%2Fkey/settings${suffix}`));
+    expect(links.map(link => link.getAttribute("href"))).toEqual(["", "/annotation", "/workflow", "/guidelines", "/people", "/ontology"].map(suffix => `#/projects/p%2Fkey/settings${suffix}`));
     expect(within(navigation).getByRole("link", { name: "General" }).getAttribute("aria-current")).toBe("page");
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
     expect(await screen.findByRole("form", { name: "General" })).toBeDefined();
@@ -501,7 +501,7 @@ describe("workflow settings", () => {
     const count = within(form).getByRole("spinbutton", { name: /Annotators per text/ });
     expect(count).toHaveProperty("min", "1");
     expect(count).toHaveProperty("max", "5");
-    expect(within(form).getByText("The limit when you assign, and the target on Progress.")).toBeTruthy();
+    expect(within(form).getByText("An upper limit per text when you assign; fewer is fine.")).toBeTruthy();
     fireEvent.change(count, { target: { value: "3" } });
     vi.mocked(api.updateProjectSettings).mockResolvedValue({ ...settings, import_plan: "nothing", annotations_per_text: 3 });
     fireEvent.click(within(form).getByRole("button", { name: "Save changes" }));
@@ -516,7 +516,7 @@ describe("workflow settings", () => {
     const count = await screen.findByRole("spinbutton", { name: /Annotators per text/ });
     expect(screen.queryByText(/Nobody is removed\./)).toBeNull();
     fireEvent.change(count, { target: { value: "2" } });
-    expect(await screen.findByText("4 rows have more annotators than the new target. Nobody is removed.")).toBeTruthy();
+    expect(await screen.findByText("4 rows have more annotators than the new limit. Nobody is removed.")).toBeTruthy();
     expect(preview).toHaveBeenLastCalledWith(settings.project_key, 2);
     preview.mockResolvedValue({ rows_over_target: 0 });
     fireEvent.change(count, { target: { value: "1" } });

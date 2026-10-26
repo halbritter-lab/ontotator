@@ -113,11 +113,20 @@ function pausedText(cell: StageCellView): StageText {
   return { symbol: "⏸", word: "Paused", detail: person && excerpt ? `${person}: ${excerpt}` : person || excerpt || "" };
 }
 
+/**
+ * Annotators of a text against the project limit, an upper bound (R-13): "1 annotator · max 2", "2 · full",
+ * "No annotator yet · max 2"; never "1 of 2", which reads like a required number.
+ */
+export function annotatorCount(assigned: number, max: number): string {
+  if (assigned >= max) return `${assigned} · full`;
+  return `${assigned === 0 ? "No annotator yet" : plural(assigned, "annotator")} · max ${max}`;
+}
+
 function annotationText(cell: StageCellView): StageText {
   const detail = cell.detail;
   const people = names(detail.people);
   const waiting = detail.note === "text_change_waiting" ? "text change waiting for review" : null;
-  const counted = (word: string) => (detail.target != null ? `${detail.assigned ?? 0} of ${detail.target} assigned` : word);
+  const counted = (word: string) => (detail.target != null ? annotatorCount(detail.assigned ?? 0, detail.target) : word);
   const several = (detail.people?.length ?? 0) > 1;
   switch (cell.state) {
     case "not_planned": return { symbol: "—", word: "not planned", detail: detail.note === "review_only" ? "Review only" : "" };

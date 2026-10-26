@@ -13,7 +13,7 @@ from tests_support_reviews import insert_review
 from work_plan_support import BASE, assign, doc, plan_env, select_final, submit, write
 
 from ontocurator.domain.work_plans import PlanFlags, RowKey
-from ontocurator.storage.tables import AssignmentRow, DocumentRow
+from ontocurator.storage.tables import AssignmentRow, DocumentRow, ProjectRow
 
 BOTH = PlanFlags(True, True)
 REVIEW = PlanFlags(True, False)
@@ -190,3 +190,18 @@ def test_annotation_in_progress_excludes_paused_rows(env):
 def test_progress_people_are_lead_only(env):
     annotator = logged_in(env.app, "anno", assignments=[])
     assert annotator.get(f"{BASE}/progress").status_code == 403
+
+
+def test_one_submitted_annotation_counts_as_annotated_under_a_higher_limit(env):
+    """R-13: the per-text limit is an upper bound; Progress counts a text
+    with one submitted annotation as annotated."""
+    with env.db.transaction() as conn:
+        conn.execute(
+            update(ProjectRow)
+            .where(ProjectRow.project_key == "proj")
+            .values(annotations_per_text=2)
+        )
+    submit(env, assign(env, doc("c1", "en"), "anno", "annotate"), "s-limit")
+    annotation = progress(env.lead)["stages"]["annotation"]
+    assert annotation["done"] == 1
+    assert annotation["counts"]["submitted"] == 0  # one of two places is open
