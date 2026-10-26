@@ -128,7 +128,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     if (!view || initialized.current) return;
     initialized.current = true;
     const routed = view.groups.find(group => group.group_id === props.group);
-    const first = routed ?? textOrder(view.groups).find(group => group.state === "open");
+    const first = routed ?? textOrder(view.groups, view.text).find(group => group.state === "open");
     setSelected(first?.group_id ?? null);
   }, [view, props.group]);
 
@@ -138,7 +138,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   }, [focusRequest]);
 
   const readOnly = !view || view.read_only || !!props.readOnly || submitted;
-  const groups = useMemo(() => textOrder(view?.groups ?? []), [view?.groups]);
+  const groups = useMemo(() => textOrder(view?.groups ?? [], view?.text ?? ""), [view?.groups, view?.text]);
   const open = groups.filter(group => group.state === "open").length;
 
   const select = (groupId: string, focus = false) => {
@@ -175,7 +175,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     const ok = await data.resolve(group.group_id, payload);
     if (!ok) return false;
     setSummaries(current => new Map(current).set(group.group_id, summary));
-    const next = nextOpenAfter(textOrder(viewRef.current?.groups ?? []), group.group_id);
+    const next = nextOpenAfter(textOrder(viewRef.current?.groups ?? [], viewRef.current?.text ?? ""), group.group_id);
     setSelected(next);
     if (next) setFocusRequest({ groupId: next });
     else submitRef.current?.querySelector<HTMLButtonElement>("button")?.focus();

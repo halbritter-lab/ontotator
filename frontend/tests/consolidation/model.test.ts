@@ -3,6 +3,7 @@ import { fieldsToDecide, groupStatus, headerTitle, partialText, submittedText, s
 import type { ConsolidationGroupView } from "../../src/api/client";
 import { attachCandidates, choicesComplete, choose, comparisonRows, groupName, resolvePayload, resultLine, standaloneText, takeFinding, type Choices } from "../../src/consolidation/groupModel";
 import { NO_MODIFIERS } from "../../src/consolidation/modifierSets";
+import { textOrder } from "../../src/consolidation/GroupList";
 import { ANA, BEN, CEM, decidedView, exampleGroups, exampleView, group, hypotoniaThree, LUC, member, mild, MOD_PEOPLE, MOD_TEXT, modSpan, recurrent, seizure, severe, span, TEXT, THREE, TOM } from "./fixtures";
 
 describe("consolidation copy", () => {
@@ -315,6 +316,14 @@ describe("standalone modifier (S18)", () => {
     // Only a "." before whitespace ends a sentence (spec), so "Z.n. " still does.
     expect(ids("Anfälle (Z.n./V.a.) schwere Hypotonie.", { "g-a": "Anfälle" }, "schwere")).toEqual(["g-a"]);
     expect(ids("- Anfälle\n- schwere Hypotonie", { "g-a": "Anfälle", "g-b": "Hypotonie" }, "schwere")).toEqual(["g-b"]);
+  });
+
+  it("sorts a standalone modifier after the last other finding of its sentence", () => {
+    const groups = [resolved("g-fever", "Fieber", "open"), resolved("g-hypo", "Muskelhypotonie", "open"), standalone(),
+      resolved("g-seiz", "Krampfanfälle", "open"), resolved("g-rep", "wiederholt", "open")];
+    expect(textOrder(groups, MOD_TEXT).map(value => value.group_id)).toEqual(["g-rep", "g-seiz", "g-hypo", "g-sev", "g-fever"]);
+    // Alone in its sentence, it keeps its text position.
+    expect(textOrder([groups[0], standalone()], MOD_TEXT).map(value => value.group_id)).toEqual(["g-sev", "g-fever"]);
   });
 
   it("an attached group reads attached", () => {
