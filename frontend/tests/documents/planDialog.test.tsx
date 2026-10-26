@@ -77,7 +77,7 @@ describe("PlanDialog", () => {
   it("the quick choice fills the selected translations' languages, plans only the selected texts and saves nothing by itself (M-1)", async () => {
     const rows = [{ case_id: "case-0101", language: "de" }, { case_id: "case-0102", language: "en" }];
     vi.mocked(api.previewWorkPlans).mockImplementation(async (_key, body) => body.rows
-      ? preview({ cases: 2, languages: [lang("source", 1, null, [0, 1]), lang("de", 1, [0, 1], [0, 1])] }) : preview());
+      ? preview({ cases: 2, languages: [lang("source", 1, null, [0, 1]), lang("de", 1, [0, 1], [0, 1], { will_change: 1 })] }) : preview());
     renderDialog({ rows });
     const quick = await screen.findByRole("group", { name: "Quick choice for the selected translations" });
     fireEvent.click(within(quick).getByRole("button", { name: "Translation review and annotation" }));
@@ -85,8 +85,30 @@ describe("PlanDialog", () => {
     expect((await radio("de", "Translation review", "On")).checked).toBe(true);
     expect(screen.queryByRole("region", { name: /^fr In selection/ })).toBeNull();
     fireEvent.click(within(quick).getByRole("button", { name: "Annotation only, no translation review" }));
-    await waitFor(() => expect(lastPreviewBody()).toEqual({ rows, languages: { de: { annotate: "on" } } }));
+    await waitFor(() => expect(lastPreviewBody()).toEqual({ rows, languages: { de: { review: "off_unstarted", annotate: "on" } } }));
+    expect((await radio("de", "Translation review", "Off")).checked).toBe(true);
     expect(api.saveWorkPlans).not.toHaveBeenCalled();
+  });
+
+  it("each quick choice shows its effect; one that changes nothing is unavailable as already planned (R-15)", async () => {
+    const rows = [{ case_id: "case-0101", language: "de" }];
+    vi.mocked(api.previewWorkPlans).mockImplementation(async (_key, body) => {
+      if (!body.rows) return preview();
+      const de = body.languages?.de;
+      const extra = de?.review === "on" ? { will_change: 0 } : de?.review === "off_unstarted" ? { will_change: 1, review_kept_started: 1 } : {};
+      return preview({ cases: 1, languages: [lang("de", 1, [1, 0], [0, 1], extra)] });
+    });
+    renderDialog({ rows });
+    const quick = await screen.findByRole("group", { name: "Quick choice for the selected translations" });
+    const both = within(quick).getByRole("button", { name: "Translation review and annotation" });
+    await waitFor(() => expect(both.getAttribute("aria-disabled")).toBe("true"));
+    expect(description(both)).toBe("Already planned.");
+    const only = within(quick).getByRole("button", { name: "Annotation only, no translation review" });
+    await waitFor(() => expect(description(only)).toBe("Changes 1 text. 1 text keeps its translation review: it has started or is done."));
+    fireEvent.click(both);
+    expect((await radio("de", "Translation review", /^Leave as is/)).checked).toBe(true);
+    fireEvent.click(only);
+    expect(await screen.findByText("1 text keeps its translation review: it has started or is done.", { selector: "p" })).toBeTruthy();
   });
 
   it("has no quick choice when the selected texts hold no translation, even if their cases do (M-1)", async () => {

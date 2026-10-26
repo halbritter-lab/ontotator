@@ -13,7 +13,7 @@ const lang = (key: string, cases: number, extra: Partial<LanguagePreview> = {}):
 });
 const noConsequences: ConsequencesView = { withdrawn: [], finals_leaving: [], restored: [], open_reports: [] };
 const preview = (overrides: Partial<BulkPreview> = {}): BulkPreview => ({
-  cases: 20, languages: [lang("source", 20), lang("de", 20)], changes: 0, to_assign: {}, consequences: noConsequences, invalid: [],
+  cases: 20, languages: [lang("source", 20), lang("de", 20, { will_change: 20 })], changes: 0, to_assign: {}, consequences: noConsequences, invalid: [],
   revisions: { "case-0101": 1 }, rule_on: true, ...overrides,
 });
 const caseIds = Array.from({ length: 20 }, (_, index) => `case-${String(101 + index).padStart(4, "0")}`);

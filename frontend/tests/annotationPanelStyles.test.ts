@@ -56,3 +56,9 @@ it("the text card's grid for technical details never reaches the editor's Source
   const css = readFileSync(new URL("../src/documents/textCard/textCard.css", import.meta.url), "utf8");
   expect(css).not.toMatch(/(^|[\s,}])\.technical-details\b/m);
 });
+
+it("pins Source and rules to the bottom of the inspector pane (R-17)", () => {
+  const css = readFileSync(new URL("../src/styles/screens/editor.css", import.meta.url), "utf8");
+  expect(css).toMatch(/\.inspector-pane > \.review-actions \{[^}]*flex: 1 0 auto;[^}]*flex-direction: column;/);
+  expect(css).toMatch(/\.review-actions__more \{\s*margin-top: auto;/);
+});

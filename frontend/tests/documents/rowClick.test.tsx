@@ -1,7 +1,7 @@
 /** Row interaction on Documents (R-4): a click selects, a double click or Enter on the text name opens the text card. */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DocumentsTable, type TableSelection } from "../../src/documents/DocumentsTable";
+import { DOUBLE_CLICK_MS, DocumentsTable, type TableSelection } from "../../src/documents/DocumentsTable";
 import { group, page } from "./fixtures";
 import { stagedRow } from "./tableFixtures";
 
@@ -50,13 +50,40 @@ describe("in the table", () => {
     expect(onOpenPanel).not.toHaveBeenCalled();
   });
 
-  it("a double click opens the card and leaves the selection as it was", () => {
+  it("a mouse click selects once no second click follows (R-16)", () => {
+    vi.useFakeTimers();
+    try {
+      const { current, waitingCell } = renderTable();
+      fireEvent.click(waitingCell("de"), { detail: 1 });
+      expect(current.select).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS);
+      expect(current.select).toHaveBeenCalledWith("case-120:de", "toggle", order);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a double click opens the card and never touches the selection (R-16)", () => {
+    vi.useFakeTimers();
+    try {
+      const { onOpenPanel, current, waitingCell } = renderTable();
+      const cell = waitingCell("de");
+      fireEvent.click(cell, { detail: 1 });
+      fireEvent.click(cell, { detail: 2 });
+      fireEvent.doubleClick(cell);
+      vi.advanceTimersByTime(DOUBLE_CLICK_MS);
+      expect(current.select).not.toHaveBeenCalled();
+      expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), { opener: screen.getByRole("button", { name: "Open text card, case-120 de" }) });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a slow double click (after the selection applied) toggles back and opens the card", () => {
     const { onOpenPanel, current, waitingCell } = renderTable();
     const cell = waitingCell("de");
-    fireEvent.click(cell, { detail: 1 });
-    fireEvent.click(cell, { detail: 2 });
+    fireEvent.click(cell, { detail: 0 });
     fireEvent.doubleClick(cell);
-    // The first click toggled; the double click toggles back.
     expect(current.select).toHaveBeenCalledTimes(2);
     expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), { opener: screen.getByRole("button", { name: "Open text card, case-120 de" }) });
   });

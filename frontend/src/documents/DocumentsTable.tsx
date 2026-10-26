@@ -7,7 +7,7 @@
  * R-4 (2026-10-26): a click on the row (or its text name) toggles its selection, a double click opens the text card;
  * on the focused text name Space toggles and Enter opens.
  */
-import { useMemo, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, DocumentRowsRequest, NextStepView } from "../api/client";
 import type { Route } from "../app/router";
 import { plural } from "../app/labels";
@@ -99,6 +99,9 @@ export function rowAreaClick(event: MouseEvent<HTMLElement>): "row" | "range" | 
   return event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle-keep-anchor" : "row";
 }
 
+/** How long a plain row click waits for a second click before it selects (R-16). */
+export const DOUBLE_CLICK_MS = 250;
+
 /** Server sorts the headers can set (VD10). */
 export type HeaderSort = "case" | "-case" | "activity" | "-activity";
 
@@ -169,19 +172,32 @@ export function DocumentsTable({
   const openCard = (row: DocumentRowView, opener: HTMLElement) => onOpenPanel?.(row, { opener });
   // The text name gets focus back when the card closes.
   const opener = (row: DocumentRowView, fallback: HTMLElement) => document.getElementById(documentsRowId(row.case_id, row.language, "header")) ?? fallback;
+  // A plain mouse click waits for a possible second click (R-16): a double click opens the card and never selects.
+  const pending = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(pending.current), []);
   // A click on the row selects like its checkbox (Shift a range, Ctrl/Meta keeps the anchor).
   const onRowClick = (row: DocumentRowView) => selection ? (event: MouseEvent<HTMLTableRowElement>) => {
     const mode = rowAreaClick(event);
-    if (mode) selection.select(rowKeyOf(row), mode === "row" ? "toggle" : mode, order);
+    if (!mode) return;
+    const tr = event.currentTarget;
+    const select = () => {
+      pending.current = undefined;
+      selection.select(rowKeyOf(row), mode === "row" ? "toggle" : mode, order);
+      // The selection bar may appear and shorten the table: keep the clicked row above it.
+      window.requestAnimationFrame(() => { if (tr.isConnected) tr.scrollIntoView?.({ block: "nearest" }); });
+    };
+    window.clearTimeout(pending.current);
+    if (mode === "row" && event.detail === 1 && onOpenPanel) pending.current = window.setTimeout(select, DOUBLE_CLICK_MS);
+    else select();
   } : undefined;
-  // A plain double click opens the card; its first click toggled the selection, so it toggles back.
+  // A plain double click opens the card; a pending first-click toggle is dropped, an applied one (slow double click) toggles back.
   const onRowDoubleClick = (row: DocumentRowView) => onOpenPanel ? (event: MouseEvent<HTMLTableRowElement>) => {
     const target = event.target as Element;
     const interactive = target.closest(ROW_INTERACTIVE);
     if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || !event.currentTarget.contains(target)
       || (interactive && !interactive.matches(".documents-text-name"))) return;
     window.getSelection?.()?.removeAllRanges();
-    selection?.select(rowKeyOf(row), "toggle", order);
+    if (pending.current !== undefined) { window.clearTimeout(pending.current); pending.current = undefined; } else selection?.select(rowKeyOf(row), "toggle", order);
     openCard(row, opener(row, event.currentTarget));
   } : undefined;
 

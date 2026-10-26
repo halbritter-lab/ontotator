@@ -32,6 +32,11 @@ export const keepLabel = (counts: { on: number; off: number } | null): string =>
   if (!counts.on) return `Leave as is (now off for ${plural(counts.off, "text")})`;
   return counts.off ? `Leave as is (now on for ${counts.on}, off for ${counts.off})` : `Leave as is (now on for ${plural(counts.on, "text")})`;
 };
+/** "3 texts keep their translation review: it has started or is done." */
+const keptReviewText = (kept: number): string => `${plural(kept, "text")} ${kept === 1 ? "keeps its" : "keep their"} translation review: it has started or is done.`;
+/** The effect line under a quick choice: "Changes 12 texts" / "Already planned" (+ the started reviews it keeps). */
+export const presetEffectText = ({ change, kept }: { change: number; kept: number }): string =>
+  `${change === 0 ? "Already planned." : `Changes ${plural(change, "text")}.`}${kept > 0 ? ` ${keptReviewText(kept)}` : ""}`;
 type AnnotationChoice = "keep" | "off" | "on" | "proposals" | "scratch";
 /** "on" = annotate with each text's mode kept (a quick-action preset); the mode radios set a mode. */
 const annotationChoice = (choice: PlanChoices[string] | undefined): AnnotationChoice => {
@@ -94,6 +99,8 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
   /** Translation languages of the selected texts (not of their whole cases). */
   const [textLanguages, setTextLanguages] = useState<string[]>([]);
   const [textsOnly, setTextsOnly] = useState(false);
+  /** Per quick choice: the texts it would change and the started reviews it keeps (R-15); missing until checked. */
+  const [presetEffects, setPresetEffects] = useState<Partial<Record<PlanPreset, { change: number; kept: number }>>>({});
   const [choices, setChoices] = useState<PlanChoices>(() => ({ ...(initial ?? {}) }));
   const [preview, setPreview] = useState<{ request: string; data: BulkPreview } | null>(null);
   const [previewError, setPreviewError] = useState<unknown>();
@@ -113,7 +120,15 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
     if (!rows?.length) return;
     let active = true;
     api.previewWorkPlans(projectKey, { rows: [...rows], languages: {} }).then(data => {
-      if (active) setTextLanguages(data.languages.map(language => language.key).filter(key => key !== SOURCE_KEY));
+      if (!active) return;
+      const keys = data.languages.map(language => language.key).filter(key => key !== SOURCE_KEY);
+      setTextLanguages(keys);
+      for (const preset of keys.length ? Object.keys(PRESET_LABELS) as PlanPreset[] : []) {
+        api.previewWorkPlans(projectKey, { rows: [...rows], languages: presetChoices(preset, keys) }).then(effect => {
+          const total = (count: (language: LanguagePreview) => number | undefined) => effect.languages.reduce((sum, language) => sum + (count(language) ?? 0), 0);
+          if (active) setPresetEffects(value => ({ ...value, [preset]: { change: total(language => language.will_change), kept: total(language => language.review_kept_started) } }));
+        }, () => undefined); // without it the button stays plain
+      }
     }, () => undefined); // without it the quick choice stays hidden; the dialog itself still works
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,7 +235,15 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
       {preview && !confirming && textLanguages.length > 0 && <fieldset className="plan-step plan-quick-choice">
         <legend>Quick choice for the selected translations</legend>
         <div className="plan-quick-choice-actions">
-          {(Object.keys(PRESET_LABELS) as PlanPreset[]).map(preset => <Button key={preset} onClick={() => applyPreset(preset)}>{PRESET_LABELS[preset]}</Button>)}
+          {(Object.keys(PRESET_LABELS) as PlanPreset[]).map(preset => {
+            const effect = presetEffects[preset];
+            const noteId = `${ids}-preset-${preset}`;
+            const none = effect?.change === 0;
+            return <div key={preset} className="plan-quick-choice-item">
+              <Button aria-disabled={none || undefined} aria-describedby={effect ? noteId : undefined} onClick={() => { if (!none) applyPreset(preset); }}>{PRESET_LABELS[preset]}</Button>
+              {effect && <span id={noteId} className="field-hint">{presetEffectText(effect)}</span>}
+            </div>;
+          })}
         </div>
         <p className="field-hint">Fills the choices below for the selected texts only; nothing is saved until “Save”.</p>
       </fieldset>}
@@ -237,7 +260,8 @@ export function PlanDialog({ projectKey, caseIds, rows, initial, onClose, onSave
             <legend>Translation review</legend>
             {option("review", "keep", keepLabel(language.review), review === "keep", () => setCells(language.key, { review: "keep" }))}
             {option("review", "on", "On", review === "on", () => setCells(language.key, { review: "on" }), REVIEW_HELP.on)}
-            {option("review", "off", "Off", review === "off", () => setCells(language.key, { review: "off" }), REVIEW_HELP.off)}
+            {option("review", "off", "Off", review === "off" || review === "off_unstarted", () => setCells(language.key, { review: "off" }), REVIEW_HELP.off)}
+            {review === "off_unstarted" && fresh && (language.review_kept_started ?? 0) > 0 && <p className="field-hint">{keptReviewText(language.review_kept_started ?? 0)}</p>}
           </fieldset>}
           <fieldset className="plan-step">
             <legend>Annotation</legend>
