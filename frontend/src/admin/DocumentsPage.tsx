@@ -783,6 +783,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
         onOpenPanel={onOpenPanel} activeKey={panelKey} renderRowNotice={renderRowNotice} rowBadge={rowBadge} onAction={onAction} onNavigate={navigateLink} busy={rows.loading}
         sort={request.sort} onSort={(next: HeaderSort) => { setColumnSort(null); changeFilter({ sort: next === "case" ? undefined : next }); }}
         columnSort={columnSort} onColumnSort={setColumnSort} showNotInPlan={notInPlanShown} onAddToPlan={setPlanFor}
+        onShowNotInPlan={tab === "all" ? () => changeShowNotInPlan(true) : undefined}
         empty={<EmptyState title="No texts in plan on this page." action={notInPlanCount > 0 ? <Button size="sm" onClick={() => changeShowNotInPlan(true)}>Show texts not in plan</Button> : undefined} />} />;
     }
     // Floats at the bottom of the viewport; placed above the table (below 700 px after the cards) to keep the focus order.

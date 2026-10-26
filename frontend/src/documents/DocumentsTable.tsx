@@ -3,8 +3,9 @@
  * [checkbox] Text (case ID, language, "+n" for texts of the case not shown), Translation, Annotation,
  * Finalization, Waiting on, Next step, Last activity. Texts outside the plan are rows only with the page's
  * "Show texts not in plan" switch: muted, with "Add to plan…". The row open in the card is current; the other
- * shown texts of its case are tinted wherever the sort puts them. Decision rows get the left edge. A row click
- * (or the text name) opens the text card and never changes the selection; only the checkboxes select.
+ * shown texts of its case are tinted wherever the sort puts them. Decision rows get the left edge. Owner decision
+ * R-4 (2026-10-26): a click on the row (or its text name) toggles its selection, a double click opens the text card;
+ * on the focused text name Space toggles and Enter opens.
  */
 import { useMemo, type MouseEvent, type ReactNode } from "react";
 import type { DocumentGroupView, DocumentRowView, DocumentRowsPage, DocumentRowsRequest, NextStepView } from "../api/client";
@@ -83,14 +84,16 @@ export interface TableSelection {
 const ROW_INTERACTIVE = "a, button, input, select, textarea, label, summary, [role='button'], [role='menuitem'], [role='checkbox'], [tabindex]:not([tabindex='-1']), .data-table-select-cell";
 
 /**
- * How a click on a row's own area selects: plain "row", Shift "range", Ctrl/Meta "toggle-keep-anchor"; null for
- * clicks on interactive elements, from a portal (popover/menu content bubbles through React), other buttons,
- * Alt, or while text is being selected (dragging over a name copies it).
+ * How a click on a row's own area (or its text name) selects: plain "row", Shift "range", Ctrl/Meta
+ * "toggle-keep-anchor"; null for clicks on other interactive elements, from a portal (popover/menu content bubbles
+ * through React), other buttons, Alt, the later clicks of a double click, or while text is being selected
+ * (dragging over a name copies it).
  */
 export function rowAreaClick(event: MouseEvent<HTMLElement>): "row" | "range" | "toggle-keep-anchor" | null {
   const target = event.target as Element | null;
-  if (!target || !event.currentTarget.contains(target) || event.button !== 0 || event.altKey) return null;
-  if (target.closest(ROW_INTERACTIVE)) return null;
+  if (!target || !event.currentTarget.contains(target) || event.button !== 0 || event.altKey || event.detail > 1) return null;
+  const interactive = target.closest(ROW_INTERACTIVE);
+  if (interactive && !interactive.matches(".documents-text-name")) return null;
   const selected = typeof window.getSelection === "function" ? window.getSelection()?.toString() ?? "" : "";
   if (selected.length > 0) return null;
   return event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle-keep-anchor" : "row";
@@ -143,6 +146,8 @@ export interface DocumentsTableProps {
   showNotInPlan?: boolean;
   /** "Add to plan…" of a text outside the plan (the Change plan dialog). */
   onAddToPlan?: (row: DocumentRowView) => void;
+  /** The "+n" marker turns on "Show texts not in plan". */
+  onShowNotInPlan?: () => void;
   /** Current server sort; with `onSort` the Text and Last activity headers sort (VD10). */
   sort?: DocumentRowsRequest["sort"];
   onSort?: (sort: HeaderSort) => void;
@@ -153,7 +158,7 @@ export interface DocumentsTableProps {
 
 export function DocumentsTable({
   page, rows: givenRows, onOpenPanel, activeKey = null, renderRowNotice, rowBadge, onAction, onNavigate, busy, empty, selection, sort, onSort,
-  showNotInPlan = false, onAddToPlan, columnSort = null, onColumnSort, translations = true,
+  showNotInPlan = false, onAddToPlan, onShowNotInPlan, columnSort = null, onColumnSort, translations = true,
 }: DocumentsTableProps): JSX.Element {
   const rows = useMemo(() => givenRows ?? tableRows(page, showNotInPlan, columnSort), [givenRows, page, showNotInPlan, columnSort]);
   const order = useMemo(() => rows.map(rowKeyOf), [rows]);
@@ -162,11 +167,22 @@ export function DocumentsTable({
   const isSibling = (row: DocumentRowView) => row.case_id === activeCase && rowKeyOf(row) !== activeKey;
 
   const openCard = (row: DocumentRowView, opener: HTMLElement) => onOpenPanel?.(row, { opener });
-  // A plain click on the row's own area opens the card (never the selection); modifier clicks do nothing.
-  const onRowClick = (row: DocumentRowView) => onOpenPanel ? (event: MouseEvent<HTMLTableRowElement>) => {
-    if (rowAreaClick(event) !== "row") return;
-    // The text name gets focus back when the card closes.
-    openCard(row, document.getElementById(documentsRowId(row.case_id, row.language, "header")) ?? event.currentTarget);
+  // The text name gets focus back when the card closes.
+  const opener = (row: DocumentRowView, fallback: HTMLElement) => document.getElementById(documentsRowId(row.case_id, row.language, "header")) ?? fallback;
+  // A click on the row selects like its checkbox (Shift a range, Ctrl/Meta keeps the anchor).
+  const onRowClick = (row: DocumentRowView) => selection ? (event: MouseEvent<HTMLTableRowElement>) => {
+    const mode = rowAreaClick(event);
+    if (mode) selection.select(rowKeyOf(row), mode === "row" ? "toggle" : mode, order);
+  } : undefined;
+  // A plain double click opens the card; its first click toggled the selection, so it toggles back.
+  const onRowDoubleClick = (row: DocumentRowView) => onOpenPanel ? (event: MouseEvent<HTMLTableRowElement>) => {
+    const target = event.target as Element;
+    const interactive = target.closest(ROW_INTERACTIVE);
+    if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || !event.currentTarget.contains(target)
+      || (interactive && !interactive.matches(".documents-text-name"))) return;
+    window.getSelection?.()?.removeAllRanges();
+    selection?.select(rowKeyOf(row), "toggle", order);
+    openCard(row, opener(row, event.currentTarget));
   } : undefined;
 
   const columns: Column<DocumentRowView>[] = [
@@ -176,7 +192,7 @@ export function DocumentsTable({
       rowHeader: true,
       sortable: true,
       cell: row => <RowHeaderCell row={row} badge={rowBadge?.(row)} onOpenCard={onOpenPanel ? opener => openCard(row, opener) : undefined}
-        showCaseId more={hidden.get(row.case_id) ?? 0} sibling={isSibling(row)} />,
+        showCaseId more={hidden.get(row.case_id) ?? 0} onShowMore={onShowNotInPlan} sibling={isSibling(row)} />,
     },
     ...(translations ? [{ id: "review", header: "Translation", sortable: true, cell: (row: DocumentRowView) => <RowStageCell row={row} stage="review" /> }] : []),
     { id: "annotation", header: "Annotation", sortable: true, cell: row => <RowStageCell row={row} stage="annotation" /> },
@@ -216,7 +232,7 @@ export function DocumentsTable({
       columns={columns}
       rows={[...rows]}
       rowKey={rowKeyOf}
-      rowProps={row => ({ className: rowClass(row), onClick: onRowClick(row), ...(rowKeyOf(row) === activeKey ? { "aria-current": true } : {}) })}
+      rowProps={row => ({ className: rowClass(row), onClick: onRowClick(row), onDoubleClick: onRowDoubleClick(row), ...(rowKeyOf(row) === activeKey ? { "aria-current": true } : {}) })}
       rowEdge={row => (rowNeedsDecision(row) ? "decision" : null)}
       renderExpanded={below}
       busy={busy}

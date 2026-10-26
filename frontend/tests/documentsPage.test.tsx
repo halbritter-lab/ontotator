@@ -423,9 +423,9 @@ describe("case selection", () => {
     expect(within(selectionRegion()).getByText(selectedText(2))).toBeTruthy();
     fireEvent.click(first);
     expect((first as HTMLInputElement).checked).toBe(false);
-    // One text is no bulk work: the bar hides, the live region still counts.
+    // One selected text still shows the bar (R-3).
     await waitFor(() => expect(live().textContent).toBe(selectedText(1)));
-    expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
+    expect(within(selectionRegion()).getByText(selectedText(1))).toBeTruthy();
   });
 
   it("Ctrl+Z and Meta+Z undo the last plan change while a row checkbox has focus", async () => {
@@ -449,7 +449,7 @@ describe("case selection", () => {
     await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(1));
     expect(api.setWorkPlanRows).toHaveBeenLastCalledWith("p", expect.objectContaining({ undo: true }));
     await waitFor(() => expect(screen.queryByText("fr of case-0101: Translation review off")).toBeNull());
-    fireEvent.click(screen.getByRole("button", { name: "Open text card, case-0101 fr" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Open text card, case-0101 fr" }), { key: "Enter" });
     fireEvent.click(within(await textCard("case-0101 fr")).getByRole("button", { name: "Details" }));
     fireEvent.click(await screen.findByRole("button", { name: /^Translation review, case-0101 fr/ }));
     await screen.findByText(/fr of case-0101: Translation review/);
@@ -502,7 +502,7 @@ describe("case selection", () => {
     // The second click clears the header's texts (no second request) and keeps the earlier selection.
     fireEvent.click(header);
     await waitFor(() => expect(live().textContent).toBe(selectedText(1)));
-    expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
+    expect(within(selectionRegion()).getByText(selectedText(1))).toBeTruthy();
     expect(api.documentRowKeys).toHaveBeenCalledTimes(1);
     expect(header.checked).toBe(false);
     expect((rowBox("case-0101", "de") as HTMLInputElement).checked).toBe(true);
@@ -782,7 +782,7 @@ it("opens no row panel for a deep link with several languages", async () => {
 it("the text name opens the row panel with replace navigation", async () => {
   mockRows(scenarioS1().page);
   const { onNavigate } = renderPage({ query: { language: "en" } });
-  fireEvent.click(await screen.findByRole("button", { name: "Open text card, case-0042 en" }));
+  fireEvent.keyDown(await screen.findByRole("button", { name: "Open text card, case-0042 en" }), { key: "Enter" });
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en", panel: "case-0042:en" }, { replace: true });
 });
 
@@ -838,7 +838,7 @@ describe("text changes (V5)", () => {
     renderStateful({});
     // The row shows the first step only; the text card offers one entry per person.
     expect(await screen.findByRole("button", { name: "Handle text change…, Tom Reis, case-201 de" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Open text card, case-201 de" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Open text card, case-201 de" }), { key: "Enter" });
     const card = await screen.findByRole("dialog", { name: "case-201 de" });
     expect(within(card).getByRole("button", { name: "Handle text change…, Tom Reis" })).toBeTruthy();
     fireEvent.click(within(card).getByRole("button", { name: "Handle text change…, Ana Weber" }));
@@ -1551,22 +1551,21 @@ describe("text card (U3)", () => {
     expect(await within(card).findByRole("button", { name: "Assign annotators…" })).toBeTruthy();
   });
 
-  it("a row click opens only the card and marks the row current; it never changes the selection", async () => {
+  it("a row click selects; a double click opens the card and marks the row current (R-4)", async () => {
     mockRows(page([group("case-0200", [proposalsRow()])]));
     const { onNavigate } = renderStateful({});
     const box = await screen.findByRole("checkbox", { name: "Select case-0200 de" });
     const waiting = box.closest("tr")!.children[5] as HTMLElement;
     fireEvent.click(waiting);
-    expect(box).toHaveProperty("checked", false);
+    expect(box).toHaveProperty("checked", true);
+    expect(screen.queryByRole("dialog", { name: "case-0200 de" })).toBeNull();
+    fireEvent.click(waiting, { detail: 1 });
+    fireEvent.click(waiting, { detail: 2 });
+    fireEvent.doubleClick(waiting);
+    expect(screen.getByRole("checkbox", { name: "Select case-0200 de" })).toHaveProperty("checked", true);
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", panel: "case-0200:de" }, { replace: true });
     await textCard("case-0200 de");
     expect(box.closest("tr")!.className).toContain("documents-row--active");
-    fireEvent.click(within(await textCard("case-0200 de")).getByRole("button", { name: "Close" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "case-0200 de" })).toBeNull());
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select case-0200 de" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select case-0200 de" }).closest("tr")!.children[5]);
-    expect(screen.getByRole("checkbox", { name: "Select case-0200 de" })).toHaveProperty("checked", true);
-    await textCard("case-0200 de");
   });
 
   it("closing the card keeps the selection", async () => {
@@ -1575,7 +1574,7 @@ describe("text card (U3)", () => {
     const box = await screen.findByRole("checkbox", { name: "Select case-0200 de" });
     fireEvent.click(box);
     expect(box).toHaveProperty("checked", true);
-    fireEvent.click(screen.getByRole("button", { name: "Open text card, case-0200 de" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Open text card, case-0200 de" }), { key: "Enter" });
     const card = await textCard("case-0200 de");
     fireEvent.click(within(card).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "case-0200 de" })).toBeNull());
@@ -1611,7 +1610,7 @@ describe("text card (U3)", () => {
     await waitFor(() => expect(live().textContent).toBe("First row"));
     fireEvent.click(within(await textCard("case-0200 de")).getByRole("button", { name: "Close" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /^Show texts not in plan/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Open text card, case-0200 de" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Open text card, case-0200 de" }), { key: "Enter" });
     fireEvent.click(within(await textCard("case-0200 de")).getByRole("button", { name: "Previous text" }));
     await textCard("case-0200 en");
     window.localStorage.clear();

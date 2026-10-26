@@ -306,22 +306,24 @@ export interface RowHeaderCellProps {
   row: DocumentRowView;
   /** Visit badge ("Resolved" / "Changed: …"). */
   badge?: ReactNode;
-  /** The text name opens the text card; without it the name is plain text. */
+  /** Enter on the text name opens the text card (clicks and Space reach the row, which selects); without it the name is plain text. */
   onOpenCard?: (opener: HTMLElement) => void;
   /** Flat table: the case ID shows before the language (muted); otherwise it is only in the accessible name. */
   showCaseId?: boolean;
-  /** Texts of the case the table does not show (not in plan): a "+n" marker, information only. */
+  /** Texts of the case the table does not show (not in plan): a "+n" marker. */
   more?: number;
+  /** "+n" becomes a button that shows the texts not in plan, so they can be selected (R-2). */
+  onShowMore?: () => void;
   /** Another text of the case is open in the card (the row's tint has this as its words). */
   sibling?: boolean;
 }
 
 /**
  * Text cell (row header): the text name, flag and language code in plain text style (a button that opens
- * the text card, "Open text card, case-107 de"), "source", version marker, NEW and the visit badge;
- * decision rows add the hidden "Needs your decision". No "Open" link: the row opens the card.
+ * the text card with Enter, "Open text card, case-107 de"), "source", version marker, NEW and the visit badge;
+ * decision rows add the hidden "Needs your decision". No "Open" link: a double click on the row opens the card.
  */
-export function RowHeaderCell({ row, badge, onOpenCard, showCaseId = false, more = 0, sibling = false }: RowHeaderCellProps): JSX.Element {
+export function RowHeaderCell({ row, badge, onOpenCard, showCaseId = false, more = 0, onShowMore, sibling = false }: RowHeaderCellProps): JSX.Element {
   const active = isActiveRow(row);
   const nameId = documentsRowId(row.case_id, row.language, "header");
   const caseId = showCaseId ? <><span className="documents-row-case"><ShortId value={row.case_id} /></span>{" "}</> : <span className="visually-hidden">{`${row.case_id} `}</span>;
@@ -330,12 +332,15 @@ export function RowHeaderCell({ row, badge, onOpenCard, showCaseId = false, more
     <span className="documents-row-header documents-text-cell">
       {onOpenCard
         ? <button type="button" id={nameId} className="documents-text-name" aria-label={`Open text card, ${row.case_id} ${row.language}`}
-          onClick={event => onOpenCard(event.currentTarget)}>{nameContent}</button>
+          onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); onOpenCard(event.currentTarget); } }}>{nameContent}</button>
         : <span id={nameId} tabIndex={-1} className="documents-text-name">{nameContent}</span>}
       {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}
       {row.is_source && <span className="documents-source">source</span>}
-      {more > 0 && <span className="documents-more"><span aria-hidden="true">{`+${more}`}</span>
-        <span className="visually-hidden">{`${more} more ${more === 1 ? "text" : "texts"} of this case not in plan`}</span></span>}
+      {more > 0 && (onShowMore
+        ? <button type="button" className="documents-more" title="Show texts not in plan" onClick={onShowMore}><span aria-hidden="true">{`+${more}`}</span>
+          <span className="visually-hidden">{`Show ${more} more ${more === 1 ? "text" : "texts"} of this case not in plan`}</span></button>
+        : <span className="documents-more"><span aria-hidden="true">{`+${more}`}</span>
+          <span className="visually-hidden">{`${more} more ${more === 1 ? "text" : "texts"} of this case not in plan`}</span></span>)}
       {sibling && <span className="visually-hidden">Same case as the open text</span>}
       <VersionMarker row={row} />
       {active && rowIsNew(row) && <NewBadge />}

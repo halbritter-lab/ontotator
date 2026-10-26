@@ -57,8 +57,10 @@
 /* :where keeps this below the active and sibling tints (same specificity, earlier). */
 .documents-table .documents-row > :where(th[scope="row"]) { background: transparent; font-weight: var(--weight-regular); }
 .documents-row-case { margin-inline-end: var(--space-2); color: var(--text-muted); font-variant-numeric: tabular-nums; }
-/* "+n": texts of the case not shown (not in plan); information, not a control. */
+/* "+n": texts of the case not shown (not in plan); in the All tab a button that shows them. */
 .documents-more { padding: 0 var(--space-1); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--size-xs); line-height: var(--leading-xs); white-space: nowrap; }
+button.documents-more { background: transparent; font-family: inherit; cursor: pointer; }
+button.documents-more:hover { border-color: var(--text-muted); color: var(--text); }
 .documents-row-header { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--space-1) var(--space-3); font-weight: var(--weight-regular); }
 .documents-language { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: var(--weight-strong); }
 /* Row header name: a focus target of deep links and "Next decision"; in the table a button in plain

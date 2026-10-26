@@ -87,6 +87,14 @@ describe("structure", () => {
     expect(screen.queryByRole("checkbox", { name: "Select case-107 en" })).toBeNull();
   });
 
+  it("with onShowNotInPlan the +n marker is a button that shows the texts outside the plan (R-2)", () => {
+    const onShowNotInPlan = vi.fn();
+    const { props } = renderTable(page([case107()]), { onShowNotInPlan });
+    fireEvent.click(within(header("case-107 de")).getByRole("button", { name: "Show 1 more text of this case not in plan" }));
+    expect(onShowNotInPlan).toHaveBeenCalledTimes(1);
+    expect(props.selection!.select).not.toHaveBeenCalled();
+  });
+
   it("with showNotInPlan texts outside the plan are muted rows with Add to plan…, no +n, Finalization —", () => {
     const onAddToPlan = vi.fn();
     const { props } = renderTable(page([case107()]), { showNotInPlan: true, onAddToPlan });
@@ -227,7 +235,7 @@ describe("text cell", () => {
     expect(name.className).not.toContain("documents-text-button");
     expect(name.querySelector("svg, img, .language-flag, [class*='flag']")).not.toBeNull();
     expect(within(th).queryByRole("link")).toBeNull();
-    fireEvent.click(name);
+    fireEvent.keyDown(name, { key: "Enter" });
     expect(props.onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ case_id: "case-107", language: "de" }), { opener: name });
   });
 
