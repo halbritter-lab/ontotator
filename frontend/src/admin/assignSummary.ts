@@ -50,7 +50,8 @@ export function skippedLines(skipped: readonly BatchSkipView[], language: string
 export function memberReason(member: Pick<BatchPersonView, "unavailable" | "already_assigned" | "reads">, task: AssignTask, language: string): string | null {
   switch (member.unavailable) {
     case "inactive": return "Account inactive";
-    case "role_missing": return "Not an annotator in this project";
+    // Annotators also review translations (TASK_ROLES): the reason names the task.
+    case "role_missing": return task === "annotate" ? "Cannot annotate in this project" : "Cannot review translations in this project";
     case "does_not_read": return member.reads.includes(language) ? "does not read the source language" : `does not read ${language}`;
   }
   if (member.already_assigned > 0) return `Already ${task === "annotate" ? "annotating" : "reviewing"} ${member.already_assigned} of these cases`;

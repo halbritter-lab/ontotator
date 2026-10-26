@@ -19,7 +19,10 @@ export type AssignWorkDialogProps =
     /** Project rule "the consolidator is not an annotator": its hint shows with the lead's own entry. */
     consolidatorRule?: boolean;
     onClose: () => void; onAssigned: (message: string) => void }
-  | { mode: "cases"; projectKey: string; caseIds: readonly string[]; sort: "case" | "import" | "activity"; filters: DocumentRowFilters; onClose: () => void; onAssigned: (message: string, skipped: readonly string[]) => void };
+  | { mode: "cases"; projectKey: string; caseIds: readonly string[]; sort: "case" | "import" | "activity"; filters: DocumentRowFilters;
+    /** The lead: without the annotator role their row offers "Add me as annotator". */
+    me?: { username: string; name: string };
+    onClose: () => void; onAssigned: (message: string, skipped: readonly string[]) => void };
 
 type Preview = BatchPreview;
 type Step = { task: AssignWorkTask; language: string; versions: number };
@@ -140,6 +143,20 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const randomUseful = !!fresh && fresh.targets.some(item => item.remaining > 0)
     && fresh.people.filter(person => !memberUnavailable(person)).length > Math.max(...fresh.targets.map(item => item.remaining));
   const meHolds = !!me && props.mode === "row" && props.row.work.some(item => item.task === "annotate" && item.is_me && item.moved_to_version == null);
+
+  /** "Add me as annotator" (F23): the lead adds the role (Documents is lead-only, and leads manage members), then the preview reloads. */
+  const addMeAsAnnotator = async () => {
+    const username = props.me?.username;
+    if (!username || writing.current) return;
+    writing.current = true; setBusy(true); reset();
+    try {
+      const roles = (await api.listMembers(props.projectKey)).find(member => member.username === username)?.roles ?? [];
+      await api.setMemberRoles(props.projectKey, username, [...new Set([...roles, "annotator"])]);
+      if (alive.current) setReload(value => value + 1);
+    } catch (error: unknown) {
+      if (alive.current) setFailure(errorMessage(error));
+    } finally { if (alive.current) { writing.current = false; setBusy(false); } }
+  };
 
   const reset = () => { setConfirming(false); setRefused([]); setFailure(null); setNotice(null); };
   const choose = (username: string, checked: boolean) => {
@@ -300,6 +317,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
           const checked = usernames.includes(person.username);
           const atLimit = !radios && !checked && picked >= limit;
           const inputId = `${id}-member-${index}`;
+          const addMe = person.unavailable === "role_missing" && person.username === props.me?.username;
           const whyId = `${id}-why-${index}`;
           const describedBy = [why && whyId, atLimit && limitReachedId].filter(Boolean).join(" ") || undefined;
           // Muted only when the row cannot be ticked; a language mismatch stays normal with its warning.
@@ -313,6 +331,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
                 onChange={event => { if (!off && !atLimit && !busy) choose(person.username, event.target.checked); }}
                 onKeyDown={event => rove(event, person.username)} />
               <label htmlFor={inputId}>{personLabel(person.person)}{why ? <span id={whyId} className="assign-reason">, {why}</span> : atLimit && <span className="assign-reason">, limit reached</span>}</label>
+              {addMe && <Button size="sm" disabled={busy} onClick={() => { void addMeAsAnnotator(); }}>Add me as annotator</Button>}
             </span></td>
             <td className="assign-reads"><span className="assign-narrow-label">Reads </span>{person.reads.length ? person.reads.map((item, at) => <span key={item}>{at > 0 && ", "}{item === language ? <strong>{item}</strong> : item}</span>) : "None listed"}</td>
             <td className="assign-open"><span className="assign-narrow-label">Open </span>{person.open_before}</td>

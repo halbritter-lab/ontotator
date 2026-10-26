@@ -306,10 +306,11 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   // Assign dialog: one row (task preselected) or the selected cases (selection bar).
   const [assignDialog, setAssignDialog] = useState<AssignWorkDialogProps | null>(null);
   /** Assign dialog for one row; `options.newReviewOfAccepted` marks a new review of an accepted translation (D25). */
+  const assignMe = currentUser ? { username: currentUser.username, name: personLabel({ pseudonym: currentUser.pseudonym, display_name: currentUser.display_name ?? null }) } : undefined;
   const onAssign = (row: DocumentRowView, task: AssignTask, options?: { newReviewOfAccepted?: boolean; reviewReason?: "source_changed" }) => {
     setAssignDialog({
       mode: "row", projectKey, row, task, newReviewOfAccepted: options?.newReviewOfAccepted, reviewReason: options?.reviewReason,
-      me: currentUser ? { username: currentUser.username, name: personLabel({ pseudonym: currentUser.pseudonym, display_name: currentUser.display_name ?? null }) } : undefined,
+      me: assignMe,
       consolidatorRule: page?.adjudicator_not_annotator ?? false,
       onClose: () => setAssignDialog(null),
       onAssigned: message => { setAssignDialog(null); showToast({ message }); announce(message); refreshAll(); },
@@ -463,7 +464,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     const caseIds = [...selection.cases];
     if (!caseIds.length) return;
     setAssignDialog({
-      mode: "cases", projectKey, caseIds, sort: batchSort(request.sort), filters,
+      mode: "cases", projectKey, caseIds, sort: batchSort(request.sort), filters, me: assignMe,
       onClose: () => setAssignDialog(null),
       onAssigned: (message, skipped) => {
         // The planned work is done for this selection; the skipped cases stay one click away.

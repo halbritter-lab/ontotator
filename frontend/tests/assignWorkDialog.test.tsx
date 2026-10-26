@@ -86,7 +86,7 @@ it("shows ineligible members muted with the reason and aria-disabled", async () 
     const eva = screen.getByRole("checkbox", { name: /Eva Klein/ });
     expect(eva.getAttribute("aria-disabled")).toBe("true");
     expect(eva.hasAttribute("disabled")).toBe(false);
-    expect(document.getElementById(eva.getAttribute("aria-describedby")!)!.textContent).toContain("Not an annotator in this project");
+    expect(document.getElementById(eva.getAttribute("aria-describedby")!)!.textContent).toContain("Cannot annotate in this project");
     expect(eva.closest("tr")!.className).toContain("is-unavailable");
     fireEvent.click(eva);
     expect((eva as HTMLInputElement).checked).toBe(false);
@@ -112,6 +112,19 @@ it("annotation at the limit: a line under the table names it, blocked rows are m
   expect(ben.getAttribute("aria-disabled")).toBe("true");
   expect(ben.closest("tr")!.className).toContain("is-unavailable");
   expect(ben.getAttribute("aria-describedby")!.split(" ").map(item => document.getElementById(item)!.textContent).join(" ")).toContain("Limit reached: 1 person per text.");
+});
+
+it("the lead without the annotator role adds it inline and the preview reloads", async () => {
+  vi.spyOn(api, "listMembers").mockResolvedValue([{ username: "eva", display_name: "Eva Klein", pseudonym: "ann-0012", roles: ["lead"], languages: ["de"] }]);
+  const set = vi.spyOn(api, "setMemberRoles").mockResolvedValue({ username: "eva", display_name: "Eva Klein", pseudonym: "ann-0012", roles: ["annotator", "lead"], languages: ["de"] });
+  render(<AssignWorkDialog {...casesProps()} me={{ username: "eva", name: "Eva Klein" }} />); await ready();
+  expect(screen.getByRole("radio", { name: /Eva Klein.*Cannot review translations in this project/ })).toBeDefined();
+  // Only the lead's own row offers it.
+  expect(screen.getAllByRole("button", { name: "Add me as annotator" })).toHaveLength(1);
+  const calls = vi.mocked(api.previewAssignmentBatch).mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: "Add me as annotator" }));
+  await waitFor(() => expect(set).toHaveBeenCalledWith("p/key", "eva", ["lead", "annotator"]));
+  await waitFor(() => expect(vi.mocked(api.previewAssignmentBatch).mock.calls.length).toBeGreaterThan(calls));
 });
 
 it("One person: radio per member and live summary", async () => {
