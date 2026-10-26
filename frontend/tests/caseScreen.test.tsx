@@ -2577,6 +2577,45 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(runsOf(container, "ev-seizure")[0].title).toBe("Seizure, modifiers: Severe (“schwere”)");
   });
 
+  it("the copy being edited after Edit & Replace is an attach target, in the list and in the text (F25)", async () => {
+    const view = modView([]);
+    const proposal = { ...findingSnap(["prop", "HP:0001250", "Krampfanfälle"]), version: "prop-v1",
+      evidence: [{ version: "ev-1", mention: { evidence_id: "ev-prop", segments: [pos("Krampfanfälle")] } }] } as any;
+    proposal.annotation.evidence_refs = [{ evidence_id: "ev-prop", version: "ev-1" }];
+    proposal.annotation.provenance = { actor: { actor_id: "tool", kind: "tool" }, method: "automatic", source_refs: [] };
+    const targets = { target_set_id: "targets-0", targets: [{ annotation_id: "prop", version: "prop-v1" }] };
+    Object.assign(view, { key: { ...view.key, mode: "proposal_check" }, scope: { ...view.scope, mode: "proposal_check" }, targets, available_inputs: [proposal] });
+    Object.assign(view.draft, { key: view.key, targets });
+    vi.spyOn(api, "resolveTermLabels").mockImplementation(async (_p, terms) => terms.map(t => ({ ...t, label: LABELS[t.term_id]?.[0] ?? t.term_id,
+      role: LABELS[t.term_id]?.[1] ?? "finding", exclusive_class: LABELS[t.term_id]?.[2] ?? null })) as never);
+    vi.spyOn(api, "searchOntology").mockResolvedValue(severeHits as never);
+    let current = structuredClone(view.draft);
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_ws, envelope) => {
+      const payload = envelope.payload as Record<string, any>;
+      current = structuredClone(current); current.revision += 1;
+      if (payload.command === "create_annotation") {
+        current.annotations = [...(current.annotations ?? []), { ...findingSnap([payload.annotation_id, payload.term_id, null]),
+          annotation: { ...findingSnap([payload.annotation_id, payload.term_id, null]).annotation, layer_id: payload.layer_id,
+            evidence_refs: [{ evidence_id: payload.evidence_id, version: "ev-1" }],
+            provenance: { actor: { actor_id: "ann", kind: "human" }, method: "manual", source_refs: [`${payload.source_annotation_id}:${payload.source_version}`] } } } as never];
+        current.evidence = [...(current.evidence ?? []), { version: "ev-1", mention: { evidence_id: payload.evidence_id, segments: payload.segments } }] as never;
+      }
+      return current;
+    });
+    vi.spyOn(api, "recordDecision").mockImplementation(async () => current);
+    const { container } = render(<CaseScreen view={view} workspaceId="ws-mod" onClose={vi.fn()} />);
+    fireEvent.click(await waitFor(() => container.querySelector<HTMLElement>('[data-list-key^="target:"]')!));
+    fireEvent.keyDown(window, { key: "3" });
+    await waitFor(() => expect(container.querySelector('[data-list-key^="annotation:"]')).not.toBeNull());
+    const copyId = container.querySelector<HTMLElement>('[data-list-key^="annotation:"]')!.dataset.listKey!.slice("annotation:".length);
+    await startAttach(container);
+    const row = screen.getByRole("button", { name: "Attach Severe to Seizure" });
+    const copyRun = [...container.querySelectorAll<HTMLElement>(".text-container .run")].find(run => run.textContent === "Krampfanfälle")!;
+    expect(copyRun.title).toBe("Attach Severe to Seizure");
+    fireEvent.click(row);
+    await waitFor(() => expect(payloads(apply).at(-1)).toEqual({ command: "add_modifier", annotation_id: copyId, term_id: "HP:0012828", segments: [pos("schwere")] }));
+  });
+
   it("↓ moves to the next target row and Enter attaches there", async () => {
     const { container, apply } = await setup(modView(SEIZURE_HYPO));
     await startAttach(container);
