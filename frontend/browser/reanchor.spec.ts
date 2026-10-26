@@ -281,12 +281,18 @@ for(const width of [1280,1024,600])test(`real pending contexts preserve producer
     // Actual human adoption must retain source ancestry without an AI badge.
     const offered=(before.view.available_inputs??[]).find(value=>value.proposal_set_id===s.metadata.id)!;
     await page.locator('.sidebar [data-list-key^="target:"]').filter({hasText:'HP:0001252'}).click();
+    // The source sits in the collapsed "Source and rules" details.
+    await page.locator('.review-actions__more > summary').click();
     const source=page.getByRole('region',{name:'Proposal source',exact:true});
     await expect(source).toContainText(`Carried over from version ${s.metadata.source_version}`);
     const actor=s.metadata.actors.find(value=>value.actor_id===offered.annotation.provenance.actor.actor_id)!;
     expect(actor).toBeDefined();
     expect(actor.actor_id).toBe('ontocurator-reanchor');
-    for(const value of [actor.name??actor.actor_id,actor.version,actor.model,actor.run_id]) {
+    // The panel's one source line names the tool and version; the compact source section keeps model and run.
+    for(const value of [actor.name??actor.actor_id,actor.version]) {
+      if(typeof value==='string' && value)await expect(page.locator('.review-actions__origin')).toContainText(value);
+    }
+    for(const value of [actor.model,actor.run_id]) {
       if(typeof value==='string' && value)await expect(source).toContainText(value);
     }
     await expect(source).toContainText('score 0.91');await expect(source).toContainText(s.metadata.annotation_set_id);

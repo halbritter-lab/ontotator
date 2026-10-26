@@ -66,9 +66,15 @@ export const textRow = (page: Page, caseId: string, language: string): Locator =
 /** The same row (T2's name). */
 export const cardRow = textRow;
 
-/** Cell positions of a text row (the row header "Text" is not a cell; cell 0 is the row checkbox). */
-export const STAGE_COLUMNS = { select: 0, translation: 1, annotation: 2, finalization: 3, waiting: 4, next: 5, activity: 6 } as const;
-export const rowCell = (row: Locator, column: keyof typeof STAGE_COLUMNS): Locator => row.getByRole("cell").nth(STAGE_COLUMNS[column]);
+/** Column headers of a text row's cells; the Translation column is absent while the project has no translation (U-4). */
+export const STAGE_HEADERS = { translation: "Translation", annotation: "Annotation", finalization: "Finalization", waiting: "Waiting on", next: "Next step", activity: "Last activity" } as const;
+/** The row's cell under the column header ``header`` (none while that column is hidden). */
+export const cellUnder = (row: Locator, header: string): Locator => {
+  const th = `ancestor::table[1]/thead/tr/th[normalize-space(.)="${header}"]`;
+  return row.locator(`xpath=./*[${th}][count(${th}/preceding-sibling::*) + 1]`);
+};
+export const rowCell = (row: Locator, column: "select" | keyof typeof STAGE_HEADERS): Locator =>
+  column === "select" ? row.locator(":scope > td.data-table-select-cell") : cellUnder(row, STAGE_HEADERS[column]);
 
 /** A row's next-step button "{label}, {case} {language}" (Next step column or narrow card). */
 export const rowAction = (page: Page, label: string, caseId: string, language: string): Locator =>

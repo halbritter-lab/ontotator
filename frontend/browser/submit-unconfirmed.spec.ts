@@ -86,7 +86,7 @@ test("confirm one row, then the rest with Confirm all, and submit without a warn
   await section.getByRole("button", { name: "Confirm all (2)", exact: true }).click();
   await expect(dialog.getByRole("status").filter({ hasText: "All values are confirmed." })).toBeVisible();
   await expect(section).toHaveCount(0);
-  await expect(dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values$/ })).toHaveCount(0);
+  await expect(dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values?$/ })).toHaveCount(0);
 
   await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Case submitted" })).toContainText(/Submitted \d/);

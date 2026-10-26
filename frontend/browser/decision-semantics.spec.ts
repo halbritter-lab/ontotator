@@ -40,6 +40,8 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await expect(page.getByRole("checkbox", { name: "Visibility for Hidden findings" })).toBeChecked();
   await expect(page.getByLabel("Proposal details")).toBeFocused();
   await expect(page.getByLabel("Proposal details").getByText("Defaulted", { exact: true })).toBeVisible();
+  // The immutability note sits in the collapsed "Source and rules" details.
+  await page.locator(".review-actions__more > summary").click();
   await expect(page.getByText(/This proposal is immutable/)).toBeVisible();
   await page.getByRole("button", { name: /Edit & Replace/i }).click();
   await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
@@ -255,7 +257,7 @@ test("stale rules recover to an actionable evidence repair at desktop and narrow
     await page.getByRole("button", { name: /^Finish & Submit/ }).click();
     const dialog = page.getByRole("dialog", { name: "Submit case", exact: true });
     // The finding's empty values are acknowledged too, so the stale rule is what the server answers.
-    await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values$/ }).check();
+    await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values?$/ }).check();
     await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
     await expect(page.getByText(/Submission failed:/)).toHaveCount(1);
     await expect(page.getByText(/Reload the case to load the current rules/)).toBeVisible();

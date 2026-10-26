@@ -8,7 +8,7 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 import {
-  documentsReady, documentsTabs, evidence, expectEdge, expectStage, expectWaiting, namePattern, moreMarker, openDocuments, rowAction, rowCell, rowHeader,
+  documentsReady, documentsTable, documentsTabs, evidence, expectEdge, expectStage, expectWaiting, namePattern, moreMarker, openDocuments, rowAction, rowCell, rowHeader,
   textRow, type CellText,
 } from "./documentsOverviewHelpers";
 import { loginOverviewUser, overviewScenario, type OverviewScenarioName } from "./overviewHelpers";
@@ -116,7 +116,9 @@ async function expectRow(page: Page, expected: RowExpect | FoldedExpect): Promis
   const row = textRow(page, caseId, language);
   await expect(row, `${caseId} ${language}`).toHaveCount(1);
   await test.step(`${caseId} ${language}`, async () => {
-    await expectStage(rowCell(row, "translation"), expected.translation);
+    // U-4: a project without any translation shows no Translation column.
+    if (await documentsTable(page).getByRole("columnheader", { name: "Translation", exact: true }).count()) await expectStage(rowCell(row, "translation"), expected.translation);
+    else await expect(rowCell(row, "translation")).toHaveCount(0);
     await expectStage(rowCell(row, "annotation"), expected.annotation);
     await expectStage(rowCell(row, "finalization"), expected.finalization);
     await expectWaiting(row, expected.waiting);

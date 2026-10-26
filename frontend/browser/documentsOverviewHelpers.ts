@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { cellUnder, STAGE_HEADERS } from "./documentsHelpers";
 
 /**
  * Locators and checks of the documents overview specs (plan O10c): the one-line stage table,
@@ -61,10 +62,8 @@ export const textName = (page: Page, caseId: string, language: string): Locator 
 export const textRow = (page: Page, caseId: string, language: string): Locator =>
   documentsTable(page).locator("tr").filter({ has: textName(page, caseId, language) });
 
-/** Columns after the row checkbox and the row header "Text". */
-const COLUMN = { translation: 0, annotation: 1, finalization: 2, waiting: 3, next: 4, activity: 5 } as const;
-export type Column = keyof typeof COLUMN;
-export const rowCell = (row: Locator, column: Column): Locator => row.locator(":scope > td:not(.data-table-select-cell)").nth(COLUMN[column]);
+export type Column = keyof typeof STAGE_HEADERS;
+export const rowCell = (row: Locator, column: Column): Locator => cellUnder(row, STAGE_HEADERS[column]);
 export const rowHeader = (row: Locator): Locator => row.locator(':scope > th[scope="row"]');
 
 /** A row's next-step button "{label}, {case} {language}" (Next step column or narrow card). */

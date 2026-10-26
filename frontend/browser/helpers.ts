@@ -106,7 +106,7 @@ export async function submitCase(page: Page) {
   await expect(dialog).toBeVisible();
   const submit = dialog.getByRole("button", { name: /^Submit case$/ });
   // Unconfirmed values (defaults or empty) are acknowledged in one tick; the dialog resends once.
-  const acknowledgement = dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values$/ });
+  const acknowledgement = dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values?$/ });
   if (await acknowledgement.isVisible()) {
     await expect(submit).toBeDisabled();
     await acknowledgement.check();
