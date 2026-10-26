@@ -112,7 +112,7 @@ export const activityLines = (card: Locator): Locator => card.getByRole("list", 
 /** Open the Translation part's collapsed "Older versions (n)", when there is one. */
 export async function openOlderVersions(card: Locator): Promise<void> {
   const older = card.locator(".text-version-older > details");
-  if (await older.count() && !(await older.evaluate(element => (element as HTMLDetailsElement).open))) await older.locator("summary").click();
+  if (await older.count() && !(await older.evaluate(element => (element as HTMLDetailsElement).open))) await older.locator(":scope > summary").click();
 }
 
 /** Show the card's Translation part; returns its version items, older ones opened (``count`` is checked). */

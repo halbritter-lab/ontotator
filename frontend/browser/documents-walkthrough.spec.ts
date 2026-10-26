@@ -16,6 +16,7 @@ import {
   documentsTab, evidence, expectCounterEqualsTab, expectEdge, expectStage, expectWaiting, moreMarker,
   namePattern, newBadge, openDocuments, rowAction, rowCell, rowHeader, textCard, textName, textRow, type CellText,
 } from "./documentsOverviewHelpers";
+import { openOlderVersions } from "./documentsHelpers";
 import { LeadClicks, loginOverviewUser, overviewAct, overviewScenario, type OverviewActBody, type OverviewScenario } from "./overviewHelpers";
 
 test.describe.configure({ mode: "serial" });
@@ -221,6 +222,7 @@ test("step 7: Handle text change… → Move to v2 (preselected) → Apply", asy
   if (!(await area.isVisible())) await textName(page, CASE, "de").click();
   const translation = area.getByRole("navigation", { name: "Text path", exact: true }).getByRole("button", { name: /^Translation / });
   if ((await translation.getAttribute("aria-current")) !== "step") await translation.click();
+  await openOlderVersions(area);
   const v1 = area.getByRole("list", { name: "Assignments on v1", exact: true });
   await expect(v1.getByRole("listitem").filter({ hasText: LUC })).toContainText(/Annotation\W+moved to v2/);
   await expect(v1.getByRole("listitem").filter({ hasText: TOM })).toContainText(/Annotation\W+Submitted/);

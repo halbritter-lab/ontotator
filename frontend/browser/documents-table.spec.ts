@@ -405,7 +405,7 @@ test("S13 case-0713 en: consolidation and carry-forward kinds, the final is the 
   const en = textRow(page, caseId, "en");
   await expect(en.getByRole("rowheader")).toContainText("v2 corrected");
   await expect(rowCell(en, "annotation")).toContainText("Submitted on v1");
-  await expect(rowCell(en, "finalization")).toContainText(/ready to compare|Your choice/);
+  await expect(rowCell(en, "finalization")).toContainText(/ready to compare|ready to accept|Your choice/);
   await expect(rowCell(en, "next").getByRole("button").first()).toHaveAccessibleName(textNamePattern("Carry to v2…, ", caseId, "en"));
   // "Choose final…" became "Accept result…" / "Compare results…" (V6, X14), in the text card (one button per row).
   await expect(rowCell(en, "next").getByRole("button")).toHaveCount(1);
