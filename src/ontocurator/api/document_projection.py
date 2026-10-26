@@ -1,11 +1,13 @@
 """Metadata-only document list and grouped assignment projections."""
 
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Connection, any_, exists, func, literal, select
+from sqlalchemy import Connection, String, any_, exists, func, literal, select
 from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql.elements import ColumnElement
 
 from ontocurator.api.job_routes import authorized_project
@@ -77,10 +79,12 @@ class ProjectDocumentSummary(BaseModel):
     assignees: list[Assignee] | None = None
 
 
-def _in_ids(column, ids) -> ColumnElement[bool]:
+def _in_ids(
+    column: InstrumentedAttribute[str], ids: Iterable[str]
+) -> ColumnElement[bool]:
     """``column = ANY(:ids)``: one array parameter instead of an IN list of
     ~1,000 binds, which dominated dashboard CPU (rendering and query parsing)."""
-    return column == any_(literal(list(ids), ARRAY(column.type)))
+    return column == any_(literal(list(ids), ARRAY(String)))
 
 
 def _legacy_statuses(
@@ -265,7 +269,9 @@ def project_documents(
             func.length(DocumentRow.text).label("text_length"),
         ).where(DocumentRow.project_id == project_id)
         if not visibility.all:
-            query = query.where(_in_ids(DocumentRow.document_id, visibility.document_ids))
+            query = query.where(
+                _in_ids(DocumentRow.document_id, visibility.document_ids)
+            )
         if language is not None:
             query = query.where(DocumentRow.language == language)
         if origin is not None:
