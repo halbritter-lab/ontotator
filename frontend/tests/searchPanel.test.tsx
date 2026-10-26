@@ -297,7 +297,8 @@ describe("SearchPanel", () => {
     await waitFor(() => expect(options()).toHaveLength(3));
     const slots = options().map((option) => option.querySelector(".candidate-header .candidate-enter"));
     expect(slots.every((slot) => slot !== null && slot.getAttribute("aria-hidden") === "true")).toBe(true);
-    expect(slots.every((slot) => slot!.textContent === "Enter")).toBe(true);
+    // The word, and ⏎ for a narrow list (B2-2; the container query picks one).
+    expect(slots.every((slot) => slot!.querySelector(".candidate-enter-word")?.textContent === "Enter" && slot!.querySelector(".candidate-enter-symbol")?.textContent === "⏎")).toBe(true);
   });
 
   it("reserves no Enter slot when terms cannot be assigned", async () => {

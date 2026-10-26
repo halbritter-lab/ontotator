@@ -377,12 +377,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
                 onClick={() => addCandidate(cand)}
               >
                 <div className="candidate-header">
-                  <strong className="candidate-label">{cand.label}</strong>
+                  <strong className="candidate-label" title={cand.label}>{cand.label}</strong>
                   <span className="candidate-id">{cand.term_id}</span>
                   {isModifierHit(cand) && <span className="candidate-role">{cand.role === "cohort" ? COHORT_TAG : "Modifier"}</span>}
                   {canAssign && (
                     // Reserved in every row and shown only on the active one, so activity never changes the layout.
-                    <span className="candidate-enter" aria-hidden="true"><Kbd>Enter</Kbd></span>
+                    <span className="candidate-enter" aria-hidden="true"><Kbd><span className="candidate-enter-word">Enter</span><span className="candidate-enter-symbol">⏎</span></Kbd></span>
                   )}
                 </div>
                 {match && <div className="candidate-match" title={cand.match_kind}>{match}</div>}

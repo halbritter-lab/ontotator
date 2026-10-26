@@ -1170,6 +1170,18 @@
   visibility: hidden;
 }
 
+/* One line per hit header (B2-1): a long label is cut with an ellipsis (full in its title and the detail below),
+   the ID, role tag and Enter slot keep their width. */
+.candidate-list { container-type: inline-size; }
+.candidate-header > .candidate-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.candidate-header > :not(.candidate-label) { flex: none; white-space: nowrap; }
+.candidate-enter-symbol { display: none; }
+/* A narrow list shows the Enter key as ⏎ (B2-2). */
+@container (max-width: 24rem) {
+  .candidate-enter-word { display: none; }
+  .candidate-enter-symbol { display: inline; }
+}
+
 .candidate-card[aria-selected="true"] .candidate-enter {
   visibility: visible;
 }
