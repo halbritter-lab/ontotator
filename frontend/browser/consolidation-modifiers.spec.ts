@@ -53,9 +53,9 @@ test("the modifier acceptance round takes 10 clicks; axe is clean on a card with
   await expect(wholeFinding(page)).toHaveCount(0);
   const axe = await new AxeBuilder({ page }).include(".cons-group-expanded").analyze();
   expect(axe.violations.flatMap(v => v.nodes.map(n => `${v.id} ${n.target.join(" ")}: ${n.failureSummary ?? ""}`))).toEqual([]);
-  await click(take(page, "Recurrent “Recurrent”", "Ana Weber"));
+  await click(take(page, "Recurrent", "Ana Weber"));
   await click(take(page, "Severe", "Ben Roth"));
-  await expect(expanded(page).locator(".cons-result")).toContainText("modifiers: Recurrent “Recurrent”, Severe");
+  await expect(expanded(page).locator(".cons-result")).toContainText("modifiers: Recurrent, Severe");
   await evidence(page, "consolidation-modifiers.png");
   await click(expanded(page).getByRole("button", { name: "Keep", exact: true }));
 
@@ -76,7 +76,7 @@ test("the modifier acceptance round takes 10 clicks; axe is clean on a card with
   await expect(expandedTitle(page)).toHaveText("Reduced reflexes");
   await click(expanded(page).getByRole("button", { name: "Keep Ana Weber's finding", exact: true }));
   await expect(expandedTitle(page)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^focal seizures decided: .*modifiers: Recurrent “Recurrent”, Severe/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^focal seizures decided: .*modifiers: Recurrent, Severe/ })).toBeVisible();
 
   await click(page.getByRole("button", { name: "Submit consolidation", exact: true }));
   const dialog = page.getByRole("dialog", { name: "Submit consolidation?" });

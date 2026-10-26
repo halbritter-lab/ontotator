@@ -398,6 +398,14 @@ describe("GroupCard, modifiers", () => {
         "Severe “schwere” to Seizure (HP:0001250), “Krampfanfälle”");
     });
 
+    it("drops the axis and whole-finding rows, which mean nothing for a modifier", () => {
+      const value = standalone();
+      renderCard(value, { ...mod, groups: [value, seizureKept] });
+      expect(screen.getByRole("row", { name: /Term/ })).toBeTruthy();
+      expect(screen.queryByRole("row", { name: /Assertion/ })).toBeNull();
+      expect(screen.queryByRole("row", { name: /Whole finding/ })).toBeNull();
+    });
+
     it("without a resolved finding in the sentence, Attach is unavailable with the reason", () => {
       const value = standalone();
       const { props } = renderCard(value, { ...mod, groups: [value, { ...seizureKept, state: "open", annotation_ids: [] }] });

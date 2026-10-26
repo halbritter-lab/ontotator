@@ -95,3 +95,9 @@ export function axisLabel(axis: string): string {
 export function quoted(text: string): string {
   return `“${text}”`;
 }
+
+/** "Severe “schwere”"; just "Recurrent" when the quote repeats the label, ignoring case. Spaces count: they tell
+ *  variants that differ by segments only apart ("Severe “ schwere”"). */
+export function labelWithQuote(label: string, quote: string | null): string {
+  return quote && quote.toLowerCase() !== label.toLowerCase() ? `${label} ${quoted(quote)}` : label;
+}

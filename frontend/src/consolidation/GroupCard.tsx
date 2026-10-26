@@ -17,7 +17,7 @@ import { useTermLabels } from "../editor/useTermLabels";
 import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from "../ui";
 import { IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
-import { axisLabel, groupStatus, keepLabel, namesOf, NO_ATTACH_TARGET, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
+import { axisLabel, groupStatus, labelWithQuote, keepLabel, namesOf, NO_ATTACH_TARGET, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
 import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, modifiersConflict, needsTerm, presentPeople, resolvePayload, resultLine, standaloneText, takeFinding, type Choices, type OtherTerm } from "./groupModel";
 import { crossLinks, setText, type ModifierView } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
@@ -69,7 +69,7 @@ export interface EditedValues { axes: Record<string, string>; modifiers: Modifie
 
 /** Chips without "·" (DN-10): "Severe “schwere”", "Frequent Cohort term". */
 const consolidationChip = (label: string, quote: string | null, role: TermInfo["role"]) =>
-  [quote ? `${label} “${quote}”` : label, role === "cohort" ? COHORT_TAG : null].filter(Boolean).join(" ");
+  [labelWithQuote(label, quote), role === "cohort" ? COHORT_TAG : null].filter(Boolean).join(" ");
 
 /** "Edit values…": every axis of the finding's type and, on a modifier layer, its Modifiers, starting from the kept member's. */
 function EditValues({ group, workspace, text, busy, onKeep, onCancel }: { group: ConsolidationGroupView; workspace: WorkspaceView; text: string; busy: boolean; onKeep: (values: EditedValues) => void; onCancel: () => void }): JSX.Element {
@@ -204,7 +204,9 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       }} />
   </div>;
 
-  const table = (tableReadOnly: boolean) => <ComparisonTable name={name} group={group} people={people} rows={rows} readOnly={tableReadOnly}
+  // A standalone modifier has no axes and cannot be taken as a finding: its table keeps term, text and notes.
+  const tableRows = standalone ? rows.filter(row => row.kind !== "axis" && row.kind !== "whole") : rows;
+  const table = (tableReadOnly: boolean) => <ComparisonTable name={name} group={group} people={people} rows={tableRows} readOnly={tableReadOnly}
     busy={busy} onChoose={onChoose} onTake={member => settle(takeFinding(group, member), otherTerm, true)} />;
 
   const crossLinkHints = links.map(link => <p key={`${link.personId}-${link.groupId}-${link.termLabel}`} className="cons-muted cons-crosslink">

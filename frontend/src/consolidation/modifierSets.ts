@@ -4,6 +4,7 @@
  * segments), variants of one term exclude each other, "No modifiers" excludes every modifier.
  * Segments are [start, end) code points.
  */
+import { labelWithQuote } from "./consolidationText";
 
 export interface ModifierView {
   term_id: string;
@@ -117,7 +118,7 @@ const quote = (text: string, segments: readonly [number, number][]): string => {
 
 /** "Severe “schwere”" / "Recurrent" / "Severe (no text)" (spanless while another member linked the term). */
 export function modifierText(modifier: ModifierView, text: string, noTextTerms?: ReadonlySet<string>): string {
-  if (modifier.segments.length) return `${modifier.term_label} “${quote(text, modifier.segments)}”`;
+  if (modifier.segments.length) return labelWithQuote(modifier.term_label, quote(text, modifier.segments));
   return noTextTerms?.has(modifier.term_id) ? `${modifier.term_label} (no text)` : modifier.term_label;
 }
 

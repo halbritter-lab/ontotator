@@ -95,6 +95,13 @@ describe("modifierChoices and the selection rule", () => {
     expect(modifierText(SEVERE_WIDE, TEXT)).toBe("Severe “ schwere”");
   });
 
+  it("the quote is left out when it repeats the label", () => {
+    const text = "Recurrent seizures, recurrent  fever.";
+    expect(modifierText(mod("HP:0031796", "Recurrent", [[0, 9]]), text)).toBe("Recurrent");
+    expect(modifierText(mod("HP:0031796", "Recurrent", [[20, 29]]), text)).toBe("Recurrent");
+    expect(modifierText(mod("HP:0031796", "Recurrent", [[19, 29]]), text)).toBe("Recurrent “ recurrent”");
+  });
+
   it("nothing pressed is no choice; pressing a pressed id releases it", () => {
     const choices = modifierChoices([ana(SEVERE), ben()]);
     expect(chosenModifiers(none, choices)).toBeNull();

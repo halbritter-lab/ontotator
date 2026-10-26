@@ -11,7 +11,7 @@
 import type { ConsolidationGroupView, ConsolidationMemberView, ConsolidationModifierView, ConsolidationPersonView, ConsolidationResolvePayload } from "../api/client";
 import { axisOptionLabel } from "../editor/axisLabels";
 import { sentenceBounds } from "../editor/modifiers";
-import { axisLabel, OVERLAPPING, quoted } from "./consolidationText";
+import { axisLabel, labelWithQuote, OVERLAPPING, quoted } from "./consolidationText";
 import { personName } from "./lanes";
 import { chosenModifiers, modifierChoices, modifierKey, modifierText, NO_MODIFIERS, otherTextChosen, press, setText, setWarnings, toggleName, type MemberSet, type ModifierView } from "./modifierSets";
 
@@ -315,5 +315,5 @@ export function attachCandidates(group: ConsolidationGroupView, groups: readonly
 export function standaloneText(group: ConsolidationGroupView, text: string): string {
   const base = group.members.find(member => member.input_id === group.keep_input_id) ?? group.members[0];
   const label = base.term_label || base.term_id;
-  return base.spans.length ? `${label} ${quoted(passage(text, base.spans))}` : label;
+  return base.spans.length ? labelWithQuote(label, passage(text, base.spans)) : label;
 }
