@@ -323,7 +323,9 @@ def test_a_lead_imports_into_their_project_only(db: Database) -> None:
         lead.import_package(_package("C"))
 
 
-def test_membership_changes_are_audited_and_end_sessions(db: Database) -> None:
+def test_membership_changes_are_audited_and_only_removals_end_sessions(
+    db: Database,
+) -> None:
     accounts = AccountService(db)
     sessions = SessionService(db)
     memberships = MembershipService(db)
@@ -334,14 +336,14 @@ def test_membership_changes_are_audited_and_end_sessions(db: Database) -> None:
     roles = memberships.add(ADMIN, "A", "Alice", ["annotator", "lead"])
 
     assert roles == {"annotator", "lead"}
-    assert sessions.resolve(token) is None
+    # Adding roles keeps the session (F23 follow-up: as set_roles, only a removal revokes).
+    assert sessions.resolve(token) is not None
     assert memberships.members("A") == [
         ("alice", principal.pseudonym, frozenset({"annotator", "lead"}))
     ]
     assert memberships.access_for(principal).roles == {
         "A": frozenset({"annotator", "lead"})
     }
-    token, _ = sessions.login("alice", PASSWORD, client_ip="10.0.0.1")
     # Nothing new: no audit row, the session stays.
     memberships.add(ADMIN, "A", "alice", ["lead"])
     assert sessions.resolve(token) is not None
