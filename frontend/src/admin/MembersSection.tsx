@@ -32,6 +32,8 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
   const [newRoles, setNewRoles] = useState<string[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const addButton = useRef<HTMLButtonElement>(null);
   const lifetime = useRef(0);
   const writing = useRef(false);
   useEffect(() => {
@@ -64,6 +66,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
     } finally { if (epoch === lifetime.current) { writing.current = false; setBusy(false); } }
   };
   const blocked = busy || pending !== null || members === null;
+  const closeAdd = () => { setAdding(false); setUsername(""); setNewRoles([]); requestAnimationFrame(() => addButton.current?.focus()); };
   const columns: Column<Member>[] = [
     { id: "person", header: "Person", cell: member => personLabel(member) },
     { id: "username", header: "Username", cell: member => member.username },
@@ -79,17 +82,20 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
     {members !== null && (members.length ? <DataTable label="Project members" columns={columns} rows={members} rowKey={member => member.username} /> : <EmptyState title="No project members." />)}
     {error !== undefined && !pending && <ErrorNotice error={error} />}
     {suggestionError !== undefined && <ErrorNotice error={suggestionError} />}
-    <form aria-label="Add member" onSubmit={event => {
+    {!adding ? <Button ref={addButton} onClick={() => setAdding(true)}>Add member…</Button> : <form aria-label="Add member" onSubmit={event => {
       event.preventDefault();
       if (!event.currentTarget.reportValidity() || blocked) return;
       if (!newRoles.length) { setError(new Error("Choose at least one role for the new member.")); return; }
       void change(username, newRoles, false, true);
     }}><fieldset disabled={blocked}><legend>Add member</legend>
-      <TextInput id={`${id}-username`} label="Username" hint="Enter the exact username." value={username} required list={isSystemAdmin ? `${id}-suggestions` : undefined} onChange={event => setUsername(event.target.value)} />
+      <TextInput id={`${id}-username`} label="Username" hint="Enter the exact username." value={username} required autoFocus list={isSystemAdmin ? `${id}-suggestions` : undefined} onChange={event => setUsername(event.target.value)} />
       {isSystemAdmin && <datalist id={`${id}-suggestions`}>{suggestions.map(user => <option key={user.username} value={user.username}>{user.display_name} ({user.username})</option>)}</datalist>}
       {roles.map(role => <Checkbox key={role} id={`${id}-new-${role}`} label={roleLabels[role]} aria-label={`New member: ${roleLabels[role]}`} checked={newRoles.includes(role)} onChange={event => setNewRoles(event.target.checked ? [...newRoles, role] : newRoles.filter(item => item !== role))} />)}
-      <Button type="submit" loading={busy}>Add member</Button>
-    </fieldset></form>
+      <div className="settings-section-actions">
+        <Button type="submit" variant="primary" loading={busy}>Add member</Button>
+        <Button onClick={closeAdd}>Close</Button>
+      </div>
+    </fieldset></form>}
     <ConfirmDialog open={pending !== null} title="Revoke affected assignments?" busy={busy} confirmLabel="Remove and revoke their open assignments"
       message={pending && <><p>Changing roles for {pending.username} affects these assignments:</p><ul>{pending.assignments.map(assignment => <li key={assignment.id}>{assignment.document_id} — {labelFor(taskLabels, assignment.task)} (assignment {assignment.id})</li>)}</ul>{error !== undefined && <ErrorNotice error={error} />}</>}
       onCancel={() => { if (!writing.current) { setPending(null); setError(undefined); } }}

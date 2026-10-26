@@ -104,6 +104,7 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings$`));
   await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Members", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings/members$`));
+  await page.getByRole("button", { name: "Add member…", exact: true }).click();
   const members = page.getByRole("form", { name: "Add member", exact: true });
   for (const [actor, role] of [[lead, "Lead"], [annotator, "Annotator"]] as const) {
     await members.getByLabel(/^Username/).fill(actor.username);

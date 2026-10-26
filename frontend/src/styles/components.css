@@ -642,6 +642,7 @@ textarea.form-control {
 .shell-page .detail-section:last-child { border-bottom: 0; }
 .shell-page :not(td) > .toolbar { margin-block: var(--space-3); }
 .shell-page :is(.form-control, .form-select) { max-width: var(--field-max-width); }
+.shell-page input.form-control[type="number"] { max-width: 8rem; }
 .shell-page .toolbar .form-group { margin-bottom: 0; }
 .notice { font-size: var(--size-md); line-height: var(--leading-md); }
 

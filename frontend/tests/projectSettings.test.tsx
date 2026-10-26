@@ -37,6 +37,12 @@ describe("project creation", () => {
     const select = screen.getByLabelText(/^Ontology file for HP/);
     expect(within(select).getAllByRole("option")).toHaveLength(3);
     fireEvent.change(select, { target: { value: "b".repeat(64) } });
+    // A short SHA-256 in the option, the full one in its title and in the select's description.
+    const chosen = within(select).getByRole("option", { selected: true });
+    expect(chosen.textContent).toContain(`(${"b".repeat(12)})`);
+    expect(chosen.textContent).not.toContain("b".repeat(13));
+    expect(chosen.getAttribute("title")).toBe("b".repeat(64));
+    expect(document.getElementById(select.getAttribute("aria-describedby")!)?.textContent).toBe(`SHA-256 ${"b".repeat(64)}`);
     fireEvent.change(screen.getByLabelText("Allowed roots for HP"), { target: { value: "HP:1, HP:2" } });
     fireEvent.change(screen.getByLabelText("T1 profile for HP"), { target: { value: "hpo-phenotype" } });
     fireEvent.click(screen.getByRole("button", { name: "Create project" }));

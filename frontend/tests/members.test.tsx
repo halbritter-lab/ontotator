@@ -58,12 +58,20 @@ describe("project members", () => {
 
   it("adds an exact username and restricts user-list suggestions to actual administrators", async () => {
     const view = render(<MembersSection projectKey="p" isSystemAdmin={true} />);
-    fireEvent.change(await screen.findByLabelText(/^Username/), { target: { value: "new.user" } });
+    // The form stays closed until "Add member…".
+    expect(screen.queryByRole("form", { name: "Add member" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Add member…" }));
+    expect(document.activeElement).toBe(screen.getByLabelText(/^Username/));
+    fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "new.user" } });
     fireEvent.click(screen.getByRole("checkbox", { name: "New member: Annotator" }));
     fireEvent.click(screen.getByRole("button", { name: "Add member" }));
     expect(api.adminListUsers).toHaveBeenCalledTimes(1);
     expect(api.setMemberRoles).toHaveBeenCalledWith("p", "new.user", ["annotator"], false);
     await screen.findByRole("checkbox", { name: "new.user: Annotator" });
+    // The form stays open for the next member; Close collapses it.
+    expect((screen.getByLabelText(/^Username/) as HTMLInputElement).value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("form", { name: "Add member" })).toBeNull();
     view.rerender(<MembersSection projectKey="q" isSystemAdmin={false} />);
     await screen.findByRole("checkbox", { name: "alice: Annotator" });
     expect(api.adminListUsers).toHaveBeenCalledTimes(1);

@@ -20,10 +20,12 @@ export function PinFields({ ids, ontologies, value, onChange, disabled }: {
     const choices = ontologies.filter(item => item.status !== "failed" && item.ontology_id.toLowerCase() === id.toLowerCase());
     const change = (patch: Partial<PinDraft>) => onChange({ ...value, [id]: { ...pin, ...patch } });
     return <fieldset key={id} disabled={disabled}><legend>{id}</legend>
-      <Select id={`${prefix}-${index}-file`} label={`Ontology file for ${id}`} required value={pin.sha256} onChange={event => change({ sha256: event.target.value })}>
+      {/* The short SHA-256 keeps the select narrow; the hint (the select's description) and each option's title carry the full value. */}
+      <Select id={`${prefix}-${index}-file`} label={`Ontology file for ${id}`} required value={pin.sha256}
+        hint={pin.sha256 ? `SHA-256 ${pin.sha256}` : undefined} onChange={event => change({ sha256: event.target.value })}>
         <option value="">Choose an ontology version</option>
-        {pin.sha256 && !choices.some(choice => choice.sha256 === pin.sha256) && <option value={pin.sha256}>Current pin ({pin.sha256})</option>}
-        {choices.map(choice => <option key={choice.sha256} value={choice.sha256}>{choice.ontology_id} {choice.release} ({choice.sha256})</option>)}
+        {pin.sha256 && !choices.some(choice => choice.sha256 === pin.sha256) && <option value={pin.sha256} title={pin.sha256}>Current pin ({pin.sha256.slice(0, 12)})</option>}
+        {choices.map(choice => <option key={choice.sha256} value={choice.sha256} title={choice.sha256}>{choice.ontology_id} {choice.release} ({choice.sha256.slice(0, 12)})</option>)}
       </Select>
       <TextInput id={`${prefix}-${index}-roots`} label={`Allowed roots for ${id}`} hint="Comma-separated CURIEs; leave empty to allow all roots." value={pin.rootsText} onChange={event => change({ rootsText: event.target.value })} />
       <Select id={`${prefix}-${index}-t1`} label={`T1 profile for ${id}`} value={pin.t1_profile} onChange={event => change({ t1_profile: event.target.value as ProjectPin["t1_profile"] })}>
