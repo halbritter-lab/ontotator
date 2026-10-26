@@ -73,14 +73,14 @@ describe("project members", () => {
     expect((screen.getByRole("checkbox", { name: "alice: Annotator" }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it("suggests matching people to a lead from two typed letters on", async () => {
+  it("suggests matching people to a lead from three typed letters on", async () => {
     vi.mocked(api.listMemberCandidates).mockResolvedValue([{ username: "maria.k", display_name: "Maria Klein" }]);
     const view = render(<MembersSection projectKey="p" isSystemAdmin={false} />);
     fireEvent.click(await screen.findByRole("button", { name: "Add member…" }));
-    fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "m" } });
-    expect(api.listMemberCandidates).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "ma" } });
-    expect(api.listMemberCandidates).toHaveBeenCalledWith("p", "ma");
+    expect(api.listMemberCandidates).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "mar" } });
+    expect(api.listMemberCandidates).toHaveBeenCalledWith("p", "mar");
     await waitFor(() => expect(view.container.querySelector("datalist option")?.getAttribute("value")).toBe("maria.k"));
     expect(view.container.querySelector("datalist option")?.textContent).toBe("Maria Klein (maria.k)");
   });

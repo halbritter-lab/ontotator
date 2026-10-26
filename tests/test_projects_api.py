@@ -754,23 +754,30 @@ def test_only_removing_a_role_ends_the_members_sessions(app):
     assert alice.get("/api/v1/projects").status_code == 401
 
 
-def test_a_lead_finds_active_non_members_by_name_or_username(app):
+def test_a_lead_finds_colleagues_by_name_and_others_only_by_exact_match(app):
     from auth_harness import ensure_user
 
     admin = logged_in(app, "root", system_admin=True)
     create_project(app, admin)
-    lead = logged_in(app, "lead", projects={"phenotypes": ["lead"]})
-    ensure_user(app, "maria.k")
-    ensure_user(app, "mario")
-    ensure_user(app, "marta")
+    create_project(app, admin, key="other")
+    lead = logged_in(app, "lead", projects={"phenotypes": ["lead"], "other": ["lead"]})
+    # Colleagues: members of "other", a project the lead shares.
+    for name in ("maria.k", "mario", "marta", "mara.admin"):
+        logged_in(app, name, projects={"other": ["annotator"]})
     app.state.accounts.update_profile(Actor.cli(), "marta", display_name="Marta Ruiz")
     app.state.accounts.set_active(Actor.cli(), "mario", False)
+    app.state.accounts.set_system_admin(Actor.cli(), "mara.admin", True)
     logged_in(app, "markus", projects={"phenotypes": ["annotator"]})
+    # A stranger shares no project with the lead.
+    ensure_user(app, "marlene")
+    app.state.accounts.update_profile(
+        Actor.cli(), "marlene", email="Marlene@Example.org"
+    )
     path = "/api/v1/projects/phenotypes/member-candidates"
 
     found = lead.get(path, params={"q": "MAR"})
     assert found.status_code == 200, found.text
-    # Inactive users and members are left out; only username and name are shown.
+    # Inactive users, admins, members and strangers are left out.
     assert found.json() == [
         {"username": "maria.k", "display_name": "maria.k"},
         {"username": "marta", "display_name": "Marta Ruiz"},
@@ -778,7 +785,20 @@ def test_a_lead_finds_active_non_members_by_name_or_username(app):
     assert [c["username"] for c in lead.get(path, params={"q": "ruiz"}).json()] == [
         "marta"
     ]
-    assert lead.get(path, params={"q": "m"}).json() == []
-    assert lead.get(path, params={"q": "%_"}).json() == []
+    assert lead.get(path, params={"q": "ma"}).json() == []
+    assert lead.get(path, params={"q": "marlene"}).json() == [
+        {"username": "marlene", "display_name": "marlene"}
+    ]
+    by_mail = lead.get(path, params={"q": "marlene@example.org"}).json()
+    assert [c["username"] for c in by_mail] == ["marlene"]
+    assert lead.get(path, params={"q": "marle"}).json() == []
+    # A lead of another project only does not see this lead's colleagues.
+    other_lead = logged_in(app, "olga", projects={"phenotypes": ["lead"]})
+    assert other_lead.get(path, params={"q": "mar"}).json() == []
+    assert [c["username"] for c in admin.get(path, params={"q": "mar"}).json()] == [
+        "maria.k",
+        "marlene",
+        "marta",
+    ]
     annotator = logged_in(app, "markus")
     assert annotator.get(path, params={"q": "mar"}).status_code == 403

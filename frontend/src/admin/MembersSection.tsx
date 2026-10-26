@@ -58,7 +58,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
   const typeUsername = (value: string) => {
     setUsername(value);
     const request = ++search.current;
-    if (value.trim().length < 2) { setSuggestions([]); return; }
+    if (value.trim().length < 3) { setSuggestions([]); return; }
     // Suggestions are a convenience: a failed search leaves the typed username usable.
     void api.listMemberCandidates(projectKey, value.trim()).then(rows => { if (request === search.current) setSuggestions(rows); }).catch(() => { if (request === search.current) setSuggestions([]); });
   };
@@ -114,7 +114,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
       if (!newRoles.length) { setError(new Error("Choose at least one role for the new member.")); return; }
       void change(username, newRoles, false, true);
     }}><fieldset disabled={blocked}><legend>Add member</legend>
-      <TextInput id={`${id}-username`} label="Username" hint="Type at least two letters of the name or username, then pick the person." value={username} required autoFocus autoComplete="off" list={`${id}-suggestions`} onChange={event => typeUsername(event.target.value)} />
+      <TextInput id={`${id}-username`} label="Username" hint="Type at least three letters of the name of someone from your projects, or the exact username or e-mail of anyone else." value={username} required autoFocus autoComplete="off" list={`${id}-suggestions`} onChange={event => typeUsername(event.target.value)} />
       <datalist id={`${id}-suggestions`}>{suggestions.map(user => <option key={user.username} value={user.username}>{user.display_name} ({user.username})</option>)}</datalist>
       {roles.map(role => <Checkbox key={role} id={`${id}-new-${role}`} label={roleLabels[role]} aria-label={`New member: ${roleLabels[role]}`} checked={newRoles.includes(role)} onChange={event => setNewRoles(event.target.checked ? [...newRoles, role] : newRoles.filter(item => item !== role))} />)}
       <div className="settings-section-actions">

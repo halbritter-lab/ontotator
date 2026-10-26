@@ -474,14 +474,17 @@ MEMBER_CANDIDATE_LIMIT = 10
 def member_candidates(
     key: str, principal: PrincipalDep, request: Request, q: str = ""
 ) -> list[MemberCandidate]:
-    """Active users outside the project whose username or name contains ``q``.
+    """Active users outside the project matching ``q`` (three characters at least).
 
-    Two characters at least and ten results at most, so a lead finds a
-    person without browsing the whole user list.
+    A lead finds people who share a project with them by part of the name or
+    username, and anybody else only by the exact username or e-mail, so the
+    search does not browse the installation's user list. System
+    administrators are never offered (they manage without membership); an
+    administrator caller searches everyone. Ten results at most.
     """
     _guard(request, Action.MANAGE_MEMBERS, key)
     query = q.strip().lower()
-    if len(query) < 2:
+    if len(query) < 3:
         return []
     accounts = request.app.state.accounts
     with accounts.db.snapshot() as conn:
@@ -493,15 +496,27 @@ def member_candidates(
         members = select(ProjectMembershipRow.user_id).where(
             ProjectMembershipRow.project_id == project_id
         )
+        partial = or_(
+            func.strpos(UserRow.username, query) > 0,
+            func.strpos(func.lower(UserRow.display_name), query) > 0,
+        )
+        exact = or_(UserRow.username == query, func.lower(UserRow.email) == query)
+        if not principal.is_system_admin:
+            mine = select(ProjectMembershipRow.project_id).where(
+                ProjectMembershipRow.user_id == principal.user_id
+            )
+            colleagues = select(ProjectMembershipRow.user_id).where(
+                ProjectMembershipRow.project_id.in_(mine)
+            )
+            partial = partial & UserRow.id.in_(colleagues)
         rows = conn.execute(
             select(UserRow.username, UserRow.display_name)
             .where(
                 UserRow.active.is_(True),
+                UserRow.anonymised_at.is_(None),
+                UserRow.is_system_admin.is_(False),
                 UserRow.id.not_in(members),
-                or_(
-                    func.strpos(UserRow.username, query) > 0,
-                    func.strpos(func.lower(UserRow.display_name), query) > 0,
-                ),
+                or_(partial, exact),
             )
             .order_by(UserRow.username)
             .limit(MEMBER_CANDIDATE_LIMIT)
