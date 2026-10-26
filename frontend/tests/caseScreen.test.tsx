@@ -3003,4 +3003,47 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     await waitFor(() => expect(announcer(container)).toContain("Attached Severe to Seizure."));
     expect(container.querySelector(".pending-quote")!.textContent).toBe("“Wochen”");
   });
+
+  describe("Edit & Replace copies", () => {
+    /** Review view: `copy` (when given) is an adopted copy of the proposal `prop-seizure`. */
+    const reviewView = (proposalModifiers: Mod[], copy: boolean) => {
+      const view = modView(copy ? [["seizure", "HP:0001250", "Krampfanfälle"]] : []);
+      const proposal = findingSnap(["prop-seizure", "HP:0001250", "Krampfanfälle", proposalModifiers]) as any;
+      proposal.version = "prop-v";
+      proposal.evidence = [{ version: "ev-1", mention: { evidence_id: "ev-prop-seizure", segments: [pos("Krampfanfälle")] } }];
+      if (copy) view.draft.annotations![0].annotation.provenance.source_refs = ["prop-seizure:prop-v"];
+      view.available_inputs = [proposal]; view.key.mode = "review"; view.draft.key.mode = "review";
+      const target = { annotation_id: "prop-seizure", version: "prop-v" };
+      view.targets!.targets = [target]; view.draft.targets = view.targets!;
+      return { view, target };
+    };
+
+    it("adding a modifier to the copy records the deferred changed decision", async () => {
+      const { view, target } = reviewView([], true);
+      const decide = vi.spyOn(api, "recordDecision").mockImplementation(async () => structuredClone(view.draft));
+      const { container, apply } = await setup(view);
+      await startAttach(container);
+      const row = screen.getByRole("button", { name: "Attach Severe to Seizure" });
+      fireEvent.keyDown(row, { key: "Enter" });
+      await waitFor(() => expect(payloads(apply)).toEqual([expect.objectContaining({ command: "add_modifier", annotation_id: "seizure" })]));
+      await waitFor(() => expect(decide).toHaveBeenCalledWith("ws-mod", expect.objectContaining({ payload: expect.objectContaining({
+        target, outcome: "changed", replacement: expect.objectContaining({ annotation_id: "seizure" }) }) })));
+    });
+
+    it("the copy keeps the proposal's modifiers and records no decision while it equals the proposal", async () => {
+      const { view } = reviewView([{ term_id: "HP:0012828", segments: [pos("schwere")] }, { term_id: "HP:0031796" }], false);
+      const decide = vi.spyOn(api, "recordDecision");
+      const { apply } = await setup(view, severeHits, false);
+      fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+      fireEvent.click(screen.getByRole("button", { name: /Edit & Replace/ }));
+      await waitFor(() => expect(payloads(apply)).toHaveLength(3));
+      const [create, ...mods] = payloads(apply);
+      expect(create).toEqual(expect.objectContaining({ command: "create_annotation", source_annotation_id: "prop-seizure" }));
+      expect(mods).toEqual([
+        { command: "add_modifier", annotation_id: create.annotation_id, term_id: "HP:0012828", segments: [pos("schwere")] },
+        { command: "add_modifier", annotation_id: create.annotation_id, term_id: "HP:0031796" },
+      ]);
+      expect(decide).not.toHaveBeenCalled();
+    });
+  });
 });

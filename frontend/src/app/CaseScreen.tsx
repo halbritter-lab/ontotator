@@ -142,6 +142,11 @@ const segmentsKey = (evidence: { mention: { segments: { start: number; end: numb
       .sort(),
   );
 
+const modifiersKey = (modifiers: { term_id: string; segments?: { start: number; end: number }[] }[] | null | undefined) =>
+  JSON.stringify((modifiers ?? [])
+    .map((m) => [m.term_id, [...(m.segments ?? [])].sort((a, b) => a.start - b.start).map((s) => [s.start, s.end])] as const)
+    .sort(([a], [b]) => a.localeCompare(b)));
+
 interface ConfirmRequest {
   title: string;
   message: string;
@@ -1085,7 +1090,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const value = draftNote ?? stored ?? "";
     return value.trim() || undefined;
   };
-  /** Whether an adopted copy differs from its source proposal (term, type, axes, note or mentions). */
+  /** Whether an adopted copy differs from its source proposal (term, type, axes, modifiers, note or mentions). */
   const copyDiffersFromTarget = (copy: AnnotationSnapshot, target: { annotation_id: string; version: string }) => {
     const source = targetSnapshotOf(target);
     if (!source) return true;
@@ -1094,6 +1099,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (copy.annotation.type_id !== source.annotation.type_id) return true;
     if (JSON.stringify(normalizeAxes(copy.annotation.axes_values)) !== JSON.stringify(normalizeAxes(source.annotation.axes_values))) return true;
     if (JSON.stringify([...(copy.annotation.axes_defaulted ?? [])].sort()) !== JSON.stringify([...(source.annotation.axes_defaulted ?? [])].sort())) return true;
+    if (modifiersKey(copy.annotation.modifiers) !== modifiersKey(source.annotation.modifiers)) return true;
     const copyEvidence = (copy.annotation.evidence_refs ?? [])
       .map((ref) => (latestDraft.current.evidence ?? []).find((ev) => ev.mention.evidence_id === ref.evidence_id))
       .filter((ev): ev is NonNullable<typeof ev> => !!ev);
@@ -2175,6 +2181,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           annotation_id: newAnnId,
           evidence_id: newEvidenceId(),
           segments: evidenceList[i].mention.segments,
+        });
+      }
+      // create_annotation carries no modifiers: copy the proposal's one by one (same text, so with their spans).
+      for (const modifier of snap?.annotation.modifiers ?? []) {
+        await enqueueMutation({
+          command: "add_modifier",
+          annotation_id: newAnnId,
+          term_id: modifier.term_id,
+          ...(modifier.segments?.length ? { segments: modifier.segments } : {}),
         });
       }
     } catch (error) {
