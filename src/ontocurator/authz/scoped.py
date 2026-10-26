@@ -97,6 +97,12 @@ def _count_writes(*args: Any) -> None:
         _writes.count = getattr(_writes, "count", 0) + 1
 
 
+@event.listens_for(Engine, "rollback")
+def _count_rollbacks(*args: Any) -> None:
+    # A rollback undoes writes, so a memo built on them must not survive it.
+    _writes.count = getattr(_writes, "count", 0) + 1
+
+
 def _write_stamp() -> tuple[int, int]:
     return threading.get_ident(), getattr(_writes, "count", 0)
 

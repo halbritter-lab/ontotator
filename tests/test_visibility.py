@@ -891,3 +891,40 @@ def test_request_memo_checks_once_and_a_write_invalidates_it(assigned):
     with pytest.raises(DomainError) as refused:
         repo._document(PROJECT, "doc-beta")
     assert refused.value.code == "DOCUMENT_NOT_FOUND"
+
+
+def test_request_memo_is_dropped_by_a_rollback(assigned):
+    from types import SimpleNamespace
+
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    from ontocurator.authz.scoped import ScopedRepository
+
+    app, _client, _row = assigned
+    user = app.state.accounts.get_by_username("alice")
+    access = app.state.memberships.access_for(
+        SimpleNamespace(
+            user_id=user.id,
+            pseudonym=user.pseudonym,
+            is_system_admin=user.is_system_admin,
+        )
+    )
+    repo = ScopedRepository(app.state.repo.db, access)
+    repo._document(PROJECT, "doc-beta")
+    from sqlalchemy import text
+
+    with app.state.repo.db.engine.connect() as conn:
+        conn.execute(text("SELECT 1"))  # autobegin, so the rollback is real
+        conn.rollback()
+    statements = []
+
+    def count(*args):
+        statements.append(args[2])
+
+    event.listen(Engine, "before_cursor_execute", count)
+    try:
+        repo._document(PROJECT, "doc-beta")
+    finally:
+        event.remove(Engine, "before_cursor_execute", count)
+    assert statements  # re-read after the rollback
