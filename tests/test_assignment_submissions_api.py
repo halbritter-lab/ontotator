@@ -116,3 +116,13 @@ def test_detail_of_carry_forward_submission_contains_inputs_and_resolutions(
     assert first["round_input_resolutions"] == []
     assert len(first["annotations"]) == 1
     assert first["document_checked"] is True
+
+
+def test_unknown_and_foreign_assignments_answer_alike(carried_round):  # noqa: F811
+    app, owner, carried = carried_round
+    other = logged_in(app, "olga", projects={}, assignments=[])
+    for ident, client in ((999_999, owner), (carried["assignment_id"], other)):
+        for tail in ("submissions", "rounds", "round-sources"):
+            response = client.get(f"/api/v1/assignments/{ident}/{tail}")
+            assert response.status_code == 404, (ident, tail, response.text)
+            assert response.json()["code"] == "ASSIGNMENT_NOT_FOUND"
