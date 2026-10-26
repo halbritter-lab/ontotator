@@ -33,6 +33,7 @@
 
 .cons-compare-scroll {
   overflow-x: auto;
+  container-type: inline-size;
 }
 
 .cons-header {
@@ -367,19 +368,24 @@
   color: var(--text-muted);
 }
 
+/* B5-2: an agreed value under every person; below 28rem once across the columns, "(all agree)". */
+.cons-agreed-once { display: none; }
+@container (max-width: 28rem) {
+  .cons-agreed-each { display: none; }
+  .cons-agreed-once { display: table-cell; }
+}
+
 /* M2 M-7e: agreed rows stay visible, muted. */
 .cons-row--agreed th {
   color: var(--text-muted);
   font-weight: normal;
 }
 
-/* M2 M-7g: the inline Undo of the last decision, next to the row's state. */
+/* M2 M-7g, B5-4: the inline Undo of the last decision, next to the row's state, in the toast's look (.ui-toast). */
 .cons-undo {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-1);
   flex: none;
-  color: var(--text-muted);
+  padding-block: var(--space-1);
+  box-shadow: none;
 }
 
 .cons-value {

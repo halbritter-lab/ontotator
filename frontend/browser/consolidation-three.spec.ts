@@ -67,11 +67,11 @@ test("three people: choose by field, Keep saves, the result line names what is n
   await expect(toggle).toContainText("2 fields to decide");
   const table = hypotonia.locator("table.cons-compare");
   await expect(table.locator("thead th")).toHaveCount(3);
-  // Every row is visible (M-7e): agreed rows muted after the rows to decide, one value across the columns.
+  // Every row is visible (M-7e): agreed rows muted after the rows to decide, the value under every person (B5-2).
   await expect(table.getByRole("row", { name: /^Agreed/ })).toHaveCount(0);
   await expect(table.locator("tr.cons-row--agreed").first()).toBeVisible();
-  await expect(table.getByRole("cell", { name: "Patient (all agree)", exact: true })).toBeVisible();
-  await expect(table.getByRole("cell", { name: "Current (all agree)", exact: true })).toBeVisible();
+  await expect(table.getByRole("row", { name: /^Experiencer/ }).getByRole("cell", { name: "Patient", exact: true })).toHaveCount(3);
+  await expect(table.getByRole("row", { name: /^Temporality/ }).getByRole("cell", { name: "Current", exact: true })).toHaveCount(3);
   const result = hypotonia.locator(".cons-result");
 
   // ✓ on the other term (Term row): the result names it and lists what is not taken.

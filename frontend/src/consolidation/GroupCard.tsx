@@ -17,7 +17,7 @@ import { COHORT_TAG, type TermInfo } from "../editor/modifiers";
 import { ModifiersSection } from "../editor/ModifiersSection";
 import { useTermLabels } from "../editor/useTermLabels";
 import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from "../ui";
-import { IconWarning } from "../ui/icons";
+import { IconUndo, IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
 import { axisLabel, groupStatus, labelWithQuote, keepLabel, namesOf, NO_ATTACH_TARGET, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
 import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, standaloneText, type Choices, type OtherTerm } from "./groupModel";
@@ -229,7 +229,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     {noteAndFlag(false)}
     <div className="cons-actions">
       {attachTargets.length
-        ? <MenuButton label="Attach to a finding…" buttonLabel="Attach to a finding…" items={attachTargets.map(target => ({ id: target.annotationId, label: target.label,
+        ? <MenuButton label="Attach to a finding…" buttonLabel="Attach to a finding…" size="md" items={attachTargets.map(target => ({ id: target.annotationId, label: target.label,
           onSelect: () => { if (!busy) resolve({ action: "leave_out", attach_to: target.annotationId }, `${modifier} to ${target.label}`); } }))} />
         : <><Button aria-disabled="true" aria-describedby={`${noteId}-attach`}>Attach to a finding…</Button>
           <span id={`${noteId}-attach`} className="cons-muted">{NO_ATTACH_TARGET}</span></>}
@@ -255,7 +255,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
           <Button variant="primary" loading={busy} aria-disabled={!complete || undefined} aria-describedby={!complete ? `${noteId}-keep` : undefined}
             onClick={() => { if (complete && !busy) resolve(resolvePayload(group, choices), line.finding); }}>{partial && !conflicts ? keepLabel(present) : "Keep"}</Button>
           <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, NOT_IN_RESULT); }}>Not in result</Button>
-          {workspace && (!conflicts || needsTerm(group)) && <span ref={moreRef} className="cons-more"><MenuButton label={`More actions, ${name}`} buttonLabel="More…" items={[
+          {workspace && (!conflicts || needsTerm(group)) && <span ref={moreRef} className="cons-more"><MenuButton label={`More actions, ${name}`} buttonLabel="More…" size="md" items={[
             ...(!conflicts ? [{ id: "edit-values", label: "Edit values…", onSelect: () => setEditing(true) }] : []),
             { id: "other-term", label: "Other term…", onSelect: () => setPicking(true) },
           ]} /></span>}
@@ -296,9 +296,11 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   return <li className={["cons-group", expanded && "cons-group-expanded", !open && "cons-group-resolved", group.state === "auto" && "cons-group-agreed"].filter(Boolean).join(" ")} data-group={group.group_id}>
     <div className="cons-group-line">
       {header}
-      {props.onUndo && !open && !readOnly && <span className="cons-undo">
-        <Button size="sm" variant="quiet" className="btn-link" loading={busy} aria-label={`Undo, ${name}`} aria-keyshortcuts="Control+Z Meta+Z"
-          onClick={props.onUndo}>Undo</Button></span>}
+      {/* B5-4: inline in the row, styled as the app's toast. */}
+      {props.onUndo && !open && !readOnly && <span className="ui-toast cons-undo">
+        <span className="ui-toast-message">Decision saved</span>
+        <Button size="sm" className="ui-toast-action" icon={<IconUndo className="ui-toast-undo-icon" />} loading={busy} aria-label={`Undo, ${name}`}
+          aria-keyshortcuts="Control+Z Meta+Z" onClick={props.onUndo}>Undo</Button></span>}
     </div>
     {narrow && <Snippet group={group} text={text} />}
     {expanded && <div className="cons-group-body">

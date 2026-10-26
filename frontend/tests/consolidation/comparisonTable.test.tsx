@@ -42,6 +42,13 @@ describe("ComparisonTable", () => {
     expect(screen.getByText("“muscular hypotonia” (overlapping, comes with the chosen finding)")).toBeTruthy();
   });
 
+  it("an agreed value stands under every person, the line across is the narrow variant (B5-2)", () => {
+    render(<Harness group={hypotoniaThree()} />);
+    const row = screen.getByRole("rowheader", { name: "Experiencer" }).closest("tr")!;
+    expect([...row.querySelectorAll(".cons-agreed-each")].map(cell => cell.textContent)).toEqual(["Patient", "Patient", "Patient"]);
+    expect(row.querySelector(".cons-agreed-once")?.getAttribute("colspan")).toBe("3");
+  });
+
   it("every row is visible: rows to decide first and highlighted, agreed rows muted; no Whole finding row (M-7d, M-7e)", () => {
     render(<Harness group={hypotoniaThree()} />);
     const headers = screen.getAllByRole("rowheader").map(header => header.textContent);

@@ -82,6 +82,8 @@ export function summaryText(groups: readonly ConsolidationGroupView[], added = 0
   return `${plural(groups.length, "group", "groups")}, ${plural(findings, "finding", "findings")}, ${leftOut} ${NOT_IN_RESULT}`;
 }
 
+/** B5-5: the strip once every group is decided. */
+export const READY_TO_SUBMIT = "All groups are decided. You can submit the consolidation.";
 export const SUBMIT_LABEL = "Submit consolidation";
 
 export function submitReason(open: number): string {

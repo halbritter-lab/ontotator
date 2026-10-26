@@ -126,6 +126,8 @@ describe("GroupCard", () => {
     const actions = container.querySelector(".cons-group-body > .cons-actions")!;
     expect(within(actions as HTMLElement).getAllByRole("button").map(button => button.textContent)).toEqual(["Keep", "Not in result", "More…"]);
     expect(actions.querySelector(".btn-primary")?.textContent).toBe("Keep");
+    // One size across the row (B5-3).
+    expect(within(actions as HTMLElement).getAllByRole("button").filter(button => button.classList.contains("btn-sm"))).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /Edit in editor/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^More actions/ }));
     expect(screen.getAllByRole("menuitem").map(item => item.textContent)).toEqual(["Edit values…", "Other term…"]);
@@ -270,6 +272,8 @@ describe("GroupCard, inline Undo (M-7g)", () => {
     renderCard({ ...byId("g-hypo"), state: "choose", annotation_ids: ["cons-1"] }, { expanded: false, summary: "Hypotonia (HP:0001252), Absent, Patient, Current", onUndo });
     const undo = screen.getByRole("button", { name: "Undo, muscular hypotonia" });
     expect(undo.getAttribute("aria-keyshortcuts")).toBe("Control+Z Meta+Z");
+    // In the row, in the look of the app's toast (B5-4).
+    expect(undo.closest(".ui-toast")?.textContent).toBe("Decision savedUndo");
     fireEvent.click(undo);
     expect(onUndo).toHaveBeenCalled();
     cleanup();

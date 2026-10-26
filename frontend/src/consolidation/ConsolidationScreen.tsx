@@ -15,7 +15,7 @@ import { nextTaskLabel, remainingTasksText } from "../translation/labels";
 import { Button, EmptyState, InlineMessage, Popover, Select, TextInput, Toast, useMediaQuery, useToast } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
 import { StagePath } from "../ui/StagePath";
-import { addedHeading, finalizationState, headerTitle, READ_ONLY_REASONS, submittedText, summaryText } from "./consolidationText";
+import { addedHeading, finalizationState, headerTitle, READ_ONLY_REASONS, READY_TO_SUBMIT, submittedText, summaryText } from "./consolidationText";
 import { groupName, termLabel } from "./groupModel";
 import { GroupList, textOrder } from "./GroupList";
 import { SubmitBar } from "./SubmitBar";
@@ -289,6 +289,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
         onNextOpen={() => { const next = nextOpenAfter(groups, selected); if (next) select(next, true); }} /></div>}
     </header>
     {reason && !submitted && <InlineMessage tone="info">{reason}</InlineMessage>}
+    {/* B5-5: every group decided: say so plainly where the work happened. */}
+    {!readOnly && !submitted && open === 0 && groups.length > 0 && <InlineMessage tone="success">{READY_TO_SUBMIT}</InlineMessage>}
     {submitted && <div className="cons-submitted" role="status">
       <p>{submittedText(!!isLead)}</p>
       <div className="cons-actions">

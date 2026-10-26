@@ -80,7 +80,7 @@ describe("ConsolidationScreen", () => {
     expect(screen.getByRole("button", { name: /^muscular hypotonia decided: Hypotonia \(HP:0001252\), Absent, Patient, Current$/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Change/ })).toBeNull();
     // No toast: the Undo sits in the decided row; the live region names the decision.
-    expect(document.querySelector(".ui-toast")).toBeNull();
+    expect(document.querySelector(".ui-toast-region .ui-toast")).toBeNull();
     expect(screen.getByRole("button", { name: "Undo, muscular hypotonia" })).toBeTruthy();
     await waitFor(() => expect(screen.getByText("muscular hypotonia: Hypotonia (HP:0001252), Absent, Patient, Current.")).toBeTruthy());
     // Ctrl+Z in a text field stays the field's own undo.
@@ -227,6 +227,7 @@ describe("ConsolidationScreen", () => {
     expect(document.getElementById(submit.getAttribute("aria-describedby")!)?.textContent).toBe("Resolve the 4 open groups first.");
     fireEvent.click(submit);
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByText("All groups are decided. You can submit the consolidation.")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Next open group" }));
     expect(expandedTitle()).toBe("Delayed development");
   });
@@ -240,9 +241,12 @@ describe("ConsolidationScreen", () => {
     await takeAbsentAndKeep();
     expect(await screen.findByRole("button", { name: /^Undo/ })).toBeTruthy();
     await waitFor(() => expect(screen.getByRole("button", { name: "Submit consolidation" }).getAttribute("aria-disabled")).toBeNull());
+    // Every group decided: a ready strip says so (B5-5).
+    expect(screen.getByText("All groups are decided. You can submit the consolidation.").closest(".notice-success")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Submit consolidation?" })).getByRole("button", { name: "Submit" }));
     await screen.findByText("Consolidation submitted. The lead then accepts the result.");
+    expect(screen.queryByText("All groups are decided. You can submit the consolidation.")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
   });
 
