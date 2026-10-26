@@ -2841,6 +2841,9 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     expect(row.getAttribute("aria-pressed")).toBe("true");
     // The selected finding keeps its modifier segments framed.
     expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--framed")).toBe(true);
+    // The clicked modifier's own span is the selected mark, not the finding's term (B3-3).
+    expect(runsOf(container, "mod:seizure:HP:0012828")[0].classList.contains("run--hot")).toBe(true);
+    expect(runsOf(container, "ev-seizure")[0].classList.contains("run--hot")).toBe(false);
   });
 
   it("“+ Add modifier…” adds without a span; remove shows an Undo toast and Ctrl+Z restores", async () => {

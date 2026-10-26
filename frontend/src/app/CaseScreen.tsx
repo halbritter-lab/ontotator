@@ -1798,8 +1798,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       return;
     }
     if (pickedModifier) {
-      // A modifier segment selects its finding and focuses the chip.
+      // A modifier segment selects its finding, marks its own span as the selected one (B3-3) and focuses the chip.
       selectListKey(`annotation:${pickedModifier.annotationId}`);
+      setSelectedEvidenceId(evidenceId);
       setFocusRequest({ key: `annotation:${pickedModifier.annotationId}`, find: root => chipIn(root, pickedModifier.termId) });
       return;
     }
