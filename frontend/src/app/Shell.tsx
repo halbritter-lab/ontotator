@@ -3,7 +3,7 @@ import { api, onSessionRestored, type CurrentUser, type ProjectSummary } from ".
 import { roleLabels } from "./labels";
 import { AppShell, type Crumb } from "../ui/AppShell";
 import { MY_TASKS, routeHref, type Route } from "./router";
-import { ProjectSwitcher } from "./ProjectPicker";
+import { projectDestination, ProjectSwitcher } from "./ProjectPicker";
 import { rememberedProject } from "./lastProject";
 import { useDocumentsSummary } from "../documents/useDocumentsSummary";
 
@@ -116,6 +116,9 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
         </ul>
       </section>}
   </>;
+  // The logo's start page: the current project's landing (Documents for leads, its My tasks otherwise), else My tasks.
+  const home = current ? projectDestination(current) : MY_TASKS;
   return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav} role={shellRole(user, projects, current)}
+    homeHref={routeHref(home)} onHome={() => onNavigate(home)}
     density={(route.name === "task" || route.name === "projectCase") ? "reading" : "compact"}>{children}</AppShell>;
 }
