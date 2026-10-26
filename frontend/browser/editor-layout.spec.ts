@@ -136,9 +136,14 @@ test("sidebar resize: pointer and keyboard, persistence across reload, reset, te
   // At the default width the separator does not move the text pane.
   const textLeft = () => page.locator(".center-pane").evaluate(element => element.getBoundingClientRect().left);
   const withSeparator = await textLeft();
-  await page.addStyleTag({ content: ".sidebar-resizer { display: none !important; }" });
+  // Via the CSSOM: the app's CSP (style-src 'self') blocks injected <style> tags.
+  const hideResizer = (hidden: boolean) => page.evaluate(hide => document.querySelectorAll<HTMLElement>(".sidebar-resizer").forEach(element => {
+    if (hide) element.style.setProperty("display", "none", "important");
+    else element.style.removeProperty("display");
+  }), hidden);
+  await hideResizer(true);
   expect(await textLeft()).toBe(withSeparator);
-  await page.evaluate(() => document.querySelectorAll("style").forEach(style => { if (style.textContent?.includes(".sidebar-resizer { display: none !important; }")) style.remove(); }));
+  await hideResizer(false);
   await expect(handle).toBeVisible();
 
   // Keyboard: ±16, Shift ±64, Home/End, Enter resets (and removes the stored width).
