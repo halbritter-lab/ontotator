@@ -272,18 +272,19 @@ describe("A4/A5: review decisions and notes", () => {
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
     expect(decide.mock.calls[1][1].payload).toEqual(expect.objectContaining({ outcome: "rejected", note: "laterality differs" }));
 
-    // Repeating the outcome keeps it; explicit zero resets while retaining the note.
+    // Repeating the outcome moves on and saves nothing (F7); explicit zero resets while retaining the note.
     fireEvent.click(screen.getByRole("button", { name: /Reject/ }));
-    await waitFor(() => expect(decide).toHaveBeenCalledTimes(3));
-    expect(decide.mock.calls[2][1].payload.outcome).toBe("rejected");
+    await waitFor(() => expect(screen.queryByLabelText("Reviewer note")).toBeNull());
+    expect(decide).toHaveBeenCalledTimes(2);
+    fireEvent.keyDown(window, { key: "j" });
     fireEvent.keyDown(window, { key: "0" });
-    await waitFor(() => expect(decide).toHaveBeenCalledTimes(4));
-    expect(decide.mock.calls[3][1].payload.outcome).toBeNull();
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(3));
+    expect(decide.mock.calls[2][1].payload.outcome).toBeNull();
     expect((screen.getByLabelText("Reviewer note") as HTMLInputElement).value).toBe("laterality differs");
     // ...and the next decision carries it again.
     fireEvent.keyDown(window, { key: "1" });
-    await waitFor(() => expect(decide).toHaveBeenCalledTimes(5));
-    expect(decide.mock.calls[4][1].payload).toEqual(expect.objectContaining({ outcome: "confirmed", note: "laterality differs" }));
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(4));
+    expect(decide.mock.calls[3][1].payload).toEqual(expect.objectContaining({ outcome: "confirmed", note: "laterality differs" }));
   });
 
   it("ReviewActions permits multiline notes and saves them on blur with an existing decision", async () => {

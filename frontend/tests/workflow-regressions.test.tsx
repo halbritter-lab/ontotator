@@ -258,20 +258,19 @@ it("keeps a repeated outcome explicit and resets only through zero", async () =>
    reviewer_id: "annotator",
   }],
  };
- const decide = vi.spyOn(api, "recordDecision").mockResolvedValueOnce({ ...view.draft, revision: 1 })
-  .mockResolvedValueOnce({ ...view.draft, revision: 2, decisions: [] });
+ const decide = vi.spyOn(api, "recordDecision").mockResolvedValueOnce({ ...view.draft, revision: 1, decisions: [] });
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
  fireEvent.click(screen.getByText("HP:1"));
  const confirmBtn = screen.getByRole("button", { name: /Confirm|Bestätigen/ });
  expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
+ // The repeated outcome moves on (F7): nothing is saved, the decision stays.
  fireEvent.click(confirmBtn);
- await waitFor(() => expect(decide).toHaveBeenCalled());
- expect(decide.mock.calls[0][1].payload.outcome).toBe("confirmed");
- expect(confirmBtn.getAttribute("aria-pressed")).toBe("true");
+ expect(document.querySelector("[data-advance-status]")!.textContent).toBe("Already confirmed. Every proposal is decided.");
+ expect(decide).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByText("HP:1"));
  fireEvent.keyDown(window, { key: "0" });
- await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
- expect(decide.mock.calls[1][1].payload.outcome).toBeNull();
- expect(decide.mock.calls[1][1].payload.target).toEqual({ annotation_id: "same", version: "v1" });
+ await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+ expect(decide.mock.calls[0][1].payload.outcome).toBeNull();
  expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v1" });
 });
 
