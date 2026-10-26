@@ -71,11 +71,14 @@ export function Toast({ toast, onDismiss, durationMs = 10_000, undoDescription =
     observer.observe(document.body, { childList: true, subtree: true });
     window.addEventListener("resize", schedule);
     window.addEventListener("scroll", schedule, { capture: true, passive: true });
+    // The selection bar slides in (8 px): measured mid-animation, the toast would cover its top edge.
+    document.addEventListener("animationend", schedule, true);
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", schedule);
       window.removeEventListener("scroll", schedule, { capture: true });
+      document.removeEventListener("animationend", schedule, true);
     };
   }, [toast]);
 

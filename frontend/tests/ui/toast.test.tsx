@@ -140,6 +140,27 @@ it("moves above a dialog footer that opens while the toast is visible", async ()
   expect(screen.getByRole("status").style.getPropertyValue("--toast-offset")).toBe("76px");
   spy.mockRestore();
 });
+it("measures again when the selection bar's slide-in ends", async () => {
+  const height = window.innerHeight;
+  let top = height - 112; // mid-animation: still 8 px low
+  function Page() {
+    const { toast, show, dismiss } = useToast();
+    return <>
+      <div className="selection-bar" data-testid="bar" />
+      <button onClick={() => show({ message: "Saved" })}>show</button>
+      <Toast toast={toast} onDismiss={dismiss} />
+    </>;
+  }
+  render(<Page />);
+  vi.spyOn(screen.getByTestId("bar"), "getBoundingClientRect").mockImplementation(() =>
+    ({ top, bottom: top + 120, left: 0, right: 390, width: 390, height: 120, x: 0, y: top, toJSON: () => ({}) }) as DOMRect);
+  fireEvent.click(screen.getByText("show"));
+  expect(screen.getByRole("status").style.getPropertyValue("--toast-offset")).toBe("112px");
+  top = height - 120;
+  fireEvent.animationEnd(screen.getByTestId("bar"));
+  await act(async () => { vi.advanceTimersByTime(50); });
+  expect(screen.getByRole("status").style.getPropertyValue("--toast-offset")).toBe("120px");
+});
 it("the undo toast stays on one line", () => {
   const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../src/styles/components.css"), "utf8");
   const style = document.head.appendChild(document.createElement("style"));
