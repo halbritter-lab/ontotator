@@ -4,7 +4,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import { plural } from "../app/labels";
 import { personLabel, textLabel } from "../app/identity";
 import { Button, Checkbox, Dialog, InlineMessage, Textarea, type TriState } from "../ui";
-import { allKeep, changedChoices, languageName, planReport, SOURCE_KEY, type PlanChoices } from "./planSummary";
+import { allKeep, changedChoices, languageName, planReport, PRESET_LABELS, presetChoices, SOURCE_KEY, type PlanChoices, type PlanPreset } from "./planSummary";
 import { ANNOTATION_LABELS, PlanOption, proposalsHelp, REVIEW_HELP, SCRATCH_HELP } from "./PlanSteps";
 
 export interface PlanDialogProps {
@@ -24,10 +24,11 @@ const CHANGED_MESSAGE = "This plan changed. Reloaded the current plan.";
 const CHECKING = "Checking consequences…";
 
 const hasConsequences = (c: ConsequencesView): boolean => !!(c.withdrawn.length || c.finals_leaving.length || c.restored.length || c.open_reports?.length);
-/** "Keep (12 on, 8 off)": the current values in the selection. */
-const keepLabel = (counts: { on: number; off: number } | null): string => {
-  const parts = counts ? [counts.on && `${counts.on} on`, counts.off && `${counts.off} off`].filter(Boolean) : [];
-  return parts.length ? `Keep (${parts.join(", ")})` : "Keep";
+/** "No change (12 planned, 8 not)" / "No change (2 not planned)": the current values in the selection (M2 F27). */
+export const keepLabel = (counts: { on: number; off: number } | null): string => {
+  if (!counts || (!counts.on && !counts.off)) return "No change";
+  if (!counts.on) return `No change (${counts.off} not planned)`;
+  return counts.off ? `No change (${counts.on} planned, ${counts.off} not)` : `No change (${counts.on} planned)`;
 };
 type AnnotationChoice = "keep" | "off" | "on" | "proposals" | "scratch";
 /** "on" = annotate with each text's mode kept (a quick-action preset); the mode radios set a mode. */
@@ -76,7 +77,11 @@ function consequenceGroups(consequences: ConsequencesView): { language: string; 
   });
 }
 
-/** Plan many cases at once (spec D19, F5): per language the steps in words with Keep, live preview, confirmation inside the dialog. */
+/**
+ * Plan many cases at once (spec D19, F5): per language the steps in words with "No change", live preview, confirmation
+ * inside the dialog. A "Quick choice" row with the two translation presets fills every translation language (M2 M-1);
+ * it is left out when the selection holds no translation.
+ */
 export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: PlanDialogProps): JSX.Element {
   const ids = useId().replace(/:/g, "");
   const summaryId = `${ids}-summary`;
@@ -143,6 +148,11 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
     setChoices(currentChoices => ({ ...currentChoices, [key]: { ...currentChoices[key], ...cells } }));
     setNotice(null); setError(undefined);
   };
+  const translationKeys = languages.map(language => language.key).filter(key => key !== SOURCE_KEY);
+  const applyPreset = (preset: PlanPreset) => {
+    setChoices(currentChoices => ({ ...currentChoices, ...presetChoices(preset, translationKeys) }));
+    setNotice(null); setError(undefined);
+  };
 
   const submit = async (confirm: boolean) => {
     if (!preview || saving) return;
@@ -190,6 +200,13 @@ export function PlanDialog({ projectKey, caseIds, initial, onClose, onSaved }: P
       {notice && <InlineMessage tone="info">{notice}</InlineMessage>}
       {!preview && previewError === undefined && <p className="field-hint">{CHECKING}</p>}
       {previewError !== undefined && <><ErrorNotice error={previewError} /><Button size="sm" onClick={() => setReload(value => value + 1)}>Retry</Button></>}
+      {preview && !confirming && translationKeys.length > 0 && <fieldset className="plan-step plan-quick-choice">
+        <legend>Quick choice for every translation</legend>
+        <div className="plan-quick-choice-actions">
+          {(Object.keys(PRESET_LABELS) as PlanPreset[]).map(preset => <Button key={preset} onClick={() => applyPreset(preset)}>{PRESET_LABELS[preset]}</Button>)}
+        </div>
+        <p className="field-hint">Fills the choices below; nothing is saved until “Save”.</p>
+      </fieldset>}
       {preview && !confirming && languages.map(language => {
         const count = language.cases_in_selection === totalCases ? String(language.cases_in_selection) : `${language.cases_in_selection} of ${totalCases}`;
         const group = `${ids}-${language.key}`;

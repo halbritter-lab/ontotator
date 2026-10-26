@@ -53,7 +53,7 @@ const caseBox = (page: Page, caseId: string) => page.getByRole("checkbox", { nam
 const chip = (page: Page, flag: "Translation review" | "Annotate", caseId: string, language: string) =>
   page.getByRole("button", { name: textNamePattern(`${flag}, `, caseId, language) });
 /** The selection bar's actions (U4). */
-const BAR_ACTIONS = ["Assign…", "Translation review and annotation", "Annotation only, no translation review", "Plan…", "Clear selection"];
+const BAR_ACTIONS = ["Assign…", "Plan…", "Clear selection"];
 /** The bulk "Plan…" dialog "Work plan · 1 case" (separator per U9). */
 const planDialog = (page: Page) => page.getByRole("dialog", { name: /^Work plan\W+1 case$/ });
 /** The "Translation review" radio group of one language in the bulk plan dialog. */

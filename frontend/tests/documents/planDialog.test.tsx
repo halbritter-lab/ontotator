@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, type BulkPreview, type BulkResult, type ConsequencesView } from "../../src/api/client";
-import { PlanDialog } from "../../src/documents/PlanDialog";
+import { keepLabel, PlanDialog } from "../../src/documents/PlanDialog";
 
 type LanguagePreview = BulkPreview["languages"][number];
 const lang = (key: string, cases: number, review: [number, number] | null, annotate: [number, number], extra: Partial<LanguagePreview> = {}): LanguagePreview => ({
@@ -61,10 +61,39 @@ describe("PlanDialog", () => {
     expect(api.previewWorkPlans).toHaveBeenCalledWith("p", { case_ids: caseIds, languages: {} });
   });
 
-  it("shows the current values of the selection beside Keep", async () => {
+  it("shows the current values of the selection beside No change (F27)", async () => {
     renderDialog();
-    expect((await radio("es", "Translation review", /^Keep/)).labels?.[0].textContent).toBe("Keep (12 on, 8 off)");
-    expect((await radio("de", "Annotation", /^Keep/)).labels?.[0].textContent).toBe("Keep (20 off)");
+    expect((await radio("es", "Translation review", /^No change/)).labels?.[0].textContent).toBe("No change (12 planned, 8 not)");
+    expect((await radio("de", "Annotation", /^No change/)).labels?.[0].textContent).toBe("No change (20 not planned)");
+  });
+
+  it("words No change for every count", () => {
+    expect(keepLabel(null)).toBe("No change");
+    expect(keepLabel({ on: 0, off: 2 })).toBe("No change (2 not planned)");
+    expect(keepLabel({ on: 3, off: 0 })).toBe("No change (3 planned)");
+    expect(keepLabel({ on: 12, off: 8 })).toBe("No change (12 planned, 8 not)");
+  });
+
+  it("the quick choice fills every translation language and saves nothing by itself (M-1)", async () => {
+    renderDialog();
+    const quick = await screen.findByRole("group", { name: "Quick choice for every translation" });
+    fireEvent.click(within(quick).getByRole("button", { name: "Translation review and annotation" }));
+    expect((await radio("de", "Translation review", "On")).checked).toBe(true);
+    expect((await radio("fr", "Annotation", "Annotate")).checked).toBe(true);
+    expect(within(await region("Source (en)")).getByRole("radio", { name: /^No change/ })).toHaveProperty("checked", true);
+    await waitFor(() => expect(lastPreviewBody().languages).toEqual({
+      de: { review: "on", annotate: "on" }, fr: { review: "on", annotate: "on" }, es: { review: "on", annotate: "on" } }));
+    fireEvent.click(within(quick).getByRole("button", { name: "Annotation only, no translation review" }));
+    expect((await radio("de", "Translation review", /^No change/)).checked).toBe(true);
+    await waitFor(() => expect(lastPreviewBody().languages).toEqual({ de: { annotate: "on" }, fr: { annotate: "on" }, es: { annotate: "on" } }));
+    expect(api.saveWorkPlans).not.toHaveBeenCalled();
+  });
+
+  it("has no quick choice when the selection holds no translation", async () => {
+    vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ languages: [lang("source", 20, null, [0, 20])] }));
+    renderDialog();
+    await region("Source (en)");
+    expect(screen.queryByRole("group", { name: "Quick choice for every translation" })).toBeNull();
   });
 
   it("no lone pills", async () => {
