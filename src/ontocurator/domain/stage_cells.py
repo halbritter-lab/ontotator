@@ -456,7 +456,15 @@ def _annotation(facts: StageFacts, codes: frozenset[str]) -> StageCell:
         )
     submitted = facts.submissions
     if facts.consolidators:
-        return _cell("consolidating", "running", people=facts.consolidators)
+        # Counts of the newest version, as "submitted"; without them the client
+        # would count annotate work of every version (v1 + v2 read "3 of 3").
+        return _cell(
+            "consolidating",
+            "running",
+            people=facts.consolidators,
+            submitted=submitted if counted else None,
+            total=per_text if counted else None,
+        )
     if step.open_annotations or facts.annotators_open:
         note: dict[str, Any] = (
             {"note": "may_change", "version": newest}
