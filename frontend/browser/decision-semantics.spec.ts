@@ -63,10 +63,10 @@ test("repeated outcome keys keep decisions and zero resets without losing the no
     for (let repeat = 0; repeat < 2; repeat++) {
       await page.locator(".review-actions__title").click();
       await page.keyboard.press(key);
-      if (key === "4") await page.getByRole("button", { name: "Save decision", exact: true }).click();
+      if (key === "4" && repeat === 0) await page.getByRole("button", { name: "Save decision", exact: true }).click();
       await expect(proposal).toContainText(label);
-      // A new outcome moves on to the next open proposal; the repeat stays.
-      if (repeat === 0) { await expect(proposal).not.toHaveClass(/\bselected\b/); await proposal.click(); }
+      // A new outcome moves on to the next open proposal; the repeat (F7) moves on too and saves nothing.
+      await expect(proposal).not.toHaveClass(/\bselected\b/); await proposal.click();
     }
   }
   const note = page.getByRole("textbox", { name: "Reviewer note" });
