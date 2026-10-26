@@ -51,3 +51,8 @@ it("lets a handle drag reach the text under the pending mark bar", () => {
   expect(rule?.[1]).toMatch(/pointer-events: none/);
   expect(rule?.[1]).toMatch(/opacity: 0\.4/);
 });
+
+it("the text card's grid for technical details never reaches the editor's Source and rules disclosure (R-5)", () => {
+  const css = readFileSync(new URL("../src/documents/textCard/textCard.css", import.meta.url), "utf8");
+  expect(css).not.toMatch(/(^|[\s,}])\.technical-details\b/m);
+});
