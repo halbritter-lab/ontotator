@@ -81,7 +81,8 @@ async function showPlanLine(page: Page, caseId: string, language: string) {
   if (!(await target.count())) {
     const card = page.getByRole("article", { name: textNamePattern("", caseId, language) });
     if (await card.count()) await card.getByRole("button", { name: textNamePattern("Details, ", caseId, language) }).click();
-    else await textName(page, caseId, language).dblclick();
+    // Enter on the text name opens the card (R-4); a double click near the viewport bottom could land on the selection bar.
+    else { await textName(page, caseId, language).focus(); await page.keyboard.press("Enter"); }
   }
   await expect(target).toBeVisible();
   const details = target.getByRole("button", { name: "Details", exact: true });
