@@ -167,8 +167,11 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
   useShortcut("k", () => step(-1), { description: "Previous open group", group: "Consolidation", enabled: !!view });
 
   const reopen = async (group: ConsolidationGroupView): Promise<boolean> => {
+    const previous = lastDecision;
     setLastDecision(null);
     const ok = await data.reopen(group.group_id, { input_ids: group.members.map(member => member.input_id) });
+    // A failed reopen keeps Undo available.
+    if (!ok) setLastDecision(previous);
     if (ok) {
       setSummaries(current => { const next = new Map(current); next.delete(group.group_id); return next; });
       select(group.group_id, true);

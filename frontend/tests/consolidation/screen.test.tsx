@@ -96,6 +96,18 @@ describe("ConsolidationScreen", () => {
     expect(screen.getByRole("button", { name: "Take Absent from Tom Reis for Assertion" }).getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("a failed Undo keeps the inline Undo available (M-7g)", async () => {
+    const after = withGroup(exampleView(), "g-hypo", { state: "choose", annotation_ids: ["cons-1"] });
+    load(exampleView(), after);
+    vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
+    const reopen = vi.spyOn(api, "reopenConsolidationGroup").mockRejectedValue(new Error("offline"));
+    await renderScreen();
+    await takeAbsentAndKeep();
+    fireEvent.click(await screen.findByRole("button", { name: "Undo, muscular hypotonia" }));
+    await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("button", { name: "Undo, muscular hypotonia" })).toBeTruthy();
+  });
+
   it("J and K walk the open groups, not while typing, and are listed in the help", async () => {
     load(exampleView());
     await renderScreen();
