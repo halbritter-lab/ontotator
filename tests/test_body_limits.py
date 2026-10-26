@@ -101,3 +101,24 @@ def test_document_upload_request_is_bounded_by_the_configured_limit(
     assert response.status_code == 413
     assert response.json()["code"] == "PAYLOAD_TOO_LARGE"
     assert parses == []
+
+
+def test_a_bulk_selection_gets_its_own_larger_limit(team) -> None:
+    from ontocurator.api.body_limits import SELECTION_BYTES
+
+    team.app.state.config.max_request_bytes = 1024
+    key = BASE.split("/")[4]
+    rows = [{"case_id": f"case-{n}", "language": "de"} for n in range(100)]
+    # Over the general limit, yet parsed: the endpoint answers, not the limit.
+    allowed = team.lead.post(
+        f"/api/v1/projects/{key}/document-rows/selection-summary", json={"rows": rows}
+    )
+    assert allowed.status_code != 413, allowed.text
+    refused = team.lead.post(
+        f"/api/v1/projects/{key}/document-rows/selection-summary",
+        content=b"x" * (SELECTION_BYTES + MULTIPART_ALLOWANCE + 1),
+        headers={"content-type": "application/json"},
+    )
+    assert refused.status_code == 413
+    other = team.lead.post(f"/api/v1/projects/{key}/guidelines/x", json={"x": "y" * 2000})
+    assert other.status_code == 413

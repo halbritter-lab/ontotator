@@ -21,10 +21,24 @@ from typing import Any
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from ontocurator.api.work_plan_routes import (
+    MAX_CASE_ID_LENGTH,
+    MAX_LANGUAGE_LENGTH,
+    MAX_SELECTED_ROWS,
+)
 from ontocurator.domain.guidelines import MAX_GUIDELINE_BYTES
 
 # Multipart boundaries, part headers and the small form fields.
 MULTIPART_ALLOWANCE = 64 * 1024
+# A Documents selection at its longest: every row a longest case id and
+# language with its JSON framing ({"case_id":"","language":""},).
+SELECTION_BYTES = MAX_SELECTED_ROWS * (MAX_CASE_ID_LENGTH + MAX_LANGUAGE_LENGTH + 32)
+# The JSON routes that carry a Documents selection or other bulk row lists.
+SELECTION_PATH = re.compile(
+    r"^/api/v1/projects/[^/]+/(work-plans/(bulk(/preview)?|rows)"
+    r"|assignments(/batch(/preview)?)?|document-rows/(selection-summary|keys)"
+    r"|case-ids/lookup)/?$"
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +77,16 @@ LIMITS: tuple[BodyLimit, ...] = (
         lambda app: _config(app, "max_ontology_bytes"),
         "PAYLOAD_TOO_LARGE",
         lambda _app: "Ontology uploads exceed the configured byte limit.",
+    ),
+    *(
+        BodyLimit(
+            method,
+            SELECTION_PATH,
+            lambda _app: SELECTION_BYTES,
+            "PAYLOAD_TOO_LARGE",
+            lambda _app: "The selection exceeds the request byte limit.",
+        )
+        for method in ("POST", "PUT")
     ),
 )
 
