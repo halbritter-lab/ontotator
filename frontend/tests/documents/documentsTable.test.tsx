@@ -68,12 +68,9 @@ describe("structure", () => {
     expect(cellsOf("case-107 de")).toHaveLength(8);
   });
 
-  it("pins Next step to the right edge so it stays visible when the table scrolls (F15)", () => {
-    renderTable(page([case107()]));
-    expect(screen.getByRole("columnheader", { name: "Next step" }).querySelector(".documents-col-action")).not.toBeNull();
-    expect(cellsOf("case-107 de")[6].querySelector(".documents-col-action")).not.toBeNull();
+  it("Next step scrolls with the other columns, it is not pinned (B1-1)", () => {
     const css = readFileSync(resolve(__dirname, "../../src/styles/screens/documents-table.css"), "utf8");
-    expect(css).toMatch(/:where\(th, td\):has\(\.documents-col-action\) \{ position: sticky; right: 0;/);
+    expect(css).not.toMatch(/documents-col-action\) \{ position: sticky/);
   });
 
   it("a flat list: no case lines, the case ID in the Text cell, texts outside the plan hidden behind +n", () => {

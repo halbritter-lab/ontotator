@@ -185,7 +185,6 @@ export function DocumentsTable({
     { id: "waiting", header: <span className="documents-col-wide">Waiting on</span>, sortable: true, cell: row => <span className="documents-col-wide"><WaitingOnCell row={row} /></span> },
     {
       id: "action",
-      // `documents-col-action`: pinned to the right edge while the table scrolls (F15).
       header: <span className="documents-col-action">Next step</span>,
       sortable: true,
       cell: row => <span className="documents-col-action"><RowActionCell row={row} onAction={onAction} onNavigate={onNavigate} onAddToPlan={onAddToPlan} /></span>,
