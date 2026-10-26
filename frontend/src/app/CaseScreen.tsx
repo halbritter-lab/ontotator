@@ -1289,7 +1289,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const linkSpan = readOnly ? null : modifierCommands.linkSpan;
   /** The chip of a modifier (its actions button when it has one). */
   const chipIn = (root: ParentNode, termId: string) =>
-    root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"] button`) ?? root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"]`);
+    root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"] button[aria-haspopup]`) ?? root.querySelector<HTMLElement>(`[data-modifier-chip="${termId}"]`);
   const findingNameOf = (snapshot: { annotation: { layer_id: string; term_id: string } }) =>
     termLabel(snapshot.annotation.layer_id, snapshot.annotation.term_id) ?? snapshot.annotation.term_id;
   const carriedTermText = (snapshot: SnapshotLike) =>

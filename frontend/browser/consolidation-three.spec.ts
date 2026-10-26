@@ -27,7 +27,7 @@ async function threeScenario(page: Page): Promise<ThreeScenario> {
 
 const OTHER = "Abnormality of the nervous system (HP:0000707)";
 const group = (page: Page, name: string) => page.locator(".cons-group").filter({ has: page.locator(".cons-group-title", { hasText: name }) });
-const submitButton = (page: Page) => page.locator(".cons-submit").getByRole("button", { name: "Submit consolidation", exact: true });
+const submitButton = (page: Page) => page.locator(".cons-progress").getByRole("button", { name: "Submit consolidation", exact: true });
 const saved = (page: Page) => page.waitForResponse(r => r.request().method() !== "GET" && /consolidation/.test(r.url()));
 
 /** Resolve every remaining open group: a ✓ in each conflicting row (first person), then Keep (M-7d). */

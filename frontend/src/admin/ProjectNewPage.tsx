@@ -37,7 +37,8 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
     writing.current = true; setBusy(true); setError(undefined);
     try {
       const result = await api.createProject({ key, name, description: description.trim() ? description : null, languages, pins: serializePins(ids, pins), ...(source === "template" ? { template } : { profile: uploaded!.profile }) });
-      if (epoch === lifetime.current) onNavigate({ name: "projectSettings", key: result.project_key });
+      // A new project needs its people next (B6-1: the bare address opens General).
+      if (epoch === lifetime.current) onNavigate({ name: "projectSettings", key: result.project_key, section: "people" });
     } catch (failure: unknown) { if (epoch === lifetime.current) setError(failure); }
     finally { if (epoch === lifetime.current) { writing.current = false; setBusy(false); } }
   };

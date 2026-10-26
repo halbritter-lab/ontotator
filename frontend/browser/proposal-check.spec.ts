@@ -68,7 +68,7 @@ async function decideProposals(page: Page, keys: readonly ("1" | "2" | "3")[], w
 
 /** Resolve every open group: a ✓ in each conflicting row, then Keep. */
 async function consolidateAll(page: Page): Promise<void> {
-  const submit = page.locator(".cons-submit").getByRole("button", { name: "Submit consolidation", exact: true });
+  const submit = page.locator(".cons-progress").getByRole("button", { name: "Submit consolidation", exact: true });
   const groups = page.locator(".cons-group");
   const count = await groups.count();
   for (let index = 0; index < count; index += 1) {

@@ -131,9 +131,9 @@ it("refreshes authoritative project navigation after creation and a saved name",
   fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Requested name" } });
   fireEvent.click(screen.getByRole("button", { name: "Create project" }));
   await screen.findByRole("heading", { name: "Project settings" });
-  expect(window.location.hash).toBe("#/projects/p%2Fkey/settings");
+  expect(window.location.hash).toBe("#/projects/p%2Fkey/settings/people");
   await screen.findByRole("heading", { name: "Research" });
-  // Settings open on General (B6-1).
+  // A new project opens on People; the name is under General (B6-1).
   fireEvent.click(within(await screen.findByRole("navigation", { name: "Settings sections" })).getByRole("link", { name: "General" }));
   fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: "Edited name" } });
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));

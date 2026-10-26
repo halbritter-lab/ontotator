@@ -186,7 +186,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     const next = nextOpenAfter(textOrder(viewRef.current?.groups ?? [], viewRef.current?.text ?? ""), group.group_id);
     setSelected(next);
     if (next) setFocusRequest({ groupId: next });
-    else submitRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    // After the card re-rendered as ready: its one button is Submit.
+    else requestAnimationFrame(() => submitRef.current?.querySelector<HTMLButtonElement>(".btn-primary")?.focus());
     announce(`${groupName(group, viewRef.current?.text ?? "")}: ${summary}.`);
     setLastDecision(group);
     return true;

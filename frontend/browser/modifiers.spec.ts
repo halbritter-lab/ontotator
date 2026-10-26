@@ -92,7 +92,7 @@ test("two keys after marking attach Severe; a click on the mark attaches the nex
   const chip = page.locator('[data-modifier-chip="HP:0012828"]');
   await expect(chip).toContainText("Severe · “schwere”");
   await expect(chip.getByRole("button", { name: "Actions, Severe" })).toBeFocused();
-  await expect(seizureRow(page).getByRole("list", { name: "Modifiers" })).toContainText("Modifier: Severe HP:0012828 “schwere”");
+  await expect(seizureRow(page).locator(".mod-lines")).toHaveText("Modifiers: Severe");
   await expect(banner(page)).toHaveCount(0);
 
   // A second modifier, attached by clicking the Seizure mark in the text.

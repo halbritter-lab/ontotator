@@ -101,8 +101,8 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   await page.getByLabel("Allowed roots for HP", { exact: true }).fill("HP:0000118");
   await page.getByLabel("T1 profile for HP", { exact: true }).selectOption("hpo-phenotype");
   await page.getByRole("button", { name: "Create project", exact: true }).click();
-  // Settings open on People (M-8a).
-  await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings$`));
+  // A new project opens its settings on People (M-8a, B6-1).
+  await expect(page).toHaveURL(new RegExp(`#/projects/${key}/settings/people$`));
   await expect(page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "People", exact: true })).toHaveAttribute("aria-current", "page");
   await page.getByRole("button", { name: "Add member…", exact: true }).click();
   const members = page.getByRole("form", { name: "Add member", exact: true });
