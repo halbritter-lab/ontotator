@@ -175,8 +175,7 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   await page.getByRole("link", { name: DOCUMENTS_LINK }).click();
   await importTwoDocuments(page);
   // Plan annotation for "one" if the import left it outside the plan ("Plan…" opens the text card on Text details
-  // with the plan chips, VD2, U3), then assign it through the row's Assign dialog. With one annotator for the open place
-  // there is nothing to draw, so the dialog offers no "Random distribution…" (the cases dialog keeps it).
+  // with the plan chips, VD2, U3), then assign it through the row's Assign dialog and its seeded "Random distribution…".
   if (await rowAction(page, "Plan…", "one", "en").count()) {
     await rowAction(page, "Plan…", "one", "en").click();
     const card = textCard(page, "one", "en");
@@ -188,13 +187,14 @@ async function distributeAndSubmit(page: Page, setup: ProjectSetup) {
   }
   await rowAction(page, "Assign annotation…", "one", "en").click();
   const assign = page.getByRole("dialog", { name: "Assign annotation", exact: true });
-  // The project's one annotator is the first member row (the lead's own row comes last).
-  await assign.getByRole("table", { name: "Members", exact: true }).getByRole("checkbox").first().check();
-  const assignOne = assign.getByRole("button", { name: "Assign 1 person", exact: true });
-  await expect(assignOne).not.toHaveAttribute("aria-disabled", "true");
-  await expect(assign.getByRole("button", { name: "Random distribution…", exact: true })).toHaveCount(0);
-  await assignOne.click();
-  await expect(assign).toHaveCount(0);
+  await assign.getByRole("button", { name: "Random distribution…", exact: true }).click();
+  const distribution = page.getByRole("dialog", { name: "Propose distribution", exact: true });
+  await distribution.getByRole("button", { name: "Propose", exact: true }).click();
+  await expect(distribution.getByRole("combobox", { name: "one, slot 1", exact: true })).toHaveValue(setup.annotator.username);
+  await distribution.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(distribution).toContainText("Assignment request complete: 1 accepted; 0 refused.");
+  await distribution.locator(".modal-actions").getByRole("button", { name: "Close", exact: true }).click();
+  await expect(distribution).toHaveCount(0);
   if (await assign.count()) await assign.getByRole("button", { name: "Cancel", exact: true }).click();
   // No dialog may stay open (the failure names the one that does).
   await expect(page.getByRole("dialog")).toHaveCount(0);
