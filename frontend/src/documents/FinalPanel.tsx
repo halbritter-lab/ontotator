@@ -11,13 +11,12 @@ import { routeHref, type ProjectDocumentsQuery, type Route } from "../app/router
 import { Time } from "../app/Time";
 import { submissionGuidelineLabel } from "../guidelines/submissionLabel";
 import { Button, InlineMessage, type ButtonVariant } from "../ui";
-import { InlineConfirm } from "../ui/InlineConfirm";
 import { onSpaceActivate } from "../ui/spaceActivates";
 import { ConsolidationLauncher, type ConsolidationStarted } from "../variants/ConsolidationLauncher";
 import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
 import {
-  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchQuestion, allMatchText, barArrows, changedPassagesText, compareSummary, consolidateHint,
+  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, barArrows, changedPassagesText, compareSummary, consolidateHint,
   consolidationInputs, decidedLine, decisionKind, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
   personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
 } from "./finalPanelText";
@@ -279,11 +278,13 @@ function PanelContent(props: ContentProps): JSX.Element {
   return <CompareContent {...props} />;
 }
 
-/** W1: "All findings match (2 of 2)", one primary "Accept result…" with a confirmation; the table under "Show submissions". */
+/**
+ * W1: "All findings match (2 of 2)", one primary "Accept result" that saves at once (a final can be changed later
+ * with "Change final…", like "Use as final"); the table under "Show submissions".
+ */
 function AllMatchContent(props: ContentProps & { submission: FinalPanelSubmissionView }): JSX.Element {
-  const { row, data, submission, busy, onSave, onAnnounce, onDirtyChange } = props;
+  const { row, data, submission, busy, onSave, onAnnounce } = props;
   const id = useId();
-  const [confirming, setConfirming] = useConfirming(onDirtyChange);
   const [show, setShow] = useState(false);
   const { route, link } = useEditorRoute(props);
   const listed = listedSubmissions(data.panel.submissions ?? []);
@@ -293,31 +294,14 @@ function AllMatchContent(props: ContentProps & { submission: FinalPanelSubmissio
   const tableId = `${id}-submissions`;
   return <div className="final-panel-match">
     <p className="final-panel-question">{allMatchText(compared, findings)}</p>
-    {!confirming && <div className="final-panel-actions">
-      <ChoiceButton id={triggerId} label="Accept result…" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
-        onChoose={() => setConfirming(true)} />
-    </div>}
-    {confirming && <InlineConfirm title="Accept result?" headingLevel={4} message={allMatchQuestion(compared)} confirmLabel="Accept result"
-      busy={busy !== null} onCancel={() => setConfirming(false)}
-      onConfirm={() => { if (busy === null) onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId); }}>
-      <p>{link(route(submission.document_id, submission.submission_id), "Open result")}</p>
-    </InlineConfirm>}
+    <div className="final-panel-actions">
+      <ChoiceButton id={triggerId} label="Accept result" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
+        onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />
+      {link(route(submission.document_id, submission.submission_id), "Open result")}
+    </div>
     <p><Button size="sm" variant="quiet" className="btn-link" aria-expanded={show} aria-controls={tableId} onClick={() => setShow(value => !value)}>Show submissions</Button></p>
     {show && <div id={tableId}><SubmissionTable {...props} listed={listed} /></div>}
   </div>;
-}
-
-/** An open "Accept result?" confirmation counts as unsaved work (onDirtyChange). */
-function useConfirming(onDirtyChange: ContentProps["onDirtyChange"]): [boolean, (value: boolean) => void] {
-  const [confirming, setConfirming] = useState(false);
-  useEffect(() => {
-    if (!confirming) return;
-    onDirtyChange?.(true);
-    return () => onDirtyChange?.(false);
-    // Only the confirmation's open state counts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [confirming]);
-  return [confirming, setConfirming];
 }
 
 function useEditorRoute(props: ContentProps) {
@@ -349,10 +333,13 @@ function preselectedOf(row: DocumentRowView, data: FinalPanelData): boolean {
   return row.final != null || (data.panel.label_rule === "accept" && data.panel.accept_submission_id != null);
 }
 
+/**
+ * A preselected result (accept rule): its question, "Accept result" (saves at once; "Change final…" changes it later).
+ * A submitted consolidation offers no Compare or Consolidate again, only a quiet "Choose another result…".
+ */
 function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionView; onCompareAll: () => void }): JSX.Element {
-  const { row, data, submission, busy, onSave, onAnnounce, onDirtyChange, guidelineCurrent, now } = props;
+  const { row, data, submission, busy, onSave, onAnnounce, guidelineCurrent, now } = props;
   const id = useId();
-  const [confirming, setConfirming] = useConfirming(onDirtyChange);
   const { route, link } = useEditorRoute(props);
   const listed = listedSubmissions(data.panel.submissions ?? []);
   const triggerId = `${id}-accept`;
@@ -364,23 +351,16 @@ function AcceptContent(props: ContentProps & { submission: FinalPanelSubmissionV
   return <div className="final-panel-choose">
     {submission.kind === "consolidation" && <p className="final-panel-consolidated"><strong>{submissionName(submission)}</strong></p>}
     <p className="final-panel-question">{acceptQuestion(submission)}</p>
-    <p className="cell-secondary">
-      {submissionLine(submission, row.language, row.parallel_roots, now)}{", "}
-      {link(route(submission.document_id, submission.submission_id), "Open in editor")}
-      {consolidation && <>{", "}{link(consolidation, "Open consolidation")}</>}
-    </p>
+    <p className="cell-secondary">{submissionLine(submission, row.language, row.parallel_roots, now)}</p>
     <p className="cell-secondary">{submissionGuidelineLabel(submission.guideline_version, submission.guideline_withdrawn, guidelineCurrent)}</p>
-    {!isFinal && !confirming && <div className="final-panel-actions">
-      <ChoiceButton id={triggerId} label="Accept result…" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
-        onChoose={() => setConfirming(true)} />
-    </div>}
-    {!isFinal && confirming && <InlineConfirm title="Accept result?" headingLevel={4} message={acceptQuestion(submission)} confirmLabel="Accept result"
-      busy={busy !== null} onCancel={() => setConfirming(false)}
-      onConfirm={() => { if (busy === null) onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId); }} />}
-    <div className="final-panel-links">
-      {submission.kind === "consolidation" && compared > 1 && <Button size="sm" onClick={props.onCompareAll}>{`Compare all ${compared}…`}</Button>}
+    <div className="final-panel-actions">
+      {!isFinal && <ChoiceButton id={triggerId} label="Accept result" variant="primary" blocked={!submission.eligible} busy={busy} onAnnounce={onAnnounce}
+        onChoose={() => onSave(selectRequest(row, data.submissions, submission, triggerId), triggerId)} />}
+      {link(route(submission.document_id, submission.submission_id), "Open in editor")}
+      {consolidation && link(consolidation, "Open consolidation")}
+      {submission.kind === "consolidation" && compared > 1 && <Button size="sm" variant="quiet" onClick={props.onCompareAll}>Choose another result…</Button>}
     </div>
-    <Consolidate {...props} listed={listed} primary={false} />
+    {submission.kind !== "consolidation" && <Consolidate {...props} listed={listed} primary={false} />}
   </div>;
 }
 

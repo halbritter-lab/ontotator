@@ -337,8 +337,7 @@ test("step 12: Accept result… → Consolidated by Ana, accept the result", asy
   await expect(panel).toBeVisible();
   await expect(panel.getByText(`Consolidated by ${ANA}`, { exact: true })).toBeVisible();
   await expect(panel.getByText("Accept this consolidation as the result?", { exact: true })).toBeVisible();
-  await clicks.count(panel.getByRole("button", { name: "Accept result…", exact: true }));
-  await clicks.count(panel.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true }));
+  await clicks.count(panel.getByRole("button", { name: "Accept result", exact: true }));
   await expect(panel.getByText("No more final results to decide.", { exact: true })).toBeVisible();
   await evidence(page, "walkthrough-12-panel");
   await panel.getByRole("button", { name: "Close", exact: true }).first().click();

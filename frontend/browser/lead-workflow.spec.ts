@@ -466,15 +466,14 @@ test("ROWS: row actions within three clicks", async ({ page }) => {
   await loginLead(page, s);
   const cases = s.cases!;
 
-  // Accept result… with one submission (was "Choose final…", V6, X14, D2): the text card, "Accept result…" and its
-  // confirmation "Accept result": 3.
+  // Accept result… with one submission (was "Choose final…", V6, X14, D2): the text card and "Accept result" (saves at
+  // once; "Change final…" changes it later): 2.
   let clicks = counter(page);
   await clicks.click(rowAction(page, "Accept result…", cases.choose_final, "de"));
   const accept = await openDecisionBlock(page, cases.choose_final, "de");
   await expect(accept.getByText(/^Accept .+ as the result\?$/)).toBeVisible();
-  await clicks.click(accept.getByRole("button", { name: "Accept result…", exact: true }));
-  await clicks.click(accept.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true }));
-  expect(clicks.total).toBe(3);
+  await clicks.click(accept.getByRole("button", { name: "Accept result", exact: true }));
+  expect(clicks.total).toBe(2);
   // VD17: the card moves to the next final decision of the list and names the saved one.
   const card = page.locator('.text-card[role="dialog"]');
   const next = card.getByRole("region", { name: "Final result", exact: true });

@@ -81,7 +81,9 @@ export function finalizationState(row: DocumentRowView, _now: Date): State {
     case "none":
     case "after_annotation":
     case "after_review": return { state: "waiting", tone: "later" };
-    case "choose": return (cell.detail.submitted ?? 0) >= 2 ? { state: "ready to compare", tone: "now" } : { state: cellLabel(row, "final"), tone: "now" };
+    // A preselected result (a submitted consolidation, the accept rule) waits for acceptance, not a comparison.
+    case "choose": return cell.detail.label_rule === "accept" ? { state: "ready to accept", tone: "now" }
+      : (cell.detail.submitted ?? 0) >= 2 ? { state: "ready to compare", tone: "now" } : { state: cellLabel(row, "final"), tone: "now" };
     case "confirm": return { state: "ready to accept", tone: "now" };
     case "final": {
       const day = dayMonth(row.final?.selected_at ?? cell.detail.at);

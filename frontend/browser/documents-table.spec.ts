@@ -412,7 +412,7 @@ test("S13 case-0713 en: consolidation and carry-forward kinds, the final is the 
   const card = textCard(page, caseId, "en");
   const block = await openDecisionBlock(page, caseId, "en");
   await expect(block).toBeVisible();
-  await expect(block.getByRole("button", { name: /^(Accept result…|Use as final)$/ }).first()).toBeVisible();
+  await expect(block.getByRole("button", { name: /^(Accept result|Use as final)$/ }).first()).toBeVisible();
 
   // History: the two annotations, the consolidation and the carry-forward on v2.
   await card.getByRole("button", { name: /^History \(\d+\)$/ }).click();

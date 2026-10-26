@@ -70,11 +70,6 @@ export function allMatchText(submissions: number, findings: number): string {
   return submissions === 2 ? "Both submissions have no findings" : "No submission has findings";
 }
 
-/** The W1 confirmation: "Both submissions contain the same findings. Accept them as the final result?" ("All 3 submissions…"). */
-export function allMatchQuestion(submissions: number): string {
-  return `${submissions === 2 ? "Both submissions" : `All ${submissions} submissions`} contain the same findings. Accept them as the final result?`;
-}
-
 /** Hint of "Consolidate…": "Resolve the 2 differences together" ("the 1 difference"); without a count none. */
 export function consolidateHint(agreement: AgreementView | null): string | null {
   if (!agreement) return null;

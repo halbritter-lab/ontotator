@@ -134,8 +134,7 @@ test("first selection: Accept result… opens the text card, saves, announces an
   const panel = await openDecisionBlock(page, caseId, "en");
   await expect(panel.getByText(/^Accept .+ as the result\?$/)).toBeVisible();
   await expect(panel.getByRole("link", { name: "Open in editor", exact: true })).toBeVisible();
-  await panel.getByRole("button", { name: "Accept result…", exact: true }).click();
-  await panel.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true }).click();
+  await panel.getByRole("button", { name: "Accept result", exact: true }).click();
 
   // Success line with the bar change; nothing else to decide; focus stays in the card.
   await expect(panel.locator(".final-panel-success")).toContainText(savedFor(caseId, "en"));
@@ -346,8 +345,7 @@ test("S13 session ends during a decision: nothing is saved and the decision stay
   const caseId = "case-0713";
   await openDocuments(page, s);
   const panel = await openDecisionBlock(page, caseId, "en");
-  await panel.getByRole("button", { name: "Accept result…", exact: true }).click();
-  const accept = panel.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true });
+  const accept = panel.getByRole("button", { name: "Accept result", exact: true });
   await expect(accept).toBeVisible();
   await page.context().clearCookies();
   await accept.click();

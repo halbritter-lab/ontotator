@@ -71,6 +71,10 @@ describe("Finalization", () => {
     expect(annotationState(target).tone).toBe("done");
     expect(finalizationState(target, now)).toEqual({ state: "ready to compare", tone: "now" });
   });
+  it("a preselected result (submitted consolidation, accept rule) is ready to accept, not to compare", () => {
+    const target = cardRow({ final: cell("choose", "decision", { submitted: 3, label_rule: "accept" }) });
+    expect(finalizationState(target, now)).toEqual({ state: "ready to accept", tone: "now" });
+  });
   it("consolidating shows 2 of 3 groups open", () => {
     const stages = { annotation: cell("consolidating", "running"), final: cell("after_annotation", "waiting") };
     expect(finalizationState(cardRow(stages, { consolidation_progress: { open: 2, total: 3 } }), now)).toEqual({ state: "consolidating (2 of 3 groups open)", tone: "now" });

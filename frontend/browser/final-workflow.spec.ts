@@ -153,12 +153,11 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     const panel = await openDecisionBlock(page, s.case_id, language);
     await expect(editorLink(panel, finalId)).toHaveCount(1);
     const selecting = page.waitForResponse(r => r.request().method() !== 'GET' && /\/final/.test(new URL(r.url()).pathname));
-    const accept = panel.getByRole('button', { name: 'Accept result…', exact: true });
+    const accept = panel.getByRole('button', { name: 'Accept result', exact: true });
     if (await accept.count()) {
       await expect(panel.getByText(/^Consolidated by .+$/)).toBeVisible();
       await expect(panel.getByText('Accept this consolidation as the result?', { exact: true })).toBeVisible();
       await accept.click();
-      await panel.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true }).click();
     } else {
       await panel.getByRole('row').filter({ has: editorLink(panel, finalId) }).getByRole('button', { name: 'Use as final', exact: true }).click();
     }
@@ -316,18 +315,15 @@ test('a lead without the Consolidator role consolidates as You, and full agreeme
   // The consolidator's task opens the consolidation view (acceptance fixes WP-E).
   await expect(page.getByRole('heading', { level: 1, name: new RegExp(`^Consolidate ${openCase}\\W+en v1$`) })).toBeVisible({ timeout: 30_000 });
 
-  // Full agreement on case-1601: "Both submissions have no findings" and one "Accept result…" with a confirmation.
+  // Full agreement on case-1601: "Both submissions have no findings" and one "Accept result" that saves at once.
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/documents`);
   await documentsReady(page);
   const match = await openDecisionBlock(page, matchCase, 'en');
   await expect(match.getByText('Both submissions have no findings', { exact: true })).toBeVisible();
   await expect(match.getByRole('table')).toHaveCount(0);
-  await match.getByRole('button', { name: 'Accept result…', exact: true }).click();
-  const confirm = match.getByRole('group', { name: 'Accept result?', exact: true });
-  await expect(confirm.getByText('Both submissions contain the same findings. Accept them as the final result?', { exact: true })).toBeVisible();
-  await expect(confirm.getByRole('link', { name: 'Open result', exact: true })).toBeVisible();
+  await expect(match.getByRole('link', { name: 'Open result', exact: true })).toBeVisible();
   const selecting = page.waitForResponse(r => r.request().method() === 'PUT' && /\/final-selections$/.test(new URL(r.url()).pathname));
-  await confirm.getByRole('button', { name: 'Accept result', exact: true }).click();
+  await match.getByRole('button', { name: 'Accept result', exact: true }).click();
   const selected = await selecting;
   expect(selected.ok(), await selected.text()).toBeTruthy();
   const submissions = s.submissions as { match: string[] };

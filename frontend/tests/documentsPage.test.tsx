@@ -1088,8 +1088,7 @@ describe("row actions", () => {
     const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], categories: [],
       final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1" }) };
     mockRows(page([group("case-0042", [done])]));
-    fireEvent.click(await within(again).findByRole("button", { name: "Accept result…" }));
-    fireEvent.click(within(within(again).getByRole("group", { name: "Accept result?" })).getByRole("button", { name: "Accept result" }));
+    fireEvent.click(await within(again).findByRole("button", { name: "Accept result" }));
     expect(await within(again).findByText("No more final results to decide.")).toBeTruthy();
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -1153,8 +1152,7 @@ describe("row actions", () => {
     const done = { ...first, next_step: stepOf("done"), steps: [stepOf("done")], matches_decision: false, retained: true, categories: [],
       final: final({ case_id: "case-0042", language: "en", document_id: "case-0042-en", submission_id: "case-0042-s1" }) };
     mockRows(page([group("case-0042", [done]), group("case-0099", [second])]));
-    fireEvent.click(await within(panel).findByRole("button", { name: "Accept result…" }));
-    fireEvent.click(within(within(panel).getByRole("group", { name: "Accept result?" })).getByRole("button", { name: "Accept result" }));
+    fireEvent.click(await within(panel).findByRole("button", { name: "Accept result" }));
     expect(api.selectFinalResult).toHaveBeenCalledWith("p", { document_id: "case-0042-en", submission_id: "case-0042-s1", expected_revision: 0, acknowledged_cause_ids: [] });
     // The same frame (not remounted) shows the next row at once.
     await waitFor(() => expect(within(panel).getByRole("heading", { level: 2 }).textContent).toBe("case-0099 de"));
@@ -1179,8 +1177,7 @@ describe("row actions", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Compare results…, case-0042 en" }));
     const panel = await textCard("case-0042 en");
     mockRows(page([group("case-0042", [{ ...first, next_step: stepOf("done"), steps: [stepOf("done")], categories: [] }]), group("case-0390", [report])]));
-    fireEvent.click(await within(panel).findByRole("button", { name: "Accept result…" }));
-    fireEvent.click(within(within(panel).getByRole("group", { name: "Accept result?" })).getByRole("button", { name: "Accept result" }));
+    fireEvent.click(await within(panel).findByRole("button", { name: "Accept result" }));
     fireEvent.click(await within(panel).findByRole("button", { name: "Next decision: case-0390 de (problem report)" }));
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectProblemReport", key: "p", reportId: "report-0390", section: "decide", documents: { segment: "decision" } }, undefined);
   });

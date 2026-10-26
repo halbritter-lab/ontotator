@@ -160,8 +160,8 @@ test("the lead assigns two annotations from proposals, both work with J/K and 1�
   card = await openTextCard(page, CASE, "en");
   await showSegment(card, "Finalization");
   const accepted = page.waitForResponse(r => r.request().method() === "PUT" && /\/final-selections$/.test(new URL(r.url()).pathname));
-  await card.getByRole("button", { name: "Accept result…", exact: true }).click();
-  await expect(card.getByRole("heading", { name: "Accept result?", exact: true })).toBeVisible();
+  await expect(cardSegment(card, "Finalization")).toContainText("ready to accept");
+  await expect(card.getByRole("button", { name: "Consolidate…", exact: true })).toHaveCount(0);
   await card.getByRole("button", { name: "Accept result", exact: true }).click();
   expect((await accepted).ok()).toBeTruthy();
   await expect(cardSegment(card, "Finalization")).toContainText(/accepted \d{1,2} [A-Z][a-z]{2}/);

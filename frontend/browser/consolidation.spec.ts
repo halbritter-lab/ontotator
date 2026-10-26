@@ -134,9 +134,8 @@ test("a lead without the Consolidator role consolidates the 8-group example in 6
   const decision = await openDecisionBlock(page, s.case_id, "en");
   await expect(decision.getByText(/^Consolidated by .+$/)).toBeVisible();
   const selecting = page.waitForResponse(r => r.request().method() === "PUT" && /\/final-selections$/.test(new URL(r.url()).pathname));
-  // "Accept result…" asks first ("Accept result?", Copy table).
-  await decision.getByRole("button", { name: "Accept result…", exact: true }).click();
-  await decision.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true }).click();
+  // "Accept result" saves at once ("Change final…" changes it later).
+  await decision.getByRole("button", { name: "Accept result", exact: true }).click();
   expect((await selecting).ok()).toBeTruthy();
   await expect(decision.locator(".final-panel-success")).toContainText(new RegExp(`Final result saved for ${s.case_id}\\W+en\\.`));
 });

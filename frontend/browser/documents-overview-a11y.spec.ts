@@ -93,11 +93,8 @@ test("keyboard-only: tabs, filter popover, row checkbox range, text card accept,
   const panel = textCard(page, "case-107", "de");
   await expect(panel).toBeVisible();
   await expect(panel.locator(":focus")).toHaveCount(1);
-  const acceptFinal = panel.getByRole("region", { name: "Final result", exact: true }).getByRole("button", { name: "Accept result…", exact: true });
+  const acceptFinal = panel.getByRole("region", { name: "Final result", exact: true }).getByRole("button", { name: "Accept result", exact: true });
   await tabTo(page, acceptFinal);
-  await page.keyboard.press("Enter");
-  const confirm = panel.getByRole("group", { name: "Accept result?", exact: true }).getByRole("button", { name: "Accept result", exact: true });
-  await tabTo(page, confirm);
   await page.keyboard.press("Enter");
   await expect(panel.getByText("No more final results to decide.", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
