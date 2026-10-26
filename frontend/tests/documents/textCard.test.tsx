@@ -256,7 +256,7 @@ describe("translation part", () => {
     expect(within(card()).queryByText("Automatic check passed")).toBeNull();
     expect(within(card()).getByText("Ready for review")).toBeTruthy();
     expect(within(card()).getByText("Ana Weber").closest(".assignment-chip")!.textContent).toContain("in progress");
-    fireEvent.click(within(card()).getByRole("button", { name: "Assign reviewer…" }));
+    fireEvent.click(within(card()).getByRole("button", { name: "Assign review…" }));
     expect(onAssign).toHaveBeenCalledWith(row, "translation_review");
     fireEvent.click(within(card()).getByRole("link", { name: "Compare with source" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "projectCase", key: "p", caseId: "case-200", variant: "case-200-de", compare: "case-200-en", documents: query });
@@ -296,7 +296,7 @@ describe("translation part", () => {
   it("calls a native text the source text and a failed check failed", () => {
     renderCard({ row: assignRow({ is_source: true, versions: [version({ document_id: "case-200-de" })] }), initialSegment: "translation" });
     expect(within(card()).getByText("Source text")).toBeTruthy();
-    expect(within(card()).queryByRole("button", { name: "Assign reviewer…" })).toBeNull();
+    expect(within(card()).queryByRole("button", { name: "Assign review…" })).toBeNull();
     cleanup();
     renderCard({ row: assignRow({ versions: [version({ document_id: "case-200-de", origin: "machine_translation", translation_status: "automatic_check_failed" })] }), initialSegment: "translation" });
     expect(within(card()).getByText("Check failed")).toBeTruthy();

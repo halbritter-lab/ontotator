@@ -71,7 +71,7 @@ export interface DocumentsPageProps {
 
 /** Below 700 px the page renders cards instead of the table (the same breakpoint as popover sheets and the side panel). */
 export const NARROW_DOCUMENTS_QUERY = "(max-width: 699px)";
-/** Lead steps the text card's parts offer themselves (Assign reviewer…, + Person, the decision block, Change plan…). */
+/** Lead steps the text card's parts offer themselves (Assign review…, + Person, the decision block, Change plan…). */
 const CARD_PART_ACTIONS: ReadonlySet<string> = new Set(["assign_translation_review", "assign_annotation", "choose_final", "review_changes", "plan"]);
 
 export { ID_FILTER_DELAY_MS } from "../documents/DocumentsSearch";

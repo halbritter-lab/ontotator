@@ -48,7 +48,7 @@ export function TranslationPart({ row, projectKey, query, canManage, onAssign, o
         menu={canManage ? { tools: textVersionTools, review: true } : undefined} />)}
     </div>}
     <div className="text-card-actions">
-      {canManage && !native && <Button size="sm" onClick={() => onAssign(row, "translation_review")}>Assign reviewer…</Button>}
+      {canManage && !native && <Button size="sm" onClick={() => onAssign(row, "translation_review")}>Assign review…</Button>}
       {source && <RouteLink route={textViewRoute(projectKey, row.case_id, shown!.document_id, query, { compare: source })} onNavigate={onNavigate}
         className="btn btn-secondary btn-sm">Compare with source</RouteLink>}
     </div>

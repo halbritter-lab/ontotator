@@ -19,7 +19,7 @@ export function StagePath({ segments, current, onSelect, label = "Text path" }: 
         const className = `stage-path-seg stage-path-seg--${segment.tone}${isCurrent ? " stage-path-seg--current" : ""}`;
         const content = <>
           <span className="stage-path-title">{segment.title}</span>{" "}
-          <span className="stage-path-state">{segment.state}</span>
+          <span className="stage-path-state" title={segment.state}>{segment.state}</span>
           <span className="visually-hidden">{TONE_WORDS[segment.tone]}</span>
         </>;
         return <li key={segment.id}>

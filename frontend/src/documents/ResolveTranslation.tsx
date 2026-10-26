@@ -174,7 +174,7 @@ function NotAcceptedOptions(props: ResolveTranslationProps): JSX.Element {
       const result = kind === "review"
         ? await api.patchWorkPlan(projectKey, row.case_id, row.language, { review: true, expected_revision: revision, confirm: false })
         : await api.patchWorkPlan(projectKey, row.case_id, row.language, { annotate: true, expected_revision: revision, confirm: false, accept_external_review: { reason: reason.trim() } });
-      onDone(kind === "review" ? `Translation review on for ${name}. Next: Assign reviewer…` : `${name} accepted as reviewed outside Ontocurator.`,
+      onDone(kind === "review" ? `Translation review on for ${name}. Next: Assign review…` : `${name} accepted as reviewed outside Ontocurator.`,
         { caseId: result.case_id, revision: result.revision });
     } catch (failure: unknown) {
       onAnnounce("");

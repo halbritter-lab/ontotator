@@ -126,7 +126,7 @@ it("Assign review or accept… offers Turn translation review on or the external
   const box = screen.getByRole("group", { name: "Translation not accepted, case-0101 de" });
   fireEvent.click(within(box).getByRole("button", { name: "Turn translation review on" }));
   await waitFor(() => expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-0101", "de", { review: true, expected_revision: 3, confirm: false }));
-  await waitFor(() => expect(props.onDone).toHaveBeenCalledWith("Translation review on for case-0101 de. Next: Assign reviewer…", { caseId: "case-0101", revision: 4 }));
+  await waitFor(() => expect(props.onDone).toHaveBeenCalledWith("Translation review on for case-0101 de. Next: Assign review…", { caseId: "case-0101", revision: 4 }));
 
   cleanup();
   vi.mocked(api.patchWorkPlan).mockClear();

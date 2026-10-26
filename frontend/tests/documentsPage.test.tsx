@@ -1343,7 +1343,7 @@ describe("lead review fixes", () => {
     fireEvent.click(within(box).getByRole("button", { name: "Turn translation review on" }));
     expect(live().textContent).toBe("Saving…");
     expect(api.patchWorkPlan).toHaveBeenCalledWith("p", "case-1", "de", { review: true, expected_revision: 2, confirm: false });
-    await waitFor(() => expect(live().textContent).toBe("Translation review on for case-1 de. Next: Assign reviewer…"));
+    await waitFor(() => expect(live().textContent).toBe("Translation review on for case-1 de. Next: Assign review…"));
     await waitFor(() => expect(screen.queryByRole("group", { name: "Translation not accepted, case-1 de" })).toBeNull());
     await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole("button", { name: "Annotate, case-1 de" }));
