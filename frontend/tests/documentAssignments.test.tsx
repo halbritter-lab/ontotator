@@ -66,12 +66,12 @@ it("assigns the selected cases from the selection bar and refreshes rows and inv
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
   expect(api.selectionSummary).toHaveBeenCalledWith("p/key", ["z/doc"], { language: "en" });
-  fireEvent.click(await within(dialog).findByRole("radio", { name: /Alice/ }));
+  fireEvent.click(await within(dialog).findByRole("checkbox", { name: /Alice/ }));
   const assign = within(dialog).getByRole("button", { name: "Assign 1" });
   await waitFor(() => expect(assign.getAttribute("aria-disabled")).toBeNull());
   fireEvent.click(assign);
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Assign 1 case" })).toBeNull());
-  expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ task: "annotate", language: "en", case_ids: ["z/doc"], mode: "one", usernames: ["alice"], sort: "case", filters: { language: "en" } }));
+  expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ task: "annotate", language: "en", case_ids: ["z/doc"], mode: "each", usernames: ["alice"], sort: "case", filters: { language: "en" } }));
   await waitFor(() => expect(api.listDocumentRows).toHaveBeenCalledTimes(2));
   expect(api.listAssignments).toHaveBeenCalledTimes(2);
   expect(api.listDocumentRows).toHaveBeenLastCalledWith("p/key", { language: "en" });
@@ -97,7 +97,7 @@ it("closes an open assign dialog on project change and ignores its pending mutat
   fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc de" }));
   fireEvent.click(within(screen.getByRole("region", { name: "Selection" })).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
-  fireEvent.click(await within(dialog).findByRole("radio", { name: /Alice/ }));
+  fireEvent.click(await within(dialog).findByRole("checkbox", { name: /Alice/ }));
   const assign = within(dialog).getByRole("button", { name: "Assign 1" });
   await waitFor(() => expect(assign.getAttribute("aria-disabled")).toBeNull());
   fireEvent.click(assign);

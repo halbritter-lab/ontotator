@@ -70,12 +70,12 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   expect(within(bar).getByText("2 texts in 1 case selected")).toBeTruthy();
   fireEvent.click(within(bar).getByRole("button", { name: "Assign…" }));
   const dialog = await screen.findByRole("dialog", { name: "Assign 1 case" });
-  fireEvent.click(await within(dialog).findByRole("radio", { name: /Alice/ }));
+  fireEvent.click(await within(dialog).findByRole("checkbox", { name: /Alice/ }));
   const assign = within(dialog).getByRole("button", { name: "Assign 1" });
   await waitFor(() => expect(assign.getAttribute("aria-disabled")).toBeNull());
   fireEvent.click(assign);
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Assign 1 case" })).toBeNull());
-  expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ task: "annotate", language: "en", case_ids: ["z/doc"], mode: "one", usernames: ["alice"] }));
+  expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ task: "annotate", language: "en", case_ids: ["z/doc"], mode: "each", usernames: ["alice"] }));
   await waitFor(() => expect(api.listAssignments).toHaveBeenCalledTimes(2));
   expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
