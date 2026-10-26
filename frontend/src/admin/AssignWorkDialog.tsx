@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { api, ApiError, type BatchAssignRequest, type BatchPersonView, type BatchPreview, type DocumentRowFilters, type DocumentRowView } from "../api/client";
+import { api, ApiError, type BatchAssignRequest, type BatchPersonView, type BatchPreview, type BatchSkipView, type DocumentRowFilters, type DocumentRowView } from "../api/client";
 import { personLabel, textLabel } from "../app/identity";
 import { assignedText } from "../app/assignedDate";
 import { plural } from "../app/labels";
 import { versionName } from "../documents/labels";
-import { Button, Checkbox, Dialog, IconButton, Popover, Select, StatusBadge, TextInput } from "../ui";
+import { Button, Checkbox, Dialog, IconButton, Popover, Select, StatusBadge } from "../ui";
 import { IconInfo } from "../ui/icons";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
@@ -83,16 +83,31 @@ function LimitInfo({ projectKey, current, textName, onSaved }: { projectKey: str
     </>}>
       <div id={`${id}-limit`} className="assign-limit-popover">
         <h3>{`Up to ${current === 1 ? "1 annotator" : `${current} annotators`} per text`}</h3>
-        <p>This is a <strong>project setting</strong>. It is the upper limit for every text, and the target that Progress counts towards.</p>
-        <TextInput id={`${id}-per-text`} label="Annotators per text" type="number" min={1} max={5} step={1} required value={value} disabled={busy}
-          onChange={event => setValue(event.target.value)}
-          onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void save(); } }} />
+        <p>This is a <strong>project setting</strong>: the most annotators any text can get. Fewer is fine.</p>
+        {/* R-11: a compact inline number field, as high as the small buttons. */}
+        <p className="assign-limit-field"><label htmlFor={`${id}-per-text`}>Annotators per text</label>
+          <input id={`${id}-per-text`} className="form-control assign-limit-input" type="number" min={1} max={5} step={1} required value={value} disabled={busy}
+            onChange={event => setValue(event.target.value)}
+            onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void save(); } }} /></p>
         {rows !== null && rows > 0 && <p role="status" className="assign-limit-warn">{`${rows === 1 ? "1 text already has" : `${rows} texts already have`} more; their assignments stay.`}</p>}
-        <p className="assign-limit-warn">Changing it changes the limit for <strong>all texts</strong> in this project{textName ? `, not only ${textName},` : ""} and the Progress target.</p>
+        <p className="assign-limit-warn">Changing it changes the limit for <strong>all texts</strong> in this project{textName ? `, not only ${textName}` : ""}.</p>
         {error !== undefined && <ErrorNotice error={error} />}
       </div>
     </Popover>
   </>;
+}
+
+/** Why one text cannot get an annotator now (R-12), from the preview's skip reason. */
+function rowBlockedText(reason: BatchSkipView["reason"] | undefined, perText: number, language: string): string {
+  switch (reason) {
+    case "waiting_for_review": return "This text is still in translation review. Annotation can be assigned once the review is accepted.";
+    case "not_in_plan": return `Annotation of this text is not in the plan for ${language}. Turn it on with Plan… first.`;
+    case "already_assigned": return `Limit reached: ${perText === 1 ? "1 annotator" : `${perText} annotators`} already assigned.`;
+    case "step_differs": return "This text is at another step of the plan.";
+    case "discarded": return `The ${language} version of this text is discarded.`;
+    case "no_proposals_on_version": return "This text's annotation started from tool proposals, but its newest version has none. Change the plan to annotate from scratch.";
+    default: return "This text cannot get an annotator now.";
+  }
 }
 
 function refusedRows(error: ApiError): Refused[] {
@@ -193,7 +208,12 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const chosenPeople = fresh ? people.filter(person => usernames.includes(person.username)) : [];
   const assignments = fresh ? fresh.targets.reduce((sum, target) => sum + target.usernames.length, 0) : 0;
   const count = assignments || fresh?.versions || shown?.versions || 0;
-  const limit = rowMulti ? Math.max(1, shown?.targets[0]?.remaining ?? 1) : multi ? shown?.per_text ?? 1 : Infinity;
+  // R-12: a text the preview has no target for has no free place (its skip reason says why); never a made-up 1.
+  const blocked = rowMulti && !!shown && !shown.targets.length ? rowBlockedText(shown.skipped[0]?.reason, shown.per_text, language) : null;
+  const limit = rowMulti ? shown?.targets[0]?.remaining ?? (shown ? 0 : 1) : multi ? shown?.per_text ?? 1 : Infinity;
+  /** R-13: annotators the text already has (the limit is an upper bound, never a required number). */
+  const assignedCount = shown?.targets[0] ? shown.per_text - shown.targets[0].remaining
+    : props.mode === "row" ? props.row.work.filter(item => item.task === "annotate" && item.moved_to_version == null).length : 0;
   // Row mode knows it before the preview, so the acknowledgement is there from the start (no jump).
   const unreviewed = task === "annotate" && shown ? shown.targets.filter(target => target.unreviewed_translation) : [];
   const unreviewedText = unreviewed.length > 0 || (props.mode === "row" && task === "annotate" && props.row.unreviewed_translation);
@@ -232,7 +252,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
 
   const reason = !task || steps === null ? "Loading…"
     : calculating || !fresh ? "Calculating…"
-    : !fresh.targets.length ? "No cases in the selection need this task."
+    : !fresh.targets.length ? blocked ?? "No cases in the selection need this task."
     : unacknowledged ? "Confirm annotating before the translation review is accepted."
     : !picked ? (radios ? "Choose a person first." : "Choose people first.")
     : usernames.length && !assignments ? "The chosen people already hold these tasks."
@@ -314,8 +334,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   /** One status line: mode, who holds the task (of the limit), the limit. */
   const status = [
     textMode && (textMode.mode === "proposals" ? "From proposals" : `From scratch${textMode.source === "no_proposals" ? " (no tool proposals)" : ""}`),
-    task === "annotate" && shown?.targets[0] ? `${shown.per_text - shown.targets[0].remaining} of ${shown.per_text} assigned${holders.length ? `: ${holders.join("; ")}` : ""}`
-      : holders.length ? `Assigned: ${holders.join("; ")}` : "Nobody assigned yet",
+    holders.length ? `Assigned: ${holders.join("; ")}` : "Nobody assigned yet",
   ].filter(Boolean).join(" · ");
   /** Parallel roots of one text share its label: name the chain. */
   const rootLabel = (item: { case_id: string; language: string; document_id: string }) => {
@@ -363,7 +382,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
 
       {multi && props.mode === "cases" && shown && <p id={limitId} className="assign-muted">Tick everyone who should annotate these texts. Each ticked person gets every selected text.</p>}
       {multi && shown && <p id={limitReachedId} className="assign-limit-hint">{rowMulti
-        ? `${picked} of ${limit} possible`
+        ? blocked ?? [`${assignedCount} assigned`, picked > 0 && `${picked} selected`,
+          picked >= limit ? "limit reached" : `${limit - picked} more possible (limit ${shown.per_text})`].filter(Boolean).join(" · ")
         : `Up to ${shown.per_text} per text`}{limitInfo}</p>}
       {limitSaved && <p className="assign-muted" role="status">{limitSaved}</p>}
 
@@ -399,7 +419,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
                 onClick={event => { if (radios && (off || atLimit || busy)) event.preventDefault(); }}
                 onChange={event => { if (!off && !atLimit && !busy) choose(person.username, event.target.checked); }}
                 onKeyDown={event => rove(event, person.username)} />
-              <label htmlFor={inputId}>{personLabel(person.person)}{why ? <span id={whyId} className="assign-reason">, {why}</span> : atLimit && <span className="assign-reason">, limit reached</span>}</label>
+              <label htmlFor={inputId}>{personLabel(person.person)}{why ? <span id={whyId} className="assign-reason">, {why}</span> : atLimit && !blocked && <span className="assign-reason">, limit reached</span>}</label>
               {addMe && <Button size="sm" disabled={busy} onClick={() => { void addMeAsAnnotator(); }}>Add me as annotator</Button>}
             </span></td>
             <td className="assign-reads"><span className="assign-narrow-label">Reads </span>{person.reads.length ? person.reads.map((item, at) => <span key={item}>{at > 0 && ", "}{item === language ? <strong>{item}</strong> : item}</span>) : "None listed"}</td>
@@ -410,7 +430,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
         {me && rowMulti && (() => {
           const atLimit = !self && picked >= limit;
           const off = meHolds || atLimit || busy;
-          const why = meHolds ? "already annotating this text" : atLimit ? "limit reached" : null;
+          const why = meHolds ? "already annotating this text" : atLimit && !blocked ? "limit reached" : null;
           return <tr key="me" className={[meHolds || atLimit ? "is-unavailable" : "", self ? "is-chosen" : ""].filter(Boolean).join(" ") || undefined}>
             <td><span className="assign-member">
               <input id={`${id}-member-me`} type="checkbox" checked={self} aria-disabled={off ? "true" : undefined}
