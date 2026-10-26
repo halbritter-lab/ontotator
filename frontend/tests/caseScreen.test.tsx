@@ -3320,6 +3320,18 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       await waitFor(() => expect(container.querySelector('[data-list-key="annotation:split"]')?.classList.contains("selected")).toBe(true));
     });
 
+    it("a proposal whose copy has a single mention left offers no Move (R-7)", async () => {
+      const { view, target } = reviewView([], true);
+      const proposal = view.available_inputs![0] as any;
+      proposal.annotation.evidence_refs.push({ evidence_id: "ev-prop-2", version: "ev-1" });
+      proposal.evidence.push({ version: "ev-1", mention: { evidence_id: "ev-prop-2", segments: [pos("Muskelhypotonie")] } });
+      view.draft.decisions = [{ decision_id: "d0", target, outcome: "changed", replacement: { annotation_id: "seizure", version: "seizure-v1" }, reviewer_id: "ann" }] as never;
+      const { container } = await setup(view, severeHits, false);
+      fireEvent.click(container.querySelector('[data-list-key^="target:"]')!);
+      await screen.findByRole("button", { name: /Show mention 2/ });
+      expect(screen.queryByRole("button", { name: /^Move mention \d to a new finding$/ })).toBeNull();
+    });
+
     it("Move on a proposal with an existing copy moves the copy's mention with the same span, not the same index (M-4)", async () => {
       const { view } = reviewView([], true);
       const proposal = view.available_inputs![0] as any;

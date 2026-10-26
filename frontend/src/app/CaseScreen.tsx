@@ -2327,6 +2327,13 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     setAdvanceStatus({ listKey: `annotation:${annotationId}`, decidedKey: "",
       text: `Moved mention ${index + 1} “${quoteSegments(view.document.text, segments, 40)}” to a new finding ${finding}.${stays}` });
   };
+  /** R-7: a proposal replaced by a copy with a single mention has nothing left to move (the move acts on the copy). */
+  const proposalCopyCanMove = (target: TargetProposal) => {
+    const decision = decisionsMap[refKey(target)];
+    const copyId = decision?.outcome === "changed" ? decision.replacement?.annotation_id : undefined;
+    const copy = copyId ? draft.annotations?.find(a => a.annotation.annotation_id === copyId) : undefined;
+    return !copy || (copy.annotation.evidence_refs?.length ?? 0) > 1;
+  };
   /** M-4 on a proposal: proposals stay immutable, so Edit & Replace runs first and the copy's mention moves. */
   const moveProposalMention = async (target: TargetProposal, index: number) => {
     const wanted = targetSnapshotOf(target)?.evidence?.[index]?.mention.segments;
@@ -3914,7 +3921,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               }}
               onDeselect={handleDeselectAll}
               onRepeatDecision={outcome => { repeatDecision(selectedTarget, outcome); }}
-              onMoveMention={index => { void moveProposalMention(selectedTarget, index).catch(reportError); }}
+              onMoveMention={proposalCopyCanMove(selectedTarget) ? index => { void moveProposalMention(selectedTarget, index).catch(reportError); } : undefined}
               onShowMention={ev => {
                 const evidenceId = `target:${selectedTarget.annotation_id}:${selectedTarget.version}:${ev.mention.evidence_id}:${ev.version}`;
                 setSelectedEvidenceId(evidenceId);
