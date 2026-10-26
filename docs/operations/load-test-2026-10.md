@@ -288,3 +288,35 @@ Still open: the remaining statements are layered re-checks (`require_workable`
 3–5 times, project-id lookups ~10 times per write). A real P9 run under the
 documented limits is required to know whether the ~25–40% lower per-request
 CPU moves the CPU-saturated stack below its targets.
+
+### Round 2 (same day): seeder repaired, request-scoped authorization memo
+
+The seeder and Locust file now run on this base unchanged: a synthetic lead
+raises `annotations_per_text` to 5 through the settings API, each annotator is
+assigned one sixth of the corpus (every text has five annotators, ~167 texts per
+user), opens use `proposal_check` (the mode the seeded assignments get) on the
+user's own texts, and spanless findings carry a note. The local database was
+re-seeded through `loadtest/seed.py` itself (admin CLI run locally instead of
+`docker compose exec`, HPO 2026-09-01), so the open numbers below are
+proposal-check opens and are not comparable with the round 1 table.
+
+`ScopedRepository` (one per request) now memoizes the project-id lookup, the
+document/visible-documents checks and the role/document part of
+`require_workable` for the rest of the request. An entry is dropped as soon as
+the request's thread executes any non-`SELECT` statement, and
+`_before_workspace_locks` clears the memo once its locks are held, so checks that
+guard a write are still read under the locks; the assignment row (status) is
+always read fresh. Nothing is cached across requests.
+
+| Endpoint | Before: mean ms / statements / CPU ms | After: mean ms / statements / CPU ms |
+|---|---:|---:|
+| Open (proposal check) | 464 / 129 / 164 | 326 / 92 / 125 |
+| Search | 167 / 50 / 62 | 120 / 36 / 46 |
+| Write | 171 / 65 / 66 | 144 / 52 / 62 |
+| Dashboard | 78 / 18 / 24 | 86 / 18 / 38 |
+
+Same method and noise caveats as above (50 opens/searches, 100 commands,
+17 listings). The dashboard path does not use these checks; its change is noise.
+The remaining open statements are mostly not authorization: the proposal-check
+open opens the draft twice and re-reads the task profile and search conditions
+four times each. A real P9 run is still required.
