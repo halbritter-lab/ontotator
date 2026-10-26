@@ -5,7 +5,7 @@
 import type { AgreementView, DecisionBarView, DocumentRowView, DocumentRowsPage, FinalPanelSubmissionView, NextStepView } from "../api/client";
 import { plural } from "../app/labels";
 import { formatTime } from "../app/submissionLabels";
-import { decisionCategoryLabels, versionName } from "./labels";
+import { versionName } from "./labels";
 import { leadSteps } from "./nextStepLabels";
 import { rowKeyOf } from "./RowCells";
 import { roundName, submissionVersion } from "./SubmissionsTable";
@@ -153,18 +153,9 @@ export function savedText(caseId: string, language: string): string {
   return `Final result saved for ${caseId} ${language}.`;
 }
 
-const BAR_COUNTS: readonly (readonly [keyof DecisionBarView, string])[] = [
-  ["total", "Needs your decision"],
-  ["report_or_pause", decisionCategoryLabels["report-or-pause"]],
-  ["confirm_final", decisionCategoryLabels["confirm-final"]],
-  ["translation", decisionCategoryLabels.translation],
-  ["missing_final", decisionCategoryLabels["missing-final"]],
-];
-
-/** Changed bar counts after a decision: "Needs your decision: 3 → 2, Final result to confirm: 1 → 0". */
-export function barArrows(before: DecisionBarView, after: DecisionBarView): string {
-  return BAR_COUNTS.filter(([field]) => before[field] !== after[field])
-    .map(([field, label]) => `${label}: ${String(before[field])} → ${String(after[field])}`).join(", ");
+/** What is left after a decision: "2 more need your decision." / "Nothing else needs your decision." */
+export function remainingText(after: DecisionBarView): string {
+  return after.total ? `${after.total} more ${after.total === 1 ? "needs" : "need"} your decision.` : "Nothing else needs your decision.";
 }
 
 /** Short kind of a decision for "Next decision: case-109 de (problem report)". */

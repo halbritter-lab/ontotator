@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, ConflictError, type DocumentRowView, type DocumentRowsPage, type FinalPanelView, type RowSubmissions, type WorkRoundView } from "../../src/api/client";
 import { formatTime } from "../../src/app/submissionLabels";
 import { DecisionBlock, type DecisionBlockProps } from "../../src/documents/FinalPanel";
-import { AGREEMENT_EXPLANATION, agreementText, barArrows, compareSummary, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
+import { AGREEMENT_EXPLANATION, agreementText, compareSummary, remainingText, consolidationStartedToast, nextFinalDecision, nextOtherDecision } from "../../src/documents/finalPanelText";
 import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionState";
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
@@ -473,7 +473,7 @@ describe("after a decision", () => {
     await acceptResult();
     await waitFor(() => expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Final result: case-109 de"));
     expect(screen.getByText("Final result saved for case-107 de.")).toBeTruthy();
-    expect(screen.getByText("Needs your decision: 3 → 2, Final result missing: 1 → 0")).toBeTruthy();
+    expect(screen.getByText("2 more need your decision.")).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2 })));
     await waitFor(() => expect(liveRegion().textContent).toBe("Final result saved. Next: case-109 de."));
     expect(await screen.findByRole("button", { name: "Keep final on v1" })).toBeTruthy();
@@ -609,7 +609,9 @@ describe("panel text", () => {
       .toBe("2 annotations submitted on v2, 7 findings in total");
     expect(agreementText(agreement({ total: 6, matching: 4, context_differences: 2 }))).toBe("Agreement: 4 of 6 findings match, 2 differ in context only");
     expect(agreementText(agreement({ total: 6, matching: 6 }))).toBe("Agreement: 6 of 6 findings match");
-    expect(barArrows(bar({ total: 3, confirm_final: 1 }), bar({ total: 2, confirm_final: 0 }))).toBe("Needs your decision: 3 → 2, Final result to confirm: 1 → 0");
+    expect(remainingText(bar({ total: 2, confirm_final: 0 }))).toBe("2 more need your decision.");
+    expect(remainingText(bar({ total: 1 }))).toBe("1 more needs your decision.");
+    expect(remainingText(bar({ total: 0 }))).toBe("Nothing else needs your decision.");
   });
 
   it("finds the next final decision after the row, wrapping around", () => {

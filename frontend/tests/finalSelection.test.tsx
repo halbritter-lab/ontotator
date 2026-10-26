@@ -74,12 +74,17 @@ it("has exactly one primary action in every state", async () => {
 it("shows the preflight with a summary without moving focus", async () => {
   vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, omissions: [{ case_id: "other", language: "de" }] });
   render(<FinalExportPanel projectKey="p" username="lead" />);
-  expect(screen.getByText("The archive includes README.txt and index.csv, a plain-language guide and a table of every result.")).toBeDefined();
+  expect(screen.getByText(/The archive includes README\.txt and index\.csv/)).toBeDefined();
   const heading = await screen.findByRole("heading", { name: "Export preflight" });
   expect(document.activeElement).not.toBe(heading);
   expect(screen.getByRole("region", { name: "Export preflight" })).toBeDefined();
-  expect(screen.getByText("1 selected results, 1 warnings, 1 omitted")).toBeDefined();
-  expect(screen.getByRole("group", { name: "Final export actions" })).toBeDefined();
+  const counts = screen.getByText("1 selected result, 1 warning, 1 omitted");
+  expect(counts.tagName).toBe("STRONG");
+  const actions = screen.getByRole("group", { name: "Final export actions" });
+  // The numbers and the actions come before the reference prose.
+  const prose = screen.getByText(/The archive includes README\.txt/);
+  expect(counts.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(actions.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 it("explains unacknowledged warnings and moves focus to the checkbox instead of starting", async () => {

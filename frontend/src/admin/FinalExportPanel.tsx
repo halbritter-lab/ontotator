@@ -7,6 +7,7 @@ import { routeHref } from "../app/router";
 import { FINAL_SELECTION_CHANGED } from "../variants/finalSelectionState";
 import { useJob } from "./useJob";
 import { LanguageFlag } from "../ui/LanguageTag";
+import { plural } from "../app/labels";
 
 function RowLink({ projectKey, caseId, language }: { projectKey: string; caseId: string; language: string }): JSX.Element {
   return <a href={routeHref({ name: "projectDocuments", key: projectKey, case: caseId, language })}>Show {caseId} {language}</a>;
@@ -137,8 +138,6 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
     : !state.selections.length ? "final-export-empty"
     : state.warnings.length > 0 && !accepted ? "final-export-ack-hint" : undefined;
   return <section className="detail-section" aria-label="Selected final results"><h2>Selected final results</h2>
-    <p>Export the exact results selected by the lead, with an audit receipt. Missing selections are disclosed; another submission is never substituted.</p>
-    <p>The archive includes README.txt and index.csv, a plain-language guide and a table of every result.</p>
     {changed && <InlineMessage tone="info">{CHANGED_TEXT[changed]}</InlineMessage>}
     {phase === "check" && <>
       {checking && <p id="final-export-checking" role="status">Checking final results…</p>}
@@ -147,7 +146,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       {!checking && !state && <p id="final-export-recheck" className="field-hint">Check again to confirm the current selections and warnings.</p>}
       {state && <section className="final-export-preflight" aria-labelledby="final-export-preflight-heading">
         <h3 id="final-export-preflight-heading" tabIndex={-1}>Export preflight</h3>
-        <p>{state.selections.length} selected results, {state.warnings.length} warnings, {state.omissions.length} omitted{notInPlan.length > 0 && `, ${notInPlan.length} not planned`}</p>
+        <p><strong>{plural(state.selections.length, "selected result")}, {plural(state.warnings.length, "warning")}, {state.omissions.length} omitted{notInPlan.length > 0 && `, ${notInPlan.length} not planned`}</strong></p>
         <WorkflowWarnings projectKey={projectKey} state={state} />
         {state.warnings.length > 0 && <Checkbox ref={acknowledgement} id="final-export-ack" label="Export these selected results with the listed warnings and omissions" checked={accepted} disabled={creating} onChange={event => setAccepted(event.target.checked)} />}
         {!state.selections.length && <InlineMessage tone="warning"><span id="final-export-empty">Select at least one submitted result before exporting.</span></InlineMessage>}
@@ -174,5 +173,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
             <Button variant="primary" aria-disabled="true" aria-describedby="final-export-download-hint">Download final export</Button>
           </>}
     </>}
+    {/* The numbers and the button lead; what the archive holds is reference. */}
+    <p className="cell-secondary">Exports the exact results selected by the lead, with an audit receipt. Missing selections are disclosed; another submission is never substituted. The archive includes README.txt and index.csv, a plain-language guide and a table of every result.</p>
   </section>;
 }

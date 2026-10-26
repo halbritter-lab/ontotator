@@ -16,7 +16,7 @@ import { ConsolidationLauncher, type ConsolidationStarted } from "../variants/Co
 import { refKey } from "../variants/versionState";
 import { failureOf, keepRequest, selectionPayload, selectRequest, type FinalConfirmFailure, type FinalConfirmRequest } from "./FinalConfirm";
 import {
-  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, barArrows, changedPassagesText, compareSummary, consolidateHint,
+  acceptQuestion, AGREEMENT_EXPLANATION, agreementText, allMatchText, remainingText, changedPassagesText, compareSummary, consolidateHint,
   consolidationInputs, decidedLine, decisionKind, keepLabel, listedSubmissions, nextFinalDecision, nextOtherDecision, onlyHereText, panelMode, panelStep,
   personName, savedText, submissionLine, submissionName, submissionWhen, textChangedLine, type NextRow,
 } from "./finalPanelText";
@@ -106,7 +106,7 @@ export function DecisionBlock(props: DecisionBlockProps): JSX.Element | null {
     if (!saved || !page || page === saved.before) return;
     pending.current = null;
     setBusy(null);
-    setSuccess({ text: savedText(caseOfTextKey(saved.rowKey), languageOfTextKey(saved.rowKey)), bar: barArrows(saved.before.bar, page.bar) });
+    setSuccess({ text: savedText(caseOfTextKey(saved.rowKey), languageOfTextKey(saved.rowKey)), bar: remainingText(page.bar) });
     const next = nextFinalDecision(page, saved.rowKey);
     if (next) {
       announce(`Final result saved. Next: ${rowName(next.row)}.`);
