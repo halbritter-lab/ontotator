@@ -20,6 +20,8 @@ function changedCases(details: unknown): { case_id: string; revision: number }[]
 
 /** Work assigned since the change would be withdrawn: `needs_confirm`; a newer plan revision: `changed`. Other errors are thrown. */
 export async function runPlanUndo(projectKey: string, undo: UndoView, options?: { confirm?: boolean }): Promise<PlanUndoOutcome> {
+  // Nothing to restore (a save that changed no row): the server refuses an empty list.
+  if (!undo.rows.length) return { kind: "done", revisions: {} };
   try {
     const result = await api.setWorkPlanRows(projectKey, {
       // The server restores `annotation_mode` and `decided` only when the row names them (null clears an override).

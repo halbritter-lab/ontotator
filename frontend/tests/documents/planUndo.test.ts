@@ -16,6 +16,12 @@ const consequences = { withdrawn: [{ assignment_id: 9, case_id: "case-0101", lan
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe("runPlanUndo", () => {
+  it("sends nothing for an empty undo", async () => {
+    const set = vi.spyOn(api, "setWorkPlanRows");
+    await expect(runPlanUndo("p", { rows: [], revisions: {} })).resolves.toEqual({ kind: "done", revisions: {} });
+    expect(set).not.toHaveBeenCalled();
+  });
+
   it("sends undo: true with restored_revision per row", async () => {
     const set = vi.spyOn(api, "setWorkPlanRows").mockResolvedValue(result);
     await expect(runPlanUndo("p", undo)).resolves.toEqual({ kind: "done", revisions: result.revisions });

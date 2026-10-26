@@ -4,7 +4,7 @@
  * "{k} not shown with these filters" (from the selection summary with the current filters) and
  * "Clear selection"; primary "Assign…" (the page's only primary button) and the plan actions
  * "Translation review and annotation", "Annotation only, no translation review" (one click when no existing work is affected;
- * only in projects with translations) and "Plan…". Every plan save keeps the selection and shows an Undo toast (D22). The summary and
+ * only in projects with translations) and "Plan…". Every plan save keeps the selection and shows an Undo toast (D22); a save that changes nothing says why instead. The summary and
  * the quick plan actions send the selected texts (`rows`); the plan dialog still edits whole cases.
  * The bar floats at the bottom of the viewport over the content (`useFloatingBar`): its arrival never moves the
  * table; the page reserves its height as bottom padding. Its place in the DOM keeps the focus order.
@@ -69,6 +69,14 @@ function presetChoices(preset: Preset, languages: readonly string[]): PlanChoice
   return Object.fromEntries(languages.filter(language => language !== SOURCE_KEY).map(language => [language, { ...cell }]));
 }
 
+/** Why a plan save changed nothing: the quick actions skip source texts (`skipped_rows`), the rest already had the plan. */
+export function nothingChangedText(result: BulkResult, selected: number): string {
+  const skipped = result.skipped_rows?.length ?? 0;
+  if (skipped && skipped >= selected) return "Nothing changed: the selected texts are source texts; these plan actions apply to translations only.";
+  if (skipped) return `Nothing changed: ${plural(skipped, "selected text")} ${skipped === 1 ? "is a source text" : "are source texts"}, the others already have this plan.`;
+  return "Nothing changed: the selected texts already have this plan.";
+}
+
 type Undo = { kind: "conflict"; undo: UndoView; consequences: ConsequencesView } | { kind: "changed" };
 
 export function SelectionBar({
@@ -105,6 +113,8 @@ export function SelectionBar({
   const [undoState, setUndoState] = useState<Undo | null>(null);
   const [undoBusy, setUndoBusy] = useState(false);
   const [understood, setUnderstood] = useState(false);
+  /** "Nothing changed: …" for the selection it was saved for. */
+  const [nothing, setNothing] = useState<{ key: string; text: string } | null>(null);
 
   const undo = (payload: UndoView, confirm: boolean) => {
     setUndoBusy(true);
@@ -135,7 +145,13 @@ export function SelectionBar({
 
   /** After any plan save: Undo toast, refetch, the selection stays. */
   const saved = (result: BulkResult, message: string) => {
-    setError(undefined); setUndoState(null);
+    setError(undefined); setUndoState(null); setNothing(null);
+    if (!result.changed_rows || !result.undo.rows.length) {
+      const text = nothingChangedText(result, rows.length);
+      setNothing({ key: idsKey, text });
+      latest.current.onAnnounce(text);
+      return;
+    }
     latest.current.onRevisions?.(result.revisions);
     latest.current.onAnnounce(message);
     latest.current.showToast({
@@ -152,7 +168,7 @@ export function SelectionBar({
     if (busy || !rows.length) return;
     const selected = rows;
     const cases = caseIds;
-    setBusy(preset); setError(undefined); setUndoState(null);
+    setBusy(preset); setError(undefined); setUndoState(null); setNothing(null);
     latest.current.onAnnounce("Saving…");
     try {
       const result = await api.saveWorkPlans(projectKey, { rows: selected, preset, confirm: false });
@@ -203,6 +219,7 @@ export function SelectionBar({
       </div>}
       {limitNote && keys.size >= MIN_TEXTS && <p className="selection-bar-limit">{limitNote}</p>}
       {error !== undefined && <div className="selection-bar-error"><ErrorNotice error={error} /></div>}
+      {nothing?.key === idsKey && keys.size >= MIN_TEXTS && <InlineMessage tone="info">{nothing.text}</InlineMessage>}
       {undoState?.kind === "changed" && <InlineMessage tone="info">{PLAN_CHANGED_MESSAGE}</InlineMessage>}
       {undoState?.kind === "conflict" && <div className="selection-bar-undo">
         <InlineConfirm title="Undo the plan change" busy={undoBusy} confirmLabel="Undo anyway"

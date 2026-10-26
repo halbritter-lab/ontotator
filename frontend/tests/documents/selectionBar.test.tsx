@@ -148,6 +148,20 @@ it("Translation review and annotation saves at once without a dialog when nothin
   expect(screen.getByText("Plan saved for 20 cases, de: annotate")).toBeTruthy();
 });
 
+it("a quick action that changes nothing says why and offers no Undo", async () => {
+  const empty: BulkResult = { changed_rows: 0, revisions: {}, withdrawn: [], undo: { rows: [], revisions: {} }, skipped_rows: rows };
+  vi.mocked(api.saveWorkPlans).mockResolvedValueOnce(empty);
+  render(<Harness />);
+  fireEvent.click(within(bar()).getByRole("button", { name: "Translation review and annotation" }));
+  expect(await within(bar()).findByText("Nothing changed: the selected texts are source texts; these plan actions apply to translations only.")).toBeTruthy();
+  expect(screen.queryByText(/Plan saved/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+  vi.mocked(api.saveWorkPlans).mockResolvedValueOnce({ ...empty, skipped_rows: rows.slice(0, 1) });
+  fireEvent.click(within(bar()).getByRole("button", { name: "Annotation only, no translation review" }));
+  expect(await within(bar()).findByText("Nothing changed: 1 selected text is a source text, the others already have this plan.")).toBeTruthy();
+  expect(api.setWorkPlanRows).not.toHaveBeenCalled();
+});
+
 it("Annotation only, no translation review opens the plan dialog with the acceptance section when translations are not accepted and the rule is on", async () => {
   vi.mocked(api.saveWorkPlans).mockRejectedValueOnce(new ApiError(409, "invalid", "WORK_PLAN_INVALID", { reason: "annotate_not_accepted", rows: [] } as never));
   vi.mocked(api.previewWorkPlans).mockResolvedValue(preview({ languages: [lang("source", 20), lang("de", 20, { not_accepted: 12, marked_in_package: 8 })] }));
