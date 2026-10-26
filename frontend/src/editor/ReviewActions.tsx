@@ -64,6 +64,8 @@ export interface ReviewActionsProps {
   onShowMention?: (evidence: components["schemas"]["EvidenceSnapshot"]) => void;
   /** M2 M-4: Edit & Replace, then this mention of the copy becomes a new finding (the proposal itself stays unchanged). */
   onMoveMention?: (index: number) => void;
+  /** B2-4: every finding that replaced the proposal (its copy first) when a mention was moved off the copy. */
+  replacedBy?: { annotationId: string; quote: string }[];
   /** Controlled reviewer note (kept by the parent so it survives re-selection and decision resets). */
   note?: string;
   onNoteChange?: (note: string) => void;
@@ -119,6 +121,7 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
   onRepeatDecision,
   onShowMention,
   onMoveMention,
+  replacedBy = [],
   evidence = [],
   documentText = "",
   note: controlledNote,
@@ -360,10 +363,14 @@ export const ReviewActions: React.FC<ReviewActionsProps> = ({
             const replLabel = replSnap ? resolveTermLabel?.(replSnap.annotation.layer_id, replTermId) : null;
             return (
               <div className="review-actions__block-body">
-                Replaced by:{" "}
+                {replacedBy.length > 1 ? `Replaced by ${replacedBy.length} findings, ` : "Replaced by: "}
                 <strong>
                   <TermName termId={replTermId} label={replLabel} />
                 </strong>
+                {replacedBy.length > 1 && onEditReplacement && <>:{" "}{replacedBy.map((item, index) => <React.Fragment key={item.annotationId}>
+                  {index > 0 && " "}
+                  <Button type="button" size="sm" title="Open this finding" onClick={() => onEditReplacement(item.annotationId)}>“{item.quote}”</Button>
+                </React.Fragment>)}</>}
               </div>
             );
           })()}

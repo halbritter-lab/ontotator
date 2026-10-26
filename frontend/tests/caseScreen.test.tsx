@@ -3280,6 +3280,20 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       expect(proposal.annotation.evidence_refs).toHaveLength(2);
     });
 
+    it("a proposal whose copy gave a mention its own finding is replaced by 2 findings, both linked (B2-4)", async () => {
+      const { view, target } = reviewView([], true);
+      const proposal = view.available_inputs![0] as any;
+      proposal.evidence.push({ version: "ev-1", mention: { evidence_id: "ev-prop-2", segments: [pos("Muskelhypotonie")] } });
+      view.draft.annotations!.push(findingSnap(["split", "HP:0001250", "Muskelhypotonie"]) as never);
+      view.draft.evidence!.push({ version: "ev-1", mention: { evidence_id: "ev-split", segments: [pos("Muskelhypotonie")] } } as never);
+      view.draft.decisions = [{ decision_id: "d0", target, outcome: "changed", replacement: { annotation_id: "seizure", version: "seizure-v1" }, reviewer_id: "ann" }] as never;
+      const { container } = await setup(view, severeHits, false);
+      const row = container.querySelector<HTMLElement>('[data-list-key^="target:"]')!;
+      expect(row.textContent).toContain("Replaced by 2 findings");
+      fireEvent.click(within(row).getByRole("button", { name: "“Muskelhypotonie”" }));
+      await waitFor(() => expect(container.querySelector('[data-list-key="annotation:split"]')?.classList.contains("selected")).toBe(true));
+    });
+
     it("Move on a proposal with an existing copy moves the copy's mention with the same span, not the same index (M-4)", async () => {
       const { view } = reviewView([], true);
       const proposal = view.available_inputs![0] as any;

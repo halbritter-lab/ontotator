@@ -134,6 +134,8 @@ const normalizeAxes = (axes: Record<string, string | null | undefined> | null | 
       .sort(([a], [b]) => a.localeCompare(b)),
   );
 
+/** One mention's span, for matching mentions across a proposal and draft findings. */
+const spanKeyOf = (segments: readonly { start: number; end: number }[]) => segments.map(seg => `${seg.start}-${seg.end}`).join(",");
 const segmentsKey = (evidence: { mention: { segments: { start: number; end: number }[] } }[]) =>
   JSON.stringify(
     evidence
@@ -1095,6 +1097,29 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     (view.available_inputs ?? []).find(
       (snap) => snap.annotation.annotation_id === t.annotation_id && snap.version === t.version,
     );
+  /**
+   * B2-4 (display only): findings split off a proposal's copy by "Move to a new finding" (M-4), so the proposal
+   * names every finding that replaced it. shortcut: nothing stores the link, so a split-off is a fresh draft finding
+   * of the copy's term whose mentions are mentions of the proposal the copy no longer has; one whose term changed
+   * later drops out. Upgrade when the split stores a source ref.
+   */
+  const splitOffsOf = (target: { annotation_id: string; version: string }, replacementId: string | undefined): AnnotationSnapshot[] => {
+    const annotations = draft.annotations ?? [];
+    const copy = annotations.find(a => a.annotation.annotation_id === replacementId)?.annotation;
+    const proposalSpans = new Set((targetSnapshotOf(target)?.evidence ?? []).map(ev => spanKeyOf(ev.mention.segments)));
+    if (!copy || proposalSpans.size < 2) return [];
+    const spansOf = (refs: { evidence_id: string }[] | undefined) => (refs ?? []).map(ref =>
+      spanKeyOf((draft.evidence ?? []).find(ev => ev.mention.evidence_id === ref.evidence_id)?.mention.segments ?? []));
+    const copySpans = new Set(spansOf(copy.evidence_refs));
+    return annotations.filter(({ annotation: a }) => {
+      if (a.annotation_id === copy.annotation_id || a.layer_id !== copy.layer_id || a.term_id !== copy.term_id || a.provenance.source_refs?.length) return false;
+      const spans = spansOf(a.evidence_refs);
+      return spans.length > 0 && spans.every(span => proposalSpans.has(span) && !copySpans.has(span));
+    });
+  };
+  /** A draft finding's first mention, quoted short (the split-off buttons, B2-4). */
+  const firstQuoteOf = (snap: AnnotationSnapshot) => quoteSegments(view.document.text,
+    (draft.evidence ?? []).find(ev => ev.mention.evidence_id === snap.annotation.evidence_refs?.[0]?.evidence_id)?.mention.segments ?? [], 40);
   /** Review target an annotation was adopted from (via provenance.source_refs). */
   const sourceTargetOf = (snap: AnnotationSnapshot) => {
     const refs = snap.annotation.provenance.source_refs ?? [];
@@ -2303,13 +2328,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
   /** M-4 on a proposal: proposals stay immutable, so Edit & Replace runs first and the copy's mention moves. */
   const moveProposalMention = async (target: TargetProposal, index: number) => {
-    const spanKey = (segments: { start: number; end: number }[]) => segments.map(seg => `${seg.start}-${seg.end}`).join(",");
     const wanted = targetSnapshotOf(target)?.evidence?.[index]?.mention.segments;
     const copyId = await handleAdoptAndEditTarget(target);
     if (!copyId || !wanted) return;
     // An existing edited copy may order its mentions differently: match by span, not by index.
     const evidenceId = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === copyId)?.annotation.evidence_refs
-      ?.find(ref => (latestDraft.current.evidence ?? []).some(ev => ev.mention.evidence_id === ref.evidence_id && spanKey(ev.mention.segments) === spanKey(wanted)))?.evidence_id;
+      ?.find(ref => (latestDraft.current.evidence ?? []).some(ev => ev.mention.evidence_id === ref.evidence_id && spanKeyOf(ev.mention.segments) === spanKeyOf(wanted)))?.evidence_id;
     if (!evidenceId) { setActionError("Your copy no longer has this mention. Move it from your copy instead."); return; }
     await moveMentionToNewFinding(copyId, evidenceId);
   };
@@ -3496,6 +3520,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                               const replTermId = replSnap?.annotation.term_id ?? dec.replacement?.annotation_id ?? "";
                               const replLabel = replSnap ? termLabel(replSnap.annotation.layer_id, replTermId) : null;
                               const displayText = replLabel ? `${replLabel} (${replTermId})` : replTermId;
+                              const splitOffs = splitOffsOf(t, dec.replacement?.annotation_id);
+                              if (splitOffs.length) return (
+                                <div className="doc-meta__line">
+                                  Replaced by {splitOffs.length + 1} findings, <strong>{displayText}</strong>:{" "}
+                                  {[replSnap, ...splitOffs].map((snap, index) => snap && <React.Fragment key={snap.annotation.annotation_id}>
+                                    {index > 0 && " "}
+                                    <Button type="button" size="sm" title="Jump to this finding in the draft" onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedTargetId(null); setSelectedSourceId(null);
+                                      setSelectedAnnotationId(snap.annotation.annotation_id);
+                                      setSelectedEvidenceId(snap.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+                                      setMobilePane("details");
+                                    }}>“{firstQuoteOf(snap)}”</Button>
+                                  </React.Fragment>)}
+                                  {" "}<AiBadge provenance={t.provenance} source={sourceForTarget(t)} />
+                                </div>
+                              );
                               return (
                                 <div className="doc-meta__line">
                                   <Button
@@ -3840,6 +3881,12 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               resolveTermLabel={termLabel}
               termInfo={termId => selectedTarget.layer_id ? termLabel.info(selectedTarget.layer_id, termId) : undefined}
               evidence={targetSnapshot?.evidence ?? []}
+              replacedBy={(() => {
+                const replacementId = decisionsMap[refKey(selectedTarget)]?.replacement?.annotation_id;
+                const splitOffs = splitOffsOf(selectedTarget, replacementId);
+                const copy = (draft.annotations ?? []).find(a => a.annotation.annotation_id === replacementId);
+                return splitOffs.length && copy ? [copy, ...splitOffs].map(snap => ({ annotationId: snap.annotation.annotation_id, quote: firstQuoteOf(snap) })) : [];
+              })()}
               documentText={view.document.text}
               currentDecision={decisionsMap[refKey(selectedTarget)] ?? null}
               draftAnnotations={draft.annotations ?? []}
