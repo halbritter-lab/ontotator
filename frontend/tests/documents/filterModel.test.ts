@@ -32,6 +32,7 @@ describe("filter model", () => {
     ["Waiting on facet", { waiting_on: "me,ann-0001" }, { waiting_on: ["me", "ann-0001"] }, ["Waiting on: You", "Waiting on: ann-0001"]],
     ["Flags facet (X5)", { flags: "guidelines_unclear,nope" }, { flags: "guidelines_unclear" }, ["Flagged: guidelines unclear"]],
     ["Plan not in plan reads Not planned", { plan: "not_in_plan" }, { plan: "not_in_plan" }, ["Plan: Not planned"]],
+    ["Review and annotation not planned keep the short chip", { review_state: "not_planned", annotation_state: "not_planned" }, { review_state: "not_planned", annotation_state: "not_planned" }, ["Translation review: Not planned", "Annotation: Not planned"]],
     ["Exact case (deep link)", { case: "case-104" }, { case: "case-104" }, ["Case ID: case-104"]],
   ])("maps every old filter per VD9: %s", (_name, query, request, chips) => {
     expect(rowsRequest(query)).toEqual(request);
@@ -88,6 +89,10 @@ describe("filter model", () => {
     expect(toggleOption({}, flagged, true)).toEqual({ flags: "guidelines_unclear" });
     expect(FACET_GROUPS.find(group => group.id === "plan")!.options.map(option => option.label)).toEqual(["Not planned", "Not decided"]);
     expect(FACET_GROUPS.flatMap(group => group.options).some(option => option.label === "Not in plan")).toBe(false);
+    // "Not planned" appears once; the stage groups name their stage.
+    expect(FACET_GROUPS.flatMap(group => group.options).filter(option => option.label === "Not planned")).toHaveLength(1);
+    expect(optionOf("Review not planned")).toMatchObject({ param: "review_state", values: ["not_planned"] });
+    expect(optionOf("Annotation not planned")).toMatchObject({ param: "annotation_state", values: ["not_planned"] });
     expect(clearAllPatch({ flags: "guidelines_unclear" })).toMatchObject({ flags: undefined });
     expect(filtersActive({ flags: "guidelines_unclear" })).toBe(true);
   });

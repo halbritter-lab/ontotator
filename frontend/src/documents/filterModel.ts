@@ -58,7 +58,7 @@ export const FACET_GROUPS: readonly FacetGroup[] = [
     option("review_state", "Not accepted", "not_accepted"),
     option("review_state", "Source changed", "source_changed"),
     option("review_state", "Accepted", "accepted"),
-    option("review_state", "Not planned", "not_planned"),
+    option("review_state", "Review not planned", "not_planned"),
   ] },
   { id: "annotation", legend: "Annotation", options: [
     option("annotation_state", "Unassigned", "unassigned", "partly_assigned"),
@@ -66,7 +66,7 @@ export const FACET_GROUPS: readonly FacetGroup[] = [
     option("annotation_state", "Paused", "paused"),
     option("annotation_state", "On old text", "old_text_open", "old_text_submitted"),
     option("annotation_state", "Submitted", "submitted"),
-    option("annotation_state", "Not planned", "not_planned"),
+    option("annotation_state", "Annotation not planned", "not_planned"),
   ] },
   { id: "final", legend: "Final", options: [
     option("final_state", "No final yet", "none", "after_annotation", "after_review", "choose"),
@@ -83,6 +83,9 @@ export const FACET_GROUPS: readonly FacetGroup[] = [
   // Spec §2b: texts whose newest proposal set has tool proposals (read model facet `proposals`).
   { id: "proposals", legend: "Tool proposals", options: [option("proposals", "With tool proposals", "with"), option("proposals", "Without", "without")] },
 ];
+
+/** Popover labels that name their stage so "Not planned" is not listed three times; the chip's prefix already names it. */
+const CHIP_LABELS: Readonly<Record<string, string>> = { "review_state-not_planned": "Not planned", "annotation_state-not_planned": "Not planned" };
 
 /** Every value the server accepts per stage facet (generated `DocumentRowFilters`); labels for the ones without a popover option. */
 const STATE_VALUES: Readonly<Record<"review_state" | "annotation_state" | "final_state", Readonly<Record<string, string>>>> = {
@@ -235,7 +238,7 @@ function facetChips(query: ProjectDocumentsQuery, param: FacetParam, people: Peo
     const item = options.find(entry => entry.values.includes(value));
     const covered = item ? item.values.filter(entry => values.includes(entry)) : [value];
     for (const entry of covered) done.add(entry);
-    const label = item?.label
+    const label = (item && (CHIP_LABELS[item.id] ?? item.label))
       ?? (param === "waiting_on" ? (value === "me" ? "You" : people.get(value) ?? value)
         : param === "plan" ? PLAN_LABELS[value]
           : param === "origin" ? ORIGIN_LABELS[value]
