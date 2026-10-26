@@ -11,6 +11,8 @@ export interface LanguagesFieldProps {
   value: string[];
   onChange: (value: string[]) => void;
   disabled?: boolean;
+  /** What the languages do, before the entry help. */
+  hint?: string;
 }
 
 const commonCodes = ["de", "en", "es", "fr", "it", "nl", "pt", "pl"];
@@ -20,7 +22,7 @@ const pendingCode = "Add this language code before saving.";
 /** Commit on Enter/Add/blur. Parent forms must retain native validation so
  * requestSubmit cannot silently discard text that has not been committed.
  */
-export function LanguagesField({ id, label, value, onChange, disabled = false }: LanguagesFieldProps): JSX.Element {
+export function LanguagesField({ id, label, value, onChange, disabled = false, hint }: LanguagesFieldProps): JSX.Element {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,7 +49,7 @@ export function LanguagesField({ id, label, value, onChange, disabled = false }:
   return <div>
     <TextInput ref={inputRef} id={id} label={label} value={draft} disabled={disabled}
       list={`${id}-suggestions`} autoComplete="off" autoCapitalize="none" spellCheck={false}
-      hint="Press Enter or Add to add a language." error={error}
+      hint={`${hint ? `${hint} ` : ""}Press Enter or Add to add a language.`} error={error}
       onChange={(event) => {
         setDraft(event.target.value);
         setError("");

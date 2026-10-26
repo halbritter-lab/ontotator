@@ -57,3 +57,47 @@
 .settings-radio-group .form-checkbox-row .field-hint {
   display: block;
 }
+
+/* P9: a section receives focus programmatically when its address opens; the container itself shows no ring. */
+.project-settings-sections > .settings-section:focus {
+  outline: none;
+}
+
+/* M2 M-8b/c: groups inside one tab, in the order work happens. */
+.settings-subheading {
+  margin-block: var(--space-4) var(--space-2);
+  font-size: var(--size-base);
+  font-weight: var(--weight-strong);
+}
+
+.settings-advanced {
+  margin-block-start: var(--space-4);
+}
+
+.settings-advanced > summary {
+  cursor: pointer;
+  padding-block: var(--space-2);
+}
+
+/* D7 B: the values annotators can choose, one row of toggles per axis (pressed = shown). */
+.axis-shown-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block: var(--space-2);
+}
+
+.axis-shown-row > .form-label {
+  min-width: 8rem;
+  margin: 0;
+}
+
+.axis-shown-off {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.settings-confirmation:empty {
+  display: none;
+}

@@ -81,13 +81,13 @@ it('disables people who annotated this text with the reason, while the consolida
   expect(options()).toContain('Luc Martin (ann-0004)');
 });
 
-it('explains a project without adjudicators and links Settings → Members', async () => {
+it('explains a project without adjudicators and links Settings → People', async () => {
   vi.mocked(api.listMembers).mockResolvedValue([lead, reader]);
   await openForm();
   expect(options()).toEqual(['Choose a reviewer', 'You (Mia Kühn)']);
   const note = screen.getByText(/No member has the Consolidator role yet\. Give it in/);
-  expect(note.textContent).toBe('No member has the Consolidator role yet. Give it in Settings → Members.');
-  expect(within(note).getByRole('link', { name: 'Settings → Members' }).getAttribute('href')).toBe('#/projects/p/settings/members');
+  expect(note.textContent).toBe('No member has the Consolidator role yet. Give it in Settings → People.');
+  expect(within(note).getByRole('link', { name: 'Settings → People' }).getAttribute('href')).toBe('#/projects/p/settings');
 });
 
 it('keeps the missing-language confirmation and reuses an existing review assignment revision', async () => {

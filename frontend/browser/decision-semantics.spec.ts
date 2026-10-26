@@ -226,9 +226,9 @@ test("new-draft spanless findings require a reason, retain it through search and
 test("a lead persists the project spanless rule and new drafts explain the prohibition", async ({ page }) => {
   await importPackage(page, "single", "browser-fixture-decision-semantics", "spanless-settings-lead");
   await page.goto("/#/projects/browser-fixture-decision-semantics/settings/rules");
-  const mode = page.getByRole("combobox", { name: "Findings without a text span" });
-  await mode.selectOption("prohibited"); await page.getByRole("button", { name: "Save rules" }).click();
-  await expect(page.getByText("Rules saved.")).toBeVisible(); await page.reload(); await expect(mode).toHaveValue("prohibited");
+  const mode = page.getByRole("combobox", { name: "Findings that point to no text passage" });
+  await mode.selectOption("prohibited"); await page.getByRole("form", { name: "Annotation" }).getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Annotation saved.")).toBeVisible(); await page.reload(); await expect(mode).toHaveValue("prohibited");
   await page.goto("/#/?project=browser-fixture-decision-semantics"); await openCase(page);
   await expect(page.getByRole("button", { name: "Add finding without a text span" })).toBeDisabled();
   await expect(page.getByText("This project requires a text span for findings.")).toBeVisible();
@@ -374,10 +374,10 @@ test("a project prohibiting spanless findings repairs a source only after suppor
 test("a lead enables optional reasons and an annotator creates, clears and submits a note-less finding", async ({ page, browser }) => {
   await importPackage(page, "single", "browser-fixture-decision-semantics", "optional-spanless-lead");
   await page.goto("/#/projects/browser-fixture-decision-semantics/settings/rules");
-  const mode = page.getByRole("combobox", { name: "Findings without a text span" });
-  await mode.selectOption("optional"); await page.getByRole("button", { name: "Save rules" }).click();
-  await expect(page.getByText("Rules saved.")).toBeVisible(); await page.reload(); await expect(mode).toHaveValue("optional");
-  await page.getByRole("form", { name: "Rules" }).screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/spanless-modes-project-rules.png" });
+  const mode = page.getByRole("combobox", { name: "Findings that point to no text passage" });
+  await mode.selectOption("optional"); await page.getByRole("form", { name: "Annotation" }).getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Annotation saved.")).toBeVisible(); await page.reload(); await expect(mode).toHaveValue("optional");
+  await page.getByRole("form", { name: "Annotation" }).screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/spanless-modes-project-rules.png" });
   const provisioned = await page.request.post("/__test_user__?username=optional-spanless-annotator&pseudonym=optional-spanless-annotator&projects=browser-fixture-decision-semantics");
   expect(provisioned.ok()).toBeTruthy();
   const restricted = await authenticatedRequest(page, "/api/v1/projects/browser-fixture-decision-semantics/members/optional-spanless-annotator", "PUT", { roles: ["annotator"], revoke_assignments: true });

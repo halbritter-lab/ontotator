@@ -125,7 +125,8 @@ it("uses the refreshed current role after an existing settings save reloads proj
   vi.spyOn(api, "updateProjectSettings").mockResolvedValue(settings);
   render(<App user={lead} />);
   fireEvent.click(await screen.findByRole("link", { name: "Settings" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Save general" }));
+  fireEvent.click(await screen.findByRole("link", { name: "General" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Save changes" }));
   await waitFor(() => expect(api.listProjects).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.queryByRole("link", { name: "Documents" })).toBeNull());
   act(() => { window.location.hash = "#/projects/p%2Fkey/documents"; });

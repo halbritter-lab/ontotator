@@ -231,14 +231,14 @@ it("keeps original File identity for stale Check again and does not carry its ov
 it("retains an unsaved translation gate when another settings section is saved", async () => {
   vi.spyOn(api, "updateProjectSettings").mockResolvedValue({ ...settings, annotate_accepted_translations_only: false });
   const view = render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="workflow" />);
-  fireEvent.click(await screen.findByLabelText("Annotate translations only after an accepted review"));
+  fireEvent.click(await screen.findByLabelText("Wait for an accepted translation review before annotating"));
   view.rerender(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="general" />);
-  fireEvent.click(screen.getByRole("button", { name: "Save general" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   await screen.findByText("General saved.");
   view.rerender(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="workflow" />);
-  const gate = screen.getByLabelText("Annotate translations only after an accepted review");
+  const gate = screen.getByLabelText("Wait for an accepted translation review before annotating");
   expect((gate as HTMLInputElement).checked).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "Save workflow" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   await waitFor(() => expect(api.updateProjectSettings).toHaveBeenLastCalledWith("p", expect.objectContaining({ annotate_accepted_translations_only: true })));
 });
 
@@ -288,9 +288,9 @@ it("renders exact preview variant lineage and every failed code", () => {
 it("loads explicit false annotation gate and saves its changed Workflow value", async () => {
   vi.spyOn(api, "updateProjectSettings").mockResolvedValue({ ...settings, annotate_accepted_translations_only: true });
   render(<ProjectSettingsPage projectKey="p" currentUser={currentUser} section="workflow" />);
-  const gate = await screen.findByLabelText("Annotate translations only after an accepted review");
+  const gate = await screen.findByLabelText("Wait for an accepted translation review before annotating");
   expect((gate as HTMLInputElement).checked).toBe(false);
-  fireEvent.click(gate); fireEvent.click(screen.getByRole("button", { name: "Save workflow" }));
+  fireEvent.click(gate); fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   await waitFor(() => expect(api.updateProjectSettings).toHaveBeenCalledWith("p", expect.objectContaining({ annotate_accepted_translations_only: true })));
 });
 

@@ -7,6 +7,16 @@ import { personLabel } from "../app/identity";
 export interface MembersSectionProps { projectKey: string; isSystemAdmin: boolean }
 
 const roles = ["lead", "annotator", "adjudicator"] as const;
+
+/** M2 M-8d: each role change saves at once and is confirmed in words ("Ana Weber is now Consolidator."). */
+export function roleChangeText(name: string, before: readonly string[], after: readonly string[]): string {
+  const label = (role: string) => roleLabels[role as typeof roles[number]] ?? role;
+  const added = after.filter(role => !before.includes(role)).map(label);
+  const removed = before.filter(role => !after.includes(role)).map(label);
+  const parts = [added.length && `${name} is now ${added.join(" and ")}.`, removed.length && `${name} is no longer ${removed.join(" and ")}.`].filter(Boolean);
+  if (!after.length) return `${name} is no longer a member of this project.`;
+  return parts.join(" ") || `${name}'s roles are unchanged.`;
+}
 type Affected = { id: number; document_id: string; task: string };
 type Pending = { username: string; roles: string[]; assignments: Affected[]; fromAdd: boolean };
 function affectedAssignments(error: unknown): Affected[] | null {
@@ -33,6 +43,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
   const addButton = useRef<HTMLButtonElement>(null);
   const lifetime = useRef(0);
   const writing = useRef(false);
@@ -47,10 +58,12 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
   const change = async (name: string, wanted: string[], revoke: boolean, fromAdd = false) => {
     if (writing.current || members === null) return;
     const epoch = lifetime.current;
-    writing.current = true; setBusy(true); setError(undefined);
+    writing.current = true; setBusy(true); setError(undefined); setConfirmation("");
+    const previous = members.find(member => member.username === name);
     try {
       const response = await api.setMemberRoles(projectKey, name, wanted, revoke);
       if (epoch !== lifetime.current) return;
+      setConfirmation(roleChangeText(previous?.display_name?.trim() || response.display_name?.trim() || name, previous?.roles ?? [], response.roles));
       setMembers(current => {
         const remaining = (current ?? []).filter(member => member.username !== response.username);
         if (!response.roles.length) return remaining;
@@ -77,9 +90,11 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
     }} /> })),
   ];
   return <section aria-label="Members"><h2>Members</h2>
+    <p className="field-hint">Role changes save immediately. Leads manage the project, annotators annotate texts and review translations, consolidators merge the annotations of a text.</p>
     {members === null && loadError === undefined && <InlineMessage tone="info">Loading members…</InlineMessage>}
     {loadError !== undefined && <><ErrorNotice error={loadError} /><Button onClick={() => setRetry(value => value + 1)}>Try again</Button></>}
     {members !== null && (members.length ? <DataTable label="Project members" columns={columns} rows={members} rowKey={member => member.username} /> : <EmptyState title="No project members." />)}
+    <p role="status" className="settings-confirmation">{confirmation}</p>
     {error !== undefined && !pending && <ErrorNotice error={error} />}
     {suggestionError !== undefined && <ErrorNotice error={suggestionError} />}
     {!adding ? <Button ref={addButton} onClick={() => setAdding(true)}>Add member…</Button> : <form aria-label="Add member" onSubmit={event => {

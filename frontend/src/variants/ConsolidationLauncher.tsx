@@ -120,7 +120,7 @@ function ConsolidationContent(props: Props): JSX.Element {
     } finally { writing.current = false; if (active.current) setBusy(false); }
   };
   if (!open) return <Button size="sm" onClick={() => setOpen(true)}>Consolidate results</Button>;
-  const membersHref = routeHref({ name: 'projectSettings', key: projectKey, section: 'members' });
+  const membersHref = routeHref({ name: 'projectSettings', key: projectKey, section: 'people' });
   return <section className="detail-section" aria-label="Consolidate submitted results"><h3>Consolidate submitted results</h3>
     <p>Select at least two exact results on this text and a reviewer. The reviewer creates a separate result; the original submissions remain in history.</p>
     {loadError != null && <><ErrorNotice error={loadError} /><Button onClick={() => setAttempt(value => value + 1)}>Reload reviewer tasks</Button></>}
@@ -138,7 +138,7 @@ function ConsolidationContent(props: Props): JSX.Element {
         </option>)}
       </Select>
       {getsRole && <p className="cell-secondary">You will get the Consolidator role for this project.</p>}
-      {noConsolidator && <p className="cell-secondary">No member has the Consolidator role yet. Give it in <a href={membersHref}>Settings → Members</a>.</p>}
+      {noConsolidator && <p className="cell-secondary">No member has the Consolidator role yet. Give it in <a href={membersHref}>Settings → People</a>.</p>}
       {missingLanguage && <Checkbox id={`${fieldId}-language`} label={`Assign this reviewer despite missing ${language} in their profile`} checked={confirmLanguage} disabled={busy} onChange={event => setConfirmLanguage(event.target.checked)} />}
       <Textarea id={`${fieldId}-reason`} label="Consolidation reason (optional)" value={reason} disabled={busy} onChange={event => setReason(event.target.value)} />
       {error != null && <><ErrorNotice error={error} /><Button disabled={busy} onClick={() => { setError(undefined); setAttempt(value => value + 1); }}>Reload reviewer tasks</Button></>}

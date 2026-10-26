@@ -294,8 +294,8 @@ test('a lead without the Consolidator role consolidates as You, and full agreeme
   const launcher = area.getByRole('region', { name: 'Consolidate submitted results', exact: true });
   const reviewer = launcher.getByLabel('Consolidation reviewer', { exact: true });
   await expect(reviewer.locator('option').nth(1)).toHaveText(/^You( \(.+\))?$/);
-  await expect(launcher.getByText('No member has the Consolidator role yet. Give it in Settings → Members.', { exact: true })).toBeVisible();
-  await expect(launcher.getByRole('link', { name: 'Settings → Members', exact: true })).toHaveAttribute('href', `#/projects/${encodeURIComponent(s.project)}/settings/members`);
+  await expect(launcher.getByText('No member has the Consolidator role yet. Give it in Settings → People.', { exact: true })).toBeVisible();
+  await expect(launcher.getByRole('link', { name: 'Settings → People', exact: true })).toHaveAttribute('href', `#/projects/${encodeURIComponent(s.project)}/settings`);
   await reviewer.selectOption(s.users.lead);
   await expect(launcher.getByText('You will get the Consolidator role for this project.', { exact: true })).toBeVisible();
   const started = page.waitForResponse(r => r.request().method() === 'POST' && /\/projects\/[^/]+\/consolidations$/.test(r.url()));

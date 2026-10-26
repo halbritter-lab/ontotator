@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError } from "../src/api/client";
-import { MembersSection } from "../src/admin/MembersSection";
+import { MembersSection, roleChangeText } from "../src/admin/MembersSection";
 import { deferred, members } from "./projectFixtures";
 
 beforeEach(() => {
@@ -87,5 +87,27 @@ describe("project members", () => {
     view.unmount();
     await act(async () => { pending.resolve({ ...members[0], roles: [] }); });
     expect(screen.queryByRole("table")).toBeNull();
+  });
+});
+
+describe("role change confirmation (M-8d)", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("confirms each role change in words in a status line", async () => {
+    vi.spyOn(api, "listMembers").mockResolvedValue(members);
+    vi.spyOn(api, "setMemberRoles").mockImplementation(async (_key, username, roles) => ({ ...members[0], username, roles }));
+    vi.spyOn(api, "adminListUsers").mockResolvedValue([]);
+    render(<MembersSection projectKey="p/key" isSystemAdmin={false} />);
+    expect(await screen.findByText(/^Role changes save immediately\./)).toBeDefined();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "alice: Consolidator" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Alice is now Consolidator."));
+    fireEvent.click(screen.getByRole("checkbox", { name: "alice: Annotator" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Alice is no longer Annotator."));
+  });
+
+  it("words added, removed and dropped roles", () => {
+    expect(roleChangeText("Ana Weber", ["annotator"], ["annotator", "adjudicator"])).toBe("Ana Weber is now Consolidator.");
+    expect(roleChangeText("Ana Weber", ["annotator", "lead"], ["lead", "adjudicator"])).toBe("Ana Weber is now Consolidator. Ana Weber is no longer Annotator.");
+    expect(roleChangeText("Ana Weber", ["annotator"], [])).toBe("Ana Weber is no longer a member of this project.");
   });
 });
