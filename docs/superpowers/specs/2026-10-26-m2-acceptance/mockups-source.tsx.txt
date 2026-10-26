@@ -1,0 +1,883 @@
+/**
+ * Scratch generator for build/m2/decisions/index.html and tour.html (manual acceptance M2, decisions M-1 … M-8).
+ * Renders the real components of feat/ux-calm in jsdom (SelectionBar, PlanDialog, CaseScreen, SearchPanel,
+ * AttachModePanel, Dialog, Toast, ConsolidationScreen, ProjectSettingsPage, ui kit), clones their markup and changes
+ * only what an option changes (dashed outline). Run from ux-calm/frontend:
+ *   npx vitest run --config ../build/m2/decisions/vitest.config.mjs
+ */
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readdirSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { renderToStaticMarkup } from "react-dom/server";
+import { it, vi } from "vitest";
+import { api, type SelectionSummary } from "../../../../frontend/src/api/client";
+import { SelectionBar } from "../../../../frontend/src/documents/SelectionBar";
+import { PlanDialog } from "../../../../frontend/src/documents/PlanDialog";
+import { CaseScreen, type WorkspaceView } from "../../../../frontend/src/app/CaseScreen";
+import { SearchPanel } from "../../../../frontend/src/editor/SearchPanel";
+import { SearchManager } from "../../../../frontend/src/editor/searchState";
+import { AttachModePanel } from "../../../../frontend/src/editor/AttachModePanel";
+import { ConsolidationScreen } from "../../../../frontend/src/consolidation/ConsolidationScreen";
+import { ProjectSettingsPage } from "../../../../frontend/src/admin/ProjectSettingsPage";
+import { AxisValue, Button, Checkbox, Dialog, FilterChip, InlineConfirm, InlineMessage, Kbd, MenuButton, Select, TextInput, Toast } from "../../../../frontend/src/ui";
+import { IconCheck } from "../../../../frontend/src/ui/icons";
+import { draft, withGroup, exampleView, group, member, mockViewport, resetViewport, workspaceView } from "../../../../frontend/tests/consolidation/fixtures";
+import { currentUser, ontologies, settings as baseSettings } from "../../../../frontend/tests/projectFixtures";
+
+const OUT = resolve(__dirname, "..");
+
+// ---------- helpers ----------
+const q = <T extends Element = HTMLElement>(root: ParentNode, sel: string) => { const e = root.querySelector<T>(sel); if (!e) throw new Error(`missing ${sel}`); return e; };
+const qa = (root: ParentNode, sel: string) => [...root.querySelectorAll<HTMLElement>(sel)];
+const byText = (root: ParentNode, sel: string, text: string | RegExp) => {
+  const found = qa(root, sel).find(e => typeof text === "string" ? e.textContent?.trim() === text : text.test(e.textContent ?? ""));
+  if (!found) throw new Error(`missing ${sel} "${text}"`);
+  return found;
+};
+const html = (node: JSX.Element) => renderToStaticMarkup(node);
+const click = (el: Element, n: number | string) => { el.classList.add("ux-click"); el.setAttribute("data-click", String(n)); };
+const isNew = (el: Element) => { el.classList.add("ux-new"); return el; };
+async function snap(node: JSX.Element, ready: () => Promise<unknown>, selector?: string, after?: () => Promise<void> | void): Promise<HTMLElement> {
+  render(node);
+  await ready();
+  if (after) await after();
+  qa(document.body, "input").forEach(i => { const e = i as HTMLInputElement; if (e.checked) e.setAttribute("checked", ""); else e.removeAttribute("checked"); if (e.type !== "checkbox" && e.type !== "radio") e.setAttribute("value", e.value); });
+  qa(document.body, "select").forEach(sel => [...(sel as HTMLSelectElement).options].forEach(o => o.selected ? o.setAttribute("selected", "") : o.removeAttribute("selected")));
+  qa(document.body, "textarea").forEach(t => { t.textContent = (t as HTMLTextAreaElement).value; });
+  const el = (selector ? q(document.body, selector) : document.body).cloneNode(true) as HTMLElement;
+  cleanup();
+  return el;
+}
+const dialogFrame = (el: HTMLElement | string) => `<div class="ux-dialog">${typeof el === "string" ? el : el.outerHTML}</div>`;
+const pad = (inner: string, cls = "") => `<div class="ux-pad ${cls}">${inner}</div>`;
+const state = (label: string, body: string) => `<p class="dn-state">${label}</p>${body}`;
+const shot = (path: string, alt: string, cls = "") => `<img class="ux-shot ${cls}" src="${path}" alt="${alt}" loading="lazy">`;
+/** Only the details pane of a CaseScreen render, at its real width, without the fixed height. */
+const paneOf = (body: HTMLElement) => `<div class="ux-pane">${q(body, ".inspector-pane").outerHTML}</div>`;
+const appFrame = (body: HTMLElement, cls = "") => `<div class="ux-app ${cls}">${body.firstElementChild!.outerHTML}</div>`;
+
+interface Option { letter: string; name: string; recommended?: string; clicks?: string; note?: string; html: string }
+interface Section { id: string; title: string; question: string; finding: string; today: { html: string; clicks?: string; caption: string }; options: Option[]; wide?: boolean; extra?: string }
+
+function option(o: Option): string {
+  return `<article class="dn-option${o.recommended ? " dn-option--rec" : ""}" aria-label="Option ${o.letter}">
+    <h3 class="dn-option-head"><span class="dn-letter">${o.letter}</span> ${o.name}${o.recommended ? ` <span class="dn-rec">recommended</span>` : ""}</h3>
+    ${o.recommended ? `<p class="ux-why"><strong>Why:</strong> ${o.recommended}</p>` : ""}
+    ${o.clicks ? `<p class="ux-clicks">${o.clicks}</p>` : ""}
+    ${o.note ? `<p class="dn-note">${o.note}</p>` : ""}
+    <div class="dn-frame">${o.html}</div>
+  </article>`;
+}
+function section(s: Section): string {
+  const rec = s.options.find(o => o.recommended)!;
+  return `<section class="dn dn--open" id="${s.id}" data-status="open" aria-labelledby="${s.id}-h">
+  <h2 id="${s.id}-h" class="dn-title">${s.title} <span class="dn-status dn-status--open">open, recommended ${rec.letter}</span></h2>
+  <p class="dn-finding">${s.finding}</p>
+  <p class="dn-question">${s.question}</p>
+  <div class="ux-today"><h3 class="ux-today-h">Today${s.today.clicks ? ` <span class="ux-today-clicks">${s.today.clicks}</span>` : ""}</h3><p class="dn-note">${s.today.caption}</p>${s.today.html}</div>
+  <div class="dn-options${s.wide ? " dn-options--stacked" : ""}">
+  ${s.options.map(option).join("\n")}
+  </div>
+  ${s.extra ?? ""}
+</section>`;
+}
+
+const SECTIONS: Section[] = [];
+
+// =====================================================================================================
+// M-1 Documents selection bar: plan presets
+// =====================================================================================================
+const NATIVE = ["EN100068:en", "EN100075:en"];
+const MIXED = ["EN100068:en", "EN100024:de", "EN100123:de"];
+function barMocks(common: { task: string; language: string }) {
+  vi.restoreAllMocks();
+  vi.spyOn(api, "selectionSummary").mockResolvedValue({ cases: 2, steps: [{ ...common, versions: 2, cases: 2 }], skipped: {}, common: { ...common, versions: 2, cases: 2 }, not_shown: 0 } as SelectionSummary);
+}
+async function bar(keys: string[], translations: boolean, common = { task: "annotate", language: "en" }): Promise<HTMLElement> {
+  barMocks(common);
+  return snap(<SelectionBar projectKey="e3c" keys={new Set(keys)} filters={{}} onClear={() => {}} onAssign={() => {}} showToast={() => {}} onAnnounce={() => {}} onChanged={() => {}} translations={translations} />,
+    () => screen.findByText(/next step:/), ".selection-bar");
+}
+type Lang = { key: string; source_languages: string[]; cases_in_selection: number; review: { on: number; off: number } | null; annotate: { on: number; off: number }; will_change: number; not_accepted: number; not_acceptable: number; in_review: number; marked_in_package: number };
+const lang = (key: string, cases: number): Lang => ({ key, source_languages: key === "source" ? ["en"] : [], cases_in_selection: cases,
+  review: key === "source" ? null : { on: 0, off: cases }, annotate: { on: 0, off: cases }, will_change: 0, not_accepted: 0, not_acceptable: 0, in_review: 0, marked_in_package: 0 });
+async function planDialog(languages: Lang[], cases: string[], initial?: Record<string, Record<string, string>>): Promise<HTMLElement> {
+  vi.restoreAllMocks();
+  vi.spyOn(api, "previewWorkPlans").mockResolvedValue({ cases: cases.length, languages, changes: 0, to_assign: {}, consequences: { withdrawn: [], finals_leaving: [], restored: [], open_reports: [] }, invalid: [], revisions: {}, rule_on: true } as never);
+  return snap(<PlanDialog projectKey="e3c" caseIds={cases} initial={initial as never} onClose={() => {}} onSaved={() => {}} />, () => screen.findAllByText(/In selection/), ".modal-overlay");
+}
+
+async function m1(): Promise<void> {
+  const today = await bar(NATIVE, true);
+  const nativeA = await bar(NATIVE, false);
+  const mixedA = await bar(MIXED, true, { task: "translation_review", language: "de" });
+  const barB = await bar(MIXED, false, { task: "translation_review", language: "de" });
+  click(byText(barB, "button", "Plan…"), 1);
+  const planB = await planDialog([lang("source", 1), lang("de", 2)], ["EN100068", "EN100024", "EN100123"], { de: { review: "on", annotate: "on" } });
+  const presets = isNew(document.createElement("div"));
+  presets.innerHTML = html(<fieldset className="plan-step"><legend>Quick choice for every translation</legend>
+    <div className="selection-bar-actions" style={{ justifyContent: "flex-start" }}>
+      <Button>Translation review and annotation</Button><Button>Annotation only, no translation review</Button></div>
+    <p className="field-hint">Fills the choices below; nothing is saved until “Save”.</p></fieldset>);
+  q(planB, ".work-plan-dialog").prepend(presets);
+  click(qa(presets, "button")[0], 2);
+  click(byText(planB, ".modal-actions button, footer button", /^Save for/), 3);
+  const planNative = await planDialog([lang("source", 2)], ["EN100068", "EN100075"]);
+
+  SECTIONS.push({ id: "m-1", title: "M-1 Documents: plan presets in the selection bar", finding: "Finding F2 (and F1: on native texts the preset is a silent no-op whose Undo fails).",
+    question: "The selection bar shows “Translation review and annotation” and “Annotation only, no translation review” for every selection, also when it holds no translation (here EN100068 en and EN100075 en, both native sources). Where should the two plan presets live?",
+    today: { clicks: "1 click, but it does nothing on native texts", caption: "Acceptance screenshot bar-1 (e3c-proposals, two native en texts selected) and the bar rendered from SelectionBar.",
+      html: `<div class="ux-shots"><figure>${shot("../bar-1.png", "Selection bar today", "ux-shot--half")}</figure></div>${pad(today.outerHTML, "ux-bar")}` },
+    options: [
+      { letter: "A", name: "Show the presets only when the selection holds translations", clicks: "1 click (presets), 0 when hidden",
+        note: "Rule: hidden while no selected text is a translation (the bar's existing <code>translations</code> switch, but per selection instead of per project). The bar changes its width as the selection changes.",
+        html: state("Selection: two native en texts", pad(nativeA.outerHTML, "ux-bar")) + state("Selection with two de translations", pad(mixedA.outerHTML, "ux-bar")) },
+      { letter: "B", name: "Move the presets into “Plan…”", clicks: "3 clicks (Plan…, quick choice, Save) instead of 1",
+        recommended: "The bar keeps three stable actions (Assign…, Plan…, Clear selection); the presets sit where their effect is shown per language before anything is saved, so a native-only selection can never trigger a silent no-op.",
+        note: "The plan dialog gets a “Quick choice” row on top that fills the per-language choices. For a native-only selection the row is not shown (no translation language in the dialog).",
+        html: state("Bar", pad(barB.outerHTML, "ux-bar")) + state("Plan… with the quick choice (selection with translations)", dialogFrame(planB)) + state("Plan… for two native texts: no quick choice", dialogFrame(planNative)) },
+      { letter: "C", name: "As today", clicks: "1 click", note: "Plus the F1 fix: on native texts the toast says “Nothing changed: the selected texts are native sources” and offers no Undo.", html: pad(today.outerHTML, "ux-bar") },
+    ] });
+}
+
+// =====================================================================================================
+// Editor fixtures (EN100068 excerpt): proposal check with three proposals, one with two mentions
+// =====================================================================================================
+const ETEXT = "The resurgence of that lancinating pain irradiating to the loins and associated with slight vaginal bleeding prompted consultation. "
+  + "On admission, besides the main complaint, the patient had vaginal bleeding and nausea but neither fever, nor vomiting.";
+const at = (word: string, nth = 0) => { let i = -1; for (let k = 0; k <= nth; k++) i = ETEXT.indexOf(word, i + 1); if (i < 0) throw new Error(word); return { start: i, end: i + word.length }; };
+const AXES = [
+  { id: "assertion", label: "Assertion", options: ["present", "absent", "uncertain"], allow_empty: true },
+  { id: "experiencer", label: "Experiencer", options: ["patient", "family_member", "other"], allow_empty: true },
+  { id: "temporality", label: "Temporality", options: ["current", "historical", "future"], allow_empty: true },
+];
+const LABELS: Record<string, string> = { "HP:0034263": "Vaginal hemorrhage", "HP:0002018": "Nausea", "HP:0002013": "Vomiting", "HP:0012825": "Mild" };
+type Seg = { start: number; end: number };
+function snapOf(id: string, termId: string, mentions: Seg[][], assertion: string, actor: "tool" | "human" = "tool", extra: Record<string, unknown> = {}) {
+  return { schema_version: "ontocurator-annotation/v3", version: `${id}-v1`, document_id: "EN100068", text_sha256: "t", ontology_sha256: "o", layer_config_sha256: "l",
+    annotation: { annotation_id: id, document_id: "EN100068", layer_id: "phenotype", type_id: "default", term_id: termId,
+      axes_values: { assertion, experiencer: "patient", temporality: "current" }, axes_defaulted: [],
+      evidence_refs: mentions.map((_, i) => ({ evidence_id: `ev-${id}-${i}`, version: "ev-1" })),
+      provenance: actor === "tool" ? { actor: { actor_id: "phentrieve", kind: "tool" }, method: "automated", source_refs: [] } : { actor: { actor_id: "ann-0004", kind: "human" }, method: "manual", source_refs: ["p2:p2-v1"] }, ...extra },
+    evidence: mentions.map((segments, i) => ({ mention: { evidence_id: `ev-${id}-${i}`, segments, cue_segments: [] }, version: "ev-1", document_id: "EN100068", text_sha256: "t" })) };
+}
+const P2 = () => snapOf("p2", "HP:0034263", [[at("vaginal bleeding")], [at("vaginal bleeding", 1)]], "present");
+const P1 = () => snapOf("p1", "HP:0002018", [[at("nausea")]], "present");
+const P3 = () => snapOf("p3", "HP:0002013", [[at("vomiting")]], "absent");
+function editorCase(decisions: { id: string; outcome: string; replacement?: string }[], copies: ReturnType<typeof snapOf>[] = []): WorkspaceView {
+  const key = { project_key: "e3c", document_id: "EN100068", annotator_id: "ann-0004", mode: "proposal_check", scope_id: "scope-default", target_set_id: "targets-1" };
+  const inputs = [P2(), P1(), P3()];
+  const targets = { target_set_id: "targets-1", targets: inputs.map(s => ({ annotation_id: s.annotation.annotation_id, version: s.version })) };
+  return {
+    require_chosen_axes: false, annotation_policy_revision: 1, allow_spanless_findings: true, require_spanless_note: false, enforce_spanless_rules: true,
+    document: { document_id: "EN100068", text: ETEXT, language: "en", text_sha256: "t" }, key,
+    scope: { scope_id: "scope-default", mode: "proposal_check", editable_layer_ids: ["phenotype"], reference_layer_ids: [] },
+    layers: [{ layer_id: "phenotype", label: "Phenotype", ontology_id: "hp", access: "editable", default_visible: true, default_type_id: "default",
+      annotation_types: [{ type_id: "default", label: "Phenotype", evidence_policy: "optional", axes: AXES }] }],
+    modifier_layer_ids: ["phenotype"],
+    ontologies: [{ ontology_id: "hp", release: "2026-09-01", label: "Human Phenotype Ontology", sha256: "s", format: "obo-graph-json" }],
+    checked_layer_ids: [], targets, available_inputs: inputs, submissions: [], term_statuses: {},
+    draft: { key, targets, revision: 3, annotations: copies, evidence: copies.flatMap(c => c.evidence), checked_layer_ids: [],
+      decisions: decisions.map(d => ({ decision_id: `d-${d.id}`, target: { annotation_id: d.id, version: `${d.id}-v1` }, outcome: d.outcome, reviewer_id: "ann-0004",
+        ...(d.replacement ? { replacement: { annotation_id: d.replacement, version: `${d.replacement}-v1` } } : {}) })) },
+    axes_definition: "editor-axes/v1", axes_config: AXES, axes_config_sha256: "x",
+  } as unknown as WorkspaceView;
+}
+function editorMocks(): void {
+  vi.restoreAllMocks();
+  vi.spyOn(api, "resolveTermLabels").mockImplementation(async (_p, terms) => terms.map(t => ({ ...t, label: LABELS[t.term_id] ?? t.term_id })) as never);
+  vi.spyOn(api, "getPreferences").mockResolvedValue({ last_annotator_id: "ann-0004", mode_by_package: {} } as never);
+  vi.spyOn(api, "listPackageOntologies").mockResolvedValue([]);
+}
+async function editor(view: WorkspaceView, selectKey: string | null): Promise<HTMLElement> {
+  mockViewport(1440);
+  editorMocks();
+  return snap(<CaseScreen view={view} workspaceId="ws-e" onClose={() => {}} />,
+    () => screen.findByRole("button", { name: /Finish & Submit/ }), undefined, async () => {
+      await waitFor(() => { if (!document.body.textContent?.includes("Vaginal hemorrhage")) throw new Error("labels"); });
+      if (selectKey) {
+        const row = () => qa(document.body, "[data-list-key]").find(e => e.dataset.listKey!.startsWith(selectKey));
+        if (!row()) throw new Error("keys: " + qa(document.body, "[data-list-key]").map(e => e.dataset.listKey).join(", "));
+        fireEvent.click(row()!);
+        await waitFor(() => { if (!row()?.classList.contains("selected")) throw new Error("not selected"); });
+      }
+    });
+}
+const statusLine = (b: HTMLElement) => q(b, "[data-advance-status]");
+const ADVANCE = "Confirmed Vaginal hemorrhage “vaginal bleeding”. Next open proposal: 2 of 3";
+
+async function toastHtml(message: string, actionLabel?: string, undo = false): Promise<string> {
+  const el = await snap(<Toast toast={{ id: 1, message, ...(actionLabel ? { actionLabel, onAction: () => {}, undo } : {}) }} onDismiss={() => {}} />, () => screen.findByText(message), ".ui-toast-region");
+  return el.outerHTML;
+}
+
+// =====================================================================================================
+// M-2 Editor: the auto-advance status line
+// =====================================================================================================
+async function m2(): Promise<void> {
+  const base = await editor(editorCase([{ id: "p2", outcome: "confirmed" }]), `target:["p1"`);
+  const today = base.cloneNode(true) as HTMLElement;
+  statusLine(today).innerHTML = html(<p className="form-hint">{ADVANCE}<span aria-hidden="true"> <Kbd>K</Kbd> back</span></p>);
+  const a = base.cloneNode(true) as HTMLElement;
+  statusLine(a).innerHTML = `<div class="ux-new ux-advance-strip">${html(<InlineMessage tone="success"><p><IconCheck /> {ADVANCE}. <span aria-hidden="true"><Kbd>K</Kbd> back</span></p></InlineMessage>)}</div>`;
+  const b = base.cloneNode(true) as HTMLElement;
+  const toast = await toastHtml("Confirmed Vaginal hemorrhage. Next open proposal: 2 of 3", "Back (K)");
+  b.firstElementChild!.insertAdjacentHTML("beforeend", `<div class="ux-new ux-toast-at">${toast}</div>`);
+  SECTIONS.push({ id: "m-2", title: "M-2 Editor: the status line after a decision moves on", finding: "Finding F4 (auto-advance from U-2 works, but its line is easy to miss).", wide: true,
+    question: "After 1/2/4 the next open proposal is selected and a line at the top of the details pane names what was decided. The line is plain grey hint text and runs into the panel below. How should it look?",
+    today: { caption: "Rendered from CaseScreen (proposal check, EN100068 excerpt): “Vaginal hemorrhage” confirmed with 1, Nausea selected. The line is the real markup of <code>[data-advance-status]</code>.", html: appFrame(today) },
+    options: [
+      { letter: "A", name: "Framed strip in the details pane", recommended: "It stays exactly where the eye goes next (the new proposal's details) and lasts until the next action, so K is still explained; a frame and check icon make it read as a status, not as panel text.",
+        note: "InlineMessage (tone success, check icon) in place of the hint; same live region, cleared on the next selection change.", html: appFrame(a) },
+      { letter: "B", name: "Toast at the bottom", note: "The app's Toast with “Back (K)” as action; it disappears after 10 s and sits far from the details pane (and over the text on narrow screens).", html: appFrame(b) },
+      { letter: "C", name: "As today", note: "Grey hint text, no frame.", html: appFrame(today) },
+    ] });
+}
+
+// =====================================================================================================
+// M-3 Term search: restrict to modifiers
+// =====================================================================================================
+const searchKey = { project_key: "e3c", document_id: "EN100068", annotator_id: "ann-0004", mode: "independent" as const, scope_id: "scope-default", target_set_id: "empty" };
+const hit = (term_id: string, label: string, role?: string) => ({ term_id, label, definition: `${label}.`, matched_term: label, match_kind: "label", rank: 1, display_pos: 1, obsolete: false, route: "lexical", ...(role ? { role } : {}) });
+const ALL_HITS = [hit("HP:0012828", "Severe", "modifier"), hit("HP:0008527", "Congenital sensorineural hearing impairment"), hit("HP:0012379", "Abnormal enzyme/coenzyme activity"),
+  hit("HP:0030127", "Severe short stature"), hit("HP:0001252", "Severe muscular hypotonia"), hit("HP:0002099", "Severe asthma"), hit("HP:0012829", "Profound", "modifier")];
+const MOD_HITS = [hit("HP:0012828", "Severe", "modifier"), hit("HP:0012829", "Profound", "modifier"), hit("HP:0012826", "Moderate", "modifier")];
+async function search(query: string, hits: unknown[]): Promise<HTMLElement> {
+  vi.restoreAllMocks();
+  const manager = new SearchManager({ searchOntology: vi.fn().mockResolvedValue({ search_id: "s-1", candidates: hits }) } as never);
+  return snap(<div className="inspector-pane" style={{ position: "static" }}><SearchPanel searchManager={manager} annotationId="new" workspaceKey={searchKey} layerId="phenotype" onSelectCandidate={() => {}} debounceMs={0} /></div>,
+    async () => screen.getByRole("combobox", { name: "Search term" }), ".inspector-pane", async () => {
+      fireEvent.change(screen.getByRole("combobox", { name: "Search term" }), { target: { value: query } });
+      await waitFor(() => { if (screen.queryAllByRole("option").length !== hits.length) throw new Error("hits"); });
+    });
+}
+async function emptySearch(): Promise<HTMLElement> {
+  vi.restoreAllMocks();
+  const manager = new SearchManager({ searchOntology: vi.fn() } as never);
+  return snap(<div className="inspector-pane" style={{ position: "static" }}><SearchPanel searchManager={manager} annotationId="new" workspaceKey={searchKey} layerId="phenotype" onSelectCandidate={() => {}} debounceMs={0} /></div>,
+    async () => screen.getByRole("combobox", { name: "Search term" }), ".inspector-pane");
+}
+/** The help line under the field (the empty-field hint). */
+const hintLine = (el: HTMLElement) => qa(el, "p, div, span").find(e => e.children.length === 0 && /Name or code/.test(e.textContent ?? ""));
+const chipRow = (on: boolean) => `<div class="ux-new ux-chip-row">${on ? html(<FilterChip label="Modifiers only" onRemove={() => {}} />) : html(<Button size="sm" aria-pressed="false">Modifiers only</Button>)}</div>`;
+const afterInput = (el: HTMLElement, extra: string) => { const input = q(el, "[role='combobox']"); (input.closest(".search-input-row, .search-field, div") ?? input).insertAdjacentHTML("afterend", extra); };
+
+async function m3(): Promise<void> {
+  const today = await search("sev", ALL_HITS);
+  const aEmpty = await emptySearch();
+  const h = hintLine(aEmpty); if (h) { h.textContent = "Name or code, for example HP:0001250. Type mod: to search modifiers only (mod:sev)."; isNew(h); }
+  const aMod = await search("mod:sev", MOD_HITS);
+  afterInput(aMod, `<p class="field-hint ux-new">Modifiers only (Clinical modifier, HP:0012823). Delete “mod:” for all terms.</p>`);
+  const bOff = await search("sev", ALL_HITS); afterInput(bOff, chipRow(false));
+  click(q(bOff, ".ux-chip-row button"), 1);
+  const bOn = await search("sev", MOD_HITS); afterInput(bOn, chipRow(true));
+  const cOn = await search("sev", MOD_HITS);
+  afterInput(cOn, chipRow(true) + `<p class="field-hint ux-new">“mod:” switched on “Modifiers only”.</p>`);
+  const cEmpty = await emptySearch(); afterInput(cEmpty, chipRow(false));
+  const h2 = hintLine(cEmpty); if (h2) { h2.textContent = "Name or code, for example HP:0001250. mod: searches modifiers only."; isNew(h2); }
+  const strip = (...frames: string[]) => `<div class="ux-strip">${frames.join("")}</div>`;
+  SECTIONS.push({ id: "m-3", title: "M-3 Term search: find modifier terms", finding: "Finding F9.",
+    question: "Searching “sev” for Severe returns modifier and phenotype hits mixed; there is no way to restrict the search to modifiers (HPO: the Clinical modifier branch HP:0012823, or whatever the T1 profile marks as modifier). The “+ Add modifier…” search already restricts to these roots, so the filter exists server-side.",
+    today: { caption: "Rendered from SearchPanel with mocked hits for “sev”.", html: pad(today.outerHTML, "ux-narrow") },
+    options: [
+      { letter: "A", name: "Prefix <code>mod:</code> with a visible hint", clicks: "0 clicks, 4 keys (mod:)", note: "The empty-field hint mentions it; while the prefix is in the field a line names the filter.",
+        html: strip(state("Empty field", pad(aEmpty.outerHTML)), state("mod:sev", pad(aMod.outerHTML))) },
+      { letter: "B", name: "A “Modifiers only” filter chip", clicks: "1 click", note: "Off: a small toggle under the field. On: a removable chip (the app's FilterChip). Remembered for the session (guess).",
+        html: strip(state("Off", pad(bOff.outerHTML)), state("On", pad(bOn.outerHTML))) },
+      { letter: "C", name: "Both: the chip, and <code>mod:</code> switches it on", clicks: "1 click or 4 keys",
+        recommended: "The chip makes the filter discoverable for occasional annotators, the prefix keeps it on the keyboard; both are one state, so there is nothing extra to learn.",
+        note: "Typing “mod:” removes the prefix from the query and turns the chip on; removing the chip goes back to all terms.",
+        html: strip(state("Empty field", pad(cEmpty.outerHTML)), state("After typing mod:sev (prefix became the chip)", pad(cOn.outerHTML))) },
+    ] });
+}
+
+// =====================================================================================================
+// M-4 Move one mention to a new finding (HPO guide principle 3)
+// =====================================================================================================
+const MILD = { term_id: "HP:0012825", segments: [at("slight")] };
+const COPY = (mentions: Seg[][], id = "copy-p2", modifiers = [MILD]) => snapOf(id, "HP:0034263", mentions, "present", "human", { modifiers });
+async function m4(): Promise<void> {
+  const twoMentions = [[at("vaginal bleeding")], [at("vaginal bleeding", 1)]];
+  const copyView = () => editorCase([{ id: "p2", outcome: "changed", replacement: "copy-p2" }], [COPY(twoMentions)]);
+  const base = await editor(copyView(), "annotation:copy-p2");
+  const a = base.cloneNode(true) as HTMLElement;
+  const cards = qa(a, ".mention-card");
+  cards.forEach((c, i) => { const acts = q(c, ".mention-card__actions"); acts.insertAdjacentHTML("afterbegin", html(<Button size="sm">Move to a new finding</Button>)); isNew(acts.firstElementChild!); if (i === 1) click(acts.firstElementChild!, 1); });
+  const after = await editor(editorCase([{ id: "p2", outcome: "changed", replacement: "copy-p2" }],
+    [COPY([[at("vaginal bleeding")]]), COPY([[at("vaginal bleeding", 1)]], "copy-p2b", [])]), "annotation:copy-p2");
+  q(after, ".inspector-pane").insertAdjacentHTML("afterbegin", `<div class="ux-new ux-advance-strip">${html(<InlineMessage tone="success"><p>Moved mention 2 “vaginal bleeding” to a new finding Vaginal hemorrhage. Mild stays with mention 1.</p></InlineMessage>)}</div>`);
+
+  const prop = await editor(editorCase([]), `target:["p2"`);
+  const b = prop.cloneNode(true) as HTMLElement;
+  const er = byText(b, ".inspector-pane button", /Edit & Replace/);
+  const menu = await snap(<MenuButton label="Edit & Replace" buttonLabel="Edit & Replace…" items={[
+    { id: "all", label: "Both mentions (one finding)", onSelect: () => {} },
+    { id: "m1", label: "Only mention 1 “slight vaginal bleeding”", description: "Mention 2 stays as the confirmed proposal", onSelect: () => {} },
+    { id: "m2", label: "Only mention 2 “vaginal bleeding”", onSelect: () => {} }]} />,
+  async () => screen.getByRole("button"), undefined, async () => { fireEvent.click(screen.getByRole("button")); await screen.findAllByRole("menuitem"); });
+  const menuEl = menu.firstElementChild as HTMLElement;
+  isNew(menuEl); click(q(menuEl, "button"), "3"); click(qa(menuEl, "[role='menuitem']")[1], 1);
+  er.replaceWith(menuEl);
+
+  const c = base.cloneNode(true) as HTMLElement;
+  click(qa(c, ".mention-card")[1].querySelector("button.btn-danger")!, 1);
+  SECTIONS.push({ id: "m-4", title: "M-4 Editor: move one mention to a new finding", finding: "Finding F10 (pending user confirmation of the guideline reading).",
+    question: "The tool merged “slight vaginal bleeding” and the later “vaginal bleeding” into one proposal (two mentions). The HPO guide (principle 3, R4, A26) says occurrences with the same term and the same attributes are one annotation, and a changed attribute makes a new one. Modifiers count like attributes (logically; the guide does not say it yet). So when the first mention gets Mild, it must leave the merged finding. Where does that operation live?",
+    today: { clicks: "6 clicks + typing (Remove, Yes, mark the text, search, pick term, confirm values)", caption: "Rendered from CaseScreen: the Edit &amp; Replace copy of the proposal, Mild attached, two mentions. Mild now applies to both.", html: appFrame(base) },
+    options: [
+      { letter: "A", name: "Per mention in the details pane", clicks: "1 click",
+        recommended: "The split happens where the mentions and the modifiers are shown, works the same for scratch findings and for copies, and needs no new step in Edit &amp; Replace.",
+        note: "Every mention card of a finding with two or more mentions gets “Move to a new finding”. The new finding copies term and axis values, but no modifiers; the status strip says what happened. Shown: before (the click) and after.",
+        html: `<div class="ux-strip">${state("Click on mention 2", paneOf(a))}${state("After", paneOf(after))}</div>` },
+      { letter: "B", name: "In Edit &amp; Replace", clicks: "2 clicks (Edit &amp; Replace…, which mentions)",
+        note: "For a proposal with several mentions, Edit &amp; Replace asks which mentions the copy takes; the others stay with the proposal (confirmed). Does not help a finding made from scratch or a copy made earlier.",
+        html: paneOf(b) },
+      { letter: "C", name: "No action: remove and mark again", clicks: "6 clicks + typing", note: "As today: Remove the mention on the copy, then mark the text again and create the finding anew.", html: paneOf(c) },
+    ] });
+}
+
+// =====================================================================================================
+// M-5 Attach a modifier to a proposal
+// =====================================================================================================
+async function m5(): Promise<void> {
+  const prop = await editor(editorCase([]), `target:["p2"`);
+  const nearest = { annotationId: "p2", term: "Vaginal hemorrhage", termId: "HP:0034263", segments: [at("vaginal bleeding")], quote: "vaginal bleeding", distance: 1, after: true };
+  const panel = (props: Partial<Parameters<typeof AttachModePanel>[0]>) => html(<AttachModePanel termLabel="Mild" termId="HP:0012825" markQuote="slight" nearest={nearest} focused={null}
+    existing={() => undefined} noFindings={false} onAttach={() => {}} onReplace={() => {}} onCancel={() => {}} {...props} />);
+  const inPane = (body: string, extra = "") => { const el = prop.cloneNode(true) as HTMLElement; const pane = q(el, ".inspector-pane"); pane.innerHTML = extra + body; return el; };
+  const today = inPane(panel({ noFindings: true }));
+  const aEl = inPane(panel({ note: <p className="ux-new">Vaginal hemorrhage is a tool proposal: attaching replaces it with your copy (Edit &amp; Replace).</p> }));
+  click(q(aEl, ".mod-attach-actions button"), 1);
+  const aAfter = await editor(editorCase([{ id: "p2", outcome: "changed", replacement: "copy-p2" }], [COPY([[at("vaginal bleeding")], [at("vaginal bleeding", 1)]])]), "annotation:copy-p2");
+  q(aAfter, ".inspector-pane").insertAdjacentHTML("afterbegin", `<div class="ux-new ux-advance-strip">${html(<InlineMessage tone="success"><p>Vaginal hemorrhage replaced by your copy with Mild “slight”. <span aria-hidden="true"><Kbd>Ctrl</Kbd>+<Kbd>Z</Kbd> undo</span></p></InlineMessage>)}</div>`);
+  const bEl = inPane(panel({}) + `<div class="ux-new">${html(<InlineConfirm title="Replace the proposal with your copy?" message="Vaginal hemorrhage becomes your edited copy with Mild. The proposal is recorded as changed." confirmLabel="Replace and attach" onConfirm={() => {}} onCancel={() => {}} />)}</div>`);
+  click(byText(bEl, ".mod-attach-actions button", /Attach to/), 1); click(byText(bEl, ".ux-new button", "Replace and attach"), 2);
+  const cEl = inPane(panel({ noFindings: true }));
+  q(cEl, ".mod-attach-panel p").textContent = "Mild cannot be attached to a tool proposal. Press 3 (Edit & Replace) on Vaginal hemorrhage, then attach Mild to your copy.";
+  isNew(q(cEl, ".mod-attach-panel p"));
+  SECTIONS.push({ id: "m-5", title: "M-5 Editor: attach a modifier to a proposal", finding: "Finding F12 (depends on the F11 fix: copies carry and compare modifiers; F25: a fresh copy is a target).",
+    question: "In proposal check most findings are proposals, and attach mode only targets own findings, so marking “slight” and choosing Mild ends in “Create the finding first…”. If a proposal can be the target, attaching changes it: it must become the annotator's copy (Edit &amp; Replace, decision “changed”). Should that happen implicitly?",
+    today: { clicks: "dead end; workaround 3 (Edit &amp; Replace) first, then attach", caption: "Rendered: AttachModePanel in the details pane after marking “slight” and choosing Mild (the real “no target” text).", html: appFrame(today) },
+    options: [
+      { letter: "A", name: "Implicit Edit &amp; Replace, named before and after", clicks: "1 click / Enter",
+        recommended: "Attaching a modifier is an edit, and Edit &amp; Replace is the one edit path for proposals; one sentence in the panel and the status line make the replacement visible, and Undo reverts both.",
+        note: "The panel says that attaching replaces the proposal; after Enter the status line names the replacement.",
+        html: `<div class="ux-strip">${state("Attach mode", paneOf(aEl))}${state("After", paneOf(aAfter))}</div>` },
+      { letter: "B", name: "A confirm step", clicks: "2 clicks / Enter twice", note: "“Attach to Vaginal hemorrhage” opens an inline confirmation “Replace the proposal with your copy?” every time.", html: paneOf(bEl) },
+      { letter: "C", name: "Not allowed, explain the way", clicks: "Esc, J/K to the proposal, 3, mark again, attach", note: "Only the message changes: it names Edit &amp; Replace.", html: paneOf(cEl) },
+    ] });
+}
+// =====================================================================================================
+// M-6 After submit
+// =====================================================================================================
+async function m6(): Promise<void> {
+  const todayDialog = await snap(<Dialog open title="Case submitted" heading="Case submitted" footer={<>
+    <Button variant="secondary">View submitted result</Button><Button variant="secondary">Stay in case</Button><Button variant="secondary">Back to my tasks</Button>
+    <Button variant="secondary">Review next case (Case 3) →</Button><Button variant="primary">Next task</Button></>}>
+    <p>Submitted <time>14:12</time>.</p><details className="technical-details"><summary>Technical details</summary></details></Dialog>,
+  () => screen.findByRole("dialog"), ".modal-overlay");
+  click(byText(todayDialog, "button", "Next task"), 2);
+  const next = await editor(editorCase([]), null);
+  qa(next, ".case-header *, header *").filter(e => e.children.length === 0 && e.textContent === "EN100068").forEach(e => { e.textContent = "EN100075"; });
+  const toast = await toastHtml("EN100068 submitted.", "View result");
+  next.firstElementChild!.insertAdjacentHTML("beforeend", `<div class="ux-new ux-toast-at">${toast}</div>`);
+  const bDialog = await snap(<Dialog open title="Submit case" heading="Case submitted" footer={<>
+    <Button variant="secondary">Back to my tasks</Button><Button variant="primary">Next task: EN100075</Button></>}>
+    <p className="ux-new"><IconCheck /> EN100068 submitted at 14:12. 2 tasks left.</p><p><a href="#">View submitted result</a></p></Dialog>,
+  () => screen.findByRole("dialog"), ".modal-overlay");
+  click(byText(bDialog, "button", /^Next task/), 2);
+  SECTIONS.push({ id: "m-6", wide: true, title: "M-6 After submit: the “Case submitted” modal", finding: "Finding F13.",
+    question: "After “Submit case” the submit dialog closes and a second modal opens with up to five buttons (View submitted result, Stay in case, Back to my tasks, Review next case →, Next task). What should follow a submit?",
+    today: { clicks: "2 clicks from the submit dialog to the next task (Submit case, Next task)", caption: "Rendered with the real Dialog and the button set of CaseScreen (assignment with a next task and a next case).", html: dialogFrame(todayDialog) },
+    options: [
+      { letter: "A", name: "No second modal: open the next task with a toast", clicks: "1 click (Submit case; the next task opens)",
+        recommended: "Submitting is the end of the job; the next task is what the annotator wants in nearly every case, the toast keeps the one useful extra (the result), and a submitted case is read-only, so “Stay in case” has no purpose.",
+        note: "Goes straight to the next task, or to My tasks when none is left; the toast “EN100068 submitted. View result” stays 10 s. Shown: the next task opened.",
+        html: appFrame(next) },
+      { letter: "B", name: "The submit dialog turns into its success state", clicks: "2 clicks",
+        note: "Same modal, no second one: one primary “Next task”, “Back to my tasks”, and a quiet link to the result. “Stay in case” and “Review next case” go.", html: dialogFrame(bDialog) },
+      { letter: "C", name: "As today", clicks: "2 clicks", note: "Five buttons.", html: dialogFrame(todayDialog) },
+    ] });
+}
+
+// =====================================================================================================
+// M-7 Consolidation card and sidebar
+// =====================================================================================================
+function consView() {
+  const view = exampleView();
+  const states: Record<string, Record<string, unknown>> = {
+    "g-dd": { state: "choose", annotation_ids: ["cons-2"] },
+    "g-gait": { state: "leave_out" },
+  };
+  return { ...view, groups: view.groups.map(g => ({ ...g, ...states[g.group_id] })) };
+}
+async function cons(groupId: string, after?: () => Promise<void>, views: unknown[] = [consView()]): Promise<HTMLElement> {
+  resetViewport(); mockViewport(1440);
+  vi.restoreAllMocks();
+  const get = vi.spyOn(api, "getConsolidation");
+  views.slice(0, -1).forEach(v => get.mockResolvedValueOnce(v as never));
+  get.mockResolvedValue(views.at(-1) as never);
+  vi.spyOn(api, "openWorkRound").mockResolvedValue({ workspace_id: "ws-c", view: workspaceView(), read_only: false } as never);
+  vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
+  return snap(<ConsolidationScreen projectKey="pkg-1" roundId="round-c" assignmentId={55} onNavigate={() => {}} group={groupId}
+    headerActions={<><Button size="sm">Guidelines</Button><Button size="sm">Report problem</Button></>} />,
+  () => screen.findByRole("heading", { name: /case-107 de v2$/ }), undefined, async () => {
+    await waitFor(() => { if (!document.querySelector(".cons-group-expanded .cons-actions")) throw new Error("not expanded"); });
+    await waitFor(() => { if (!vi.mocked(api.openWorkRound).mock.calls.length) throw new Error("no workspace"); });
+    await new Promise(r => setTimeout(r, 50));
+    if (after) await after();
+  });
+}
+const side = (el: HTMLElement) => `<div class="ux-side"><section class="cons-screen">${q(el, ".cons-side").outerHTML}</section></div>`;
+const groupOf = (el: HTMLElement, id: string) => q(el, `[data-group='${id}']`);
+const removeEditInEditor = (el: HTMLElement) => qa(el, ".cons-group button").filter(b => b.textContent?.trim() === "Edit in editor…").forEach(b => b.remove());
+const addHeaderEditor = (el: HTMLElement) => { const h = q(el, ".cons-header-actions"); h.insertAdjacentHTML("beforeend", html(<Button size="sm" title="For span changes and findings the comparison cannot express">Open in full editor</Button>)); isNew(h.lastElementChild!); };
+const dropChangeButtons = (el: HTMLElement) => qa(el, ".cons-change").forEach(b => b.remove());
+async function moreMenu(): Promise<HTMLElement> {
+  const m = await snap(<MenuButton label="More actions" buttonLabel="More…" items={[{ id: "ev", label: "Edit values…", onSelect: () => {} }, { id: "ot", label: "Other term…", onSelect: () => {} }]} />,
+    async () => screen.getByRole("button"), undefined, async () => { fireEvent.click(screen.getByRole("button")); await screen.findAllByRole("menuitem"); });
+  return isNew(m.firstElementChild as HTMLElement) as HTMLElement;
+}
+/** Open card actions: primary + Leave out + More… (recommended M-7c). */
+async function calmActions(card: HTMLElement, leaveOut = "Leave out"): Promise<void> {
+  const actions = qa(card, ".cons-actions").at(-1)!;
+  qa(actions, "button").filter(b => /Edit values…|Other term…|Edit in editor…/.test(b.textContent ?? "")).forEach(b => b.remove());
+  const leave = byText(actions, "button", "Leave out"); leave.textContent = leaveOut;
+  actions.appendChild(await moreMenu());
+}
+/** All rows visible; agreed rows muted; axis values as AxisValue chips (recommended M-7e). */
+function unfold(card: HTMLElement): void {
+  card.querySelector(".cons-agreed-summary")?.remove();
+  qa(card, ".cons-compare tbody tr").forEach(tr => {
+    tr.removeAttribute("hidden");
+    const td = tr.querySelector("td.cons-agreed");
+    if (!td || td.querySelector(".axis-value")) return;
+    tr.classList.add("ux-agreed-row", "ux-new");
+    const label = tr.querySelector("th")?.textContent ?? "";
+    if (/Assertion|Experiencer|Temporality/.test(label)) {
+      const [word, ...rest] = (td.textContent ?? "").split(/(?=[ ,(])/);
+      const value = { family: "family_member" }[word.toLowerCase()] ?? word.toLowerCase();
+      td.innerHTML = `${html(<AxisValue value={value} />)}<span class="cons-muted">${rest.join("")}</span>`;
+    }
+  });
+  qa(card, ".cons-compare td:not(.cons-agreed)").forEach(td => {
+    const label = td.closest("tr")?.querySelector("th")?.textContent ?? "";
+    if (/Assertion|Experiencer|Temporality/.test(label) && !td.querySelector(".axis-value")) {
+      const val = td.querySelector(".cons-value > span, .cons-value") as HTMLElement | null;
+      if (val && val.firstChild?.nodeType === 3) { const word = val.firstChild.textContent!.trim(); val.firstChild.replaceWith(frag(html(<AxisValue value={word.toLowerCase()} />))); }
+    }
+  });
+}
+const frag = (h: string) => { const t = document.createElement("template"); t.innerHTML = h.trim(); return t.content.firstElementChild as HTMLElement; };
+/** Choice staged instead of resolving (recommended M-7d). */
+function stage(card: HTMLElement, dropWhole: boolean): void {
+  const take = qa(card, "button.cons-take").find(b => /Absent/.test(b.getAttribute("aria-label") ?? ""))!;
+  take.setAttribute("aria-pressed", "true"); click(take, 1);
+  const result = q(card, ".cons-result"); result.textContent = "Result: 1 finding, Hypotonia (HP:0001252), Absent, Patient, Current. Not saved yet."; isNew(result);
+  if (dropWhole) qa(card, ".cons-compare tr").filter(tr => tr.querySelector("th")?.textContent === "Whole finding").forEach(tr => tr.remove());
+  const actions = qa(card, ".cons-actions").at(-1)!;
+  actions.insertAdjacentHTML("afterbegin", html(<Button variant="primary">Keep</Button>)); isNew(actions.firstElementChild!); click(actions.firstElementChild!, 2);
+}
+
+async function m7(): Promise<void> {
+  // 7a Open in full editor
+  const micro = await cons("g-micro");
+  const aA = micro.cloneNode(true) as HTMLElement; removeEditInEditor(aA); addHeaderEditor(aA);
+  const consApp = (el: HTMLElement) => `<div class="ux-app ux-app--tall">${el.firstElementChild!.outerHTML}</div>`;
+  SECTIONS.push({ id: "m-7a", title: "M-7a Consolidation: “Edit in editor…” on every card", finding: "Finding F17.", wide: true,
+    question: "“Edit in editor…” opens the whole consolidation draft in the full annotation editor (for span changes and new findings the comparison cannot express). It sits on every open and every expanded resolved card, although it acts on the whole text and leaves the view.",
+    today: { caption: "Acceptance screenshot cons-1 (EN100068) and ConsolidationScreen rendered with the spec example (case-107), the one-person group “below the 3rd percentile” open.",
+      html: `<div class="ux-shots"><figure>${shot("../cons-1.png", "Consolidation today", "ux-shot--half")}</figure></div>${consApp(micro)}` },
+    options: [
+      { letter: "A", name: "One “Open in full editor” in the header", recommended: "It acts on the whole text, so it belongs to the screen, next to Report problem; the cards lose one button each.",
+        note: "Tooltip: “For span changes and findings the comparison cannot express”. Removed from every card.", html: consApp(aA) },
+      { letter: "B", name: "As today", note: "On every open card and every expanded resolved card.", html: consApp(micro) },
+    ] });
+
+  // 7b resolved rows
+  const dd = await cons("g-dd");
+  const bA = micro.cloneNode(true) as HTMLElement; dropChangeButtons(bA); removeEditInEditor(bA);
+  const bAexp = dd.cloneNode(true) as HTMLElement; dropChangeButtons(bAexp); removeEditInEditor(bAexp);
+  click(q(groupOf(bAexp, "g-dd"), ".cons-group-toggle"), 1); click(byText(groupOf(bAexp, "g-dd"), "button", "Change"), 2);
+  const bB = micro.cloneNode(true) as HTMLElement; removeEditInEditor(bB);
+  qa(bB, ".cons-change").forEach((b, i) => { b.className = "btn btn-quiet btn-link btn-sm cons-change ux-new"; if (i !== 1) b.classList.add("ux-hidden-until-hover"); else click(b, "hover"); });
+  SECTIONS.push({ id: "m-7b", title: "M-7b Consolidation: a bordered “Change” on every resolved row", finding: "Finding F18 (1).",
+    question: "Every agreed or decided row carries its own bordered “Change” button (13 identical buttons in a column on EN100068). How does a resolved row offer “Change”?",
+    today: { caption: "Rendered sidebar: agreed and decided rows each with “Change”.", html: side(micro) },
+    options: [
+      { letter: "A", name: "The row is the control", clicks: "2 clicks (open the row, Change)", recommended: "The row toggle already expands the group; the expanded resolved card already has “Change” inside. Dropping the column of buttons removes the noise without losing anything.",
+        note: "No button on the collapsed row. Click or Enter expands it, “Change” is inside (shown: “Delayed development” expanded).",
+        html: `<div class="ux-strip">${state("Collapsed rows", side(bA))}${state("Row expanded", side(bAexp))}</div>` },
+      { letter: "B", name: "Quiet “Change” link on hover or focus", clicks: "1 click", note: "A text-style link, visible only while the pointer is on the row or the row has focus (shown on “muscular hypotonia”'s neighbour). Invisible to anyone scanning the list.", html: side(bB) },
+      { letter: "C", name: "As today", clicks: "1 click", html: side(micro) },
+    ] });
+
+  // 7c open card actions
+  const cA = micro.cloneNode(true) as HTMLElement; await calmActions(groupOf(cA, "g-micro"));
+  const cB = micro.cloneNode(true) as HTMLElement; removeEditInEditor(cB);
+  SECTIONS.push({ id: "m-7c", title: "M-7c Consolidation: five buttons on the open card", finding: "Finding F18 (2).",
+    question: "The open card shows Keep …'s finding, Leave out, Edit values…, Other term…, Edit in editor…, wrapping onto two lines at 1280 px.",
+    today: { caption: "Rendered: the open one-person group.", html: side(micro) },
+    options: [
+      { letter: "A", name: "One primary, Leave out, and “More…”", recommended: "The two everyday answers stay one click away; the rare corrections are one level down and the line never wraps.",
+        note: "“More…” holds Edit values… and Other term…; “Edit in editor…” is in the header (M-7a). Shown with the menu open.", html: side(cA) },
+      { letter: "B", name: "Only move “Edit in editor…” to the header", note: "Four buttons stay on the card.", html: side(cB) },
+      { letter: "C", name: "As today", html: side(micro) },
+    ] });
+
+  // 7d staged choices, 7e agreed rows
+  const hypo = await cons("g-hypo");
+  const dToday = hypo.cloneNode(true) as HTMLElement;
+  click(qa(groupOf(dToday, "g-hypo"), "button.cons-take").find(b => /Absent/.test(b.getAttribute("aria-label") ?? ""))!, "1 = saved");
+  const dA = hypo.cloneNode(true) as HTMLElement; stage(groupOf(dA, "g-hypo"), true); removeEditInEditor(dA);
+  const dB = hypo.cloneNode(true) as HTMLElement; stage(groupOf(dB, "g-hypo"), false); removeEditInEditor(dB);
+  const wholeRow = qa(groupOf(dB, "g-hypo"), ".cons-compare tr").find(tr => tr.querySelector("th")?.textContent === "Whole finding");
+  if (wholeRow) { wholeRow.classList.add("ux-dim"); isNew(wholeRow); }
+  SECTIONS.push({ id: "m-7d", title: "M-7d Consolidation: a field choice saves at once", finding: "Finding F20.",
+    question: "Clicking one person's value in a conflicting row (here Assertion: Absent from Tom) resolves the group immediately; the “Whole finding” row (“Keep Luc's / Tom's finding”) does nearly the same for the whole finding. Two doubled ways, and the first acts without a confirm. Modifier rows already stage choices and wait for “Keep” (DN-11).",
+    today: { clicks: "1 click saves", caption: "Rendered: “muscular hypotonia”, Assertion differs.", html: side(dToday) },
+    options: [
+      { letter: "A", name: "Choices stage, one “Keep” saves; no whole-finding row", clicks: "2 clicks (choice, Keep)",
+        recommended: "One rule for every row (as for modifiers since DN-11): the result line shows what will be saved before anything is saved. With the choice in each row, “take the whole finding” is only a shortcut for clicking each row of one column.",
+        note: "The result line updates and says “Not saved yet”; Keep saves; Undo stays (toast + Ctrl+Z).", html: side(dA) },
+      { letter: "B", name: "Choices stage; “Keep …'s finding” as a shortcut while nothing is staged", clicks: "2 clicks, or 1 with the shortcut",
+        note: "The Whole finding row stays as a one-click shortcut until the first value is staged; then it hides (shown dimmed here).", html: side(dB) },
+      { letter: "C", name: "As today", clicks: "1 click", html: side(dToday) },
+    ] });
+
+  const eA = hypo.cloneNode(true) as HTMLElement; unfold(groupOf(eA, "g-hypo")); removeEditInEditor(eA);
+  const eMicro = micro.cloneNode(true) as HTMLElement; unfold(groupOf(eMicro, "g-micro")); removeEditInEditor(eMicro);
+  SECTIONS.push({ id: "m-7e", title: "M-7e Consolidation: agreed fields folded into one line", finding: "Finding F21.",
+    question: "Agreed fields fold into “Agreed: Term, Experiencer, Temporality, Text · Show values”, so the result is hidden behind a click, so what the result will contain is hidden behind a click. (Axis colours in agreed rows and the result line are fixed meanwhile, 9d3b7542, and rendered here.)",
+    today: { caption: "Rendered: a two-person group (folded) and a one-person group (plain text axis values).", html: `<div class="ux-strip">${side(hypo)}${side(micro)}</div>` },
+    options: [
+      { letter: "A", name: "Every row visible, agreed rows muted", recommended: "The card is where the lead checks the result; seeing every field costs four short lines and removes a click per group.",
+        note: "Conflicting rows stay first and highlighted; agreed rows follow, muted, one value across the columns.", html: `<div class="ux-strip">${side(eA)}${side(eMicro)}</div>` },
+      { letter: "B", name: "As today", note: "The folded line stays; chips as of 9d3b7542.", html: side(hypo) },
+    ] });
+
+  // 7f rename Leave out
+  const rename = async (label: string, status: string) => {
+    const el = micro.cloneNode(true) as HTMLElement; removeEditInEditor(el);
+    const card = groupOf(el, "g-micro");
+    const b = byText(card, ".cons-actions button", "Leave out"); b.textContent = label; isNew(b);
+    const done = q(groupOf(el, "g-gait"), ".cons-group-done"); done.textContent = status; isNew(done);
+    return side(el);
+  };
+  SECTIONS.push({ id: "m-7f", title: "M-7f Consolidation: rename “Leave out”", finding: "Finding F21 (naming).",
+    question: "“Leave out” reads like “omit a field”; it means the finding is not in the result (its row then reads “left out”). Which words?",
+    today: { caption: "Rendered: the button on the open card and the “left out” state of “Unsteady gait”.", html: side(micro) },
+    options: [
+      { letter: "A", name: "“Not in result”", recommended: "It names the outcome in the same words as the result line and the summary (“7 findings, 1 not in result”), and does not sound like deleting a person's work.",
+        note: "Button “Not in result”, row state “not in result”.", html: await rename("Not in result", "not in result") },
+      { letter: "B", name: "“Drop finding”", note: "Button “Drop finding”, row state “dropped”. A verb, but it sounds destructive.", html: await rename("Drop finding", "dropped") },
+      { letter: "C", name: "Keep “Leave out”", html: side(micro) },
+    ] });
+
+  // 7g Undo after a decision (F26)
+  const resolvedView = withGroup(consView() as never, "g-hypo", { state: "choose", annotation_ids: ["cons-1"] });
+  const afterResolve = await cons("g-hypo", async () => {
+    vi.spyOn(api, "resolveConsolidationGroup").mockResolvedValue(draft(4));
+    fireEvent.click(await screen.findByRole("button", { name: "Take Absent from Tom Reis for Assertion" }));
+    await waitFor(() => { if (!document.querySelector(".ui-toast")) throw new Error("no toast"); });
+  }, [consView(), resolvedView]);
+  const gToday = afterResolve.cloneNode(true) as HTMLElement;
+  q(gToday, ".ui-toast-region").classList.add("ux-toast-left");
+  const gA = afterResolve.cloneNode(true) as HTMLElement;
+  q(gA, ".ui-toast-region").remove();
+  const hypoRow = groupOf(gA, "g-hypo");
+  q(hypoRow, ".cons-group-line").insertAdjacentHTML("beforeend", html(<Button size="sm" variant="quiet" className="btn-link">Undo</Button>));
+  isNew(q(hypoRow, ".cons-group-line").lastElementChild!); click(q(hypoRow, ".cons-group-line").lastElementChild!, "1 · Ctrl+Z");
+  const gB = afterResolve.cloneNode(true) as HTMLElement;
+  const region = q(gB, ".ui-toast-region"); region.remove(); region.classList.add("ux-toast-side"); isNew(region);
+  q(gB, ".cons-side").appendChild(region);
+  SECTIONS.push({ id: "m-7g", title: "M-7g Consolidation: the Undo after a decision is easy to miss", finding: "Finding F26 (F19 Undo itself works: it reopens the group with its previous choices, bf4b1392).", wide: true,
+    question: "After a resolve, the Undo toast appears at the bottom left under the text column and closes after 10 s; the lead did not see it. Where should Undo appear?",
+    today: { caption: "Rendered: ConsolidationScreen after taking “Absent” from Tom (the group resolves, the next open group expands, the real Undo toast appears). Toast placed bottom left as in the app.", html: consApp(gToday) },
+    options: [
+      { letter: "A", name: "Inline in the resolved row: “decided … · Undo”", clicks: "1 click or Ctrl+Z",
+        recommended: "The undo sits where the decision landed and where the eye looks to check it; it needs no timer and no toast at all, and it stays until the next decision.",
+        note: "A quiet Undo link on the row just resolved, until the next decision or 1 minute; Ctrl+Z works as before. The live region still announces the decision.", html: consApp(gA) },
+      { letter: "B", name: "Toast near the sidebar, until the next action", clicks: "1 click or Ctrl+Z",
+        note: "The same toast, anchored to the bottom of the group list, without the 10 s timer.", html: consApp(gB) },
+      { letter: "C", name: "As today", note: "Toast bottom left, 10 s.", html: consApp(gToday) },
+    ],
+    extra: await m7Combined() });
+}
+async function m7Combined(): Promise<string> {
+  const el = await cons("g-hypo");
+  removeEditInEditor(el); addHeaderEditor(el); dropChangeButtons(el);
+  const card = groupOf(el, "g-hypo");
+  stage(card, true); unfold(card); await calmActions(card, "Not in result");
+  q(groupOf(el, "g-gait"), ".cons-group-done").textContent = "not in result";
+  return `<div class="ux-sub"><h3>All recommended M-7 options together</h3><p class="dn-note">Header “Open in full editor” (7a), rows without Change buttons (7b), Keep + Not in result + More… (7c, 7f), staged choice with one Keep (7d), every row visible with axis chips (7e).</p><div class="ux-app ux-app--tall">${el.firstElementChild!.outerHTML}</div></div>`;
+}
+
+// =====================================================================================================
+// M-8 Settings restructure (settings audit D1–D8)
+// =====================================================================================================
+const E3C = {
+  ...baseSettings, project_key: "e3c-proposals", name: "E3C proposals", description: "E3C clinical cases, tool proposals by phentrieve.", languages: ["en", "de"],
+  tool_proposal_mode: "proposals", locked: true, annotations_per_text: 1,
+  profile: { ...baseSettings.profile, default_layer_id: "phenotype", layers: [{ layer_id: "phenotype", label: "Phenotypes", ontology_id: "HP", access: "editable", default_visible: true, default_type_id: "default",
+    annotation_types: [{ type_id: "default", label: "Phenotype", evidence_policy: "optional", axes: AXES }] }] },
+  axis_defaults: { phenotype: { assertion: "present" } },
+  creation_defaults: { phenotype: { default: { assertion: "present", experiencer: "patient", temporality: "current" } } },
+  hidden_axis_values: { phenotype: { experiencer: ["other"] } },
+};
+const MEMBERS = [
+  { username: "lead", display_name: "Project lead", pseudonym: "ann-0002", languages: ["de", "en"], roles: ["lead"] },
+  { username: "rev", display_name: "Translation reviewer", pseudonym: "ann-0003", languages: ["de", "en"], roles: ["annotator"] },
+  { username: "ann", display_name: "Annotator", pseudonym: "ann-0004", languages: ["de"], roles: ["annotator"] },
+  { username: "ann2", display_name: "Second annotator", pseudonym: "ann-0005", languages: ["de"], roles: ["annotator", "consolidator"] },
+];
+async function settingsPage(section: string): Promise<HTMLElement> {
+  vi.restoreAllMocks();
+  vi.spyOn(api, "getProjectSettings").mockResolvedValue(E3C as never);
+  vi.spyOn(api, "listOntologies").mockResolvedValue(ontologies);
+  vi.spyOn(api, "listMembers").mockResolvedValue(MEMBERS as never);
+  vi.spyOn(api, "adminListUsers").mockResolvedValue([] as never);
+  vi.spyOn(api, "listGuidelines").mockResolvedValue({ current: null, latest_version: null, versions: [], my_latest_seen: null } as never);
+  vi.spyOn(api, "annotationTargetPreview").mockResolvedValue({ rows_over_target: 0 } as never);
+  return snap(<ProjectSettingsPage projectKey="e3c-proposals" currentUser={currentUser} section={section as never} />,
+    () => screen.findByRole("navigation", { name: "Settings sections" }), "section", async () => {
+      await new Promise(r => setTimeout(r, 50));
+      if (section === "members") await screen.findAllByText(/Second annotator/);
+    });
+}
+const settingsFrame = (inner: string) => `<div class="ux-settings">${inner}</div>`;
+const NEW_TABS = ["People", "Workflow", "Annotation", "Guidelines", "General", "Ontology"];
+function retab(page: HTMLElement, labels: string[], current: string): HTMLElement {
+  const nav = q(page, ".settings-tabs");
+  nav.innerHTML = labels.map(l => `<a class="settings-tab" href="#"${l === current ? ` aria-current="page"` : ""}>${l}</a>`).join("");
+  isNew(nav);
+  return page;
+}
+const radioGroup = (name: string, label: string, options: { label: string; help?: string; checked?: boolean }[], hint?: string) =>
+  <div className="form-group"><div className="form-label">{label}</div>
+    <div role="radiogroup" className="settings-radio-group">{options.map(o => <label key={o.label} className="form-checkbox-row">
+      <input type="radio" name={name} defaultChecked={o.checked} /><span>{o.label}{o.help && <span className="field-hint">{o.help}</span>}</span></label>)}</div>
+    {hint && <div className="field-hint">{hint}</div>}</div>;
+const saveBar = (dirty: boolean) => <div className="settings-section-actions"><Button type="submit" variant="primary">Save changes</Button>
+  {dirty && <Button>Discard changes</Button>}{dirty && <p role="status" className="field-hint">Unsaved changes.</p>}</div>;
+const newWorkflow = (dirty = false) => html(<form aria-label="Workflow"><fieldset><legend>Workflow</legend>
+  <h3 className="ux-settings-h">New imports</h3>
+  {radioGroup("plan", "When texts are imported", [{ label: "Plan review and annotation for every translation", checked: true }, { label: "Do not plan anything (plan texts on Documents)" }],
+    "Applies to texts imported from now on. Single texts can be changed on Documents (Plan…); those changes stay.")}
+  <h3 className="ux-settings-h">Texts with tool proposals</h3>
+  {radioGroup("tools", "Annotators work", [{ label: "From the proposals", help: "They confirm, reject or correct each proposal and add what the tool missed.", checked: true }, { label: "From scratch", help: "They start from the plain text and do not see the proposals." }],
+    "The project default. A text's plan can override it until work on that text has started.")}
+  <h3 className="ux-settings-h">Annotation and consolidation</h3>
+  <Checkbox id="w-gate" label="Wait for an accepted translation review before annotating" checked readOnly
+    hint="Native source texts are never held back. The Assign dialog can override this for one assignment." />
+  <TextInput id="w-per-text" label="Annotators per text" type="number" value="1" readOnly hint="The limit when you assign, and the target on Progress." />
+  <div className="ux-new"><Checkbox id="w-cons" label="The consolidator of a text may not be one of its annotators" checked={false} readOnly hint="Checked when you assign consolidation." /></div>
+  {saveBar(dirty)}</fieldset></form>);
+const chips = (axis: string, values: string[], hidden: string[]) => <div className="ux-chip-axis"><span className="form-label">{axis}</span>
+  {values.map(v => <Button key={v} size="sm" aria-pressed={!hidden.includes(v)} className={hidden.includes(v) ? "ux-chip-off" : undefined}>{v}</Button>)}</div>;
+const newAnnotation = (open: boolean) => html(<form aria-label="Annotation"><fieldset><legend>Annotation</legend>
+  <h3 className="ux-settings-h">When submitting</h3>
+  <p className="field-hint">Applies to every submission from now on, in annotation and in consolidation. Submitted work is unchanged.</p>
+  <Select id="a-spanless" label="Findings that point to no text passage" value="required" onChange={() => {}}>
+    <option value="prohibited">Not allowed</option><option value="required">Allowed with a reason</option><option value="optional">Allowed, reason optional</option></Select>
+  <Checkbox id="a-confirm" label="Annotators must confirm every value before submitting" checked={false} readOnly hint="Off: prefilled values that were not confirmed are submitted marked as prefilled, after a warning." />
+  <Checkbox id="a-cont" label="A finding must be one continuous passage" checked={false} readOnly />
+  <h3 className="ux-settings-h">Prefilled values</h3>
+  <p className="field-hint">New findings start with these values, marked as not confirmed until the annotator confirms or changes them.</p>
+  <div className="ux-defaults-row">{AXES.map(a => <Select key={a.id} id={`d-${a.id}`} label={a.label} value={{ assertion: "present", experiencer: "patient", temporality: "current" }[a.id]!} onChange={() => {}}>
+    <option value="">No prefill</option>{a.options.map(o => <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1).replace("_", " ")}</option>)}</Select>)}</div>
+  <details className="settings-secondary-rules" open={open}><summary>Values annotators can choose (1 hidden)</summary>
+    <p className="field-hint">Untick a value to hide it in the editor's choices. Existing findings keep their values.</p>
+    {chips("Assertion", ["Present", "Absent", "Uncertain"], [])}{chips("Experiencer", ["Patient", "Family member", "Other"], ["Other"])}{chips("Temporality", ["Current", "Historical", "Future"], [])}
+  </details>
+  {saveBar(false)}</fieldset></form>);
+
+async function m8(): Promise<void> {
+  const general = await settingsPage("general");
+  const workflow = await settingsPage("workflow");
+  const rules = await settingsPage("rules");
+  const defaults = await settingsPage("defaults");
+  const members = await settingsPage("members");
+  const page = (base: HTMLElement, tabs: string[] | null, current: string, body?: string) => {
+    const el = base.cloneNode(true) as HTMLElement;
+    if (tabs) retab(el, tabs, current);
+    if (body) { const nav = q(el, ".settings-tabs"); while (nav.nextElementSibling) nav.nextElementSibling.remove(); nav.insertAdjacentHTML("afterend", `<div class="ux-new">${body}</div>`); }
+    return settingsFrame(el.outerHTML);
+  };
+  // 8a tab set
+  const relabel = ["General", "Guidelines", "Submission rules", "Workflow", "Prefilled values", "Ontology", "Members"];
+  const onePage = (() => {
+    const pick = (el: HTMLElement) => { const c = el.cloneNode(true) as HTMLElement; const nav = q(c, ".settings-tabs"); const parts: string[] = []; let n = nav.nextElementSibling; while (n) { parts.push(n.outerHTML); n = n.nextElementSibling; } return parts.join(""); };
+    const nav = `<nav class="ux-anchor-nav ux-new" aria-label="On this page"><ul>${NEW_TABS.map(t => `<li><a href="#">${t}</a></li>`).join("")}</ul></nav>`;
+    return settingsFrame(`<section><h1>Project settings</h1><p>E3C proposals (e3c-proposals)</p><div class="ux-onepage">${nav}<div>
+      <h2>People</h2>${pick(members)}<h2>Workflow</h2>${newWorkflow()}<h2>Annotation</h2>${newAnnotation(false)}<h2>General</h2>${pick(general)}</div></div></section>`);
+  })();
+  SECTIONS.push({ id: "m-8a", title: "M-8a Settings: the tab set (D1, with D2 default tab)", finding: "Finding F8, settings audit P1, D1, D2.", wide: true,
+    question: "Seven tabs follow the data model, not the lead's jobs: Ontology (set once, later locked) sits mid-row, Members (used most) comes last, and “Annotation rules” vs “Workflow” vs “Creation defaults” needs guessing.",
+    today: { caption: "Rendered ProjectSettingsPage (General tab) and the audit screenshot of the Workflow tab.",
+      html: `${page(general, null, "")}<div class="ux-shots"><figure>${shot("../settings-audit/05-e3c-workflow.png", "Workflow tab today", "ux-shot--half")}</figure></div>` },
+    options: [
+      { letter: "A", name: "Keep 7 tabs, relabel", note: "General, Guidelines, Submission rules, Workflow, Prefilled values, Ontology, Members. Order and grouping stay.", html: page(general, relabel, "General") },
+      { letter: "B", name: "6 tabs by job: People, Workflow, Annotation, Guidelines, General, Ontology", recommended: "Most-used first (People, opened by default: D2 B), the two rule tabs and creation defaults become one Annotation tab with one Save, and the once-only Ontology moves to the end.",
+        note: "Shown: People opened by default. Workflow and Annotation are in M-8b and M-8c.", html: page(members, NEW_TABS, "People") },
+      { letter: "C", name: "One long page with anchors", note: "Everything on one scrolling page, an “On this page” list on the left. One Save per part still needed; long with Members and Guidelines on it.", html: `<div class="ux-scroll">${onePage}</div>` },
+    ] });
+  // 8b workflow
+  SECTIONS.push({ id: "m-8b", title: "M-8b Settings: the Workflow tab (new order and copy, with D3)", finding: "Settings audit P2, P3, P4, §3.2, D3.", wide: true,
+    question: "Workflow today: “Plan for imported texts” (“Nothing planned”), “Texts with tool proposals”, the translation gate and “Annotations per text”, without saying what each one affects or that a text's own plan overrides it. The consolidator rule sits among the submit rules.",
+    today: { caption: "Rendered ProjectSettingsPage › Workflow (e3c-proposals values).", html: page(workflow, null, "") },
+    options: [
+      { letter: "A", name: "Text-life order, plain copy, consolidator rule moved here", recommended: "The tab reads in the order work happens (import → proposals → annotation → consolidation); each hint says where the setting acts and what overrides it; the consolidator rule is a staffing rule and is checked when assigning, so it belongs here (D3 A).",
+        note: "Dashed: the consolidator rule moved from “Annotation rules”. Shown with unsaved changes (save model M-8d).", html: page(workflow, NEW_TABS, "Workflow", newWorkflow(true)) },
+      { letter: "B", name: "As today", html: page(workflow, null, "") },
+    ] });
+  // 8c annotation
+  SECTIONS.push({ id: "m-8c", title: "M-8c Settings: one Annotation tab (rules + creation defaults, with D7)", finding: "Settings audit P3, P4, P10, §3.3, D7.", wide: true,
+    question: "“Annotation rules” and “Creation defaults” are two tabs with two Save buttons, although “every axis must be chosen”, the hidden values and the defaults act on the same thing. Labels are technical (text span, contiguous mentions, axis).",
+    today: { caption: "Rendered: Annotation rules (hidden values open) and Creation defaults.", html: `<div class="ux-strip">${page(rules, null, "")}${page(defaults, null, "")}</div>` },
+    options: [
+      { letter: "A", name: "Merged tab: When submitting, Prefilled values, Values annotators can choose", recommended: "One place for everything the editor enforces or prefills, in the annotator's words, with one Save; the hidden-values list folds into one line with a count (D7 B).",
+        note: "Hidden values as one row of toggles per axis (pressed = shown), collapsed by default with “(1 hidden)”. Shown collapsed and open.",
+        html: `<div class="ux-strip">${page(rules, NEW_TABS, "Annotation", newAnnotation(false))}${page(rules, NEW_TABS, "Annotation", newAnnotation(true))}</div>` },
+      { letter: "B", name: "As today (two tabs)", html: `<div class="ux-strip">${page(rules, null, "")}${page(defaults, null, "")}</div>` },
+    ] });
+  // 8d save model
+  const membersA = members.cloneNode(true) as HTMLElement;
+  const row = byText(membersA, "tbody tr", /ann-0004/);
+  const boxes = qa(row, "input[type='checkbox']"); const consBox = boxes.at(-1)!; consBox.setAttribute("checked", ""); click(consBox.closest("label") ?? consBox, 1);
+  row.insertAdjacentHTML("afterend", `<tr class="ux-new"><td colspan="${row.children.length}">${html(<InlineConfirm title="Make Annotator a consolidator?" message="Role changes save immediately." confirmLabel="Make consolidator" onConfirm={() => {}} onCancel={() => {}} />)}</td></tr>`);
+  q(membersA, ".settings-tabs").insertAdjacentHTML("afterend", `<p class="field-hint ux-new">Role changes save immediately.</p>`);
+  const toast = await toastHtml("Workflow saved.", "Undo", true);
+  const autosave = newWorkflow(false).replace(/<div class="settings-section-actions">[\s\S]*?<\/div>(?=<\/fieldset>)/, `<p class="field-hint ux-new">Changes save as you make them.</p>${toast}`);
+  SECTIONS.push({ id: "m-8d", title: "M-8d Settings: the save model (D6)", finding: "Settings audit P5, P6, §3.7, D6.", wide: true,
+    question: "Five tabs have their own “Save general / Save rules / Save workflow / Save creation defaults / Save pins”, two of them also “Discard”, Guidelines publishes, and Members saves each checkbox on click without any feedback.",
+    today: { caption: "Rendered: Members (a click saves) and Workflow (“Save workflow”).", html: `<div class="ux-strip">${page(members, null, "")}${page(workflow, null, "")}</div>` },
+    options: [
+      { letter: "A", name: "“Save changes” everywhere; Members instant with a confirmation", recommended: "One label and one place for saving on every tab, Discard only when there is something to discard, and the one instant-save tab says so and asks before a role changes.",
+        note: "Forms: “Save changes”, plus “Discard changes” and “Unsaved changes.” while dirty. Members: a hint line and an inline confirmation per role change.",
+        html: `<div class="ux-strip">${page(membersA, NEW_TABS, "People")}${page(workflow, NEW_TABS, "Workflow", newWorkflow(true))}</div>` },
+      { letter: "B", name: "Autosave with Undo", note: "Every change saves at once with an Undo toast; no Save buttons. Risky for settings with consequences (lowering annotators per text, the translation gate).", html: page(workflow, NEW_TABS, "Workflow", autosave) },
+      { letter: "C", name: "As today", html: page(workflow, null, "") },
+    ],
+    extra: `<div class="ux-sub"><h3>Other settings decisions (D2–D8), options and recommendations</h3><ul class="ux-list">
+      <li><strong>D2 Default tab</strong>: A General / <strong>B People (recommended)</strong>: most-used tab first / C the last opened tab. Shown in M-8a B.</li>
+      <li><strong>D3 Consolidator rule</strong>: <strong>A Workflow (recommended)</strong>: it is a staffing rule, checked when assigning / B People / C stays among the submit rules. Shown in M-8b A.</li>
+      <li><strong>D4 Description</strong>: <strong>A show it on the Projects page (recommended)</strong>: today it is stored and shown nowhere / B hide the input / C as is. Not rendered.</li>
+      <li><strong>D5 Annotators per text from the Assign dialog</strong> (F3 too): <strong>A an inline “Change…” next to “up to 1 per text” (recommended)</strong>: the limit is found when it blocks, so it should be changeable there / B keep the link (it loses the selection) / C open Settings in a new tab. Not rendered.</li>
+      <li><strong>D6 Save model</strong>: this section.</li>
+      <li><strong>D7 Hidden values</strong>: A checkboxes (today) / <strong>B toggles of the shown values, collapsed with a count (recommended)</strong> / C move to Ontology. Shown in M-8c A.</li>
+      <li><strong>D8 Ontology tab while unlocked</strong>: A show everything / <strong>B ontology version visible, file SHA, allowed roots, T1 profile and profile JSON under “Advanced” with plain labels (recommended)</strong> / C hide it from non-admins. When locked: a plain summary, technical details collapsed. Not rendered (audit screenshots 07 and 11).</li>
+    </ul></div>` });
+}
+
+// =====================================================================================================
+// tour: the acceptance in order
+// =====================================================================================================
+function tour(): void {
+  TOUR.push(
+    { id: "lead-docs", title: "Lead: Documents", who: "Project lead, e3c-proposals (acceptance screenshots build/m2)", steps: [
+      { img: "../docs-lead.png", cap: "Documents at about 1280 px: the Next step column is off-screen (F15, a fix, not a decision)." },
+      { img: "../bar-1.png", cap: "Select EN100068 en and EN100075 en (two native texts): the selection bar offers both translation plan presets.", dns: ["m-1"] },
+      { img: "../bar-2.png", cap: "“Translation review and annotation”: “Plan saved for 2 cases”, but nothing changed (F1); Undo then fails.", dns: ["m-1"] },
+      { img: "../assign-1.png", cap: "Assign…: one person per text (project setting), the lead not tickable (F3, F23; limit change: D5).", dns: ["m-8d"] },
+    ] },
+    { id: "annotator", title: "Annotator: proposal check in the editor", who: "Annotator on EN100068 (frames rendered for index.html)", steps: [
+      { img: "shots/m-2-today.png", cap: "1 confirms a proposal; the editor moves on and a grey line names the decision.", dns: ["m-2"] },
+      { img: "shots/m-3-today.png", cap: "Search a modifier (“sev” for Severe): modifiers and phenotypes mixed.", dns: ["m-3"] },
+      { img: "shots/m-5-today.png", cap: "Mark “slight”, choose Mild: a proposal cannot be the target (“Create the finding first…”).", dns: ["m-5"] },
+      { img: "shots/m-4-today.png", cap: "Workaround Edit &amp; Replace + Mild: the merged finding now carries Mild for both mentions.", dns: ["m-4"] },
+      { img: "shots/m-6-today.png", cap: "Submit: a second modal “Case submitted” with five buttons.", dns: ["m-6"] },
+    ] },
+    { id: "consolidation", title: "Lead: consolidation", who: "Project lead consolidating EN100068 (acceptance screenshot cons-1, then rendered frames)", steps: [
+      { img: "../cons-1.png", cap: "The sidebar: a “Change” on every resolved row, five buttons on the open card, “Edit in editor…” on each card.", dns: ["m-7a", "m-7b", "m-7c"] },
+      { img: "shots/m-7e-today.png", cap: "Agreed fields folded into one line behind “Show values”.", dns: ["m-7e"] },
+      { img: "shots/m-7d-today.png", cap: "A click on one person's value saves the group at once; “Take …'s finding” next to it.", dns: ["m-7d"] },
+      { img: "shots/m-7g-today.png", cap: "After the save, the Undo toast sits bottom left and closes after 10 s.", dns: ["m-7g"] },
+      { img: "shots/m-7f-today.png", cap: "“Leave out” means “this finding is not in the result”.", dns: ["m-7f"] },
+    ] },
+    { id: "settings", title: "Lead: Settings", who: "Project lead (settings audit screenshots build/m2/settings-audit)", steps: [
+      { img: "../settings-audit/01-e3c-general.png", cap: "Settings open on General; seven tabs in data-model order.", dns: ["m-8a"] },
+      { img: "../settings-audit/05-e3c-workflow.png", cap: "Workflow: plan, tool proposals, translation gate, annotations per text.", dns: ["m-8b"] },
+      { img: "../settings-audit/03-e3c-rules.png", cap: "Annotation rules, with the consolidator rule among the submit rules.", dns: ["m-8c", "m-8b"] },
+      { img: "../settings-audit/06-e3c-creation-defaults.png", cap: "Creation defaults on their own tab with their own Save.", dns: ["m-8c", "m-8d"] },
+      { img: "../settings-audit/08-e3c-members.png", cap: "Members: every checkbox saves at once, without feedback.", dns: ["m-8d", "m-8a"] },
+      { img: "../settings-audit/11-t5-ontology-profile.png", cap: "Ontology and profile (locked): raw pins and SHA (D8)." },
+    ] },
+  );
+}
+
+// =====================================================================================================
+// page assembly
+// =====================================================================================================
+interface TourStep { img: string; cap: string; dns?: string[] }
+const TOUR: { id: string; title: string; who: string; steps: TourStep[] }[] = [];
+
+function writePages(): void {
+  const css = "app/assets/" + readdirSync(resolve(OUT, "app/assets")).find(f => f.endsWith(".css"));
+  const head = (title: string) => `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<link rel="stylesheet" href="${css}">
+<link rel="stylesheet" href="mockups.css">
+</head>`;
+  const plain = (t: string) => t.replace(/<[^>]+>/g, "");
+  const openList = `<section class="dn-open-list" aria-labelledby="open-h"><h2 id="open-h">Open questions</h2><ul>${SECTIONS.map(s => {
+    const rec = s.options.find(o => o.recommended)!;
+    return `<li><a href="#${s.id}">${s.title.split(" ")[0]}</a> ${s.title.replace(/^\S+ /, "")} <span class="dn-status dn-status--open">open, recommended ${rec.letter}: ${plain(rec.name)}</span></li>`;
+  }).join("")}</ul><p>Nothing is decided yet. Each section shows today, then the options side by side with the recommended one outlined in blue.</p></section>`;
+  writeFileSync(resolve(OUT, "index.html"), `${head("M2 acceptance: decisions M-1 … M-8 (local mockups)")}
+<body>
+<main class="dn-page">
+<header class="dn-intro">
+  <p><a href="tour.html">Tour: where each decision appears, lead → annotator → consolidation → settings →</a></p>
+  <h1>Manual acceptance M2: UI decisions M-1 … M-8</h1>
+  ${openList}
+  <p>Local mockups for the open UI questions of <code>build/m2/FINDINGS-2026-10-26.md</code> and <code>build/m2/settings-audit/REPORT.md</code> (feat/ux-calm). Option frames are the real components rendered in jsdom with the built app CSS; only what an option changes is edited and marked with a dashed outline. Red outlines with a number are counted clicks. “Today” frames are rendered from the same components or are acceptance screenshots.</p>
+  <nav aria-label="Decisions"><ul class="dn-nav">${SECTIONS.map(s => `<li><a href="#${s.id}">${s.title.split(" ")[0]}</a></li>`).join("")}</ul></nav>
+</header>
+${SECTIONS.map(section).join("\n")}
+</main>
+</body>
+</html>`);
+  writeTour(head);
+}
+
+function writeTour(head: (t: string) => string): void {
+  if (!TOUR.length) return;
+  const ids = new Set(SECTIONS.map(s => s.id));
+  const titleOf = (id: string) => SECTIONS.find(s => s.id === id)?.title.replace(/^\S+ /, "") ?? id;
+  const badge = (id: string) => `<a class="tour-dn" href="index.html#${id.split("/")[0]}" title="${titleOf(id.split("/")[0]).replace(/"/g, "&quot;")}">open: ${id.toUpperCase()}</a>`;
+  const label = (flow: number, i: number) => `${flow + 1}.${i + 1}`;
+  const where = [...ids].map(id => {
+    const steps = TOUR.flatMap((f, fi) => f.steps.map((st, i) => ({ f, fi, i, st }))).filter(x => x.st.dns?.some(d => d.split("/")[0] === id));
+    return `<li><a href="index.html#${id}">${id.toUpperCase()}</a> ${titleOf(id)}: step ${steps.map(x => `<a href="#${x.f.id}-${x.i + 1}">${label(x.fi, x.i)}</a>`).join(", ") || "none"}</li>`;
+  }).join("");
+  writeFileSync(resolve(OUT, "tour.html"), `${head("M2 acceptance: tour (local mockups)")}
+<body><main class="dn-page tour-page">
+<header class="dn-intro"><p><a href="index.html">← Decisions M-1 … M-8 (options side by side)</a></p>
+<h1>M2 acceptance: where each decision shows up</h1>
+<p>The acceptance in the order it was walked: lead on Documents, annotator in the editor, lead consolidating, lead in Settings. Images are acceptance screenshots (build/m2) or the “today” frames rendered for index.html; click to enlarge. Orange steps are where an open decision appears; the badge links to its options.</p>
+<section class="dn-open-list" aria-labelledby="open-h"><h2 id="open-h">Open questions and their steps</h2><ul>${where}</ul></section>
+</header>
+${TOUR.map((f, fi) => `<section class="tour-flow" id="${f.id}" aria-labelledby="${f.id}-h"><h2 id="${f.id}-h">${fi + 1}. ${f.title}</h2><p class="dn-note">${f.who}</p>
+<ol class="tour-steps">${f.steps.map((st, i) => `<li class="tour-step${st.dns ? " tour-step--decision" : ""}" id="${f.id}-${i + 1}"><span class="tour-num">${i + 1}</span>
+<p class="tour-cap">${st.cap}</p><a href="${st.img}"><img src="${st.img}" alt="Step ${label(fi, i)}" loading="lazy"></a>
+${st.dns ? `<p class="tour-dns">${st.dns.map(badge).join("")}</p>` : ""}</li>`).join("\n")}</ol></section>`).join("\n")}
+</main></body></html>`);
+}
+
+it("writes the M2 decision mockups", async () => {
+  await m1();
+  await m2();
+  await m3();
+  await m4();
+  await m5();
+  await m6();
+  await m7();
+  await m8();
+  tour();
+  writePages();
+}, 300_000);
