@@ -367,7 +367,7 @@ describe("CaseScreen integration", () => {
       expect(submit).toHaveBeenCalledTimes(1);
       const box = within(dialog).getByRole("checkbox", { name: "Submit with 2 unconfirmed values" }) as HTMLInputElement;
       expect(box.checked).toBe(false);
-      expect(within(dialog).getByText("Betroffene Person (Experiencer): Patient, Zeitlicher Bezug (Temporality): Current")).toBeDefined();
+      expect(within(dialog).getByText((_, el) => el?.classList.contains("unconfirmed-values__values") === true && el.textContent === "Betroffene Person (Experiencer): Patient, Zeitlicher Bezug (Temporality): Current")).toBeDefined();
     });
 
     it("sends no acknowledgement when no rows remain", async () => {
@@ -1961,12 +1961,16 @@ describe("CaseScreen integration", () => {
       for (let repeat = 0; repeat < 2; repeat++) {
         // A new outcome on the only proposal moves on to Finish & Submit; select it again.
         if (!row().classList.contains("selected")) fireEvent.click(row());
+        const before = record.mock.calls.length;
         fireEvent.keyDown(window, { key });
-        if (key === "4") fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
+        if (key === "4" && repeat === 0) fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
         await waitFor(() => expect(record).toHaveBeenLastCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({ outcome }) })));
-        if (repeat === 0) await waitFor(() => expect(row().classList.contains("selected")).toBe(false));
+        await waitFor(() => expect(row().classList.contains("selected")).toBe(false));
+        // The repeat moves on too and saves nothing (F7).
+        if (repeat === 1) expect(record).toHaveBeenCalledTimes(before);
       }
     }
+    fireEvent.click(row());
     const note = screen.getByRole("textbox", { name: /Reviewer note/i });
     fireEvent.change(note, { target: { value: "Keep this draft" } });
     const calls = record.mock.calls.length;
