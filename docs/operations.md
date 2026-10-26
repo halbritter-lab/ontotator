@@ -125,7 +125,11 @@ docker compose exec app ontocurator admin users reset-code alice
 docker compose exec app ontocurator admin users deactivate alice
 docker compose exec app ontocurator admin users activate alice
 docker compose exec app ontocurator admin users list
+docker compose exec app ontocurator admin users edit alice --email alice@example.org --languages de,en
+docker compose exec app ontocurator admin audit --user alice --since 2026-10-01
 ```
+
+`users list` shows e-mail, setup state ("setup pending" until the setup code is redeemed) and projects. `admin audit` prints the audit trail newest first (`--project`, `--limit`, `--json` for JSONL). To erase a person's data on request (GDPR Art. 17), deactivate the account, then run `ontocurator admin users anonymise alice --confirm alice` (or use Anonymise on the Users page): name, e-mail, ORCID, qualification, languages, password, codes and login traces are removed, the username becomes `anonymised-<id>`, and the pseudonym and all work stay. Audit rows written before the erasure are append-only and keep the former username.
 
 Stage inputs on writable tmpfs, then register them into persistent storage. Stream incoming files through `exec -T`: the Docker daemon can refuse `docker compose cp` into a container with a read-only root even when the target is writable tmpfs. The helper below writes as app's UID 1001. Only use releases whose licenses permit your intended use.
 
