@@ -3269,6 +3269,22 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
       expect(proposal.annotation.evidence_refs).toHaveLength(2);
     });
 
+    it("Move on a proposal with an existing copy moves the copy's mention with the same span, not the same index (M-4)", async () => {
+      const { view } = reviewView([], true);
+      const proposal = view.available_inputs![0] as any;
+      proposal.annotation.evidence_refs.push({ evidence_id: "ev-prop-2", version: "ev-1" });
+      proposal.evidence.push({ version: "ev-1", mention: { evidence_id: "ev-prop-2", segments: [pos("Muskelhypotonie")] } });
+      // The copy lists the same two mentions in the other order.
+      view.draft.annotations![0].annotation.evidence_refs!.unshift({ evidence_id: "ev-copy-hypo", version: "ev-1" });
+      view.draft.evidence!.push({ version: "ev-1", mention: { evidence_id: "ev-copy-hypo", segments: [pos("Muskelhypotonie")] } } as never);
+      const { container } = await setup(view, severeHits, false);
+      const { apply } = draftSpy(view);
+      fireEvent.click(container.querySelector('[data-list-key^="target:"]')!);
+      fireEvent.click(await screen.findByRole("button", { name: "Move mention 2 to a new finding" }));
+      await waitFor(() => expect(payloads(apply).map(p => p.command)).toEqual(["create_annotation", "detach_mention"]));
+      expect(payloads(apply)[1]).toEqual({ command: "detach_mention", annotation_id: "seizure", evidence_id: "ev-copy-hypo" });
+    });
+
     it("the copy keeps the proposal's modifiers and records no decision while it equals the proposal", async () => {
       const { view } = reviewView([{ term_id: "HP:0012828", segments: [pos("schwere")] }, { term_id: "HP:0031796" }], false);
       const decide = vi.spyOn(api, "recordDecision");

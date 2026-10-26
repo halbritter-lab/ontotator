@@ -2303,9 +2303,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
   /** M-4 on a proposal: proposals stay immutable, so Edit & Replace runs first and the copy's mention moves. */
   const moveProposalMention = async (target: TargetProposal, index: number) => {
+    const spanKey = (segments: { start: number; end: number }[]) => segments.map(seg => `${seg.start}-${seg.end}`).join(",");
+    const wanted = targetSnapshotOf(target)?.evidence?.[index]?.mention.segments;
     const copyId = await handleAdoptAndEditTarget(target);
-    const evidenceId = copyId ? latestDraft.current.annotations?.find(a => a.annotation.annotation_id === copyId)?.annotation.evidence_refs?.[index]?.evidence_id : undefined;
-    if (copyId && evidenceId) await moveMentionToNewFinding(copyId, evidenceId);
+    if (!copyId || !wanted) return;
+    // An existing edited copy may order its mentions differently: match by span, not by index.
+    const evidenceId = latestDraft.current.annotations?.find(a => a.annotation.annotation_id === copyId)?.annotation.evidence_refs
+      ?.find(ref => (latestDraft.current.evidence ?? []).some(ev => ev.mention.evidence_id === ref.evidence_id && spanKey(ev.mention.segments) === spanKey(wanted)))?.evidence_id;
+    if (!evidenceId) { setActionError("Your copy no longer has this mention. Move it from your copy instead."); return; }
+    await moveMentionToNewFinding(copyId, evidenceId);
   };
 
 
