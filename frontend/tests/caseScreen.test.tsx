@@ -2620,6 +2620,50 @@ describe("CaseScreen: finding modifiers (attach mode, Modifiers section, marks)"
     await waitFor(() => expect(payloads(apply).at(-1)).toEqual({ command: "add_modifier", annotation_id: copyId, term_id: "HP:0012828", segments: [pos("schwere")] }));
   });
 
+  it("Edit & Replace keeps the copy without a refused modifier; skipped or normalised modifiers are no change", async () => {
+    const view = modView([]);
+    const proposal = { ...findingSnap(["prop", "HP:0001250", "Krampfanfälle", [{ term_id: "hp:0012828" }, { term_id: "HP:0031796" }]]), version: "prop-v1",
+      evidence: [{ version: "ev-1", mention: { evidence_id: "ev-prop", segments: [pos("Krampfanfälle")] } }] } as any;
+    proposal.annotation.evidence_refs = [{ evidence_id: "ev-prop", version: "ev-1" }];
+    proposal.annotation.provenance = { actor: { actor_id: "tool", kind: "tool" }, method: "automatic", source_refs: [] };
+    const targets = { target_set_id: "targets-0", targets: [{ annotation_id: "prop", version: "prop-v1" }] };
+    Object.assign(view, { key: { ...view.key, mode: "proposal_check" }, scope: { ...view.scope, mode: "proposal_check" }, targets, available_inputs: [proposal] });
+    Object.assign(view.draft, { key: view.key, targets });
+    vi.spyOn(api, "resolveTermLabels").mockImplementation(async (_p, terms) => terms.map(t => ({ ...t, label: LABELS[t.term_id]?.[0] ?? t.term_id,
+      role: LABELS[t.term_id]?.[1] ?? "finding", exclusive_class: LABELS[t.term_id]?.[2] ?? null })) as never);
+    let current = structuredClone(view.draft);
+    const apply = vi.spyOn(api, "applyCommand").mockImplementation(async (_ws, envelope) => {
+      const payload = envelope.payload as Record<string, any>;
+      if (payload.command === "add_modifier" && payload.term_id === "HP:0031796") throw new ApiError(422, "Refused", "MODIFIER_NOT_ALLOWED", { term_id: "HP:0031796" });
+      current = structuredClone(current); current.revision += 1;
+      if (payload.command === "create_annotation") {
+        const snap = findingSnap([payload.annotation_id, payload.term_id, null]);
+        current.annotations = [...(current.annotations ?? []), { ...snap, annotation: { ...snap.annotation, layer_id: payload.layer_id,
+          evidence_refs: [{ evidence_id: payload.evidence_id, version: "ev-1" }],
+          provenance: { actor: { actor_id: "ann", kind: "human" }, method: "manual", source_refs: [`${payload.source_annotation_id}:${payload.source_version}`] } } } as never];
+        current.evidence = [...(current.evidence ?? []), { version: "ev-1", mention: { evidence_id: payload.evidence_id, segments: payload.segments } }] as never;
+      } else if (payload.command === "add_modifier") {
+        const copy = current.annotations!.find(a => a.annotation.annotation_id === payload.annotation_id)!;
+        copy.annotation.modifiers = [...(copy.annotation.modifiers ?? []), { term_id: payload.term_id.toUpperCase() }] as never; // server normalises
+      } else if (payload.command === "set_annotation_note") {
+        current.annotations![0].version = "noted"; // the server ignores the note: the copy stays as copied
+      }
+      return current;
+    });
+    const decide = vi.spyOn(api, "recordDecision").mockImplementation(async () => current);
+    const { container } = render(<CaseScreen view={view} workspaceId="ws-mod" onClose={vi.fn()} />);
+    fireEvent.click(await waitFor(() => container.querySelector<HTMLElement>('[data-list-key^="target:"]')!));
+    fireEvent.keyDown(window, { key: "3" });
+    await screen.findByText(/Copied without modifier (Recurrent|HP:0031796): not allowed in this ontology\./);
+    expect(payloads(apply).map(p => p.command)).not.toContain("delete_draft_annotation");
+    expect(container.querySelector('[data-list-key^="annotation:"]')).not.toBeNull();
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "x" } });
+    fireEvent.blur(screen.getByLabelText("Note"));
+    await waitFor(() => expect(payloads(apply).at(-1)).toEqual(expect.objectContaining({ command: "set_annotation_note" })));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(decide).not.toHaveBeenCalled();
+  });
+
   it("↓ moves to the next target row and Enter attaches there", async () => {
     const { container, apply } = await setup(modView(SEIZURE_HYPO));
     await startAttach(container);

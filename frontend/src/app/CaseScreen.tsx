@@ -142,6 +142,14 @@ const segmentsKey = (evidence: { mention: { segments: { start: number; end: numb
       .sort(),
   );
 
+/** Why the backend refused to copy a proposal's modifier (Edit & Replace keeps the copy without it). */
+const MODIFIER_REFUSALS: Record<string, string> = {
+  MODIFIER_NOT_ALLOWED: "not allowed in this ontology",
+  MODIFIERS_NOT_SUPPORTED: "this layer has no modifiers",
+  UNKNOWN_TERM: "unknown term",
+  OBSOLETE_TERM: "obsolete term",
+};
+
 const modifiersKey = (modifiers: { term_id: string; segments?: { start: number; end: number }[] }[] | null | undefined) =>
   JSON.stringify((modifiers ?? [])
     .map((m) => [m.term_id, [...(m.segments ?? [])].sort((a, b) => a.start - b.start).map((s) => [s.start, s.end])] as const)
@@ -326,6 +334,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const creatingPending = useRef(false);
   const [draft, setDraft] = useState<Draft>(view.draft);
   const latestDraft = useRef(draft);
+  /** modifiersKey of each Edit & Replace copy right after copying (server-normalised, refused ones skipped). */
+  const copiedModifiers = useRef(new Map<string, string>());
   latestDraft.current = draft;
   const pendingReanchorItems = isReviewLike(view.key.mode) ? view.pending_reanchor_items ?? [] : [];
   const unresolvedReanchorCount = pendingReanchorItems.filter(item =>
@@ -1099,7 +1109,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (copy.annotation.type_id !== source.annotation.type_id) return true;
     if (JSON.stringify(normalizeAxes(copy.annotation.axes_values)) !== JSON.stringify(normalizeAxes(source.annotation.axes_values))) return true;
     if (JSON.stringify([...(copy.annotation.axes_defaulted ?? [])].sort()) !== JSON.stringify([...(source.annotation.axes_defaulted ?? [])].sort())) return true;
-    if (modifiersKey(copy.annotation.modifiers) !== modifiersKey(source.annotation.modifiers)) return true;
+    // Compare with what the copy received, so a skipped or normalised modifier is no user change.
+    // shortcut: lost on reload (then the source is compared), persist it if that matters.
+    const baseline = copiedModifiers.current.get(copy.annotation.annotation_id) ?? modifiersKey(source.annotation.modifiers);
+    if (modifiersKey(copy.annotation.modifiers) !== baseline) return true;
     const copyEvidence = (copy.annotation.evidence_refs ?? [])
       .map((ref) => (latestDraft.current.evidence ?? []).find((ev) => ev.mention.evidence_id === ref.evidence_id))
       .filter((ev): ev is NonNullable<typeof ev> => !!ev);
@@ -2167,6 +2180,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const firstSegments = supportingSegments ?? firstEvidence?.mention.segments ?? [];
     const firstEvidenceId = firstSegments.length > 0 ? newEvidenceId() : undefined;
     let created = false;
+    const notCopied: string[] = [];
     try {
       await enqueueMutation({
         command: "create_annotation",
@@ -2192,14 +2206,23 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         });
       }
       // create_annotation carries no modifiers: copy the proposal's one by one (same text, so with their spans).
+      // Best effort: a modifier the backend refuses is skipped and named, the copy stays.
       for (const modifier of snap?.annotation.modifiers ?? []) {
-        await enqueueMutation({
-          command: "add_modifier",
-          annotation_id: newAnnId,
-          term_id: modifier.term_id,
-          ...(modifier.segments?.length ? { segments: modifier.segments } : {}),
-        });
+        try {
+          await enqueueMutation({
+            command: "add_modifier",
+            annotation_id: newAnnId,
+            term_id: modifier.term_id,
+            ...(modifier.segments?.length ? { segments: modifier.segments } : {}),
+          });
+        } catch (error) {
+          const why = error instanceof ApiError ? MODIFIER_REFUSALS[error.code ?? ""] : undefined;
+          if (!why) throw error;
+          notCopied.push(`${termLabel(targetLayer, modifier.term_id) ?? modifier.term_id}: ${why}`);
+        }
       }
+      copiedModifiers.current.set(newAnnId, modifiersKey(latestDraft.current.annotations
+        ?.find((a) => a.annotation.annotation_id === newAnnId)?.annotation.modifiers));
     } catch (error) {
       if (error instanceof DiscardedChangesError) return;
       let rolledBack = false;
@@ -2220,6 +2243,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (reason?.trim() || supportingSegments?.length) {
       try { await syncReplacementDecision(newAnnId); } catch (error) { reportError(error); }
     }
+    if (notCopied.length) setActionError(`Copied without modifier ${notCopied.join("; ")}.`);
     setPendingEvidenceAdoption(null);
     openCopy(newAnnId);
   };
