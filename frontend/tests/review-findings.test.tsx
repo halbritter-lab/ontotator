@@ -262,6 +262,9 @@ describe("A4/A5: review decisions and notes", () => {
     fireEvent.keyDown(window, { key: "2" });
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
     expect(decide.mock.calls[0][1].payload).toEqual(expect.objectContaining({ outcome: "rejected", note: "wrong body site" }));
+    // The only proposal is decided, so the selection moved on to Finish & Submit; J brings it back.
+    await waitFor(() => expect(screen.queryByLabelText("Reviewer note")).toBeNull());
+    fireEvent.keyDown(window, { key: "j" });
 
     const noteField = screen.getByLabelText("Reviewer note");
     fireEvent.change(noteField, { target: { value: "laterality differs" } });

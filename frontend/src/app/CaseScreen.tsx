@@ -343,6 +343,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const lastTargetIdRef = useRef<string | null>(null);
+  /** U-2: what the last decision did; shown while the selection it made (`listKey`, null: none) is unchanged. */
+  const [advanceStatus, setAdvanceStatus] = useState<{ listKey: string | null; text: string } | null>(null);
   if (selectedTargetId) lastTargetIdRef.current = selectedTargetId;
   // A carried input without a finding on this text (placeholder row); exclusive with the others.
   const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
@@ -680,6 +682,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // The selection as of the last render, for async actions that must not move a selection the user changed.
   const selectedListKeyRef = useRef(selectedListKey);
   selectedListKeyRef.current = selectedListKey;
+  // The decision status belongs to the selection the decision made.
+  useEffect(() => { setAdvanceStatus(status => status && status.listKey !== selectedListKey ? null : status); }, [selectedListKey]);
   useEffect(() => {
     if (!selectedListKey) return;
     const entry = Array.from(
@@ -1040,6 +1044,17 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       reanchorContext.reveal(item.new_context);
       leftTextElement?.focus();
     } catch(error) {reportError(error);}
+  };
+
+  /** Selects a proposal and its first mark, as a click on its list row does. */
+  const selectProposal = (t: TargetProposal) => {
+    setSelectedTargetId(refKey(t));
+    setSelectedAnnotationId(null);
+    setSelectedSourceId(null);
+    cancelPending();
+    setMobilePane("details");
+    const firstEv = targetSnapshotOf(t)?.evidence?.[0];
+    setSelectedEvidenceId(firstEv ? `target:${t.annotation_id}:${t.version}:${firstEv.mention.evidence_id}:${firstEv.version}` : null);
   };
 
   const handleDeselectAll = () => {
@@ -2018,8 +2033,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     } else {
       note = payload.note !== undefined ? (payload.note.trim() || undefined) : currentNoteFor(key);
     }
+    const previousOutcome = decisionsMap[key]?.outcome;
     try {
       await enqueueDecision(target, payload.outcome, payload.replacement?.annotation_id, note);
+      // U-2: a new Confirm / Reject / Unresolved moves on, unless the user already selected something else.
+      // A note save repeats the outcome and stays.
+      if ((payload.outcome === "confirmed" || payload.outcome === "rejected" || payload.outcome === "uncertain")
+        && payload.outcome !== previousOutcome && selectedListKeyRef.current === `target:${key}`
+        && decisionIntentTokens.current[key] === submittedIntentToken) advanceAfterDecision(target, payload.outcome);
       // A previous decision may finish after the reviewer starts another intent.
       // Only the intent that this request actually submitted can be cleared.
       if (decisionIntentTokens.current[key] === submittedIntentToken) setDecisionIntentKeys(keys => keys.filter(value => value !== key));
@@ -2037,6 +2058,25 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         });
       }
     } catch (error) { reportError(error); }
+  };
+
+  /** Selects the next open proposal after `target` (wrapping), or "Finish & Submit" when none is left. */
+  const advanceAfterDecision = (target: TargetProposal, outcome: "confirmed" | "rejected" | "uncertain") => {
+    const decided = new Set((latestDraft.current.decisions ?? []).map(d => refKey(d.target)));
+    const n = reviewTargets.length, from = reviewTargets.findIndex(t => refKey(t) === refKey(target));
+    const next = Array.from({ length: n - 1 }, (_, i) => (from + 1 + i) % n).find(index => !decided.has(refKey(reviewTargets[index])));
+    const snapshot = targetSnapshotOf(target);
+    const segments = snapshot?.evidence?.[0]?.mention.segments ?? [];
+    const quote = segments.length ? ` “${quoteSegments(view.document.text, segments, 40)}”` : "";
+    const done = `${{ confirmed: "Confirmed", rejected: "Rejected", uncertain: "Left unresolved" }[outcome]} ${termLabel(target.layer_id, target.term_id ?? target.annotation_id) ?? target.term_id ?? target.annotation_id}${quote}.`;
+    if (next === undefined) {
+      handleDeselectAll();
+      setAdvanceStatus({ listKey: null, text: `${done} Every proposal is decided.` });
+      document.querySelector<HTMLButtonElement>("[data-finish-submit]")?.focus();
+      return;
+    }
+    selectProposal(reviewTargets[next]);
+    setAdvanceStatus({ listKey: `target:${refKey(reviewTargets[next])}`, text: `${done} Next open proposal: ${next + 1} of ${n}` });
   };
 
   // Adopt a review target as an editable draft copy and switch to editing it.
@@ -2920,14 +2960,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     handleDeselectAll();
   }, { ...shortcutOptions, allowRepeat: true, allowInInputs: true, group: "General", description: "Discard the marked text / clear selection / cancel adding a mention or segment" });
   useShortcut(["j", "k"], (event) => {
-    // Resume from the last proposal (Edit & Replace clears the selection) and prefer open ones.
+    // Resume from the last proposal (Edit & Replace clears the selection); J prefers open ones,
+    // K steps back one by one, so it brings back the proposal just decided.
     const n = reviewTargets.length;
     const current = reviewTargets.findIndex((target) => refKey(target) === (selectedTargetId ?? lastTargetIdRef.current));
     const step = event.key.toLowerCase() === "j" ? 1 : -1;
     const start = current < 0 ? (step > 0 ? -1 : n) : current;
     const at = (i: number) => (((start + step * i) % n) + n) % n;
-    let index = at(1);
-    for (let i = 1; i <= n; i++) if (!decisionsMap[refKey(reviewTargets[at(i)])]) { index = at(i); break; }
+    let index = !selectedTargetId && current >= 0 && step < 0 ? current : at(1);
+    if (step > 0) for (let i = 1; i <= n; i++) if (!decisionsMap[refKey(reviewTargets[at(i)])]) { index = at(i); break; }
     setSelectedTargetId(refKey(reviewTargets[index]));
     setSelectedAnnotationId(null);
     setSelectedSourceId(null);
@@ -3239,20 +3280,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                             handleDeselectAll();
                             return;
                           }
-                          setSelectedTargetId(targetKey);
-                          setSelectedAnnotationId(null);
-                          setSelectedSourceId(null);
-                          cancelPending();
-                          setMobilePane("details");
-                          const snap = (view.available_inputs ?? []).find(
-                            (s) => s.annotation.annotation_id === t.annotation_id && s.version === t.version
-                          );
-                          const firstEv = snap?.evidence?.[0];
-                          if (firstEv) {
-                            setSelectedEvidenceId(`target:${t.annotation_id}:${t.version}:${firstEv.mention.evidence_id}:${firstEv.version}`);
-                          } else {
-                            setSelectedEvidenceId(null);
-                          }
+                          selectProposal(t);
                         }}
                       >
                         <div className="doc-id doc-row">
@@ -3479,6 +3507,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
 
         {/* Right: Annotation & Search Panel + Review Actions */}
         <div className="inspector-pane density-compact" ref={inspectorRef}>
+          {advanceStatus?.listKey === selectedListKey && <p role="status" className="form-hint" data-advance-status>
+            {advanceStatus.text}{advanceStatus.listKey && <span aria-hidden="true"> <Kbd>K</Kbd> back</span>}
+          </p>}
           {!readOnly && !pendingAnnotation && selectedReanchorItem && selectedAnnotation && <InlineMessage tone="warning">
             <p>This finding is saved. Its current version still needs text-change review. Check the evidence and clinical values, then complete this review. Later changes require completion again.</p>
             <Button disabled={queueState === "saving"} onClick={()=>{void (async()=>{

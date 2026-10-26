@@ -24,6 +24,7 @@ export function SubmitControl({ onSubmit, disabled, pending, openCount = null, o
       <Button
         type="button"
         variant="primary" size="sm"
+        data-finish-submit
         onClick={onSubmit}
         disabled={disabled}
         aria-busy={pending}

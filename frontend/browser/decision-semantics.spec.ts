@@ -16,8 +16,10 @@ test("defaulted warning reveals a hidden result and an explicit axis confirmatio
   await page.locator('.sidebar [data-list-key^="target:"]').nth(1).click();
   await page.keyboard.press("2");
   await expect(page.locator('.sidebar [data-list-key^="target:"]').nth(1)).toContainText("Rejected");
-  // Confirm decides the proposal's defaulted values: no badge, no unconfirmed values to acknowledge.
-  await proposal.click(); await page.keyboard.press("1");
+  // Rejecting moved on to the open proposal. Confirm decides its defaulted values: no badge, nothing to acknowledge.
+  await expect(proposal).toHaveClass(/\bselected\b/);
+  await expect(page.locator("[data-advance-status]")).toContainText("Rejected");
+  await page.keyboard.press("1");
   await expect(proposal).toContainText("Confirmed");
   await expect(proposal).not.toContainText("Defaults to confirm");
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
@@ -61,6 +63,8 @@ test("repeated outcome keys keep decisions and zero resets without losing the no
       await page.keyboard.press(key);
       if (key === "4") await page.getByRole("button", { name: "Save decision", exact: true }).click();
       await expect(proposal).toContainText(label);
+      // A new outcome moves on to the next open proposal; the repeat stays.
+      if (repeat === 0) { await expect(proposal).not.toHaveClass(/\bselected\b/); await proposal.click(); }
     }
   }
   const note = page.getByRole("textbox", { name: "Reviewer note" });
@@ -97,7 +101,9 @@ test("unresolved notes are required, survive reload and block submission when lo
   await page.keyboard.press("4");
   await page.getByRole("button", { name: "Save decision", exact: true }).click();
   await expect(proposals.first()).toContainText("Unresolved");
-  await proposals.nth(1).click(); await page.keyboard.press("1");
+  // Saving the decision moved on to the next open proposal.
+  await expect(proposals.nth(1)).toHaveClass(/\bselected\b/);
+  await page.locator(".review-actions__title").click(); await page.keyboard.press("1");
   await expect(proposals.nth(1)).toContainText("Confirmed");
   await proposals.first().click(); await note.fill("  "); await proposals.nth(1).click();
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
@@ -283,6 +289,8 @@ test("repairing a historical spanless proposal collects a clinical reason withou
   const sourceBefore = JSON.stringify(source);
   const proposals = page.locator('.sidebar [data-list-key^="target:"]');
   await proposals.first().click(); await page.keyboard.press("2"); await expect(proposals.first()).toContainText("Rejected");
+  // Rejecting moved on to the open proposal; go back to the rejected one.
+  await expect(proposals.nth(1)).toHaveClass(/\bselected\b/); await proposals.first().click();
   await page.getByRole("button", { name: /Edit & Replace/ }).click();
   const dialog = page.getByRole("dialog", { name: "Reason for no text span" });
   await dialog.getByLabel("Reason for no text span").fill("Specialist summary supports this finding");
@@ -329,6 +337,8 @@ test("a project prohibiting spanless findings repairs a source only after suppor
   const sourceBefore = JSON.stringify(source);
   const proposals = page.locator('.sidebar [data-list-key^="target:"]');
   await proposals.first().click(); await page.keyboard.press("2"); await expect(proposals.first()).toContainText("Rejected");
+  // Rejecting moved on to the open proposal; go back to the rejected one.
+  await expect(proposals.nth(1)).toHaveClass(/\bselected\b/); await proposals.first().click();
   const creates: unknown[] = [];
   page.on("request", request => { if (request.url().endsWith("/commands") && request.postDataJSON()?.payload?.command === "create_annotation") creates.push(request.postDataJSON()); });
   await page.getByRole("button", { name: /Edit & Replace/ }).click();

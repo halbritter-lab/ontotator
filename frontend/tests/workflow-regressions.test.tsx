@@ -810,8 +810,8 @@ it("supports review keyboard shortcuts: 1 (confirm), 2 (reject), Escape (deselec
     );
   });
 
-  // 3. Press 'j' to navigate to second target
-  fireEvent.keyDown(window, { key: "j" });
+  // 3. Confirming moved on to the second (open) target
+  await waitFor(() => expect(document.querySelectorAll('[data-list-key^="target:"]')[1].classList.contains("selected")).toBe(true));
   // Press '2' to reject target 2
   fireEvent.keyDown(window, { key: "2" });
   await waitFor(() => {

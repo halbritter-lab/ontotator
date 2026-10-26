@@ -262,8 +262,8 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
       );
     });
 
-    // 4. Select Tool proposal: verify the exact same 4 actions are present
-    fireEvent.click(screen.getAllByText("prop-tool")[0]);
+    // 4. Confirming moved on to the open Tool proposal: verify the exact same 4 actions are present
+    await waitFor(() => expect(document.querySelector('[data-list-key^="target:"][data-list-key*="prop-tool"]')?.classList.contains("selected")).toBe(true));
     expect(screen.getByRole("button", { name: /Confirm|Bestätigen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Reject|Verwerfen/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /Edit|Ändern/i })).toBeDefined();

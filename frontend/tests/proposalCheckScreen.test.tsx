@@ -71,8 +71,57 @@ it("J resumes after the last proposal once the selection is cleared and skips de
   expect(selected()).toBe(-1);
   fireEvent.keyDown(window, { key: "j" });
   expect(selected()).toBe(2);
+  // K steps back one by one, also onto a decided proposal.
   fireEvent.keyDown(window, { key: "k" });
+  expect(selected()).toBe(1);
+  // Without a selection K brings back the last proposal itself.
+  fireEvent.keyDown(window, { key: "Escape" });
+  fireEvent.keyDown(window, { key: "k" });
+  expect(selected()).toBe(1);
+});
+
+/** recordDecision answers with the draft's decisions plus the recorded one. */
+function recordDecisions(view: WorkspaceView) {
+  let decisions = [...(view.draft.decisions ?? [])];
+  return vi.spyOn(api, "recordDecision").mockImplementation(async (_id, envelope) => {
+    const payload = envelope.payload as { target: { annotation_id: string; version: string }; outcome: "confirmed" | "rejected" | "uncertain"; note?: string };
+    decisions = [...decisions.filter(d => d.target.annotation_id !== payload.target.annotation_id),
+      { decision_id: `d-${payload.target.annotation_id}`, target: payload.target, outcome: payload.outcome, reviewer_id: "user-test", note: payload.note }];
+    return { ...view.draft, revision: decisions.length, decisions } as never;
+  });
+}
+
+it("1 and 2 move on to the next open proposal and name what was decided; the last one goes to Finish & Submit", async () => {
+  const view = proposalView();
+  view.draft.decisions = [{ decision_id: "d", target: { annotation_id: "p-2", version: "p-2-v1" }, outcome: "confirmed", reviewer_id: "user-test" }] as never;
+  recordDecisions(view);
+  render(<CaseScreen view={view} workspaceId="ws-pc" onClose={vi.fn()} />);
+  const rows = () => Array.from(document.querySelectorAll('[data-list-key^="target:"]'));
+  const selected = () => rows().findIndex(row => row.classList.contains("selected"));
+  fireEvent.click(rows()[0]);
+  fireEvent.keyDown(window, { key: "1" });
+  // p-2 is decided already: the next open one is p-3.
+  await waitFor(() => expect(selected()).toBe(2));
+  const status = () => document.querySelector("[data-advance-status]")?.textContent;
+  expect(status()).toMatch(/^Confirmed .+\. Next open proposal: 3 of 3 K back$/);
+  fireEvent.click(screen.getByRole("button", { name: /^Reject/ }));
+  await waitFor(() => expect(selected()).toBe(-1));
+  expect(status()).toMatch(/^Rejected .+\. Every proposal is decided\.$/);
+  expect(document.activeElement).toBe(document.querySelector("[data-finish-submit]"));
+});
+
+it("a repeated outcome stays on the proposal", async () => {
+  const view = proposalView();
+  view.draft.decisions = [{ decision_id: "d", target: { annotation_id: "p-1", version: "p-1-v1" }, outcome: "confirmed", reviewer_id: "user-test" }] as never;
+  const record = recordDecisions(view);
+  render(<CaseScreen view={view} workspaceId="ws-pc" onClose={vi.fn()} />);
+  const rows = () => Array.from(document.querySelectorAll('[data-list-key^="target:"]'));
+  const selected = () => rows().findIndex(row => row.classList.contains("selected"));
+  fireEvent.click(rows()[0]);
+  fireEvent.keyDown(window, { key: "1" });
+  await waitFor(() => expect(record).toHaveBeenCalledTimes(1));
   expect(selected()).toBe(0);
+  expect(document.querySelector("[data-advance-status]")).toBeNull();
 });
 
 it("Submit is unavailable until every proposal has a decision", async () => {

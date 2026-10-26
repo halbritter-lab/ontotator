@@ -41,16 +41,17 @@ async function assignPerson(page: Page, card: Locator, name: string): Promise<vo
 
 const targets = (page: Page) => page.locator('.sidebar [data-list-key^="target:"]');
 
-/** Walk the proposals with J and decide each with its key ("1" confirm, "2" reject, "3" edit & replace). */
+/** J selects the first proposal; each key decides one ("1" confirm, "2" reject, "3" edit & replace) and moves on. */
 async function decideProposals(page: Page, keys: readonly ("1" | "2" | "3")[], words: readonly string[]): Promise<void> {
   await expect(targets(page)).toHaveCount(keys.length);
+  await page.locator("body").press("j");
   for (const [index, key] of keys.entries()) {
-    await page.locator("body").press("j");
+    // Confirm and Reject select the next open proposal.
     await expect(targets(page).nth(index)).toHaveClass(/\bselected\b/);
     if (index === 1) {
-      // K walks back over the decided first proposal to the last open one; J comes forward again.
+      // K steps back onto the decided first proposal; J skips it and comes forward again.
       await page.keyboard.press("k");
-      await expect(targets(page).nth(2)).toHaveClass(/\bselected\b/);
+      await expect(targets(page).nth(0)).toHaveClass(/\bselected\b/);
       await page.keyboard.press("j");
       await expect(targets(page).nth(1)).toHaveClass(/\bselected\b/);
     }

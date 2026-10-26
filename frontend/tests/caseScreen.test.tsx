@@ -1954,13 +1954,17 @@ describe("CaseScreen integration", () => {
       return saved;
     });
     render(<CaseScreen view={view} workspaceId="ws-test" onClose={vi.fn()} />);
-    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    const row = () => document.querySelector('[data-list-key^="target:"]')!;
+    fireEvent.click(row());
     fireEvent.change(screen.getByRole("textbox", { name: /Reviewer note/ }), { target: { value: "Review required" } });
     for (const [key, outcome] of [["1", "confirmed"], ["2", "rejected"], ["4", "uncertain"]]) {
       for (let repeat = 0; repeat < 2; repeat++) {
+        // A new outcome on the only proposal moves on to Finish & Submit; select it again.
+        if (!row().classList.contains("selected")) fireEvent.click(row());
         fireEvent.keyDown(window, { key });
         if (key === "4") fireEvent.click(screen.getByRole("button", { name: "Save decision" }));
         await waitFor(() => expect(record).toHaveBeenLastCalledWith("ws-test", expect.objectContaining({ payload: expect.objectContaining({ outcome }) })));
+        if (repeat === 0) await waitFor(() => expect(row().classList.contains("selected")).toBe(false));
       }
     }
     const note = screen.getByRole("textbox", { name: /Reviewer note/i });
