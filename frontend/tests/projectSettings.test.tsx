@@ -87,20 +87,19 @@ describe("project creation", () => {
 });
 
 describe("settings section addresses", () => {
-  const labels = ["People", "Workflow", "Annotation", "Guidelines", "General", "Ontology"];
+  const labels = ["General", "Ontology", "Annotation", "Workflow", "Guidelines", "People"];
   const saveIn = (form: string) => within(screen.getByRole("form", { name: form })).getByRole("button", { name: "Save changes" });
 
-  it("opens People at the default address with six job tabs (M-8a)", async () => {
+  it("opens General at the default address with six job tabs (M-8a, B6-1)", async () => {
     render(<ProjectSettingsPage projectKey={settings.project_key} currentUser={currentUser} />);
     const navigation = await screen.findByRole("navigation", { name: "Settings sections" });
     const links = within(navigation).getAllByRole("link");
     expect(links.map(link => link.textContent)).toEqual(labels);
-    expect(links.map(link => link.getAttribute("href"))).toEqual(["", "/workflow", "/annotation", "/guidelines", "/general", "/ontology"].map(suffix => `#/projects/p%2Fkey/settings${suffix}`));
-    expect(within(navigation).getByRole("link", { name: "People" }).getAttribute("aria-current")).toBe("page");
+    expect(links.map(link => link.getAttribute("href"))).toEqual(["", "/ontology", "/annotation", "/workflow", "/guidelines", "/people"].map(suffix => `#/projects/p%2Fkey/settings${suffix}`));
+    expect(within(navigation).getByRole("link", { name: "General" }).getAttribute("aria-current")).toBe("page");
     expect(links.filter(link => link.hasAttribute("aria-current"))).toHaveLength(1);
-    expect(await screen.findByRole("region", { name: "Members" })).toBeDefined();
-    expect(screen.getByText(/^Role changes save immediately\./)).toBeDefined();
-    expect(screen.queryByRole("form", { name: "General" })).toBeNull();
+    expect(await screen.findByRole("form", { name: "General" })).toBeDefined();
+    expect(screen.queryByRole("region", { name: "Members" })).toBeNull();
   });
 
   it("section Guidelines renders GuidelinesSection", async () => {
@@ -129,7 +128,7 @@ describe("settings section addresses", () => {
     const navigation = await screen.findByRole("navigation", { name: "Settings sections" });
     fireEvent.click(within(navigation).getByRole("link", { name: "Annotation" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "projectSettings", key: settings.project_key, section: "annotation" });
-    fireEvent.click(within(navigation).getByRole("link", { name: "People" }));
+    fireEvent.click(within(navigation).getByRole("link", { name: "General" }));
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectSettings", key: settings.project_key });
     fireEvent.click(within(navigation).getByRole("link", { name: "Workflow" }), { ctrlKey: true });
     expect(onNavigate).toHaveBeenCalledTimes(2);

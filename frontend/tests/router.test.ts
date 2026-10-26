@@ -263,10 +263,11 @@ describe("settings section addresses", () => {
     expect(parseRoute("#/projects/a/settings")).toEqual({ name: "projectSettings", key: "a" });
     expect(parseRoute("#/projects/a/settings/annotation")).toEqual({ name: "projectSettings", key: "a", section: "annotation" });
     expect(parseRoute("#/projects/a/settings/unknown").name).toBe("notFound");
-    // People is the default tab (M-8a).
-    expect(routeHref({ name: "projectSettings", key: "a", section: "people" })).toBe("#/projects/a/settings");
-    expect(routeHref({ name: "projectSettings", key: "a", section: "general" })).toBe("#/projects/a/settings/general");
-    expect(SETTINGS_SECTIONS).toEqual(["people", "workflow", "annotation", "guidelines", "general", "ontology"]);
+    // General is the default tab (B6-1); the People address keeps working.
+    expect(routeHref({ name: "projectSettings", key: "a", section: "general" })).toBe("#/projects/a/settings");
+    expect(routeHref({ name: "projectSettings", key: "a", section: "people" })).toBe("#/projects/a/settings/people");
+    expect(parseRoute("#/projects/a/settings/members")).toEqual({ name: "projectSettings", key: "a", section: "people" });
+    expect(SETTINGS_SECTIONS).toEqual(["general", "ontology", "annotation", "workflow", "guidelines", "people"]);
     for (const section of SETTINGS_SECTIONS) expect(parseRoute(routeHref({ name: "projectSettings", key: "a", section }))).toMatchObject({ key: "a" });
   });
 

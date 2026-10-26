@@ -96,12 +96,12 @@ function documentsEntries(query: ProjectDocumentsQuery | undefined, prefix = "")
 }
 
 /**
- * Project settings tabs by job and frequency (M2 M-8a); each one has its own address (`…/settings/{section}`), and
- * `…/settings` opens People. The addresses of the earlier sections stay as aliases.
+ * Project settings tabs (M2 M-8a, order B6-1); each one has its own address (`…/settings/{section}`), and
+ * `…/settings` opens the first tab, General. The addresses of the earlier sections stay as aliases.
  */
 export type SettingsSection = "people" | "workflow" | "annotation" | "guidelines" | "general" | "ontology";
-export const SETTINGS_SECTIONS: readonly SettingsSection[] = ["people", "workflow", "annotation", "guidelines", "general", "ontology"];
-export const DEFAULT_SETTINGS_SECTION: SettingsSection = "people";
+export const SETTINGS_SECTIONS: readonly SettingsSection[] = ["general", "ontology", "annotation", "workflow", "guidelines", "people"];
+export const DEFAULT_SETTINGS_SECTION: SettingsSection = "general";
 const SETTINGS_ALIASES: Readonly<Record<string, SettingsSection>> = {
   members: "people", rules: "annotation", defaults: "annotation", guideline: "guidelines", profile: "ontology",
 };
