@@ -140,6 +140,7 @@
   --getting-started-shadow-colour: rgba(0, 0, 0, 0.05);
   --session-card-shadow-colour: rgba(0, 0, 0, 0.08);
   --flag-shadow-colour: rgba(15, 23, 42, 0.18);
+  --pinned-column-shadow-colour: rgba(31, 26, 20, 0.18);
   --language-menu-shadow-colour: rgba(15, 23, 42, 0.14);
   /* Axis values (spec 2026-10-23 §3, variant B): aliases of existing colours, the word always stays. */
   --axis-present-text: var(--success);
