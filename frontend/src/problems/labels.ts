@@ -198,7 +198,7 @@ export function historyItems(r: ProblemReportView): HistoryItem[] {
   return [created, ...items];
 }
 
-/** Toolbar "Report problem" badge and the visually hidden part of its accessible name. */
+/** Toolbar "Report a text problem" badge and the visually hidden part of its accessible name. */
 export function toolbarEntry(reports: ProblemReportView[] | null, held: boolean): { badge: string | null; paused: boolean; accessibleSuffix: string } {
   const open = (reports ?? []).filter(r => r.state === "open").length;
   const openText = `${open} open`;
@@ -207,7 +207,7 @@ export function toolbarEntry(reports: ProblemReportView[] | null, held: boolean)
     return { badge: open ? `Paused, ${openText}` : "Paused", paused: true, accessibleSuffix: open ? `Task paused, ${openReports}` : "Task paused" };
   }
   if (open) return { badge: openText, paused: false, accessibleSuffix: openReports };
-  return { badge: null, paused: false, accessibleSuffix: "Report a problem with this task" };
+  return { badge: null, paused: false, accessibleSuffix: "for this task" };
 }
 
 export type Intent = "close" | "release" | "pause" | "restart" | "reopen";

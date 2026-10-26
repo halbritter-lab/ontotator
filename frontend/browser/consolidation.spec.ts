@@ -84,7 +84,7 @@ test("a lead without the Consolidator role consolidates the 8-group example in 6
   await expect(page).toHaveURL(new RegExp(`#/tasks/${round.assignment_id}$`));
   await expectOpened(page);
   // The task's guidelines and problem report stay at hand; the path names the open groups.
-  await expect(page.getByRole("group", { name: "Task", exact: true }).getByRole("button", { name: /^Report problem/ })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Task", exact: true }).getByRole("button", { name: /^Report a text problem/ })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Text path", exact: true })).toContainText("consolidating, 4 of 8 groups open");
   // A person label on every member: the comparison names both people; no internal ids anywhere.
   await expect(expanded(page).locator("thead th")).toHaveCount(2);

@@ -37,7 +37,7 @@ async function openTask(page: Page, id: number) {
   await expect(entry(page)).toBeVisible();
 }
 
-/** The toolbar "Report problem" button (outside any dialog, so located by its class). */
+/** The toolbar "Report a text problem" button (outside any dialog, so located by its class). */
 const entry = (page: Page) => page.locator("button.problem-entry");
 const badge = (page: Page) => entry(page).locator(".problem-badge");
 /** The editor's "Task paused: {reason}" banner. */
@@ -66,7 +66,7 @@ async function closeReports(page: Page, task: number) {
 /** File a report as the reporter (no report yet: the dialog opens in the form view). Leaves the list dialog open. */
 async function fileReport(page: Page, s: ProblemReportScenario, text = REPORT_TEXT): Promise<Locator> {
   const task = s.tasks.reporter;
-  await expect(entry(page)).toHaveAccessibleName("Report problem Report a problem with this task");
+  await expect(entry(page)).toHaveAccessibleName("Report a text problem for this task");
   await entry(page).click();
   const form = page.getByRole("dialog", { name: "New problem report", exact: true });
   await expect(form).toBeVisible();
@@ -82,7 +82,7 @@ async function fileReport(page: Page, s: ProblemReportScenario, text = REPORT_TE
   await expect(fact(dialog, "Report")).toHaveText("Open");
   await expect(fact(dialog, "Your task")).toContainText("Paused since");
   await expect(badge(page)).toHaveText(/^Paused\W+1 open$/);
-  await expect(entry(page)).toHaveAccessibleName("Report problem Task paused, 1 open report");
+  await expect(entry(page)).toHaveAccessibleName("Report a text problem Task paused, 1 open report");
   await expect(banner(page)).toBeVisible();
   return dialog;
 }
@@ -215,7 +215,7 @@ test("withdraw an untouched report, lead reopens it: Open, no withdraw, task sta
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Active");
   await expect(dialog).toContainText("A project lead has acted on this report. Resume your task with a reason and ask a project lead to close it.");
   await expect(banner(page)).toHaveCount(0);
-  await expect(entry(page)).toHaveAccessibleName("Report problem 1 open report");
+  await expect(entry(page)).toHaveAccessibleName("Report a text problem 1 open report");
 });
 
 test("a lead releases the pause in another window: the open dialog and editor update on window focus", async ({ page, browser }) => {
@@ -281,7 +281,7 @@ test("the lead pauses the same-text task: its owner sees only the lead's reason,
     await expect(banner(owner.page)).toContainText(leadReason);
     await expect(owner.page.getByText(REPORT_TEXT)).toHaveCount(0);
     await expect(badge(owner.page)).toHaveText("Paused");
-    await expect(entry(owner.page)).toHaveAccessibleName("Report problem Task paused");
+    await expect(entry(owner.page)).toHaveAccessibleName("Report a text problem Task paused");
     await expect(owner.page.locator("body")).not.toContainText(s.labels.reporter);
     // The owner has no report of their own: the dialog opens in the new report view.
     await entry(owner.page).click();

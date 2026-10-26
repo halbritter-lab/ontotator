@@ -146,7 +146,7 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
   const assignment = workspace.assignment;
   // An active consolidation round opens the consolidation view (acceptance fixes WP-E); "Edit in editor…" adds view=editor.
   if (roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor") {
-    // The task's guidelines and "Report problem" stay at hand: the consolidator decides guideline questions.
+    // The task's guidelines and "Report a text problem" stay at hand: the consolidator decides guideline questions.
     return <TaskGuidelines assignment={assignment} readOnly={workspace.read_only || assignment.held}>{guidelines => <>
       {guidelines.notice}
       <ConsolidationScreen projectKey={assignment.project_key} roundId={roundInfo.round_id} assignmentId={assignmentId}

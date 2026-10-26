@@ -684,7 +684,7 @@ test("lead corrects a rejected translation and annotation becomes assignable", a
   await expect(page.getByText("You are correcting this translation as project lead.", { exact: true })).toBeVisible();
   await expect(page.getByRole("radio")).toHaveCount(1);
   await expect(page.getByRole("radio", { name: "Accepted with corrections", exact: true })).toBeChecked();
-  await expect(page.getByRole("button", { name: /Report a problem/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Report a text problem/ })).toHaveCount(0);
   const before = await text.inputValue();
   const corrected = `${before} The second seizure episode is included.`;
   await text.fill(corrected);

@@ -157,8 +157,8 @@ describe("ConsolidationScreen", () => {
 
   it("shows header actions (guidelines, problem report) next to the title", async () => {
     load(exampleView());
-    await renderScreen({ headerActions: <button type="button">Report problem</button> });
-    expect(within(document.querySelector(".cons-header") as HTMLElement).getByRole("button", { name: "Report problem" })).toBeTruthy();
+    await renderScreen({ headerActions: <button type="button">Report a text problem</button> });
+    expect(within(document.querySelector(".cons-header") as HTMLElement).getByRole("button", { name: "Report a text problem" })).toBeTruthy();
   });
 
   it("lists added findings with their label: by you live, by the consolidator for the lead", async () => {
@@ -343,10 +343,10 @@ describe("ConsolidationScreen", () => {
 
   it("opens the editor for the consolidation task from the header's Open in full editor (M-7a)", async () => {
     load(exampleView());
-    const { onNavigate } = await renderScreen({ assignmentId: 42, headerActions: <button type="button">Report problem</button> });
+    const { onNavigate } = await renderScreen({ assignmentId: 42, headerActions: <button type="button">Report a text problem</button> });
     expect(screen.queryByRole("button", { name: "Edit in editor…" })).toBeNull();
     const header = within(screen.getByRole("group", { name: "Task" }));
-    expect(header.getAllByRole("button").map(button => button.textContent)).toEqual(["Open in full editor", "Report problem"]);
+    expect(header.getAllByRole("button").map(button => button.textContent)).toEqual(["Open in full editor", "Report a text problem"]);
     const open = header.getByRole("button", { name: "Open in full editor" });
     expect(open.getAttribute("title")).toBe("For span changes and findings the comparison cannot express");
     fireEvent.click(open);

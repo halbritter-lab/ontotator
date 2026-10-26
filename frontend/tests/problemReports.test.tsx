@@ -107,7 +107,7 @@ it("resumes only the selected own report pause, reuses the request identity on r
   const metadata = vi.spyOn(api, "getAssignmentMetadata").mockResolvedValue(paused);
   const refresh = vi.fn();
   render(<TaskProblemActions assignment={paused} onSaveBeforeReport={vi.fn()} onRefresh={refresh} />);
-  fireEvent.click(await screen.findByRole("button", { name: /^Report problem Task paused, 1 open report$/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /^Report a text problem Task paused, 1 open report$/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Resume my task…" }));
   fireEvent.change(screen.getByRole("textbox", { name: /Why can you continue\?/ }), { target: { value: "Lead clarified the conflict" } });
   fireEvent.click(screen.getByRole("button", { name: "Resume my task" }));

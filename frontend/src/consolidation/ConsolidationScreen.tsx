@@ -39,7 +39,7 @@ export interface ConsolidationScreenProps {
   onNavigate?: (route: Route) => void;
   /** The editor view of the round when the task already opened it (layers, axes, creation defaults). */
   workspaceView?: WorkspaceView | null;
-  /** Task actions next to the title (the task's guidelines and "Report problem"). */
+  /** Task actions next to the title (the task's guidelines and "Report a text problem"). */
   headerActions?: ReactNode;
   /** "Back to documents" target of the lead's read-only view (the Documents page with its row panel). */
   back?: Route;

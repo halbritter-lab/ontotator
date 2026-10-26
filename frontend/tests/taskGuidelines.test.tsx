@@ -32,7 +32,7 @@ const first: GuidelineNotice = { from_version: null, to_version: 3, more: 0, cha
 
 function Harness({ assignment, readOnly = false }: { assignment: AssignmentView; readOnly?: boolean }) {
   return <TaskGuidelines assignment={assignment} readOnly={readOnly}>{({ button, notice, drawer }) => <>
-    <div role="group" aria-label="Task actions">{button}<button>Report problem</button></div>
+    <div role="group" aria-label="Task actions">{button}<button>Report a text problem</button></div>
     <div data-testid="notice-slot">{notice}</div>
     <button>Editor</button>
     {drawer}
@@ -119,7 +119,7 @@ describe("task guidelines focus return", () => {
     view.rerender(<Harness assignment={task({ guideline: null })} />);
     expect(screen.queryByRole("button", { name: /^Guidelines v\d+, open/ })).toBeNull();
     fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Report problem" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Report a text problem" }));
   });
 });
 
@@ -225,9 +225,9 @@ describe("task guidelines in the task screens", () => {
   }
   const before = (a: HTMLElement, b: HTMLElement) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
-  it("is placed before Report problem in both task screens", async () => {
+  it("is placed before Report a text problem in both task screens", async () => {
     annotationTask();
-    const report = await screen.findByRole("button", { name: /^Report problem/ });
+    const report = await screen.findByRole("button", { name: /^Report a text problem/ });
     const guidelines = await screen.findByRole("button", { name: /^Guidelines v3, open the project guidelines/ });
     expect(before(guidelines, report)).toBe(true);
     expect(before(screen.getByRole("button", { name: "Work rounds" }), guidelines)).toBe(true);
@@ -235,7 +235,7 @@ describe("task guidelines in the task screens", () => {
     translationTask();
     await screen.findByRole("textbox", { name: "Translation (de)" });
     const reviewGuidelines = await screen.findByRole("button", { name: /^Guidelines v3, open the project guidelines/ });
-    expect(before(reviewGuidelines, screen.getByRole("button", { name: /^Report problem/ }))).toBe(true);
+    expect(before(reviewGuidelines, screen.getByRole("button", { name: /^Report a text problem/ }))).toBe(true);
     expect(reviewGuidelines.closest(".translation-review-tools")).not.toBeNull();
   });
 
@@ -244,7 +244,7 @@ describe("task guidelines in the task screens", () => {
     translationTask(workspace);
     await screen.findByRole("textbox", { name: "Translation (de)" });
     expect(await screen.findByRole("button", { name: /^Guidelines v3, open the project guidelines/ })).toBeDefined();
-    expect(screen.queryByRole("button", { name: /^Report problem/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Report a text problem/ })).toBeNull();
   });
 
   it("a focus reload in lead-correction mode re-reads the task and shows the new version and its notice once", async () => {

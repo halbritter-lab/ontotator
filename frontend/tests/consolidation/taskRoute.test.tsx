@@ -54,12 +54,12 @@ describe("TaskEditor switch", () => {
     expect(await screen.findByRole("button", { name: "Open in full editor" })).toBeTruthy();
   });
 
-  it("offers the guidelines and Report problem in the consolidation view", async () => {
+  it("offers the guidelines and Report a text problem in the consolidation view", async () => {
     mockTask({ guideline: { version: 2 } });
     render(<TaskEditor assignmentId={1} user={user} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
     await screen.findByRole("heading", { name: "Consolidate case-107 de v2" });
     expect(screen.getByRole("button", { name: /^Guidelines v2/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^Report problem/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Report a text problem/ })).toBeTruthy();
   });
 
   it("opens the editor with view=editor", async () => {

@@ -28,7 +28,7 @@ const footer = () => {
   expect(actions).not.toBeNull();
   return within(actions!);
 };
-const entry = () => screen.getByRole("button", { name: /^Report problem/ });
+const entry = () => screen.getByRole("button", { name: /^Report a text problem/ });
 
 function setup({ reports = [] as ProblemReportView[], assignment = task(), metadata }: { reports?: ProblemReportView[]; assignment?: AssignmentView; metadata?: AssignmentView } = {}) {
   const list = vi.spyOn(api, "listTaskProblemReports").mockResolvedValue(reports);
@@ -43,15 +43,15 @@ describe("reporter toolbar entry", () => {
   it("names the entry by its visible text plus the state", async () => {
     setup();
     await waitFor(() => expect(api.listTaskProblemReports).toHaveBeenCalledWith("p", 4));
-    expect(entry().textContent).toContain("Report problem");
-    expect(screen.getByRole("button", { name: "Report problem Report a problem with this task" })).toBeTruthy();
+    expect(entry().textContent).toContain("Report a text problem");
+    expect(screen.getByRole("button", { name: "Report a text problem for this task" })).toBeTruthy();
     cleanup();
     setup({ reports: [report({ holds: [hold({ active: false, release_action: "resume", released_by_label: "ann-0004", released_at: T1 })] })] });
-    expect(await screen.findByRole("button", { name: "Report problem 1 open report" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Report a text problem 1 open report" })).toBeTruthy();
     expect(screen.getByText("1 open")).toBeTruthy();
     cleanup();
     setup({ reports: [report()], assignment: pausedTask() });
-    const button = await screen.findByRole("button", { name: "Report problem Task paused, 1 open report" });
+    const button = await screen.findByRole("button", { name: "Report a text problem Task paused, 1 open report" });
     const badge = button.querySelector(".problem-badge")!;
     expect(badge.textContent).toBe("Paused, 1 open");
     expect(badge.querySelector("svg")).not.toBeNull();
@@ -63,7 +63,7 @@ describe("reporter toolbar entry", () => {
     await waitFor(() => expect(api.listTaskProblemReports).toHaveBeenCalled());
     await act(async () => undefined);
     expect(entry().querySelector(".problem-badge")).toBeNull();
-    expect(entry().textContent).toContain("Report problem");
+    expect(entry().textContent).toContain("Report a text problem");
   });
 });
 
@@ -194,7 +194,7 @@ describe("reporter dialog", () => {
 
   it("asks before discarding typed text and keeps it on Keep writing", async () => {
     setup({ reports: [report({ state: "resolved", holds: [hold({ active: false })] })] });
-    await screen.findByRole("button", { name: /Report a problem with this task/ });
+    await screen.findByRole("button", { name: /for this task/ });
     fireEvent.click(entry());
     await act(async () => undefined);
     fireEvent.click(footer().getByRole("button", { name: "New report" }));

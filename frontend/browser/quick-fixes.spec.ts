@@ -130,7 +130,7 @@ test('Q1 (B2): the problem dialog keeps New report and Close in a fixed footer',
   await loginExisting(page, s.users.reporter);
   await page.goto(`/#/tasks/${task}`);
   await expect(page.locator('.text-container')).toBeVisible();
-  const entry = page.getByRole('button', { name: /^Report problem/ });
+  const entry = page.getByRole('button', { name: /^Report a text problem/ });
   // No report yet: the entry opens the new report form directly.
   await entry.click();
   const form = page.getByRole('dialog', { name: 'New problem report', exact: true });
