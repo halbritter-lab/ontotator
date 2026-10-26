@@ -60,6 +60,21 @@ it("J moves to the next proposal and 1 confirms it", async () => {
     payload: expect.objectContaining({ outcome: "confirmed", target: { annotation_id: "p-2", version: "p-2-v1" } }) })));
 });
 
+it("J resumes after the last proposal once the selection is cleared and skips decided ones", () => {
+  const view = proposalView();
+  view.draft.decisions = [{ decision_id: "d", target: { annotation_id: "p-2", version: "p-2-v1" }, outcome: "confirmed", reviewer_id: "user-test" }] as never;
+  render(<CaseScreen view={view} workspaceId="ws-pc" onClose={vi.fn()} />);
+  const rows = () => Array.from(document.querySelectorAll('[data-list-key^="target:"]'));
+  const selected = () => rows().findIndex(row => row.classList.contains("selected"));
+  fireEvent.click(rows()[0]);
+  fireEvent.keyDown(window, { key: "Escape" });
+  expect(selected()).toBe(-1);
+  fireEvent.keyDown(window, { key: "j" });
+  expect(selected()).toBe(2);
+  fireEvent.keyDown(window, { key: "k" });
+  expect(selected()).toBe(0);
+});
+
 it("Submit is unavailable until every proposal has a decision", async () => {
   render(<CaseScreen view={proposalView()} workspaceId="ws-pc" onClose={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));

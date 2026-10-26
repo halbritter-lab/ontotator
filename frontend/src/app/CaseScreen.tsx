@@ -342,6 +342,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const flushPendingAxes = () => { pendingAxesFlush.current?.(); };
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const lastTargetIdRef = useRef<string | null>(null);
+  if (selectedTargetId) lastTargetIdRef.current = selectedTargetId;
   // A carried input without a finding on this text (placeholder row); exclusive with the others.
   const [selectedInputId, setSelectedInputId] = useState<string | null>(null);
   useEffect(() => {
@@ -2919,10 +2921,14 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     handleDeselectAll();
   }, { ...shortcutOptions, allowRepeat: true, allowInInputs: true, group: "General", description: "Discard the marked text / clear selection / cancel adding a mention or segment" });
   useShortcut(["j", "k"], (event) => {
-    const current = reviewTargets.findIndex((target) => refKey(target) === selectedTargetId);
-    const index = event.key.toLowerCase() === "j"
-      ? (current < reviewTargets.length - 1 ? current + 1 : 0)
-      : (current > 0 ? current - 1 : reviewTargets.length - 1);
+    // Resume from the last proposal (Edit & Replace clears the selection) and prefer open ones.
+    const n = reviewTargets.length;
+    const current = reviewTargets.findIndex((target) => refKey(target) === (selectedTargetId ?? lastTargetIdRef.current));
+    const step = event.key.toLowerCase() === "j" ? 1 : -1;
+    const start = current < 0 ? (step > 0 ? -1 : n) : current;
+    const at = (i: number) => (((start + step * i) % n) + n) % n;
+    let index = at(1);
+    for (let i = 1; i <= n; i++) if (!decisionsMap[refKey(reviewTargets[at(i)])]) { index = at(i); break; }
     setSelectedTargetId(refKey(reviewTargets[index]));
     setSelectedAnnotationId(null);
     setSelectedSourceId(null);

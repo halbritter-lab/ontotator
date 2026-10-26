@@ -48,9 +48,9 @@ async function decideProposals(page: Page, keys: readonly ("1" | "2" | "3")[], w
     await page.locator("body").press("j");
     await expect(targets(page).nth(index)).toHaveClass(/\bselected\b/);
     if (index === 1) {
-      // K walks back, J forward again.
+      // K walks back over the decided first proposal to the last open one; J comes forward again.
       await page.keyboard.press("k");
-      await expect(targets(page).nth(0)).toHaveClass(/\bselected\b/);
+      await expect(targets(page).nth(2)).toHaveClass(/\bselected\b/);
       await page.keyboard.press("j");
       await expect(targets(page).nth(1)).toHaveClass(/\bselected\b/);
     }
