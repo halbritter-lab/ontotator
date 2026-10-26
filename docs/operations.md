@@ -65,6 +65,8 @@ cp secrets/postgres/owner-password secrets/migrate/owner-password
 cp secrets/postgres/app-password secrets/app/app-password
 ```
 
+Each file must hold exactly 64 lowercase hex characters and a line feed. The PostgreSQL init script rejects anything else, including the carriage return that the MinGW `openssl` in Git Bash appends on Windows. There, pipe through `tr -d '\r'` (`openssl rand -hex 32 | tr -d '\r' > ...`).
+
 Generate the admin Argon2id hash with the verified image. With `-i` and no TTY the CLI reads one password line from stdin; it does not provide a hidden prompt. Read with Bash's hidden input first, then pipe it, so neither command history nor a plaintext file holds the password:
 
 ```bash
@@ -103,7 +105,7 @@ docker compose up -d --wait
 docker compose ps --all
 ```
 
-PostgreSQL initialization creates separate non-superuser owner and app roles and the application schema. `migrate` upgrades that schema as owner, and only successful completion allows app to start. Sign in at your HTTPS origin as `admin` with the password used to generate the bootstrap hash.
+PostgreSQL initialization creates separate non-superuser owner and app roles and the application schema. If initialization fails (for example `Invalid generated credential (hex expected)` in `docker compose logs postgres`), the data volume is left half-initialized: PostgreSQL restarts, reports healthy and skips initialization, but the roles are missing. On a **new, empty** deployment only, fix the secrets, run `docker compose down --volumes` and start again. `migrate` upgrades that schema as owner, and only successful completion allows app to start. Sign in at your HTTPS origin as `admin` with the password used to generate the bootstrap hash.
 
 After confirming admin exists and can sign in, remove `ONTOCURATOR_ADMIN_PASSWORD_HASH_FILE` from app's environment in your **deployment copy** of the Compose configuration. Recreate app with that revised configuration while the hash file still exists:
 
@@ -166,12 +168,12 @@ Import T1 documents/proposals and export submissions/edit logs, then copy output
 stage_file ./proposals.zip /tmp/proposals.zip
 docker compose exec app ontocurator admin import ward-7 /tmp/proposals.zip
 docker compose exec app ontocurator admin export ward-7 /tmp/results.zip
-docker compose cp app:/tmp/results.zip ./results.zip
+docker compose exec -T app cat /tmp/results.zip > ./results.zip
 docker compose exec app ontocurator admin export-edit-log ward-7 /tmp/edits.jsonl
-docker compose cp app:/tmp/edits.jsonl ./edits.jsonl
+docker compose exec -T app cat /tmp/edits.jsonl > ./edits.jsonl
 ```
 
-Imports/exports are jobs, awaited by default; `--no-wait` queues them for a server worker. `/tmp` is ephemeral and limited to 256 MiB. For larger files use a provisioned private directory on `/data` or a deployment-managed writable staging mount, then clean up staged files after copying. Imported blobs and job outputs in persistent storage must remain with the database backup. Keep clinical exports private.
+`docker compose cp` cannot copy out of app's `/tmp` either: it reads the container filesystem, not the tmpfs mount, and reports that the file is missing. Stream outputs out with `exec -T ... cat` in Bash, never through PowerShell redirection. Imports/exports are jobs, awaited by default; `--no-wait` queues them for a server worker. `/tmp` is ephemeral and limited to 256 MiB. For larger files use a provisioned private directory on `/data` or a deployment-managed writable staging mount, then clean up staged files after copying. Imported blobs and job outputs in persistent storage must remain with the database backup. Keep clinical exports private.
 
 ## Upgrades
 
@@ -191,7 +193,7 @@ Migrations are forward-only. `/readyz` refuses any schema differing from the ima
 
 Back up PostgreSQL and the `ontocurator-data` volume as one recovery point. PostgreSQL holds accounts, sessions, projects, annotations, ontology metadata and jobs; `/data` holds referenced blobs, ontology/translation files and exports. Neither half alone is complete.
 
-**Deployment validation pending: the following paired backup/restore procedure has not been executed against a deployment.** Syntax and tool options have been checked; validate a complete recovery on an isolated host before relying on it.
+**Drill 2026-10-26: passed.** The procedure below was executed end to end with this repository's `docker-compose.yml` on throwaway Compose projects (Docker Desktop 6 GiB VM, Git Bash, local image `ontocurator:acceptance-20261023`, one worker, synthetic seed data: three users, `hp` ontology with a German translation, one project with an imported bundle, a text upload and two submissions). After `docker compose down --volumes` of the source, the restore into a fresh project gave: migrate exited 0 at the same revision (`0019`), app healthy, `/readyz` all checks true, logins of all three users and a rejected wrong password, row counts of all 62 tables equal (the only differences were the login attempts and sessions of the verification logins), every `/data` file byte-identical with equal numeric owners and modes, a byte-identical edit-log export, and a new upload written after restore. Logins and the upload went through a drill-only client inside app that acted as the trusted proxy on `127.0.0.1`, not through a real HTTPS proxy. Not covered: the T1 `admin export` failed with `DOCUMENT_NOT_FOUND` on this image both before backup and after restore (an application issue, not a restore effect, still to be checked on a current image), and ontology search was only covered by `/readyz`. Timings: first start 24 s, backup including app stop and restart 15 s, destroy 3 s, restore up to the ownership check 18 s, start of migrate and app 11 s. Repeat the drill on the real Linux host with production-sized data before relying on it; dump and archive times grow with the data.
 
 Quiesce all writers: stop every app instance connected to this database, block new CLI writes, and wait for any running imports, exports or migration jobs to finish. Keep this maintenance restriction until both backup artifacts are complete. Leave PostgreSQL running. Use a new private backup directory for each recovery point. Run this block in Bash on the Linux deployment host against the intended source Compose project:
 
@@ -205,7 +207,7 @@ app_container="$(docker compose ps --all --quiet app)"
 test -n "$app_container"
 data_volume="$(docker inspect --format '{{range .Mounts}}{{if and (eq .Destination "/data") (eq .Type "volume")}}{{.Name}}{{end}}{{end}}' "$app_container")"
 test -n "$data_volume"
-helper_image="$(docker inspect --format '{{.Config.Image}}' "$app_container")"
+helper_image="$(docker inspect --format '{{ .Config.Image }}' "$app_container")"
 test -n "$helper_image"
 printf '%s\n' "$helper_image" > "$backup_dir/image-reference.txt"
 docker compose exec -T postgres pg_dump --username=ontocurator_bootstrap --dbname=ontocurator --format=custom > "$backup_dir/database.dump"
@@ -218,9 +220,9 @@ test -s "$backup_dir/data.tar"
 docker compose up -d --wait app
 ```
 
-The volume is resolved from app's actual `/data` mount, never guessed from a project name. The archive helper uses the same verified image, has no network, reads the source volume read-only and records numeric owners. If any command fails, app stays stopped; investigate before releasing the maintenance restriction. Keep deployed Compose settings, ontology release identities and protected role credentials with this recovery record. `pg_dump` does not back up role passwords. Protect backups as clinical data. Bash streams binary data safely; older PowerShell versions may corrupt native binary redirection.
+Run the block in the source deployment directory (or set `COMPOSE_PROJECT_NAME` and the same `--file`/`--env-file` options) so every `docker compose` command addresses the source project. Keep the spaces in `{{ .Config.Image }}`: the Docker CLI on Windows turns a space-free `{{.Config.Image}}` passed from Git Bash into the literal `.Config.Image`. In Git Bash also set `MSYS_NO_PATHCONV=1`, otherwise container paths such as `/source` are rewritten into Windows paths. `image-reference.txt` holds the reference app was started with; it identifies the image only if `.env` pins a digest. The final `up` also reruns the one-shot `migrate`, which finds the schema current. The volume is resolved from app's actual `/data` mount, never guessed from a project name. The archive helper uses the same verified image, has no network, reads the source volume read-only and records numeric owners. If any command fails, app stays stopped; investigate before releasing the maintenance restriction. Keep deployed Compose settings, ontology release identities and protected role credentials with this recovery record. `pg_dump` does not back up role passwords. Protect backups as clinical data. Bash streams binary data safely; older PowerShell versions may corrupt native binary redirection.
 
-Restore only into a **fresh isolated target**, using the same image digest and role names. Prepare a separate deployment directory containing the matching Compose file, private `.env` and service-specific secrets. Its bootstrap/owner/app credentials must initialize the roles and match that target's consuming files. Remove app's bootstrap admin `_FILE` setting as described earlier: the restored database already contains admin. Configure a separate test origin/proxy; do not attach the target to the live proxy network or allow users/CLI writers during restoration.
+Restore only into a **fresh isolated target**, using the same image digest and role names. Prepare a separate deployment directory containing the matching Compose file, `docker/postgres-init.sh` at the same relative path (the Compose file mounts it from `./docker/`), private `.env` and service-specific secrets in `./secrets/`. Generate fresh bootstrap/owner/app passwords for the target as in [Configuration and secrets](#configuration-and-secrets): the dump carries no role passwords, so initialization sets the target's roles from its own files, and the consuming files must match them. Remove app's bootstrap admin `_FILE` setting as described earlier: the restored database already contains admin. Configure a separate test origin/proxy; do not attach the target to the live proxy network or allow users/CLI writers during restoration.
 
 The following block starts PostgreSQL alone so initialization provisions `ontocurator_bootstrap`, `ontocurator_owner` and `ontocurator_app`. Creating app's stopped container resolves its actual data volume without starting app or migrations. It then restores blobs before streaming the paired dump into PostgreSQL. Choose a unique target project; the guards refuse existing project containers or labelled volumes.
 
@@ -260,7 +262,7 @@ Only after both halves restore successfully, start the matching migration/app se
 "${restore_compose[@]}" ps --all
 ```
 
-Require successful migration completion and healthy app, then verify login, an ontology search, a restored project document and a new export through the isolated test origin. This is the deployment validation still required for the procedure. Upgrade only after the matched recovery point works.
+Require successful migration completion and healthy app. `docker compose logs migrate` must report the revision the source ran (`SELECT version_num FROM ontocurator.alembic_version`); with the same image digest no migration runs. Then verify login, an ontology search, a restored project document and a new export through the isolated test origin. Upgrade only after the matched recovery point works.
 
 Do not initialize or restore against the only copy of an existing deployment. A restored database containing admin does not need a bootstrap admin hash; keep its `_FILE` setting removed as described above.
 
