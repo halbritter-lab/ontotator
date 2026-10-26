@@ -57,7 +57,8 @@ class NotAuthenticated(DomainError):
 
 
 LOGIN_FAILED_MESSAGE = (
-    "Username or password is wrong, or the account is locked for 15 minutes."
+    "Username or password is wrong, or the account is deactivated or locked"
+    " for 15 minutes."
 )
 
 

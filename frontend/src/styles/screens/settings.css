@@ -101,3 +101,6 @@
 .settings-confirmation:empty {
   display: none;
 }
+
+/* The hand-over text keeps its line breaks and wraps in the narrow code dialog. */
+.handover-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--size-sm); }

@@ -2,7 +2,7 @@ import { StrictMode, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CodeOnceDialog, type CodeOnceDialogProps } from "../src/admin/CodeOnceDialog";
+import { CodeOnceDialog, handoverText, type CodeOnceDialogProps } from "../src/admin/CodeOnceDialog";
 import { formatDateTime } from "../src/app/labels";
 
 const props = { open: true, kind: "setup" as const, code: "single-use-code-123", expires_at: "2026-10-16T12:30:00Z" };
@@ -152,6 +152,9 @@ describe("one-time code dialog", () => {
     await user.click(opener);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Copy" }));
     await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Copy hand-over text" }));
+    await user.tab(); // the hand-over text disclosure
+    await user.tab();
     const checkbox = screen.getByRole("checkbox");
     expect(document.activeElement).toBe(checkbox);
     await user.keyboard(" ");
@@ -171,6 +174,27 @@ describe("one-time code dialog", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByText(props.code)).toBeNull();
     expect(document.activeElement).toBe(opener);
+  });
+
+  it("copies a hand-over text with the login address, steps, username, code and expiry", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    clipboard(writeText);
+    render(<CodeOnceDialog {...props} username="carol" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy hand-over text" }));
+    await screen.findByRole("button", { name: "Hand-over text copied" });
+    const text = writeText.mock.calls[0][0] as string;
+    expect(text).toContain(window.location.origin);
+    expect(text).toContain('Choose "I have a setup or reset code"');
+    expect(text).toContain("username carol");
+    expect(text).toContain(`Code: ${props.code}`);
+    expect(text).toContain(formatDateTime(props.expires_at));
+    expect(screen.getByRole("button", { name: "Copy" })).toBeDefined();
+  });
+
+  it("states the lifetime in hours", () => {
+    const now = Date.parse("2026-10-16T10:30:00Z");
+    expect(handoverText({ ...props, kind: "reset" }, "https://x.example/", now)).toContain("valid for about 2 hours");
+    expect(handoverText({ ...props, expires_at: "2026-10-16T11:30:00Z" }, "https://x.example/", now)).toContain("about 1 hour,");
   });
 
   it("removes the code on unmount and safely ignores pending clipboard completion", async () => {

@@ -117,7 +117,7 @@ Confirm sign-in still works, then remove `secrets/app/admin-password-hash` using
 
 ## Users, ontologies and projects
 
-Run administrative commands inside app; they inherit its application-role database configuration and `/data`. They act directly on the database and audit the CLI operator. No SMTP service is used. Setup/reset codes are printed once: give them to the user out of band. Setup codes last 24 hours; reset codes last 15 minutes.
+Run administrative commands inside app; they inherit its application-role database configuration and `/data`. They act directly on the database and audit the CLI operator. No SMTP service is used. Setup/reset codes are printed once: give them to the user out of band. Setup codes last 24 hours; reset codes last 2 hours. Codes are groups of four letters and digits without look-alikes (no I, L, O, U); case, spaces and hyphens do not matter when typed.
 
 ```bash
 docker compose exec app ontocurator admin users create alice --display-name 'Alice A.'

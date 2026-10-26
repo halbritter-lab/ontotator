@@ -531,7 +531,7 @@ def users_create(
 
 @users_app.command("reset-code")
 def users_reset_code(ctx: typer.Context, username: UsernameArgument) -> None:
-    """Print a single-use reset code (valid 15 minutes); older codes end."""
+    """Print a single-use reset code (valid 2 hours); older codes end."""
     with _open_database(ctx) as db:
         issued = AccountService(db).issue_reset_code(Actor.cli(), username)
     _print_code(issued)

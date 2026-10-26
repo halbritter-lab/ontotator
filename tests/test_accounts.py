@@ -141,7 +141,7 @@ def test_an_expired_or_foreign_code_is_refused(services: Services) -> None:
     assert str(foreign.value) == str(unknown.value) == str(expired.value)
 
 
-def test_a_reset_code_lives_fifteen_minutes_and_replaces_older_code(
+def test_a_reset_code_lives_two_hours_and_replaces_older_code(
     services: Services,
 ) -> None:
     setup = services.accounts.create_user(ADMIN, "alice", "Alice")
@@ -149,19 +149,48 @@ def test_a_reset_code_lives_fifteen_minutes_and_replaces_older_code(
     reset = services.accounts.issue_reset_code(ADMIN, "alice")
 
     assert reset.purpose == "reset"
-    assert reset.expires_at == services.clock() + timedelta(minutes=15)
+    assert reset.expires_at == services.clock() + timedelta(hours=2)
     with pytest.raises(DomainError) as old:
         services.accounts.redeem_code("alice", setup.code, PASSWORD)
     assert _code(old) == "CODE_INVALID"
-    services.clock.advance(minutes=15, seconds=1)
+    services.clock.advance(hours=2, seconds=1)
     with pytest.raises(DomainError) as expired:
         services.accounts.redeem_code("alice", reset.code, PASSWORD)
     assert _code(expired) == "CODE_INVALID"
     fresh = services.accounts.issue_reset_code(ADMIN, "alice")
-    services.clock.advance(minutes=14)
+    services.clock.advance(minutes=119)
     assert services.accounts.redeem_code("alice", fresh.code, PASSWORD).username == (
         "alice"
     )
+
+
+def test_a_code_is_grouped_without_look_alikes_and_typed_loosely(
+    services: Services,
+) -> None:
+    issued = services.accounts.create_user(ADMIN, "alice", "Alice")
+
+    groups = issued.code.split("-")
+    assert len(groups) == 13 and all(len(group) == 4 for group in groups)
+    assert not set(issued.code) & set("ILOU") and issued.code == issued.code.upper()
+    # Lower case, spaces instead of hyphens, and O/I/L for 0/1 still match.
+    typed = " ".join(groups).lower().replace("0", "o").replace("1", "l")
+    assert services.accounts.redeem_code("alice", typed, PASSWORD).username == "alice"
+
+
+def test_a_code_issued_in_the_former_format_still_redeems(
+    services: Services,
+) -> None:
+    from ontocurator.auth.tokens import token_digest
+    from ontocurator.storage.tables import OneTimeCodeRow
+
+    services.accounts.create_user(ADMIN, "alice", "Alice")
+    legacy = "aB3_-xYzlO0Il1aB3_-xYzlO0Il1aB3_-xYzlO0Il1q"  # token_urlsafe(32) shape
+    with services.accounts.db.transaction() as conn:
+        conn.execute(
+            update(OneTimeCodeRow).values(code_sha256=token_digest(legacy))
+        )
+
+    assert services.accounts.redeem_code("alice", legacy, PASSWORD).username == "alice"
 
 
 def test_the_password_rules_apply_when_a_code_is_redeemed(services: Services) -> None:

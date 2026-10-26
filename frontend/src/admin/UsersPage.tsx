@@ -11,7 +11,7 @@ export interface UsersPageProps {
   /** App must consult this before shell/hash/history navigation or logout. */
   routeLeaveRef?: MutableRefObject<(() => Promise<boolean>) | null>;
 }
-type Handover = CodeResponse & { kind: "setup" | "reset" };
+type Handover = CodeResponse & { kind: "setup" | "reset"; username: string };
 type PendingChange = { username: string; change: AdminUserPatch; kind: "admin" | "deactivate"; fromEdit: boolean };
 type EditState = { baseline: AdminUser; draft: AdminUser };
 const emptyCreate = (): CreateUserRequest => ({ username: "", display_name: "", email: "", languages: [], system_admin: false });
@@ -67,8 +67,8 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     return () => { if (routeLeaveRef.current === guard) routeLeaveRef.current = null; };
   }, [routeLeaveRef]);
 
-  const showCode = (issued: CodeResponse, kind: Handover["kind"]) => {
-    const value: Handover = { code: issued.code, expires_at: issued.expires_at, kind };
+  const showCode = (issued: CodeResponse, kind: Handover["kind"], username: string) => {
+    const value: Handover = { code: issued.code, expires_at: issued.expires_at, kind, username };
     pendingCode.current = value; setCode(value);
   };
   const closeCode = () => { pendingCode.current = null; setCode(null); };
@@ -83,7 +83,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     try {
       const response = await api.adminCreateUser({ ...create, email: create.email?.trim() || null });
       if (epoch !== lifetime.current) return;
-      replaceUser(response.user); setCreate(emptyCreate()); showCode(response, "setup");
+      replaceUser(response.user); setCreate(emptyCreate()); showCode(response, "setup", response.user.username);
     } catch (error: unknown) {
       if (epoch === lifetime.current) setCreateError(error);
     } finally {
@@ -96,7 +96,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     writing.current = true; setBusy(true); setActionError(undefined);
     try {
       const issued = await api.adminIssueResetCode(username);
-      if (epoch === lifetime.current) showCode(issued, "reset");
+      if (epoch === lifetime.current) showCode(issued, "reset", username);
     } catch (error: unknown) {
       if (epoch === lifetime.current) setActionError(error);
     } finally {
@@ -143,7 +143,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     { id: "admin", header: "Admin", cell: user => user.is_system_admin ? "Yes" : "No" },
     { id: "active", header: "Active", cell: user => user.active ? "Yes" : "No" },
     { id: "actions", header: "Actions", cell: user => <Toolbar label={`Actions for ${user.username}`}>
-      <Button size="sm" disabled={pageBlocked} aria-label={`Reset code for ${user.username}`} onClick={() => { void issueReset(user.username); }}>Reset code</Button>
+      <Button size="sm" disabled={pageBlocked || !user.active} title={user.active ? undefined : "Activate the account before issuing a reset code."} aria-label={`Reset code for ${user.username}`} onClick={() => { void issueReset(user.username); }}>Reset code</Button>
       <Button size="sm" disabled={pageBlocked} aria-label={`Edit ${user.username}`} onClick={() => { setEditError(undefined); setEditing({ baseline: user, draft: { ...user, languages: [...user.languages] } }); }}>Edit</Button>
       <Button size="sm" variant={user.active ? "danger" : "secondary"} disabled={pageBlocked || user.username === currentUser.username} title={user.username === currentUser.username ? "You cannot deactivate yourself." : undefined} aria-label={`${user.active ? "Deactivate" : "Activate"} ${user.username}`} onClick={() => {
         if (user.active) setConfirmation({ username: user.username, change: { active: false }, kind: "deactivate", fromEdit: false });

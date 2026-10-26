@@ -71,8 +71,14 @@ BootstrapResult = Literal["created", "already_done", "not_configured"]
 
 CODE_LIFETIME: dict[str, timedelta] = {
     "setup": timedelta(hours=24),
-    "reset": timedelta(minutes=15),
+    # Long enough to reach the person out of band; still single use.
+    "reset": timedelta(hours=2),
 }
+# Crockford base32 (no I, L, O, U): a code read aloud has no look-alikes.
+CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+# 52 symbols of 5 bits: 260 bits, at least the former token_urlsafe(32).
+CODE_LENGTH = 52
+CODE_GROUP = 4
 ADMIN_USERNAME = "admin"
 ADMIN_DISPLAY_NAME = "Administrator"
 BOOTSTRAP_KEY = "admin_bootstrapped"
@@ -204,6 +210,24 @@ def _annotator_ids_in_use(conn: Connection) -> set[str]:
     )
     ids = union(*(select(column).where(column.like("ann-%")) for column in columns))
     return {str(value) for value in conn.execute(ids).scalars()}
+
+
+def new_code() -> str:
+    """A fresh code in groups of four symbols, e.g. ``7K3Q-...``."""
+    raw = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
+    return "-".join(
+        raw[start : start + CODE_GROUP] for start in range(0, CODE_LENGTH, CODE_GROUP)
+    )
+
+
+def canonical_code(code: str) -> str:
+    """The stored form of a typed code: no separators, upper case, I/L as 1, O as 0."""
+    return (
+        "".join(code.split())
+        .replace("-", "")
+        .upper()
+        .translate(str.maketrans("ILO", "110"))
+    )
 
 
 def _code_invalid() -> DomainError:
@@ -596,13 +620,13 @@ class AccountService:
                 OneTimeCodeRow.user_id == user.id, OneTimeCodeRow.used_at.is_(None)
             )
         )
-        code = secrets.token_urlsafe(32)
+        code = new_code()
         expires_at = now + CODE_LIFETIME[purpose]
         conn.execute(
             pg_insert(OneTimeCodeRow).values(
                 user_id=user.id,
                 purpose=purpose,
-                code_sha256=token_digest(code),
+                code_sha256=token_digest(canonical_code(code)),
                 issued_by=actor.user_id,
                 credential_generation=user.credential_generation,
                 created_at=now,
@@ -635,11 +659,13 @@ class AccountService:
                 raise _code_invalid() from None
             # The user row is locked first, as in every account change, then
             # the code row: one code cannot be redeemed twice at once.
+            # Codes issued before the grouped format are matched verbatim.
+            digests = {token_digest(code), token_digest(canonical_code(code))}
             row = conn.execute(
                 select(OneTimeCodeRow)
-                .where(OneTimeCodeRow.code_sha256 == token_digest(code))
+                .where(OneTimeCodeRow.code_sha256.in_(digests))
                 .with_for_update()
-            ).one_or_none()
+            ).first()
             if (
                 not user.active
                 or row is None
