@@ -259,7 +259,7 @@ class MembershipService:
         *,
         revoke_assignments: bool = False,
     ) -> frozenset[Role]:
-        """Replace roles atomically; removal confirms and revokes open work."""
+        """Replace roles atomically; removal confirms, revokes open work and sessions."""
         from ontocurator.projects.assignments import revoke_assignments as revoke_work
         from ontocurator.projects.assignments import unsupported_assignments
 
@@ -336,7 +336,10 @@ class MembershipService:
             grant_roles(
                 conn, actor, project_id, user.id, user.username, wanted - current, now
             )
-            revoke_user_sessions(conn, user.id, "project.member_roles", now)
+            # Only a privilege reduction ends sessions; adding a role (e.g. a lead
+            # adding themself as annotator) must not log the target out.
+            if removed:
+                revoke_user_sessions(conn, user.id, "project.member_roles", now)
             return wanted
 
     def members(self, project_key: str) -> list[tuple[str, str, frozenset[Role]]]:

@@ -357,7 +357,8 @@ def test_adjudicator_role_alone_has_no_document_grant_and_mixed_roles_are_curren
     user = env.app.state.accounts.get_by_username("alice")
     stale = ScopedRepository(env.db, Access(user.id, user.pseudonym, False))
     assert stale.get_variant_text("proj", TARGET).text == TEXT + " translated"
-    assert env.alice.get(path("other", "text")).status_code == 401
+    # Adding a role keeps the session; the added role grants no document access.
+    assert env.alice.get(path("other", "text")).status_code == 404
     env.app.state.memberships.set_roles(HARNESS, "proj", "alice", ["annotator"])
     from ontocurator.domain.errors import DomainError
 

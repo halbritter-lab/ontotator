@@ -308,7 +308,9 @@ def test_membership_revocation_failure_rolls_back_work_roles_audit_and_sessions(
 
     admin = logged_in(app, "root", system_admin=True)
     create_project(app, admin)
-    alice = logged_in(app, "alice", projects={"phenotypes": ["annotator"]})
+    alice = logged_in(
+        app, "alice", projects={"phenotypes": ["annotator"]}, assignments=[]
+    )
     user = app.state.accounts.get_by_username("alice")
     with app.state.repo.db.transaction() as conn:
         pid = conn.execute(
@@ -722,3 +724,31 @@ def test_optional_spanless_reason_setting_is_authorized_persisted_and_audited(ap
         ["description"],
         ["require_spanless_note"],
     ]
+
+
+def test_only_removing_a_role_ends_the_members_sessions(app):
+    admin = logged_in(app, "root", system_admin=True)
+    create_project(app, admin)
+    lead = logged_in(app, "lead", projects={"phenotypes": ["lead"]})
+    alice = logged_in(
+        app, "alice", projects={"phenotypes": ["annotator"]}, assignments=[]
+    )
+
+    def put(client, username, roles):
+        response = client.put(
+            f"/api/v1/projects/phenotypes/members/{username}", json={"roles": roles}
+        )
+        assert response.status_code == 200, response.text
+
+    # A lead adding themself as annotator keeps their session.
+    put(lead, "lead", ["lead", "annotator"])
+    assert lead.get("/api/v1/projects").status_code == 200
+    put(admin, "alice", ["annotator", "adjudicator"])
+    assert alice.get("/api/v1/projects").status_code == 200
+    # Removing a role revokes.
+    put(admin, "alice", ["annotator"])
+    assert alice.get("/api/v1/projects").status_code == 401
+    # Mixed add and remove revokes too.
+    alice = logged_in(app, "alice")
+    put(admin, "alice", ["adjudicator"])
+    assert alice.get("/api/v1/projects").status_code == 401
