@@ -45,6 +45,7 @@ from ontocurator.authz.policy import (
     Action,
     Role,
     Task,
+    can,
     may_take,
 )
 from ontocurator.authz.project_authority import require_project_management
@@ -380,6 +381,34 @@ class AssignmentService:
         if row["revoked_at"] is not None:
             raise DomainError("ASSIGNMENT_REVOKED")
         return row
+
+    @staticmethod
+    def readable(conn: Connection, assignment_id: int, access: Access) -> Assignment:
+        """The assignment, for its qualifying owner or a project's manager.
+
+        Unknown and foreign ids raise the same ASSIGNMENT_NOT_FOUND.
+        """
+        from ontocurator.authz.visibility import qualifying_assignment
+
+        row = (
+            conn.execute(_assignments().where(AssignmentRow.id == assignment_id))
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            raise DomainError("ASSIGNMENT_NOT_FOUND")
+        assignment = _assignment(row)
+        if not can(access, Action.MANAGE_ASSIGNMENTS, assignment.project_key) and (
+            conn.execute(
+                select(AssignmentRow.id).where(
+                    AssignmentRow.id == assignment_id,
+                    qualifying_assignment(access.user_id),
+                )
+            ).first()
+            is None
+        ):
+            raise DomainError("ASSIGNMENT_NOT_FOUND")
+        return assignment
 
     @staticmethod
     def _get(conn: Connection, assignment_id: int) -> Assignment:

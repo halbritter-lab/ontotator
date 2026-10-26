@@ -2227,6 +2227,8 @@ export interface paths {
         /**
          * List Ontologies
          * @description List loaded ontologies plus registered files that failed to load.
+         *
+         *     Server paths and load errors are for system administrators only.
          */
         get: operations["list_ontologies_api_v1_ontologies_get"];
         put?: never;

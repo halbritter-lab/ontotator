@@ -26,7 +26,6 @@ from ontocurator.application.work_rounds import (
 )
 from ontocurator.assignments.service import AssignmentService
 from ontocurator.auth.audit import Actor
-from ontocurator.authz.policy import Action, can
 from ontocurator.domain.errors import DomainError
 from ontocurator.domain.work_rounds import (
     CreatableRoundKind,
@@ -108,11 +107,9 @@ def list_rounds(
     repo = get_repo(request)
     # One snapshot: the round views and their facts show one committed state.
     with repo.db.snapshot() as conn:
-        assignment = AssignmentService._get(conn, assignment_id)
-        if assignment.user_id != principal.user_id and not can(
-            get_access(request), Action.MANAGE_ASSIGNMENTS, assignment.project_key
-        ):
-            raise DomainError("ASSIGNMENT_NOT_FOUND")
+        assignment = AssignmentService.readable(
+            conn, assignment_id, get_access(request)
+        )
         ids = (
             conn.execute(
                 select(WorkRoundRow.round_id)
@@ -206,16 +203,14 @@ def round_sources(
     repo = Repository(request.app.state.repo.db)
     # One snapshot: the sources and their facts show one committed state.
     with repo.db.snapshot() as conn:
-        assignment = AssignmentService._get(conn, assignment_id)
+        assignment = AssignmentService.readable(
+            conn, assignment_id, get_access(request)
+        )
         pid = repo._require_project(conn, assignment.project_key)
         fresh = current_access(conn, get_access(request), pid, assignment.project_key)
         require_document(
             conn, fresh, pid, assignment.project_key, assignment.document_id
         )
-        if assignment.user_id != principal.user_id and not can(
-            fresh, Action.MANAGE_ASSIGNMENTS, assignment.project_key
-        ):
-            raise DomainError("ASSIGNMENT_NOT_FOUND")
         if assignment.task != "annotate":
             return []
         variants = {

@@ -1,4 +1,4 @@
-"""Request body limits for multipart uploads, enforced before any parsing.
+"""Request body limits, enforced before any parsing.
 
 FastAPI parses a whole multipart body (spooling files to disk) before the
 endpoint runs, so the endpoints' bounded reads cannot bound the request.
@@ -9,6 +9,8 @@ without one (chunked): past the limit it ends the body for the app and answers
 
 A limit is the route's content limit plus ``MULTIPART_ALLOWANCE`` for the
 multipart framing and form fields; the endpoints keep their exact checks.
+Every other request (JSON, the unauthenticated login and code redemption
+included) is bounded by ``max_request_bytes``.
 """
 
 import json
@@ -19,10 +21,24 @@ from typing import Any
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from ontocurator.api.work_plan_routes import (
+    MAX_CASE_ID_LENGTH,
+    MAX_LANGUAGE_LENGTH,
+    MAX_SELECTED_ROWS,
+)
 from ontocurator.domain.guidelines import MAX_GUIDELINE_BYTES
 
 # Multipart boundaries, part headers and the small form fields.
 MULTIPART_ALLOWANCE = 64 * 1024
+# A Documents selection at its longest: every row a longest case id and
+# language with its JSON framing ({"case_id":"","language":""},).
+SELECTION_BYTES = MAX_SELECTED_ROWS * (MAX_CASE_ID_LENGTH + MAX_LANGUAGE_LENGTH + 32)
+# The JSON routes that carry a Documents selection or other bulk row lists.
+SELECTION_PATH = re.compile(
+    r"^/api/v1/projects/[^/]+/(work-plans/(bulk(/preview)?|rows)"
+    r"|assignments(/batch(/preview)?)?|document-rows/(selection-summary|keys)"
+    r"|case-ids/lookup)/?$"
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +49,7 @@ class BodyLimit:
     content_bytes: Callable[[Any], int]
     code: str
     details: Callable[[Any], str | dict[str, Any]]
+    allowance: int = MULTIPART_ALLOWANCE
 
 
 def _config(app: Any, name: str) -> int:
@@ -61,6 +78,27 @@ LIMITS: tuple[BodyLimit, ...] = (
         "PAYLOAD_TOO_LARGE",
         lambda _app: "Ontology uploads exceed the configured byte limit.",
     ),
+    *(
+        BodyLimit(
+            method,
+            SELECTION_PATH,
+            lambda _app: SELECTION_BYTES,
+            "PAYLOAD_TOO_LARGE",
+            lambda _app: "The selection exceeds the request byte limit.",
+        )
+        for method in ("POST", "PUT")
+    ),
+)
+
+
+# Any request no upload rule names.
+DEFAULT_LIMIT = BodyLimit(
+    "*",
+    re.compile(""),
+    lambda app: _config(app, "max_request_bytes"),
+    "PAYLOAD_TOO_LARGE",
+    lambda _app: "The request body exceeds the configured byte limit.",
+    allowance=0,
 )
 
 
@@ -69,9 +107,7 @@ class BodyLimitMiddleware:
         self.app = app
         self.limits = tuple(limits)
 
-    def _limit(self, scope: Scope) -> BodyLimit | None:
-        if scope["type"] != "http":
-            return None
+    def _limit(self, scope: Scope) -> BodyLimit:
         method, path = scope["method"], scope["path"]
         return next(
             (
@@ -79,16 +115,16 @@ class BodyLimitMiddleware:
                 for item in self.limits
                 if item.method == method and item.path.match(path)
             ),
-            None,
+            DEFAULT_LIMIT,
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        rule = self._limit(scope)
         app = scope.get("app")
-        if rule is None or app is None or not hasattr(app.state, "config"):
+        if scope["type"] != "http" or app is None or not hasattr(app.state, "config"):
             await self.app(scope, receive, send)
             return
-        limit = rule.content_bytes(app) + MULTIPART_ALLOWANCE
+        rule = self._limit(scope)
+        limit = rule.content_bytes(app) + rule.allowance
 
         async def refuse() -> None:
             body = json.dumps(

@@ -503,8 +503,8 @@ class AccountService:
                 )
             ).scalar_one_or_none()
             locked = login_locked(conn, username, client_ip, now, SessionPolicy())
-            matches = verify_password(stored_hash, current)
-            if not matches or locked:
+            matches = not locked and verify_password(stored_hash, current)
+            if not matches:
                 conn.execute(
                     insert(LoginAttemptRow).values(
                         username=username,

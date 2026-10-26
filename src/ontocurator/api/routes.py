@@ -412,9 +412,9 @@ def get_review_inputs(
             "REVIEW_MODE_REQUIRED",
             "Review inputs can only be queried in review mode",
         )
-    if req.mode == "proposal_check":
-        # Every annotator may open the mode; only one from proposals sees them.
-        cast(ScopedRepository, repo).require_proposals(req.project_key, req.document_id)
+    # Only a consolidator or an annotator from proposals sees them: holding
+    # the review role does not lift a from-scratch annotate task's blindness.
+    cast(ScopedRepository, repo).require_proposals(req.project_key, req.document_id)
     return ws_svc.get_review_inputs(req.project_key, req.document_id, mode=req.mode)
 
 
@@ -686,8 +686,13 @@ def package_ontologies(
 
 
 @router.get("/ontologies")
-def list_ontologies(ontology: OntologyDep) -> list[OntologyInfo]:
-    """List loaded ontologies plus registered files that failed to load."""
+def list_ontologies(
+    ontology: OntologyDep, principal: PrincipalDep
+) -> list[OntologyInfo]:
+    """List loaded ontologies plus registered files that failed to load.
+
+    Server paths and load errors are for system administrators only.
+    """
     ontology.load_registered()
     results = [
         _ontology_info(sha, svc, ontology.registered_path(sha))
@@ -705,4 +710,6 @@ def list_ontologies(ontology: OntologyDep) -> list[OntologyInfo]:
         )
         for failure in ontology.failures()
     )
+    if not principal.is_system_admin:
+        results = [r.model_copy(update={"path": None, "error": None}) for r in results]
     return results

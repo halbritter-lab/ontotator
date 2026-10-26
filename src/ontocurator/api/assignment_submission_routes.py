@@ -9,8 +9,6 @@ from ontocurator.api.identity import PrincipalDep
 from ontocurator.api.routes import get_access, get_repo
 from ontocurator.application.round_reads import assignment_submissions
 from ontocurator.assignments.service import AssignmentService
-from ontocurator.authz.policy import Action, can
-from ontocurator.domain.errors import DomainError
 
 
 class AssignmentSubmissionView(BaseModel):
@@ -34,11 +32,9 @@ def list_assignment_submissions(
     repo = get_repo(request)
     # One snapshot: the authorization and the listed facts show one state.
     with repo.db.snapshot() as conn:
-        assignment = AssignmentService._get(conn, assignment_id)
-        if assignment.user_id != principal.user_id and not can(
-            get_access(request), Action.MANAGE_ASSIGNMENTS, assignment.project_key
-        ):
-            raise DomainError("ASSIGNMENT_NOT_FOUND")
+        assignment = AssignmentService.readable(
+            conn, assignment_id, get_access(request)
+        )
         return [
             AssignmentSubmissionView(**item)
             for item in assignment_submissions(

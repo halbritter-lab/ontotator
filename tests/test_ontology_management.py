@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from auth_harness import HARNESS, AutoLoginClient
+from auth_harness import HARNESS, AutoLoginClient, logged_in
 from pg_harness import database_url_for
 
 from ontocurator.api.app import create_app
@@ -115,3 +115,18 @@ def test_uploaded_ontologies_are_listed_after_a_restart(tmp_path: Path) -> None:
     assert len(ontologies) == 1
     assert ontologies[0]["ontology_id"] == "hp"
     assert ontologies[0]["term_count"] == 2
+
+
+def test_only_system_admins_see_server_paths(tmp_path: Path) -> None:
+    app = _app(tmp_path / "workspace")
+    app.state.ontology_store.add(
+        HARNESS, "hp.json", json.dumps(SAMPLE_OBO_JSON).encode("utf-8")
+    )
+
+    [admin] = logged_in(app, "root", system_admin=True).get("/api/v1/ontologies").json()
+    [member] = logged_in(app, "member").get("/api/v1/ontologies").json()
+
+    assert admin["path"]
+    assert member["path"] is None
+    assert member["error"] is None
+    assert member["sha256"] == admin["sha256"]

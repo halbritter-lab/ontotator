@@ -286,7 +286,21 @@ Recovery audits operator/reason and ends all sessions for that administrator. Co
 
 Set `ONTOCURATOR_PUBLIC_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://editor.example.org` (include a nondefault port if used). Set `ONTOCURATOR_TRUSTED_PROXIES` to comma-separated exact proxy peer IPs on `edge`, never `*` or a subnet. Allocate stable peer addresses in the deployment network so replacement does not silently change trust.
 
-Forward the original `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`. For nginx, configure `proxy_set_header Host $host;`, `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` and `proxy_set_header X-Forwarded-Proto $scheme;`. For a public nondefault port preserve its authority in Host. Ensure the first trusted proxy replaces untrusted incoming forwarded headers and any proxy chain is explicitly configured. Host validation, HTTPS session cookies, same-origin writes and per-client login throttling depend on these settings. Verify through the public origin after provisioning; TLS/proxy configuration is maintained outside this repository.
+Forward the original `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`. For nginx, configure `proxy_set_header Host $host;`, `proxy_set_header X-Forwarded-For $remote_addr;` (at the first proxy; `$proxy_add_x_forwarded_for` only behind another trusted proxy) and `proxy_set_header X-Forwarded-Proto $scheme;`. For a public nondefault port preserve its authority in Host. Ensure the first trusted proxy replaces untrusted incoming forwarded headers and any proxy chain is explicitly configured. Host validation, HTTPS session cookies, same-origin writes and per-client login throttling depend on these settings. Verify through the public origin after provisioning; TLS/proxy configuration is maintained outside this repository.
+
+## Internet exposure
+
+The app sets its own security headers (CSP with `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, HSTS for an https origin) and refuses request bodies over its limits with 413: 50 MiB for document uploads, 300 MiB for ontology uploads, about 116 MiB for the bulk selection routes of a project (work plans, batch assignment, selection summaries; derived from their 200,000-row maximum), 1 MiB for every other request. A login locks a username from one client address after 5 failures in 15 minutes, and a client address after 100 failures for any names; locks end with the window, so no CLI unlock exists (a locked user can still log in from another address; see Lost admin password otherwise). The proxy owner should still:
+
+- Rate-limit `POST /api/v1/auth/login` and `/api/v1/auth/redeem-code` per client address, since the per-address lock does not stop attempts spread over many addresses, for example:
+  ```nginx
+  limit_req_zone $binary_remote_addr zone=ontocurator_auth:10m rate=10r/m;
+  location ~ ^/api/v1/auth/(login|redeem-code)$ { limit_req zone=ontocurator_auth burst=10 nodelay; proxy_pass http://ontocurator; }
+  ```
+- Set `client_max_body_size 1m;` by default and `300m` on `/api/v1/admin/ontologies` and `/api/v1/projects/` (uploads and bulk selections; the app enforces the exact limits).
+- Overwrite, never append to, `X-Forwarded-For` at the first proxy (`proxy_set_header X-Forwarded-For $remote_addr;`), so clients cannot choose the address the lockout counts.
+- Block `/livez` and `/readyz` from outside (`location ~ ^/(livez|readyz)$ { deny all; }`); Docker health checks reach them directly.
+- Terminate TLS with a current configuration and redirect HTTP to HTTPS.
 
 ## Workers and resource limits
 
