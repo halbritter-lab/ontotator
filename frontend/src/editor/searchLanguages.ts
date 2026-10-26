@@ -18,17 +18,22 @@ export interface SearchLanguageControl {
   onToggle: (language: string) => void;
 }
 
-/** No stored selection means all loaded languages; stored codes that are not loaded are ignored. */
-export const activeLanguages = (loaded: string[], stored: string[] | undefined): string[] =>
-  stored === undefined ? loaded : loaded.filter((language) => stored.includes(language));
+const baseLanguage = (code: string): string => code.split(/[-_]/)[0].toLowerCase();
+
+/** No stored selection means English (implied) plus the document's language; stored codes that are not loaded are ignored. */
+export const activeLanguages = (loaded: string[], stored: string[] | undefined, documentLanguage?: string): string[] =>
+  stored === undefined
+    ? loaded.filter((language) => !!documentLanguage && baseLanguage(language) === baseLanguage(documentLanguage))
+    : loaded.filter((language) => stored.includes(language));
 
 /** The selection to store after one loaded language was switched; codes that are not loaded stay stored. */
 export const toggledSelection = (
   loaded: string[],
   stored: string[] | undefined,
   language: string,
+  documentLanguage?: string,
 ): string[] => {
-  const active = activeLanguages(loaded, stored);
+  const active = activeLanguages(loaded, stored, documentLanguage);
   const next = active.includes(language)
     ? active.filter((code) => code !== language)
     : [...active, language];
@@ -98,10 +103,10 @@ export function useSearchLanguages(
       if (options.length === 0 && unavailable.length === 0) return undefined;
       return {
         options,
-        active: activeLanguages(loaded, stored),
+        active: activeLanguages(loaded, stored, documentLanguage),
         unavailable,
         onToggle: (language: string) => {
-          const next = toggledSelection(loaded, storedRef.current, language);
+          const next = toggledSelection(loaded, storedRef.current, language, documentLanguage);
           storedRef.current = next;
           setStored(next);
           // This is an ad-hoc override for this document. Personal defaults
@@ -109,6 +114,6 @@ export function useSearchLanguages(
         },
       };
     },
-    [client, annotatorId, ontologies, stored],
+    [client, annotatorId, ontologies, stored, documentLanguage],
   );
 }

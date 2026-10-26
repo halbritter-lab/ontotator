@@ -35,8 +35,12 @@ const clientWith = (stored?: Record<string, string[]>) => {
 };
 
 describe("search language selection", () => {
-  it("treats a missing selection as all loaded languages and ignores codes that are not loaded", () => {
-    expect(activeLanguages(["de", "es"], undefined)).toEqual(["de", "es"]);
+  it("treats a missing selection as English plus the document language and ignores codes that are not loaded", () => {
+    expect(activeLanguages(["de", "es"], undefined)).toEqual([]);
+    expect(activeLanguages(["de", "es"], undefined, "en")).toEqual([]);
+    expect(activeLanguages(["de", "es"], undefined, "de-AT")).toEqual(["de"]);
+    // A stored choice wins over the document language.
+    expect(activeLanguages(["de", "es"], ["es"], "de")).toEqual(["es"]);
     expect(activeLanguages(["de", "es"], [])).toEqual([]);
     expect(activeLanguages(["de", "es"], ["es", "fr"])).toEqual(["es"]);
     // A language that arrived after the annotator chose starts switched off.
@@ -44,7 +48,8 @@ describe("search language selection", () => {
   });
 
   it("switches one language and keeps stored codes that are not loaded", () => {
-    expect(toggledSelection(["de", "es"], undefined, "de")).toEqual(["es"]);
+    expect(toggledSelection(["de", "es"], undefined, "es")).toEqual(["es"]);
+    expect(toggledSelection(["de", "es"], undefined, "de", "de")).toEqual([]);
     expect(toggledSelection(["de", "es"], ["es"], "de")).toEqual(["de", "es"]);
     expect(toggledSelection(["de", "es"], ["es"], "es")).toEqual([]);
     expect(toggledSelection(["de", "es"], ["es", "fr"], "es")).toEqual(["fr"]);

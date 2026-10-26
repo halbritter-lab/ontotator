@@ -158,7 +158,7 @@ describe("TreeBrowser: one walk", () => {
 
   it("shows name, id, definition, synonyms and translated names by language", async () => {
     vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
-    const { container } = renderBrowser();
+    const { container } = renderBrowser({ languages: ["de", "fr"] });
     await loaded();
     const pane = detailPane(container);
 
@@ -171,6 +171,16 @@ describe("TreeBrowser: one walk", () => {
     expect(pane.getByText("fr").nextElementSibling?.textContent).toBe("Crise");
     // The only parent is the one the path runs through.
     expect(pane.queryByText("Also under")).toBeNull();
+  });
+
+  it("shows translated names only in the active search languages (F14)", async () => {
+    vi.spyOn(api, "openTree").mockResolvedValue(seizureWalk());
+    const { container, rerender, props } = renderBrowser({ languages: ["de"] });
+    await loaded();
+    expect(detailPane(container).getByText("de")).toBeDefined();
+    expect(detailPane(container).queryByText("fr")).toBeNull();
+    rerender(<TreeBrowser {...props} languages={[]} />);
+    expect(detailPane(container).queryByText("Translated names")).toBeNull();
   });
 
   it("shows no translation block for a term without translated names", async () => {

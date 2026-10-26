@@ -38,6 +38,8 @@ export interface TreeBrowserProps {
   onClose: () => void;
   /** Assign the term. The walk's id binds the selection to what was shown. */
   onUseTerm: (termId: string, browseId: string) => Promise<void>;
+  /** The active search languages: only their translated names are shown (F14). */
+  languages?: readonly string[];
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -63,6 +65,7 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
   focusOnOpen,
   onClose,
   onUseTerm,
+  languages = [],
 }) => {
   const [data, setData] = useState<TreeData>(emptyTree);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -288,11 +291,12 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
                       </ul>
                     </div>
                   )}
-                  {Object.keys(detail.translations).length > 0 && (
+                  {Object.keys(detail.translations).some((language) => languages.includes(language)) && (
                     <div className="tree-detail__group">
                       <h4>Translated names</h4>
                       <dl>
                         {Object.entries(detail.translations)
+                          .filter(([language]) => languages.includes(language))
                           .sort(([a], [b]) => a.localeCompare(b))
                           .map(([language, names]) => (
                           <React.Fragment key={language}>

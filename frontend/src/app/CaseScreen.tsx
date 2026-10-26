@@ -3815,6 +3815,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             focusOnOpen={treeWalk.focus}
             onClose={handleCloseTree}
             onUseTerm={handleUseTreeTerm}
+            languages={searchLanguagesFor(treeWalk.layerId)?.active}
           />
         )}
       </div>
