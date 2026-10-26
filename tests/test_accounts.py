@@ -85,7 +85,7 @@ def test_a_new_user_gets_a_pseudonym_and_a_setup_code(services: Services) -> Non
     assert first.purpose == "setup"
     assert first.expires_at == services.clock() + timedelta(hours=24)
     assert CODE_LIFETIME["setup"] == timedelta(hours=24)
-    assert len(first.code) >= 40
+    assert len(first.code.replace("-", "")) == 26  # 130 bits
     stored = services.accounts.get_by_username("alice")
     assert stored is not None
     assert stored.email == "alice@example.org"
@@ -170,7 +170,7 @@ def test_a_code_is_grouped_without_look_alikes_and_typed_loosely(
     issued = services.accounts.create_user(ADMIN, "alice", "Alice")
 
     groups = issued.code.split("-")
-    assert len(groups) == 13 and all(len(group) == 4 for group in groups)
+    assert [len(group) for group in groups] == [5, 5, 4, 4, 4, 4]
     assert not set(issued.code) & set("ILOU") and issued.code == issued.code.upper()
     # Lower case, spaces instead of hyphens, and O/I/L for 0/1 still match.
     typed = " ".join(groups).lower().replace("0", "o").replace("1", "l")
@@ -189,6 +189,23 @@ def test_a_code_issued_in_the_former_format_still_redeems(
         conn.execute(update(OneTimeCodeRow).values(code_sha256=token_digest(legacy)))
 
     assert services.accounts.redeem_code("alice", legacy, PASSWORD).username == "alice"
+
+
+def test_a_52_symbol_grouped_code_still_redeems(services: Services) -> None:
+    from ontocurator.auth.accounts import canonical_code
+    from ontocurator.auth.tokens import token_digest
+    from ontocurator.storage.tables import OneTimeCodeRow
+
+    services.accounts.create_user(ADMIN, "alice", "Alice")
+    longer = "-".join(["7K3Q"] * 13)
+    with services.accounts.db.transaction() as conn:
+        conn.execute(
+            update(OneTimeCodeRow).values(
+                code_sha256=token_digest(canonical_code(longer))
+            )
+        )
+
+    assert services.accounts.redeem_code("alice", longer, PASSWORD).username == "alice"
 
 
 def test_the_password_rules_apply_when_a_code_is_redeemed(services: Services) -> None:

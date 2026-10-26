@@ -82,9 +82,9 @@ CODE_LIFETIME: dict[str, timedelta] = {
 }
 # Crockford base32 (no I, L, O, U): a code read aloud has no look-alikes.
 CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-# 52 symbols of 5 bits: 260 bits, at least the former token_urlsafe(32).
-CODE_LENGTH = 52
-CODE_GROUP = 4
+# 26 symbols of 5 bits: 130 bits, far beyond guessing a single-use code that
+# expires, short enough to read aloud in six groups.
+CODE_GROUPS = (5, 5, 4, 4, 4, 4)
 ADMIN_USERNAME = "admin"
 ADMIN_DISPLAY_NAME = "Administrator"
 BOOTSTRAP_KEY = "admin_bootstrapped"
@@ -225,10 +225,14 @@ def _annotator_ids_in_use(conn: Connection) -> set[str]:
 
 
 def new_code() -> str:
-    """A fresh code in groups of four symbols, e.g. ``7K3Q-...``."""
-    raw = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
+    """A fresh code in six groups of five or four symbols, e.g. ``7K3QZ-...``.
+
+    Codes of other lengths (the former 43-character ``token_urlsafe`` codes)
+    still redeem: only the digest is stored and compared.
+    """
     return "-".join(
-        raw[start : start + CODE_GROUP] for start in range(0, CODE_LENGTH, CODE_GROUP)
+        "".join(secrets.choice(CODE_ALPHABET) for _ in range(size))
+        for size in CODE_GROUPS
     )
 
 
