@@ -3657,6 +3657,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                   languages={searchLanguagesFor(pendingAnnotation.layerId)}
                   {...pendingSearchProps(pendingAnnotation)}
                   onPickModifier={pendingIsMarkedSpan && modifierLayerIds.has(pendingAnnotation.layerId) ? startAttach : undefined}
+                  modifierFilter={modifierLayerIds.has(pendingAnnotation.layerId)}
                   onSelectCandidate={(candidate, searchId) => {
                     if (pendingAnnotation.selectedTerm) setPendingAnnotation({ ...pendingAnnotation, selectedTerm: { termId: candidate.term_id, searchId } });
                     else void createPendingAnnotation(candidate.term_id, searchId, candidate.label ?? undefined);

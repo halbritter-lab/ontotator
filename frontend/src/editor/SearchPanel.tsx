@@ -1,6 +1,7 @@
 import { IconButton } from "../ui/IconButton";
 import { IconCheck, IconClose } from "../ui/icons";
 import { Button } from "../ui/Button";
+import { FilterChip } from "../ui/FilterChip";
 import { InlineMessage } from "../ui/InlineMessage";
 import { Kbd } from "../ui/Kbd";
 import { useShortcutHint } from "../ui/shortcuts";
@@ -40,6 +41,8 @@ export interface SearchPanelProps {
   assignMode?: "new" | "change" | "modifier";
   /** New mark: a modifier hit is reported here instead of being assigned (attach mode, E-a). */
   onPickModifier?: (candidate: SearchCandidate, searchId?: string) => void;
+  /** The layer's profile classifies modifiers (HPO phenotype): offer the "Modifiers only" chip and the `mod:` prefix (M2 M-3). */
+  modifierFilter?: boolean;
 }
 
 /** Reason line of a modifier hit in "Change term". */
@@ -48,6 +51,9 @@ const isModifierHit = (c: SearchCandidate) => c.role === "modifier" || c.role ==
 
 export const SEARCH_DEBOUNCE_MS = 250;
 const DEFAULT_EMPTY_HINT = "Name or code, for example HP:0001250";
+/** Typed at the start of the query, switches "Modifiers only" on and is removed from the query (M2 M-3). */
+export const MODIFIER_PREFIX = "mod:";
+export const MODIFIER_PREFIX_HINT = "mod: searches modifiers only.";
 
 export const SearchPanel: React.FC<SearchPanelProps> = ({
   searchManager,
@@ -66,8 +72,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   mode = "finding",
   assignMode = "new",
   onPickModifier,
+  modifierFilter = false,
 }) => {
-  const within = mode === "modifier" ? MODIFIER_ROOTS : undefined;
+  const [modifiersOnly, setModifiersOnly] = useState(false);
+  const offerModifierFilter = modifierFilter && mode === "finding";
+  const within = mode === "modifier" || (offerModifierFilter && modifiersOnly) ? MODIFIER_ROOTS : undefined;
   // "/" focuses #search-input (the term search); the modifier search has its own id.
   const inputId = mode === "modifier" ? "modifier-search-input" : "search-input";
   const languageControl = languages && languages.options.length > 0 ? languages : undefined;
@@ -88,17 +97,18 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   useEffect(() => () => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
   }, []);
-  const runSearch = (val: string, immediate = false) => {
+  /** `roots`: null searches every term; omitted, the current filter. */
+  const runSearch = (val: string, immediate = false, roots: readonly string[] | null = within ?? null) => {
     cancelDebounce();
     if (immediate || debounceMs <= 0 || !val.trim()) {
-      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages, within);
+      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages, roots ?? undefined);
       return;
     }
     setDebouncing(true);
     debounceTimer.current = setTimeout(() => {
       debounceTimer.current = null;
       setDebouncing(false);
-      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages, within);
+      void searchManager.search(val, annotationId, workspaceKey, "auto", 10, layerId, requestLanguages, roots ?? undefined);
     }, debounceMs);
   };
   const [state, setState] = useState<SearchState>(searchManager.getState());
@@ -120,7 +130,8 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     const isMount = identity.every((value, index) => Object.is(value, mountIdentity.current[index]));
     const query = isMount ? initialQuery ?? "" : "";
     setQueryInput(query);
-    if (query.trim()) runSearch(query, true);
+    if (!isMount) setModifiersOnly(false);
+    if (query.trim()) runSearch(query, true, isMount ? within ?? null : mode === "modifier" ? MODIFIER_ROOTS : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [annotationId, workspaceKey, layerId, searchManager]);
 
@@ -220,8 +231,22 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
 
   const handleQueryChange = (val: string) => {
     userTyped.current = true;
+    const start = val.trimStart();
+    if (offerModifierFilter && start.slice(0, MODIFIER_PREFIX.length).toLowerCase() === MODIFIER_PREFIX) {
+      const rest = start.slice(MODIFIER_PREFIX.length).trimStart();
+      setModifiersOnly(true);
+      setQueryInput(rest);
+      runSearch(rest, false, MODIFIER_ROOTS);
+      return;
+    }
     setQueryInput(val);
     runSearch(val);
+  };
+
+  const toggleModifiersOnly = (on: boolean) => {
+    setModifiersOnly(on);
+    if (queryInput.trim()) runSearch(queryInput, true, on ? MODIFIER_ROOTS : null);
+    inputRef.current?.focus({ preventScroll: true });
   };
 
   const handleClear = () => {
@@ -293,10 +318,15 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           )}
           {languageControl && <SearchLanguageButton control={languageControl} />}
         </div>
+        {offerModifierFilter && <div className="search-filter-row">
+          {modifiersOnly
+            ? <FilterChip label="Modifiers only" onRemove={() => toggleModifiersOnly(false)} />
+            : <Button size="sm" aria-pressed="false" onClick={() => toggleModifiersOnly(true)}>Modifiers only</Button>}
+        </div>}
         <div id={hintId} className="search-hint">
           {hasQuery && languageHint && !noHits && <span className="search-hint-language">{languageHint}</span>}
           {!hasQuery ? (
-            languageHint ?? DEFAULT_EMPTY_HINT
+            <>{languageHint ?? DEFAULT_EMPTY_HINT}{offerModifierFilter && !modifiersOnly && `${languageHint ? " " : ". "}${MODIFIER_PREFIX_HINT}`}</>
           ) : searching ? (
             <span role="status">Searching…</span>
           ) : failed ? null : noHits ? (

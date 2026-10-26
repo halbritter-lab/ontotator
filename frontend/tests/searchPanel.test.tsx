@@ -658,4 +658,50 @@ describe("SearchPanel: modifier roles (finding modifiers)", () => {
     await waitFor(() => expect(searchOntology).toHaveBeenCalled());
     expect(searchOntology.mock.calls[0][0]).toEqual(expect.objectContaining({ within: ["HP:0012823", "HP:0040279"] }));
   });
+
+  describe("Modifiers only (M-3)", () => {
+    const roots = (call: unknown[]) => (call[0] as { within?: string[] }).within;
+
+    it("is not offered without the profile's modifier classification", () => {
+      renderPanel(vi.fn());
+      expect(screen.queryByRole("button", { name: "Modifiers only" })).toBeNull();
+      expect(screen.getByText("Name or code, for example HP:0001250")).toBeTruthy();
+    });
+
+    it("the chip limits the search to modifier terms and goes back to all terms when removed", async () => {
+      const search = vi.fn().mockResolvedValue(threeHits);
+      const input = renderPanel(search, { modifierFilter: true });
+      expect(screen.getByText("Name or code, for example HP:0001250. mod: searches modifiers only.")).toBeTruthy();
+      fireEvent.change(input, { target: { value: "sev" } });
+      await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+      expect(roots(search.mock.calls[0])).toBeUndefined();
+      fireEvent.click(screen.getByRole("button", { name: "Modifiers only" }));
+      await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+      expect(roots(search.mock.calls[1])).toEqual(["HP:0012823", "HP:0040279"]);
+      expect(document.activeElement).toBe(input);
+      fireEvent.click(screen.getByRole("button", { name: "Remove filter Modifiers only" }));
+      await waitFor(() => expect(search).toHaveBeenCalledTimes(3));
+      expect(roots(search.mock.calls[2])).toBeUndefined();
+      expect(screen.getByRole("button", { name: "Modifiers only" }).getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("typing mod: switches the chip on and is removed from the query", async () => {
+      const search = vi.fn().mockResolvedValue(threeHits);
+      const input = renderPanel(search, { modifierFilter: true });
+      fireEvent.change(input, { target: { value: "mod:" } });
+      expect(input.value).toBe("");
+      expect(screen.getByRole("button", { name: "Remove filter Modifiers only" })).toBeTruthy();
+      fireEvent.change(input, { target: { value: "sev" } });
+      await waitFor(() => expect(search).toHaveBeenCalled());
+      expect(search.mock.calls.at(-1)![0]).toMatchObject({ query: "sev", within: ["HP:0012823", "HP:0040279"] });
+      fireEvent.change(input, { target: { value: "MOD: sev" } });
+      expect(input.value).toBe("sev");
+    });
+
+    it("the modifier search itself offers no chip", () => {
+      const manager = new SearchManager({ searchOntology: vi.fn() } as any);
+      render(<SearchPanel searchManager={manager} annotationId="a" workspaceKey={key} layerId="phenotype" onSelectCandidate={vi.fn()} mode="modifier" modifierFilter />);
+      expect(screen.queryByRole("button", { name: "Modifiers only" })).toBeNull();
+    });
+  });
 });
