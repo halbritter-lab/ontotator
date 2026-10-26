@@ -267,7 +267,7 @@ describe("settings section addresses", () => {
     expect(routeHref({ name: "projectSettings", key: "a", section: "general" })).toBe("#/projects/a/settings");
     expect(routeHref({ name: "projectSettings", key: "a", section: "people" })).toBe("#/projects/a/settings/people");
     expect(parseRoute("#/projects/a/settings/members")).toEqual({ name: "projectSettings", key: "a", section: "people" });
-    expect(SETTINGS_SECTIONS).toEqual(["general", "ontology", "annotation", "workflow", "guidelines", "people"]);
+    expect(SETTINGS_SECTIONS).toEqual(["general", "annotation", "workflow", "guidelines", "people", "ontology"]);
     for (const section of SETTINGS_SECTIONS) expect(parseRoute(routeHref({ name: "projectSettings", key: "a", section }))).toMatchObject({ key: "a" });
   });
 

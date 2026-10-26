@@ -100,7 +100,7 @@ function documentsEntries(query: ProjectDocumentsQuery | undefined, prefix = "")
  * `…/settings` opens the first tab, General. The addresses of the earlier sections stay as aliases.
  */
 export type SettingsSection = "people" | "workflow" | "annotation" | "guidelines" | "general" | "ontology";
-export const SETTINGS_SECTIONS: readonly SettingsSection[] = ["general", "ontology", "annotation", "workflow", "guidelines", "people"];
+export const SETTINGS_SECTIONS: readonly SettingsSection[] = ["general", "annotation", "workflow", "guidelines", "people", "ontology"];
 export const DEFAULT_SETTINGS_SECTION: SettingsSection = "general";
 const SETTINGS_ALIASES: Readonly<Record<string, SettingsSection>> = {
   members: "people", rules: "annotation", defaults: "annotation", guideline: "guidelines", profile: "ontology",
