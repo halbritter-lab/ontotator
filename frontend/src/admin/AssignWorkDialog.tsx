@@ -9,7 +9,7 @@ import { Button, Checkbox, Dialog, Select } from "../ui";
 import { DistributionDialog } from "./DistributionDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { errorMessage } from "./errors";
-import { memberReason, memberUnavailable, needsPeopleMessage, onePersonSummary, partlyAssignedLines, personName, resultMessage, skippedLines, stepLabel, stepName } from "./assignSummary";
+import { memberReason, memberUnavailable, onePersonSummary, partlyAssignedLines, personName, resultMessage, skippedLines, stepLabel, stepName } from "./assignSummary";
 
 export type AssignWorkTask = "translation_review" | "annotate";
 export type AssignWorkDialogProps =
@@ -40,10 +40,6 @@ export const sortMembers = (people: readonly BatchPersonView[]): BatchPersonView
 function refusedRows(error: ApiError): Refused[] {
   const rows = error.details && typeof error.details === "object" ? (error.details as { refused?: unknown }).refused : undefined;
   return Array.isArray(rows) ? rows.filter((row): row is Refused => !!row && typeof row === "object" && typeof row.case_id === "string" && typeof row.username === "string" && typeof row.code === "string") : [];
-}
-function neededPeople(error: ApiError): number | null {
-  const value = error.details && typeof error.details === "object" ? (error.details as { needs_people?: unknown }).needs_people : undefined;
-  return typeof value === "number" ? value : null;
 }
 
 function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
@@ -104,8 +100,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const order = people.map(person => person.username);
   const usernames = order.filter(name => chosen.includes(name));
   const picked = usernames.length + (self ? 1 : 0);
-  // Many texts: every ticked person gets every text up to the limit ("each"); "Random distribution…" splits a batch.
-  const apiMode: BatchAssignRequest["mode"] = isRow ? (usernames.length > 1 ? "split" : "one") : multi ? "each" : "one";
+  // One rule for one text and many: every ticked person gets every text up to the limit ("each"); "Random distribution…" splits a batch.
+  const apiMode: BatchAssignRequest["mode"] = multi ? "each" : "one";
   const request: BatchAssignRequest | null = !task ? null : props.mode === "row"
     ? { task, language, case_ids: [props.row.case_id], mode: apiMode, usernames, ...(props.newReviewOfAccepted && task === "translation_review" ? { review_accepted_translation: true } : {}), ...(sourceChanged ? { review_reason: "source_changed" as const } : {}) }
     : { task, language, case_ids: [...props.caseIds], sort: props.sort, filters: props.filters, mode: apiMode, usernames };
@@ -131,12 +127,10 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
 
   const calculating = !!requestKey && preview?.key !== requestKey && previewError?.key !== requestKey;
   const fresh = shown && !calculating ? shown : null;
-  const split = isRow && usernames.length > 1;
   const radios = !multi;
   const chosenPeople = fresh ? people.filter(person => usernames.includes(person.username)) : [];
   const assignments = fresh ? fresh.targets.reduce((sum, target) => sum + target.usernames.length, 0) : 0;
   const count = assignments || fresh?.versions || shown?.versions || 0;
-  const needs = fresh?.needs_people ?? null;
   const limit = rowMulti ? Math.max(1, shown?.targets[0]?.remaining ?? 1) : multi ? shown?.per_text ?? 1 : Infinity;
   // Row mode knows it before the preview, so the acknowledgement is there from the start (no jump).
   const unreviewed = task === "annotate" && shown ? shown.targets.filter(target => target.unreviewed_translation) : [];
@@ -163,7 +157,6 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const reason = !task || steps === null ? "Loading…"
     : calculating || !fresh ? "Calculating…"
     : !fresh.targets.length ? "No cases in the selection need this task."
-    : needs !== null && usernames.length ? needsPeopleMessage(needs, task)
     : unacknowledged ? "Confirm annotating before the translation review is accepted."
     : !picked ? (radios ? "Choose a person first." : "Choose people first.")
     : usernames.length && !assignments ? "The chosen people already hold these tasks."
@@ -177,7 +170,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       if (usernames.length) {
         const result = await api.commitAssignmentBatch(props.projectKey, { ...request, expected_preview_digest: fresh.digest, confirm_language: confirmLanguage, confirm_unreviewed_translation: acknowledged });
         if (!alive.current) return;
-        messages.push(resultMessage(task, result.created.length, chosenPeople.map(person => ({ person: person.person, count: result.created.filter(item => item.username === person.username).length })), split));
+        messages.push(resultMessage(task, result.created.length, chosenPeople.map(person => ({ person: person.person, count: result.created.filter(item => item.username === person.username).length }))));
       }
       if (self && me && props.mode === "row") {
         const response = await api.createAssignments(props.projectKey, { rows: [{ document_id: props.row.open.document_id, username: me.username }], task: "annotate", confirm_language: true, confirm_unreviewed_translation: acknowledged });
@@ -193,9 +186,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       if (error instanceof ApiError && error.code === "ASSIGNMENT_BATCH_STALE") { setNotice(errorMessage(error)); setReload(value => value + 1); }
       else if (error instanceof ApiError && error.code === "ASSIGNMENT_BATCH_REFUSED") {
         const rows = refusedRows(error);
-        const needed = neededPeople(error);
-        if (needed !== null) setFailure(needsPeopleMessage(needed, task));
-        else if (rows.length && rows.every(row => row.code === "LANGUAGE_CONFIRMATION_REQUIRED") && !confirmLanguage) setConfirming(true);
+        if (rows.length && rows.every(row => row.code === "LANGUAGE_CONFIRMATION_REQUIRED") && !confirmLanguage) setConfirming(true);
         else { setFailure(errorMessage(error)); setRefused(rows); }
       } else setFailure(errorMessage(error));
     } finally { if (alive.current) { writing.current = false; setBusy(false); } }
@@ -230,8 +221,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const summaryLines: string[] = [];
   if (fresh && task) {
     if (!fresh.targets.length) summaryLines.push("No cases in the selection need this task.");
-    if (needs !== null) summaryLines.push(needsPeopleMessage(needs, task));
-    else if (chosenPeople.length && assignments) {
+    if (chosenPeople.length && assignments) {
       for (const person of sortMembers(chosenPeople)) summaryLines.push(onePersonSummary({ person: person.person, gets: person.gets, task, language, openBefore: person.open_before, openAfter: person.open_after }));
     }
     for (const person of mismatched) summaryLines.push(`${personName(person.person)} ${person.reads.includes(language) ? "does not read the source language" : `does not read ${language}`}.`);

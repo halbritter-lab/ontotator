@@ -46,11 +46,6 @@ export function skippedLines(skipped: readonly BatchSkipView[], language: string
   });
 }
 
-export function needsPeopleMessage(n: number, task: AssignTask): string {
-  if (task === "annotate") return `Choose at least ${n} annotators for ${n} annotations per text.`;
-  return `Choose at least ${n} reviewers for ${n} translation reviews per text.`;
-}
-
 /** Why a member is muted, or null. `does_not_read` and already-assigned people stay selectable. */
 export function memberReason(member: Pick<BatchPersonView, "unavailable" | "already_assigned" | "reads">, task: AssignTask, language: string): string | null {
   switch (member.unavailable) {
@@ -76,9 +71,8 @@ export function partlyAssignedLines(targets: readonly { case_id: string; languag
 
 const joinNames = (names: readonly string[]): string => names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 
-/** "20 translation reviews assigned to Ana Weber" / "… split between Ana Weber (10) and Ben Roth (10)". */
-export function resultMessage(task: AssignTask, created: number, people: readonly { person: PersonRef; count: number }[], split: boolean): string {
+/** "20 translation reviews assigned to Ana Weber" / "2 annotations assigned to Ana Weber and Ben Roth". */
+export function resultMessage(task: AssignTask, created: number, people: readonly { person: PersonRef; count: number }[]): string {
   const getting = people.filter(item => item.count > 0);
-  if (split && getting.length > 1) return `${taskNoun(task, created)} split between ${joinNames(getting.map(item => `${personName(item.person)} (${item.count})`))}`;
   return `${taskNoun(task, created)} assigned to ${joinNames(getting.map(item => personName(item.person)))}`;
 }

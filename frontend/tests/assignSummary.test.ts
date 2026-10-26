@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { memberReason, needsPeopleMessage, onePersonSummary, partlyAssignedLines, resultMessage, skippedLines, stepLabel } from "../src/admin/assignSummary";
+import { memberReason, onePersonSummary, partlyAssignedLines, resultMessage, skippedLines, stepLabel } from "../src/admin/assignSummary";
 
 const ana = { pseudonym: "ann-0004", display_name: "Ana Weber" };
 const ben = { pseudonym: "ann-0007", display_name: "Ben Roth" };
@@ -26,10 +26,6 @@ describe("assign summary", () => {
     ]);
   });
 
-  it("asks for enough people for n annotations", () => {
-    expect(needsPeopleMessage(2, "annotate")).toBe("Choose at least 2 annotators for 2 annotations per text.");
-  });
-
   it("labels steps, reasons, partial targets and results", () => {
     expect(stepLabel("translation_review", "de", 20)).toBe("Translation review, de, 20 versions");
     expect(stepLabel("annotate", "fr", 1)).toBe("Annotation, fr, 1 version");
@@ -39,8 +35,7 @@ describe("assign summary", () => {
     expect(memberReason({ unavailable: null, already_assigned: 3, reads: ["de"] }, "annotate", "de")).toBe("Already annotating 3 of these cases");
     expect(memberReason({ unavailable: null, already_assigned: 0, reads: ["de"] }, "annotate", "de")).toBeNull();
     expect(partlyAssignedLines([{ case_id: "case-0101", language: "de", remaining: 1 }, { case_id: "case-0102", language: "de", remaining: 2 }], 2)).toEqual(["case-0101 de: 1 of 2 assigned"]);
-    expect(resultMessage("translation_review", 20, [{ person: ana, count: 20 }], true)).toBe("20 translation reviews assigned to Ana Weber");
-    expect(resultMessage("translation_review", 20, [{ person: ana, count: 10 }, { person: ben, count: 10 }], true)).toBe("20 translation reviews split between Ana Weber (10) and Ben Roth (10)");
-    expect(resultMessage("annotate", 2, [{ person: ana, count: 1 }, { person: ben, count: 1 }], false)).toBe("2 annotations assigned to Ana Weber and Ben Roth");
+    expect(resultMessage("translation_review", 20, [{ person: ana, count: 20 }])).toBe("20 translation reviews assigned to Ana Weber");
+    expect(resultMessage("annotate", 2, [{ person: ana, count: 1 }, { person: ben, count: 1 }])).toBe("2 annotations assigned to Ana Weber and Ben Roth");
   });
 });

@@ -20,7 +20,6 @@ const caseIds = Array.from({ length: 20 }, (_, index) => `case-0${101 + index}`)
 let skipped: BatchPreview["skipped"] = [];
 let perText = 1;
 let remainingOf: (caseId: string) => number = () => 1;
-let needsPeople: number | null = null;
 let digest = "digest-1";
 let unreviewedOf: (caseId: string) => boolean = () => false;
 
@@ -29,14 +28,10 @@ function preview(body: BatchAssignRequest): BatchPreview & { needs_people?: numb
   const ids = body.case_ids.filter(id => !skipped.some(item => item.case_id === id));
   const blocks = new Map<string, string[]>();
   if (body.mode === "one" && usernames.length === 1) for (const id of ids) blocks.set(id, [usernames[0]]);
-  if (body.mode === "split" && usernames.length && needsPeople === null) {
-    const size = Math.ceil(ids.length / usernames.length);
-    ids.forEach((id, index) => blocks.set(id, [usernames[Math.floor(index / size)]]));
-  }
   if (body.mode === "each") for (const id of ids) blocks.set(id, usernames.slice(0, remainingOf(id)));
   const targets = ids.map(id => ({ case_id: id, language: body.language, document_id: `doc-${id}`, version: 1, remaining: remainingOf(id), usernames: blocks.get(id) ?? [], unreviewed_translation: unreviewedOf(id) }));
   return {
-    task: body.task, language: body.language, versions: targets.length, targets, skipped, per_text: perText, digest, needs_people: needsPeople,
+    task: body.task, language: body.language, versions: targets.length, targets, skipped, per_text: perText, digest, needs_people: null,
     people: people.map(item => {
       const cases = targets.filter(target => target.usernames.includes(item.username)).map(target => target.case_id);
       return { ...item, gets: cases.length, open_after: item.open_before + cases.length, first_case: cases[0] ?? null, last_case: cases.at(-1) ?? null };
@@ -46,7 +41,7 @@ function preview(body: BatchAssignRequest): BatchPreview & { needs_people?: numb
 const summary = (steps: SelectionSummary["steps"]): SelectionSummary => ({ cases: 20, steps, skipped: {}, common: steps[0] ?? null, not_shown: 0 });
 
 beforeEach(() => {
-  skipped = []; perText = 1; remainingOf = () => 1; needsPeople = null; digest = "digest-1"; unreviewedOf = () => false;
+  skipped = []; perText = 1; remainingOf = () => 1; digest = "digest-1"; unreviewedOf = () => false;
   vi.spyOn(api, "selectionSummary").mockResolvedValue(summary([{ task: "translation_review", language: "de", versions: 20, cases: 20 }]));
   vi.spyOn(api, "previewAssignmentBatch").mockImplementation(async (_key, body) => preview(body));
   vi.spyOn(api, "commitAssignmentBatch").mockImplementation(async (_key, body) => ({ created: preview(body).targets.flatMap(target => target.usernames.map(username => ({ ...assignment, username, document_id: target.document_id, task: body.task }))) }));
@@ -245,6 +240,8 @@ it("row mode shows context in one line and Change task", async () => {
   await waitForPreviewOf(["ben"]);
   fireEvent.click(screen.getByRole("button", { name: "Assign 1 person" }));
   await waitFor(() => expect(onAssigned).toHaveBeenCalledWith("1 annotation assigned to Ben Roth"));
+  // One text follows the same rule as many: every ticked person gets it ("each").
+  expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ mode: "each", usernames: ["ben"] }));
   cleanup();
   render(<AssignWorkDialog mode="row" projectKey="p/key" row={row} task="annotate" onClose={vi.fn()} onAssigned={vi.fn()} />);
   await ready();
