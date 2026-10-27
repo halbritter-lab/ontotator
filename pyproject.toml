@@ -13,7 +13,7 @@ dependencies = [
     "argon2-cffi>=23.1,<26",
     "fastapi>=0.110,<1",
     "numpy>=1.26,<3",
-    "ontospan @ git+https://github.com/janpower/ontospan.git@e00b0161e17a9e77014b2c8582e5ebdaf714f413",
+    "ontospan @ git+https://github.com/janpower/ontospan.git@06cb4f457331497b70aef3b4364bf7fe69281065",
     "psycopg[binary]>=3.2,<4",
     "pydantic>=2,<3",
     "python-multipart>=0.0.9",
