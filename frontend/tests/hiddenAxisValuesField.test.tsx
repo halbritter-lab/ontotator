@@ -37,7 +37,7 @@ describe("values annotators can choose (shown-value toggles, M-8c)", () => {
     expect(within(axisGroup("layer-a", "confidence")).getAllByRole("button")).toHaveLength(2);
     expect(within(axisGroup("layer-b", "assertion")).getAllByRole("button")).toHaveLength(2);
     // Several layers: one heading each.
-    expect(screen.getAllByRole("heading", { level: 4 }).map(heading => heading.textContent)).toEqual(["Findings", "Findings"]);
+    expect(screen.getAllByRole("heading", { level: 3 }).map(heading => heading.textContent)).toEqual(["Findings", "Findings"]);
   });
 
   it("protects only the actual server-resolved default, which need not be the first option", () => {

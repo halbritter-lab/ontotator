@@ -197,7 +197,7 @@ export interface CaseScreenProps {
   routeLeaveRef?: React.MutableRefObject<RouteLeaveGuard | null>;
   assignmentNavigation?: {
     tasks: TaskSummary[]; current: TaskSummary; onNavigate: (assignmentId: number) => void;
-    /** M2 M-6: after a submit the caller opens the next task (or My tasks) and names the submission; no "Case submitted" dialog. */
+    /** M2 M-6: after a submit the caller opens the next task (or My tasks) and names the submission; no "Text submitted" dialog. */
     onSubmitted?: (result: { label: string; assignmentId: number; next?: number }) => void;
   };
   onReadonlyRequired?: () => void;
@@ -385,7 +385,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const [logoutSaving, setLogoutSaving] = useState(false);
   const logoutRejectedBaseline = useRef(0);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
-  // "Finish & Submit" was clicked and waits for pending saves before it validates.
+  // "Finish & submit" was clicked and waits for pending saves before it validates.
   const [submitPending, setSubmitPending] = useState(false);
   const [axisWarning, setAxisWarning] = useState<AxisWarning | null>(null);
   const [axisWarningAcknowledged, setAxisWarningAcknowledged] = useState(false);
@@ -2131,7 +2131,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     } catch (error) { reportError(error); }
   };
 
-  /** Selects the next open proposal after `target` (wrapping), or "Finish & Submit" when none is left. */
+  /** Selects the next open proposal after `target` (wrapping), or "Finish & submit" when none is left. */
   const advanceAfterDecision = (target: TargetProposal, outcome: "confirmed" | "rejected" | "uncertain", repeated = false) => {
     const decided = new Set((latestDraft.current.decisions ?? []).map(d => refKey(d.target)));
     const n = reviewTargets.length, from = reviewTargets.findIndex(t => refKey(t) === refKey(target));
@@ -2926,7 +2926,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         expected_revision: expectedRevision,
         payload: {
           command: "submit_workspace" as const,
-          // Submitting from the dialog confirms the entire text was checked (its sentence above "Submit case").
+          // Submitting from the dialog confirms the entire text was checked (its sentence above "Submit text").
           document_checked: true,
           ...(acknowledgement ? { warning_acknowledgement: acknowledgement } : {}),
         },
@@ -3161,7 +3161,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const document = event.key === "ArrowLeft" ? prevDoc : nextDoc;
     if (!document || !onNavigateCase || queueState === "saving") return false;
     navigateTo(document.document_id);
-  }, { ...shortcutOptions, group: "Navigation", description: "Previous / next case" });
+  }, { ...shortcutOptions, group: "Navigation", description: "Previous / next text" });
   useShortcut("Escape", (event) => {
     // Registered with allowInInputs so a select or other non-text control can discard (spec F1.5);
     // text fields keep their Escape, and only the pending discard runs from a non-text control.
@@ -4094,16 +4094,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         // One primary action, last as in every footer: the next piece of work, else the way back.
         const nextTask = assignmentNavigation && completedNextAssignment.current !== undefined;
         const nextCase = !!(nextDoc && onNavigateCase);
-        return <Dialog open title="Case submitted" heading="Case submitted" footer={<>
+        return <Dialog open title="Text submitted" heading="Text submitted" footer={<>
           <Button type="button" variant="secondary" onClick={() => { setHistorySubmission(completedSubmission); setCompletedSubmission(null); }}>View submitted result</Button>
-          <Button type="button" variant="secondary" onClick={() => setCompletedSubmission(null)}>Stay in case</Button>
+          <Button type="button" variant="secondary" onClick={() => setCompletedSubmission(null)}>Stay in text</Button>
           <Button type="button" variant={nextTask || nextCase ? "secondary" : "primary"}
             onClick={() => { if (assignmentNavigation) onClose(); else { setCompletedSubmission(null); void leaveCase(onClose); } }}>
             {assignmentNavigation ? "Back to my tasks" : "Back to dashboard"}
           </Button>
           {nextCase && <Button type="button" variant={nextTask ? "secondary" : "primary"}
             onClick={() => { setCompletedSubmission(null); void leaveCase(() => onNavigateCase!(nextDoc!.document_id)); }}>
-            Review next case (Case {nextDoc!.position}) →
+            Review next text (Text {nextDoc!.position}) →
           </Button>}
           {nextTask && <Button type="button" variant="primary"
             onClick={() => navigateAssignment(completedNextAssignment.current!)}>Next task</Button>}

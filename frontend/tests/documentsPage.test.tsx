@@ -268,8 +268,8 @@ describe("exact filters from Progress links", () => {
     expect(Object.keys((lastAssign() as { filters?: object }).filters ?? {}).sort()).toEqual(Object.keys(expected).sort());
     act(() => { lastAssign().onClose(); });
     // Two of three selected: the header checkbox is mixed (#47 A-20).
-    expect((screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }) as HTMLInputElement).indeterminate).toBe(true);
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }));
+    expect((screen.getByRole("checkbox", { name: "Select all 3 filtered texts" }) as HTMLInputElement).indeterminate).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all 3 filtered texts" }));
     await waitFor(() => expect(api.documentRowKeys).toHaveBeenCalledWith("p", { filters: expected, sort: "import" }));
   });
 
@@ -322,8 +322,8 @@ describe("exact filters from Progress links", () => {
     expect(lastAssign()).toMatchObject({ sort: "activity", filters: expected });
     act(() => { lastAssign().onClose(); });
     // Two of three selected: the header checkbox is mixed (#47 A-20).
-    expect((screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }) as HTMLInputElement).indeterminate).toBe(true);
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select all 3 filtered cases" }));
+    expect((screen.getByRole("checkbox", { name: "Select all 3 filtered texts" }) as HTMLInputElement).indeterminate).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all 3 filtered texts" }));
     await waitFor(() => expect(api.documentRowKeys).toHaveBeenCalledWith("p", { filters: expected, sort: "-activity" }));
   });
 });
@@ -474,13 +474,13 @@ describe("case selection", () => {
     await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(2));
   });
 
-  it("header checkbox selects all filtered cases across pages", async () => {
+  it("header checkbox selects all filtered texts across pages", async () => {
     mockRows(casesPage(3, { group_count: 50, page_count: 17 }));
     const all = Array.from({ length: 50 }, (_, index) => `case-${String(101 + index).padStart(4, "0")}`);
     vi.spyOn(api, "documentRowKeys").mockResolvedValueOnce(deKeys(all));
     const view = renderPage({ query: { language: "de", segment: "assign", page: "2" } });
     await loaded();
-    const header = screen.getByRole("checkbox", { name: "Select all 50 filtered cases" });
+    const header = screen.getByRole("checkbox", { name: "Select all 50 filtered texts" });
     expect(header.className).toContain("checkbox-target");
     fireEvent.click(header);
     await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(50))).toBeTruthy());
@@ -496,7 +496,7 @@ describe("case selection", () => {
     vi.mocked(api.documentRowKeys).mockResolvedValueOnce(deKeys(first, true));
     renderPage();
     await loaded();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Select the first 2000 of 2500 filtered cases" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select the first 2000 of 2500 filtered texts" }));
     await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(2000))).toBeTruthy());
     expect(within(selectionRegion()).getByText("Selection is limited to 2000 cases. Selected the first 2000.")).toBeTruthy();
   });
@@ -509,7 +509,7 @@ describe("case selection", () => {
     await loaded();
     // One case selected before: the header adds only 1999 more cases.
     fireEvent.click(rowBox("case-0101", "de"));
-    const header = screen.getByRole("checkbox", { name: "Select the first 2000 of 2500 filtered cases" }) as HTMLInputElement;
+    const header = screen.getByRole("checkbox", { name: "Select the first 2000 of 2500 filtered texts" }) as HTMLInputElement;
     fireEvent.click(header);
     await waitFor(() => expect(within(selectionRegion()).getByText(selectedText(2000))).toBeTruthy());
     expect(within(selectionRegion()).getByText("Selection is limited to 2000 cases. Selected the first 2000.")).toBeTruthy();

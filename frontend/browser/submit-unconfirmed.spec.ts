@@ -59,7 +59,7 @@ function countSubmits(page: Page) {
   return submits;
 }
 
-const submitDialog = (page: Page) => page.getByRole("dialog", { name: "Submit case", exact: true });
+const submitDialog = (page: Page) => page.getByRole("dialog", { name: "Submit text", exact: true });
 
 test("confirm one row, then the rest with Confirm all, and submit without a warning round", async ({ page }) => {
   const s = await openLoop(page);
@@ -68,7 +68,7 @@ test("confirm one row, then the rest with Confirm all, and submit without a warn
   await addFinding(page, s, "hypotonia", "hypotonia", "Hypotonia");
   const submits = countSubmits(page);
 
-  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
+  await page.getByRole("button", { name: /^Finish & submit/ }).click();
   const dialog = submitDialog(page);
   const section = dialog.locator("[data-unconfirmed-values]");
   await expect(section.getByRole("heading", { name: "Unconfirmed values (3 findings)", exact: true })).toBeVisible();
@@ -88,7 +88,7 @@ test("confirm one row, then the rest with Confirm all, and submit without a warn
   await expect(section).toHaveCount(0);
   await expect(dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values?$/ })).toHaveCount(0);
 
-  await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
+  await dialog.getByRole("button", { name: "Submit text", exact: true }).click();
   await expectSubmitted(page);
   expect(submits).toHaveLength(1);
 });
@@ -99,10 +99,10 @@ test("one click submits with the ticked unconfirmed values", async ({ page }) =>
   await addFinding(page, s, "hypotonia", "hypotonia", "Hypotonia");
   const submits = countSubmits(page);
 
-  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
+  await page.getByRole("button", { name: /^Finish & submit/ }).click();
   const dialog = submitDialog(page);
   await expect(dialog.getByRole("heading", { name: "Unconfirmed values (2 findings)", exact: true })).toBeVisible();
-  const submit = dialog.getByRole("button", { name: "Submit case", exact: true });
+  const submit = dialog.getByRole("button", { name: "Submit text", exact: true });
   await expect(submit).toHaveAttribute("aria-disabled", "true");
   await dialog.getByRole("checkbox", { name: "Submit with 6 unconfirmed values", exact: true }).check();
   await expect(dialog.getByText("Acknowledging does not confirm the values; they stay marked as defaults.")).toBeVisible();

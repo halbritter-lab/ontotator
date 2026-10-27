@@ -145,7 +145,7 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
   }, [projectKey, target, lowered]);
   const rows = lowered && over?.target === target ? over.rows : null;
   return <>
-    <h3 className="settings-subheading">New imports</h3>
+    <h2 className="settings-subheading">New imports</h2>
     <div className="form-group">
       <div id={`${prefix}-plan-label`} className="form-label">When texts are imported</div>
       <div role="radiogroup" aria-labelledby={`${prefix}-plan-label`} aria-describedby={`${prefix}-plan-hint`} className="settings-radio-group">
@@ -156,7 +156,7 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
       </div>
       <div id={`${prefix}-plan-hint`} className="field-hint">Applies to texts imported from now on. Single texts can be changed on Documents (Plan…); those changes stay.</div>
     </div>
-    <h3 className="settings-subheading">Texts with tool proposals</h3>
+    <h2 className="settings-subheading">Texts with tool proposals</h2>
     <div className="form-group">
       <div id={`${prefix}-tools-label`} className="form-label">Annotators work</div>
       <div role="radiogroup" aria-labelledby={`${prefix}-tools-label`} aria-describedby={`${prefix}-tools-hint`} className="settings-radio-group">
@@ -168,7 +168,7 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
       </div>
       <div id={`${prefix}-tools-hint`} className="field-hint">The project default. A text's plan can override it until work on that text has started.</div>
     </div>
-    <h3 className="settings-subheading">Annotation and consolidation</h3>
+    <h2 className="settings-subheading">Annotation and consolidation</h2>
     <Checkbox id={`${prefix}-translation-gate`} label="Wait for an accepted translation review before annotating"
       hint="Native source texts are never held back. The Assign dialog can override this for one assignment."
       checked={value.annotate_accepted_translations_only} disabled={disabled} onChange={event => onChange({ ...value, annotate_accepted_translations_only: event.target.checked })} />

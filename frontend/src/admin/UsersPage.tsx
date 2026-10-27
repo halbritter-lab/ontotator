@@ -94,7 +94,7 @@ export function auditActor(actor: string): string {
 
 const codeLabel = (user: AdminUser) => user.setup_pending ? "New setup code" : "Reset code";
 
-const accessMessage = "Only system administrators can see and manage user accounts. Ask an administrator if someone needs an account or a new sign-in code.";
+const accessMessage = "Only system administrators can see and manage user accounts. Ask an administrator if someone needs an account or a setup or reset code.";
 
 export function UsersPage(props: UsersPageProps): JSX.Element {
   if (!props.currentUser.is_system_admin) return <section className="detail-section"><h1>Users</h1><InlineMessage tone="info">{accessMessage}</InlineMessage></section>;

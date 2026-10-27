@@ -164,7 +164,7 @@ test("D15: import, plan de, assign de, plan fr, assign fr", async ({ page }) => 
   // decision (V10). The en sources are never undecided: not planned, no row (the "+1" of the case's rows), no decision.
   await expect(documentsTab(page, "All", 200)).toBeVisible();
   await expect(documentsTab(page, "Needs your decision", 150)).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: "Select all 50 filtered cases", exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Select all 50 filtered texts", exact: true })).toBeVisible();
   for (const language of ["de", "es", "fr"]) {
     await expect(rowCell(row(page, "case-0101", language), "translation"), language).toContainText("not decided");
     await expect(rowAction(page, "Plan…", "case-0101", language)).toBeVisible();
@@ -235,7 +235,7 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   await expect(documentsTab(page, "In progress", 6)).toBeVisible();
 
   // With all 20 cases selected, the 6 still in review are skipped and named.
-  await page.getByRole("checkbox", { name: "Select all 20 filtered cases", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Select all 20 filtered texts", exact: true }).click();
   await bar(page).getByRole("button", { name: "Assign…", exact: true }).click();
   let dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}20 cases$`) });
   await expect(dialog.getByText(new RegExp(`^Annotation${SEP}de${SEP}14 versions$`))).toBeVisible();
@@ -247,7 +247,7 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   // "To assign", header checkbox, Assign…, annotator, Assign 14 (5).
   const clicks = counter(page);
   await clicks.click(documentsTab(page, "To assign", 14));
-  await clicks.click(page.getByRole("checkbox", { name: "Select all 14 filtered cases", exact: true }));
+  await clicks.click(page.getByRole("checkbox", { name: "Select all 14 filtered texts", exact: true }));
   await expect(bar(page)).toContainText(new RegExp(`${selected(14, 14)}${SEP}next step: Assign annotation \\(de\\)`));
   await clicks.click(bar(page).getByRole("button", { name: "Assign…", exact: true }));
   dialog = page.getByRole("dialog", { name: new RegExp(`^Assign${SEP}14 cases$`) });
@@ -367,7 +367,7 @@ test("ROWS: one chip click with Undo", async ({ page }) => {
 test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }) => {
   const s = await leadScenario(page, "FR_OFF");
   await loginLead(page, s);
-  await page.getByRole("checkbox", { name: "Select all 10 filtered cases", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Select all 10 filtered texts", exact: true }).click();
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();
   const dialog = planDialog(page, 10);
   // Both steps of fr off (U5: radio groups per language).
@@ -421,7 +421,7 @@ test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }
 test("ACCEPTANCE: annotate without review", async ({ page }) => {
   const s = await leadScenario(page, "ACCEPTANCE");
   await loginLead(page, s);
-  await page.getByRole("checkbox", { name: "Select all 30 filtered cases", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Select all 30 filtered texts", exact: true }).click();
   await bar(page).getByRole("button", { name: "Plan…", exact: true }).click();
   const dialog = planDialog(page, 30);
   await planLanguage(dialog, "fr").getByRole("group", { name: "Annotation", exact: true }).getByRole("radio", { name: "Annotate from scratch", exact: true }).check();

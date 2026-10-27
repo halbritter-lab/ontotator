@@ -55,7 +55,7 @@ it("keeps a pending spanless finding in the mounted editor through pause and res
   rendered.rerender(<CaseScreen {...props} held holdReason="Evidence conflict" />);
   expect(screen.getByRole("textbox", { name: /Reason for no text span/ })).toHaveProperty("value", "Local evidence explanation");
   expect(screen.getByRole("textbox", { name: /Reason for no text span/ })).toHaveProperty("readOnly", true);
-  expect(screen.queryByRole("button", { name: /Finish & Submit Case/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Finish & submit text/ })).toBeNull();
   let leaving!: Promise<boolean>;
   await act(async () => { leaving = routeLeaveRef.current!(); });
   const dialog = await screen.findByRole("dialog", { name: "Paused task has local input" });

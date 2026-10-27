@@ -45,7 +45,7 @@ it('resolves real case metadata and displays history separately from the unchang
   expect(api.getVariantMetadata).toHaveBeenCalledWith('pkg', 'target');
   expect(api.getCase).toHaveBeenCalledWith('pkg', caseDetail.case_id);
   expect(api.listAnnotationVersions).toHaveBeenCalledWith('pkg', 'target', 1);
-  expect(screen.queryByRole('button', { name: /Finish & Submit/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Finish & submit/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
   await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
   expect(screen.queryByText('HP:old')).toBeNull();
@@ -58,7 +58,7 @@ it('returning from history never unlocks a submitted server task', async () => {
   await screen.findByText('HP:old');
   fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
   await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
-  expect(screen.queryByRole('button', { name: /Finish & Submit/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Finish & submit/ })).toBeNull();
 });
 it('preserves draft display, selection and focus when an unsaved snapshot transition is cancelled', async () => {
   vi.spyOn(api, 'applyCommand').mockRejectedValue(new TypeError('Offline'));
@@ -198,7 +198,7 @@ it('keeps a working annotation draft independently scrollable with comparison op
 
 it('does not fetch general version metadata or controls for restricted task text', async () => {
   render(<CaseScreen view={emptyWorkspaceFixture('target').view} workspaceId="ws" onClose={vi.fn()} versionContext={{ ...context, canBrowseVersions: false }} />);
-  await screen.findByRole('button', { name: /Finish & Submit/ });
+  await screen.findByRole('button', { name: /Finish & submit/ });
   expect(api.getVariantMetadata).not.toHaveBeenCalled();
   expect(api.listAnnotationVersions).not.toHaveBeenCalled();
   expect(screen.queryByText('Versions')).toBeNull();

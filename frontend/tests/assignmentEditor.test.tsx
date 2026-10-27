@@ -62,7 +62,7 @@ it("keeps a submitted workspace readable while disabling submission and new find
   const submit = vi.spyOn(api, "submitWorkspace");
   render(<CaseScreen view={view()} workspaceId="ws" onClose={vi.fn()} readOnly />);
   expect(screen.getByText("Submitted. The project lead can reopen it for changes.")).toBeDefined();
-  expect(screen.queryByRole("button", { name: /Finish & Submit Case/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Finish & submit text/ })).toBeNull();
   expect(screen.queryByRole("button", { name: /Add finding without a text span/i })).toBeNull();
   fireEvent.keyDown(document.querySelector(".text-container")!, { key: "1" });
   expect(command).not.toHaveBeenCalled();

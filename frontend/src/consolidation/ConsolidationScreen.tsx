@@ -299,7 +299,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
           { id: "finalization", title: "Finalization", ...finalizationState(open, groups.length, submitted || view.read_only_reason === "submitted",
             view.accepted_at, props.assignmentId === undefined || !!isLead) },
         ]} />
-        <h1 id="cons-title" className="cons-title"><LanguageText text={headerTitle(view, readOnly && !submitted)} code={view.language} /></h1>
+        <h1 id="cons-title" className="case-title"><LanguageText text={headerTitle(view, readOnly && !submitted)} code={view.language} /></h1>
         {/* B5-6: the tools as a quiet row under the title (mockup 02 B). M-7a: one way into the full editor, same tab. */}
         {(props.headerActions || editInEditor || (!readOnly && decidedCount > 0)) && <div className="cons-header-actions" role="group" aria-label="Task">
           {editInEditor && <Button size="sm" variant="quiet" title="For span changes and findings the comparison cannot express" onClick={editInEditor}>Open in full editor</Button>}

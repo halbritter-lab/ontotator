@@ -58,7 +58,7 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
     const percent = card.total > 0 ? Math.round((card.doneCount / card.total) * 100) : 0;
     return <li key={card.id} className="progress-pipeline-item">
       <section className="progress-stage" aria-labelledby={`progress-stage-${card.id}`}>
-        <h2 id={`progress-stage-${card.id}`}>{card.title}</h2>
+        <h3 id={`progress-stage-${card.id}`}>{card.title}</h3>
         <p className="progress-stage-scope">{card.scope}</p>
         <div className="progress-meter" aria-hidden="true"><span style={{ width: `${percent}%` }} /></div>
         <p className="progress-stage-done"><strong>{`${card.doneCount} of ${card.total}`}</strong>{card.done.slice(`${card.doneCount} of ${card.total}`.length)}</p>

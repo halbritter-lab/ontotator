@@ -100,7 +100,7 @@ describe("project creation", () => {
     fireEvent.change(screen.getByLabelText(/^Project key/), { target: { value: "project-1" } });
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Research" } });
     fireEvent.change(screen.getByLabelText(/^Ontology file for HP/), { target: { value: "a".repeat(64) } });
-    const languages = screen.getByLabelText("Document languages");
+    const languages = screen.getByLabelText("Languages of the texts");
     fireEvent.change(languages, { target: { value: "en" } });
     const form = screen.getByRole("button", { name: "Create project" }).closest("form")!;
     fireEvent.submit(form);
@@ -247,7 +247,7 @@ describe("project settings sections", () => {
     view.show("annotation");
     const form = screen.getByRole("form", { name: "Annotation" });
     expect(document.activeElement).toBe(form);
-    expect(within(form).getAllByRole("heading", { level: 3 }).map(heading => heading.textContent)).toEqual(["When submitting", "Prefilled values"]);
+    expect(within(form).getAllByRole("heading", { level: 2 }).map(heading => heading.textContent)).toEqual(["When submitting", "Prefilled values"]);
     const save = within(form).getByRole("button", { name: "Save changes" });
     const control = within(form).getByRole("combobox", { name: "Findings that point to no text passage" });
     expect(save.className).toContain("btn-primary");
@@ -538,7 +538,7 @@ describe("workflow settings", () => {
     view.show("workflow");
     const form = screen.getByRole("form", { name: "Workflow" });
     expect(document.activeElement).toBe(form);
-    expect(within(form).getAllByRole("heading", { level: 3 }).map(heading => heading.textContent)).toEqual(["New imports", "Texts with tool proposals", "Annotation and consolidation"]);
+    expect(within(form).getAllByRole("heading", { level: 2 }).map(heading => heading.textContent)).toEqual(["New imports", "Texts with tool proposals", "Annotation and consolidation"]);
     const group = within(form).getByRole("radiogroup", { name: "When texts are imported" });
     expect(within(group).getAllByRole("radio").map(radio => radio.closest("label")!.textContent)).toEqual(["Plan review and annotation for every translation", "Do not plan anything (plan texts on Documents)"]);
     expect(within(group).getByRole("radio", { name: "Plan review and annotation for every translation" })).toHaveProperty("checked", true);

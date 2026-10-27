@@ -130,7 +130,7 @@ export function dialogItems(items: readonly OpenItem[]): OpenItem[] {
 }
 
 /**
- * Why "Submit case" is unavailable because of open items: the first blocking kind's sentence, then
+ * Why "Submit text" is unavailable because of open items: the first blocking kind's sentence, then
  * `blockingValues` unconfirmed values when the project requires chosen axes.
  */
 export function submitBlockedReason(items: readonly OpenItem[], blockingValues = 0): string | null {

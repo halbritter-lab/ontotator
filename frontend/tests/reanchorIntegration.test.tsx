@@ -218,10 +218,10 @@ it('blocks submission for an invalidated frozen reanchor resolution and focuses 
   render(<CaseScreen view={view} workspaceId="reanchor-submit" onClose={()=>{}}/>);
   const disclosure = screen.getByRole('button', {name:'HP:1, phenotype'}).closest('details')!;
   disclosure.open = false;
-  fireEvent.click(screen.getByRole('button',{name:/Finish & Submit/}));
-  const dialog=await screen.findByRole('dialog',{name:'Submit case'});
+  fireEvent.click(screen.getByRole('button',{name:/Finish & submit/}));
+  const dialog=await screen.findByRole('dialog',{name:'Submit text'});
   expect(within(dialog).getByText(/1 finding after text correction is still pending/)).toBeTruthy();
-  expect(within(dialog).getByRole('button',{name:'Submit case'}).getAttribute('aria-disabled')).toBe('true');
+  expect(within(dialog).getByRole('button',{name:'Submit text'}).getAttribute('aria-disabled')).toBe('true');
   fireEvent.click(within(dialog).getAllByRole('button',{name:/^Go to /})[0]);
   await waitFor(()=>expect(screen.getByRole('button',{name:'HP:1, phenotype'})).toBe(document.activeElement));
   expect(disclosure.open).toBe(true);

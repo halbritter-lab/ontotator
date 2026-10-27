@@ -130,7 +130,7 @@ function recordDecisions(view: WorkspaceView) {
   });
 }
 
-it("1 and 2 move on to the next open proposal and name what was decided; the last one goes to Finish & Submit", async () => {
+it("1 and 2 move on to the next open proposal and name what was decided; the last one goes to Finish & submit", async () => {
   const view = proposalView();
   view.draft.decisions = [{ decision_id: "d", target: { annotation_id: "p-2", version: "p-2-v1" }, outcome: "confirmed", reviewer_id: "user-test" }] as never;
   recordDecisions(view);
@@ -208,9 +208,9 @@ it("a repeated outcome moves on like a new decision and saves nothing (F7)", asy
 
 it("Submit is unavailable until every proposal has a decision", async () => {
   render(<CaseScreen view={proposalView()} workspaceId="ws-pc" onClose={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
-  const dialog = await screen.findByRole("dialog", { name: "Submit case" });
-  const submit = within(dialog).getByRole("button", { name: "Submit case" });
+  fireEvent.click(screen.getByRole("button", { name: /Finish & submit/ }));
+  const dialog = await screen.findByRole("dialog", { name: "Submit text" });
+  const submit = within(dialog).getByRole("button", { name: "Submit text" });
   expect(submit.getAttribute("aria-disabled")).toBe("true");
   const reason = document.getElementById(submit.getAttribute("aria-describedby")!)!;
   expect(reason.textContent).toBe("Decide every review proposal before submitting.");

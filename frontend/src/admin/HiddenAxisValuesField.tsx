@@ -39,7 +39,7 @@ export function HiddenAxisValuesField({ profile, axisDefaults, value, onChange, 
   if (!groups.length) return <InlineMessage tone="info">This profile has no values to limit.</InlineMessage>;
   return <div className="axis-shown-values">
     {groups.map(({ layer, axes }) => <div key={layer.layer_id} role="group" aria-label={layer.label === layer.layer_id ? layer.label : `${layer.label} (${layer.layer_id})`} className="axis-shown-layer">
-      {groups.length > 1 && <h4 className="settings-subheading">{layer.label}</h4>}
+      {groups.length > 1 && <h3 className="settings-subheading">{layer.label}</h3>}
       {axes.map(({ definition: axis, options }) => <div key={axis.id} role="group" aria-label={axis.label} className="axis-shown-row">
         <span className="form-label">{axis.label}</span>
         {[...options].map(option => {

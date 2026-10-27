@@ -65,18 +65,18 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
 
   return (
     <div className="case-navigation" data-testid="case-navigation">
-      <IconButton label="Previous Case" icon={<IconChevronLeft />}
+      <IconButton label="Previous text" icon={<IconChevronLeft />}
         type="button"
         variant="secondary" size="sm"
         onClick={handlePrev}
         disabled={!hasPrev || disabled}
-        title="Previous Case (Alt + ←)"
+        title="Previous text (Alt + ←)"
         style={{ border: "none", borderRadius: 0, padding: "4px 10px", fontSize: "0.95rem" }}
       />
 
       {total > 1 ? (
         <Select id="case-navigation-select" label={null}
-          aria-label="Select case"
+          aria-label="Select text"
           className="form-select-sm"
           value={currentNavigationId ?? currentDocumentId}
           onChange={handleSelect}
@@ -103,7 +103,7 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
             const openable = canOpenCase(doc);
             return (
               <option key={idAt(index)} value={idAt(index)} disabled={!openable}>
-                Case {doc.position} of {total}: {shownId} ({statusLabel}){!openable && " – no proposals"}
+                Text {doc.position} of {total}: {shownId} ({statusLabel}){!openable && " – no proposals"}
               </option>
             );
           })}
@@ -111,16 +111,16 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
       ) : (
         // The document name is the page's h1; the id stays available on hover.
         <span className="case-navigation__label" title={currentDocumentId}>
-          Case {position} of {total}
+          Text {position} of {total}
         </span>
       )}
 
-      <IconButton label="Next Case" icon={<IconChevronRight />}
+      <IconButton label="Next text" icon={<IconChevronRight />}
         type="button"
         variant="secondary" size="sm"
         onClick={handleNext}
         disabled={!hasNext || disabled}
-        title="Next Case (Alt + →)"
+        title="Next text (Alt + →)"
         style={{ border: "none", borderRadius: 0, padding: "4px 10px", fontSize: "0.95rem" }}
       />
     </div>

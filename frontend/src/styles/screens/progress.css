@@ -6,7 +6,7 @@
 .progress-pipeline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-6); margin: 0 0 var(--space-6); padding: 0; list-style: none; }
 .progress-pipeline-item { position: relative; display: flex; }
 .progress-stage { flex: 1; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); box-shadow: var(--shadow-1); }
-.progress-stage h2 { margin: 0; font-size: var(--size-base); line-height: var(--leading-base); font-weight: var(--weight-strong); }
+.progress-stage h3 { margin: 0; font-size: var(--size-base); line-height: var(--leading-base); font-weight: var(--weight-strong); }
 .progress-stage-scope { margin: 0 0 var(--space-3); font-size: var(--size-sm); color: var(--text-muted); }
 .progress-meter { height: 6px; margin: var(--space-2) 0 var(--space-1); overflow: hidden; border-radius: 3px; background: var(--surface-sunken); }
 .progress-meter span { display: block; height: 100%; background: var(--success); }

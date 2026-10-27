@@ -28,10 +28,10 @@ export function SubmitControl({ onSubmit, disabled, pending, openCount = null, o
         onClick={onSubmit}
         disabled={disabled}
         aria-busy={pending}
-        title={pending ? "Saving changes before submitting" : "Finish and submit case"}
+        title={pending ? "Saving changes before submitting" : "Finish and submit text"}
       >
         <IconCheck />
-        {open ? `Finish & Submit (${openCount} open)` : "Finish & Submit Case"}
+        {open ? `Finish & submit (${openCount} open)` : "Finish & submit text"}
       </Button>
     </>
   );

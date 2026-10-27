@@ -166,8 +166,8 @@ describe("carried findings in the findings list", () => {
     const carried = finding("carried");
     const submit = vi.spyOn(api, "submitWorkspace");
     const { container } = setup({ annotations: [carried], inputs: [input("input-1", carried)] });
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
-    const dialog = await screen.findByRole("dialog", { name: "Submit case" });
+    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Submit text" });
     expect(dialog.textContent).toContain("1 carried finding still needs a check");
     fireEvent.click(within(dialog).getByRole("button", { name: "Go to first unchecked" }));
     expect(pressed(container)).toEqual(["annotation:carried"]);

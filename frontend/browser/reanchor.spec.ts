@@ -58,11 +58,11 @@ test('re-creates a Unicode finding, dismisses with reason, reloads and submits w
   expect(opened.view.draft.reanchor_inputs).toHaveLength(2);
   const writes=writesSince(page);
   await panel(page).locator(':scope > details > summary').click();
-  await page.getByRole('button',{name:/^Finish & Submit/}).click();
-  const blocked=page.getByRole('dialog',{name:'Submit case',exact:true});
+  await page.getByRole('button',{name:/^Finish & submit/}).click();
+  const blocked=page.getByRole('dialog',{name:'Submit text',exact:true});
   await expect(blocked).toContainText('2 findings after text correction still pending');
   await expect(blocked).toContainText('Re-create or dismiss 2 findings after text correction before submitting.');
-  await expect(blocked.getByRole('button',{name:'Submit case',exact:true})).toBeDisabled();
+  await expect(blocked.getByRole('button',{name:'Submit text',exact:true})).toBeDisabled();
   // Each pending item has its own "Go to" action; the first leads to the first pending row.
   await blocked.getByRole('button',{name:/^Go to /}).first().click();
   await expect(blocked).toBeHidden();

@@ -14,7 +14,7 @@ test.setTimeout(120_000);
 test.use({ actionTimeout: 15_000 });
 
 const CASE = "modifiers";
-const submitDialog = (page: Page) => page.getByRole("dialog", { name: "Submit case", exact: true });
+const submitDialog = (page: Page) => page.getByRole("dialog", { name: "Submit text", exact: true });
 const commandResponse = (page: Page, command: string) => page.waitForResponse(response =>
   response.url().endsWith("/commands") && response.request().method() === "POST"
   && (response.request().postDataJSON() as { payload?: { command?: string } } | null)?.payload?.command === command);
@@ -49,27 +49,27 @@ async function addModifiers(page: Page, terms: string[]) {
 test("Mild and Severe: Two severities is listed, the ticked box submits", async ({ page }) => {
   await open(page, { with_finding: "1" });
   await addModifiers(page, ["Mild", "Severe"]);
-  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
+  await page.getByRole("button", { name: /^Finish & submit/ }).click();
   const dialog = submitDialog(page);
   const warnings = dialog.getByRole("region", { name: "Modifier warnings (1)" });
   await expect(warnings).toContainText("Seizure: Two severities: Mild, Severe.");
   await expect(warnings.getByRole("button", { name: "Go to Seizure" })).toBeVisible();
   await dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values? and 1 modifier warning$/ }).check();
-  await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
+  await dialog.getByRole("button", { name: "Submit text", exact: true }).click();
   await expectSubmitted(page);
 });
 
 test("Frequent: the cohort term is listed as a modifier warning", async ({ page }) => {
   await open(page, { with_finding: "1" });
   await addModifiers(page, ["Frequent"]);
-  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
+  await page.getByRole("button", { name: /^Finish & submit/ }).click();
   const warnings = submitDialog(page).getByRole("region", { name: "Modifier warnings (1)" });
   await expect(warnings).toContainText("Seizure: Frequent is a cohort term.");
 });
 
 test("a standalone modifier only warns; Go to Severe focuses Turn into modifier…; the ticked box submits", async ({ page }) => {
   await open(page, { with_finding: "1", standalone: "1" });
-  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
+  await page.getByRole("button", { name: /^Finish & submit/ }).click();
   const dialog = submitDialog(page);
   const item = dialog.getByRole("region", { name: "Modifier warnings (1)" }).locator('[data-open-item="modifier-as-finding"]');
   await expect(item).toContainText("Severe: Severe is a modifier term. Keep it only if it names the finding itself.");

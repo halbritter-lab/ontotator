@@ -65,9 +65,9 @@ function setup(annotations: AnnotationSnapshot[] = [carriedFinding(), openFindin
 }
 const pressed = (container: HTMLElement) =>
   Array.from(container.querySelectorAll<HTMLElement>(".sidebar [data-list-key][aria-pressed='true']")).map(element => element.dataset.listKey);
-const openDialog = async (label: RegExp = /Finish & Submit/) => {
+const openDialog = async (label: RegExp = /Finish & submit/) => {
   fireEvent.click(screen.getByRole("button", { name: label }));
-  return screen.findByRole("dialog", { name: "Submit case" });
+  return screen.findByRole("dialog", { name: "Submit text" });
 };
 const goToButtons = (dialog: HTMLElement) => within(dialog).getAllByRole("button", { name: "Go to Seizure" });
 
@@ -75,7 +75,7 @@ describe("submit dialog open items", () => {
   it("lists every open item with its own Go to and keeps Submit focusable with the reason", async () => {
     const submit = vi.spyOn(api, "submitWorkspace");
     setup();
-    const dialog = await openDialog(/Finish & Submit \(2 open\)/);
+    const dialog = await openDialog(/Finish & submit \(2 open\)/);
     // Defaulted values leave the generic list for the "Unconfirmed values" section.
     expect(within(dialog).getByText("1 carried finding still needs a check")).toBeDefined();
     expect(within(dialog).getByRole("button", { name: "Go to first unchecked" })).toBeDefined();
@@ -84,7 +84,7 @@ describe("submit dialog open items", () => {
     expect(Array.from(dialog.querySelectorAll<HTMLElement>("[data-unconfirmed-row]")).map(row => row.dataset.unconfirmedRow)).toEqual(["open"]);
 
     const footer = dialog.querySelector(".modal-actions")!;
-    const confirm = within(footer as HTMLElement).getByRole("button", { name: "Submit case" });
+    const confirm = within(footer as HTMLElement).getByRole("button", { name: "Submit text" });
     expect(within(footer as HTMLElement).getByRole("button", { name: "Cancel" })).toBeDefined();
     expect(confirm).toHaveProperty("disabled", false);
     expect(confirm.getAttribute("aria-disabled")).toBe("true");
@@ -94,10 +94,10 @@ describe("submit dialog open items", () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
-  it("states the text check as a sentence above Submit case and names the acknowledgement as the reason", async () => {
+  it("states the text check as a sentence above Submit text and names the acknowledgement as the reason", async () => {
     setup([openFinding()]);
-    const dialog = await openDialog(/Finish & Submit \(1 open\)/);
-    const confirm = within(dialog).getByRole("button", { name: "Submit case" });
+    const dialog = await openDialog(/Finish & submit \(1 open\)/);
+    const confirm = within(dialog).getByRole("button", { name: "Submit text" });
     expect(within(dialog).getByText("Submitting confirms you checked the entire text for further findings.")).toBeDefined();
     expect(within(dialog).queryByRole("checkbox", { name: /Entire text checked/ })).toBeNull();
     expect(document.getElementById(confirm.getAttribute("aria-describedby")!)?.textContent)
@@ -112,7 +112,7 @@ describe("submit dialog open items", () => {
     expect(document.querySelector(".app-layout")!.className).toContain("mobile-pane-list");
     const dialog = await openDialog();
     fireEvent.click(goToButtons(dialog)[0]);
-    expect(screen.queryByRole("dialog", { name: "Submit case" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Submit text" })).toBeNull();
     expect(pressed(container)).toEqual(["annotation:carried"]);
     expect(container.querySelector(".app-layout")!.className).toContain("mobile-pane-details");
     expect(scrollToEvidence).toHaveBeenCalledWith("ev-carried", undefined);
@@ -137,13 +137,13 @@ describe("submit dialog open items", () => {
     }));
     const dialog = await openDialog();
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }));
-    await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" })); });
+    await act(async () => { fireEvent.click(within(dialog).getByRole("button", { name: "Submit text" })); });
     await waitFor(() => expect(dialog.querySelector("[data-submit-status]")!.textContent).toBe("The unconfirmed values changed. Check the list again."));
     // One resend with the fresh acknowledgement, then the list is shown again.
     expect(submit).toHaveBeenCalledTimes(2);
     expect((within(dialog).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }) as HTMLInputElement).checked).toBe(false);
     expect(within(dialog).getByText((_, el) => el?.classList.contains("unconfirmed-values__values") === true && el.textContent === "Temporality: Not specified")).toBeDefined();
-    expect(within(dialog).getByRole("button", { name: "Submit case" })).toBeDefined();
+    expect(within(dialog).getByRole("button", { name: "Submit text" })).toBeDefined();
     expect(within(dialog).queryByRole("button", { name: "Continue and submit" })).toBeNull();
     fireEvent.click(goToButtons(dialog)[0]);
     await waitFor(() => expect(document.activeElement).toBe(container.querySelector('[data-axis-field="temporality"] input:checked')));
@@ -152,7 +152,7 @@ describe("submit dialog open items", () => {
   it("lists every unconfirmed finding in its section, without the five-item limit", async () => {
     const many = Array.from({ length: 8 }, (_, index) => finding(`open-${index}`, { assertion: "present", temporality: null }, ["temporality"]));
     setup(many);
-    const dialog = await openDialog(/Finish & Submit \(8 open\)/);
+    const dialog = await openDialog(/Finish & submit \(8 open\)/);
     expect(within(dialog).getByRole("heading", { name: "Unconfirmed values (8 findings)" })).toBeDefined();
     expect(goToButtons(dialog)).toHaveLength(8);
     expect(within(dialog).queryByText(/more$/)).toBeNull();
@@ -165,7 +165,7 @@ describe("submit dialog open items", () => {
 describe("toolbar open count", () => {
   it("shows the count and Next open item before the dialog was opened and drops both when resolved", async () => {
     const { container, view } = setup([carriedFinding(), openFinding()]);
-    expect(screen.getByRole("button", { name: /Finish & Submit \(2 open\)/ })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Finish & submit \(2 open\)/ })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Next open item" }));
     expect(pressed(container)).toEqual(["annotation:carried"]);
     await waitFor(() => expect((document.activeElement as HTMLElement).textContent).toContain("Mark as checked"));
@@ -180,7 +180,7 @@ describe("toolbar open count", () => {
       ({ ...view.draft, revision, annotations, round_input_resolutions: resolutions as never });
     vi.spyOn(api, "applyCommand").mockResolvedValue(draft(1, [carriedFinding(), chosen]));
     await act(async () => { fireEvent.click(screen.getByRole("radio", { name: "Current" })); });
-    await waitFor(() => expect(screen.getByRole("button", { name: /Finish & Submit \(1 open\)/ })).toBeDefined());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Finish & submit \(1 open\)/ })).toBeDefined());
     const dialog = await openDialog();
     expect(goToButtons(dialog)).toHaveLength(1);
     fireEvent.click(goToButtons(dialog)[0]);
@@ -189,7 +189,7 @@ describe("toolbar open count", () => {
     vi.spyOn(api, "resolveRoundInput").mockResolvedValue(draft(2, [carriedFinding(), chosen], [resolution]));
     await waitFor(() => expect((document.activeElement as HTMLElement).textContent).toContain("Mark as checked"));
     await act(async () => { fireEvent.click(document.activeElement as HTMLElement); });
-    await waitFor(() => expect(screen.getByRole("button", { name: "Finish & Submit Case" })).toBeDefined());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Finish & submit text" })).toBeDefined());
     expect(screen.queryByRole("button", { name: "Next open item" })).toBeNull();
   });
 });
@@ -222,7 +222,7 @@ describe("Unconfirmed values section", () => {
   });
   const section = () => document.querySelector<HTMLElement>("[data-unconfirmed-values]")!;
   const status = () => document.querySelector("[data-unconfirmed-status]")!.textContent;
-  const submitButton = () => screen.getByRole("button", { name: "Submit case" });
+  const submitButton = () => screen.getByRole("button", { name: "Submit text" });
   const reasonOf = (button: HTMLElement) => document.getElementById(button.getAttribute("aria-describedby")!)?.textContent;
 
   it("summarises with real plurals, drops zero parts and names a submission without findings (#48 N-20)", () => {
@@ -235,7 +235,7 @@ describe("Unconfirmed values section", () => {
     expect(screen.getByText("You are submitting no findings for this text.")).toBeDefined();
   });
 
-  it("shows a blocked reason once, also after a click on Submit case", () => {
+  it("shows a blocked reason once, also after a click on Submit text", () => {
     render(<SubmitCaseDialog {...dialogProps()} />);
     fireEvent.click(submitButton());
     expect(document.querySelectorAll("[data-submit-blocked-reason]")).toHaveLength(1);
@@ -296,7 +296,7 @@ describe("Unconfirmed values section", () => {
     rerender(<SubmitCaseDialog {...dialogProps({ onConfirmValues, unconfirmed: [rows[1]] })} />);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Confirm values of Seizure" }));
 
-    // No rows left: Submit case, and the section is replaced by the status.
+    // No rows left: Submit text, and the section is replaced by the status.
     fireEvent.click(screen.getByRole("button", { name: "Confirm values of Seizure" }));
     await act(async () => { resolve(true); });
     rerender(<SubmitCaseDialog {...dialogProps({ onConfirmValues, unconfirmed: [] })} />);
@@ -324,7 +324,7 @@ describe("Unconfirmed values section", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Confirm values of Seizure" }));
     expect(status()).toBe("Confirmed Hypotonia. 2 left.");
 
-    // The mixed row is the only one left: the focus goes to Submit case, not to body.
+    // The mixed row is the only one left: the focus goes to Submit text, not to body.
     fireEvent.click(screen.getByRole("button", { name: "Confirm values of Seizure" }));
     await act(async () => { resolve(true); });
     rerender(<SubmitCaseDialog {...dialogProps({ onConfirmValues, unconfirmed: after.slice(0, 1) })} />);
@@ -368,7 +368,7 @@ describe("Unconfirmed values section", () => {
     expect(onGoToRow).toHaveBeenCalledWith(rows[0]);
   });
 
-  it("offers the acknowledgement while rows remain and blocks Submit case until it is ticked", () => {
+  it("offers the acknowledgement while rows remain and blocks Submit text until it is ticked", () => {
     const setAcknowledged = vi.fn(), onConfirm = vi.fn();
     const rows = threeRows().slice(0, 2);
     const { rerender } = render(<SubmitCaseDialog {...dialogProps({ unconfirmed: rows, setAcknowledged, onConfirm })} />);
@@ -410,7 +410,7 @@ describe("Unconfirmed values section", () => {
     expect(onGoToRow).toHaveBeenCalledTimes(1);
   });
 
-  it("always labels the primary button Submit case and reads the submit status politely", () => {
+  it("always labels the primary button Submit text and reads the submit status politely", () => {
     const text = "The unconfirmed values changed. Check the list again.";
     const { rerender } = render(<SubmitCaseDialog {...dialogProps({ submitStatus: { text, count: 1 } })} />);
     expect(submitButton()).toBeDefined();

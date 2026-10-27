@@ -157,7 +157,7 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       {error != null && <ErrorNotice error={error} />}
       {!checking && !state && <p id="final-export-recheck" className="field-hint">Check again to confirm the current selections and warnings.</p>}
       {state && <section className="final-export-preflight" aria-labelledby="final-export-preflight-heading">
-        <h3 id="final-export-preflight-heading" tabIndex={-1}>Export preflight</h3>
+        <h3 id="final-export-preflight-heading" tabIndex={-1}>Export check</h3>
         <p><strong>{plural(state.selections.length, "selected result")}, {plural(state.warnings.length, "warning")}, {state.omissions.length} omitted{notInPlan.length > 0 && `, ${notInPlan.length} not planned`}</strong></p>
         {state.warnings.length > 0 && <Checkbox ref={acknowledgement} id="final-export-ack" label="Export these selected results with the listed warnings and omissions" checked={accepted} disabled={creating} onChange={event => setAccepted(event.target.checked)} />}
         {!state.selections.length && <InlineMessage tone="warning"><span id="final-export-empty">Select at least one submitted result before exporting.</span></InlineMessage>}

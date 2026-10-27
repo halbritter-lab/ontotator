@@ -90,8 +90,8 @@ async function createProjectThroughUi(page: Page): Promise<ProjectSetup> {
   await page.getByRole("link", { name: "New project", exact: true }).click();
   await page.getByLabel(/^Project key/).fill(key);
   await page.getByLabel(/^Name \(required\)/).fill(`Browser project ${suffix}`);
-  await page.getByLabel("Document languages", { exact: true }).fill("en");
-  await page.getByLabel("Document languages", { exact: true }).press("Enter");
+  await page.getByLabel("Languages of the texts", { exact: true }).fill("en");
+  await page.getByLabel("Languages of the texts", { exact: true }).press("Enter");
   await page.getByLabel(/^Built-in template/).selectOption("hpo-phenotype");
   const versions = page.getByLabel(/^Ontology file for HP/);
   const ontology = versions.locator("option").filter({ hasText: "2026-06-23" }).first();
@@ -237,7 +237,7 @@ test.describe("Administration through real accounts and jobs", () => {
     for (const actor of [setup.lead, setup.annotator]) {
       await redeemCode(page, actor);
       // redeemCode ends on My tasks; neither has a task yet.
-      await expect(page.getByRole("heading", { name: "No documents are assigned to you yet." })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "No texts are assigned to you yet." })).toBeVisible();
       await expect(page.getByRole("link", { name: "Users", exact: true })).toHaveCount(0);
       await logout(page);
     }
@@ -284,7 +284,7 @@ test.describe("Administration through real accounts and jobs", () => {
     await tasks.getByRole("link", { name: /^(Start|Continue|View)$/ }).click();
     await page.reload();
     await expect(page.getByText("Submitted. The project lead can reopen it for changes.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Finish & Submit/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Finish & submit/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Add finding without a text span", exact: true })).toHaveCount(0);
     await logout(page);
     await loginExisting(page, setup.lead);

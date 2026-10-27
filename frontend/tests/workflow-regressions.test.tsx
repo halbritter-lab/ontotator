@@ -143,16 +143,16 @@ it("submits the API payload and preserves its envelope through a lost-response r
  };
  const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(new Error("response lost")).mockResolvedValue(submission as any);
  render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()}/>);
- fireEvent.click(screen.getByRole("button", { name: /Finish & Submit Case|Fall abschließen/i }));
- const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
- fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
+ fireEvent.click(screen.getByRole("button", { name: /Finish & submit text|Fall abschließen/i }));
+ const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
+ fireEvent.click(within(dialog).getByRole("button", { name: /^Submit text$/i }));
  await waitFor(() => expect(screen.getByText(/Retry|Erneut versuchen/i)).toBeDefined());
  expect(submit.mock.calls[0][1].payload).toEqual({
    command: "submit_workspace",
    document_checked: true,
  });
  fireEvent.click(screen.getByText(/Retry|Erneut versuchen/i));
- await waitFor(() => expect(screen.getByRole("dialog", { name: "Case submitted" })).toBeDefined());
+ await waitFor(() => expect(screen.getByRole("dialog", { name: "Text submitted" })).toBeDefined());
  expect(submit.mock.calls[1][1]).toEqual(submit.mock.calls[0][1]);
 });
 
@@ -237,7 +237,7 @@ it("allows clearing an existing review decision back to offen", async () => {
  await waitFor(() => expect(decide).toHaveBeenCalled());
  expect(decide.mock.calls[0][1].payload.outcome).toBeNull();
  expect(decide.mock.calls[0][1].payload.target).toEqual({ annotation_id: "same", version: "v1" });
- await waitFor(() => expect(within(document.querySelector<HTMLElement>(".sidebar")!).getByText(/open|offen/i)).toBeDefined());
+ await waitFor(() => expect(within(document.querySelector<HTMLElement>(".sidebar")!).getByText(/Pending/)).toBeDefined());
 });
 
 it("keeps a repeated outcome explicit and resets only through zero", async () => {

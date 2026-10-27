@@ -18,7 +18,7 @@ export function TextViewToolbar({ projectKey, caseId, language, documents, onNav
   }}>{text}</a>;
   return <div className="case-toolbar text-view-toolbar" role="group" aria-label="Text view">
     {link({ name: 'projectDocuments', key: projectKey, ...documents }, <><span aria-hidden="true">‹ </span>Documents</>, 'btn btn-quiet btn-sm')}
-    <h1>{caseId}</h1>
+    <h1 className="case-title">{caseId}</h1>
     <LanguageTag code={language} />
     {children}
     {link({ name: 'projectDocuments', key: projectKey, ...documents, panel: `${caseId}:${language}` }, 'Text card')}

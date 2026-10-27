@@ -129,7 +129,7 @@ it("explains included reviewer flags, omitted rejections and historical missing-
   ] } });
   render(<ExportPage projectKey="p" currentUser={user} />);
   expect(card().getByText(/Clinical axis values are unchanged/)).toBeTruthy();
-  expect(card().getByText(/cannot currently be re-imported into proposal storage/)).toBeTruthy();
+  expect(card().getByText(/cannot currently be imported again as proposals/)).toBeTruthy();
   await card().findByText(/2 unresolved result\(s\) included with reviewer flags; 3 rejected result\(s\) omitted/);
   expect(card().getByText(/old-result \(original-version\) has no reviewer note/)).toBeTruthy();
   expect(card().queryByText(/excludes unresolved/)).toBeNull();
@@ -167,7 +167,7 @@ it("runs the preflight on open", async () => {
   expect(create.getAttribute("aria-disabled")).toBe("true");
   await act(async () => { resolve({ ...emptyPreflight, selections: [selection] }); });
   expect(finals().queryByText("Checking final results…")).toBeNull();
-  expect(finals().getByRole("region", { name: "Export preflight" })).toBeTruthy();
+  expect(finals().getByRole("region", { name: "Export check" })).toBeTruthy();
   expect(create.getAttribute("aria-disabled")).toBeNull();
   expect(document.activeElement).toBe(document.body);
 });
@@ -224,7 +224,7 @@ it.each([
   const activate = (element: HTMLElement) => { activations += 1; fireEvent.click(element); };
   render(<ExportPage projectKey="p" currentUser={user} />);
   const primaries = () => [...screen.getByRole("region", { name: "Selected final results" }).querySelectorAll(".btn-primary")].map(b => b.textContent);
-  await finals().findByRole("region", { name: "Export preflight" });
+  await finals().findByRole("region", { name: "Export check" });
   expect(primaries()).toEqual(["Create final export"]);
   if (warnings.length) activate(finals().getByLabelText("Export these selected results with the listed warnings and omissions"));
   activate(finals().getByRole("button", { name: "Create final export" }));

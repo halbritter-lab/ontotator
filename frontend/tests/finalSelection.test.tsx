@@ -75,9 +75,9 @@ it("shows the preflight with a summary without moving focus", async () => {
   vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, omissions: [{ case_id: "other", language: "de" }] });
   render(<FinalExportPanel projectKey="p" username="lead" />);
   expect(screen.getByText(/The archive includes README\.txt and index\.csv/)).toBeDefined();
-  const heading = await screen.findByRole("heading", { name: "Export preflight" });
+  const heading = await screen.findByRole("heading", { name: "Export check" });
   expect(document.activeElement).not.toBe(heading);
-  expect(screen.getByRole("region", { name: "Export preflight" })).toBeDefined();
+  expect(screen.getByRole("region", { name: "Export check" })).toBeDefined();
   const counts = screen.getByText("1 selected result, 1 warning, 1 omitted");
   expect(counts.tagName).toBe("STRONG");
   const actions = screen.getByRole("group", { name: "Final export actions" });
@@ -109,7 +109,7 @@ it("checks again without starting, clears the acknowledgement and keeps focus on
   const again = screen.getByRole("button", { name: "Check again" });
   again.focus();
   fireEvent.click(again);
-  expect(screen.queryByRole("region", { name: "Export preflight" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "Export check" })).toBeNull();
   expect(screen.getByText("Checking final results…")).toBeDefined();
   expect(document.activeElement).toBe(again);
   expect((await screen.findByLabelText("Export these selected results with the listed warnings and omissions") as HTMLInputElement).checked).toBe(false);
@@ -132,7 +132,7 @@ it("keeps focus on Create while the export is being created", async () => {
   vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, warnings: [] });
   const start = vi.spyOn(api, "startFinalExport").mockReturnValue(new Promise(() => undefined));
   render(<FinalExportPanel projectKey="p" username="lead" />);
-  await screen.findByRole("region", { name: "Export preflight" });
+  await screen.findByRole("region", { name: "Export check" });
   const create = screen.getByRole("button", { name: "Create final export" });
   create.focus();
   fireEvent.click(create);
@@ -147,17 +147,17 @@ it("keeps focus on Create while the export is being created", async () => {
   expect(again.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(again);
   expect(api.finalExportPreflight).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole("region", { name: "Export preflight" })).toBeDefined();
+  expect(screen.getByRole("region", { name: "Export check" })).toBeDefined();
 });
 
 it("says so and checks again when final selections change while the preflight is open", async () => {
   const read = vi.spyOn(api, "finalExportPreflight").mockResolvedValue(preflight);
   render(<FinalExportPanel projectKey="p" username="lead" />);
-  await screen.findByRole("heading", { name: "Export preflight" });
+  await screen.findByRole("heading", { name: "Export check" });
   act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey: "p" } })); });
   expect(screen.getByText("Final selections changed. The check was run again.")).toBeDefined();
-  expect(screen.queryByRole("region", { name: "Export preflight" })).toBeNull();
-  await screen.findByRole("heading", { name: "Export preflight" });
+  expect(screen.queryByRole("region", { name: "Export check" })).toBeNull();
+  await screen.findByRole("heading", { name: "Export check" });
   expect(read).toHaveBeenCalledTimes(2);
 });
 
@@ -166,7 +166,7 @@ it("keeps a finished export when final selections change afterwards and says so"
   vi.spyOn(api, "startFinalExport").mockResolvedValue({ job_id: 8 });
   vi.spyOn(api, "getJob").mockResolvedValue(job("succeeded") as never);
   render(<FinalExportPanel projectKey="p" username="lead" />);
-  await screen.findByRole("region", { name: "Export preflight" });
+  await screen.findByRole("region", { name: "Export check" });
   fireEvent.click(screen.getByRole("button", { name: "Create final export" }));
   await screen.findByText("Final export 8: succeeded");
   act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey: "p" } })); });

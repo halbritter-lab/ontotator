@@ -159,7 +159,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   REVISION_CONFLICT: "This work changed elsewhere. Reload the latest revision before retrying.",
   REANCHOR_ITEMS_UNRESOLVED: "Re-create pending findings after text correction or dismiss them with a reason before submitting.",
   CONSOLIDATION_GROUPS_OPEN: "Resolve the open groups first.",
-  UNSUPPORTED_REVIEW_RESOLUTION: "Bundles with reviewer flags cannot currently be re-imported into proposal storage.",
+  UNSUPPORTED_REVIEW_RESOLUTION: "Bundles with reviewer flags cannot currently be imported again as proposals.",
   REVIEW_NOTE_REQUIRED: "Add a reviewer note before marking a proposal as unresolved or submitting it.",
   REVIEW_ROUND_NOT_FOUND: "The requested review round is unavailable. Reload the task.",
   REVISION_NOT_FOUND: "The requested revision is unavailable.",

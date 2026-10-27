@@ -430,8 +430,8 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   const filteredTotal = page?.group_count ?? 0;
   const allSelected = allFiltered !== null && allFiltered.identity === filterIdentity && allFiltered.keys.length > 0 && allFiltered.keys.every(key => selection.keys.has(key));
   const selectAllLabel = filteredTotal > MAX_SELECTION
-    ? `Select the first ${MAX_SELECTION} of ${filteredTotal} filtered cases`
-    : filteredTotal === 1 ? "Select the only filtered case" : `Select all ${filteredTotal} filtered cases`;
+    ? `Select the first ${MAX_SELECTION} of ${filteredTotal} filtered texts`
+    : filteredTotal === 1 ? "Select the only filtered text" : `Select all ${filteredTotal} filtered texts`;
   const filters = useMemo(() => selectionFilters(request), [requestIdentity]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleAll = async () => {
     if (selectingAll) return;

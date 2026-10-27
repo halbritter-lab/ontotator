@@ -15,7 +15,7 @@ const importFixture = (page: Page, annotator: string, options: { proposals?: boo
 test("first run: log in without projects, get a T1 import, open a case without typing initials", async ({ page }) => {
   // A user without assignments sees the empty list, and nothing to upload.
   await loginAs(page, "first-run");
-  const guide = page.getByRole("heading", { name: "No documents are assigned to you yet." });
+  const guide = page.getByRole("heading", { name: "No texts are assigned to you yet." });
   await expect(guide).toBeVisible();
   await expect(guide).not.toContainText(/initials/i);
   await expect(page.locator("#mode-select")).toHaveCount(0);
@@ -92,7 +92,7 @@ test("real backend: review, resume, reload and submit", async ({ page }) => {
   await page.reload();
   await expect(page.getByText("Submitted. The project lead can reopen it for changes.")).toBeVisible();
   // A submitted task shows no submit control.
-  await expect(page.getByRole("button", { name: /^Finish & Submit/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Finish & submit/ })).toHaveCount(0);
   await page.goto(`${LAUNCH_URL}#/?project=browser-fixture-workflow`);
   await expect(page.locator("#project-select")).toHaveValue("browser-fixture-workflow");
   await expect(page.getByText(/Forbidden|Unauthorized|Error loading/)).toHaveCount(0);

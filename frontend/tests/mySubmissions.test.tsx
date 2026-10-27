@@ -130,10 +130,10 @@ describe("My submissions", () => {
     render(<CaseScreen view={view} workspaceId="ws-submit" onClose={vi.fn()} roundOrdinal={3}
       versionContext={{ canBrowseVersions: false, username: "alice", assignmentId: 7, onNavigate: vi.fn() }} />);
     await within(mine()).findByText("Round 3, not submitted yet");
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/ }));
-    const confirm = await screen.findByRole("dialog", { name: "Submit case" });
-    await act(async () => { fireEvent.click(within(confirm).getByRole("button", { name: "Submit case" })); });
-    const receipt = await screen.findByRole("dialog", { name: "Case submitted" });
+    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/ }));
+    const confirm = await screen.findByRole("dialog", { name: "Submit text" });
+    await act(async () => { fireEvent.click(within(confirm).getByRole("button", { name: "Submit text" })); });
+    const receipt = await screen.findByRole("dialog", { name: "Text submitted" });
     fireEvent.click(within(receipt).getByRole("button", { name: "View submitted result" }));
     const dialog = screen.getByRole("dialog", { name: "Historical submission" });
     expect(within(dialog).getByRole("heading", { name: `Round 3, ${formatTime(at(19, 2, 5))}` })).toBeDefined();

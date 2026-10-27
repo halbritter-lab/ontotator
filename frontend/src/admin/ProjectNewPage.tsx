@@ -59,7 +59,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
         <TextInput ref={keyInput} id="new-project-key" label="Project key" value={key} error={keyError} onChange={event => { setKey(event.target.value); if (keyError) setError(undefined); }} required pattern="[a-z0-9][a-z0-9\-]{1,62}" minLength={2} maxLength={63} hint="Use 2–63 lower-case letters, digits or hyphens; start with a letter or digit." />
         <TextInput id="new-project-name" label="Name" value={name} required onChange={event => setName(event.target.value)} />
         <Textarea id="new-project-description" label="Description" value={description} onChange={event => setDescription(event.target.value)} />
-        <LanguagesField id="new-project-languages" label="Document languages" value={languages} onChange={setLanguages} disabled={busy} />
+        <LanguagesField id="new-project-languages" label="Languages of the texts" value={languages} onChange={setLanguages} disabled={busy} />
         <Select id="new-project-source" label="Profile source" value={source} onChange={event => { setSource(event.target.value); setUploaded(null); setError(undefined); }}>
           <option value="template">Built-in template</option><option value="upload">Upload profile JSON</option>
         </Select>

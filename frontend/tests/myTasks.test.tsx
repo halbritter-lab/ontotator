@@ -74,7 +74,7 @@ describe("My tasks component", () => {
     expect(screen.getByRole("status").textContent).toContain("Loading tasks");
     expect(screen.queryByRole("table")).toBeNull();
     await act(async () => { pending.resolve([]); });
-    expect(await screen.findByText("No documents are assigned to you yet.")).toBeDefined();
+    expect(await screen.findByText("No texts are assigned to you yet.")).toBeDefined();
   });
 
   it("filters by the controlled raw project key and updates only through navigation", async () => {
@@ -201,7 +201,7 @@ describe("My tasks component", () => {
 
   it("keeps a selected empty project visible by its current project summary name", async () => {
     render(<MyTasks project="empty%/project" projects={[project("empty%/project", "Empty project", true)]} onNavigate={vi.fn()} />);
-    await screen.findByText("No documents are assigned to you yet.");
+    await screen.findByText("No texts are assigned to you yet.");
     const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
     expect(select.value).toBe("empty%/project");
     expect(select.selectedOptions[0].textContent).toBe("Empty project (empty%/project)");
@@ -210,7 +210,7 @@ describe("My tasks component", () => {
 
   it("keeps unknown route filters without inventing a project or choosing another one", async () => {
     render(<MyTasks project="unavailable" projects={[project("p", "Managed", true)]} onNavigate={vi.fn()} />);
-    await screen.findByText("No documents are assigned to you yet.");
+    await screen.findByText("No texts are assigned to you yet.");
     const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
     expect(select.value).toBe("unavailable");
     expect(select.selectedOptions[0].textContent).toBe("unavailable");
@@ -220,14 +220,14 @@ describe("My tasks component", () => {
   it("shows ordinary empty notice without inventing an assignment action", async () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([]);
     render(<MyTasks projects={[project("p", "P")]} onNavigate={vi.fn()} />);
-    await screen.findByText("No documents are assigned to you yet.");
+    await screen.findByText("No texts are assigned to you yet.");
     expect(screen.queryByRole("link", { name: /Go to Documents/ })).toBeNull();
   });
 
   it("keeps an empty raw route filter distinct from All my tasks", async () => {
     const onNavigate = vi.fn();
     render(<MyTasks project="" projects={[]} onNavigate={onNavigate} />);
-    await screen.findByText("No documents are assigned to you yet.");
+    await screen.findByText("No texts are assigned to you yet.");
     const select = screen.getByRole("combobox", { name: "Filter my tasks by project" }) as HTMLSelectElement;
     expect(select.value).toBe("");
     expect(select.selectedOptions[0].textContent).toBe("Empty project filter");
@@ -382,7 +382,7 @@ describe("My tasks filter and counts", () => {
   it("hides filter and counts for a lead without tasks", async () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
     render(<MyTasks projects={[project("p", "Project P", true)]} onNavigate={vi.fn()} />);
-    await screen.findByText("No documents are assigned to you yet.");
+    await screen.findByText("No texts are assigned to you yet.");
     expect(screen.queryByRole("combobox")).toBeNull();
     expect(screen.queryByRole("tablist")).toBeNull();
   });
@@ -496,7 +496,7 @@ describe("My tasks status tabs", () => {
     const onNavigate = vi.fn();
     const view = render(<MyTasks status="todo" project="p" projects={[]} onNavigate={onNavigate} />);
     expect(await screen.findByText("Nothing to do here.")).toBeDefined();
-    expect(screen.queryByText("No documents are assigned to you yet.")).toBeNull();
+    expect(screen.queryByText("No texts are assigned to you yet.")).toBeNull();
     const panel = screen.getByRole("tabpanel");
     const showAll = within(panel).getByRole("link", { name: "Show all tasks" });
     expect(showAll.getAttribute("href")).toBe("#/?project=p&status=all");
@@ -510,7 +510,7 @@ describe("My tasks status tabs", () => {
   it("keeps the no-assignments notice without tabs when there are no tasks at all", async () => {
     vi.spyOn(api, "listMyTasks").mockResolvedValue([]);
     render(<MyTasks status="todo" projects={[]} onNavigate={vi.fn()} />);
-    expect(await screen.findByText("No documents are assigned to you yet.")).toBeDefined();
+    expect(await screen.findByText("No texts are assigned to you yet.")).toBeDefined();
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.queryByText("Nothing to do here.")).toBeNull();
     expect(screen.queryByRole("link", { name: "Show all tasks" })).toBeNull();

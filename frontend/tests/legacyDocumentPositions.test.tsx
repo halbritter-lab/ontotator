@@ -74,18 +74,18 @@ describe("assignment App presentation positions", () => {
     await screen.findByRole("table", { name: "My tasks" });
     const user = userEvent.setup();
     await user.click(screen.getAllByRole("link", { name: /^(Start|Continue|View)$/ })[0]);
-    const select = await screen.findByRole("combobox", { name: "Select case" }) as HTMLSelectElement;
-    expect(Array.from(select.options).map((option) => option.textContent)).toEqual(ids.map((id, index) => `Case ${index + 1} of 4: ${id} (Open)`));
-    expect((screen.getByRole("button", { name: "Previous Case" }) as HTMLButtonElement).disabled).toBe(true);
+    const select = await screen.findByRole("combobox", { name: "Select text" }) as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => option.textContent)).toEqual(ids.map((id, index) => `Text ${index + 1} of 4: ${id} (Open)`));
+    expect((screen.getByRole("button", { name: "Previous text" }) as HTMLButtonElement).disabled).toBe(true);
     for (let index = 0; index < ids.length; index++) {
       await waitFor(() => {
-        const current = screen.getByRole("combobox", { name: "Select case" }) as HTMLSelectElement;
+        const current = screen.getByRole("combobox", { name: "Select text" }) as HTMLSelectElement;
         expect(current.value).toBe(String(100 + index));
-        expect(current.selectedOptions[0].textContent).toBe(`Case ${index + 1} of 4: ${ids[index]} (Open)`);
+        expect(current.selectedOptions[0].textContent).toBe(`Text ${index + 1} of 4: ${ids[index]} (Open)`);
       });
-      if (index < ids.length - 1) await user.click(screen.getByRole("button", { name: "Next Case" }));
+      if (index < ids.length - 1) await user.click(screen.getByRole("button", { name: "Next text" }));
     }
-    expect((screen.getByRole("button", { name: "Next Case" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Next text" }) as HTMLButtonElement).disabled).toBe(true);
     expect(open.mock.calls.map(([id]) => id)).toEqual([100, 101, 102, 103]);
     expect(mutation).not.toHaveBeenCalled();
     expect(documents.map((doc) => doc.position)).toEqual(positions);

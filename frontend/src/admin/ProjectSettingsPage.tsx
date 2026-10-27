@@ -204,7 +204,7 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
     </form>; break;
     case "annotation": content = <form ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Annotation" onSubmit={event => submit(event, "Annotation")}>
       <fieldset disabled={busy !== null}><legend>Annotation</legend>
-        <h3 className="settings-subheading">When submitting</h3>
+        <h2 className="settings-subheading">When submitting</h2>
         <p className="field-hint">Applies to every submission from now on, in annotation and in consolidation. Submitted work is unchanged. Text evidence the task profile requires is still required.</p>
         <Select id="project-rule-spanless" label="Findings that point to no text passage"
           value={!annotation.allow_spanless_findings ? "prohibited" : annotation.require_spanless_note ? "required" : "optional"}
@@ -215,10 +215,10 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
         </Select>
         <Checkbox id="project-rule-chosen" label="Annotators must confirm every value before submitting" hint="Off: prefilled values that were not confirmed are submitted marked as prefilled, after a warning." checked={annotation.require_chosen_axes} onChange={event => editAnnotation({ require_chosen_axes: event.target.checked })} />
         <Checkbox id="project-rule-contiguous" label="A finding must be one continuous passage" checked={annotation.contiguous_mentions_only} onChange={event => editAnnotation({ contiguous_mentions_only: event.target.checked })} />
-        <h3 className="settings-subheading">Prefilled values</h3>
+        <h2 className="settings-subheading">Prefilled values</h2>
         <p className="field-hint">New findings start with these values, marked as not confirmed until the annotator confirms or changes them. Existing findings, proposals and carried findings keep their values.</p>
         {prefillGroups.map(({ layer, type, heading }) => <div key={`${layer.layer_id}/${type.type_id}`} role="group" aria-label={heading} className="settings-prefill-group">
-          {prefillGroups.length > 1 && <h4 className="settings-subheading">{heading}</h4>}
+          {prefillGroups.length > 1 && <h3 className="settings-subheading">{heading}</h3>}
           {(type.axes ?? []).map(axis => {
             const defaults = annotation.creation_defaults;
             const current = defaults[layer.layer_id]?.[type.type_id]?.[axis.id] ?? "";

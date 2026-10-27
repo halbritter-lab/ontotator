@@ -111,10 +111,10 @@ for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) 
     await expect(rounds).toBeHidden();
 
     // Submit dialog (Cancel is its close action).
-    await page.getByRole("button", { name: /^Finish & Submit/ }).click();
-    const submit = page.getByRole("dialog", { name: "Submit case", exact: true });
+    await page.getByRole("button", { name: /^Finish & submit/ }).click();
+    const submit = page.getByRole("dialog", { name: "Submit text", exact: true });
     await expectCloseInView(page, submit, "Cancel");
-    await expect(submit.locator(".modal-actions").getByRole("button", { name: "Submit case", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(submit.locator(".modal-actions").getByRole("button", { name: "Submit text", exact: true })).toBeInViewport({ ratio: 1 });
     await evidence(page, `submit-${size.width}`);
     await submit.locator(".modal-actions").getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(submit).toBeHidden();
