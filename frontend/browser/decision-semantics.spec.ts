@@ -74,14 +74,14 @@ test("repeated outcome keys keep decisions and zero resets without losing the no
   await note.press("1"); await expect(proposal).toContainText("Unresolved");
   await note.fill("Preserve this note");
   await page.locator(".review-actions__title").click();
-  await page.keyboard.press("0"); await expect(proposal).toContainText("open");
+  await page.keyboard.press("0"); await expect(proposal).toContainText("Pending");
   await expect(note).toHaveValue("Preserve this note");
   await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", isComposing: true, bubbles: true })));
-  await expect(proposal).toContainText("open");
+  await expect(proposal).toContainText("Pending");
   await page.getByRole("button", { name: /^Finish & submit/ }).click();
   await expect(page.getByRole("dialog", { name: "Submit text" })).toBeVisible();
   await page.keyboard.press("1"); await page.keyboard.press("Escape");
-  await expect(proposal).toContainText("open");
+  await expect(proposal).toContainText("Pending");
 });
 
 
@@ -94,11 +94,11 @@ test("unresolved notes are required, survive reload and block submission when lo
   await proposals.first().click();
   const note = page.getByRole("textbox", { name: "Reviewer note" });
   await page.getByRole("button", { name: /Unresolved/ }).click();
-  await expect(proposals.first()).toContainText("open"); await expect(note).toBeFocused();
+  await expect(proposals.first()).toContainText("Pending"); await expect(note).toBeFocused();
   await expect(note).toHaveAttribute("aria-invalid", "true");
   await page.screenshot({ path: "../.superpowers/sdd/2026-10-17-phase0-priorities/b02-unresolved-note-required.png", fullPage: true });
   await page.locator(".review-actions__title").click(); await page.keyboard.press("4");
-  await expect(note).toBeFocused(); await expect(proposals.first()).toContainText("open");
+  await expect(note).toBeFocused(); await expect(proposals.first()).toContainText("Pending");
   await note.fill("Needs specialist review"); await page.locator(".review-actions__title").click();
   await page.keyboard.press("4");
   await page.getByRole("button", { name: "Save decision", exact: true }).click();
@@ -304,7 +304,7 @@ test("repairing a historical spanless proposal collects a clinical reason withou
   await dialog.getByRole("button", { name: "Create editable copy" }).click();
   await page.getByRole("button", { name: "Reset decision and edit copy" }).click();
   await expect(page.getByLabel("Reason for no text span")).toHaveValue("Specialist summary supports this finding");
-  await expect(proposals.nth(1)).toContainText("open");
+  await expect(proposals.nth(1)).toContainText("Pending");
   const draft = await (await copied).json();
   const replacement = draft.annotations[0];
   const premature = await authenticatedRequest(page, `/api/v1/workspaces/${encodeURIComponent(opened.workspace_id)}/decisions`, "POST", {

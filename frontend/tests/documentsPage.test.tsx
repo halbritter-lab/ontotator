@@ -750,19 +750,24 @@ it("shows an unknown text and an empty decision filter with Show all texts", asy
 });
 
 it("shows the empty states per tab, for filters and for an empty project", async () => {
-  mockRows(page([]));
+  mockRows(page([], { bar: { ...page([]).bar, all: 3 } }));
   const cases: [ProjectDocumentsQuery, string][] = [
     [{ segment: "assign" }, "Nothing to assign"],
     [{ segment: "progress" }, "Nothing in progress"],
     [{ segment: "decision" }, "Nothing needs your decision"],
     [{ segment: "done", language: "de" }, "Nothing done yet"],
-    [{}, "No texts yet"],
   ];
   for (const [query, title] of cases) {
     const { unmount } = renderPage({ query });
     expect(await screen.findByRole("heading", { name: title })).toBeTruthy();
     unmount();
   }
+  // An empty project shows "No texts yet" with the upload on every tab, as it has no tabs to leave.
+  mockRows(page([]));
+  const deepLinked = renderPage({ query: { segment: "assign" } });
+  expect(await screen.findByRole("heading", { name: "No texts yet" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Upload texts…" })).toBeTruthy();
+  deepLinked.unmount();
   renderPage();
   expect(await screen.findByText("Upload texts to start.")).toBeTruthy();
   // An empty project offers only the upload, inside the empty state: no tabs, filters or selection (#46).

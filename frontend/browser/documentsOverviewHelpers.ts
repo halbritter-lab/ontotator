@@ -30,7 +30,8 @@ export async function openDocuments(page: Page, project: string, query = ""): Pr
 export const documentsTabs = (page: Page): Locator => page.getByRole("tablist", { name: "Documents views", exact: true });
 
 export async function documentsReady(page: Page): Promise<void> {
-  await expect(documentsTabs(page)).toBeVisible({ timeout: 30_000 });
+  // A project without texts shows no tabs, only "No texts yet" (#46).
+  await expect(documentsTabs(page).or(page.getByRole("heading", { name: "No texts yet", exact: true }))).toBeVisible({ timeout: 30_000 });
 }
 
 /** One tab "{label}, {count}" (any count without ``count``). */

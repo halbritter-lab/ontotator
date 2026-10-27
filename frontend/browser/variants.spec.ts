@@ -176,7 +176,7 @@ test('own history is genuinely submitted, read-only and return-to-draft preserve
   await expect(page.getByRole('dialog', { name: 'Submit text', exact: true })).toHaveCount(0);
   expect(writes).toEqual([]);
   await page.getByRole('button', { name: 'Back to my draft', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^Finish & submit/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Finish & submit/ })).toHaveCount(0); // read-only work hides the edit controls (#48)
   await reopen(browser, s, s.assignments.alice);
   await page.reload();
   await expect(page.getByRole('button', { name: /^Finish & submit/ })).toBeEnabled();
