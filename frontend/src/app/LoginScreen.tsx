@@ -3,6 +3,7 @@ import { api, AuthError, type CurrentUser, type DemoLogin } from "../api/client"
 
 import { Button } from "../ui/Button";
 import { TextInput } from "../ui/TextInput";
+import { useDocumentTitle } from "../ui/useDocumentTitle";
 import { InlineMessage } from "../ui/InlineMessage";
 
 /** The server also sends the account's display name (null before the user exists); `DemoLogin` lives in the contracts chain. */
@@ -37,6 +38,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ notice, overlay = fals
   const headingRef = useRef<HTMLHeadingElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const shownView = useRef(view);
+  useDocumentTitle([view === "code" ? "Set your password" : "Log in"]);
 
   // A dialog takes the focus to its first field; switching views moves it to the new heading.
   useEffect(() => {

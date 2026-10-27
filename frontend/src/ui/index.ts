@@ -31,3 +31,4 @@ export * from "./LanguageTag";
 export * from "./AxisValue";
 export * from "./StagePath";
 export * from "./AssignedDate";
+export * from "./useDocumentTitle";
