@@ -564,6 +564,10 @@ describe("CaseScreen integration", () => {
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} />);
     selectEditableFinding();
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Clinical explanation" } });
+    // N-8: an unsaved note is not drawn in the green "Saved" style.
+    const badge = screen.getByText("Annotation note changes not saved");
+    expect(badge.classList.contains("status-saved")).toBe(false);
+    expect(badge.classList.contains("status-saving")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
     selectEditableFinding();
     expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("Clinical explanation");

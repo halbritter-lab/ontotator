@@ -3331,7 +3331,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             className={`status-badge ${
               statusIsError
                 ? "status-error"
-                : queueState === "saved"
+                : statusText === "Saved"
                 ? "status-saved"
                 : "status-saving"
             }`}
