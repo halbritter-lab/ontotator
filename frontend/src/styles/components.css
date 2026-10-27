@@ -1131,3 +1131,14 @@ button.stage-path-seg:focus-visible { outline: var(--focus-width) solid var(--fo
   .stage-path-seg--current { border-width: 3px; }
   button.stage-path-seg:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
 }
+
+/* SuggestInput (ui/SuggestInput.tsx): the suggestion list sits in the field's box, right under the input. */
+.suggest-field { position: relative; }
+.suggest-list { position: absolute; z-index: 95; max-height: 14rem; margin: 0; padding: var(--space-1) 0; overflow-y: auto; list-style: none;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-raised); box-shadow: var(--shadow-2); }
+.suggest-option { display: flex; align-items: baseline; gap: var(--space-2); min-height: 28px; padding: var(--space-1) var(--space-3); cursor: pointer; }
+.suggest-option[aria-selected="true"] { background: var(--accent-light); box-shadow: inset 3px 0 0 var(--accent); }
+.suggest-option__label { color: var(--text-muted); font-size: var(--size-sm); }
+@media (forced-colors: active) {
+  .suggest-option[aria-selected="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; box-shadow: none; }
+}

@@ -96,14 +96,17 @@ describe("project members", () => {
 
   it("suggests matching people to a lead from three typed letters on", async () => {
     vi.mocked(api.listMemberCandidates).mockResolvedValue([{ username: "maria.k", display_name: "Maria Klein" }]);
-    const view = render(<MembersSection projectKey="p" isSystemAdmin={false} />);
+    render(<MembersSection projectKey="p" isSystemAdmin={false} />);
     fireEvent.click(await screen.findByRole("button", { name: "Add member…" }));
     fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "ma" } });
     expect(api.listMemberCandidates).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(/^Username/), { target: { value: "mar" } });
     expect(api.listMemberCandidates).toHaveBeenCalledWith("p", "mar");
-    await waitFor(() => expect(view.container.querySelector("datalist option")?.getAttribute("value")).toBe("maria.k"));
-    expect(view.container.querySelector("datalist option")?.textContent).toBe("Maria Klein (maria.k)");
+    const option = await screen.findByRole("option", { name: "maria.k Maria Klein" });
+    // The list sits in the field's box (not a detached native popup); a click picks the username.
+    expect(option.closest(".suggest-field")?.contains(screen.getByLabelText(/^Username/))).toBe(true);
+    fireEvent.click(option);
+    expect((screen.getByLabelText(/^Username/) as HTMLInputElement).value).toBe("maria.k");
   });
 
   it("says plainly when the typed username does not exist", async () => {
