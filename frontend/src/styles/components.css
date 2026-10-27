@@ -1108,7 +1108,7 @@ button.stage-path-seg:focus-visible { outline: var(--focus-width) solid var(--fo
 .stage-path > li:first-child .stage-path-seg--optional:not(.stage-path-seg--current) { clip-path: none; }
 @media (forced-colors: active) {
   .axis-value { border: 1px solid CanvasText; }
-  .stage-path-seg { clip-path: none; border: 1px solid CanvasText; }
+  .stage-path-seg, .stage-path > li:first-child .stage-path-seg { clip-path: none; border: 1px solid CanvasText; }
   .stage-path-seg--current { border-width: 3px; }
   button.stage-path-seg:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
 }

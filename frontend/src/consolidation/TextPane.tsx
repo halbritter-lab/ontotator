@@ -46,21 +46,28 @@ const laneLine = (lane: number) => LANE_LINES[lane] ?? LANE_LINES[MAX_LANES];
 /** The line style of a lane in words, for the legend (meaning never depends on colour alone). */
 export const LANE_STYLE_WORDS: Record<number, string> = { 1: "solid", 2: "dashed", 3: "dotted", 4: "double" };
 
-/** Underline lanes as stacked background lines: lane 1 sits closest to the text. */
+/**
+ * Underline lanes as stacked background lines: lane 1 sits closest to the text. Forced colours drop gradients, so
+ * the first two lanes' line styles also go to `--fc-line-a`/`--fc-line-b` for an underline and a bottom border there.
+ */
 export function laneStyle(lanes: readonly number[]): CSSProperties {
   if (!lanes.length) return {};
+  // shortcut: forced colours show at most two overlapping lanes per piece; add nested spans if three overlap often.
   return {
+    "--fc-line-a": LANE_STYLE_WORDS[lanes[0]] ?? LANE_STYLE_WORDS[MAX_LANES],
+    ...(lanes.length > 1 ? { "--fc-line-b": LANE_STYLE_WORDS[lanes[1]] ?? LANE_STYLE_WORDS[MAX_LANES] } : {}),
     backgroundImage: lanes.map(lane => laneLine(lane).image(`var(--lane-${lane}-line)`)).join(", "),
     backgroundSize: lanes.map(lane => `100% ${laneLine(lane).height}px`).join(", "),
     backgroundPosition: lanes.map(lane => `0 calc(100% - ${(MAX_LANES - lane) * 4}px)`).join(", "),
-  };
+  } as CSSProperties;
 }
 
 /** The colour key of a person: a short sample of their lane's underline, next to their name. */
 export function LaneKey({ people, personId }: { people: readonly ConsolidationPersonView[]; personId: string }): JSX.Element {
   const lane = laneOf(people, personId);
   return <span className="cons-lane-key" data-lane={lane} aria-hidden="true"
-    style={{ backgroundImage: laneLine(lane).image(`var(--lane-${lane}-line)`), backgroundSize: `100% ${laneLine(lane).height}px` }} />;
+    style={{ "--fc-line-a": LANE_STYLE_WORDS[lane], backgroundImage: laneLine(lane).image(`var(--lane-${lane}-line)`),
+      backgroundSize: `100% ${laneLine(lane).height}px` } as CSSProperties} />;
 }
 
 interface Piece {

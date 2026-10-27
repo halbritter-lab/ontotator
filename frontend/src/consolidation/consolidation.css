@@ -523,10 +523,25 @@
   padding-inline-start: var(--space-4);
 }
 
+/* Forced colours drop the gradient lanes and the shading: lanes become line-styled underlines and borders, kept a frame. */
 @media (forced-colors: active) {
   .cons-mark[data-lanes] {
-    text-decoration: underline;
-    text-decoration-thickness: 2px;
+    text-decoration: underline var(--fc-line-a) CanvasText 2px;
+    text-underline-offset: 3px;
+  }
+
+  .cons-mark[data-lanes*=" "] {
+    border-bottom: 3px var(--fc-line-b) CanvasText;
+  }
+
+  .cons-legend-swatch[style],
+  .cons-lane-key {
+    height: 0;
+    border-bottom: 3px var(--fc-line-a) CanvasText;
+  }
+
+  .cons-kept {
+    outline: 1px solid Highlight;
   }
 
   .cons-take[aria-pressed="true"],
