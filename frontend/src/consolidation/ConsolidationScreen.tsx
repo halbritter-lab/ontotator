@@ -41,6 +41,8 @@ export interface ConsolidationScreenProps {
   workspaceView?: WorkspaceView | null;
   /** Task actions next to the title (the task's guidelines and "Report a text problem"). */
   headerActions?: ReactNode;
+  /** The task's one-time guidelines notice, shown under the header (inside the screen's padding, as in CaseScreen). */
+  notice?: ReactNode;
   /** "Back to documents" target of the lead's read-only view (the Documents page with its row panel). */
   back?: Route;
   /** The consolidator leads the project: after submitting, they accept the result themselves. Unknown: asked after submit. */
@@ -309,6 +311,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
       {!readOnly && <div ref={submitRef} className="cons-header-progress"><SubmitBar open={open} total={groups.length} onSubmit={() => setDialog({ open: true, busy: false, warning: null, error: null })}
         onNextOpen={() => { const next = nextOpenAfter(groups, selected); if (next) select(next, true); }} /></div>}
     </header>
+    {props.notice}
     {reason && !submitted && <InlineMessage tone="info">{reason}</InlineMessage>}
     {submitted && <div className="cons-submitted" role="status">
       <p>{submittedText(!!isLead)}</p>

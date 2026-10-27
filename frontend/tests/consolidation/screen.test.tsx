@@ -179,6 +179,14 @@ describe("ConsolidationScreen", () => {
     expect(within(document.querySelector(".cons-header") as HTMLElement).getByRole("button", { name: "Report a text problem" })).toBeTruthy();
   });
 
+  it("shows the guidelines notice inside the screen, right under its header (R-14)", async () => {
+    load(exampleView());
+    await renderScreen({ notice: <p>This project has guidelines (v1)</p> });
+    const notice = screen.getByText("This project has guidelines (v1)");
+    expect(notice.closest(".cons-screen")).toBeTruthy();
+    expect(document.querySelector(".cons-header")?.nextElementSibling).toBe(notice);
+  });
+
   it("lists added findings with their label: by you live, by the consolidator for the lead", async () => {
     mockViewport(1280);
     const [start, end] = span("last week");
