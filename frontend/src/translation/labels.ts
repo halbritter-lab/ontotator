@@ -1,4 +1,5 @@
 import type { TaskSummary } from "../api/client";
+import { taskText } from "../app/identity";
 import type { ClinicalCategory, IssueCode, ReviewDecisionCode } from "./reviewRules";
 
 /** English presentation keyed by domain codes, ready for later translation. */
@@ -87,8 +88,8 @@ export const decisionOutcomes: Readonly<Record<ReviewDecisionCode, string>> = {
 };
 
 /** The "Next task" button after submitting (spec A.5). */
-export function nextTaskLabel(task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language">): string {
-  return `Next task: ${task.external_id ?? task.case_id ?? task.document_id} (${task.language})`;
+export function nextTaskLabel(task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language" | "version" | "origin">): string {
+  return `Next task: ${taskText(task)}`;
 }
 
 /** Open tasks left in the project after submitting, besides the one just submitted. */

@@ -178,7 +178,7 @@ test('lead assigns the exact pending translation; ordinary reviewer corrects, su
   await expect(source.locator('textarea,[contenteditable="true"]')).toHaveCount(0);
   await expect(source).toHaveText(s.texts.source);
   await expect(review(page)).not.toContainText('Selection intent');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(opened.variant.external_id);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(`${opened.variant.case_id} ${opened.variant.language}`);
   await expect(review(page)).toContainText('English → to German');
   const details = page.locator('.translation-details');
   await expect(details.getByText('Review fixture MT', { exact: true })).toBeHidden();

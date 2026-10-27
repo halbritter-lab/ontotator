@@ -7177,6 +7177,10 @@ export interface components {
             target_language?: string | null;
             /** Case Id */
             case_id?: string | null;
+            /** Version */
+            version?: number | null;
+            /** Origin */
+            origin?: string | null;
             /** Failed Check Count */
             failed_check_count?: number | null;
             /** Assigned At */

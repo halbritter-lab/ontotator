@@ -27,6 +27,9 @@ def test_my_tasks_show_mode_and_assignment_date(tmp_path):
     assert found[env.c2]["annotation_mode"] == "scratch"
     assert found[env.c1]["assigned_at"] is not None
     assert found[env.c2]["assigned_at"] is not None
+    # The text name's version and origin (R-11).
+    assert found[env.c1]["version"] == 1
+    assert found[env.c1]["origin"] == "native"
 
 
 def test_translation_review_task_has_no_annotation_mode(tmp_path):

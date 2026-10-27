@@ -3,7 +3,7 @@ import { api, onSessionRestored, type ProjectSummary, type TaskSummary } from ".
 import { routeHref, type NavigateOptions, type Route, type TaskStatusTab } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { assignmentStatusLabels, formatDateTime, taskLabels } from "../app/labels";
-import { textLabel } from "../app/identity";
+import { taskText } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
 import { IconWarning } from "../ui/icons";
 import { Button, DataTable, EmptyState, InlineMessage, Select, StatusBadge, tabId, Tabs, type Column } from "../ui";
@@ -53,8 +53,6 @@ const failedChecks = (task: Pick<TaskSummary, "task" | "failed_check_count">): n
 const projectLabel = (name: string, key: string): string => name === key ? name : `${name} (${key})`;
 
 /** Text label "case-0101 de"; servers without a case ID fall back to the document's external or internal ID. */
-export const taskText = (task: Pick<TaskSummary, "case_id" | "external_id" | "document_id" | "language">): string =>
-  textLabel({ case_id: task.case_id ?? task.external_id ?? task.document_id, language: task.language });
 
 export function MyTasks({ project, status, projects, onNavigate, username }: MyTasksProps): JSX.Element {
   // A visit without a project filter reopens the last chosen project ("" = All my tasks), once per visit,

@@ -314,7 +314,7 @@ describe("ConsolidationScreen", () => {
     await screen.findByText("Consolidation submitted. The lead then accepts the result.");
     expect(submit.mock.calls[1][1].payload).toEqual({ command: "submit_workspace", document_checked: true,
       warning_acknowledgement: { draft_revision: 3, policy_revision: 1, warning_digest: "abc" } });
-    fireEvent.click(await screen.findByRole("button", { name: "Next task: case-108 (de)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Next task: case-108 de" }));
     expect(onNavigate).toHaveBeenCalledWith({ name: "task", assignmentId: 43 });
     fireEvent.click(screen.getByRole("button", { name: "Back to my tasks" }));
     expect(onNavigate).toHaveBeenLastCalledWith({ name: "tasks", status: "all" });

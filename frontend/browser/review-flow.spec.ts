@@ -271,7 +271,7 @@ test("keyboard only: 1, Ctrl+Enter, Enter, Enter opens the next task", async ({ 
   await page.keyboard.press("Enter");
   await expect(confirmDialog(page)).toHaveCount(0);
   await expect(page.getByText("Review submitted", { exact: true })).toBeVisible();
-  const next = page.getByRole("button", { name: "Next task: second-translation (de)", exact: true });
+  const next = page.getByRole("button", { name: "Next task: second-translation de", exact: true });
   await expect(next).toBeFocused();
   await expect(page.locator(".translation-next-task [role=status]")).toHaveText("1 more open task in this project.");
   await expect(page.locator(".translation-next-task").getByRole("link", { name: "Back to my tasks", exact: true })).toBeVisible();
@@ -333,8 +333,8 @@ test("last task: Back to my tasks is primary", async ({ page }) => {
   const first = page.locator(".translation-next-task");
   await expect(first.getByRole("status")).toHaveText("1 more open task in this project.");
   await expect(first.getByRole("button", { name: /^Next task: / })).toBeFocused();
-  // Spec A.5: "Next task: {external_id} ({language})"; soft, so the last-task checks below still run.
-  await expect.soft(first.getByRole("button", { name: /^Next task: / })).toHaveText("Next task: second-translation (de)");
+  // R-11: "Next task: {case ID} {language}" (the one text name); soft, so the last-task checks below still run.
+  await expect.soft(first.getByRole("button", { name: /^Next task: / })).toHaveText("Next task: second-translation de");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`#/tasks/${s.assignments["second-translation"]}$`));
   await expect(target(page)).toHaveValue(s.texts["second-translation"]);

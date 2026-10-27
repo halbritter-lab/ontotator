@@ -31,3 +31,14 @@ export function textLabel(
   if (options?.withVersion && text.version != null) return `${base} v${text.version}`;
   return base;
 }
+
+/**
+ * The one name of a task's text in headings, lists and the case select (R-11): "{case ID} {language}", from v2 on
+ * with the version and "corrected" for a correction ("case-7 de v2 corrected"); never the internal document ID
+ * unless nothing else is known.
+ */
+export function taskText(task: { case_id?: string | null; external_id?: string | null; document_id: string; language: string; version?: number | null; origin?: string | null }): string {
+  const version = task.version ?? 1;
+  const name = textLabel({ case_id: task.case_id ?? task.external_id ?? task.document_id, language: task.language, version }, { withVersion: version > 1 });
+  return version > 1 && task.origin === "correction" ? `${name} corrected` : name;
+}
