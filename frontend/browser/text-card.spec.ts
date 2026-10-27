@@ -137,8 +137,8 @@ test("‹ › step through the table order", async ({ page }) => {
   const s = await proposalCheckScenario(page, "FRESH");
   await loginScenarioUser(page, s, "lead");
   await openDocuments(page, s);
-  const names = await documentsTable(page).getByRole("button", { name: /^Open text card, / }).evaluateAll(
-    buttons => buttons.map(button => (button.getAttribute("aria-label") ?? "").replace(/^Open text card, /, "")));
+  const names = await documentsTable(page).getByRole("button", { name: /^Text / }).evaluateAll(
+    buttons => buttons.map(button => (button.getAttribute("aria-label") ?? "").replace(/^Text /, "")));
   expect(names.length).toBeGreaterThanOrEqual(3);
   const [first, second] = names.map(name => name.split(" ") as [string, string]);
 

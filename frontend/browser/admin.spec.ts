@@ -130,7 +130,7 @@ async function selectProject(page: Page, key: string) {
 /** The navigation link "Documents", with the decision counter "Documents, n need your decision" once O8 shows it (V3). */
 const DOCUMENTS_LINK = /^Documents(, \d+ needs? your decision)?$/;
 
-/** The text name of the Documents row of one text in English: "Open text card, {text} en". */
+/** The text name of the Documents row of one text in English: "Text {text} en". */
 const rowDetails = (page: Page, caseId: string) => textName(page, caseId, "en");
 
 /** Open the text card of a text on its Translation part with the version list (one version per text here). */
@@ -154,7 +154,7 @@ async function importTwoDocuments(page: Page) {
   const preview = upload.getByRole("region", { name: "Upload preview", exact: true });
   await expect(preview).toContainText("2 documents added");
   await expect(preview).toContainText("1 with normalized text");
-  const rows = page.getByRole("button", { name: /^Open text card, / });
+  const rows = page.getByRole("button", { name: /^Text / });
   await expect(rows).toHaveCount(0);
   await upload.getByRole("button", { name: "Import 2 texts", exact: true }).click();
   // The upload dialog closes itself after the import; Documents reports the result.

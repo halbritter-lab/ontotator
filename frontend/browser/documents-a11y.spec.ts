@@ -3,7 +3,7 @@
  * forced colours and reduced motion on the documents overview (spec "Accessibility",
  * "Table", "Tabs", "Final-result panel", "Narrow viewports", "Route query"): tabs with counts,
  * search and filter popover, slim case lines with the case checkbox, one row per text with its
- * checkbox and its text name "Open text card, …" (U4 one-line rows), the modal text card (U3) with
+ * checkbox and its text name "Text …" (U4 one-line rows), the modal text card (U3) with
  * its decision block, cards below 700 px.
  *
  * Every test builds a fresh project through ``POST /__test_documents__`` and logs
@@ -111,10 +111,10 @@ test("Tab-only order: tabs, search, Filter, selection tools, then each row's con
     "input:Select the filtered case",
     "button:Select by case IDs…",
     named("input", "Select ", "en"),
-    `button:Open text card, ${S0_CASE} en`,
+    `button:Text ${S0_CASE} en`,
     named("button", "Assign annotation…, ", "en"),
     named("input", "Select ", "de"),
-    `button:Open text card, ${S0_CASE} de`,
+    `button:Text ${S0_CASE} de`,
     named("button", "Review changes…, ", "de"),
   ];
   const positions = expected.map(stop => stopIndex(stops, stop));
@@ -188,11 +188,11 @@ test("Screen reader semantics: tabs and tabpanel, a flat list of row headers, te
   await expect(documentsTable(page).locator("th[scope=rowgroup]")).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: `Select ${S0_CASE} (2 texts)`, exact: true })).toHaveCount(0);
 
-  // Row headers: <th scope="row"> with the text name "Open text card, {text} {language}"; no "Open" link any more.
+  // Row headers: <th scope="row"> with the text name "Text {text} {language}"; no "Open" link any more.
   for (const language of ["en", "de"]) {
     const header = page.getByRole("rowheader").filter({ has: page.locator(rowHeaderId(S0_CASE, language)) });
     await expect(header).toHaveCount(1);
-    await expect(header.getByRole("button", { name: `Open text card, ${S0_CASE} ${language}`, exact: true })).toContainText(language);
+    await expect(header.getByRole("button", { name: `Text ${S0_CASE} ${language}`, exact: true })).toContainText(language);
     await expect(header.getByRole("link")).toHaveCount(0);
   }
   // The stage columns: column headers name them (Last activity is hidden below 1400 px, #10).

@@ -30,7 +30,7 @@ describe("in the table", () => {
     const current = selection(selected);
     render(<DocumentsTable page={page([group("case-120", [de, fr])])} onOpenPanel={onOpenPanel} onAction={vi.fn()} selection={current} />);
     const waitingCell = (language: string) => {
-      const name = screen.getByRole("button", { name: `Open text card, case-120 ${language}` });
+      const name = screen.getByRole("button", { name: `Text case-120 ${language}` });
       return name.closest("tr")!.children[5] as HTMLElement;
     };
     return { onOpenPanel, current, waitingCell };
@@ -45,9 +45,18 @@ describe("in the table", () => {
 
   it("a click on the text name (or Space on it) toggles the selection", () => {
     const { onOpenPanel, current } = renderTable();
-    fireEvent.click(screen.getByRole("button", { name: "Open text card, case-120 de" }), { detail: 0 });
+    fireEvent.click(screen.getByRole("button", { name: "Text case-120 de" }), { detail: 0 });
     expect(current.select).toHaveBeenCalledWith("case-120:de", "toggle", order);
     expect(onOpenPanel).not.toHaveBeenCalled();
+  });
+
+  it("the text name is a toggle button that names what a click does, Enter as its shortcut (#41)", () => {
+    renderTable(["case-120:de"]);
+    const de = screen.getByRole("button", { name: "Text case-120 de" });
+    expect(de.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Text case-120 fr" }).getAttribute("aria-pressed")).toBe("false");
+    expect(de.getAttribute("aria-keyshortcuts")).toBe("Enter");
+    expect(de.getAttribute("title")).toMatch(/Enter or double click opens the text card/);
   });
 
   it("a mouse click selects once no second click follows (R-16)", () => {
@@ -73,7 +82,7 @@ describe("in the table", () => {
       fireEvent.doubleClick(cell);
       vi.advanceTimersByTime(DOUBLE_CLICK_MS);
       expect(current.select).not.toHaveBeenCalled();
-      expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), { opener: screen.getByRole("button", { name: "Open text card, case-120 de" }) });
+      expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), { opener: screen.getByRole("button", { name: "Text case-120 de" }) });
     } finally {
       vi.useRealTimers();
     }
@@ -85,12 +94,12 @@ describe("in the table", () => {
     fireEvent.click(cell, { detail: 0 });
     fireEvent.doubleClick(cell);
     expect(current.select).toHaveBeenCalledTimes(2);
-    expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), { opener: screen.getByRole("button", { name: "Open text card, case-120 de" }) });
+    expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), { opener: screen.getByRole("button", { name: "Text case-120 de" }) });
   });
 
   it("Enter on the text name opens the card without selecting", () => {
     const { onOpenPanel, current } = renderTable();
-    const name = screen.getByRole("button", { name: "Open text card, case-120 de" });
+    const name = screen.getByRole("button", { name: "Text case-120 de" });
     fireEvent.keyDown(name, { key: "Enter" });
     expect(current.select).not.toHaveBeenCalled();
     expect(onOpenPanel).toHaveBeenCalledWith(expect.objectContaining({ language: "de" }), { opener: name });

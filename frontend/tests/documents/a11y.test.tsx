@@ -79,7 +79,7 @@ describe("table", () => {
     const fresh = { ...stagedRow("case-108", "fr", { steps: [stepOf("assign_annotation"), stepOf("decide_report")] }), proposal_count: 3,
       annotation_mode: { mode: "proposals", source: "project", locked: false, override: null, proposal_count: 3 } } as DocumentRowView;
     const { container } = render(<DocumentsTable page={page([group("case-108", [fresh])])} onOpenPanel={vi.fn()} onAction={vi.fn()} selection={selection()} />);
-    const name = screen.getByRole("button", { name: "Open text card, case-108 fr" });
+    const name = screen.getByRole("button", { name: "Text case-108 fr" });
     expect(name.closest("th")!.getAttribute("scope")).toBe("row");
     expect(screen.getByRole("img", { name: "3 tool proposals; the annotation starts from them" }).querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByRole("button", { name: "Assign annotation…, case-108 fr" })).toBeTruthy();

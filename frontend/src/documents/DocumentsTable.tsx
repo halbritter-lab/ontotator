@@ -208,7 +208,8 @@ export function DocumentsTable({
       rowHeader: true,
       sortable: true,
       cell: row => <RowHeaderCell row={row} badge={rowBadge?.(row)} onOpenCard={onOpenPanel ? opener => openCard(row, opener) : undefined}
-        showCaseId more={hidden.get(row.case_id) ?? 0} onShowMore={onShowNotInPlan} sibling={isSibling(row)} />,
+        showCaseId more={hidden.get(row.case_id) ?? 0} onShowMore={onShowNotInPlan} sibling={isSibling(row)}
+        selected={selection?.keys.has(rowKeyOf(row))} />,
     },
     ...(translations ? [{ id: "review", header: "Translation", sortable: true, cell: (row: DocumentRowView) => <RowStageCell row={row} stage="review" /> }] : []),
     { id: "annotation", header: "Annotation", sortable: true, cell: row => <RowStageCell row={row} stage="annotation" /> },

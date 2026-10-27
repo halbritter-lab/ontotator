@@ -156,7 +156,7 @@ describe("structure", () => {
     ], { not_in_plan_languages: ["en", "fr"] });
     renderTable(page([view]));
     expect(within(header("case-101 de")).getByText("2 more texts of this case not in plan")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Open text card, case-101 en" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Text case-101 en" })).toBeNull();
     cleanup();
     renderTable(page([view]), { showNotInPlan: true });
     expect(rowOf("case-101 en").className).toContain("documents-row--not-in-plan");
@@ -229,7 +229,7 @@ describe("text cell", () => {
   it("the language is plain text with a flag in a button that opens the card", () => {
     const { props } = renderTable(page([case107()]));
     const th = header("case-107 de");
-    const name = within(th).getByRole("button", { name: "Open text card, case-107 de" });
+    const name = within(th).getByRole("button", { name: "Text case-107 de" });
     expect(name.id).toBe("documents-row-case-107-de-header");
     expect(name.className).toContain("documents-text-name");
     expect(name.className).not.toContain("documents-text-button");
