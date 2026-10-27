@@ -3482,12 +3482,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                         }}
                         onClick={() => {
                           if (attachEntry) { void attachTo(attachEntry.annotationId); return; }
-                          const targetKey = refKey(t);
-                          if (selectedTargetId === targetKey) {
-                            handleDeselectAll();
-                            return;
-                          }
-                          selectProposal(t);
+                          // N-6: no toggle, a click on the selected proposal keeps it; Esc or the inspector × clears it.
+                          if (selectedTargetId !== refKey(t)) selectProposal(t);
                         }}
                       >
                         <div className="doc-id doc-row">
