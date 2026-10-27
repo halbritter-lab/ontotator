@@ -308,11 +308,11 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
 
   const userNames = new Map((users ?? []).map(user => [user.id, user.display_name || user.username]));
   const columns: Column<AdminUser>[] = [
-    { id: "username", header: "Username", width: "11rem", cell: user => user.username, sortValue: user => user.username },
+    { id: "username", header: "Username", width: "9rem", cell: user => user.username, sortValue: user => user.username },
     { id: "name", header: "Display name", cell: user => user.display_name },
     { id: "pseudonym", header: "Pseudonym", cell: user => user.pseudonym },
     { id: "languages", header: "Languages", cell: user => user.languages.join(", ") || <EmptyValue /> },
-    { id: "projects", header: "Projects", cell: user => user.projects.length ? <ul>{user.projects.map(project => <li key={project.project_key} title={project.project_key}>{project.project_name || project.project_key}{project.roles.map(role => <Fragment key={role}>{" "}<StatusBadge tone="neutral">{labelFor(roleLabels, role)}</StatusBadge></Fragment>)}</li>)}</ul> : <EmptyValue /> },
+    { id: "projects", header: "Projects", width: "20rem", cell: user => user.projects.length ? <ul>{user.projects.map(project => <li key={project.project_key} title={project.project_key}>{project.project_name || project.project_key}{project.roles.map(role => <Fragment key={role}>{" "}<StatusBadge tone="neutral">{labelFor(roleLabels, role)}</StatusBadge></Fragment>)}</li>)}</ul> : <EmptyValue /> },
     { id: "admin", header: "Admin", cell: user => user.is_system_admin ? <StatusBadge tone="info">Admin</StatusBadge> : "No" },
     { id: "active", header: "Active", cell: user => user.anonymised ? "Anonymised" : user.active ? "Yes" : "No" },
     { id: "setup", header: "Setup", cell: user => user.setup_pending ? "Pending" : user.anonymised ? <EmptyValue /> : "Done", sortValue: user => user.setup_pending ? 0 : 1 },
@@ -352,8 +352,8 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
         <Checkbox id="new-admin" label="System administrator" checked={create.system_admin} disabled={blocked} onChange={event => setCreate({ ...create, system_admin: event.target.checked })} />
         {projects.length > 0 && <fieldset className="new-user-projects" disabled={blocked}><legend>Add to projects (optional)</legend>
           {/* One grid: the role names head the columns once; each checkbox keeps "Project: Role" as its name. */}
-          <div className="new-user-projects-row" aria-hidden="true"><span />{projectRoles.map(role => <span key={role}>{roleLabels[role]}</span>)}</div>
           {projects.length > PROJECT_FILTER_FROM && <TextInput id="new-projects-filter" className="new-user-projects-filter" label="Find project" type="search" value={projectFilter} onChange={event => setProjectFilter(event.target.value)} />}
+          <div className="new-user-projects-row" aria-hidden="true"><span />{projectRoles.map(role => <span key={role}>{roleLabels[role]}</span>)}</div>
           {shownProjects.map(project => <div key={project.project_key} className="new-user-projects-row" role="group" aria-label={project.name}>
             <span title={project.name}>{project.name}</span>
             {projectRoles.map(role => <Checkbox key={role} id={`new-${project.project_key}-${role}`} label={<span className="visually-hidden">{roleLabels[role]}</span>} aria-label={`${project.name}: ${roleLabels[role]}`} checked={roleFor(project.project_key).includes(role)} onChange={event => toggleNewRole(project.project_key, role, event.target.checked)} />)}
