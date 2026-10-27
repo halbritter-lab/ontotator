@@ -342,8 +342,8 @@ test.describe("Administration through real accounts and jobs", () => {
     await loginExisting(page, setup.lead);
     await selectProject(page, setup.key);
     await page.getByRole("link", { name: "Export", exact: true }).click();
-    const bundle = page.getByRole("region", { name: "Annotation results", exact: true });
-    await bundle.getByRole("button", { name: "Create export", exact: true }).click();
+    const bundle = page.getByRole("row", { name: "Annotation results", exact: true });
+    await bundle.getByRole("button", { name: "Create", exact: true }).click();
     await expect(bundle.getByRole("button", { name: "Download", exact: true })).toBeVisible();
     await page.reload();
     await expect(bundle.getByRole("button", { name: "Download", exact: true })).toBeVisible();
@@ -357,8 +357,8 @@ test.describe("Administration through real accounts and jobs", () => {
     const archive = readFileSync(zipPath!);
     expect(archive.length).toBeGreaterThan(22);
     expect(archive.subarray(0, 2).toString("ascii")).toBe("PK");
-    const log = page.getByRole("region", { name: "Edit log", exact: true });
-    await log.getByRole("button", { name: "Create export", exact: true }).click();
+    const log = page.getByRole("row", { name: "Edit log", exact: true });
+    await log.getByRole("button", { name: "Create", exact: true }).click();
     const [jsonl] = await Promise.all([
       page.waitForEvent("download"), log.getByRole("button", { name: "Download", exact: true }).click(),
     ]);
@@ -375,7 +375,7 @@ test.describe("Administration through real accounts and jobs", () => {
     await expect(page.getByRole("button", { name: "Download", exact: true })).toHaveCount(0);
     const [denied] = await Promise.all([
       page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith(`/projects/${setup.key}/exports`)),
-      bundle.getByRole("button", { name: "Create export", exact: true }).click(),
+      bundle.getByRole("button", { name: "Create", exact: true }).click(),
     ]);
     expect(denied.status()).toBe(403);
     await expect(bundle).toContainText("You do not have access to this page.");

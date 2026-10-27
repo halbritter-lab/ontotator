@@ -415,7 +415,7 @@ test("FR_OFF: turning fr off names persons and withdraws tasks", async ({ page }
   await page.getByRole("link", { name: "Export", exact: true }).click();
   await expect(page.getByText(/^Not planned, not exported/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(new RegExp(`${esc(s.final_case!)}${SEP}fr`)).first()).toBeVisible();
-  await expect(page.getByText(/1 not planned/)).toBeVisible();
+  await expect(page.getByRole("rowgroup", { name: "Not planned, not exported" })).toContainText("Not planned, not exported (1)");
 });
 
 test("ACCEPTANCE: annotate without review", async ({ page }) => {

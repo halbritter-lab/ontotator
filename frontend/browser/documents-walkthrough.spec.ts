@@ -356,11 +356,11 @@ test("step 12: Accept result… → Consolidated by Ana, accept the result", asy
 
 test("step 13: Export preflight: 1 final, no omission for de, en not in plan", async () => {
   await page.getByRole("link", { name: "Export final results…", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Export check" })).toBeVisible({ timeout: 30_000 });
-  const preflight = page.locator(".final-export-preflight");
-  await expect(preflight).toContainText(/1 selected result\W+0 warnings\W+0 omitted/);
-  await expect(preflight.getByRole("list", { name: "Omitted without a final selection" })).toHaveCount(0);
-  await expect(preflight.getByRole("list", { name: "Not planned, not exported" })).toHaveCount(0);
+  const preflight = page.getByRole("region", { name: "Export check" });
+  await expect(preflight).toBeVisible({ timeout: 30_000 });
+  // 1 final, nothing left out, nothing outside the plan: the card says there is nothing to check.
+  await expect(preflight).toContainText("The text has a final result. Nothing to check.");
+  await expect(preflight.getByRole("table")).toHaveCount(0);
   await evidence(page, "walkthrough-13");
 });
 

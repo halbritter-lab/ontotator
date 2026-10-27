@@ -225,23 +225,18 @@ test('Q4: export preflight has one primary, Cancel, and tight warning items', as
   finally { await author.close(); }
   // The submitted result has no final selection yet, so the preflight must warn.
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
-  const section = page.getByRole('region', { name: 'Selected final results' });
+  const section = page.getByRole('region', { name: 'Final results' });
   // D8: the preflight runs on opening Export; "Create final export" is the one primary, "Check again" reruns it.
-  await expect(section.getByRole('heading', { name: 'Export check' })).toBeVisible();
+  await expect(section.getByRole('region', { name: 'Export check' })).toBeVisible();
   await expect(section.locator('.btn-primary')).toHaveCount(1);
   await expect(section.locator('.btn-primary')).toHaveText('Create final export');
   await expect(section.getByRole('button', { name: 'Check again', exact: true })).toBeVisible();
-  // Required: the scenario guarantees at least one warning; an empty list is a failure.
-  const item = section.locator('.final-warning-list > li').first();
-  await expect(item).toBeVisible();
-  const gaps = await item.evaluate(li => {
-    const p = li.querySelector('p')!.getBoundingClientRect(); const a = li.querySelector('a')!.getBoundingClientRect();
-    const box = li.getBoundingClientRect(); const top = parseFloat(getComputedStyle(li).paddingTop);
-    return { own: a.top - p.bottom, next: box.bottom - a.bottom + top };
-  });
-  expect(gaps.own).toBeLessThan(gaps.next);
+  // Required: the scenario guarantees a text without a final result; it is listed as information, with no checkbox.
+  const leftOut = section.getByRole('rowgroup', { name: 'Left out: no final result' });
+  await expect(leftOut.getByRole('link', { name: /^Open in Documents, / }).first()).toBeVisible();
+  await expect(section.getByRole('checkbox')).toHaveCount(0);
   await section.getByRole('button', { name: 'Check again', exact: true }).click();
-  await expect(section.getByRole('heading', { name: 'Export check' })).toBeVisible();
+  await expect(section.getByRole('region', { name: 'Export check' })).toBeVisible();
   await expect(section.locator('.btn-primary')).toHaveCount(1);
 });
 

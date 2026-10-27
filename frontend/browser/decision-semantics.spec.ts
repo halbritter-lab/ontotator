@@ -139,8 +139,8 @@ test("unresolved notes are required, survive reload and block submission when lo
   const originalAssertion = source.annotation.axes_values.assertion;
   expect(originalAssertion).toBe("present");
   await page.goto("/#/projects/pkg-unresolved-export/export");
-  const bundle = page.getByRole("region", { name: "Annotation results", exact: true });
-  await bundle.getByRole("button", { name: "Create export", exact: true }).click();
+  const bundle = page.getByRole("row", { name: "Annotation results", exact: true });
+  await bundle.getByRole("button", { name: "Create", exact: true }).click();
   await expect(bundle.getByRole("button", { name: "Download", exact: true })).toBeVisible();
   const [download] = await Promise.all([page.waitForEvent("download"), bundle.getByRole("button", { name: "Download", exact: true }).click()]);
   expect(await download.failure()).toBeNull();

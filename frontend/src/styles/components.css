@@ -709,15 +709,39 @@ a.shell-product { color: inherit; text-decoration: none; }
 .submission-result > .readonly-annotation-view { min-height: 24rem; max-height: 65vh; }
 .historical-note { white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* Export preflight: each warning's link sits closer to its own reason than to the next item. */
-.final-warning-list > li { padding-block: var(--space-2); border-block-end: 1px solid var(--border); }
-.final-warning-list > li > p { margin: 0 0 var(--space-1); }
+/* Export page: one final-export card (counts, grouped table, one primary), research exports as a small table. */
+.export-page { display: grid; gap: var(--space-6); }
+.export-page > h1 { margin: 0; }
+.final-export-card { display: grid; gap: var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); }
+.final-export-card h2, .export-research h2 { margin: 0; }
+.final-export-head { display: flex; gap: var(--space-4); align-items: baseline; justify-content: space-between; }
+.final-export-lede { margin: var(--space-1) 0 0; color: var(--text-muted); }
+.final-export-check { display: grid; gap: var(--space-4); }
+.final-export-check .stat-row { margin: 0; }
+.final-export-clear { margin: 0; }
+.final-export-ok { color: var(--success); font-weight: var(--weight-strong); }
+.final-export-actions { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); align-items: center; }
+.final-export-actions .field-hint { margin: 0; }
+.final-export-card .notice, .final-export-card .form-group { margin: 0; }
+.final-export-details > p { margin: var(--space-2) 0 0; }
+.final-export-table td, .export-research-table :is(th, td) { vertical-align: middle; }
+.final-export-table td:last-child, .export-research-table td:last-child { text-align: right; }
+.final-export-group th { text-align: left; font-size: var(--size-sm); }
+.data-table td.cell-muted { color: var(--text-muted); }
+.export-research { display: grid; gap: var(--space-3); }
+.export-research > p { margin: 0; }
+.export-research-table tbody th { background: transparent; text-align: left; }
+.export-research-table thead th { text-align: left; }
+.export-row-status { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--size-sm); line-height: var(--leading-sm); }
+.export-row-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; }
 
 /* Label-over-number readout for a few totals; still a <dl>. */
 .stat-row { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); margin-top: var(--space-3); font-variant-numeric: tabular-nums; }
 .stat-row > div { display: flex; flex-direction: column; gap: var(--space-1); }
 .stat-row dt { font-size: var(--size-sm); line-height: var(--leading-sm); color: var(--text-muted); }
 .stat-row dd { margin: 0; font-size: var(--size-xl); line-height: var(--leading-xl); }
+/* Number above its label (export counts); the <dl> keeps dt before dd. */
+.stat-row--number-first dd { order: -1; font-family: var(--font-serif); }
 
 /* My tasks counts: a list whose separators are gaps, not glyphs. */
 ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); list-style: none; padding: 0; margin-block: var(--space-3); font-variant-numeric: tabular-nums; }

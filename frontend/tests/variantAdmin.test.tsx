@@ -251,7 +251,7 @@ it("rechecks authenticated translation-review downloads including an empty JSONL
   vi.spyOn(api, "downloadJob").mockResolvedValueOnce(payload).mockRejectedValueOnce(new ApiError(403, "Permission changed"));
   const save = vi.spyOn(downloads, "saveDownload").mockImplementation(() => {});
   render(<ExportPage projectKey="p" currentUser={currentUser} />);
-  const card = within(screen.getByRole("region", { name: "Translation reviews" }));
+  const card = within(screen.getByRole("row", { name: "Translation reviews" }));
   fireEvent.click(await card.findByRole("button", { name: "Download" }));
   await waitFor(() => expect(save).toHaveBeenCalledWith(payload, expect.stringMatching(/\.jsonl$/)));
   await waitFor(() => expect((card.getByRole("button", { name: "Download" }) as HTMLButtonElement).disabled).toBe(false));
@@ -316,8 +316,8 @@ it("uses the dedicated third export endpoint and true job kind", async () => {
   vi.spyOn(api, "startExport").mockResolvedValue({ job_id: 11 });
   vi.spyOn(api, "getJob").mockResolvedValue({ id: 33, kind: "translation_review_export", status: "succeeded", result: { sha256: "a".repeat(64), reviews: 0 }, error: null, created_at: "2026-10-16T00:00:00Z", finished_at: "2026-10-16T00:01:00Z" });
   render(<ExportPage projectKey="p" currentUser={currentUser} />);
-  const card = within(screen.getByRole("region", { name: "Translation reviews" }));
-  fireEvent.click(card.getByRole("button", { name: "Create export" }));
+  const card = within(screen.getByRole("row", { name: "Translation reviews" }));
+  fireEvent.click(card.getByRole("button", { name: "Create" }));
   await card.findByRole("button", { name: "Download" });
   expect(api.exportTranslationReviews).toHaveBeenCalledWith("p");
   expect(api.startExport).not.toHaveBeenCalled();
