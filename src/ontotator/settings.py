@@ -68,10 +68,11 @@ def server_settings(env: Mapping[str, str] | None = None) -> ServerSettings:
         workers = int(env.get("ONTOTATOR_WORKERS", "2"))
     except ValueError:
         raise SettingsError(
-            "ONTOTATOR_WORKERS must be an integer from 1 to 16"
+            "ONTOTATOR_WORKERS must be an integer from 1 to 6"
         ) from None
-    if not 1 <= workers <= 16:
-        raise SettingsError("ONTOTATOR_WORKERS must be an integer from 1 to 16")
+    # 6 workers x pool 15 (5 + overflow 10) stay under max_connections=100.
+    if not 1 <= workers <= 6:
+        raise SettingsError("ONTOTATOR_WORKERS must be an integer from 1 to 6")
     if production:
         for name in (
             "ONTOTATOR_DATABASE_PASSWORD",

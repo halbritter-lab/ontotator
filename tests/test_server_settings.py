@@ -108,7 +108,7 @@ def test_production_reads_runtime_secrets_only_and_canonicalizes(
     env = production_env(tmp_path)
     del env["ONTOTATOR_DATA_DIR"]
     env["ONTOTATOR_PUBLIC_ORIGIN"] = "https://Editor.Example.Org:443/"
-    env["ONTOTATOR_WORKERS"] = "16"
+    env["ONTOTATOR_WORKERS"] = "6"
     admin_file = tmp_path / "admin"
     admin_file.write_text("hash-from-file\n", encoding="utf-8")
     env["ONTOTATOR_ADMIN_PASSWORD_HASH_FILE"] = str(admin_file)
@@ -118,7 +118,7 @@ def test_production_reads_runtime_secrets_only_and_canonicalizes(
     assert result.data_dir == Path("/data")
     assert result.public_origin == "https://editor.example.org"
     assert result.trusted_proxies == ("10.0.0.2", "::1")
-    assert result.workers == 16
+    assert result.workers == 6
     assert result.admin_password_hash == "hash-from-file"
     assert result.database_url.password == "test-only-password"
     assert "hash-from-file" not in repr(result)
@@ -130,7 +130,7 @@ def test_unknown_environment_is_refused() -> None:
         settings.server_settings({"ONTOTATOR_ENV": "prod"})
 
 
-@pytest.mark.parametrize("workers", ["0", "17", "abc"])
+@pytest.mark.parametrize("workers", ["0", "7", "abc"])
 def test_worker_count_is_bounded(tmp_path: Path, workers: str) -> None:
     env = production_env(tmp_path)
     env["ONTOTATOR_WORKERS"] = workers
