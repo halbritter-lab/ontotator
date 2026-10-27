@@ -78,7 +78,7 @@ it('does not fetch a forged variant or ref and conceals unavailable cases', asyn
   expect(api.getAnnotationVersion).not.toHaveBeenCalled();
   vi.mocked(api.getCase).mockRejectedValue(new ApiError(404, 'missing', 'CASE_NOT_FOUND'));
   mounted.rerender(<CaseViewer {...props} caseId="missing" />);
-  await screen.findByText('This case is not available to you.');
+  await screen.findByText('Case not found or no access');
   expect(screen.queryByText('Immutable target 😃')).toBeNull();
 });
 it('drops protected text and late replies on variant and user replacement', async () => {

@@ -1,9 +1,10 @@
 import { useVersionAccess } from './useVersionAccess';
 import { ComparePane } from './ComparePane';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError, type AnnotationVersion, type CaseDetail, type SubmissionHistoryDetail, type TaskSummary, type VariantText } from '../api/client';
+import { api, type AnnotationVersion, type CaseDetail, type SubmissionHistoryDetail, type TaskSummary, type VariantText } from '../api/client';
 import { ErrorNotice } from '../admin/ErrorNotice';
 import { routeHref, type Route, type ProjectDocumentsQuery } from '../app/router';
+import { isNotAvailable, NotFound } from '../app/NotFound';
 import { useTermLabels } from '../editor/useTermLabels';
 import { Button, InlineMessage } from '../ui';
 import { languagesOf, pickVariant } from './versionState';
@@ -172,8 +173,9 @@ export function CaseViewer({ projectKey, caseId, variant, show, annotations, com
       ...(documents ? { documents } : {}) });
   };
   const retryButton = <Button onClick={() => { if (access.error) access.retry(); setRetry(value => value + 1); }}>Retry</Button>;
-  if (caseError?.identity === identity) return <>{caseError.error instanceof ApiError && caseError.error.status === 404
-    ? <InlineMessage tone="info">This case is not available to you.</InlineMessage> : <ErrorNotice error={caseError.error} />}{retryButton}</>;
+  if (caseError?.identity === identity) return isNotAvailable(caseError.error)
+    ? <NotFound title="Case not found or no access" reason="It does not exist in this project or you cannot see it." onNavigate={onNavigate} />
+    : <section className="not-found"><ErrorNotice error={caseError.error} />{retryButton}</section>;
   if (access.loading || !detail) return <InlineMessage tone="info">Loading case...</InlineMessage>;
   if (!current) return <InlineMessage tone="info">This text version is not available to you.</InlineMessage>;
   const text = textState?.identity === contentIdentity ? textState.value : null;

@@ -238,8 +238,8 @@ it.each(["ASSIGNMENT_NOT_FOUND", "ASSIGNMENT_REQUIRED", "DOCUMENT_NOT_FOUND"])("
   const { open } = editorServer();
   open.mockRejectedValue(new ApiError(404, "Unavailable", code));
   render(<App user={testUser("alice")} />);
-  await screen.findByText("This task is no longer assigned to you.");
-  fireEvent.click(screen.getByRole("link", { name: "Back to my tasks" }));
+  await screen.findByRole("heading", { name: "Task not found or not yours" });
+  fireEvent.click(screen.getByRole("link", { name: "My tasks" }));
   await screen.findByRole("heading", { name: "My tasks" });
 });
 

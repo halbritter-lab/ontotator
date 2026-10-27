@@ -30,7 +30,7 @@ it("conceals refused task metadata without opening either workspace", async () =
   vi.spyOn(api, "getAssignmentMetadata").mockRejectedValue(new ApiError(404, "Concealed", "ASSIGNMENT_NOT_FOUND"));
   const review = vi.spyOn(api, "openTranslationReview"), annotation = vi.spyOn(api, "openAssignment");
   render(<TaskEditor assignmentId={17} user={testUser("alice")} onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
-  await screen.findByText("This task is no longer assigned to you.");
+  await screen.findByText("Task not found or not yours");
   expect(review).not.toHaveBeenCalled(); expect(annotation).not.toHaveBeenCalled();
 });
 it("discards late task metadata after changing user and assignment", async () => {
@@ -42,7 +42,7 @@ it("discards late task metadata after changing user and assignment", async () =>
   const props = { onNavigate: vi.fn(), routeLeaveRef: { current: null }, leaveGuardRef: { current: null } };
   const mounted = render(<TaskEditor {...props} assignmentId={17} user={testUser("alice")} />);
   mounted.rerender(<TaskEditor {...props} assignmentId={23} user={testUser("bob")} />);
-  await screen.findByText("This task is no longer assigned to you.");
+  await screen.findByText("Task not found or not yours");
   await act(async () => { finish({ ...workspace.assignment, display_name: "Alice" }); });
   expect(metadata.mock.calls.map(args => args[0])).toEqual([17, 23]);
   expect(review).not.toHaveBeenCalled(); expect(annotation).not.toHaveBeenCalled();

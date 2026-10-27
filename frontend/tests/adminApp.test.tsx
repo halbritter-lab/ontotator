@@ -162,8 +162,9 @@ it.each([403, 404])("retains the server's managed-route denial (%s) without inve
   vi.mocked(api.listProjects).mockResolvedValue([]);
   vi.mocked(api.getProjectSettings).mockRejectedValue(new ApiError(status, "private", status === 403 ? "NOT_ALLOWED" : "PROJECT_NOT_FOUND"));
   render(<App user={{ ...user, is_system_admin: false }} />);
-  await screen.findByText(status === 403 ? "You do not have permission to do this." : "You do not have access to this project, or it no longer exists.");
-  expect(api.getProjectSettings).toHaveBeenCalledWith("private");
+  // Not in the caller's project list: no settings request, the shared not-found page (X-1, X-4).
+  await screen.findByRole("heading", { name: "Project not found or no access" });
+  expect(api.getProjectSettings).not.toHaveBeenCalled();
   expect(screen.queryByRole("button", { name: "Save general" })).toBeNull();
   expect(screen.queryByRole("link", { name: "Users" })).toBeNull();
 });

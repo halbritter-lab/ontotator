@@ -46,6 +46,9 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
   const [retry, setRetry] = useState(0);
   const projectIdentity = JSON.stringify([baseUser?.username, baseUser?.is_system_admin, retry]);
   const projects = baseUser && projectContext?.identity === projectIdentity ? projectContext.projects : [];
+  // The last loaded list of this user: a refresh keeps gated pages (and their unsaved forms) mounted.
+  const lastProjects = useRef<{ username?: string; projects: ProjectSummary[] }>({ projects: [] });
+  if (baseUser && projectContext?.identity === projectIdentity) lastProjects.current = { username: baseUser.username, projects };
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
   // Landing (D7): only the first view of plain `#/` after login redirects a lead;
   // a later visit to My tasks stays there.
@@ -248,6 +251,16 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     });
   };
   let content: JSX.Element;
+  // X-1: a page the role cannot use says so instead of showing a form the server refuses.
+  const notice = (title: string, message: string) => <section className="detail-section"><h1>{title}</h1><InlineMessage tone="info">{message}</InlineMessage></section>;
+  const projectGate = (key: string, page: string): JSX.Element | null => {
+    const loaded = projectContext?.identity === projectIdentity;
+    const known = loaded ? projects : lastProjects.current.username === user.username ? lastProjects.current.projects : [];
+    const project = known.find(item => item.project_key === key);
+    if (!project && !loaded) return <InlineMessage tone="info">Loading project access…</InlineMessage>;
+    if (!project) return <NotFound title="Project not found or no access" reason="It does not exist or you are not a member." onNavigate={go} />;
+    return project.can_manage ? null : notice(page, `${page} is for project leads. Your tasks for this project are under My tasks.`);
+  };
   switch (route.name) {
     case "tasks": content = landing || landingSummary ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
       : <MyTasks project={route.project} status={route.status} projects={projects} onNavigate={go} username={baseUser?.username} />; break;
@@ -258,9 +271,11 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     case "projects": content = projectError ? <></> : projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading your projects…</InlineMessage>
       : <ProjectsPage projects={projects} currentKey={landingProject(user.username, projects)} onNavigate={go} />; break;
     case "adminUsers": content = <UsersPage currentUser={user} routeLeaveRef={routeLeaveRef} />; break;
-    case "adminOntologies": content = <OntologiesPage onNavigate={go} />; break;
-    case "projectNew": content = <ProjectNewPage onNavigate={next => { setRetry(value => value + 1); go(next); }} />; break;
-    case "projectSettings": content = <ProjectSettingsPage projectKey={route.key} currentUser={user} section={route.section}
+    case "adminOntologies": content = user.is_system_admin ? <OntologiesPage onNavigate={go} />
+      : notice("Ontologies", "Only system administrators can upload and manage ontology files. Ask an administrator if a project needs another version."); break;
+    case "projectNew": content = user.is_system_admin ? <ProjectNewPage onNavigate={next => { setRetry(value => value + 1); go(next); }} />
+      : notice("New project", "Only system administrators can create projects. Ask an administrator to create one and make you its lead."); break;
+    case "projectSettings": content = projectGate(route.key, "Project settings") ?? <ProjectSettingsPage projectKey={route.key} currentUser={user} section={route.section}
       onNavigate={go} routeLeaveRef={routeLeaveRef} onSaved={() => setRetry(value => value + 1)} />; break;
     case "projectDocuments": {
       const currentProject = projects.find(project => project.project_key === route.key);
@@ -268,6 +283,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       const canOverrideTranslationStatus = !!currentProject?.can_manage && (user.is_system_admin || currentProject.roles.includes("lead"));
       // Lead access is decided from the projects list before the page shows anything (open question 6).
       content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
+        : !currentProject ? <NotFound title="Project not found or no access" reason="It does not exist or you are not a member." onNavigate={go} />
         : <DocumentsPage projectKey={route.key} currentUser={user} canManage={!!currentProject?.can_manage} canOverrideTranslationStatus={canOverrideTranslationStatus} query={route} onNavigate={go} />;
       break;
     }
@@ -280,7 +296,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
       const canManage = !!projects.find(project => project.project_key === route.key)?.can_manage;
       content = projectContext?.identity !== projectIdentity ? <InlineMessage tone="info">Loading project access…</InlineMessage>
         : canManage ? <ProblemReportDetail key={JSON.stringify([user.username, route.key, route.reportId])} projectKey={route.key} reportId={route.reportId} canManage={canManage} action={route.action} section={route.section} documents={route.documents} onNavigate={go} />
-        : <EmptyState title="Problem report not found" action={<Button onClick={() => go(MY_TASKS)}>My tasks</Button>} />;
+        : <NotFound title="Problem report not found or no access" onNavigate={go} />;
       break;
     }
     case "projectConsolidation": content = <ConsolidationScreen key={JSON.stringify([user.username, route.key, route.roundId])} projectKey={route.key}

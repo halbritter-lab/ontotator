@@ -40,7 +40,8 @@ async function preview() {
 
 /** Non-leads get the lead-only notice: no upload controls (and so no override) at all. */
 async function leadOnlyNotice() {
-  expect(await screen.findByRole("heading", { name: "Documents is for project leads" })).toBeTruthy();
+  // A member sees the lead-only notice; an unknown project the not-found page (X-1).
+  expect(await screen.findByRole("heading", { name: /^(Documents is for project leads|Project not found or no access)$/ })).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Upload texts…" })).toBeNull();
   expect(screen.queryByLabelText(/^Accept without review:/)).toBeNull();
 }

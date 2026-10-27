@@ -625,6 +625,8 @@ a.shell-product { color: inherit; text-decoration: none; }
 .shell-main.density-reading > div:first-child:not(.task-loading) { flex: 1; min-height: 0; }
 /* "Opening task…": a calm line, not a stretched panel (F8). */
 .task-loading { color: var(--text-muted); padding: var(--space-5) var(--space-6); flex: 0 0 auto; }
+/* Not-found and load-error pages keep the page padding inside the full-bleed reading shell (X-4). */
+.shell-main.density-reading > .not-found { padding: var(--space-5) var(--space-6); flex: 0 0 auto; }
 /* Reading keeps the editor's viewport-based columns and pane height intact.
    The same navigation stays available through a native keyboard disclosure. */
 .shell-reading .shell-header { flex: none; padding-block: var(--space-2); }

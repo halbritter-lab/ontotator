@@ -25,6 +25,7 @@ it('shows old and updated sources before deliberately saving/submitting the exac
   await screen.findByText(cause.reason);
   expect(api.resolveSourceObligation).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('radio', { name: 'Accepted unchanged' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Rationale' }), { target: { value: 'Units checked' } });
   await waitFor(() => expect(api.saveTranslationReviewDraft).toHaveBeenCalled());
   fireEvent.click(screen.getByRole('button', { name: 'Review source update to original-v2' }));
   const dialog = await screen.findByRole('dialog', { name: 'Review source update' });
@@ -42,7 +43,7 @@ it('shows old and updated sources before deliberately saving/submitting the exac
 });
 
 it('retains the same unresolved cause and current draft after a refused exact resolution', async () => {
-  vi.mocked(api.openTranslationReview).mockResolvedValue(reviewWorkspace({ draft: { text: 'Übersetzt.', form: { decision: 'accepted_unchanged', clinical_change: false }, revision: 6 } }));
+  vi.mocked(api.openTranslationReview).mockResolvedValue(reviewWorkspace({ draft: { text: 'Übersetzt.', form: { decision: 'accepted_unchanged', clinical_change: false, rationale: 'Units checked' }, revision: 6 } }));
   vi.mocked(api.resolveSourceObligation).mockRejectedValue(new ApiError(409, 'Source update changed elsewhere', 'REVISION_CONFLICT'));
   render(<TranslationReviewScreen assignmentId={17} username="alice" onNavigate={vi.fn()} routeLeaveRef={{ current: null }} leaveGuardRef={{ current: null }} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Review source update to original-v2' }));

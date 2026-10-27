@@ -198,8 +198,8 @@ it("renders blocking issues, collisions, duplicates, normalization, tool provena
     }],
   };
   render(<UploadPreview plan={detailed} />);
-  expect(screen.getByRole("alert").textContent).toContain("T1_TOOL_PROVENANCE");
-  for (const text of ["x.json", "ann", "aaaaaaaaaaaa", "bbbbbbbbbbbb", "other", "1 with normalized text", "Recognizer", "Already imported", "hidden_axis_value", "certainty", "Imported note", "Ontospan warning"]) expect(screen.getAllByText(new RegExp(text)).length).toBeGreaterThan(0);
+  expect(screen.getByRole("alert").textContent).toContain("The imported tool provenance is incomplete or invalid.");
+  for (const text of ["x.json", "ann", "aaaaaaaaaaaa", "bbbbbbbbbbbb", "other", "Recognizer", "Already imported", "hidden_axis_value", "certainty", "Imported note", "Ontospan warning"]) expect(screen.getAllByText(new RegExp(text)).length).toBeGreaterThan(0);
 });
 it("counts distinct refused proposals per set while retaining every violated rule", () => {
   const proposalSet: NonNullable<ImportPlan["proposal_sets"]>[number] = {

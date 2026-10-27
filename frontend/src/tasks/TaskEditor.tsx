@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, ApiError, type AssignmentOpenRequest, type AssignmentView, type AssignmentWorkspace, type CurrentUser, type RoundInputView, type TaskSummary, type WorkRoundView } from "../api/client";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { Button, Dialog, EmptyState, InlineMessage, Select, type ToastMessage } from "../ui";
+import { Button, Dialog, InlineMessage, Select, type ToastMessage } from "../ui";
 import { CaseScreen } from "../app/CaseScreen";
 import { CaseErrorBoundary } from "../app/ErrorBoundary";
 import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/router";
-import { NotFound } from "../app/NotFound";
+import { isNotAvailable, NotFound, TASK_UNAVAILABLE, TASK_UNAVAILABLE_REASON } from "../app/NotFound";
 import { useVersionAccess } from "../variants/useVersionAccess";
 import { TranslationReviewScreen } from "../translation/TranslationReviewScreen";
 import { WorkRoundsDialog } from "./WorkRoundsDialog";
@@ -41,9 +41,9 @@ export function TaskEditor(props: TaskEditorProps): JSX.Element {
     return () => { active = false; };
   }, [identity, retry]);
   if (!state || state.identity !== identity) return <p className="task-loading" role="status">Opening task…</p>;
-  if (state.error) return <section>{state.error instanceof ApiError && state.error.code === "ASSIGNMENT_NOT_FOUND"
-    ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={state.error} />}
-    <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button></section>;
+  if (state.error) return isNotAvailable(state.error) ? <NotFound title={TASK_UNAVAILABLE} reason={TASK_UNAVAILABLE_REASON} onNavigate={props.onNavigate} />
+    : <section className="not-found"><ErrorNotice error={state.error} />
+      <div className="toolbar"><Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button></div></section>;
   if (state.assignment?.task === "translation_review") {
     const assignment = state.assignment;
     // Lead correction shows no problem reporter, whose focus reload otherwise refreshes the task metadata.
@@ -136,13 +136,11 @@ function AnnotationTaskEditor({ assignmentId, user, onNavigate, routeLeaveRef, l
       <Button disabled={!rounds.includes(round)} onClick={() => { if (rounds.includes(round)) void load({ review_round_target_set_id: round }); }}>Resume round</Button>
       <Button onClick={back}>Back to my tasks</Button>
     </Dialog>;
-    const unavailable = error instanceof ApiError && ["ASSIGNMENT_REQUIRED", "ASSIGNMENT_NOT_FOUND", "DOCUMENT_NOT_FOUND"].includes(error.code ?? "");
-    if (!unavailable && error instanceof ApiError && error.status === 403 && error.code !== "CSRF_FAILED") return <NotFound noAccess onNavigate={onNavigate} />;
-    if (!unavailable && error instanceof ApiError && error.status === 404) return <NotFound onNavigate={onNavigate} />;
-    return <>{unavailable ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={error} />}
-      {!unavailable && <Button onClick={() => { void load(); }}>Retry</Button>}{backLink}</>;
+    if (isNotAvailable(error)) return <NotFound title={TASK_UNAVAILABLE} reason={TASK_UNAVAILABLE_REASON} onNavigate={onNavigate} />;
+    return <section className="not-found"><ErrorNotice error={error} />
+      <div className="toolbar"><Button onClick={() => { void load(); }}>Retry</Button>{backLink}</div></section>;
   }
-  if (!workspace) return <EmptyState title="This task is no longer assigned to you." action={backLink} />;
+  if (!workspace) return <NotFound title={TASK_UNAVAILABLE} reason={TASK_UNAVAILABLE_REASON} onNavigate={onNavigate} />;
   const assignment = workspace.assignment;
   // An active consolidation round opens the consolidation view (acceptance fixes WP-E); "Edit in editor…" adds view=editor.
   if (roundInfo?.kind === "consolidation" && roundInfo.active && view !== "editor") {

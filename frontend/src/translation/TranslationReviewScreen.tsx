@@ -3,7 +3,8 @@ import { api, ApiError, type ReviewWorkspace, type TaskSummary, type Translation
 import { ErrorNotice } from "../admin/ErrorNotice";
 import { nextOpenTask } from "../app/caseOrder";
 import { MY_TASKS, routeHref, type Route, type RouteLeaveGuard } from "../app/router";
-import { Button, Checkbox, ConfirmDialog, Dialog, EmptyState, IconRetry, InlineMessage, Kbd, MenuButton, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
+import { isNotAvailable, NotFound, TASK_UNAVAILABLE, TASK_UNAVAILABLE_REASON } from "../app/NotFound";
+import { Button, Checkbox, ConfirmDialog, Dialog, IconRetry, InlineMessage, Kbd, MenuButton, StatusBadge, useMediaQuery, type StatusTone } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
 import { caretInParagraph, paragraphStarts } from "../variants/paragraphs";
 import { useCoupledScroll } from "../variants/useCoupledScroll";
@@ -88,9 +89,9 @@ export function TranslationReviewScreen(props: TranslationReviewScreenProps): JS
     return () => { active = false; };
   }, [identity]);
   if (readyIdentity !== identity) return <p className="task-loading" role="status">Opening translation review…</p>;
-  if (error || !loaded) return <section><h1>Translation review</h1>
-    {error instanceof ApiError && error.code === "ASSIGNMENT_NOT_FOUND" ? <EmptyState title="This task is no longer assigned to you." /> : <ErrorNotice error={error} />}
-    <Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button></section>;
+  if (error && isNotAvailable(error)) return <NotFound title={TASK_UNAVAILABLE} reason={TASK_UNAVAILABLE_REASON} onNavigate={props.onNavigate} />;
+  if (error || !loaded) return <section className="not-found"><h1>Translation review</h1><ErrorNotice error={error} />
+    <div className="toolbar"><Button onClick={() => setRetry(n => n + 1)}>Retry</Button><Button onClick={() => props.onNavigate(MY_TASKS)}>Back to my tasks</Button></div></section>;
   return <ReviewEditor key={identity} {...props} workspace={loaded.workspace} onReload={() => setRetry(n => n + 1)} />;
 }
 

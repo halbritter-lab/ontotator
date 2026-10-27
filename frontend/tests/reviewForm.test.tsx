@@ -48,7 +48,7 @@ describe("ReviewForm", () => {
 
   it("hints the rationale for Accepted unchanged with failed checks", () => {
     const view = render(<ReviewForm value={{ decision: "accepted_unchanged", clinical_change: false }} failedCheckCount={1} issues={[]} onChange={vi.fn()} />);
-    expect(screen.getByText("Optional. Say why the flagged difference is correct.")).toBeDefined();
+    expect(screen.getByText("Required: an automatic check failed. Say why the flagged difference is correct.")).toBeDefined();
     view.rerender(<ReviewForm value={{ decision: "accepted_unchanged", clinical_change: false }} failedCheckCount={0} issues={[]} onChange={vi.fn()} />);
     expect(screen.getByText("Optional.")).toBeDefined();
     view.rerender(<ReviewForm value={{ decision: "query", clinical_change: true }} failedCheckCount={1} issues={[]} onChange={vi.fn()} />);

@@ -16,7 +16,7 @@ const notLoggedIn = () => new AuthError("Log in to continue.", undefined, "NOT_A
 const oneCaseServer = (view = caseView()) => {
   assignedList(view);
   vi.spyOn(api, "getAssignmentMetadata").mockResolvedValueOnce(assigned({ read_only: false, workspace_id: "ws", view }).assignment)
-    .mockRejectedValue(new AuthError("This task is no longer assigned to you.", undefined, "ASSIGNMENT_NOT_FOUND", 404));
+    .mockRejectedValue(new AuthError("Task not found or not yours", undefined, "ASSIGNMENT_NOT_FOUND", 404));
   vi.spyOn(api, "getPreferences").mockResolvedValue({ mode_by_package: {} } as any);
   vi.spyOn(api, "listOntologies").mockResolvedValue([]);
   const project: ProjectSummary = {
@@ -97,7 +97,7 @@ const caseWithEndedSession = (relogin: CurrentUser, view = caseView()) => {
   sessionsOf(alice);
   oneCaseServer(view);
   vi.spyOn(api, "listMyTasks").mockResolvedValue([{ assignment_id: 1, workflow_revision: 0, held: false, project_key: "pkg", project_name: "pkg", document_id: view.document.document_id, language: "en", task: view.key.mode === "review" ? "review" : "annotate", status: "open", updated_at: "2026-10-14T12:00:00Z" }]);
-  vi.spyOn(api, "openAssignment").mockResolvedValueOnce(assigned({ read_only: false, workspace_id: "ws", view })).mockRejectedValue(new AuthError("This task is no longer assigned to you.", undefined, "ASSIGNMENT_NOT_FOUND", 403));
+  vi.spyOn(api, "openAssignment").mockResolvedValueOnce(assigned({ read_only: false, workspace_id: "ws", view })).mockRejectedValue(new AuthError("Task not found or not yours", undefined, "ASSIGNMENT_NOT_FOUND", 403));
   let sessionOpen = false;
   const fetchMock = fakeServer({
     "POST /api/v1/workspaces/ws/commands": () => sessionOpen
