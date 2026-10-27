@@ -68,7 +68,7 @@ export function ExportPage({ projectKey, currentUser, documentCount, onNavigate 
   return <section className="export-page"><h1>Export</h1><FinalExportPanel projectKey={projectKey} username={currentUser.username} />
     <section className="export-research" aria-labelledby="export-research-heading">
       <h2 id="export-research-heading">Research data</h2>
-      <p className="cell-secondary">Raw material for analysis. People appear as pseudonyms.</p>
+      <p className="export-research-lede">Raw material for analysis. People appear as pseudonyms.</p>
       <table className="data-table export-research-table">
         <thead><tr><th scope="col">Export</th><th scope="col">Contains</th><th scope="col">Format</th><th scope="col"><span className="visually-hidden">Action</span></th></tr></thead>
         <tbody>{definitions.map((definition) => {
