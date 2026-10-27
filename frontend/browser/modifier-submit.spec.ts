@@ -75,8 +75,8 @@ test("a standalone modifier only warns; Go to Severe focuses Turn into modifierâ
   await expect(item).toContainText("Severe: Severe is a modifier term. Keep it only if it names the finding itself.");
   await item.getByRole("button", { name: "Go to Severe" }).click();
   await expect(page.getByRole("button", { name: "Turn into modifierâ€¦" })).toBeFocused();
-  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
+  await page.getByRole("button", { name: /^Finish & submit/ }).click();
   await dialog.getByRole("checkbox", { name: /^Submit with .*1 modifier warning$/ }).check();
-  await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
+  await dialog.getByRole("button", { name: "Submit text", exact: true }).click();
   await expectSubmitted(page);
 });

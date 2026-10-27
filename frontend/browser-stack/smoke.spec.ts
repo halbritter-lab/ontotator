@@ -28,10 +28,10 @@ test("stack smoke: log in, open the project, annotate, submit", async ({ page })
     await expect(choice).toBeChecked();
     await expect(page.locator(".status-badge")).toHaveClass(/status-saved/);
   }
-  await page.getByRole("button", { name: /Finish & Submit Case/i }).click();
-  const submit = page.getByRole("dialog", { name: "Submit case", exact: true });
-  await submit.getByRole("button", { name: "Submit case", exact: true }).click();
-  const completed = page.getByRole("dialog", { name: "Case submitted", exact: true });
+  await page.getByRole("button", { name: /Finish & submit text/i }).click();
+  const submit = page.getByRole("dialog", { name: "Submit text", exact: true });
+  await submit.getByRole("button", { name: "Submit text", exact: true }).click();
+  const completed = page.getByRole("dialog", { name: "Text submitted", exact: true });
   await expect(completed).toContainText("Case successfully submitted");
   await completed.getByRole("button", { name: "Back to my tasks" }).click();
   await expect(firstCase).toContainText("Submitted");
