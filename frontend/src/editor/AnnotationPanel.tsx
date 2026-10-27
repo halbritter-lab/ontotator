@@ -359,8 +359,10 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                     {options.map((option) => {
                       const isDefault = unconfirmed && val === option.value;
                       const confirmsDefault = isDefault && !readOnly && !!onConfirmDefaults;
+                      // An empty axis stays an open value (unconfirmedValues): "Not specified" must not look like a choice.
+                      const isUnset = option.value === "" && val === "";
                       return (
-                        <label key={option.value} className={`axis-option${isDefault ? " is-default" : ""}`}
+                        <label key={option.value} className={`axis-option${isDefault ? " is-default" : ""}${isUnset ? " is-unset" : ""}`}
                           onPointerDown={() => { arrowChange.current = false; }}>
                           <input type="radio" name={`axis-${ann.annotation_id}-${axis.id}`}
                             value={option.value} checked={val === option.value}
@@ -372,6 +374,7 @@ export const AnnotationPanel: React.FC<AnnotationPanelProps> = ({
                             onChange={() => updateAxis(option.value)}
                             onClick={confirmsDefault ? event => confirmDefaultClick(event, axis.id) : undefined} />
                           <span>{option.label}</span>{isDefault && <span className="visually-hidden"> (default)</span>}
+                          {isUnset && <span className="visually-hidden"> (no value chosen)</span>}
                         </label>
                       );
                     })}

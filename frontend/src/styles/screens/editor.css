@@ -2285,6 +2285,14 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   color: var(--on-accent);
   font-weight: var(--weight-strong);
 }
+/* An empty axis: "Not specified" is checked but no choice, so the segment stays unfilled with a dashed outline. */
+.values-section .axis-option.is-unset:has(input:checked) {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-weight: 500;
+  outline: 1px dashed var(--border-strong);
+  outline-offset: -3px;
+}
 /* An unconfirmed default: warning colours, bold text, a dashed inner outline and the "Default" tag. */
 .values-section .axis-option.is-default:has(input:checked):not(:has(input:focus-visible)) {
   background: var(--warning-light);
