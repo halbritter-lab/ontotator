@@ -549,6 +549,16 @@
     box-shadow: none;
     outline: 2px solid Highlight;
   }
+
+  /* The selected proposal's mark and row: their box-shadow frame and fill vanish in forced colours (#25). */
+  .run--hot {
+    outline: 2px solid Highlight;
+  }
+
+  .doc-item.selected {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
 }
 
 /* .run animates its box shadow; the frame appears at once under reduced motion. */
