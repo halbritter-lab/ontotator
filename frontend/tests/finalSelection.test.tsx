@@ -93,7 +93,7 @@ it("explains unacknowledged warnings and moves focus to the checkbox instead of 
   render(<FinalExportPanel projectKey="p" username="lead" />);
   await screen.findByText("Wording under review");
   const create = screen.getByRole("button", { name: "Create final export" });
-  const hint = screen.getByText("Confirm the warnings and omissions above to continue.");
+  const hint = screen.getByText("Confirm the warnings and omissions listed below to continue.");
   expect(create.getAttribute("aria-describedby")).toBe(hint.id);
   create.focus();
   fireEvent.click(create);
@@ -173,4 +173,18 @@ it("keeps a finished export when final selections change afterwards and says so"
   expect(screen.getByText("Final selections changed after this export was created.")).toBeDefined();
   expect(screen.getByRole("button", { name: "Download final export" })).toBeDefined();
   expect(read).toHaveBeenCalledTimes(1);
+});
+
+it("groups identical warnings with a count, collapses long lists and keeps the actions above them", async () => {
+  const warnings = Array.from({ length: 120 }, (_, index) => ({ ...preflight.warnings[0], id: `w${index}`, case_id: `case-${index}`, reason: "No final result selected." }));
+  vi.spyOn(api, "finalExportPreflight").mockResolvedValue({ ...preflight, warnings: [...warnings, preflight.warnings[0]] });
+  render(<FinalExportPanel projectKey="p" username="lead" />);
+  expect((await screen.findByText("120 texts:")).nextElementSibling?.textContent).toBe("No final result selected.");
+  expect(screen.getByText("1 text:")).toBeTruthy();
+  expect(screen.getAllByRole("link", { name: /^Show case-/ })).toHaveLength(5);
+  const create = screen.getByRole("button", { name: "Create final export" });
+  expect(create.compareDocumentPosition(screen.getByText("120 texts:")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Show all 120" }));
+  expect(screen.getAllByRole("link", { name: /^Show case-/ })).toHaveLength(120);
+  expect(screen.queryByRole("button", { name: "Show all 120" })).toBeNull();
 });

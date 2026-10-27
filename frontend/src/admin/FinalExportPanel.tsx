@@ -6,22 +6,34 @@ import { ErrorNotice } from "./ErrorNotice";
 import { routeHref } from "../app/router";
 import { FINAL_SELECTION_CHANGED } from "../variants/finalSelectionState";
 import { useJob } from "./useJob";
-import { LanguageFlag } from "../ui/LanguageTag";
 import { plural } from "../app/labels";
 
 function RowLink({ projectKey, caseId, language }: { projectKey: string; caseId: string; language: string }): JSX.Element {
   return <a href={routeHref({ name: "projectDocuments", key: projectKey, case: caseId, language })}>Show {caseId} {language}</a>;
 }
+type Row = { case_id: string; language: string };
+/** Rows beyond this collapse behind "Show all {n}", so a large project does not push the actions off screen. */
+const SHOWN_ROWS = 5;
+function RowList({ projectKey, rows, label }: { projectKey: string; rows: readonly Row[]; label?: string }): JSX.Element {
+  const [all, setAll] = useState(false);
+  return <>
+    <ul className="final-row-list" aria-label={label}>{(all ? rows : rows.slice(0, SHOWN_ROWS)).map(row => <li key={JSON.stringify([row.case_id, row.language])}><RowLink projectKey={projectKey} caseId={row.case_id} language={row.language} /></li>)}</ul>
+    {!all && rows.length > SHOWN_ROWS && <Button size="sm" onClick={() => setAll(true)}>Show all {rows.length}</Button>}
+  </>;
+}
 function WorkflowWarnings({ projectKey, state }: { projectKey: string; state: FinalPreflight }): JSX.Element {
   const notInPlan = state.not_in_plan ?? [];
+  // One line per cause with its count; the server repeats the same reason for every affected row.
+  const groups = new Map<string, Row[]>();
+  for (const warning of state.warnings) { const rows = groups.get(warning.reason); if (rows) rows.push(warning); else groups.set(warning.reason, [warning]); }
   return <>
-    {state.warnings.length > 0
-      ? <ul className="final-warning-list">{state.warnings.map(warning => <li key={warning.id}><strong>{warning.case_id} <LanguageFlag code={warning.language} />{warning.language}</strong><p>{warning.reason}</p><RowLink projectKey={projectKey} caseId={warning.case_id} language={warning.language} /></li>)}</ul>
+    {groups.size > 0
+      ? <ul className="final-warning-list">{[...groups].map(([reason, rows]) => <li key={reason}><p><strong>{plural(rows.length, "text")}:</strong> <span>{reason}</span></p><RowList projectKey={projectKey} rows={rows} /></li>)}</ul>
       : <p>No open workflow warnings.</p>}
-    {state.omissions.length > 0 && <><p>Omitted without a final selection:</p>
-      <ul className="final-warning-list" aria-label="Omitted without a final selection">{state.omissions.map(item => <li key={JSON.stringify([item.case_id, item.language])}><RowLink projectKey={projectKey} caseId={item.case_id} language={item.language} /></li>)}</ul></>}
-    {notInPlan.length > 0 && <><p>Not planned, not exported: these rows have a final result, but Annotate is off in the work plan. For information; nothing to confirm.</p>
-      <ul className="final-warning-list" aria-label="Not planned, not exported">{notInPlan.map(item => <li key={JSON.stringify([item.case_id, item.language])}><RowLink projectKey={projectKey} caseId={item.case_id} language={item.language} /></li>)}</ul></>}
+    {state.omissions.length > 0 && <><p>Omitted without a final selection ({state.omissions.length}):</p>
+      <RowList projectKey={projectKey} rows={state.omissions} label="Omitted without a final selection" /></>}
+    {notInPlan.length > 0 && <><p>Not planned, not exported ({notInPlan.length}): these rows have a final result, but Annotate is off in the work plan. For information; nothing to confirm.</p>
+      <RowList projectKey={projectKey} rows={notInPlan} label="Not planned, not exported" /></>}
   </>;
 }
 
@@ -147,16 +159,17 @@ function FinalExportContent({ projectKey }: { projectKey: string }): JSX.Element
       {state && <section className="final-export-preflight" aria-labelledby="final-export-preflight-heading">
         <h3 id="final-export-preflight-heading" tabIndex={-1}>Export preflight</h3>
         <p><strong>{plural(state.selections.length, "selected result")}, {plural(state.warnings.length, "warning")}, {state.omissions.length} omitted{notInPlan.length > 0 && `, ${notInPlan.length} not planned`}</strong></p>
-        <WorkflowWarnings projectKey={projectKey} state={state} />
         {state.warnings.length > 0 && <Checkbox ref={acknowledgement} id="final-export-ack" label="Export these selected results with the listed warnings and omissions" checked={accepted} disabled={creating} onChange={event => setAccepted(event.target.checked)} />}
         {!state.selections.length && <InlineMessage tone="warning"><span id="final-export-empty">Select at least one submitted result before exporting.</span></InlineMessage>}
-        {blockedBy === "final-export-ack-hint" && <p id="final-export-ack-hint" className="field-hint">Confirm the warnings and omissions above to continue.</p>}
+        {blockedBy === "final-export-ack-hint" && <p id="final-export-ack-hint" className="field-hint">Confirm the warnings and omissions listed below to continue.</p>}
       </section>}
       {creating && <p id="final-export-creating-hint" className="field-hint">The export is being created.</p>}
       <Toolbar label="Final export actions">
         <Button variant="primary" loading={creating} aria-disabled={blockedBy ? "true" : undefined} aria-describedby={blockedBy} onClick={() => { void start(); }}>Create final export</Button>
         <Button ref={checkButton} loading={checking} aria-disabled={creating ? "true" : undefined} aria-describedby={creating ? "final-export-creating-hint" : undefined} onClick={checkAgain}>Check again</Button>
       </Toolbar>
+      {/* The lists follow the actions: a long list must not push "Create final export" off screen. */}
+      {state && <section aria-label="Preflight details"><WorkflowWarnings projectKey={projectKey} state={state} /></section>}
     </>}
     {jobError != null && <ErrorNotice error={jobError} />}
     {job && <p role="status">Final export {job.id}: {job.status}</p>}
