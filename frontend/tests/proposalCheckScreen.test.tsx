@@ -70,6 +70,21 @@ it("a click on the selected proposal keeps it selected, so its keys still work (
     payload: expect.objectContaining({ outcome: "confirmed", target: { annotation_id: "p-1", version: "p-1-v1" } }) })));
 });
 
+it("proposals are listed and visited in text order, spanless ones last (N-4)", () => {
+  const view = proposalView();
+  const at = (start: number) => [{ mention: { evidence_id: `ev-${start}`, segments: [{ start, end: start + 4 }], cue_segments: [] }, version: "ev-v", document_id: "doc-pc-1", text_sha256: "text" }];
+  // Canonical (ID) order p-1, p-2, p-3; in the text p-3 comes first, p-1 has no span.
+  view.available_inputs = view.available_inputs!.map(s => s.annotation.annotation_id === "p-1" ? s
+    : { ...s, evidence: at(s.annotation.annotation_id === "p-2" ? 30 : 4) } as never);
+  render(<CaseScreen view={view} workspaceId="ws-pc" onClose={vi.fn()} />);
+  const rows = () => Array.from(document.querySelectorAll<HTMLElement>('[data-list-key^="target:"]'));
+  expect(rows().map(row => JSON.parse(row.dataset.listKey!.slice("target:".length))[0])).toEqual(["p-3", "p-2", "p-1"]);
+  fireEvent.keyDown(window, { key: "j" });
+  expect(rows()[0].classList.contains("selected")).toBe(true);
+  fireEvent.keyDown(window, { key: "j" });
+  expect(rows()[1].classList.contains("selected")).toBe(true);
+});
+
 it("J moves to the next proposal and 1 confirms it", async () => {
   const view = proposalView();
   const record = vi.spyOn(api, "recordDecision").mockImplementation(async (_id, envelope) => {
@@ -148,9 +163,10 @@ it("1 and 2 move on to the next open proposal and name what was decided; the las
 
 it("the advance after a decision scrolls the text to the next proposal's mark if needed (N-5)", async () => {
   const view = proposalView();
-  const p3 = view.available_inputs!.find(s => s.annotation.annotation_id === "p-3")!;
-  view.available_inputs = view.available_inputs!.map(s => s !== p3 ? s : { ...s,
-    evidence: [{ mention: { evidence_id: "ev-p3", segments: [{ start: 44, end: 51 }], cue_segments: [] }, version: "ev-v", document_id: "doc-pc-1", text_sha256: "text" }] } as never);
+  // p-1 (start 4) and p-3 (start 44) have marks; the list follows the text (N-4).
+  const mark = (id: string, start: number, end: number) => [{ mention: { evidence_id: id, segments: [{ start, end }], cue_segments: [] }, version: "ev-v", document_id: "doc-pc-1", text_sha256: "text" }];
+  view.available_inputs = view.available_inputs!.map(s => s.annotation.annotation_id === "p-3" ? { ...s, evidence: mark("ev-p3", 44, 51) } as never
+    : s.annotation.annotation_id === "p-1" ? { ...s, evidence: mark("ev-p1", 4, 11) } as never : s);
   view.draft.decisions = [{ decision_id: "d", target: { annotation_id: "p-2", version: "p-2-v1" }, outcome: "confirmed", reviewer_id: "user-test" }] as never;
   recordDecisions(view);
   const scroll = vi.fn();
