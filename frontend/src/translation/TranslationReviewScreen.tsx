@@ -650,6 +650,11 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
                 const current = draftRef.current;
                 edit({ ...current, form: { ...(!has(current.form, "clinical_change") ? { clinical_change: false } : {}), ...current.form, ...next } });
               }} />
+              {/* R-24: Accepted unchanged with edited text has two ways out. */}
+              {issues.includes("TEXT_CHANGED") && !busy && <div className="translation-text-changed-actions" role="group" aria-label="Edited text">
+                <Button size="sm" onClick={() => chooseOption("accepted_corrected")}>Choose Accepted with corrections</Button>
+                <Button size="sm" onClick={() => editText(workspace.text)}>Undo my edits</Button>
+              </div>}
             </>}
           {(error ?? saver.current?.error) != null && <ErrorNotice error={error ?? saver.current?.error} />}
           {serverIssues.length > 0 && <ol className="review-issues" aria-label="Server review issues">{serverIssues.map((code, index) => <li key={index}>{reviewIssueMessage(code)}</li>)}</ol>}

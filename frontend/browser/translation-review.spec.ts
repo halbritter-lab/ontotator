@@ -267,7 +267,7 @@ test('fresh failed checks remain visible and an independent edited Accepted unch
     await openReview(independent, s);
     const text = `${s.texts.target}\nRetained correction.`;
     await target(independent).fill(text); await independent.getByRole('radio', { name: 'Accepted unchanged', exact: true }).check();
-    await expect(independent.getByRole('list', { name: 'Review issues', exact: true })).toContainText('Accepted unchanged needs text equal to the reviewed text.');
+    await expect(independent.getByRole('list', { name: 'Review issues', exact: true })).toContainText('You edited the text. Choose Accepted with corrections, or undo your edits.');
     await expect(submitButton(independent)).toBeDisabled();
     await saved(independent, s.assignment_id!, text, 'accepted_unchanged');
     // Independent current-actor oracle: the disabled UI never dispatches submit.
