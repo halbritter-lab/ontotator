@@ -260,7 +260,7 @@ def test_production_pending_schema_exposes_only_unready_health(
     assert api.state.draining is True
 
 
-def test_production_database_outage_exposes_only_unready_health(
+def test_production_database_outage_exits_without_leaking_the_dsn(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from ontotator.api.server import app_from_env
@@ -270,16 +270,12 @@ def test_production_database_outage_exposes_only_unready_health(
         "postgresql://ontotator_app@127.0.0.1:1/app?connect_timeout=1"
     )
     install_env(monkeypatch, env)
-    api = app_from_env()
-    client = TestClient(api, base_url="https://editor.example.org")
-    assert client.get("/livez").status_code == 200
-    response = client.get("/readyz")
-    assert response.status_code == 503
-    assert response.json() == {
-        "ok": False,
-        "checks": {"database": False, "schema": False, "ontologies": False},
-    }
-    assert client.get("/").status_code == 404
+    with pytest.raises(RuntimeError, match="Database unavailable") as exc:
+        app_from_env()
+    # The supervisor restarts the process; the log shows no host, user or chain.
+    assert exc.value.__suppress_context__ and exc.value.__cause__ is None
+    for secret in ("ontotator_app", "127.0.0.1", "test-only-password"):
+        assert secret not in str(exc.value)
 
 
 def test_development_factory_keeps_docs_and_rejects_pending_schema(
