@@ -125,7 +125,8 @@ test("keyboard-only range selection", async ({ page }) => {
   // the not-planned en source is no row (M1 flat list).
   await page.getByRole("button", { name: "Select by case IDs…", exact: true }).focus();
   const table = page.getByRole("table", { name: "Documents", exact: true });
-  for (const header of ["Text", "Translation", "Annotation", "Finalization", "Waiting on", "Next step", "Last activity"]) {
+  // Last activity is hidden below 1400 px (#10), so its header is no Tab stop here.
+  for (const header of ["Text", "Translation", "Annotation", "Finalization", "Waiting on", "Next step"]) {
     await page.keyboard.press("Tab");
     await expect(table.getByRole("columnheader", { name: header }).getByRole("button"), header).toBeFocused();
   }

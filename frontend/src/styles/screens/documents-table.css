@@ -55,7 +55,7 @@
 .documents-table .documents-row > td,
 .documents-table .documents-row > th { height: 40px; padding-block: var(--space-1); white-space: nowrap; }
 /* :where keeps this below the active and sibling tints (same specificity, earlier). */
-.documents-table .documents-row > :where(th[scope="row"]) { background: transparent; font-weight: var(--weight-regular); }
+.documents-table .documents-row > :where(th[scope="row"]) { background: var(--surface); font-weight: var(--weight-regular); }
 .documents-row-case { margin-inline-end: var(--space-2); color: var(--text-muted); font-variant-numeric: tabular-nums; }
 /* "+n": texts of the case not shown (not in plan); in the All tab a button that shows them. */
 .documents-more { padding: 0 var(--space-1); border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--size-xs); line-height: var(--leading-xs); white-space: nowrap; }
@@ -85,6 +85,21 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 /* `display: block` overrides the stacked .stage-cell column (icon, label, who on one line). */
 .documents-status.stage-cell { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .documents-status-who { color: var(--text-muted); }
+/* Below 1400 px (#10): Last activity goes (the text card shows it) and the status and Waiting on cells cut
+   earlier (ellipsis, full text in title), so Next step stays in view at 1280 px. */
+@media (max-width: 1399px) {
+  .documents-table th:has(.documents-col-last), .documents-table td:has(> .documents-col-last) { display: none; }
+  .documents-status-cell { max-width: 9rem; }
+  .documents-waiting-on { max-width: 7rem; }
+}
+/* The checkbox and Text cells stay at the left edge while the table scrolls sideways, so actions keep their row
+   label (#10); opaque backgrounds (the row tints below repeat on them), above the scrolled cells. */
+.documents-table .documents-row > :where(.data-table-select-cell, th[scope="row"]),
+.documents-table thead th:nth-child(-n + 2) { position: sticky; left: 0; z-index: 1; }
+.documents-table .documents-row > :where(th[scope="row"]), .documents-table thead th:nth-child(2) { left: 40px; }
+.documents-table .documents-row > :where(.data-table-select-cell) { background: var(--surface); }
+.documents-table .documents-row:where(.is-selected) > :where(.data-table-select-cell, th[scope="row"]) { background: var(--accent-light); }
+.documents-table thead th:nth-child(-n + 2) { z-index: 3; }
 /* Below 900 px: narrower status cells and cell padding so the one-line row fits 768 px (after the base rules, which would win otherwise). */
 @media (max-width: 899px) {
   /* The flat list's Text cell carries the case ID: the status cells give up the room (ellipsis, full text in title). */

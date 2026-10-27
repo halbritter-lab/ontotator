@@ -223,9 +223,10 @@ export function DocumentsTable({
     },
     {
       id: "activity",
-      header: <span className="documents-col-wide">Last activity</span>,
+      // `documents-col-last`: also hidden below 1400 px, so Next step fits at 1280 px (the Order filter keeps the sort).
+      header: <span className="documents-col-wide documents-col-last">Last activity</span>,
       sortable: true,
-      cell: row => <span className="documents-activity-cell documents-col-wide"><LastActivityCell iso={row.last_activity_at} /></span>,
+      cell: row => <span className="documents-activity-cell documents-col-wide documents-col-last"><LastActivityCell iso={row.last_activity_at} /></span>,
     },
   ];
 

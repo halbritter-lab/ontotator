@@ -195,8 +195,8 @@ test("Screen reader semantics: tabs and tabpanel, a flat list of row headers, te
     await expect(header.getByRole("button", { name: `Open text card, ${S0_CASE} ${language}`, exact: true })).toContainText(language);
     await expect(header.getByRole("link")).toHaveCount(0);
   }
-  // The stage columns: column headers name them.
-  for (const name of ["Text", "Translation", "Annotation", "Finalization", "Waiting on", "Next step", "Last activity"]) {
+  // The stage columns: column headers name them (Last activity is hidden below 1400 px, #10).
+  for (const name of ["Text", "Translation", "Annotation", "Finalization", "Waiting on", "Next step"]) {
     await expect(documentsTable(page).getByRole("columnheader", { name, exact: true })).toHaveCount(1);
   }
   // A decision row carries the hidden "Needs your decision" in its row header.
