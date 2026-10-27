@@ -38,16 +38,26 @@ export interface FindingRowProps {
   onFrame?: (on: boolean) => void;
 }
 
+/** "Modifiers: Recurrent, Severe" (label order) under a finding or proposal row; nothing without modifiers. */
+export function ModifierLine({ modifiers, layerId, termLabel }: {
+  modifiers: readonly { term_id: string }[] | null | undefined;
+  layerId: string;
+  termLabel: (layer: string | undefined, term: string) => string | null;
+}) {
+  const sorted = sortByLabel(modifiers ?? [], id => {
+    const label = termLabel(layerId, id);
+    return label ? { label, role: "modifier", exclusiveClass: null } : undefined;
+  });
+  return sorted.length > 0 ? <p className="mod-lines">Modifiers: {sorted.map((modifier, index) => <span key={modifier.term_id}>
+    {index > 0 && ", "}<b>{termLabel(layerId, modifier.term_id) ?? modifier.term_id}</b></span>)}</p> : null;
+}
+
 /** One row of the saved findings list in the editor sidebar. */
 export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel, layerName, showLayer, axes, defaulted, proposal, onActivate, children, attachTarget, convertSource, onFrame }: FindingRowProps) {
   const evCount = annSnap.annotation.evidence_refs?.length ?? 0;
   const termId = annSnap.annotation.term_id;
   const layerId = annSnap.annotation.layer_id;
   const findingName = termLabel(layerId, termId) ?? termId;
-  const modifiers = sortByLabel(annSnap.annotation.modifiers ?? [], id => {
-    const label = termLabel(layerId, id);
-    return label ? { label, role: "modifier", exclusiveClass: null } : undefined;
-  });
   const className = ["doc-item", isSelected && !attachTarget && "selected", attachTarget && "mod-target", attachTarget?.active && "mod-target--active"]
     .filter(Boolean).join(" ");
   return (
@@ -86,8 +96,7 @@ export function FindingRow({ snapshot: annSnap, selected: isSelected, termLabel,
       </div>
       {convertSource && <div className="mod-attach-here">Becomes a modifier of the finding you choose</div>}
       {attachTarget?.active && <div className="mod-attach-here" aria-hidden="true">Attach {attachTarget.term} here <Kbd>Enter</Kbd></div>}
-      {modifiers.length > 0 && <p className="mod-lines">Modifiers: {modifiers.map((modifier, index) => <span key={modifier.term_id}>
-        {index > 0 && ", "}<b>{termLabel(layerId, modifier.term_id) ?? modifier.term_id}</b></span>)}</p>}
+      <ModifierLine modifiers={annSnap.annotation.modifiers} layerId={layerId} termLabel={termLabel} />
       {axes.length > 0 && <dl className="finding-axis-summary" aria-label="Clinical context">
         {axes.map(axis => <div key={axis.id} title={`${axis.label}: ${axisOptionLabel(axis.value)}${annSnap.annotation.axes_defaulted?.includes(axis.id) ? " (defaulted)" : ""}`}>
           <dt>{axis.label}: </dt><dd><AxisValue value={axis.value as string | null | undefined} /></dd>
