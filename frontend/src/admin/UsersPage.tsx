@@ -170,7 +170,9 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   const usernameInput = useRef<HTMLInputElement>(null);
   const displayNameInput = useRef<HTMLInputElement>(null);
   // A refusal about one field moves focus there, where its message is shown.
-  useEffect(() => { (usernameError ? usernameInput : displayNameError ? displayNameInput : null)?.current?.focus(); }, [createError]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Any other refusal: back to Create user, which was unavailable (and lost focus) while saving (#18).
+  const createButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (createError !== undefined) (usernameError ? usernameInput : displayNameError ? displayNameInput : createButton).current?.focus(); }, [createError]); // eslint-disable-line react-hooks/exhaustive-deps
   const createUser = async () => {
     if (writing.current || blocked) return;
     const epoch = lifetime.current;
@@ -239,6 +241,8 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       if (epoch === lifetime.current) setHistory(current => current?.username === username ? { username, events: [], error } : current);
     }
   };
+  // The renamed row's History button takes the focus back after Anonymise (#18).
+  const anonymised = useRef<string | null>(null);
   const anonymise = async () => {
     if (!erase || writing.current) return;
     const epoch = lifetime.current;
@@ -249,6 +253,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       if (epoch !== lifetime.current) return;
       // The username changes to anonymised-<id>: replace the row by its old name.
       setUsers(rows => rows && rows.map(row => row.username === username ? user : row));
+      anonymised.current = user.username;
       setErase(null);
       setNotice({ username: user.username, text: `${username} is now ${user.username}.` });
     } catch (error: unknown) {
@@ -266,7 +271,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       ? { id: "deactivate", label: "Deactivate…", onSelect: act(() => setConfirmation({ username: user.username, change: { active: false }, kind: "deactivate", fromEdit: false })) }
       : { id: "activate", label: "Activate", description: "Needed before a new code can be issued.", onSelect: act(() => { void update(user.username, { active: true }, false); }) });
     items.push({ id: "history", label: "History", onSelect: act(() => { void showHistory(user.username); }) });
-    if (!user.active) items.push({ id: "anonymise", label: "Anonymise…", onSelect: act(() => setErase({ username: user.username, typed: "" })) });
+    if (!user.active) items.push({ id: "anonymise", label: "Anonymise…", onSelect: act(() => { anonymised.current = null; setErase({ username: user.username, typed: "" }); }) });
     return items;
   };
   const roleFor = (key: string) => create.projects?.find(item => item.project_key === key)?.roles ?? [];
@@ -327,7 +332,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
           </div>)}
         </fieldset>}
         {createError !== undefined && !usernameError && !displayNameError && <ErrorNotice error={createError} />}
-        <Toolbar label="New user actions"><Button disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button type="submit" variant="primary" disabled={blocked}>Create user</Button></Toolbar>
+        <Toolbar label="New user actions"><Button disabled={busy} onClick={() => setCreating(false)}>Cancel</Button><Button ref={createButton} type="submit" variant="primary" disabled={blocked}>Create user</Button></Toolbar>
       </form>
     </Dialog>}
     {editing && <Dialog open title={`Edit ${editing.baseline.username}`} onClose={busy || confirmation ? undefined : () => setEditing(null)}>
@@ -357,6 +362,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       <p className="field-hint">Newest first, at most 200 entries. The CLI command <code>ontotator admin audit</code> exports the whole trail.</p>
     </Dialog>}
     {erase && <Dialog open title={`Anonymise ${erase.username}`} size="sm" onClose={busy ? undefined : () => setErase(null)}
+      returnFocus={() => anonymised.current === null ? null : [...document.querySelectorAll<HTMLElement>("button[aria-label]")].find(button => button.getAttribute("aria-label") === `History of ${anonymised.current}`)}
       footer={<><Button disabled={busy} onClick={() => setErase(null)}>Cancel</Button><Button variant="danger" loading={busy} disabled={erase.typed.trim().toLowerCase() !== erase.username} onClick={() => { void anonymise(); }}>Anonymise permanently</Button></>}>
       <p>This erases the person's name, e-mail, ORCID, qualification, languages, preferences and password, their codes and the addresses of their past logins, and replaces their username with an anonymous one everywhere it is recorded, including the history. It cannot be undone.</p>
       <p>Their pseudonym and all their work stay, so annotations, results and exports remain complete.</p>

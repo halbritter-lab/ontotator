@@ -199,3 +199,15 @@ it("sends actual Users writes with CSRF and keeps its form through the existing 
   expect(api.adminListUsers).toHaveBeenCalledOnce();
   expect(fetchMock).toHaveBeenCalledOnce(); // Recovery does not silently retry code issuance.
 });
+
+it("starts at the main region after a navigation that left focus nowhere, and keeps a focused link (#18)", async () => {
+  render(<App user={user} onLogout={vi.fn()} />);
+  await screen.findByRole("heading", { name: "Users" });
+  (document.activeElement as HTMLElement | null)?.blur();
+  link("Ontologies");
+  await waitFor(() => expect(document.activeElement).toBe(document.getElementById("main")));
+  const profile = screen.getByRole("link", { name: "Profile" });
+  profile.focus(); fireEvent.click(profile);
+  await waitFor(() => expect(window.location.hash).toBe("#/me"));
+  expect(document.activeElement).toBe(profile);
+});

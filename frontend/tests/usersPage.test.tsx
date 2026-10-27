@@ -152,6 +152,12 @@ describe("users administration", () => {
     expect(document.activeElement).toBe(username); expect(screen.getAllByText("This username is already taken. Choose another username.")).toHaveLength(1);
   });
 
+  it("returns focus to Create user after a refusal that is not about a field (#18)", async () => {
+    vi.mocked(api.adminCreateUser).mockRejectedValue(new ApiError(500, "Server down", "INTERNAL"));
+    render(<UsersPage currentUser={currentUser} />); await load(); await fillCreate(); fireEvent.click(newForm().getByRole("button", { name: "Create user" }));
+    await waitFor(() => expect(document.activeElement).toBe(newForm().getByRole("button", { name: "Create user" })));
+  });
+
   it("keeps edits after session expiry without adding another login dialog", async () => {
     vi.mocked(api.adminUpdateUser).mockRejectedValue(new AuthError("Ended", undefined, "NOT_AUTHENTICATED", 401));
     render(<UsersPage currentUser={currentUser} />); await load(); fireEvent.click(screen.getByRole("button", { name: "Edit alex" }));
@@ -291,6 +297,8 @@ describe("account status, projects at creation, history and erasure", () => {
     expect(table.queryByText("Alex Smith")).toBeNull();
     expect(table.getByText("Anonymised")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Edit anonymised-7" })).toBeNull();
+    // Focus returns to the renamed row, not to <body> (#18).
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "History of anonymised-7" }));
   });
 
   it("words audit details", () => {

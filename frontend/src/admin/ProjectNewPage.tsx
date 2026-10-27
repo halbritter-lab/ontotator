@@ -37,7 +37,9 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
   const keyError = fieldError(error, ["PROJECT_EXISTS", "PROJECT_KEY_INVALID"]);
   const keyInput = useRef<HTMLInputElement>(null);
   // A refusal about the key moves focus to the key field, where its message is shown.
-  useEffect(() => { if (keyError) keyInput.current?.focus(); }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Any other refusal: back to Create project, which was disabled (and lost focus) while saving (#18).
+  const createButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (error !== undefined) (keyError ? keyInput : createButton).current?.focus(); }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
   const create = async () => {
     if (writing.current || !metadata || (source === "upload" && !uploaded)) return;
     const epoch = lifetime.current;
@@ -65,7 +67,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
           <option value="">Choose a template</option>{metadata.templates.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
         </Select> : <ProfileUpload onChange={setUploaded} disabled={busy} />}
         <PinFields ids={ids} ontologies={metadata.ontologies} value={shownPins} onChange={setPins} disabled={busy} />
-        <Button type="submit" variant="primary" loading={busy} disabled={source === "upload" && uploaded === null}>Create project</Button>
+        <Button ref={createButton} type="submit" variant="primary" loading={busy} disabled={source === "upload" && uploaded === null}>Create project</Button>
       </fieldset>
       {error !== undefined && !keyError && <ErrorNotice error={error} />}
     </form>}

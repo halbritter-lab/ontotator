@@ -927,6 +927,23 @@ describe("CaseScreen integration", () => {
       );
     });
   });
+  it("moves focus to the next finding row after a delete, not to the page body (#18)", async () => {
+    const snapshot = (id: string, term: string) => ({
+      schema_version: "ontotator-annotation/v3" as const,
+      annotation: { annotation_id: id, document_id: "doc-test-1", layer_id: "phenotype", type_id: "default", term_id: term, axes_values: {}, evidence_refs: [],
+        provenance: { actor: { actor_id: "user-test", kind: "human" as const }, method: "manual" } },
+      evidence: [], document_id: "doc-test-1", text_sha256: "sha-test-text", ontology_sha256: "sha-ont", layer_config_sha256: "test-layer-sha", version: "v-1",
+    });
+    const first = snapshot("ann-first", "HP:0001252"), second = snapshot("ann-second", "HP:0001250");
+    const view = { ...sampleView, draft: { ...sampleView.draft, revision: 1, annotations: [first, second] } };
+    vi.spyOn(api, "applyCommand").mockResolvedValue({ ...view.draft, revision: 2, annotations: [second] } as any);
+    const { container } = render(<CaseScreen view={view} workspaceId="ws-test-token" onClose={vi.fn()} />);
+    fireEvent.click(screen.getByText("HP:0001252"));
+    fireEvent.click(screen.getByText("Delete finding"));
+    const yes = screen.getByRole("button", { name: /Yes, delete/i });
+    yes.focus(); fireEvent.click(yes);
+    await waitFor(() => expect(document.activeElement).toBe(container.querySelector('[data-list-key="annotation:ann-second"]')));
+  });
   it("keeps a pending span local and creates only the term chosen in a configured ontology", async () => {
     const view = structuredClone(sampleView);
     view.layers![0].ontology_id = "custom-ontology";
