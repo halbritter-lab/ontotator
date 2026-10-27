@@ -169,7 +169,7 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await expect(rowCell(textRow(page, s.case_id, language), 'finalization')).toContainText('accepted');
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
     // D8: the preflight runs on opening Export.
-    await expect(page.getByRole('heading', { name: 'Export preflight' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Export check' })).toBeVisible();
     const create = page.getByRole('button', { name: 'Create final export', exact: true });
     await expect(create).toHaveAttribute('aria-disabled', 'true');
     await page.getByLabel('Export these selected results with the listed warnings and omissions').check();

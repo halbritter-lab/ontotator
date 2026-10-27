@@ -227,7 +227,7 @@ test('Q4: export preflight has one primary, Cancel, and tight warning items', as
   await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
   const section = page.getByRole('region', { name: 'Selected final results' });
   // D8: the preflight runs on opening Export; "Create final export" is the one primary, "Check again" reruns it.
-  await expect(section.getByRole('heading', { name: 'Export preflight' })).toBeVisible();
+  await expect(section.getByRole('heading', { name: 'Export check' })).toBeVisible();
   await expect(section.locator('.btn-primary')).toHaveCount(1);
   await expect(section.locator('.btn-primary')).toHaveText('Create final export');
   await expect(section.getByRole('button', { name: 'Check again', exact: true })).toBeVisible();
@@ -241,7 +241,7 @@ test('Q4: export preflight has one primary, Cancel, and tight warning items', as
   });
   expect(gaps.own).toBeLessThan(gaps.next);
   await section.getByRole('button', { name: 'Check again', exact: true }).click();
-  await expect(section.getByRole('heading', { name: 'Export preflight' })).toBeVisible();
+  await expect(section.getByRole('heading', { name: 'Export check' })).toBeVisible();
   await expect(section.locator('.btn-primary')).toHaveCount(1);
 });
 
