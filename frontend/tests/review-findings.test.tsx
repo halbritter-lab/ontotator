@@ -131,7 +131,7 @@ describe("A1/A7: dashboard blinding, identity and persistence", () => {
     await confirmIdentity();
     await waitFor(() => expect(open).toHaveBeenCalledWith(1));
     expect(inputs).not.toHaveBeenCalled();
-    expect(await screen.findByRole("button", { name: /Finish & Submit/i })).toBeDefined();
+    expect(await screen.findByRole("button", { name: /Finish & submit/i })).toBeDefined();
   });
 
   it("requires and sends explicit round selection when resuming is ambiguous", async () => {
@@ -262,7 +262,7 @@ describe("A4/A5: review decisions and notes", () => {
     fireEvent.keyDown(window, { key: "2" });
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
     expect(decide.mock.calls[0][1].payload).toEqual(expect.objectContaining({ outcome: "rejected", note: "wrong body site" }));
-    // The only proposal is decided, so the selection moved on to Finish & Submit; J brings it back.
+    // The only proposal is decided, so the selection moved on to Finish & submit; J brings it back.
     await waitFor(() => expect(screen.queryByLabelText("Reviewer note")).toBeNull());
     fireEvent.keyDown(window, { key: "j" });
 
@@ -369,7 +369,7 @@ describe("A6: conflicts and offline state", () => {
     fireEvent.click(screen.getByText("HP:0003"));
     fireEvent.click(screen.getByRole("radio", { name: /Present/i }));
     await screen.findByRole("alert", { name: /Revision conflict/i });
-    fireEvent.click(screen.getByRole("button", { name: /Next Case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Next text/i }));
     const dialog = await screen.findByRole("dialog", { name: /Case was changed elsewhere/i });
     fireEvent.click(within(dialog).getByRole("button", { name: /Discard edits and leave/i }));
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("doc-2"));
@@ -405,11 +405,11 @@ describe("Submit", () => {
     const submit = vi.spyOn(api, "submitWorkspace").mockResolvedValue({ submission_id: "s", created_at: "now", snapshots: [], decisions: [] } as any);
     const onSubmitted = vi.fn();
     render(<CaseScreen view={view} workspaceId="ws" onClose={vi.fn()} onSubmitted={onSubmitted} />);
-    expect(screen.getAllByRole("button", { name: /Submit Case/i })).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
-    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
+    expect(screen.getAllByRole("button", { name: /Submit text/i })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
+    const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
     expect(dialog.textContent).toMatch(/1 annotation in this case/);
-    const confirm = within(dialog).getByRole("button", { name: /^Submit case$/i }) as HTMLButtonElement;
+    const confirm = within(dialog).getByRole("button", { name: /^Submit text$/i }) as HTMLButtonElement;
     expect(dialog.textContent).toContain("Submitting confirms you checked the entire text for further findings.");
     expect(confirm.getAttribute("aria-disabled")).toBeNull();
     fireEvent.click(confirm);
@@ -420,26 +420,26 @@ describe("Submit", () => {
   it("shows open review decisions in the summary and blocks submission", async () => {
     vi.spyOn(api, "submitWorkspace");
     render(<CaseScreen view={reviewView()} workspaceId="ws" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
-    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
+    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
+    const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
     expect(dialog.textContent).toMatch(/0 of 1 review proposal decided/);
-    expect(within(dialog).getByRole("button", { name: /^Submit case$/i }).getAttribute("aria-disabled")).toBe("true");
+    expect(within(dialog).getByRole("button", { name: /^Submit text$/i }).getAttribute("aria-disabled")).toBe("true");
   });
 });
 
 describe("Review cases", () => {
   const confirmed = { decision_id: "d", target: { annotation_id: "prop", version: "p-v1" }, outcome: "confirmed" as const, reviewer_id: "dr-a" };
   const submitCase = async () => {
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
-    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
+    const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit text$/i }));
   };
 
   it("counts confirmed proposals among the annotations that will be submitted", async () => {
     const own = proposal("own", "o-v1", "HP:0003");
     render(<CaseScreen view={reviewView([confirmed], [own], own.evidence)} workspaceId="ws" onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
-    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
+    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
+    const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
     expect(dialog.textContent).toMatch(/2 annotations will be submitted \(1 confirmed proposal, 1 saved finding\)/);
   });
 
@@ -454,7 +454,7 @@ describe("Review cases", () => {
     render(<CaseScreen view={reviewView([confirmed])} workspaceId="ws" onClose={vi.fn()}
       onNavigateCase={onNavigate} documentList={documentList} />);
     await submitCase();
-    fireEvent.click(await screen.findByRole("button", { name: /Review next case \(Case 2\)/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Review next text \(Text 2\)/i }));
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith("doc-de"));
   });
 
@@ -467,8 +467,8 @@ describe("Review cases", () => {
     render(<CaseScreen view={reviewView([confirmed])} workspaceId="ws" onClose={vi.fn()}
       onNavigateCase={vi.fn()} documentList={documentList} />);
     await submitCase();
-    await screen.findByRole("dialog", { name: /Case submitted/i });
-    expect(screen.getByRole("button", { name: /Review next case/i })).toBeDefined();
+    await screen.findByRole("dialog", { name: /Text submitted/i });
+    expect(screen.getByRole("button", { name: /Review next text/i })).toBeDefined();
   });
 
   it("quotes each proposal's text so equally named proposals can be told apart", () => {
@@ -618,10 +618,10 @@ describe("Shortcuts and error handling", () => {
     const onNavigate = vi.fn().mockRejectedValue(new Error("network down"));
     render(<CaseScreen view={baseView()} workspaceId="ws" onClose={vi.fn()} onNavigateCase={onNavigate}
       documentList={[{ ...docs[0], document_id: "doc" }, docs[1]]} />);
-    fireEvent.click(screen.getByRole("button", { name: /Finish & Submit/i }));
-    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /Review next case/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Finish & submit/i }));
+    const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit text$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Review next text/i }));
     await waitFor(() => expect(screen.getByText("network down")).toBeDefined());
   });
 

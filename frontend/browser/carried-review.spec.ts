@@ -61,7 +61,7 @@ const findingRow = (page: Page, term: string) => page.locator('.sidebar [data-li
 const placeholderRow = (page: Page) => page.locator('.sidebar [data-list-key^="input:"]');
 const progress = (page: Page) => page.locator(".carried-progress__status");
 const carriedSection = (page: Page) => page.getByRole("region", { name: "Carried finding", exact: true });
-const submitButton = (page: Page) => page.getByRole("button", { name: /^Finish & Submit/ });
+const submitButton = (page: Page) => page.getByRole("button", { name: /^Finish & submit/ });
 const noteField = (page: Page) => page.locator('.inspector-pane textarea[id^="annotation-note-"]');
 
 /** Specific exception sentences per stored review reason (`editor/carried/instructions.ts`). */
@@ -85,7 +85,7 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   const placeholder = placeholderRow(page);
 
   // The toolbar counts the open check before the submit dialog was ever opened.
-  await expect(submitButton(page)).toHaveText("Finish & Submit (1 open)");
+  await expect(submitButton(page)).toHaveText("Finish & submit (1 open)");
   await expect(page.getByRole("button", { name: "Next open item", exact: true })).toBeVisible();
   await expect(page.getByText(/^Round 2\W+continued from Round 1$/)).toBeVisible();
   await expect(page.getByText(/^Findings \(2\)$/)).toBeVisible();
@@ -111,7 +111,7 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   await expect(seizure).not.toContainText("Check needed");
   await expect(section.locator("[data-carried-collapsed]")).toBeFocused();
   await expect(section).toContainText(/Checked\W+Carried from Round 1 \(submitted /);
-  await expect(submitButton(page)).toHaveText("Finish & Submit Case");
+  await expect(submitButton(page)).toHaveText("Finish & submit text");
   await expect(page.getByRole("button", { name: "Next open item", exact: true })).toHaveCount(0);
 
   // Edit after the check: "Check needed" plus "Changed after your check".
@@ -122,7 +122,7 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   await expect(seizure).toContainText("Changed after your check. Check it again.");
   await expect(section).toContainText("You changed this finding after checking it. Check it again.");
   await expect(progress(page)).toHaveText("0 of 1 checked");
-  await expect(submitButton(page)).toHaveText("Finish & Submit (1 open)");
+  await expect(submitButton(page)).toHaveText("Finish & submit (1 open)");
 
   // "Does not apply…" with a reason removes the carried finding: a dismissed placeholder row.
   const reason = "Not part of this report after the correction.";
@@ -152,11 +152,11 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
 
   // The submit dialog lists the open check with its own "Go to", which focuses "Mark as checked".
   await submitButton(page).click();
-  const dialog = page.getByRole("dialog", { name: "Submit case" });
+  const dialog = page.getByRole("dialog", { name: "Submit text" });
   await expect(dialog).toContainText("1 carried finding still needs a check");
   await expect(dialog.locator("[data-open-item]")).toHaveCount(1);
   await expect(dialog.locator("[data-open-item]")).toContainText("Seizure");
-  const submit = dialog.getByRole("button", { name: "Submit case", exact: true });
+  const submit = dialog.getByRole("button", { name: "Submit text", exact: true });
   await expect(submit).toHaveAttribute("aria-disabled", "true");
   await expect(submit).toHaveAccessibleDescription("Check 1 carried finding before submitting.");
   await dialog.getByRole("button", { name: "Go to Seizure", exact: true }).click();
@@ -208,7 +208,7 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   await expect(progress(page)).toHaveText("All carried findings checked");
   await expect(hypotonia).toContainText("Checked");
   await expect(hypotonia).toContainText("Linked to carried Seizure (Round 1)");
-  await expect(submitButton(page)).toHaveText("Finish & Submit Case");
+  await expect(submitButton(page)).toHaveText("Finish & submit text");
   await evidence(page, "t5-linked");
 
   // Submit succeeds once every carried finding is checked.
@@ -325,7 +325,7 @@ test("keyboard only: N selects, Go to focuses Mark as checked, C checks; axe has
   // Toolbar submit → dialog → "Go to Seizure", by keyboard.
   await submitButton(page).focus();
   await page.keyboard.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "Submit case" });
+  const dialog = page.getByRole("dialog", { name: "Submit text" });
   await expect(dialog).toBeVisible();
   const goTo = dialog.getByRole("button", { name: "Go to Seizure", exact: true });
   for (let step = 0; step < 15 && !(await goTo.evaluate(element => element === document.activeElement)); step++) await page.keyboard.press("Tab");

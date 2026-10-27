@@ -99,12 +99,12 @@ export async function importPackage(page: Page, _scenario: string, projectKey: s
   await expect(page.locator("#project-select")).toHaveValue(projectKey);
 }
 
-/** "Finish & Submit Case" (or "Finish & Submit (n open)"), acknowledge open values and confirm. */
+/** "Finish & submit text" (or "Finish & submit (n open)"), acknowledge open values and confirm. */
 export async function submitCase(page: Page) {
-  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Submit case" });
+  await page.getByRole("button", { name: /^Finish & submit/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Submit text" });
   await expect(dialog).toBeVisible();
-  const submit = dialog.getByRole("button", { name: /^Submit case$/ });
+  const submit = dialog.getByRole("button", { name: /^Submit text$/ });
   // Unconfirmed values (defaults or empty) are acknowledged in one tick; the dialog resends once.
   const acknowledgement = dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values?$/ });
   if (await acknowledgement.isVisible()) {
@@ -119,9 +119,9 @@ export async function submitCase(page: Page) {
   await expectSubmitted(page);
 }
 
-/** M-6: no "Case submitted" dialog; the next task (or My tasks) opens and the toast names the submission. */
+/** M-6: no "Text submitted" dialog; the next task (or My tasks) opens and the toast names the submission. */
 export async function expectSubmitted(page: Page) {
-  await expect(page.getByRole("dialog", { name: "Case submitted" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Text submitted" })).toHaveCount(0);
   await expect(page.locator(".ui-toast").getByText(/ submitted\.$/)).toBeVisible();
 }
 

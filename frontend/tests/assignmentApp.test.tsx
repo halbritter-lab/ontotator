@@ -164,22 +164,22 @@ it.each(["open", "submitted"] as const)("after a submit with a %s neighbor opens
     return { submission_id: "submission", created_at: "2026-10-14T12:00:00Z", draft_revision: 1, snapshots: [], decisions: [] } as any;
   });
   render(<App user={testUser("alice")} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Finish & Submit Case/ }));
-  const submit = await screen.findByRole("dialog", { name: "Submit case" });
+  fireEvent.click(await screen.findByRole("button", { name: /Finish & submit text/ }));
+  const submit = await screen.findByRole("dialog", { name: "Submit text" });
   // The finding's empty assertion is an unconfirmed value (the server warns for empty axes too).
   fireEvent.click(within(submit).getByRole("checkbox", { name: "Submit with 1 unconfirmed value" }));
-  expect(within(submit).getByRole("button", { name: "Submit case" })).toHaveProperty("disabled", false);
-  fireEvent.click(within(submit).getByRole("button", { name: "Submit case" }));
+  expect(within(submit).getByRole("button", { name: "Submit text" })).toHaveProperty("disabled", false);
+  fireEvent.click(within(submit).getByRole("button", { name: "Submit text" }));
   // No second modal: the next open task opens by itself; a submitted neighbour is skipped.
   if (status === "open") {
     await waitFor(() => expect(open).toHaveBeenLastCalledWith(4));
-    await waitFor(() => expect((screen.getByRole("combobox", { name: "Select case" }) as HTMLSelectElement).value).toBe("4"));
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "Select text" }) as HTMLSelectElement).value).toBe("4"));
     expect(window.location.hash).toBe("#/tasks/4");
   } else {
     await waitFor(() => expect(window.location.hash).toBe("#/?status=all"));
     expect(open).not.toHaveBeenCalledWith(4);
   }
-  expect(screen.queryByRole("dialog", { name: "Case submitted" })).toBeNull();
+  expect(screen.queryByRole("dialog", { name: "Text submitted" })).toBeNull();
   expect(first.read_only).toBe(false);
   const toast = (await screen.findByText(/^\S+ \S+ submitted\.$/)).closest(".ui-toast") as HTMLElement;
   fireEvent.click(within(toast).getByRole("button", { name: "View result" }));
@@ -250,12 +250,12 @@ it("uses assignment identity, project/task scope and server order for select and
     { ...tasks[0], assignment_id: 28, task: "review" }, tasks[1],
   ]);
   render(<App user={testUser("alice")} />);
-  const select = await screen.findByRole("combobox", { name: "Select case" }) as HTMLSelectElement;
+  const select = await screen.findByRole("combobox", { name: "Select text" }) as HTMLSelectElement;
   expect(Array.from(select.options).map(option => option.value)).toEqual(["17", "4"]);
   expect(select.selectedOptions[0].textContent).toContain(first.view.document.document_id);
   fireEvent.change(select, { target: { value: "4" } });
   await waitFor(() => expect(open).toHaveBeenLastCalledWith(4));
-  await waitFor(() => expect((screen.getByRole("combobox", { name: "Select case" }) as HTMLSelectElement).selectedOptions[0].textContent).toContain(second.view.document.document_id));
+  await waitFor(() => expect((screen.getByRole("combobox", { name: "Select text" }) as HTMLSelectElement).selectedOptions[0].textContent).toContain(second.view.document.document_id));
   fireEvent.keyDown(document.querySelector(".text-container")!, { key: "ArrowLeft", altKey: true });
   await waitFor(() => expect(open).toHaveBeenLastCalledWith(17));
 });
@@ -265,7 +265,7 @@ it("restores browser history after cancelling Back, then lets Back and Forward n
   vi.mocked(api.openAssignment).mockImplementation(async id => assigned(id === 17 ? first : second, id));
   vi.spyOn(api, "applyCommand").mockRejectedValue(new TypeError("Offline"));
   render(<App user={testUser("alice")} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Next Case" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Next text" }));
   await waitFor(() => expect(window.location.hash).toBe("#/tasks/4"));
   await editFinding();
   await screen.findByText("Offline – changes not saved");
@@ -291,7 +291,7 @@ async function threeTaskHistory() {
   vi.spyOn(api, "getProfile").mockReturnValue(new Promise(() => {}));
   render(<App user={testUser("alice")} />);
   for (const id of [4, 8]) {
-    fireEvent.click(await screen.findByRole("button", { name: "Next Case" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Next text" }));
     await waitFor(() => expect(window.location.hash).toBe(`#/tasks/${id}`));
     await waitFor(() => expect(open).toHaveBeenLastCalledWith(id));
   }

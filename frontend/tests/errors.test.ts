@@ -30,7 +30,7 @@ describe("shared API error messages", () => {
 
 it("explains the pending reanchor count and unsupported flagged re-import", () => {
   expect(errorMessage(new ApiError(422, "raw", "REANCHOR_ITEMS_UNRESOLVED", { count: 3 }))).toBe("3 finding(s) after text correction still need review. Re-create them or dismiss them with a reason before submitting.");
-  expect(errorMessage(new ApiError(422, "raw", "UNSUPPORTED_REVIEW_RESOLUTION"))).toContain("cannot currently be re-imported into proposal storage");
+  expect(errorMessage(new ApiError(422, "raw", "UNSUPPORTED_REVIEW_RESOLUTION"))).toContain("cannot currently be imported again as proposals");
 });
 
 it("names the version and the refused field in guideline refusals", () => {

@@ -38,7 +38,7 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    expect(screen.getByText(/Case 1 of 3|Fall 1 von 3/i)).toBeTruthy();
+    expect(screen.getByText(/Text 1 of 3|Fall 1 von 3/i)).toBeTruthy();
   });
 
   it("disables previous button on first case and allows next button", () => {
@@ -51,8 +51,8 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    const prevBtn = screen.getByRole("button", { name: /Previous Case|Vorheriger Fall/i });
-    const nextBtn = screen.getByRole("button", { name: /Next Case|Nächster Fall/i });
+    const prevBtn = screen.getByRole("button", { name: /Previous text|Vorheriger Fall/i });
+    const nextBtn = screen.getByRole("button", { name: /Next text|Nächster Fall/i });
 
     expect((prevBtn as HTMLButtonElement).disabled).toBe(true);
     expect((nextBtn as HTMLButtonElement).disabled).toBe(false);
@@ -71,8 +71,8 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    const prevBtn = screen.getByRole("button", { name: /Previous Case|Vorheriger Fall/i });
-    const nextBtn = screen.getByRole("button", { name: /Next Case|Nächster Fall/i });
+    const prevBtn = screen.getByRole("button", { name: /Previous text|Vorheriger Fall/i });
+    const nextBtn = screen.getByRole("button", { name: /Next text|Nächster Fall/i });
 
     expect((prevBtn as HTMLButtonElement).disabled).toBe(false);
     expect((nextBtn as HTMLButtonElement).disabled).toBe(true);
@@ -91,7 +91,7 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    const select = screen.getByRole("combobox", { name: /Select case|Fall auswählen/i });
+    const select = screen.getByRole("combobox", { name: /Select text|Fall auswählen/i });
     fireEvent.change(select, { target: { value: "doc-gamma" } });
 
     expect(onNavigate).toHaveBeenCalledWith("doc-gamma");
@@ -121,9 +121,9 @@ describe("CaseNavigation Component", () => {
       />
     );
 
-    const prevBtn = screen.getByRole("button", { name: /Previous Case|Vorheriger Fall/i });
-    const nextBtn = screen.getByRole("button", { name: /Next Case|Nächster Fall/i });
-    const select = screen.getByRole("combobox", { name: /Select case|Fall auswählen/i });
+    const prevBtn = screen.getByRole("button", { name: /Previous text|Vorheriger Fall/i });
+    const nextBtn = screen.getByRole("button", { name: /Next text|Nächster Fall/i });
+    const select = screen.getByRole("combobox", { name: /Select text|Fall auswählen/i });
 
     expect((prevBtn as HTMLButtonElement).disabled).toBe(true);
     expect((nextBtn as HTMLButtonElement).disabled).toBe(true);
@@ -143,11 +143,11 @@ describe("CaseNavigation Component", () => {
       const { rerender } = render(
         <CaseNavigation documents={reviewDocuments} currentDocumentId="doc-beta" onNavigate={onNavigate} />
       );
-      fireEvent.click(screen.getByRole("button", { name: /Next Case/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Next text/i }));
       expect(onNavigate).toHaveBeenLastCalledWith("doc-alpha");
 
       rerender(<CaseNavigation documents={reviewDocuments} currentDocumentId="doc-gamma" onNavigate={onNavigate} />);
-      fireEvent.click(screen.getByRole("button", { name: /Previous Case/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Previous text/i }));
       expect(onNavigate).toHaveBeenLastCalledWith("doc-alpha");
     });
 
@@ -159,7 +159,7 @@ describe("CaseNavigation Component", () => {
           onNavigate={vi.fn()}
         />
       );
-      expect((screen.getByRole("button", { name: /Next Case/i }) as HTMLButtonElement).disabled).toBe(false);
+      expect((screen.getByRole("button", { name: /Next text/i }) as HTMLButtonElement).disabled).toBe(false);
     });
 
     it("keeps cases without proposals available in the case list", () => {
@@ -178,14 +178,14 @@ describe("CaseNavigation Component", () => {
       { ...sampleDocuments[1], document_id: `${prefix}114:18177466:native` },
     ];
     render(<CaseNavigation documents={documents} currentDocumentId={documents[0].document_id} onNavigate={vi.fn()} />);
-    expect(screen.getByRole("option", { name: /Case 1 of 2/ }).textContent).toBe("Case 1 of 2: …100:12011146:native (Submitted)");
-    expect(screen.getByRole("option", { name: /Case 2 of 2/ }).textContent).toBe("Case 2 of 2: …114:18177466:native (In progress)");
-    expect(screen.getByRole("combobox", { name: /Select case/i }).getAttribute("title")).toBe(documents[0].document_id);
+    expect(screen.getByRole("option", { name: /Text 1 of 2/ }).textContent).toBe("Text 1 of 2: …100:12011146:native (Submitted)");
+    expect(screen.getByRole("option", { name: /Text 2 of 2/ }).textContent).toBe("Text 2 of 2: …114:18177466:native (In progress)");
+    expect(screen.getByRole("combobox", { name: /Select text/i }).getAttribute("title")).toBe(documents[0].document_id);
   });
 
   it("keeps IDs whole when they share no long prefix", () => {
     render(<CaseNavigation documents={sampleDocuments} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
-    expect(screen.getByRole("option", { name: /Case 2 of 3/ }).textContent).toBe("Case 2 of 3: doc-alpha (In progress)");
+    expect(screen.getByRole("option", { name: /Text 2 of 3/ }).textContent).toBe("Text 2 of 3: doc-alpha (In progress)");
   });
 
   it("names a text by case ID, language and corrected version, never by its document ID (R-11)", () => {
@@ -194,14 +194,14 @@ describe("CaseNavigation Component", () => {
       { ...sampleDocuments[1], document_id: "ready-translation~de~v2", case_id: "synthetic-ready", version: 2, origin: "correction", position: 2 },
     ];
     render(<CaseNavigation documents={documents} currentDocumentId={documents[1].document_id} onNavigate={vi.fn()} />);
-    expect(screen.getByRole("option", { name: /Case 1 of 2/ }).textContent).toBe("Case 1 of 2: synthetic-ready de (Submitted)");
-    expect(screen.getByRole("option", { name: /Case 2 of 2/ }).textContent).toBe("Case 2 of 2: synthetic-ready de v2 corrected (In progress)");
+    expect(screen.getByRole("option", { name: /Text 1 of 2/ }).textContent).toBe("Text 1 of 2: synthetic-ready de (Submitted)");
+    expect(screen.getByRole("option", { name: /Text 2 of 2/ }).textContent).toBe("Text 2 of 2: synthetic-ready de v2 corrected (In progress)");
   });
 
   it("shows Case n of m without the document id", () => {
     render(<CaseNavigation documents={[sampleDocuments[0]]} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
-    const label = screen.getByText("Case 1 of 1");
-    expect(label.textContent).toBe("Case 1 of 1");
+    const label = screen.getByText("Text 1 of 1");
+    expect(label.textContent).toBe("Text 1 of 1");
     expect(label.getAttribute("title")).toBe("doc-beta");
     expect(screen.queryByText(/doc-beta/)).toBeNull();
   });

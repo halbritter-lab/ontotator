@@ -176,7 +176,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
   ];
   // One entry: the project's Documents, or with several managed projects the Projects page (it lists them with their open decisions).
   const emptyRoute: Route | null = managed.length === 1 ? { name: "projectDocuments", key: managed[0].project_key } : managed.length > 1 ? { name: "projects" } : null;
-  const empty = <EmptyState title="No documents are assigned to you yet." action={emptyRoute &&
+  const empty = <EmptyState title="No texts are assigned to you yet." action={emptyRoute &&
     <a className="btn btn-secondary" href={routeHref(emptyRoute)} onKeyDown={onSpaceActivate} onClick={event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault();

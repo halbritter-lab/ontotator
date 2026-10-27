@@ -69,7 +69,7 @@ export function SubmitCaseDialog({
   const [announcement, setAnnouncement] = useState<{ count: number } | null>(null);
   useEffect(() => { if (!open) setAnnouncement(null); }, [open]);
   const submitButton = useRef<HTMLButtonElement>(null);
-  // No confirmable row left to focus: "Submit case".
+  // No confirmable row left to focus: "Submit text".
   const focusAfterRows = useCallback(() => submitButton.current?.focus(), []);
 
   // Defaulted and unconfirmed values have their own section; the generic list keeps the other kinds.
@@ -99,7 +99,7 @@ export function SubmitCaseDialog({
   };
 
   return (
-    <Dialog open={open} title="Submit case" heading={<>Submit case {documentId}?</>} onClose={onCancel}
+    <Dialog open={open} title="Submit text" heading={<>Submit text {documentId}?</>} onClose={onCancel}
       footer={<>
         <Button
           ref={submitButton}
@@ -110,7 +110,7 @@ export function SubmitCaseDialog({
           aria-describedby={blockedReason ? reasonId : undefined}
           onClick={submit}
         >
-          Submit case
+          Submit text
         </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel

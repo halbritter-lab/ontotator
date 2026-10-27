@@ -356,7 +356,7 @@ test("step 12: Accept result… → Consolidated by Ana, accept the result", asy
 
 test("step 13: Export preflight: 1 final, no omission for de, en not in plan", async () => {
   await page.getByRole("link", { name: "Export final results…", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Export preflight" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Export check" })).toBeVisible({ timeout: 30_000 });
   const preflight = page.locator(".final-export-preflight");
   await expect(preflight).toContainText(/1 selected result\W+0 warnings\W+0 omitted/);
   await expect(preflight.getByRole("list", { name: "Omitted without a final selection" })).toHaveCount(0);

@@ -292,13 +292,13 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     });
 
     // 5. Complete / Submit workspace
-    // Submitting confirms the entire text was checked (a sentence above "Submit case").
-    const submitBtn = screen.getByRole("button", { name: /Finish & Submit Case|Fall abschließen & abgeben/i });
+    // Submitting confirms the entire text was checked (a sentence above "Submit text").
+    const submitBtn = screen.getByRole("button", { name: /Finish & submit text|Fall abschließen & abgeben/i });
     fireEvent.click(submitBtn);
-    const dialog = await screen.findByRole("dialog", { name: /Submit case/i });
+    const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
     // The review proposals keep empty experiencer and temporality: acknowledge them in one tick.
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 4 unconfirmed values" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit case$/i }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit text$/i }));
 
     await waitFor(() => {
       expect(submitSpy).toHaveBeenCalledWith(
@@ -311,7 +311,7 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
 
     // The submitted dialog offers no download: exports are made by an administrator (T2d).
     await waitFor(() => {
-      expect(screen.getByRole("dialog", { name: "Case submitted" })).toBeDefined();
+      expect(screen.getByRole("dialog", { name: "Text submitted" })).toBeDefined();
     });
     expect(screen.queryByRole("button", { name: /Download Export|Export herunterladen/i })).toBeNull();
   });

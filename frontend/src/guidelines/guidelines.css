@@ -4,8 +4,18 @@
   gap: var(--space-3);
 }
 
+/* The h2 of the type ramp (the class opts out of the raw-element ramp). */
 .guideline-reader-heading {
   margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--size-xl);
+  line-height: var(--leading-xl);
+  font-weight: var(--weight-regular);
+}
+
+/* Below the reader's title the document's top heading steps down a size. */
+.guideline-reader-heading ~ .guideline-document .guideline-heading-1 {
+  font-size: var(--size-reading);
 }
 
 .guideline-reader-meta,

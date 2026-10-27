@@ -32,7 +32,7 @@ export class CaseErrorBoundary extends React.Component<CaseErrorBoundaryProps, S
     if (!this.state.error) return this.props.children;
     return (
       <div role="alert" style={{ padding: 32, maxWidth: 640, margin: "40px auto" }}>
-        <h2>Something went wrong while displaying this case.</h2>
+        <h1>Something went wrong while displaying this text.</h1>
         <p style={{ color: "var(--text-muted)" }}>
           Changes that were already saved are kept on the server. Details: {this.state.error.message}
         </p>

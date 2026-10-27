@@ -2743,7 +2743,7 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   color: var(--text);
 }
 
-/* Compact case header below 700 px (after the base header rules so it wins): tighter rows; no "Case 1 of 1"
+/* Compact case header below 700 px (after the base header rules so it wins): tighter rows; no "Text 1 of 1"
    and no "as {me}" (the shell header names the user). */
 @media (max-width: 700px) {
   .case-toolbar {
