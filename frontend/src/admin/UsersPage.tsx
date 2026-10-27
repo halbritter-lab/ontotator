@@ -35,7 +35,10 @@ const auditActions: Readonly<Record<string, string>> = {
   "project.create": "Project created",
   "project.update": "Project settings changed",
   "project.import": "Texts imported",
+  "project.edit_log_export": "Edit log exported",
+  "project.export": "Export created",
   "project.export_download": "Export downloaded",
+  "project.final_export": "Final export created",
   "project.final_export_requested": "Final export requested",
   "project.final_selection": "Final selection changed",
   "project.translation_review_export": "Translation reviews exported",
@@ -49,7 +52,13 @@ const auditActions: Readonly<Record<string, string>> = {
   "guideline.upload": "Guideline uploaded",
   "guideline.withdraw": "Guideline withdrawn",
   "ontology.add": "Ontology added",
+  "problem.extend_hold": "Tasks paused for a problem",
+  "problem.reopen": "Problem reopened",
   "problem.report": "Problem reported",
+  "problem.resolve": "Problem resolved",
+  "problem.restart": "Task restarted after a problem",
+  "problem.resume": "Tasks resumed after a problem",
+  "problem.withdraw": "Problem report withdrawn",
   "round.create": "Consolidation round started",
   "text_change.auto_carry": "Text change carried over automatically",
   "text_change.carry": "Text change carried over",
@@ -67,20 +76,27 @@ const auditActions: Readonly<Record<string, string>> = {
   "work_plan.import": "Work plan imported",
   "work_plan.update": "Work plan changed",
 };
+const isBlank = (value: unknown): boolean =>
+  value === null || value === undefined || value === "" || (Array.isArray(value) ? value.length === 0 : typeof value === "object" && Object.keys(value).length === 0);
 const auditValue = (key: string, value: unknown): string =>
   key === "task" && typeof value === "string" ? labelFor(taskLabels, value)
-    : Array.isArray(value) ? value.map(item => auditValue(key, item)).join(", ")
+    : Array.isArray(value) ? value.filter(item => !isBlank(item)).map(item => item !== null && typeof item === "object" && !Array.isArray(item) ? `(${auditValue(key, item)})` : auditValue(key, item)).join(", ")
       : typeof value === "boolean" ? (value ? "yes" : "no")
-        : value !== null && typeof value === "object" ? JSON.stringify(value) : String(value);
+        : value !== null && typeof value === "object" ? auditEntries(value as Record<string, unknown>).join(", ") : String(value);
+/** "Key: value" for each non-empty entry; a user id becomes the person's name when known. */
+const auditEntries = (details: Record<string, unknown>, userNames?: ReadonlyMap<number, string>): string[] =>
+  Object.entries(details).filter(([, value]) => !isBlank(value)).map(([key, value]) =>
+    key === "user_id" && typeof value === "number" ? (userNames?.has(value) ? `User: ${userNames.get(value)}` : `User ${value}`)
+      : `${humanize(key)}: ${auditValue(key, value)}`);
 /** Plain words for the audit details people need; any other details as "Key: value" text. */
-export function auditDetails(event: AuditEvent): string {
+export function auditDetails(event: AuditEvent, userNames?: ReadonlyMap<number, string>): string {
   const details = event.details as Record<string, unknown>;
   if (Array.isArray(details.roles)) return details.roles.map(role => labelFor(roleLabels, String(role))).join(", ");
   if (typeof details.active === "boolean") return details.active ? "Activated" : "Deactivated";
   if (typeof details.is_system_admin === "boolean") return details.is_system_admin ? "Granted" : "Withdrawn";
   if (Array.isArray(details.fields)) return details.fields.join(", ");
   if (typeof details.purpose === "string" && Object.keys(details).length === 1) return `${humanize(details.purpose)} code`;
-  return Object.entries(details).map(([key, value]) => `${humanize(key)}: ${auditValue(key, value)}`).join("; ");
+  return auditEntries(details, userNames).join("; ");
 }
 /** "user:lena" is the person; "cli:jan-p" is an operator on the server's command line. */
 export function auditActor(actor: string): string {
@@ -282,6 +298,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   };
   const edit = (change: Partial<AdminUser>) => { setEditError(undefined); setEditing(value => value && { ...value, draft: { ...value.draft, ...change } }); };
 
+  const userNames = new Map((users ?? []).map(user => [user.id, user.display_name || user.username]));
   const columns: Column<AdminUser>[] = [
     { id: "username", header: "Username", cell: user => user.username, sortValue: user => user.username },
     { id: "name", header: "Display name", cell: user => user.display_name },
@@ -357,7 +374,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
           { id: "action", header: "What", cell: event => labelFor(auditActions, event.action) },
           { id: "target", header: "Whom", cell: event => event.target_type === "user" ? event.target_id : `${humanize(event.target_type)} ${event.target_id}` },
           { id: "project", header: "Project", cell: event => event.project_key ?? "" },
-          { id: "details", header: "Details", cell: auditDetails },
+          { id: "details", header: "Details", cell: event => <span className="audit-details">{auditDetails(event, userNames)}</span> },
         ]} />}
       <p className="field-hint">Newest first, at most 200 entries. The CLI command <code>ontotator admin audit</code> exports the whole trail.</p>
     </Dialog>}

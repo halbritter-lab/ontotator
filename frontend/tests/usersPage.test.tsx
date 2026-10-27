@@ -7,8 +7,8 @@ import { auditActor, auditDetails, UsersPage } from "../src/admin/UsersPage";
 import { formatDateTime, formatShortDateTime } from "../src/app/labels";
 
 const currentUser: CurrentUser = { username: "root", display_name: "Root", pseudonym: "ann-root", is_system_admin: true, csrf_token: "csrf" };
-const root: AdminUser = { qualification: null, username: "root", display_name: "Root", email: null, pseudonym: "ann-root", is_system_admin: true, active: true, languages: ["de"], projects: [], setup_pending: false, anonymised: false };
-const alex: AdminUser = { ...root, username: "alex", display_name: "Alex Smith", email: "alex@example.org", pseudonym: "ann-alex", languages: ["en"], projects: [{ project_key: "study-one", project_name: "Study One", roles: ["lead", "annotator"] }] };
+const root: AdminUser = { id: 1, qualification: null, username: "root", display_name: "Root", email: null, pseudonym: "ann-root", is_system_admin: true, active: true, languages: ["de"], projects: [], setup_pending: false, anonymised: false };
+const alex: AdminUser = { ...root, id: 2, username: "alex", display_name: "Alex Smith", email: "alex@example.org", pseudonym: "ann-alex", languages: ["en"], projects: [{ project_key: "study-one", project_name: "Study One", roles: ["lead", "annotator"] }] };
 const created: CreatedUser = { user: { ...alex, username: "bea", display_name: "Beatrice", pseudonym: "ann-bea", is_system_admin: false, projects: [] }, code: "new-setup-secret", expires_at: "2026-10-17T12:30:00Z" };
 const reset: CodeResponse = { code: "new-reset-secret", expires_at: "2026-10-17T13:30:00Z" };
 const deferred = <T,>() => { let resolve!: (value: T) => void; let reject!: (error: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
@@ -259,6 +259,7 @@ describe("account status, projects at creation, history and erasure", () => {
       { at: "2026-10-20T08:00:00Z", actor: "user:root", action: "project.member_add", target_type: "user", target_id: "alex", project_key: "study-one", details: { username: "alex", roles: ["adjudicator"] } },
       { at: "2026-10-19T08:00:00Z", actor: "cli:ops", action: "user.create", target_type: "user", target_id: "alex", project_key: null, details: { pseudonym: "ann-alex", system_admin: false } },
       { at: "2026-10-18T08:00:00Z", actor: "user:alex", action: "assignment.create", target_type: "assignment", target_id: "115", project_key: "study-one", details: { task: "annotate" } },
+      { at: "2026-10-17T08:00:00Z", actor: "user:root", action: "problem.resolve", target_type: "problem_report", target_id: "9", project_key: "study-one", details: { user_id: 2, reason: null } },
     ]);
     render(<UsersPage currentUser={currentUser} />); await load();
     more("alex", "History");
@@ -270,6 +271,8 @@ describe("account status, projects at creation, history and erasure", () => {
     expect(within(dialog).getByText("Task assigned")).toBeTruthy();
     expect(within(dialog).getByText("Assignment 115")).toBeTruthy();
     expect(within(dialog).getByText("Task: Annotation")).toBeTruthy();
+    expect(within(dialog).getByText("Problem resolved")).toBeTruthy();
+    expect(within(dialog).getByText("User: Alex Smith")).toBeTruthy();
     expect(within(dialog).getByText(formatShortDateTime("2026-10-18T08:00:00Z"))).toBeTruthy();
     expect(api.adminUserAudit).toHaveBeenCalledWith("alex");
   });
@@ -307,7 +310,10 @@ describe("account status, projects at creation, history and erasure", () => {
     expect(auditDetails({ ...base, details: { fields: ["email"] } })).toBe("email");
     expect(auditDetails({ ...base, details: {} })).toBe("");
     expect(auditDetails({ ...base, details: { purpose: "setup" } })).toBe("Setup code");
-    expect(auditDetails({ ...base, details: { task: "annotate", user_id: 4, document_id: "case-1", ok: true } })).toBe("Task: Annotation; User id: 4; Document id: case-1; Ok: yes");
+    expect(auditDetails({ ...base, details: { task: "annotate", user_id: 4, document_id: "case-1", ok: true } })).toBe("Task: Annotation; User 4; Document id: case-1; Ok: yes");
+    expect(auditDetails({ ...base, details: { user_id: 4, reason: null, note: "" } }, new Map([[4, "Alex Smith"]]))).toBe("User: Alex Smith");
+    expect(auditDetails({ ...base, details: { counts: { texts: 3, variants: 0 }, sources: [{ name: "a.csv" }], plan_sha256: "ab" } }))
+      .toBe("Counts: Texts: 3, Variants: 0; Sources: (Name: a.csv); Plan sha256: ab");
   });
 
   it("words audit actors", () => {

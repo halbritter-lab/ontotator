@@ -2357,6 +2357,8 @@ export interface components {
         };
         /** AdminUser */
         AdminUser: {
+            /** Id */
+            id: number;
             /** Username */
             username: string;
             /** Display Name */
