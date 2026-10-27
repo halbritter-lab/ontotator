@@ -381,3 +381,49 @@ The round 2 per-request reductions (25–40% fewer statements) are not enough:
 under load each request still runs tens of statements, each costing about a
 millisecond of Python CPU, and two saturated CPUs cannot serve 30 users
 within the targets. No resources, workload or thresholds were changed.
+
+## P9 rerun 2026-10-27, 4 CPUs
+
+**Result: the 30-user P9 run still FAILS every p95 target, but 2–4× faster
+than with 2 CPUs. A 6-user run with realistic think time PASSES every target.**
+
+Source `main` at `6023b846` (after the rename to Ontotator; application code
+unchanged from the run above), image
+`sha256:dacad4152651bdc46a75faaef37626af5646d95016b1aad5c3fde031ed57dbac`.
+Same host, Docker Desktop, HPO release, seeder, locustfile and seed as above;
+fresh dev Compose project. Only change: app **4 CPUs, 4 Uvicorn workers**
+(workers follow CPUs as in the 2-CPU setup) and **4 GiB** memory, because the
+2-worker app already used 1.26 GiB. Verified limits: app 4 CPU / 4 GiB /
+4 workers / 256 PIDs / read-only root; PostgreSQL unchanged at 1 CPU / 1 GiB /
+256 PIDs / read-only root. Seeding exited 0 in 466 s.
+
+**Run A, P9 workload:** 30 users, ramp 5/s, 0.5–1.5 s think time, one-minute
+warmup, then a fresh five-minute measurement (exit 1, targets). 7,499
+requests, no failures, 25.0 requests/second (13.45 with 2 CPUs).
+
+**Run B, expected launch load:** 6 users, ramp 1/s, **5–15 s** think time,
+same tasks and weights, ten minutes on the warm stack (a wrapper locustfile
+only changes `wait_time` and lets the 30-user guard pass for 6 users). 492
+requests, no failures, 0.83 requests/second, exit 0.
+
+| Operation | A req | A p50 | A p95 | A p99 | B req | B p50 | B p95 | B p99 | Required p95 | A | B |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| Search | 2,336 | 250 | 880 | 1,200 | 149 | 65 | 80 | 95 | <150 | FAIL | PASS |
+| Open | 951 | 800 | 2,200 | 2,500 | 71 | 180 | 230 | 300 | <300 | FAIL | PASS |
+| Write | 3,684 | 300 | 1,100 | 1,400 | 236 | 77 | 100 | 150 | <150 | FAIL | PASS |
+| Dashboard | 498 | 190 | 530 | 750 | 30 | 61 | 85 | 95 | <500 | FAIL | PASS |
+| Setup/login | 30 | 210 | 510 | 640 | 6 | 69 | 90 | 90 | — | — | — |
+
+All times in ms (Locust histogram estimates; run B has small samples).
+
+`docker stats` every ~17 s. Run A: app 198–336% of its 4 CPUs (no longer
+saturated), 1.74 GiB; **PostgreSQL 73–106% of its single CPU, at the limit
+for most of the run**, 160–211 MiB. With more app CPU the bottleneck moved to
+the database CPU. Run B: app 1–61% (mean 7%), PostgreSQL 0–10% (mean 3%).
+
+Conclusion: 6 concurrent annotators with realistic pauses are served well
+within the targets with about 10% of the given CPU, so a launch with 6 people
+is fine on this sizing (2 CPUs would very likely suffice too, untested). The
+30-user P9 target stays open; it needs fewer statements per request and more
+than one PostgreSQL CPU. Evidence is under the ignored `build/p9-4cpu/` of the
+rename worktree; the stack, volumes and image were removed afterwards.
