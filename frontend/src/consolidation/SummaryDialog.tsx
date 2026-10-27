@@ -1,8 +1,6 @@
-/** Summary before submitting the consolidation (X12, T10): the decisions, then "Submit"; an advisory axis warning asks for an acknowledgement. */
-import { useState } from "react";
+/** Summary before submitting the consolidation (X12, T10): the decisions and terms kept twice, then one "Submit". */
 import { errorMessage } from "../admin/errors";
-import { Button, Checkbox, Dialog, InlineMessage } from "../ui";
-import type { AxisWarning } from "./useConsolidation";
+import { Button, Dialog, InlineMessage } from "../ui";
 
 export interface SummaryDialogProps {
   open: boolean;
@@ -10,28 +8,19 @@ export interface SummaryDialogProps {
   /** R-3: terms the result holds more than once ("More than one finding with the same term: Fatigue."). */
   duplicates?: string | null;
   busy: boolean;
-  warning: AxisWarning | null;
   error: unknown;
-  onSubmit: (acknowledged: boolean) => void;
+  onSubmit: () => void;
   onClose: () => void;
 }
 
-export function SummaryDialog({ open, summary, duplicates, busy, warning, error, onSubmit, onClose }: SummaryDialogProps): JSX.Element {
-  const [acknowledged, setAcknowledged] = useState(false);
-  const blocked = !!warning && !acknowledged;
+export function SummaryDialog({ open, summary, duplicates, busy, error, onSubmit, onClose }: SummaryDialogProps): JSX.Element {
   return <Dialog open={open} title="Submit consolidation?" onClose={busy ? undefined : onClose} footer={<>
     <Button onClick={() => { if (!busy) onClose(); }} aria-disabled={busy || undefined}>Back</Button>
-    <Button variant="primary" loading={busy} aria-disabled={blocked || undefined}
-      onClick={() => { if (!blocked) onSubmit(acknowledged); }}>Submit</Button>
+    <Button variant="primary" loading={busy} onClick={onSubmit}>Submit</Button>
   </>}>
     <p>The lead then accepts the result.</p>
     <p className="cons-summary">{summary}</p>
     {duplicates && <InlineMessage tone="warning">{duplicates}</InlineMessage>}
-    {warning && <>
-      {(warning.count > 0 || !warning.modifiers) && <InlineMessage tone="warning">{warning.count === 1 ? "1 finding has" : `${warning.count || "Some"} findings have`} values that were filled in by default, not chosen. Check them before you submit.</InlineMessage>}
-      {warning.modifiers > 0 && <InlineMessage tone="warning">{warning.modifiers === 1 ? "1 finding has" : `${warning.modifiers} findings have`} modifier warnings (cohort term or two of one kind).</InlineMessage>}
-      <Checkbox id="cons-axis-ack" label={warning.modifiers ? "I checked these values and modifiers" : "I checked these values"} checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />
-    </>}
     {!!error && <InlineMessage tone="error">{errorMessage(error)}</InlineMessage>}
   </Dialog>;
 }

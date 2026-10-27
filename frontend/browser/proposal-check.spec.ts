@@ -88,12 +88,8 @@ async function consolidateAll(page: Page): Promise<void> {
   await expect(submit).not.toHaveAttribute("aria-disabled", "true");
   await submit.click();
   const dialog = page.getByRole("dialog", { name: "Submit consolidation?" });
-  const ack = dialog.getByRole("checkbox", { name: "I checked these values" });
   const done = page.getByText("Consolidation submitted. Accept the result in Documents.", { exact: true });
-  await dialog.getByRole("button", { name: "Submit", exact: true }).click();
-  // Confirmed proposals leave default axis values: the server asks for an acknowledgement first.
-  await expect(ack).toBeVisible();
-  await ack.check();
+  // Confirmed proposals leave default axis values: the one Submit also acknowledges the server's warning.
   await dialog.getByRole("button", { name: "Submit", exact: true }).click();
   await expect(done).toBeVisible();
 }
