@@ -144,14 +144,6 @@ const segmentsKey = (evidence: { mention: { segments: { start: number; end: numb
       .sort(),
   );
 
-/** Why the backend refused to copy a proposal's modifier (Edit & Replace keeps the copy without it). */
-const MODIFIER_REFUSALS: Record<string, string> = {
-  MODIFIER_NOT_ALLOWED: "not allowed in this ontology",
-  MODIFIERS_NOT_SUPPORTED: "this layer has no modifiers",
-  UNKNOWN_TERM: "unknown term",
-  OBSOLETE_TERM: "obsolete term",
-};
-
 const modifiersKey = (modifiers: { term_id: string; segments?: { start: number; end: number }[] }[] | null | undefined) =>
   JSON.stringify((modifiers ?? [])
     .map((m) => [m.term_id, [...(m.segments ?? [])].sort((a, b) => a.start - b.start).map((s) => [s.start, s.end])] as const)
@@ -2215,7 +2207,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const firstSegments = supportingSegments ?? firstEvidence?.mention.segments ?? [];
     const firstEvidenceId = firstSegments.length > 0 ? newEvidenceId() : undefined;
     let created = false;
-    const notCopied: string[] = [];
     try {
       await enqueueMutation({
         command: "create_annotation",
@@ -2240,22 +2231,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           segments: evidenceList[i].mention.segments,
         });
       }
-      // create_annotation carries no modifiers: copy the proposal's one by one (same text, so with their spans).
-      // Best effort: a modifier the backend refuses is skipped and named, the copy stays.
-      for (const modifier of snap?.annotation.modifiers ?? []) {
-        try {
-          await enqueueMutation({
-            command: "add_modifier",
-            annotation_id: newAnnId,
-            term_id: modifier.term_id,
-            ...(modifier.segments?.length ? { segments: modifier.segments } : {}),
-          });
-        } catch (error) {
-          const why = error instanceof ApiError ? MODIFIER_REFUSALS[error.code ?? ""] : undefined;
-          if (!why) throw error;
-          notCopied.push(`${termLabel(targetLayer, modifier.term_id) ?? modifier.term_id}: ${why}`);
-        }
-      }
+      // create_annotation with source_annotation_id copies the proposal's modifiers on the server.
       copiedModifiers.current.set(newAnnId, modifiersKey(latestDraft.current.annotations
         ?.find((a) => a.annotation.annotation_id === newAnnId)?.annotation.modifiers));
     } catch (error) {
@@ -2278,7 +2254,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     if (reason?.trim() || supportingSegments?.length) {
       try { await syncReplacementDecision(newAnnId); } catch (error) { reportError(error); }
     }
-    if (notCopied.length) setActionError(`Copied without modifier ${notCopied.join("; ")}.`);
     setPendingEvidenceAdoption(null);
     openCopy(newAnnId);
     return newAnnId;
