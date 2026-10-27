@@ -19,7 +19,7 @@ dist
 docs
 tests
 loadtest
-*.db
-*.sqlite*
+**/*.db
+**/*.sqlite*
 **/secrets/
-.env*
+**/.env*

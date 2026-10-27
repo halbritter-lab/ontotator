@@ -31,7 +31,8 @@ services:
     cpus: 1.0
     pids_limit: 256
     healthcheck:
-      test: [CMD, pg_isready, -U, ontotator_bootstrap, -d, ontotator]
+      # TCP, not the socket: the init-time server listens only on the socket.
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, ontotator_bootstrap, -d, ontotator]
       interval: 10s
       timeout: 5s
       retries: 5

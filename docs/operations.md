@@ -47,7 +47,7 @@ docker buildx imagetools inspect postgres:16.15-alpine3.24
 
 Record the manifest digest, check the required architecture is present, update every corresponding `tag@sha256:...` reference and rebuild. Mutable tags alone are not verification. Run the local and container checks against the rebuilt image before approving it.
 
-There is no CI. Publish an approved commit from a clean working tree with `bash scripts/publish-image.sh VERSION` (needs `docker login ghcr.io` with a token that may write packages; the build token comes from `GITHUB_TOKEN_FILE` or `gh auth token`). It builds the image as above, tags `ghcr.io/janpower/ontotator:VERSION` and `:latest`, pushes both and prints `ONTOTATOR_IMAGE=ghcr.io/janpower/ontotator@sha256:...`. Put that digest reference, not `:latest`, in the private `.env.docker`. The image is built for the local machine's architecture; check it matches the server with `docker buildx imagetools inspect`. A local image ID is useful for local tests; a registry digest is the portable deployment input. Keep release identity and check results in the deployment record.
+There is no CI. Publish an approved commit from a clean working tree with `bash scripts/publish-image.sh VERSION` (needs `docker login ghcr.io` with a token that may write packages; the build token comes from `GITHUB_TOKEN_FILE` or `gh auth token`). It refuses a VERSION that already exists in the registry, builds the image as above with tag `ghcr.io/janpower/ontotator:VERSION`, fails on fixable HIGH or CRITICAL findings from a pinned Trivy scan, pushes the tag and prints `ONTOTATOR_IMAGE=ghcr.io/janpower/ontotator@sha256:...`. There is no `:latest` tag; put that digest reference in the private `.env.docker`. The image is built for the local machine's architecture; check it matches the server with `docker buildx imagetools inspect`. A local image ID is useful for local tests; a registry digest is the portable deployment input. Keep release identity and check results in the deployment record.
 
 ## Configuration and secrets
 
@@ -343,7 +343,7 @@ On the host, with NPM and Phentrieve already running:
 
 ## Workers and resource limits
 
-The production default is two Uvicorn workers (`ONTOTATOR_WORKERS=2`, supported range 1–16). Sessions are shared in PostgreSQL, so routing needs no sticky session. Each worker has its own interpreter, ontology registry and search indexes: memory rises with worker count and loaded ontology size. Measure representative workloads before increasing workers.
+The production default is two Uvicorn workers (`ONTOTATOR_WORKERS=2`, supported range 1–6, so the connection pools stay under PostgreSQL's `max_connections=100`). Sessions are shared in PostgreSQL, so routing needs no sticky session. Each worker has its own interpreter, ontology registry and search indexes: memory rises with worker count and loaded ontology size. Measure representative workloads before increasing workers.
 
 The app contract limits it to 2 CPUs / 2 GiB, PostgreSQL to 1 CPU / 1 GiB and migrations to 1 CPU / 512 MiB. Each has a 256-PID limit; app has a 35-second stop grace period. Temporary files also consume container memory. More workers under unchanged limits can cause memory pressure or worse latency; worker count is not a throughput guarantee.
 
