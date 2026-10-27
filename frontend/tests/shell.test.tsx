@@ -277,6 +277,15 @@ describe("shell identity and task count", () => {
     rerender(<Shell {...props({ projects: [] })} />);
     expect(identity.querySelector(".cell-secondary")).toBeNull();
   });
+
+  it("names an annotator on a translation review a Translation reviewer", () => {
+    const route = { name: "task", assignmentId: 42 } as const;
+    const { rerender } = render(<Shell {...props({ projects: [project("p", false)], route, taskProject: "p", taskKind: "translation_review" })} />);
+    const identity = screen.getByTestId("current-user");
+    expect(identity.querySelector(".cell-secondary")?.textContent).toBe("Translation reviewer");
+    rerender(<Shell {...props({ projects: [project("p", false)], route, taskProject: "p", taskKind: "annotate" })} />);
+    expect(identity.querySelector(".cell-secondary")?.textContent).toBe("Annotator");
+  });
 });
 
 describe("Documents counter (V3, VD7)", () => {

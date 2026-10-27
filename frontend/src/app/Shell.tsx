@@ -16,6 +16,8 @@ export interface ShellProps {
   breadcrumb?: Crumb[];
   children: ReactNode;
   taskProject?: string;
+  /** The open task's kind: an annotator on a translation review reads as "Translation reviewer". */
+  taskKind?: string;
 }
 
 function NavigationLink({ destination, current, onNavigate, label, children }: {
@@ -37,11 +39,11 @@ function NavigationLink({ destination, current, onNavigate, label, children }: {
 const ROLE_ORDER = ["lead", "adjudicator", "annotator"] as const;
 
 /** Second header line: the roles in the current project, else across all projects. */
-export function shellRole(user: CurrentUser, projects: readonly ProjectSummary[], current: ProjectSummary | undefined): string | undefined {
+export function shellRole(user: CurrentUser, projects: readonly ProjectSummary[], current: ProjectSummary | undefined, taskKind?: string): string | undefined {
   const roles = new Set((current ? [current] : projects).flatMap(project => project.roles));
   const labels = [
     ...(user.is_system_admin ? ["System administrator"] : []),
-    ...ROLE_ORDER.filter(role => roles.has(role)).map(role => roleLabels[role]),
+    ...ROLE_ORDER.filter(role => roles.has(role)).map(role => role === "annotator" && taskKind === "translation_review" ? "Translation reviewer" : roleLabels[role]),
   ];
   return labels.length ? labels.join(", ") : undefined;
 }
@@ -70,7 +72,7 @@ function useOpenTaskCount(username: string): number | null {
   return count?.username === username ? count.value : null;
 }
 
-export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children, taskProject }: ShellProps): JSX.Element {
+export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb, children, taskProject, taskKind }: ShellProps): JSX.Element {
   const [choice, setChoice] = useState<{ username: string; key: string } | null>(null);
   const explicitKey = 'key' in route ? route.key : route.name === 'tasks' ? route.project : route.name === 'task' ? taskProject : undefined;
   // Without a project in the route: the switcher's last choice, else the remembered (last-used) project.
@@ -118,7 +120,7 @@ export function Shell({ user, projects, route, onNavigate, onLogout, breadcrumb,
   </>;
   // The logo's start page: the current project's landing (Documents for leads, its My tasks otherwise), else My tasks.
   const home = current ? projectDestination(current) : MY_TASKS;
-  return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav} role={shellRole(user, projects, current)}
+  return <AppShell user={user} onLogout={onLogout} breadcrumb={breadcrumb} nav={nav} role={shellRole(user, projects, current, route.name === "task" ? taskKind : undefined)}
     homeHref={routeHref(home)} onHome={() => onNavigate(home)}
     density={(route.name === "task" || route.name === "projectCase") ? "reading" : "compact"}>{children}</AppShell>;
 }

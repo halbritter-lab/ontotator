@@ -53,8 +53,10 @@ describe("my task actions", () => {
   });
 
   it("names a task for the breadcrumb", () => {
-    expect(taskCrumbLabel({ external_id: "failed-translation", document_id: "d", task: "translation_review", language: "de" })).toBe("failed-translation, Translation review (de)");
-    expect(taskCrumbLabel({ external_id: "accepted-translation", document_id: "d", task: "annotate", language: "de" })).toBe("accepted-translation, Annotation (de)");
+    expect(taskCrumbLabel({ external_id: "failed-translation", document_id: "d", task: "translation_review", language: "de" })).toBe("failed-translation de, Translation review");
+    expect(taskCrumbLabel({ external_id: "accepted-translation", document_id: "d", task: "annotate", language: "de" })).toBe("accepted-translation de, Annotation");
+    // Same name as the heading (taskText): the case ID, version and origin win over the external ID.
+    expect(taskCrumbLabel({ case_id: "synthetic-ready", external_id: "ready-translation", document_id: "d", task: "annotate", language: "de", version: 2, origin: "correction" })).toBe("synthetic-ready de v2 corrected, Annotation");
     expect(taskCrumbLabel({ external_id: null, document_id: "doc-7", task: "review", language: "en" })).toBe("Consolidation (en)");
     expect(taskCrumbLabel({ external_id: "", document_id: "doc-7", task: "review", language: "en" })).toBe("Consolidation (en)");
   });

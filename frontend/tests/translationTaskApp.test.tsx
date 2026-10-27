@@ -203,7 +203,7 @@ it("names the task in the breadcrumb and keeps the assignment number in its titl
   expect(current().getAttribute("title")).toBe("Assignment 17");
   expect(breadcrumb.textContent).not.toMatch(/Task 17/);
   await act(async () => { finish([{ assignment_id: 17, workflow_revision: 0, held: false, report_answered: false, project_key: "proj", project_name: "Project", document_id: "opaque-internal", external_id: "EN 1/7", language: "de", source_language: "en", target_language: "de", task: "translation_review", status: "in_progress", updated_at: "2026-10-16T12:00:00Z" }]); });
-  await waitFor(() => expect(current().textContent).toBe("EN 1/7, Translation review (de)"));
+  await waitFor(() => expect(current().textContent).toBe("EN 1/7 de, Translation review"));
   expect(current().getAttribute("title")).toBe("Assignment 17");
   expect(within(breadcrumb).getByRole("button", { name: "My tasks" })).toBeDefined();
 });
