@@ -317,14 +317,16 @@ export interface RowHeaderCellProps {
   onShowMore?: () => void;
   /** Another text of the case is open in the card (the row's tint has this as its words). */
   sibling?: boolean;
+  /** The row is selected: the text name is a toggle button, as a click (or Space) on it toggles the selection (#41). */
+  selected?: boolean;
 }
 
 /**
- * Text cell (row header): the text name, flag and language code in plain text style (a button that opens
- * the text card with Enter, "Open text card, case-107 de"), "source", version marker, NEW and the visit badge;
+ * Text cell (row header): the text name, flag and language code in plain text style (a toggle button "Text
+ * case-107 de": click and Space toggle the row's selection, Enter opens the text card), "source", version marker, NEW and the visit badge;
  * decision rows add the hidden "Needs your decision". No "Open" link: a double click on the row opens the card.
  */
-export function RowHeaderCell({ row, badge, onOpenCard, showCaseId = false, more = 0, onShowMore, sibling = false }: RowHeaderCellProps): JSX.Element {
+export function RowHeaderCell({ row, badge, onOpenCard, showCaseId = false, more = 0, onShowMore, sibling = false, selected }: RowHeaderCellProps): JSX.Element {
   const active = isActiveRow(row);
   const nameId = documentsRowId(row.case_id, row.language, "header");
   const caseId = showCaseId ? <><span className="documents-row-case"><ShortId value={row.case_id} /></span>{" "}</> : <span className="visually-hidden">{`${row.case_id} `}</span>;
@@ -332,7 +334,8 @@ export function RowHeaderCell({ row, badge, onOpenCard, showCaseId = false, more
   return (
     <span className="documents-row-header documents-text-cell">
       {onOpenCard
-        ? <button type="button" id={nameId} className="documents-text-name" aria-label={`Open text card, ${row.case_id} ${row.language}`}
+        ? <button type="button" id={nameId} className="documents-text-name" aria-label={`Text ${row.case_id} ${row.language}`}
+          aria-pressed={selected} aria-keyshortcuts="Enter" title="Click selects; Enter or double click opens the text card"
           onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); onOpenCard(event.currentTarget); } }}>{nameContent}</button>
         : <span id={nameId} tabIndex={-1} className="documents-text-name">{nameContent}</span>}
       {rowNeedsDecision(row) && <span className="visually-hidden">Needs your decision</span>}

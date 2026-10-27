@@ -54,9 +54,9 @@ export const rowName = (caseId: string, language: string): string => `${caseId} 
 export const namePattern = (prefix: string, caseId: string, language: string): RegExp =>
   new RegExp(`^${esc(prefix)}${esc(caseId)}(?: · | )${esc(language)}$`);
 
-/** The text name of a row: opens the text card ("Open text card, {case} {language}"). */
+/** The text name of a row: opens the text card ("Text {case} {language}"). */
 export const textName = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `Open text card, ${rowName(caseId, language)}`, exact: true });
+  page.getByRole("button", { name: `Text ${rowName(caseId, language)}`, exact: true });
 
 /** The table row of one text, found by its text name. */
 export const textRow = (page: Page, caseId: string, language: string): Locator =>

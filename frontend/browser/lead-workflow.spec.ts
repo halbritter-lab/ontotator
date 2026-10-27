@@ -268,7 +268,7 @@ test("ANNOTATION_BATCH: later annotation batch via To assign (5 clicks) while 6 
   await filters.getByRole("group", { name: "Translation review", exact: true }).getByRole("checkbox", { name: "In progress, 6 texts", exact: true }).check();
   await expect(live(page)).toHaveText("6 texts shown");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /^Open text card, case-\d{4} de$/ })).toHaveCount(6);
+  await expect(page.getByRole("button", { name: /^Text case-\d{4} de$/ })).toHaveCount(6);
   for (const caseId of s.in_review!) {
     await expect(rowCell(row(page, caseId, "de"), "translation")).toContainText(`in review (${s.display_names.ana})`);
     await expect(rowCell(row(page, caseId, "de"), "annotation")).toContainText("after translation review");
@@ -734,7 +734,7 @@ test("every Progress count opens Documents with the same number of rows", async 
     await expect(page.locator("table.documents-skeleton")).toHaveCount(0, { timeout: 30_000 });
     await documentsReady(page);
     // Texts in view: the text names plus the not-planned sources folded into their case lines.
-    const shown = page.getByRole("button", { name: /^Open text card, case-\d{4} [a-z]{2}$|^source [a-z]{2} \(native\), \d+ translations?$/ });
+    const shown = page.getByRole("button", { name: /^Text case-\d{4} [a-z]{2}$|^source [a-z]{2} \(native\), \d+ translations?$/ });
     if (Number(count) === 0) {
       await expect(page.getByText(/^(No texts match these filters\.|Nothing needs your decision|Nothing to assign|Nothing in progress|Nothing done yet|No texts yet)$/).first(), label).toBeVisible();
     }

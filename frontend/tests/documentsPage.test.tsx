@@ -65,8 +65,8 @@ const casesPage = (count: number, overrides: Partial<DocumentRowsPage> = {}) => 
 const rowBox = (caseId: string, language: string) => screen.getByRole("checkbox", { name: `Select ${caseId} ${language}` });
 /** The checkbox of a `casesPage` case's one text (the flat table has no case checkboxes). */
 const caseBox = (caseId: string) => rowBox(caseId, "de");
-/** The Text cell (`th scope="row"`) of a row, found through its text name ("Open text card, …"). */
-const rowHeader = (name: string) => screen.getByRole("button", { name: `Open text card, ${name.replace(", ", " ")}` }).closest("tr")!.querySelector<HTMLElement>("th[scope=row]")!;
+/** The Text cell (`th scope="row"`) of a row, found through its text name ("Text …"). */
+const rowHeader = (name: string) => screen.getByRole("button", { name: `Text ${name.replace(", ", " ")}` }).closest("tr")!.querySelector<HTMLElement>("th[scope=row]")!;
 /** The text card of a row (a modal dialog "{case} {language}"); `name` is the row name "{case}, {language}". */
 const textCard = (name: string) => screen.findByRole("dialog", { name: name.replace(", ", " ") });
 /** "3 texts in 3 cases selected" for cases with one text each. */
@@ -449,7 +449,7 @@ describe("case selection", () => {
     await waitFor(() => expect(api.setWorkPlanRows).toHaveBeenCalledTimes(1));
     expect(api.setWorkPlanRows).toHaveBeenLastCalledWith("p", expect.objectContaining({ undo: true }));
     await waitFor(() => expect(screen.queryByText("fr of case-0101: Translation review off")).toBeNull());
-    fireEvent.keyDown(screen.getByRole("button", { name: "Open text card, case-0101 fr" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Text case-0101 fr" }), { key: "Enter" });
     fireEvent.click(within(await textCard("case-0101 fr")).getByRole("button", { name: "Details" }));
     fireEvent.click(await screen.findByRole("button", { name: /^Translation review, case-0101 fr/ }));
     await screen.findByText(/fr of case-0101: Translation review/);
@@ -716,7 +716,7 @@ it("focuses a deep-linked row that no longer needs a decision and shows its noti
   // Focus goes to the row header's name (spec "Edge cases › Deep links"); a deep link opens no panel.
   const name = document.getElementById(documentsRowId("synthetic-accepted", "de", "header"))!;
   expect(rowHeader("synthetic-accepted de").contains(name)).toBe(true);
-  expect(name.getAttribute("aria-label")).toBe("Open text card, synthetic-accepted de");
+  expect(name.getAttribute("aria-label")).toBe("Text synthetic-accepted de");
   await waitFor(() => expect(document.activeElement).toBe(name));
   expect(screen.queryByRole("complementary")).toBeNull();
 });
@@ -782,7 +782,7 @@ it("opens no row panel for a deep link with several languages", async () => {
 it("the text name opens the row panel with replace navigation", async () => {
   mockRows(scenarioS1().page);
   const { onNavigate } = renderPage({ query: { language: "en" } });
-  fireEvent.keyDown(await screen.findByRole("button", { name: "Open text card, case-0042 en" }), { key: "Enter" });
+  fireEvent.keyDown(await screen.findByRole("button", { name: "Text case-0042 en" }), { key: "Enter" });
   expect(onNavigate).toHaveBeenLastCalledWith({ name: "projectDocuments", key: "p", language: "en", panel: "case-0042:en" }, { replace: true });
 });
 
@@ -838,7 +838,7 @@ describe("text changes (V5)", () => {
     renderStateful({});
     // The row shows the first step only; the text card offers one entry per person.
     expect(await screen.findByRole("button", { name: "Handle text change…, Tom Reis, case-201 de" })).toBeTruthy();
-    fireEvent.keyDown(screen.getByRole("button", { name: "Open text card, case-201 de" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Text case-201 de" }), { key: "Enter" });
     const card = await screen.findByRole("dialog", { name: "case-201 de" });
     expect(within(card).getByRole("button", { name: "Handle text change…, Tom Reis" })).toBeTruthy();
     fireEvent.click(within(card).getByRole("button", { name: "Handle text change…, Ana Weber" }));
@@ -1181,7 +1181,7 @@ describe("row actions", () => {
     expect(changed).toHaveBeenCalled();
     window.removeEventListener(FINAL_SELECTION_CHANGED, changed);
     // Updated in place: the row stays (retained) without the action.
-    await waitFor(() => expect(within(screen.getByRole("button", { name: "Open text card, case-0042 en" }).closest("tr")!).queryByRole("button", { name: /Compare results…/ })).toBeNull());
+    await waitFor(() => expect(within(screen.getByRole("button", { name: "Text case-0042 en" }).closest("tr")!).queryByRole("button", { name: /Compare results…/ })).toBeNull());
   });
 
   it("Next decision closes the panel and runs that row's action without the panel in its links", async () => {
@@ -1314,8 +1314,8 @@ describe("lead review fixes", () => {
     mockRows(page([group("case-d", [planRow("case-d", "de", stepOf("decide_report"))]), ...many], { group_count: 51 }));
     renderPage();
     await loaded();
-    expect(screen.getByRole("button", { name: "Open text card, case-000 de" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open text card, case-d de" }).closest("tr")!.className).toContain("data-table-row--decision");
+    expect(screen.getByRole("button", { name: "Text case-000 de" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Text case-d de" }).closest("tr")!.className).toContain("data-table-row--decision");
     expect(document.querySelector("th[scope='rowgroup']")).toBeNull();
   });
 
@@ -1327,11 +1327,11 @@ describe("lead review fixes", () => {
     renderPage();
     const toggle = await screen.findByRole("checkbox", { name: "Show texts not in plan (2)" });
     expect((toggle as HTMLInputElement).checked).toBe(false);
-    expect(screen.queryByRole("button", { name: "Open text card, case-1 fr" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Text case-1 fr" })).toBeNull();
     fireEvent.click(toggle);
-    const fr = screen.getByRole("button", { name: "Open text card, case-1 fr" }).closest("tr")!;
+    const fr = screen.getByRole("button", { name: "Text case-1 fr" }).closest("tr")!;
     expect(fr.className).toContain("documents-row--not-in-plan");
-    expect(within(fr).getAllByRole("button").map(button => button.getAttribute("aria-label"))).toEqual(["Open text card, case-1 fr", "Add to plan…, case-1 fr"]);
+    expect(within(fr).getAllByRole("button").map(button => button.getAttribute("aria-label"))).toEqual(["Text case-1 fr", "Add to plan…, case-1 fr"]);
     expect(window.localStorage.getItem("ontotator.documents.showNotInPlan.v1:lead")).toBe("1");
     fireEvent.click(within(fr).getByRole("button", { name: "Add to plan…, case-1 fr" }));
     expect(await screen.findByRole("dialog", { name: "Plan for case-1 fr" })).toBeTruthy();
@@ -1345,7 +1345,7 @@ describe("lead review fixes", () => {
     renderPage({ query: { segment: "assign" } });
     await loaded();
     expect(screen.queryByRole("checkbox", { name: /^Show texts not in plan/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Open text card, case-1 fr" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Text case-1 fr" })).toBeNull();
     window.localStorage.clear();
   });
 
@@ -1574,7 +1574,7 @@ describe("text card (U3)", () => {
     const box = await screen.findByRole("checkbox", { name: "Select case-0200 de" });
     fireEvent.click(box);
     expect(box).toHaveProperty("checked", true);
-    fireEvent.keyDown(screen.getByRole("button", { name: "Open text card, case-0200 de" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Text case-0200 de" }), { key: "Enter" });
     const card = await textCard("case-0200 de");
     fireEvent.click(within(card).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "case-0200 de" })).toBeNull());
@@ -1610,7 +1610,7 @@ describe("text card (U3)", () => {
     await waitFor(() => expect(live().textContent).toBe("First row"));
     fireEvent.click(within(await textCard("case-0200 de")).getByRole("button", { name: "Close" }));
     fireEvent.click(await screen.findByRole("checkbox", { name: /^Show texts not in plan/ }));
-    fireEvent.keyDown(screen.getByRole("button", { name: "Open text card, case-0200 de" }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Text case-0200 de" }), { key: "Enter" });
     fireEvent.click(within(await textCard("case-0200 de")).getByRole("button", { name: "Previous text" }));
     await textCard("case-0200 en");
     window.localStorage.clear();
@@ -1624,7 +1624,7 @@ describe("text card (U3)", () => {
     const list = within(card).getByRole("list", { name: "Other languages" });
     expect(within(list).getAllByRole("listitem").map(item => item.textContent)).toEqual(["ensourcenot in planAdd to plan…", "fr"]);
     // The open row is current; its planned sibling in the table is tinted.
-    expect(screen.getByRole("button", { name: "Open text card, case-0200 fr", hidden: true }).closest("tr")!.className).toContain("documents-row--sibling");
+    expect(screen.getByRole("button", { name: "Text case-0200 fr", hidden: true }).closest("tr")!.className).toContain("documents-row--sibling");
     fireEvent.click(within(list).getByRole("button", { name: "Add to plan…, case-0200 en" }));
     expect(await screen.findByRole("dialog", { name: "Plan for case-0200 en" })).toBeTruthy();
     fireEvent.click(within(screen.getByRole("dialog", { name: "Plan for case-0200 en" })).getByRole("button", { name: "Cancel" }));

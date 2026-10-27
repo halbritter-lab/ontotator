@@ -71,7 +71,7 @@ async function documentRow(page: Page, id: string) {
   const project = decodeURIComponent(/#\/projects\/([^/?]+)\/documents/.exec(page.url())![1]);
   const docs = await (await authenticatedRequest(page, `/api/v1/projects/${encodeURIComponent(project)}/documents`)).json() as components['schemas']['ProjectDocumentSummary'][];
   const doc = docs.find(item => item.document_id === id)!; expect(doc).toBeTruthy();
-  // The text card (text name "Open text card, …") on its Translation part with the version list; one card at a time.
+  // The text card (text name "Text …") on its Translation part with the version list; one card at a time.
   const card = textCard(page, doc.case_id, doc.language);
   const other = page.locator('.text-card[role="dialog"]');
   if (!await card.count() && await other.count()) await other.getByRole('button', { name: 'Close', exact: true }).first().click();

@@ -55,9 +55,9 @@ export const documentsTable = (page: Page): Locator => page.getByRole("table", {
 export const textNamePattern = (prefix: string, caseId: string, language: string, suffix = ""): RegExp =>
   new RegExp(`^${esc(prefix)}${esc(caseId)}(?: · | )${esc(language)}${esc(suffix)}$`);
 
-/** The text name of a row: opens the card, selection unchanged ("Open text card, {case} {language}"). */
+/** The text name of a row: opens the card, selection unchanged ("Text {case} {language}"). */
 export const textName = (page: Page, caseId: string, language: string): Locator =>
-  page.getByRole("button", { name: `Open text card, ${caseId} ${language}`, exact: true });
+  page.getByRole("button", { name: `Text ${caseId} ${language}`, exact: true });
 
 /** The table row of one text, found by its text name. */
 export const textRow = (page: Page, caseId: string, language: string): Locator =>

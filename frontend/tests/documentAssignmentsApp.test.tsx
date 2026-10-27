@@ -43,7 +43,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(n
 it("keeps the SAME focused ID input while actual App navigation controls every typed query", async () => {
   const user = userEvent.setup();
   render(<App user={testUser("lead", { is_system_admin: false })} />);
-  await screen.findByRole("button", { name: "Open text card, z/doc en" });
+  await screen.findByRole("button", { name: "Text z/doc en" });
   const input = screen.getByLabelText("Case ID or text");
   await user.type(input, "abc");
   await waitFor(() => expect(window.location.hash).toBe("#/projects/p%2Fkey/documents?q=abc"));
@@ -63,7 +63,7 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   vi.spyOn(api, "previewAssignmentBatch").mockImplementation(async (_key, body) => batchPreview(body));
   vi.spyOn(api, "commitAssignmentBatch").mockResolvedValue({ created: [{ ...assignment, username: "alice" }] });
   render(<App user={testUser("lead", { is_system_admin: false })} />);
-  await screen.findByRole("button", { name: "Open text card, z/doc en" });
+  await screen.findByRole("button", { name: "Text z/doc en" });
   fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc en" }));
   fireEvent.click(screen.getByRole("checkbox", { name: "Select z/doc de" }));
   const bar = screen.getByRole("region", { name: "Selection" });
@@ -79,7 +79,7 @@ it("assigns the selected case through the selection bar and refreshes actual inv
   await waitFor(() => expect(api.listAssignments).toHaveBeenCalledTimes(2));
   expect(api.listDocumentRows).toHaveBeenCalledTimes(2);
   expect(screen.queryByRole("region", { name: "Selection" })).toBeNull();
-  expect(screen.getAllByRole("button", { name: /^Open text card, / }).map(button => button.getAttribute("aria-label"))).toEqual(["Open text card, z/doc en", "Open text card, z/doc de", "Open text card, a de"]);
+  expect(screen.getAllByRole("button", { name: /^Text / }).map(button => button.getAttribute("aria-label"))).toEqual(["Text z/doc en", "Text z/doc de", "Text a de"]);
   expect(window.location.hash).toBe("#/projects/p%2Fkey/documents");
 });
 

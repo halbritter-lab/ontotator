@@ -62,9 +62,9 @@ async function openScenario(page: Page, name: string, query = "") {
 const casesInOrder = (page: Page): Promise<string[]> =>
   documentsTable(page).locator("th[scope=row] .documents-row-case .documents-id").evaluateAll(ids => [...new Set(ids.map(id => id.getAttribute("title") ?? ""))]);
 
-/** Language codes of a case's rows in table order (from the text names "Open text card, {case} {language}"). */
+/** Language codes of a case's rows in table order (from the text names "Text {case} {language}"). */
 async function languagesInOrder(page: Page, caseId: string): Promise<string[]> {
-  const names = await documentsTable(page).getByRole("button", { name: new RegExp(`^Open text card, ${esc(caseId)} `) }).evaluateAll(
+  const names = await documentsTable(page).getByRole("button", { name: new RegExp(`^Text ${esc(caseId)} `) }).evaluateAll(
     buttons => buttons.map(button => button.getAttribute("aria-label") ?? ""),
   );
   return names.map(name => name.split(" ").pop() ?? "");
@@ -322,7 +322,7 @@ test("S7 300 texts: 50 cases per page, page 1 of 6, a flat list", async ({ page 
   await expect(documentsTable(page).locator("th[scope=rowgroup]")).toHaveCount(0);
   await expect(textName(page, "case-0007", "de")).toBeVisible();
   await expect(rowCell(textRow(page, "case-0007", "de"), "translation")).toContainText("Check failed");
-  const rowsOnPage = await documentsTable(page).getByRole("button", { name: /^Open text card, / }).count();
+  const rowsOnPage = await documentsTable(page).getByRole("button", { name: /^Text / }).count();
   expect(rowsOnPage).toBeGreaterThanOrEqual(50);
 
   await pages.getByRole("link", { name: "Next", exact: true }).click();
