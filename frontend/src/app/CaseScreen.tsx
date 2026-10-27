@@ -607,11 +607,15 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   // Review mode targets
   const reviewTargets: TargetProposal[] = useMemo(() => {
     if (!isReviewLike(view.key.mode) || !view.targets) return [];
-    return (view.targets.targets ?? []).map((targetRef) => {
-      // Find snapshot in available_inputs
-      const snap = (view.available_inputs ?? []).find(
-        (i) => i.annotation.annotation_id === targetRef.annotation_id && i.version === targetRef.version
-      );
+    // N-4: list, J/K and "n of N" follow the text (first segment start, spanless last); the set keeps its canonical order.
+    const snapOf = (targetRef: { annotation_id: string; version: string }) => (view.available_inputs ?? []).find(
+      (i) => i.annotation.annotation_id === targetRef.annotation_id && i.version === targetRef.version
+    );
+    const startOf = (snap: AnnotationSnapshot | undefined) =>
+      Math.min(...(snap?.evidence ?? []).flatMap(ev => ev.mention.segments.map(seg => seg.start)));
+    return (view.targets.targets ?? []).map(targetRef => { const snap = snapOf(targetRef); return { targetRef, snap, start: startOf(snap) }; })
+      .sort((a, b) => (a.start === b.start ? 0 : a.start - b.start))
+      .map(({ targetRef, snap }) => {
       const termId = snap?.annotation.term_id ?? targetRef.annotation_id;
       const layerId = snap?.annotation.layer_id;
       const statusKey = layerId ? `${layerId}:${termId}` : termId;
