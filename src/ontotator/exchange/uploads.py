@@ -913,6 +913,8 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                 and tuple(source) == (row.kind, row.language, row.files)
                 and project_state(conn, key) == state
             )
+            if not reuse:
+                prepared = None  # free the stale parse before parsing again (mem_limit)
             plan, sources, plan_ctx = _prepare(
                 db,
                 conn,
@@ -921,7 +923,7 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                 row.kind,
                 row.language,
                 row.files,
-                prepared=prepared if reuse else None,
+                prepared=prepared,
             )
             if commit:
                 if plan.plan_sha256 != row.plan_sha256:
