@@ -262,7 +262,7 @@ test("D confirms from the text and V plus arrows changes one value", async ({ pa
   await expect(page.locator('[data-axis-field="assertion"] input[type="radio"]:checked')).toHaveValue(chosen);
 });
 
-test("Enter before results arrive never adds a stale hit", async ({ page }) => {
+test("Enter before results arrive adds the current hit once they do, never a stale one (#31)", async ({ page }) => {
   const s = await startLoop(page);
   await openLoop(page, s, "loop-en");
   const commands = recordCommands(page);
@@ -271,28 +271,23 @@ test("Enter before results arrive never adds a stale hit", async ({ page }) => {
     await route.continue().catch(() => undefined);
   });
 
-  // The prefilled search is still running: Enter waits for it and adds nothing.
+  // Enter while the prefilled search runs, then a new query: the queued Enter is dropped, nothing stale is added.
   const [start, end] = offsetsOf(s, "loop-en", "seizure");
   await selectText(page, start, end);
   await expect(search(page)).toBeFocused();
   await expect(newFinding(page).getByRole("status")).toHaveText("Searching…");
   await page.keyboard.press("Enter");
-  await expect(activeHit(page)).toContainText("Seizure");
-  expect(commands.of("create_annotation")).toHaveLength(0);
-
-  // A newly typed query with Enter at once: the old hits disappear, Enter runs the search, nothing is added.
   await page.keyboard.type("hypotonia");
-  await page.keyboard.press("Enter");
-  await expect(activeHit(page)).toHaveCount(0);
   await expect(activeHit(page)).toContainText("Hypotonia", { timeout: 10_000 });
   await page.waitForTimeout(300);
   expect(commands.of("create_annotation")).toHaveLength(0);
 
-  // Enter after the results: created with the current hit.
+  // Enter before the new query's hits arrive: its top hit is added when they do.
+  await page.keyboard.press("Backspace");
   const created = commandResponse(page, "create_annotation");
   await page.keyboard.press("Enter");
   expect((await created).ok()).toBeTruthy();
-  await expect(termHeading(page)).toContainText("Hypotonia");
+  await expect(termHeading(page)).toContainText("Hypotoni");
   expect(commands.of("create_annotation")).toHaveLength(1);
 });
 
