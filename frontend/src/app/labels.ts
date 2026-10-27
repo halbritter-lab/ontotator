@@ -76,7 +76,7 @@ export const uploadStatusLabels: Readonly<Record<string, string>> = {
 };
 
 export const uploadKindLabels: Readonly<Record<"t1" | "text", string>> = {
-  t1: "Ontospan bundle (T1)",
+  t1: "Ontospan bundle",
   text: "Plain text",
 };
 

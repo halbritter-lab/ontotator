@@ -44,7 +44,8 @@ describe("project creation", () => {
     expect(chosen.getAttribute("title")).toBe("b".repeat(64));
     expect(document.getElementById(select.getAttribute("aria-describedby")!)?.textContent).toBe(`SHA-256 ${"b".repeat(64)}`);
     fireEvent.change(screen.getByLabelText("Allowed roots for HP"), { target: { value: "HP:1, HP:2" } });
-    fireEvent.change(screen.getByLabelText("T1 profile for HP"), { target: { value: "hpo-phenotype" } });
+    // HP preselects the HPO phenotype scheme (#5).
+    expect((screen.getByLabelText("Annotation scheme for HP") as HTMLSelectElement).value).toBe("hpo-phenotype");
     fireEvent.click(screen.getByRole("button", { name: "Create project" }));
     await screen.findByLabelText(/^Built-in template/);
     expect(api.createProject).toHaveBeenCalledWith({ key: "project-1", name: "Research", description: null, languages: [], template: "template", pins: [{ ontology_id: "HP", sha256: "b".repeat(64), allowed_roots: ["HP:1", "HP:2"], t1_profile: "hpo-phenotype" }] });
@@ -353,7 +354,7 @@ describe("project settings sections", () => {
     expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
     const details = screen.getByText("a".repeat(64)).closest("details")!;
     expect(details.open).toBe(false);
-    expect(details.textContent).toContain("HPO phenotype checks");
+    expect(details.textContent).toContain("HPO phenotype (fixed qualifiers, modifiers)");
     view.show("general");
     expect(saveIn("General")).toBeDefined();
   });
@@ -386,9 +387,9 @@ describe("project settings sections", () => {
     const version = await screen.findByLabelText(/^HP version/);
     expect(version.closest("details")).toBeNull();
     expect(screen.getByLabelText("Limit HP terms to these branches").closest("details")!.querySelector("summary")!.textContent).toBe("Advanced");
-    expect(within(screen.getByLabelText("Checks for HP")).getAllByRole("option").map(option => option.textContent)).toEqual(["General checks", "HPO phenotype checks (findings and modifiers)"]);
+    expect(within(screen.getByLabelText("Annotation scheme for HP")).getAllByRole("option").map(option => option.textContent)).toEqual(["HPO phenotype (fixed qualifiers, modifiers)", "Generic (free qualifiers)"]);
     fireEvent.change(version, { target: { value: "b".repeat(64) } });
-    fireEvent.change(screen.getByLabelText("Checks for HP"), { target: { value: "generic" } });
+    fireEvent.change(screen.getByLabelText("Annotation scheme for HP"), { target: { value: "generic" } });
     fireEvent.click(saveIn("Ontology version"));
     await screen.findByText("Ontology version saved.");
     expect(api.updatePins).toHaveBeenCalledWith(settings.project_key, [{ ontology_id: "HP", sha256: "b".repeat(64), allowed_roots: ["HP:1"], t1_profile: "generic" }]);
@@ -415,7 +416,7 @@ describe("project settings sections", () => {
     const view = renderSettings("ontology");
     fireEvent.change(await screen.findByLabelText(/^HP version/), { target: { value: "b".repeat(64) } });
     fireEvent.change(screen.getByLabelText("Limit HP terms to these branches"), { target: { value: "HP:2, HP:3" } });
-    fireEvent.change(screen.getByLabelText("Checks for HP"), { target: { value: "generic" } });
+    fireEvent.change(screen.getByLabelText("Annotation scheme for HP"), { target: { value: "generic" } });
     fireEvent.change(screen.getByLabelText("Profile file (JSON)"), { target: { files: [new File([JSON.stringify(profile)], "compatible.json")] } });
     await waitFor(() => expect((saveIn("Task profile") as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(saveIn("Task profile"));
@@ -423,7 +424,7 @@ describe("project settings sections", () => {
     await screen.findByText("Task profile saved.");
     expect((screen.getByLabelText(/^HP version/) as HTMLSelectElement).value).toBe("b".repeat(64));
     expect((screen.getByLabelText("Limit HP terms to these branches") as HTMLInputElement).value).toBe("HP:2, HP:3");
-    expect((screen.getByLabelText("Checks for HP") as HTMLSelectElement).value).toBe("generic");
+    expect((screen.getByLabelText("Annotation scheme for HP") as HTMLSelectElement).value).toBe("generic");
     view.show("annotation");
     expect(shown("Present").disabled).toBe(false);
     view.show("ontology");
@@ -454,7 +455,7 @@ describe("project settings sections", () => {
     const view = renderSettings("annotation");
     fireEvent.click(await screen.findByRole("button", { name: "Present" }));
     view.show("ontology");
-    fireEvent.change(screen.getByLabelText("Checks for HP"), { target: { value: "hpo-phenotype" } });
+    fireEvent.change(screen.getByLabelText("Annotation scheme for HP"), { target: { value: "hpo-phenotype" } });
     fireEvent.click(saveIn("Ontology version"));
     await screen.findByText("Ontology version saved.");
     view.show("annotation");
