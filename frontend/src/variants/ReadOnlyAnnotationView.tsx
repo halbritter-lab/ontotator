@@ -7,6 +7,7 @@ import { TermName } from '../editor/TermName';
 import { AiBadge } from '../editor/AiBadge';
 import { markColourSlot } from '../editor/markColours';
 import { isNegated } from '../editor/negation';
+import { modifierMarks } from '../editor/modifiers';
 import type { MentionDisplay } from '../spans/adapter';
 import { Button } from '../ui';
 
@@ -42,9 +43,13 @@ export function ReadOnlyAnnotationView({ header, text, annotations, evidence, la
         if (ev.mention.cue_segments?.length) result.push({ evidence_id: `${id}:cue`, segments: ev.mention.cue_segments,
           kind: 'source', colorIndex: markColourSlot({ termId: annotation.term_id, layerId: annotation.layer_id, kind: 'source' }) });
       }
+      // Linked modifiers ("mild") are marked as in the editor (R-4).
+      if (annotation.modifiers?.length) result.push(...modifierMarks([{ annotationId: `${index}`, term: labelFor(annotation.layer_id, annotation.term_id) ?? annotation.term_id,
+        termId: annotation.term_id, colorIndex: markColourSlot({ termId: annotation.term_id, layerId: annotation.layer_id, kind: 'source' }), modifiers: annotation.modifiers }],
+      text, id => { const label = labelFor(annotation.layer_id, id); return label ? { label, role: 'modifier', exclusiveClass: null } : undefined; }));
     });
     return result;
-  }, [annotations, evidence]);
+  }, [annotations, evidence, text, labelFor]);
   const content = <div className="readonly-annotation-view">
     {(annotations.length > 0 || setId !== null) && <aside className="readonly-annotations density-compact" aria-label="Read-only annotations">
       {proposalContext && setId !== null && <PendingReanchorPanel projectKey={proposalContext.projectKey} documentId={proposalContext.documentId}

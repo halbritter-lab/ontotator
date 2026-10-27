@@ -11,7 +11,9 @@
 .layer-findings h2 { margin: 0 0 var(--space-2); font-size: var(--size-md); }
 .layer-findings ul { list-style: none; margin: 0 0 var(--space-2); padding: 0; }
 .layer-findings li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1); padding: var(--space-1) 0; border-bottom: 1px solid var(--border); }
-.layer-finding-term { flex: 1 1 100%; overflow-wrap: anywhere; }
+.layer-finding-term,
+.layer-finding-line { flex: 1 1 100%; overflow-wrap: anywhere; }
+.layer-finding-line { color: var(--text-muted); font-size: var(--size-sm); }
 
 .case-viewer:not(.case-comparing) > .comparison-reading { display: flex; flex: 1 1 auto; min-height: 0; }
 .case-viewer:not(.case-comparing) > .comparison-reading > .readonly-annotation-view { flex: 1 1 auto; min-width: 0; }
