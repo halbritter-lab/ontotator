@@ -7189,6 +7189,10 @@ export interface components {
             assigned_at?: string | null;
             /** Annotation Mode */
             annotation_mode?: ("proposals" | "scratch") | null;
+            /** Reopened At */
+            reopened_at?: string | null;
+            /** Reopen Reason */
+            reopen_reason?: string | null;
         };
         /** TemplateInfo */
         TemplateInfo: {

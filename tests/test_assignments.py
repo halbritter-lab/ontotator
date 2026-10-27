@@ -335,6 +335,29 @@ def test_reassign_failure_is_atomic_and_submitted_history_is_preserved(core) -> 
         service.reopen(Actor.cli(), assignment.id)
 
 
+def test_my_tasks_tell_the_assignee_why_a_task_was_reopened(core) -> None:
+    db, service, _project, users = core
+    task = service.assign(Actor.cli(), "p", "first", "alice", "annotate")
+    submitted = update(AssignmentRow).where(AssignmentRow.id == task.id)
+    with db.transaction() as conn:
+        conn.execute(submitted.values(status="submitted"))
+    (row,) = service.my_tasks(users["alice"])
+    assert row.reopen_reason is None and row.reopened_at is None
+    service.reopen(Actor.cli(), task.id, "first reason")
+    with db.transaction() as conn:
+        conn.execute(submitted.values(status="submitted"))
+    service.reopen(Actor.cli(), task.id, "Check the onset of the fever.")
+    (row,) = service.my_tasks(users["alice"])
+    # The latest reopen counts.
+    assert row.status == "reopened"
+    assert row.reopen_reason == "Check the onset of the fever."
+    assert row.reopened_at is not None
+    with db.transaction() as conn:
+        conn.execute(submitted.values(status="in_progress"))
+    (row,) = service.my_tasks(users["alice"])
+    assert row.reopen_reason is None
+
+
 def test_my_tasks_status_priority_before_actual_position(core) -> None:
     db, service, project, users = core
     ids = []

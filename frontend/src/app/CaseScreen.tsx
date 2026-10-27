@@ -55,7 +55,7 @@ import {
 } from "../editor/autosave";
 import { newEvidenceId } from "../editor/ids";
 import { submissionHistoryLabel } from "../editor/submissionHistoryLabel";
-import { plural } from "./labels";
+import { plural, reopenNotice } from "./labels";
 import { FindingRow, ModifierLine } from "../editor/FindingRow";
 import { SubmitCaseDialog } from "../editor/SubmitCaseDialog";
 import { SubmitControl } from "../editor/SubmitControl";
@@ -3313,7 +3313,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           )}
           {assignmentNavigation && assignmentTasks?.length ? (
             <CaseNavigation documents={assignmentTasks.map((task, index) => ({ document_id: task.document_id, case_id: task.case_id ?? task.external_id ?? undefined,
-              version: task.version ?? undefined, origin: task.origin as DocumentSummary["origin"], position: index + 1, language: task.language, text_length: 0, status: task.status === "submitted" ? "completed" : task.status === "in_progress" ? "in_progress" : "not_started" }))}
+              version: task.version ?? undefined, origin: task.origin as DocumentSummary["origin"], position: index + 1, language: task.language, text_length: 0,
+              // "reopened" is no document status; CaseNavigation labels it.
+              status: (task.status === "submitted" ? "completed" : task.status === "in_progress" ? "in_progress" : task.status === "reopened" ? "reopened" : "not_started") as DocumentSummary["status"] }))}
               currentDocumentId={view.document.document_id}
               navigationIds={assignmentTasks.map(task => String(task.assignment_id))}
               currentNavigationId={String(assignmentNavigation.current.assignment_id)}
@@ -3400,6 +3402,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
         <Button disabled={versionBusy} onClick={() => { void chooseAnnotationVersion("draft"); }}>Back to my draft</Button>
       </InlineMessage>}
       {serverReadOnly && <InlineMessage tone="info">Submitted. The project lead can reopen it for changes.</InlineMessage>}
+      {!serverReadOnly && assignmentNavigation && reopenNotice(assignmentNavigation.current)
+        && <InlineMessage tone="info">{reopenNotice(assignmentNavigation.current)}</InlineMessage>}
       {guidelineNotice}
       {queueState === "conflict" && (
         <InlineMessage tone="error" aria-label="Revision conflict">

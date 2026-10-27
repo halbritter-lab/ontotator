@@ -19,6 +19,7 @@ const statusLabels: Record<string, string> = {
   not_started: "Open",
   in_progress: "In Progress",
   completed: "Completed",
+  reopened: "Reopened",
 };
 
 export const CaseNavigation: React.FC<CaseNavigationProps> = ({

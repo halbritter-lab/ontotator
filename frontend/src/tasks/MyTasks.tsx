@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, onSessionRestored, type ProjectSummary, type TaskSummary } from "../api/client";
 import { routeHref, type NavigateOptions, type Route, type TaskStatusTab } from "../app/router";
 import { ErrorNotice } from "../admin/ErrorNotice";
-import { assignmentStatusLabels, formatDateTime, taskLabels } from "../app/labels";
+import { assignmentStatusLabels, formatDateTime, reopenNotice, taskLabels } from "../app/labels";
 import { taskText } from "../app/identity";
 import { failedChecksTitle } from "../translation/labels";
 import { IconWarning } from "../ui/icons";
@@ -163,6 +163,7 @@ export function MyTasks({ project, status, projects, onNavigate, username }: MyT
     { id: "status", header: "Status", cell: task => <>
       <StatusBadge status={task.status}>{assignmentStatusLabels[task.status]}</StatusBadge>
       {task.held && <><StatusBadge tone="warning">Paused</StatusBadge><p>{task.hold_reason ?? "A project problem needs attention."}</p></>}
+      {reopenNotice(task) && <p>{reopenNotice(task)}</p>}
     </> },
     { id: "assigned", header: "Assigned", cell: task => <AssignedDate at={task.assigned_at} /> },
     { id: "changed", header: "Last change", cell: task => <time dateTime={task.updated_at}>{formatDateTime(task.updated_at)}</time> },

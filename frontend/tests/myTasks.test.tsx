@@ -123,6 +123,16 @@ describe("My tasks component", () => {
     expect(screen.getByText("Reopened")).toBeDefined();
   });
 
+  it("names when and why the lead reopened a task under its status (#34)", async () => {
+    vi.mocked(api.listMyTasks).mockResolvedValue([
+      { ...task(4, "reopened"), reopened_at: "2026-10-26T09:00:00Z", reopen_reason: "Check the onset." }, task(5, "reopened"), task(3, "open")]);
+    render(<MyTasks projects={[]} onNavigate={vi.fn()} />);
+    const rows = await screen.findAllByTestId("task-row");
+    expect(rows[0].textContent).toMatch(/The project lead reopened this task on .+\. Reason: Check the onset\./);
+    expect(rows[1].textContent).toContain("The project lead reopened this task. No reason given.");
+    expect(rows[2].textContent).not.toContain("reopened this task");
+  });
+
   it("shows pauses alongside underlying status and keeps saved work accessible", async () => {
     vi.mocked(api.listMyTasks).mockResolvedValue([
       { ...task(11, "open"), held: true, hold_reason: "Source evidence needs clarification" },

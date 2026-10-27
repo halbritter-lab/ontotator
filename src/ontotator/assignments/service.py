@@ -60,6 +60,7 @@ from ontotator.storage.plan_tables import DiscardedVariantRow
 from ontotator.storage.repository import _lock_id
 from ontotator.storage.tables import (
     AssignmentRow,
+    AuditEventRow,
     DocumentRow,
     ProjectMembershipRow,
     ProjectRow,
@@ -129,6 +130,10 @@ class TaskSummary:
     # at assignment time (annotate only).
     assigned_at: datetime | None = None
     annotation_mode: AnnotationMode | None = None
+    # A reopened task: when and why the lead reopened it (the latest
+    # ``assignment.reopen`` audit event); None for other statuses.
+    reopened_at: datetime | None = None
+    reopen_reason: str | None = None
 
 
 def _assignments() -> Select[tuple[object, ...]]:
@@ -1096,6 +1101,37 @@ class AssignmentService:
                 variants.setdefault(row["project_key"], {})[variant.document_id] = (
                     variant
                 )
+            reopened = [r for r in rows if r["status"] == "reopened"]
+            reopens = (
+                {
+                    event.target_id: event
+                    for event in conn.execute(
+                        select(
+                            AuditEventRow.target_id,
+                            AuditEventRow.at,
+                            AuditEventRow.details,
+                        )
+                        .where(
+                            AuditEventRow.project_id.in_(
+                                select(ProjectRow.id).where(
+                                    ProjectRow.project_key.in_(
+                                        {r["project_key"] for r in reopened}
+                                    )
+                                )
+                            ),
+                            AuditEventRow.target_type == "assignment",
+                            AuditEventRow.target_id.in_(
+                                [str(r["assignment_id"]) for r in reopened]
+                            ),
+                            AuditEventRow.action == "assignment.reopen",
+                        )
+                        .distinct(AuditEventRow.target_id)
+                        .order_by(AuditEventRow.target_id, AuditEventRow.id.desc())
+                    )
+                }
+                if reopened
+                else {}
+            )
             result = []
             for row in rows:
                 source = target = None
@@ -1117,6 +1153,14 @@ class AssignmentService:
                         source_language=source,
                         target_language=target,
                         failed_check_count=failed,
+                        **(
+                            {
+                                "reopened_at": reopen.at,
+                                "reopen_reason": reopen.details.get("reason") or None,
+                            }
+                            if (reopen := reopens.get(str(row["assignment_id"])))
+                            else {}
+                        ),
                     )
                 )
             return result

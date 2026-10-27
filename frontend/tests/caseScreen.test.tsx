@@ -2433,6 +2433,14 @@ describe("CaseScreen integration", () => {
       expect(screen.getByText("Select a finding in the list or in the text to see its details.")).toBeDefined();
     });
 
+    it("a reopened task says why it was reopened and the case selector reads Reopened (#34)", () => {
+      const reopened = { ...task, status: "reopened" as const, reopened_at: "2026-10-26T09:00:00Z", reopen_reason: "Check the onset." };
+      const other = { ...task, assignment_id: 18, document_id: "doc-2", external_id: "second" };
+      render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} assignmentNavigation={{ tasks: [reopened, other], current: reopened, onNavigate: vi.fn() }} />);
+      expect(screen.getByText(/^The project lead reopened this task on .+\. Reason: Check the onset\.$/)).toBeDefined();
+      expect(screen.getByRole("option", { name: /^Case 1 of 2: .*\(Reopened\)$/ })).toBeDefined();
+    });
+
     it("has no My tasks button on assignment routes and keeps Dashboard on the legacy path", () => {
       const rendered = render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} assignmentNavigation={assignmentNavigation} />);
       const toolbar = screen.getByRole("group", { name: "Case" });
