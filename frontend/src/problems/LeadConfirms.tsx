@@ -93,10 +93,15 @@ export function LeadConfirm({ intent, report, finalText, preselect = [], lead, r
     };
     writing.current = true; setBusy(true); setOutcome(null); setNotice(null);
     try {
-      let after = await send(report, ACTIONS[intent], chosen);
-      // "Close and resume": release the pauses, then close with the same outcome text.
-      if (intent === "resume_close") after = await send(after, "resolve", []);
-      if (alive.current) onDone(intent, report, after, intent === "release" || intent === "resume_close" ? chosen : undefined);
+      const after = await send(report, ACTIONS[intent], chosen);
+      if (intent === "resume_close") {
+        // "Close and resume": release the pauses, then close with the same outcome text. The release is saved either
+        // way: a failed close leaves an open report and shows as the release outcome ("The report is still open.").
+        const closed = await send(after, "resolve", []).catch(() => null);
+        if (alive.current) onDone(closed ? intent : "release", report, closed ?? after, chosen);
+        return;
+      }
+      if (alive.current) onDone(intent, report, after, intent === "release" ? chosen : undefined);
     } catch (failure) {
       if (!alive.current) return;
       const code = errorCode(failure);

@@ -134,7 +134,8 @@ export function CaseViewer({ projectKey, caseId, variant, show, annotations, com
   const closeComparison = () => {
     setCompareIdentity(null);
     if (compare !== undefined) onNavigate({ name: 'projectCase', key: projectKey, caseId, ...(variant !== undefined ? { variant } : {}),
-      ...(selection !== 'text' ? { show: selection } : {}), ...(documents ? { documents } : {}) });
+      // An explicit `show=text` stays: without it the view would fall back to the final result (R-4).
+      ...(show !== undefined || selection !== 'text' ? { show: selection } : {}), ...(documents ? { documents } : {}) });
   };
   const contentIdentity = useMemo(() => ({ identity, selectedId, retry, allowed: access.allowed, loading: access.loading }), [identity, selectedId, retry, access.allowed, access.loading]);
   const [textState, setText] = useState<{ identity: object; value: VariantText } | null>(null);

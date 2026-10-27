@@ -208,6 +208,29 @@ describe("confirmations", () => {
     expect(act).toHaveBeenNthCalledWith(2, "r1", expect.objectContaining({ action: "resolve", reason: "Text is fine", expected_revision: 2, assignment_ids: [] }));
   });
 
+  it("close and resume: a failed close after the release shows the release outcome, the report still open", async () => {
+    const { act } = await setup();
+    act.mockResolvedValueOnce(leadReport({ revision: 2, holds: [hold({ active: false, release_action: "resume", released_by_label: "lead-0002" })] }))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    fireEvent.click(intent("Close and resume Task 4…"));
+    const box = within(confirmBox("Close and resume Task 4"));
+    fireEvent.change(box.getByRole("textbox", { name: /Outcome for ann-0004/ }), { target: { value: "Text is fine" } });
+    fireEvent.click(box.getByRole("button", { name: "Close and resume" }));
+    expect(await screen.findByText(/^Released the pause on .*Task 4.*\. The report is still open\.$/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Close and resume Task 4…" })).toBeNull();
+  });
+
+  it("close and resume: a conflict keeps its confirmation even when the pause is gone", async () => {
+    const { act, get } = await setup();
+    act.mockRejectedValue(new ConflictError("changed", "WORKFLOW_REVISION_CONFLICT", { reason: "REPORT_RESOLVED" }));
+    get.mockResolvedValue(leadReport({ revision: 2, holds: [hold({ active: false, release_action: "resume", released_by_label: "ann-0004" })] }));
+    fireEvent.click(intent("Close and resume Task 4…"));
+    const box = within(confirmBox("Close and resume Task 4"));
+    fireEvent.change(box.getByRole("textbox", { name: /Outcome for ann-0004/ }), { target: { value: "Text is fine" } });
+    fireEvent.click(box.getByRole("button", { name: "Close and resume" }));
+    expect(await box.findByText(/This report changed since you opened it/)).toBeTruthy();
+  });
+
   it("release preselects a single pause, counts the selection and requires one", async () => {
     const two = [hold(), hold({ hold_id: "h2", assignment_id: 7, owner_label: "ann-0005", language: "en", other_active_holds: [{ report_id: "r2" }] })];
     const { act } = await setup({ view: leadReport({ holds: two }) });

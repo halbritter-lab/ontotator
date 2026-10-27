@@ -179,3 +179,9 @@ it('an explicit "Text only" stays on the text even with a final result', async (
   expect(screen.getByLabelText<HTMLSelectElement>('Show').value).toBe('text');
   expect(api.getAnnotationVersion).not.toHaveBeenCalled();
 });
+
+it('closing a deep-linked comparison keeps an explicit "Text only"', async () => {
+  await viewer({ show: 'text', compare: 'target' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Close comparison' }));
+  expect(props.onNavigate).toHaveBeenLastCalledWith({ name: 'projectCase', key: 'pkg', caseId: caseDetail.case_id, variant: 'target', show: 'text' });
+});

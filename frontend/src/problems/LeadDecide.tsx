@@ -23,7 +23,8 @@ export function LeadDecide({ report, open, onOpen, onUnavailable, renderConfirm,
   const state = intentState(report);
   const buttons = useRef(new Map<Intent, HTMLButtonElement>());
   useEffect(() => { if (focusTrigger) buttons.current.get(focusTrigger.intent)?.focus(); }, [focusTrigger]);
-  const primary = report.state === "open" && !state.resume_close.unavailable;
+  // An open "Close and resume" confirmation stays even when a reload released the pauses (its conflict shows there).
+  const primary = open === "resume_close" || (report.state === "open" && !state.resume_close.unavailable);
   return <Toolbar label="Decide on this report" className="lead-decide">
     {(primary ? ["resume_close" as const, ...INTENT_ORDER] : INTENT_ORDER).map(intent => {
       const { label, consequence, unavailable } = state[intent];
