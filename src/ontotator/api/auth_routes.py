@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ontotator.api.identity import PrincipalDep
 from ontotator.api.security import SESSION_COOKIE
 from ontotator.auth.accounts import AccountService
+from ontotator.auth.login_attempts import client_address
 from ontotator.auth.sessions import Principal, SessionService
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -75,7 +76,7 @@ def _start_session(
         password,
         # Behind a proxy named in --forwarded-allow-ips, uvicorn sets this from
         # X-Forwarded-For (deployment contract: T2e).
-        client_ip=request.client.host if request.client else "unknown",
+        client_ip=client_address(request.client.host if request.client else None),
         user_agent=request.headers.get("user-agent"),
     )
     previous = request.cookies.get(SESSION_COOKIE)

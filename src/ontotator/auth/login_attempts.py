@@ -1,5 +1,6 @@
 """Shared login lock order and policy, without accounts/session import cycles."""
 
+import ipaddress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -27,6 +28,23 @@ class SessionPolicy:
     failures_per_address: int = 100
     # Attempts are kept this long: the window, plus a day to look into attacks.
     retention: timedelta = timedelta(days=1)
+
+
+def client_address(host: str | None) -> str:
+    """The address login limits count by: an IPv6 client's /64, else the host.
+
+    One IPv6 client usually controls a whole /64, so counting single addresses
+    would give it 2^64 fresh lockout budgets (#59).
+    """
+    if host is None:
+        return "unknown"
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is None:
+        return str(ipaddress.ip_network(f"{ip}/64", strict=False))
+    return host
 
 
 def address_lock(client_ip: str) -> int:

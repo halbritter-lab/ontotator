@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ontotator.api.identity import PrincipalDep
 from ontotator.auth.accounts import AccountService, User
 from ontotator.auth.audit import Actor
+from ontotator.auth.login_attempts import client_address
 
 router = APIRouter(prefix="/api/v1/me", tags=["me"])
 
@@ -84,6 +85,6 @@ def change_password(
         body.current_password,
         body.new_password,
         keep_session_id=principal.session_id,
-        client_ip=request.client.host if request.client else "unknown",
+        client_ip=client_address(request.client.host if request.client else None),
     )
     return Response(status_code=204)
