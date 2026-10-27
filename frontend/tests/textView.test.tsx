@@ -12,7 +12,7 @@ const leadLayers: TextLayerEntry[] = [
   { kind: 'proposals', ref: proposalsRef, label: 'Tool proposals (3)', count: 3, available: true },
   { kind: 'submission', ref: tomRef, label: 'Tom Reis, submitted 21 Oct', state: 'submitted', count: 1, available: true },
   { kind: 'person', ref: null, label: 'Mia Berg, in progress', state: 'in_progress', available: false, reason: 'Not submitted yet.' },
-  { kind: 'final', ref: null, label: 'Final result (not yet accepted)', state: 'not_accepted', available: false, reason: 'Not accepted yet.' },
+  { kind: 'final', ref: null, label: 'Final result', state: 'not_accepted', available: false, reason: 'Not accepted yet.' },
 ];
 const annotatorLayers: TextLayerEntry[] = [
   { kind: 'proposals', ref: null, label: 'Tool proposals (3)', count: 3, available: false, reason: 'Hidden while you annotate from scratch.' },
@@ -73,9 +73,9 @@ it('Show lists proposals, people, result with unavailable entries greyed and the
   const select = screen.getByLabelText<HTMLSelectElement>('Show');
   expect([...select.querySelectorAll('optgroup')].map(group => group.label)).toEqual(['Text', 'Proposals', 'Annotations', 'Result']);
   expect(options(select)).toEqual(['Text only', 'Tool proposals (3)', 'Tom Reis, submitted 21 Oct',
-    'Mia Berg, in progress (Not submitted yet)', 'Final result (not yet accepted) (Not accepted yet)']);
+    'Mia Berg, in progress (not submitted yet)', 'Final result (not accepted yet)']);
   const disabled = [...select.options].filter(option => option.disabled).map(option => option.text);
-  expect(disabled).toEqual(['Mia Berg, in progress (Not submitted yet)', 'Final result (not yet accepted) (Not accepted yet)']);
+  expect(disabled).toEqual(['Mia Berg, in progress (not submitted yet)', 'Final result (not accepted yet)']);
   expect(api.listTextLayers).toHaveBeenCalledWith('pkg', 'target');
 });
 
@@ -84,7 +84,7 @@ it("an annotator's Show list has no entries for other people", async () => {
   vi.mocked(api.listTextLayers).mockResolvedValue(annotatorLayers);
   await viewer();
   const select = screen.getByLabelText<HTMLSelectElement>('Show');
-  expect(options(select)).toEqual(['Text only', 'Tool proposals (3) (Hidden while you annotate from scratch)', ownRef.label]);
+  expect(options(select)).toEqual(['Text only', 'Tool proposals (3) (hidden while you annotate from scratch)', ownRef.label]);
   expect(select.textContent).not.toMatch(/Tom|Mia/);
   expect(api.listAnnotationVersions).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Compare' })).toBeNull();

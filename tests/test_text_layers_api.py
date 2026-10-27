@@ -63,7 +63,7 @@ def test_lead_sees_proposals_people_and_final_placeholder(env):
         "reason": "Not submitted yet.",
     }
     assert not final["available"] and final["ref"] is None
-    assert final["label"] == "Final result (not yet accepted)"
+    assert final["label"] == "Final result"
     assert final["reason"] == "Not accepted yet."
     assert final["state"] == "not_accepted"
 

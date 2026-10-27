@@ -2046,6 +2046,12 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 .case-viewer .case-toolbar { flex-wrap: wrap; justify-content: flex-start; align-items: end; gap: var(--space-2) var(--space-3); padding: var(--space-2) var(--space-3); }
 .text-view-field { display: inline-flex; flex-direction: column; gap: 2px; min-width: 0; }
 .text-view-field > span { color: var(--text-muted); font-size: var(--size-xs); line-height: var(--leading-xs); }
+/* One row of equal controls (#12): every select and button 32 px high in the small type, the select labels beside them. */
+.case-viewer .text-view-toolbar { align-items: center; --toolbar-control: 32px; }
+.text-view-toolbar .text-view-field { flex-direction: row; align-items: center; gap: var(--space-2); }
+.text-view-toolbar .text-view-field > span { font-size: var(--size-sm); line-height: var(--leading-sm); white-space: nowrap; }
+.text-view-toolbar .form-select { width: auto; max-width: 22rem; min-height: 0; height: var(--toolbar-control); padding: 0 var(--space-2); font-size: var(--size-sm); line-height: var(--leading-sm); }
+.text-view-toolbar .btn-sm { height: var(--toolbar-control); }
 .case-viewer h1 { margin: 0; font-size: var(--size-base); }
 .readonly-annotation-view { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .readonly-annotation-view .center-pane { min-width: 0; flex: 1 1 auto; }
