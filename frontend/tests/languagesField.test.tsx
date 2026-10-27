@@ -38,6 +38,8 @@ describe("LanguagesField", () => {
     await user.type(screen.getByLabelText("Languages you can read"), " DE {Enter}");
     expect(screen.getByRole("button", { name: "Remove de" })).toBeDefined();
     expect((screen.getByLabelText("Languages you can read") as HTMLInputElement).value).toBe("");
+    // The list closes so it no longer covers the Save button below.
+    expect(screen.queryByRole("listbox")).toBeNull();
     expect(onSave).not.toHaveBeenCalled();
   });
 

@@ -42,6 +42,8 @@ export const SuggestInput = forwardRef<HTMLInputElement, SuggestInputProps>(func
       pick(suggestions[activeIndex].value);
       return;
     }
+    // Enter on free text commits it (the caller's job): close the list so it no longer covers the controls below.
+    if (event.key === "Enter" && !event.nativeEvent.isComposing) { setOpen(false); setActive(-1); }
     onKeyDown?.(event);
   };
   const field = input.current;
