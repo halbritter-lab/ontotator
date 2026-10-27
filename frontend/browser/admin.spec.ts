@@ -260,6 +260,24 @@ test.describe("Administration through real accounts and jobs", () => {
     }
   });
 
+  test("a More menu near the bottom of the window opens above its button, inside the window", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 480 });
+    const username = `ui-menu-flip-${randomUUID().slice(0, 8)}`;
+    expect((await page.request.post("/__test_user__", { params: { username, pseudonym: username, system_admin: "true", assign: "none" } })).ok()).toBeTruthy();
+    await loginExisting(page, { username, code: "" });
+    await page.goto("/#/admin/users");
+    const more = page.getByRole("button", { name: /^More actions for / }).last();
+    await more.evaluate(element => element.scrollIntoView({ block: "end" }));
+    const button = (await more.boundingBox())!;
+    expect(button.y + button.height).toBeGreaterThan(480 - 120);
+    await more.click();
+    const menu = (await page.getByRole("menu", { name: (await more.getAttribute("aria-label"))!, exact: true }).boundingBox())!;
+    expect(menu.y + menu.height).toBeLessThanOrEqual(button.y);
+    expect(menu.y).toBeGreaterThanOrEqual(0);
+    expect(menu.x).toBeGreaterThanOrEqual(0);
+    expect(menu.x + menu.width).toBeLessThanOrEqual(1280);
+  });
+
   test("lead uploads plain text with a preview before importing", async ({ page }) => {
     const setup = await createProjectThroughUi(page);
     await logout(page);
