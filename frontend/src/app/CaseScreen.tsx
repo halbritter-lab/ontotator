@@ -3391,6 +3391,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
           <IconButton label="Keyboard shortcuts" icon={<IconKeyboard />} onClick={openShortcutHelp}
             variant="quiet" size="sm" title="Keyboard shortcuts (?)" />
           {taskActions}
+          {/* In the actions row, where the submit button stands in editable tasks: the text starts at the same height (#25). */}
+          {serverReadOnly && <InlineMessage tone="info">Submitted. The project lead can reopen it for changes.</InlineMessage>}
           {held && <InlineMessage tone="warning">Task paused: {holdReason ?? "A project problem needs attention."} Saved work remains readable. Your local input is kept.</InlineMessage>}
 
           {queueState === "error" && (
@@ -3419,7 +3421,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       {display && <InlineMessage tone="info"><span>Viewing {display.label} (read-only)</span>
         <Button disabled={versionBusy} onClick={() => { void chooseAnnotationVersion("draft"); }}>Back to my draft</Button>
       </InlineMessage>}
-      {serverReadOnly && <InlineMessage tone="info">Submitted. The project lead can reopen it for changes.</InlineMessage>}
       {!serverReadOnly && assignmentNavigation && reopenNotice(assignmentNavigation.current)
         && <InlineMessage tone="info">{reopenNotice(assignmentNavigation.current)}</InlineMessage>}
       {guidelineNotice}
@@ -3965,6 +3966,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             <AnnotationPanel
               source={proposalFor(selectedAnnotation, view.available_inputs ?? [])}
               readOnly={readOnly}
+              hideEmpty={readOnly && carriedListOrder.length === 0 && !isReviewLike(view.key.mode)}
               key={selectedAnnotationId ?? "empty"}
               annotation={selectedAnnotation}
               allEvidence={allEvidenceMap}
