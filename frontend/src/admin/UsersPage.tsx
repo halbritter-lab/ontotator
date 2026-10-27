@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { Fragment, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { api, ApiError, type AdminUser, type AdminUserPatch, type AuditEvent, type CodeResponse, type CreateUserRequest, type CurrentUser, type ProjectSummary } from "../api/client";
-import { Button, Checkbox, ConfirmDialog, DataTable, Dialog, EmptyState, IconMore, InlineMessage, MenuButton, TextInput, Toolbar, type Column, type MenuItem, EmptyValue } from "../ui";
+import { Button, Checkbox, ConfirmDialog, DataTable, Dialog, EmptyState, IconMore, InlineMessage, MenuButton, StatusBadge, TextInput, Toolbar, type Column, type MenuItem, EmptyValue } from "../ui";
 import { CodeOnceDialog } from "./CodeOnceDialog";
 import { ErrorNotice } from "./ErrorNotice";
 import { fieldError } from "./errors";
@@ -15,6 +15,8 @@ export interface UsersPageProps {
 type Handover = CodeResponse & { kind: "setup" | "reset"; username: string };
 type PendingChange = { username: string; change: AdminUserPatch; kind: "admin" | "deactivate"; fromEdit: boolean };
 type EditState = { baseline: AdminUser; draft: AdminUser };
+/** From this many projects the New user grid gets a "Find project" field. */
+const PROJECT_FILTER_FROM = 8;
 const emptyCreate = (): CreateUserRequest => ({ username: "", display_name: "", email: "", languages: [], system_admin: false, projects: [] });
 const projectRoles = ["lead", "annotator", "adjudicator"] as const;
 type History = { username: string; events: AuditEvent[] | null; error?: unknown };
@@ -122,6 +124,8 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>();
   const [filter, setFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [create, setCreate] = useState<CreateUserRequest>(emptyCreate);
   const [createError, setCreateError] = useState<unknown>();
   const [actionError, setActionError] = useState<unknown>();
@@ -291,6 +295,10 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     return items;
   };
   const roleFor = (key: string) => create.projects?.find(item => item.project_key === key)?.roles ?? [];
+  const projectQuery = projectFilter.trim().toLowerCase();
+  // Projects with a ticked role stay in view while filtering.
+  const shownProjects = projects.filter(project => !projectQuery || roleFor(project.project_key).length > 0
+    || project.name.toLowerCase().includes(projectQuery) || project.project_key.toLowerCase().includes(projectQuery));
   const toggleNewRole = (key: string, role: string, on: boolean) => {
     const roles = on ? [...roleFor(key), role] : roleFor(key).filter(item => item !== role);
     const others = (create.projects ?? []).filter(item => item.project_key !== key);
@@ -300,12 +308,12 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
 
   const userNames = new Map((users ?? []).map(user => [user.id, user.display_name || user.username]));
   const columns: Column<AdminUser>[] = [
-    { id: "username", header: "Username", cell: user => user.username, sortValue: user => user.username },
+    { id: "username", header: "Username", width: "11rem", cell: user => user.username, sortValue: user => user.username },
     { id: "name", header: "Display name", cell: user => user.display_name },
     { id: "pseudonym", header: "Pseudonym", cell: user => user.pseudonym },
     { id: "languages", header: "Languages", cell: user => user.languages.join(", ") || <EmptyValue /> },
-    { id: "projects", header: "Projects", cell: user => user.projects.length ? <ul>{user.projects.map(project => <li key={project.project_key} title={project.project_key}>{project.project_name || project.project_key}: {project.roles.map(role => labelFor(roleLabels, role)).join(", ")}</li>)}</ul> : <EmptyValue /> },
-    { id: "admin", header: "Admin", cell: user => user.is_system_admin ? "Yes" : "No" },
+    { id: "projects", header: "Projects", cell: user => user.projects.length ? <ul>{user.projects.map(project => <li key={project.project_key} title={project.project_key}>{project.project_name || project.project_key}{project.roles.map(role => <Fragment key={role}>{" "}<StatusBadge tone="neutral">{labelFor(roleLabels, role)}</StatusBadge></Fragment>)}</li>)}</ul> : <EmptyValue /> },
+    { id: "admin", header: "Admin", cell: user => user.is_system_admin ? <StatusBadge tone="info">Admin</StatusBadge> : "No" },
     { id: "active", header: "Active", cell: user => user.anonymised ? "Anonymised" : user.active ? "Yes" : "No" },
     { id: "setup", header: "Setup", cell: user => user.setup_pending ? "Pending" : user.anonymised ? <EmptyValue /> : "Done", sortValue: user => user.setup_pending ? 0 : 1 },
     { id: "last-login", header: "Last login", cell: user => user.last_login_at ? <time dateTime={user.last_login_at} title={formatDateTime(user.last_login_at)}>{formatShortDateTime(user.last_login_at)}</time> : "Never", sortValue: user => user.last_login_at ?? "" },
@@ -323,15 +331,17 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       <h1>Users</h1>
       <Toolbar label="Users actions">
         <TextInput id="users-filter" label="Filter users" value={filter} onChange={event => setFilter(event.target.value)} />
-        <Button variant="primary" disabled={pageBlocked} onClick={() => { setCreateError(undefined); setCreating(true); }}>New user…</Button>
+        <Button variant="primary" disabled={pageBlocked} onClick={() => { setCreateError(undefined); setProjectFilter(""); setCreating(true); }}>New user…</Button>
         <Button disabled={busy || loading || !!code || !!confirmation || !!editing || creating} onClick={() => { void refresh(lifetime.current); }}>Refresh users</Button>
       </Toolbar>
       {loading && <InlineMessage tone="info">Loading users…</InlineMessage>}
       {loadError !== undefined && <ErrorNotice error={loadError} />}
       {actionError !== undefined && <ErrorNotice error={actionError} />}
       {notice && <InlineMessage tone="success" onDismiss={() => setNotice(null)}>{notice.text}</InlineMessage>}
-      {users !== null && <DataTable label="Users" className="data-table--pin-end" columns={columns}
-        rowProps={user => user.username === notice?.username ? { className: "users-row--changed" } : {}} rows={users.filter(user => user.username.toLowerCase().includes(query) || user.display_name.toLowerCase().includes(query))} rowKey={user => user.username} empty={<EmptyState title={query ? "No matching users." : "No users to display."} />} />}
+      {users !== null && <DataTable label="Users" columns={columns}
+        // A click on the row (not on its buttons) highlights it; a second click clears it.
+        rowProps={user => ({ className: ["users-row", user.username === notice?.username && "users-row--changed"].filter(Boolean).join(" "), selected: user.username === selectedUser,
+          onClick: event => { if (!(event.target as Element).closest("button, a, input")) setSelectedUser(current => current === user.username ? null : user.username); } })} rows={users.filter(user => user.username.toLowerCase().includes(query) || user.display_name.toLowerCase().includes(query))} rowKey={user => user.username} empty={<EmptyState title={query ? "No matching users." : "No users to display."} />} />}
     </section>
     {creating && <Dialog open title="New user" onClose={busy ? undefined : () => setCreating(false)}>
       <form aria-label="New user" onSubmit={event => { event.preventDefault(); void createUser(); }}>
@@ -343,8 +353,9 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
         {projects.length > 0 && <fieldset className="new-user-projects" disabled={blocked}><legend>Add to projects (optional)</legend>
           {/* One grid: the role names head the columns once; each checkbox keeps "Project: Role" as its name. */}
           <div className="new-user-projects-row" aria-hidden="true"><span />{projectRoles.map(role => <span key={role}>{roleLabels[role]}</span>)}</div>
-          {projects.map(project => <div key={project.project_key} className="new-user-projects-row" role="group" aria-label={project.name}>
-            <span>{project.name}</span>
+          {projects.length > PROJECT_FILTER_FROM && <TextInput id="new-projects-filter" className="new-user-projects-filter" label="Find project" type="search" value={projectFilter} onChange={event => setProjectFilter(event.target.value)} />}
+          {shownProjects.map(project => <div key={project.project_key} className="new-user-projects-row" role="group" aria-label={project.name}>
+            <span title={project.name}>{project.name}</span>
             {projectRoles.map(role => <Checkbox key={role} id={`new-${project.project_key}-${role}`} label={<span className="visually-hidden">{roleLabels[role]}</span>} aria-label={`${project.name}: ${roleLabels[role]}`} checked={roleFor(project.project_key).includes(role)} onChange={event => toggleNewRole(project.project_key, role, event.target.checked)} />)}
           </div>)}
         </fieldset>}

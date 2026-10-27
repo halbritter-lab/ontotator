@@ -40,7 +40,7 @@ describe("users administration", () => {
   it("lists server fields and filters by username or display name", async () => {
     render(<UsersPage currentUser={currentUser} />); await load();
     const table = within(screen.getByRole("table", { name: "Users" }));
-    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("Study One: Lead, Annotator")).toBeTruthy();
+    expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("Study One").closest("li")?.textContent).toBe("Study One Lead Annotator"); expect(table.getAllByText(/^(Lead|Annotator)$/).every(node => node.closest(".status-pill"))).toBe(true);
     expect(table.getByText("en")).toBeTruthy();
     expect(screen.queryByRole("form", { name: "New user" })).toBeNull(); expect(screen.getByRole("group", { name: "Users actions" }).textContent).toContain("New user…");
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "SMITH" } }); expect(table.queryByText("Root")).toBeNull();
@@ -252,6 +252,27 @@ describe("account status, projects at creation, history and erasure", () => {
     fireEvent.click(newForm().getByRole("button", { name: "Create user" }));
     await screen.findByRole("dialog", { name: "Setup code for bea" });
     expect(api.adminCreateUser).toHaveBeenCalledWith(expect.objectContaining({ projects: [{ project_key: "study-one", roles: ["adjudicator", "annotator"] }] }));
+  });
+
+  it("filters the New user project grid from nine projects on and keeps ticked projects in view", async () => {
+    const many = Array.from({ length: 9 }, (_, index) => ({ ...project, project_key: `p${index}`, name: `Project ${index}` }));
+    vi.mocked(api.listProjects).mockResolvedValue(many);
+    render(<UsersPage currentUser={currentUser} />); await load(); await fillCreate();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Project 0: Lead" }));
+    fireEvent.change(newForm().getByLabelText("Find project"), { target: { value: "project 5" } });
+    expect(newForm().getAllByRole("group").map(group => group.getAttribute("aria-label")).filter(name => name?.startsWith("Project "))).toEqual(["Project 0", "Project 5"]);
+    expect(newForm().getByText("Project 5").getAttribute("title")).toBe("Project 5");
+  });
+
+  it("highlights a row on click and clears it on a second click; buttons do not select", async () => {
+    render(<UsersPage currentUser={currentUser} />); await load();
+    const row = screen.getByText("alex").closest("tr")!;
+    fireEvent.click(row.querySelector("td")!);
+    expect(row.getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(row.querySelector("td")!);
+    expect(row.getAttribute("aria-selected")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Edit alex" }));
+    expect(row.getAttribute("aria-selected")).toBe("false");
   });
 
   it("shows a user's history in words", async () => {
