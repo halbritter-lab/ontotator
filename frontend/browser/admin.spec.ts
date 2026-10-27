@@ -243,6 +243,23 @@ test.describe("Administration through real accounts and jobs", () => {
     }
   });
 
+  test("a row's More menu on Users lies above the pinned actions of the rows below", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const username = `ui-menu-admin-${randomUUID().slice(0, 8)}`;
+    expect((await page.request.post("/__test_user__", { params: { username, pseudonym: username, system_admin: "true", assign: "none" } })).ok()).toBeTruthy();
+    await loginExisting(page, { username, code: "" });
+    await page.goto("/#/admin/users");
+    // The first row: the fixture accounts of other specs (or this admin) are rows below it.
+    const more = page.getByRole("button", { name: /^More actions for / }).first();
+    await more.click();
+    const menu = page.getByRole("menu", { name: (await more.getAttribute("aria-label"))!, exact: true });
+    for (const item of await menu.getByRole("menuitem").all()) {
+      // The item's right end, where the pinned Actions cells of later rows sit, hits the item itself.
+      const hit = await item.evaluate(element => { const box = element.getBoundingClientRect(); return element.contains(document.elementFromPoint(box.right - 4, box.top + box.height / 2)); });
+      expect(hit).toBe(true);
+    }
+  });
+
   test("lead uploads plain text with a preview before importing", async ({ page }) => {
     const setup = await createProjectThroughUi(page);
     await logout(page);

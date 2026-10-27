@@ -396,7 +396,10 @@ test("PUBLISHED: Publish and Discard stay above a long preview and stick while i
   const preview = page.getByRole("region", { name: "Preview of long.md", exact: true });
   await expect(preview).toBeVisible();
   const publishButton = page.getByRole("button", { name: "Publish as v2", exact: true });
-  // Without scrolling: the actions are in view and come before the facts and the preview.
+  // The consequences come before Publish (#47 A-24); the actions come before the preview.
+  const facts = page.getByText("Will be published as v2.", { exact: true });
+  expect(await facts.evaluate((element, button) => !!(element.compareDocumentPosition(button!) & Node.DOCUMENT_POSITION_FOLLOWING), await publishButton.elementHandle())).toBe(true);
+  await publishButton.scrollIntoViewIfNeeded();
   await expect(publishButton).toBeInViewport();
   await expect(page.getByRole("button", { name: "Discard", exact: true })).toBeInViewport();
 
