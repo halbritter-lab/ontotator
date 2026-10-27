@@ -119,6 +119,8 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   const [reissue, setReissue] = useState<AdminUser | null>(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The result of the last (de)activation or anonymisation, shown above the table with its row marked (#47 A-14).
+  const [notice, setNotice] = useState<{ username: string; text: string } | null>(null);
   const lifetime = useRef(0);
   const generation = useRef(0);
   const writing = useRef(false);
@@ -152,6 +154,8 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     return () => { if (routeLeaveRef.current === guard) routeLeaveRef.current = null; };
   }, [routeLeaveRef]);
 
+  // The changed row may move (an anonymised name sorts elsewhere): bring it into view.
+  useEffect(() => { if (notice) document.querySelector(".users-row--changed")?.scrollIntoView?.({ block: "nearest" }); }, [notice]);
   const showCode = (issued: CodeResponse, kind: Handover["kind"], username: string) => {
     const value: Handover = { code: issued.code, expires_at: issued.expires_at, kind, username };
     pendingCode.current = value; setCode(value);
@@ -198,11 +202,12 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   const update = async (username: string, change: AdminUserPatch, fromEdit: boolean) => {
     if (writing.current || pendingCode.current) return;
     const epoch = lifetime.current;
-    writing.current = true; setBusy(true); setEditError(undefined); setActionError(undefined);
+    writing.current = true; setBusy(true); setEditError(undefined); setActionError(undefined); setNotice(null);
     try {
       const user = await api.adminUpdateUser(username, change);
       if (epoch !== lifetime.current) return;
       replaceUser(user); if (fromEdit) setEditing(null);
+      if (change.active !== undefined) setNotice({ username, text: `${username} is ${change.active ? "active again" : "deactivated"}.` });
     } catch (error: unknown) {
       if (epoch === lifetime.current) { if (fromEdit) setEditError(error); else setActionError(error); }
     } finally {
@@ -238,13 +243,14 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     if (!erase || writing.current) return;
     const epoch = lifetime.current;
     const { username, typed } = erase;
-    writing.current = true; setBusy(true);
+    writing.current = true; setBusy(true); setNotice(null);
     try {
       const user = await api.adminAnonymiseUser(username, typed);
       if (epoch !== lifetime.current) return;
       // The username changes to anonymised-<id>: replace the row by its old name.
       setUsers(rows => rows && rows.map(row => row.username === username ? user : row));
       setErase(null);
+      setNotice({ username: user.username, text: `${username} is now ${user.username}.` });
     } catch (error: unknown) {
       if (epoch === lifetime.current) setErase(current => current && { ...current, error });
     } finally {
@@ -301,7 +307,9 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       {loading && <InlineMessage tone="info">Loading users…</InlineMessage>}
       {loadError !== undefined && <ErrorNotice error={loadError} />}
       {actionError !== undefined && <ErrorNotice error={actionError} />}
-      {users !== null && <DataTable label="Users" className="data-table--pin-end" columns={columns} rows={users.filter(user => user.username.toLowerCase().includes(query) || user.display_name.toLowerCase().includes(query))} rowKey={user => user.username} empty={<EmptyState title={query ? "No matching users." : "No users to display."} />} />}
+      {notice && <InlineMessage tone="success" onDismiss={() => setNotice(null)}>{notice.text}</InlineMessage>}
+      {users !== null && <DataTable label="Users" className="data-table--pin-end" columns={columns}
+        rowProps={user => user.username === notice?.username ? { className: "users-row--changed" } : {}} rows={users.filter(user => user.username.toLowerCase().includes(query) || user.display_name.toLowerCase().includes(query))} rowKey={user => user.username} empty={<EmptyState title={query ? "No matching users." : "No users to display."} />} />}
     </section>
     {creating && <Dialog open title="New user" onClose={busy ? undefined : () => setCreating(false)}>
       <form aria-label="New user" onSubmit={event => { event.preventDefault(); void createUser(); }}>
@@ -311,9 +319,11 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
         <LanguagesField id="new-languages" label="Languages" value={create.languages ?? []} disabled={blocked} onChange={languages => setCreate({ ...create, languages })} />
         <Checkbox id="new-admin" label="System administrator" checked={create.system_admin} disabled={blocked} onChange={event => setCreate({ ...create, system_admin: event.target.checked })} />
         {projects.length > 0 && <fieldset className="new-user-projects" disabled={blocked}><legend>Add to projects (optional)</legend>
-          {projects.map(project => <div key={project.project_key} role="group" aria-label={project.name}>
+          {/* One grid: the role names head the columns once; each checkbox keeps "Project: Role" as its name. */}
+          <div className="new-user-projects-row" aria-hidden="true"><span />{projectRoles.map(role => <span key={role}>{roleLabels[role]}</span>)}</div>
+          {projects.map(project => <div key={project.project_key} className="new-user-projects-row" role="group" aria-label={project.name}>
             <span>{project.name}</span>
-            {projectRoles.map(role => <Checkbox key={role} id={`new-${project.project_key}-${role}`} label={roleLabels[role]} aria-label={`${project.name}: ${roleLabels[role]}`} checked={roleFor(project.project_key).includes(role)} onChange={event => toggleNewRole(project.project_key, role, event.target.checked)} />)}
+            {projectRoles.map(role => <Checkbox key={role} id={`new-${project.project_key}-${role}`} label={<span className="visually-hidden">{roleLabels[role]}</span>} aria-label={`${project.name}: ${roleLabels[role]}`} checked={roleFor(project.project_key).includes(role)} onChange={event => toggleNewRole(project.project_key, role, event.target.checked)} />)}
           </div>)}
         </fieldset>}
         {createError !== undefined && !usernameError && !displayNameError && <ErrorNotice error={createError} />}

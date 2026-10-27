@@ -175,10 +175,15 @@ it("asks Assign anyway in the dialog for a language mismatch", async () => {
   const props = casesProps(); render(<AssignWorkDialog {...props} />); await ready();
   fireEvent.click(radio(/Dan Mertens/));
   await waitForPreviewOf(["dan"]);
-  expect(screen.getByRole("status", { name: "Summary" }).textContent).toContain("Dan Mertens does not read de.");
+  // The mismatch is said at the person and in the confirmation, not a third time in the summary (#47 A-21).
+  expect(screen.getByRole("status", { name: "Summary" }).textContent).not.toContain("does not read");
   fireEvent.click(screen.getByRole("button", { name: "Assign 20" }));
   expect(api.commitAssignmentBatch).not.toHaveBeenCalled();
-  fireEvent.click(await screen.findByRole("button", { name: "Assign anyway" }));
+  expect(screen.getByRole("region", { name: "Confirm languages" }).textContent).toContain("Dan Mertens does not read de.");
+  // One "Assign anyway": the footer's primary button, no second one in the confirmation.
+  expect(screen.getAllByRole("button", { name: "Assign anyway" })).toHaveLength(1);
+  expect(screen.queryByRole("button", { name: "Assign 20" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Assign anyway" }));
   await waitFor(() => expect(api.commitAssignmentBatch).toHaveBeenCalledWith("p/key", expect.objectContaining({ usernames: ["dan"], confirm_language: true })));
   await waitFor(() => expect(props.onAssigned).toHaveBeenCalled());
 });
@@ -495,6 +500,8 @@ it("the (i) popover changes annotators per text for all texts; the dialog and it
   expect(within(popover).getByText(/^Changing it changes the limit for/).textContent).toContain("all texts");
   const field = within(popover).getByRole("spinbutton", { name: /Annotators per text/ });
   expect(field).toHaveProperty("value", "1");
+  // Unchanged: nothing to change yet (#47 A-21).
+  expect(within(popover).getByRole("button", { name: "Change for all texts" }).getAttribute("aria-disabled")).toBe("true");
   fireEvent.change(field, { target: { value: "0" } });
   expect(within(popover).getByRole("button", { name: "Change for all texts" }).getAttribute("aria-disabled")).toBe("true");
   fireEvent.change(field, { target: { value: "2" } });

@@ -92,15 +92,15 @@ describe("Settings › Guidelines", () => {
     expect(screen.queryByRole("button", { name: "Publish as v4" })).toBeNull();
   });
 
-  it("puts Publish and Discard above the facts and the preview", async () => {
+  it("puts Publish and Discard after the facts and above the preview", async () => {
     renderSection();
     await screen.findByText(/^v3, guide-v3\.md/);
     choose(markdown("# Hello\n\n" + "Long text. ".repeat(500)));
     const preview = await screen.findByRole("region", { name: "Preview of new.md" });
     const publish = screen.getByRole("button", { name: "Publish as v4" });
     const discard = screen.getByRole("button", { name: "Discard" });
-    const order = [fileInput(), screen.getByLabelText("What changed? (optional)"), publish, discard,
-      screen.getByText("new.md, 5 KB"), screen.getByText("Will be published as v4."), preview];
+    const order = [fileInput(), screen.getByLabelText("What changed? (optional)"), screen.getByText("new.md, 5 KB"),
+      screen.getByText("Will be published as v4."), screen.getByText(/Published versions cannot be changed/), publish, discard, preview];
     for (let index = 1; index < order.length; index += 1) {
       expect(order[index - 1].compareDocumentPosition(order[index]) & Node.DOCUMENT_POSITION_FOLLOWING, `element ${index} follows ${index - 1}`).toBeTruthy();
     }
