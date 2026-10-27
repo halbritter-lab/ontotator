@@ -25,8 +25,8 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); clipboard(undefined); });
 
 describe("one-time code dialog", () => {
   it.each(["setup", "reset"] as const)("shows the %s code, exact warning and local expiry", kind => {
-    render(<CodeOnceDialog {...props} kind={kind} onClose={vi.fn()} />);
-    const dialog = screen.getByRole("dialog", { name: kind === "setup" ? "Setup code" : "Reset code" });
+    render(<CodeOnceDialog {...props} kind={kind} username="frank" onClose={vi.fn()} />);
+    const dialog = screen.getByRole("dialog", { name: kind === "setup" ? "Setup code for frank" : "Reset code for frank" });
     expect(within(dialog).getByText(props.code)).toBeDefined();
     expect(within(dialog).getByText("This code is shown only once. Hand it over in person or by a secure channel.")).toBeDefined();
     expect(dialog.querySelector("time")?.dateTime).toBe(props.expires_at);

@@ -43,7 +43,7 @@ it("keeps pending issuance and visible one-time code through shell/hash/logout u
   act(() => { window.location.hash = "#/me"; });
   await waitFor(() => expect(window.location.hash).toBe("#/admin/users"));
   await act(async () => pending.resolve(created));
-  const dialog = await screen.findByRole("dialog", { name: "Setup code" });
+  const dialog = await screen.findByRole("dialog", { name: "Setup code for bea" });
   link(/^My tasks/); logout(); await act(async () => {});
   expect(screen.getByText("setup-secret")).toBeTruthy(); expect(onLogout).not.toHaveBeenCalled();
   fireEvent.click(within(dialog).getByLabelText("I have handed over or stored the code"));
@@ -82,13 +82,14 @@ it("restores native history during reset issuance and acknowledged code, then pe
   await screen.findByRole("heading", { name: "My tasks" });
   link("Users");
   fireEvent.click(await screen.findByRole("button", { name: "Reset code for alex" }));
+  fireEvent.click(within(screen.getByRole("dialog", { name: "Issue a new reset code for Alex?" })).getByRole("button", { name: "Reset code" }));
   act(() => window.history.back());
   // Native traversal and the controller's return traversal both run asynchronously.
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 70)); });
   expect(window.location.hash).toBe("#/admin/users");
   expect(screen.getByRole("heading", { name: "Users" })).toBeTruthy();
   await act(async () => pending.resolve({ code: "reset-secret", expires_at: created.expires_at }));
-  const dialog = await screen.findByRole("dialog", { name: "Reset code" });
+  const dialog = await screen.findByRole("dialog", { name: "Reset code for alex" });
   fireEvent.click(within(dialog).getByLabelText("I have handed over or stored the code"));
   act(() => window.history.back());
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 70)); });

@@ -145,13 +145,15 @@ def test_a_reset_code_lives_two_hours_and_replaces_older_code(
     services: Services,
 ) -> None:
     setup = services.accounts.create_user(ADMIN, "alice", "Alice")
+    services.accounts.redeem_code("alice", setup.code, PASSWORD)
+    unused = services.accounts.issue_reset_code(ADMIN, "alice")
 
     reset = services.accounts.issue_reset_code(ADMIN, "alice")
 
     assert reset.purpose == "reset"
     assert reset.expires_at == services.clock() + timedelta(hours=2)
     with pytest.raises(DomainError) as old:
-        services.accounts.redeem_code("alice", setup.code, PASSWORD)
+        services.accounts.redeem_code("alice", unused.code, PASSWORD)
     assert _code(old) == "CODE_INVALID"
     services.clock.advance(hours=2, seconds=1)
     with pytest.raises(DomainError) as expired:
@@ -159,6 +161,24 @@ def test_a_reset_code_lives_two_hours_and_replaces_older_code(
     assert _code(expired) == "CODE_INVALID"
     fresh = services.accounts.issue_reset_code(ADMIN, "alice")
     services.clock.advance(minutes=119)
+    assert services.accounts.redeem_code("alice", fresh.code, PASSWORD).username == (
+        "alice"
+    )
+
+
+def test_a_new_code_for_a_pending_user_is_a_fresh_setup_code(
+    services: Services,
+) -> None:
+    setup = services.accounts.create_user(ADMIN, "alice", "Alice")
+
+    fresh = services.accounts.issue_reset_code(ADMIN, "alice")
+
+    assert fresh.purpose == "setup"
+    assert fresh.expires_at == services.clock() + timedelta(hours=24)
+    with pytest.raises(DomainError) as old:
+        services.accounts.redeem_code("alice", setup.code, PASSWORD)
+    assert _code(old) == "CODE_INVALID"
+    services.clock.advance(hours=23)
     assert services.accounts.redeem_code("alice", fresh.code, PASSWORD).username == (
         "alice"
     )
