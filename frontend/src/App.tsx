@@ -302,7 +302,7 @@ export function App({ user: givenUser, onLogout }: AppProps): JSX.Element {
     }
     case "projectCase": content = <CaseViewer projectKey={route.key} caseId={route.caseId} variant={route.variant} show={route.show} annotations={route.annotations} compare={route.compare} compareShow={route.compare_show} documents={route.documents} username={user.username} onNavigate={go} />; break;
     case "projectProgress": content = <ProgressPage projectKey={route.key} onNavigate={go} />; break;
-    case "projectExport": content = <ExportPage projectKey={route.key} currentUser={user} />; break;
+    case "projectExport": content = <ExportPage projectKey={route.key} currentUser={user} documentCount={projects.find(project => project.project_key === route.key)?.document_count} onNavigate={go} />; break;
     case "projectGuidelines": content = <GuidelinesPage projectKey={route.key} version={route.version}
       canManage={!!projects.find(project => project.project_key === route.key)?.can_manage} onNavigate={go} />; break;
     case 'projectProblemReport': {

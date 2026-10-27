@@ -96,7 +96,7 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
     {error !== undefined && (denied
       ? <InlineMessage tone="error">You do not have access to this page.</InlineMessage>
       : <div className="progress-error"><ErrorNotice error={error} /><Button onClick={() => setRevision(value => value + 1)}>Retry</Button></div>)}
-    {empty && <EmptyState title="No texts yet">Upload texts to start.</EmptyState>}
+    {empty && <EmptyState title="No texts yet" action={<RouteLink route={documents({})} className="btn btn-secondary" onNavigate={onNavigate}>Go to Documents</RouteLink>}>Upload texts on the Documents page to start.</EmptyState>}
     {progress && !empty && <>
       {progress.stages && <section aria-labelledby="progress-pipeline-heading">
         <h2 id="progress-pipeline-heading" className="visually-hidden">Pipeline</h2>

@@ -763,10 +763,13 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   /** No rows: the tab is empty (tab counts ignore facets and search), or the filters exclude every row of the tab. */
   const emptyState = (bar: DocumentRowsPage["bar"]): JSX.Element => {
-    if (tabCount(bar, tab) === 0) return <TabEmptyState tab={tab} projectKey={projectKey} onNavigate={navigateLink} />;
+    if (tabCount(bar, tab) === 0) return <TabEmptyState tab={tab} projectKey={projectKey} onNavigate={navigateLink} onUpload={uploadButton} />;
     return <EmptyState title="No texts match these filters." action={<Button size="sm" onClick={clearAll}>Clear all</Button>} />;
   };
 
+  // A project without texts shows only the way to add some: no tabs, filters or selection (#46).
+  const emptyProject = page != null && page.bar.all === 0 && page.groups.length === 0;
+  const uploadButton = (variant?: "primary") => <Button variant={variant} aria-disabled={settings ? undefined : true} onClick={() => { if (settings) setUploadOpen(true); }}>Upload texts…</Button>;
   let content: JSX.Element;
   if (!page && rows.error != null) {
     content = <div className="documents-error"><ErrorNotice error={rows.error} /><Button onClick={rows.retry}>Retry</Button></div>;
@@ -797,13 +800,13 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
     // While another filter or page loads, the previous page stays (busy) so the bar and paging links keep focus.
     content = <>
       {rows.error != null && <InlineMessage tone="error">Could not refresh. <Button size="sm" onClick={rows.retry}>Retry</Button></InlineMessage>}
-      <div className="documents-selection-tools">
+      {!emptyProject && <div className="documents-selection-tools">
         {page.groups.length > 0 && <Checkbox id="documents-select-all" className="checkbox-target" label={selectAllLabel} checked={allSelected}
           // Some texts selected, not all filtered ones: mixed (announced "mixed", #47 A-20).
           ref={element => { if (element) element.indeterminate = !allSelected && selection.keys.size > 0; }}
           aria-busy={selectingAll || undefined} onChange={() => { void toggleAll(); }} />}
         <Button size="sm" onClick={() => setIdsDialogOpen(true)}>Select by case IDs…</Button>
-      </div>
+      </div>}
       {selectionError !== undefined && <ErrorNotice error={selectionError} />}
       {!narrow && selectionBar}
       <h2 className="visually-hidden">Texts</h2>
@@ -821,10 +824,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
   return <section className="documents-page">
     <div className="documents-heading">
       <h1 ref={headingRef} tabIndex={-1}>Documents</h1>
-      <Button aria-disabled={settings ? undefined : true} onClick={() => { if (settings) setUploadOpen(true); }}>Upload texts…</Button>
+      {!emptyProject && uploadButton()}
     </div>
-    {page && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />}
-    <Toolbar label="Document filters" className="documents-filters">
+    {page && !emptyProject && <DocumentsTabs bar={page.bar} query={query} projectKey={projectKey} panelId={PANEL_ID} onNavigate={navigateLink} updatedAt={rows.updatedAt} onRefresh={refreshAll} />}
+    {!emptyProject && <Toolbar label="Document filters" className="documents-filters">
       <DocumentsSearch ref={search} q={query.q} onApply={q => changeFilter({ q })} />
       <FilterPopover query={query} bar={page?.bar ?? null} sourceLanguages={sourceLanguages} translations={translations} onChange={changeFilter} onClearAll={clearAll} people={people} />
       {chips.length > 0 && <div ref={chipList} className="documents-filter-chips">
@@ -834,10 +837,10 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
       {page && !narrow && tab === "all" && <Checkbox id="documents-show-not-in-plan" className="checkbox-target" label={`Show texts not in plan (${notInPlanCount})`}
         checked={showNotInPlan} onChange={event => changeShowNotInPlan(event.currentTarget.checked)} />}
       {page && filtersActive(query) && <p className="documents-filter-count">{`${page.bar.shown} of ${tabCount(page.bar, tab)}`}</p>}
-    </Toolbar>
+    </Toolbar>}
     {settingsError !== undefined && <ErrorNotice error={settingsError} />}
     {inventoryError !== undefined && <ErrorNotice error={inventoryError} />}
-    <div id={PANEL_ID} {...(page ? { role: "tabpanel", "aria-labelledby": tabId(PANEL_ID, tab) } : {})}>{content}</div>
+    <div id={PANEL_ID} {...(page && !emptyProject ? { role: "tabpanel", "aria-labelledby": tabId(PANEL_ID, tab) } : {})}>{content}</div>
     <LiveRegion ref={liveRegion} />
     <Dialog open={uploadOpen} title="Upload texts" size="lg" onClose={() => setUploadOpen(false)}>
       {uploadOpen && settings && <UploadPanel key={projectKey} projectKey={projectKey} languages={settings.languages ?? []} canOverrideTranslationStatus={canOverrideTranslationStatus}
