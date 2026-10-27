@@ -80,7 +80,7 @@ def seed(stack: RunningStack) -> None:
         result = stack.exec("app", *args)
         # _print_code prints the token alone on an indented line. Never echo
         # stdout, response bodies, cookies, or passwords, even when seeding fails.
-        codes = re.findall(r"(?m)^  ([A-Za-z0-9_-]{43})\s*$", result.stdout)
+        codes = re.findall(r"(?m)^  ([A-Za-z0-9_-]{20,})\s*$", result.stdout)
         if len(codes) != 1:
             raise RuntimeError(
                 f"Could not read setup code for synthetic account {username}"

@@ -645,7 +645,7 @@ def seed(directory: Path) -> None:
     actors = {}
     for username, (display, role, languages, qualification) in ACTORS.items():
         output = stack.cli("users", "create", username, "--display-name", display)
-        codes = re.findall(r"(?m)^  ([A-Za-z0-9_-]{43})\s*$", output)
+        codes = re.findall(r"(?m)^  ([A-Za-z0-9_-]{20,})\s*$", output)
         if len(codes) != 1:
             raise RuntimeError("Could not consume synthetic account setup code")
         stack.cli("projects", "add-member", PROJECT_KEY, username, "--role", role)
