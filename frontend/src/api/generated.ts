@@ -3495,6 +3495,8 @@ export interface components {
             added: components["schemas"]["ConsolidationMemberView"][];
             /** Added By */
             added_by?: string | null;
+            /** Consolidator */
+            consolidator?: string | null;
             /** Workflow Revision */
             workflow_revision: number;
             /**

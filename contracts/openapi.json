@@ -10764,6 +10764,17 @@
             ],
             "title": "Added By"
           },
+          "consolidator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consolidator"
+          },
           "workflow_revision": {
             "type": "integer",
             "title": "Workflow Revision"

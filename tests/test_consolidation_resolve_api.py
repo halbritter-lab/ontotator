@@ -738,7 +738,8 @@ def test_added_findings_are_listed_for_the_assignee_and_the_lead(cons):
     """Findings the consolidator added outside every group are in ``added``
     (live and after submission), with the consolidator as ``added_by``; the
     groups' ``cons-…`` results and kept targets are not."""
-    assert view(cons)["added"] == []
+    first = view(cons)
+    assert first["added"] == [] and first["added_by"] is None
     added_id = add_finding(cons, OTHER_TERM, "Seit 2")
     resolve_all(cons)
     adj = cons.env.app.state.accounts.get_by_username("adj").pseudonym
@@ -761,6 +762,8 @@ def test_added_findings_are_listed_for_the_assignee_and_the_lead(cons):
     assert body["read_only"] is True
     assert [a["annotation_id"] for a in body["added"]] == [added_id]
     assert body["added_by"] == f"Ada Judicator ({adj})"
+    # The read-only banner names the consolidator ("Submitted by …").
+    assert body["consolidator"] == f"Ada Judicator ({adj})"
 
 
 def test_choose_with_a_null_axis_writes_it_as_not_set(cons):

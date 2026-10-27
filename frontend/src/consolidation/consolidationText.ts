@@ -54,10 +54,18 @@ export function keepLabel(present: readonly ConsolidationPersonView[]): string {
 }
 
 export const READ_ONLY_REASONS: Readonly<Record<string, string>> = {
-  submitted: "This consolidation was submitted. You see its final state.",
   input_withdrawn: "A submission used here was withdrawn. The consolidation is read-only until the lead decides.",
   not_assigned: "This consolidation is no longer assigned to you. It is read-only.",
 };
+
+/** The read-only banner, by state: accepted, submitted (the lead accepts it; the consolidator waits), else the reason. */
+export function readOnlyText(view: Pick<ConsolidationView, "read_only_reason" | "accepted_at" | "consolidator">, lead: boolean): string {
+  if (view.accepted_at) { const day = dayMonth(view.accepted_at); return `Accepted by the lead${day ? ` on ${day}` : ""}. Read-only.`; }
+  if (view.read_only_reason === "submitted") return lead
+    ? `Submitted by ${view.consolidator ? personName(view.consolidator) : "the consolidator"}. Read-only; accept it in Documents.`
+    : "Submitted. Waiting for the lead.";
+  return READ_ONLY_REASONS[view.read_only_reason ?? ""] ?? "This consolidation is read-only.";
+}
 
 /** After submitting: a lead accepts their own consolidation in Documents. */
 export function submittedText(lead: boolean): string {

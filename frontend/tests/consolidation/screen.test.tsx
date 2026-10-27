@@ -329,10 +329,10 @@ describe("ConsolidationScreen", () => {
   });
 
   it("is read-only for the lead and opens the group from the route", async () => {
-    load({ ...decidedView(), read_only: true, read_only_reason: "submitted", workspace_id: null });
+    load({ ...decidedView(), read_only: true, read_only_reason: "submitted", workspace_id: null, consolidator: "Carla Consolidator (ann-0006)" });
     await renderScreen({ group: "g-dd" });
     expect(expandedTitle()).toBe("Delayed development");
-    expect(screen.getByText("This consolidation was submitted. You see its final state.")).toBeTruthy();
+    expect(screen.getByText("Submitted by Carla Consolidator. Read-only; accept it in Documents.")).toBeTruthy();
     expect(screen.getByRole("navigation", { name: "Text path" }).textContent).toContain("ready to accept");
     for (const name of [/^Submit/, /^Change/, "Not in result", "Open in full editor"]) expect(screen.queryByRole("button", { name })).toBeNull();
     expect(screen.queryByLabelText("Guidelines unclear here")).toBeNull();

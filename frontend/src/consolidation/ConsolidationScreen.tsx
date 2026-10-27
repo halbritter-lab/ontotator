@@ -15,7 +15,7 @@ import { nextTaskLabel, remainingTasksText } from "../translation/labels";
 import { Button, ConfirmDialog, EmptyState, InlineMessage, MenuButton, Popover, Select, TextInput, Toast, useMediaQuery, useToast } from "../ui";
 import { useShortcut } from "../ui/shortcuts";
 import { StagePath } from "../ui/StagePath";
-import { addedHeading, duplicatesText, finalizationState, headerTitle, READ_ONLY_REASONS, submittedText, summaryText } from "./consolidationText";
+import { addedHeading, duplicatesText, finalizationState, headerTitle, readOnlyText, submittedText, summaryText } from "./consolidationText";
 import { duplicateTerms, groupName, termLabel } from "./groupModel";
 import { GroupList, textOrder } from "./GroupList";
 import { SubmitBar } from "./SubmitBar";
@@ -276,7 +276,8 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
     <ul className="cons-group-list" aria-hidden="true">{[0, 1, 2].map(index => <li key={index} className="cons-placeholder" />)}</ul>
   </section>;
 
-  const reason = view.read_only ? READ_ONLY_REASONS[view.read_only_reason ?? ""] ?? "This consolidation is read-only." : null;
+  const lead = props.assignmentId === undefined || !!isLead;
+  const reason = view.read_only ? readOnlyText(view, lead) : null;
   const showText = !narrow && (wide || !textHidden);
   const textToolbar = <>
     {!readOnly && addTarget && <Button ref={addRef} size="sm" aria-expanded={adding || typing}
@@ -297,7 +298,7 @@ export function ConsolidationScreen(props: ConsolidationScreenProps): JSX.Elemen
           { id: "translation", title: "Translation", state: "done", tone: "done" },
           { id: "annotation", title: "Annotation", state: `${view.people.length} submitted`, tone: "done" },
           { id: "finalization", title: "Finalization", ...finalizationState(open, groups.length, submitted || view.read_only_reason === "submitted",
-            view.accepted_at, props.assignmentId === undefined || !!isLead) },
+            view.accepted_at, lead) },
         ]} />
         <h1 id="cons-title" className="case-title"><LanguageText text={headerTitle(view, readOnly && !submitted)} code={view.language} /></h1>
         {/* B5-6: the tools as a quiet row under the title (mockup 02 B). M-7a: one way into the full editor, same tab. */}
