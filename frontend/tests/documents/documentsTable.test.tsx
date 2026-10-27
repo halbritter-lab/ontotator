@@ -263,15 +263,47 @@ describe("cells", () => {
       const status = cellsOf("case-106 de")[index].querySelector<HTMLElement>(".documents-status")!;
       expect(status).not.toBeNull();
       expect(status.querySelector("button, br, p, div")).toBeNull();
-      const visible = (status.textContent ?? "").replace(/^\S+\s/, "");
+      // The glyph is text (✓) or an SVG circle (no text); either way one space follows it.
+      const visible = (status.textContent ?? "").replace(/^\S*\s/, "");
       expect(status.getAttribute("title")).toBe(visible);
     }
     // The card's short states (cardModel), the "who" in grey.
     expect(cellsOf("case-106 de")[2].querySelector(".documents-status")!.getAttribute("title")).toBe("accepted");
-    expect(cellsOf("case-106 de")[3].querySelector(".documents-status")!.getAttribute("title")).toBe("1 of 2 submitted (Tom Reis)");
-    expect(cellsOf("case-106 de")[3].querySelector(".documents-status-who")!.textContent).toBe(" (Tom Reis)");
+    expect(cellsOf("case-106 de")[3].querySelector(".documents-status")!.getAttribute("title")).toBe("1 of 2 submitted · open: Tom Reis");
+    expect(cellsOf("case-106 de")[3].querySelector(".documents-status-who")!.textContent).toBe(" · open: Tom Reis");
     expect(cellsOf("case-106 de")[4].querySelector(".documents-status")!.getAttribute("title")).toBe("waiting");
     expect(cellsOf("case-106 de")[3].querySelector(".stage-cell-symbol")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("a running consolidation: Annotation done once all submitted, Finalization running; waiting always has its circle", () => {
+    const consolidating = stagedRow("case-106", "de", {
+      stages: {
+        review: cell("accepted", "done", { note: "unchanged" }),
+        annotation: cell("consolidating", "running", { people: [tom], submitted: 2, total: 2 }),
+        final: cell("after_review", "waiting"),
+      },
+    });
+    const early = stagedRow("case-108", "de", {
+      stages: {
+        review: cell("accepted", "done", { note: "unchanged" }),
+        annotation: cell("consolidating", "running", { people: [tom], submitted: 1, total: 2 }),
+        final: cell("after_review", "waiting"),
+      },
+    });
+    const fresh = stagedRow("case-109", "de", {
+      stages: { review: cell("accepted", "done", { note: "unchanged" }), annotation: cell("unassigned", "todo"), final: cell("none", "none") },
+    });
+    renderTable(page([group("case-106", [consolidating]), group("case-108", [early]), group("case-109", [fresh])]));
+    const status = (name: string, index: number) => cellsOf(name)[index].querySelector<HTMLElement>(".documents-status")!;
+    expect(status("case-106 de", 3).className).toContain("stage-cell--done");
+    expect(status("case-106 de", 3).querySelector(".stage-cell-symbol")!.textContent).toBe("✓");
+    expect(status("case-106 de", 4).className).toContain("stage-cell--running");
+    expect(status("case-106 de", 4).querySelector(".stage-cell-symbol path")).not.toBeNull();
+    expect(status("case-106 de", 4).getAttribute("title")).toMatch(/^consolidating/);
+    expect(status("case-108 de", 3).className).toContain("stage-cell--running");
+    expect(status("case-109 de", 4).getAttribute("title")).toBe("waiting");
+    expect(status("case-109 de", 4).className).toContain("stage-cell--waiting");
+    expect(status("case-109 de", 4).querySelector(".stage-cell-symbol circle")).not.toBeNull();
   });
 
   it("Waiting on keeps the full list", () => {
