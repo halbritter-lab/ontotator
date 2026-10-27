@@ -44,7 +44,7 @@ describe("carried findings after a text change", () => {
   it("text_change inputs read Check after text change", () => {
     const carried = finding("carried");
     const { container } = setup("text_change", [draftInput("input-1", carried)], [carried]);
-    expect(screen.getByText("Check after text change", { selector: ".badge" })).toBeDefined();
+    expect(screen.getByText("Check after text change", { selector: ".case-mode" })).toBeDefined();
     const row = container.querySelector<HTMLElement>('[data-list-key="annotation:carried"]')!;
     expect(within(row).getByText("Check after text change")).toBeDefined();
     expect(screen.getByText("0 of 1 checked")).toBeDefined();
@@ -54,7 +54,7 @@ describe("carried findings after a text change", () => {
     const carried = finding("carried");
     const input = { ...draftInput("input-1", carried), source_draft_snapshot_id: null, source_submission_id: "sub-1", source_round_ordinal: 1 };
     const { container } = setup("handover", [input], [carried]);
-    expect(screen.getByText("Review carried findings", { selector: ".badge" })).toBeDefined();
+    expect(screen.getByText("Review carried findings", { selector: ".case-mode" })).toBeDefined();
     const row = container.querySelector<HTMLElement>('[data-list-key="annotation:carried"]')!;
     expect(within(row).getByText("Carried from Round 1")).toBeDefined();
   });

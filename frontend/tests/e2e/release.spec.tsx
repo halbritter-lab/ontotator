@@ -296,9 +296,8 @@ describe("E2E Release Flow - Origin-Neutral Review & Submission", () => {
     const submitBtn = screen.getByRole("button", { name: /Finish & submit text|Fall abschließen & abgeben/i });
     fireEvent.click(submitBtn);
     const dialog = await screen.findByRole("dialog", { name: /Submit text/i });
-    // The review proposals keep empty experiencer and temporality: acknowledge them in one tick.
-    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Submit with 4 unconfirmed values" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: /^Submit text$/i }));
+    // The review proposals keep empty experiencer and temporality: acknowledge them in one click.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 2 warnings" }));
 
     await waitFor(() => {
       expect(submitSpy).toHaveBeenCalledWith(

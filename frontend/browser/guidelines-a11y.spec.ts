@@ -11,7 +11,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { selectText } from "./helpers";
+import { moreAction, selectText } from "./helpers";
 import { guidelineScenario, loginGuidelineUser, type GuidelineScenario } from "./guidelineHelpers";
 
 test.setTimeout(180_000);
@@ -26,7 +26,9 @@ async function evidence(page: Page, name: string) {
   await page.screenshot({ path: resolve(evidenceDir(), `guidelines-a11y-${name}.png`), fullPage: false });
 }
 
-const entry = (page: Page) => page.getByRole("button", { name: /^Guidelines v1, open the project guidelines/ });
+/** The editor's "More actions" button: its menu holds the guidelines item; focus returns here. */
+const entry = (page: Page) => page.getByRole("button", { name: "More actions", exact: true });
+const openGuidelines = (page: Page) => moreAction(page, /^Guidelines v1/);
 const aside = (page: Page) => page.getByRole("complementary", { name: "Guidelines v1", exact: true });
 const modal = (page: Page) => page.getByRole("dialog", { name: "Guidelines v1", exact: true });
 const scrollWidth = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth);
@@ -63,7 +65,7 @@ async function axeViolations(page: Page, include: string): Promise<string[]> {
 
 test("drawer at 1280 px is non-modal and the editor stays operable", async ({ page }) => {
   await anaOnTask(page, { width: 1280, height: 800 });
-  await entry(page).click();
+  await openGuidelines(page);
   const panel = aside(page);
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("heading", { name: "Guidelines v1", level: 2 })).toBeFocused();
@@ -102,7 +104,7 @@ test("drawer at 1280 px is non-modal and the editor stays operable", async ({ pa
 
 test("900 px uses a dialog", async ({ page }) => {
   await anaOnTask(page, { width: 900, height: 800 });
-  await entry(page).click();
+  await openGuidelines(page);
   const dialog = modal(page);
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAttribute("aria-modal", "true");
@@ -121,7 +123,7 @@ test("900 px uses a dialog", async ({ page }) => {
 
 test("390 px uses a sheet", async ({ page }) => {
   await anaOnTask(page, { width: 390, height: 844 });
-  await entry(page).click();
+  await openGuidelines(page);
   const sheet = modal(page);
   await expect(sheet).toBeVisible();
   await expect(sheet).toHaveAttribute("aria-modal", "true");
@@ -148,7 +150,7 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
   const notice = page.getByText("This project has guidelines (v1)", { exact: true });
   await expect(notice).toBeVisible();
   expect((await notice.boundingBox())!.x + (await notice.boundingBox())!.width).toBeLessThanOrEqual(320);
-  await entry(page).click();
+  await openGuidelines(page);
   const sheet = modal(page);
   await expect(sheet.getByText(V1_TEXT)).toBeVisible();
   expect(await scrollWidth(page), "sheet open").toBeLessThanOrEqual(320);
@@ -165,11 +167,15 @@ test("320 px reflow without horizontal scrolling", async ({ page }) => {
   await evidence(page, "320-sheet");
 });
 
-test("keyboard-only path: Tab to Guidelines, Enter, Escape returns focus", async ({ page }) => {
+test("keyboard-only path: Tab to More, the Guidelines item, Enter, Escape returns focus", async ({ page }) => {
   await anaOnTask(page, { width: 1280, height: 800 });
   await page.locator("body").focus();
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await tabTo(page, entry(page));
+  // ArrowUp opens the menu at its last item ("Keyboard shortcuts (?)"); the guidelines item sits just above it.
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await expect(page.getByRole("menuitem", { name: /^Guidelines v1/ })).toBeFocused();
   await page.keyboard.press("Enter");
   const panel = aside(page);
   await expect(panel).toBeVisible();
@@ -189,7 +195,7 @@ test("keyboard-only path: Tab to Guidelines, Enter, Escape returns focus", async
 
 test("axe has no violations on the drawer, Settings › Guidelines and the withdraw dialog", async ({ page }) => {
   const s = await anaOnTask(page, { width: 1280, height: 800 });
-  await entry(page).click();
+  await openGuidelines(page);
   await expect(aside(page).getByText(V1_TEXT)).toBeVisible();
   await evidence(page, "axe-drawer");
   // Soft, so Settings and the withdraw dialog are still checked when the drawer fails.
@@ -227,15 +233,15 @@ test("axe has no violations on the drawer, Settings › Guidelines and the withd
 test("forced colours keep the New badge and the notice visible", async ({ page }) => {
   await page.emulateMedia({ forcedColors: "active" });
   await anaOnTask(page, { width: 1280, height: 800 });
-  const badge = entry(page).locator(".task-guidelines-badge");
-  await expect(badge).toHaveText("New");
-  await expect(badge).toBeVisible();
-  await expect(entry(page)).toHaveAccessibleName("Guidelines v1, open the project guidelines, updated");
+  // The "New" badge is now the menu item's "(new)" text (no separate badge element to colour-check).
+  await entry(page).click();
+  await expect(page.getByRole("menuitem", { name: "Guidelines v1 (new)", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   const title = page.getByText("This project has guidelines (v1)", { exact: true });
   await expect(title).toBeVisible();
   await expect(page.getByRole("button", { name: "Read guidelines v1", exact: true })).toBeVisible();
   // Text keeps a system colour distinct from its background; the notice keeps a visible edge.
-  for (const [name, locator] of [["badge", badge], ["notice title", title]] as const) {
+  for (const [name, locator] of [["notice title", title]] as const) {
     const colours = await locator.evaluate(element => {
       let background = "rgba(0, 0, 0, 0)";
       for (let node: Element | null = element; node && /rgba\(0, 0, 0, 0\)|transparent/.test(background); node = node.parentElement) {

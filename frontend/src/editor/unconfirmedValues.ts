@@ -30,7 +30,7 @@ export interface UnconfirmedRow {
   quote: string;
   /** Open values (empty or defaulted) in the axis order of the type; server-only pairs last. */
   values: UnconfirmedValue[];
-  /** Defaulted, non-empty values still among the axis options; [] when the row cannot be confirmed in one click. */
+  /** Defaulted values still among the axis options; [] when the row cannot be confirmed in one click (also with any empty value). */
   confirmableAxisIds: string[];
   /** Last line of a row without "Confirm"; null for confirmable rows. */
   reason: string | null;
@@ -87,7 +87,9 @@ export function unconfirmedRows(input: UnconfirmedInput): UnconfirmedRow[] {
     if (open.length === 0) return [];
     const targetKey = input.targetKeyOf(snapshot);
     const editable = input.editableLayerIds.includes(annotation.layer_id);
-    const confirmable = targetKey !== undefined || !editable ? [] : open
+    // An empty value ("Not specified") is no value to confirm (#33): such a row only goes to the finding.
+    const hasEmpty = open.some(value => value.value === null);
+    const confirmable = targetKey !== undefined || !editable || hasEmpty ? [] : open
       .filter(value => value.defaulted && value.value !== null
         && (axes.find(axis => axis.id === value.axisId)?.options.includes(value.value) ?? false))
       .map(value => value.axisId);

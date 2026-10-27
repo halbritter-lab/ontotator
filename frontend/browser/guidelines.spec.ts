@@ -56,6 +56,15 @@ const settingsUrl = (s: GuidelineScenario) => `/#/projects/${encodeURIComponent(
 const guidelinesButton = (page: Page, version: number) =>
   page.getByRole("button", { name: new RegExp(`^Guidelines v${version}, open the project guidelines`) });
 const anyGuidelinesButton = (page: Page) => page.locator("button.task-guidelines-entry");
+/** The editor header's "More actions" menu button; its menu holds the guidelines entry. */
+const moreButton = (page: Page) => page.getByRole("button", { name: "More actions", exact: true });
+/** Opens the editor's "More" menu, expects the guidelines item ``name`` (or none), closes the menu. */
+async function expectGuidelinesItem(page: Page, name: string | RegExp | null) {
+  await moreButton(page).click();
+  if (name === null) await expect(page.getByRole("menuitem", { name: /^Guidelines/ })).toHaveCount(0);
+  else await expect(page.getByRole("menuitem", typeof name === "string" ? { name, exact: true } : { name })).toBeVisible();
+  await page.keyboard.press("Escape");
+}
 const drawer = (page: Page, version: number) => page.getByRole("complementary", { name: `Guidelines v${version}`, exact: true });
 const fileInput = (page: Page) => page.getByLabel("Guideline file (.md or .txt, up to 256 KB)", { exact: true });
 const notSeenLine = (page: Page) => page.locator(".guidelines-not-seen");
@@ -196,10 +205,8 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await openTask(ana.page, s, "annotate-1");
     await expect(ana.page.getByText("This project has guidelines (v1)", { exact: true })).toBeVisible();
     await expect(ana.page.getByText("Read them before you start; they are available at any time under Guidelines in the toolbar.", { exact: true })).toBeVisible();
-    const button = guidelinesButton(ana.page, 1);
-    await expect(button).toHaveAccessibleName("Guidelines v1, open the project guidelines, updated");
-    await expect(button.locator(".task-guidelines-badge")).toHaveText("New");
-    await button.click();
+    await moreButton(ana.page).click();
+    await ana.page.getByRole("menuitem", { name: "Guidelines v1 (new)", exact: true }).click();
     const panel = drawer(ana.page, 1);
     await expect(panel).toBeVisible();
     await expect(panel.getByRole("heading", { name: "Guidelines v1", level: 2 })).toBeFocused();
@@ -213,9 +220,9 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await evidence(ana.page, "ana-drawer-v1");
     await panel.getByRole("button", { name: "Close", exact: true }).last().click();
     await expect(panel).toHaveCount(0);
-    await expect(button).toBeFocused();
-    // Opening the drawer marks v1 as seen: the badge goes.
-    await expect(button.locator(".task-guidelines-badge")).toHaveCount(0);
+    await expect(moreButton(ana.page)).toBeFocused();
+    // Opening the drawer marks v1 as seen: the "(new)" mark goes.
+    await expectGuidelinesItem(ana.page, "Guidelines v1");
     expect(external, "no image request").toEqual([]);
     expect(dialogs, "no script executed").toEqual([]);
     await submitCase(ana.page);
@@ -238,12 +245,12 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await expect(ana.page.getByText("Guidelines updated to v2", { exact: true })).toBeVisible();
     await expect(ana.page.getByText(`v2: ${V2_NOTE}`, { exact: true })).toBeVisible();
     await expect(ana.page.getByRole("button", { name: "Read guidelines v2", exact: true })).toBeVisible();
-    await expect(guidelinesButton(ana.page, 2)).toHaveAccessibleName("Guidelines v2, open the project guidelines, updated");
+    await expectGuidelinesItem(ana.page, "Guidelines v2 (new)");
     await evidence(ana.page, "ana-update-notice-v2");
     await ana.page.goto("/#/");
     await expect(ana.page.locator(`a[href="#/tasks/${s.assignments["annotate-2"]}"]`)).toBeVisible();
     await openTask(ana.page, s, "annotate-2");
-    await expect(guidelinesButton(ana.page, 2)).toBeVisible();
+    await expectGuidelinesItem(ana.page, /^Guidelines v2/);
     await expect(ana.page.getByText("Guidelines updated to v2", { exact: true })).toHaveCount(0);
     await submitCase(ana.page);
     const secondSubmission = (await value<Assignment>(ana.page, `/api/v1/assignments/${s.assignments["annotate-2"]}`)).last_submission_id!;
@@ -335,8 +342,9 @@ test("EMPTY: publish v1, read it in a task, publish v2, review under v2, export 
     await evidence(page, "lead-withdrawn-v2");
 
     await openTask(ana.page, s, "annotate-2");
-    await expect(ana.page.locator(".status-badge").first()).toBeVisible();
-    await expect(anyGuidelinesButton(ana.page)).toHaveCount(0);
+    // annotate-2 is submitted: the read-only status replaces the save status.
+    await expect(ana.page.locator(".case-toolbar .case-status")).toBeVisible();
+    await expectGuidelinesItem(ana.page, null);
     await visit(ben.page, `/#/tasks/${s.assignments["review-de"]}`);
     await expect(ben.page.getByRole("textbox", { name: "Translation (de)", exact: true })).toBeVisible();
     await expect(anyGuidelinesButton(ben.page)).toHaveCount(0);
@@ -472,5 +480,5 @@ test("PUBLISHED: My tasks link and the guidelines page", async ({ page }) => {
   // Opening the page records the read: v1 is no longer new in a task.
   await expect.poll(async () => (await value<Listing>(page, `${root(s)}/guidelines`)).my_latest_seen).toBe(1);
   await openTask(page, s, "annotate-1");
-  await expect(guidelinesButton(page, 1)).toHaveAccessibleName("Guidelines v1, open the project guidelines");
+  await expectGuidelinesItem(page, "Guidelines v1");
 });

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import type { components } from '../src/api/generated';
-import { authenticatedRequest, importPackage, loginExisting, mentionWithOffsets, openCase, selectText, submitCase } from './helpers';
+import { authenticatedRequest, importPackage, loginExisting, mentionWithOffsets, moreAction, openCase, selectText, submitCase } from './helpers';
 import { problemReportScenario } from './problemReportHelpers';
 
 // Quick-fix acceptance (Q1 (B1), Q1 (B2), Q3, Q4, Q7). Q1 (B1) targets the rewritten Work rounds and
@@ -107,8 +107,9 @@ test('Q1 (B1): Work rounds and original evidence dialogs keep Close in a fixed f
   };
   for (const size of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(size);
-    const roundsButton = page.getByRole('button', { name: 'Work rounds', exact: true });
-    await roundsButton.click();
+    // Work rounds sits in the editor's "More" menu; focus returns to the "More actions" button.
+    const roundsButton = page.getByRole('button', { name: 'More actions', exact: true });
+    await moreAction(page, 'Work rounds');
     const rounds = page.getByRole('dialog', { name: /^Work rounds\W/ });
     await expect(rounds.getByRole('table', { name: 'Rounds' }).or(rounds.getByRole('list', { name: 'Rounds' }))).toBeVisible();
     await footerClose(rounds, 'Close', roundsButton);
@@ -130,9 +131,11 @@ test('Q1 (B2): the problem dialog keeps New report and Close in a fixed footer',
   await loginExisting(page, s.users.reporter);
   await page.goto(`/#/tasks/${task}`);
   await expect(page.locator('.text-container')).toBeVisible();
-  const entry = page.getByRole('button', { name: /^Report a text problem/ });
+  // The entry is a "More" menu item; focus returns to the "More actions" button.
+  const entry = page.getByRole('button', { name: 'More actions', exact: true });
+  const openEntry = () => moreAction(page, /^Report a text problem…/);
   // No report yet: the entry opens the new report form directly.
-  await entry.click();
+  await openEntry();
   const form = page.getByRole('dialog', { name: 'New problem report', exact: true });
   await form.getByRole('textbox', { name: /What is the problem\?/ }).fill('The German text misses a sentence.');
   await form.locator('.modal-actions').getByRole('button', { name: 'Report and pause my task', exact: true }).click();
@@ -142,7 +145,7 @@ test('Q1 (B2): the problem dialog keeps New report and Close in a fixed footer',
   await expect(reports).toBeHidden();
   for (const size of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(size);
-    await entry.click();
+    await openEntry();
     await expect(reports).toBeVisible();
     const footer = reports.locator('.modal-actions');
     await expect(footer.getByRole('button')).toHaveText(['New report', 'Close']);

@@ -213,7 +213,7 @@ it("Submit is unavailable until every proposal has a decision", async () => {
   const submit = within(dialog).getByRole("button", { name: "Submit text" });
   expect(submit.getAttribute("aria-disabled")).toBe("true");
   const reason = document.getElementById(submit.getAttribute("aria-describedby")!)!;
-  expect(reason.textContent).toBe("Decide every review proposal before submitting.");
+  expect(reason.textContent).toBe("Decide every proposal before submitting.");
 });
 
 it("the header shows the language flag", () => {

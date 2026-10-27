@@ -186,6 +186,10 @@ describe("CaseNavigation Component", () => {
   it("keeps IDs whole when they share no long prefix", () => {
     render(<CaseNavigation documents={sampleDocuments} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
     expect(screen.getByRole("option", { name: /Text 2 of 3/ }).textContent).toBe("Text 2 of 3: doc-alpha (In progress)");
+    // The visible short label is hidden from screen readers; the select carries the full names.
+    const label = document.querySelector(".case-navigation__label")!;
+    expect(label.textContent).toBe("1 of 3 ▾");
+    expect(label.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("names a text by case ID, language and corrected version, never by its document ID (R-11)", () => {
@@ -198,10 +202,10 @@ describe("CaseNavigation Component", () => {
     expect(screen.getByRole("option", { name: /Text 2 of 2/ }).textContent).toBe("Text 2 of 2: synthetic-ready de v2 corrected (In progress)");
   });
 
-  it("shows Case n of m without the document id", () => {
+  it("shows n of m without the document id", () => {
     render(<CaseNavigation documents={[sampleDocuments[0]]} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
-    const label = screen.getByText("Text 1 of 1");
-    expect(label.textContent).toBe("Text 1 of 1");
+    const label = screen.getByText("1 of 1");
+    expect(label.textContent).toBe("1 of 1");
     expect(label.getAttribute("title")).toBe("doc-beta");
     expect(screen.queryByText(/doc-beta/)).toBeNull();
   });

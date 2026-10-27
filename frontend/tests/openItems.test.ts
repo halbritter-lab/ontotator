@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import type { CarriedState } from "../src/editor/carried/checkState";
-import { collectOpenItems, dialogItems, DIALOG_HIDDEN_KINDS, nextOpenItem, submitBlockedReason, summaryLine, type OpenItem } from "../src/editor/openItems";
+import { collectOpenItems, dialogItems, DIALOG_HIDDEN_KINDS, nextOpenItem, submitBlockedReason, type OpenItem } from "../src/editor/openItems";
 
 const carriedState = (inputId: string, homeId: string | null): CarriedState => ({
   input: { input_id: inputId } as CarriedState["input"], index: 0, variant: "needed", unchecked: true,
@@ -46,18 +46,9 @@ describe("collectOpenItems", () => {
   });
 });
 
-describe("summaryLine and submitBlockedReason", () => {
+describe("submitBlockedReason", () => {
   const carried = (n: number) => collectOpenItems({
     ...empty, carried: Array.from({ length: n }, (_, i) => ({ state: carriedState(`i${i}`, `c${i}`), term: "Seizure", instruction: "" })),
-  });
-
-  it("names the open items", () => {
-    expect(summaryLine(carried(1))).toBe("1 carried finding still needs a check");
-    expect(summaryLine(carried(2))).toBe("2 carried findings still need a check");
-    expect(summaryLine([])).toBe("");
-    const mixed = collectOpenItems({ ...empty, carried: [{ state: carriedState("i", "c"), term: "S", instruction: "" }],
-      defaulted: [{ annotationId: "d", term: "D", axisId: "x" }] });
-    expect(summaryLine(mixed)).toBe("1 carried finding still needs a check, 1 annotation has defaulted axis values");
   });
 
   it("gives the first blocking kind's sentence and ignores warnings", () => {
@@ -68,7 +59,7 @@ describe("summaryLine and submitBlockedReason", () => {
       defaulted: [{ annotationId: "d", term: "D", axisId: "x" }] });
     expect(warnings.every(item => !item.blocking)).toBe(true);
     expect(submitBlockedReason(warnings)).toBeNull();
-    expect(submitBlockedReason(collectOpenItems({ ...empty, openTargets: [{ key: "t", term: "T" }] }))).toBe("Decide every review proposal before submitting.");
+    expect(submitBlockedReason(collectOpenItems({ ...empty, openTargets: [{ key: "t", term: "T" }] }))).toBe("Decide every proposal before submitting.");
     expect(submitBlockedReason(collectOpenItems({ ...empty, reanchor: [{ key: "r", term: "R" }] })))
       .toBe("Re-create or dismiss 1 finding after text correction before submitting.");
   });
@@ -83,13 +74,12 @@ describe("dialogItems and blocking values", () => {
   it("drops defaulted and unconfirmed values from the dialog list", () => {
     expect(DIALOG_HIDDEN_KINDS).toEqual(["defaulted", "unconfirmed-values", "modifier-as-finding", "cohort-modifier", "exclusive-modifiers"]);
     expect(dialogItems(mixed()).map(item => item.kind)).toEqual(["carried"]);
-    expect(summaryLine(dialogItems(mixed()))).toBe("1 carried finding still needs a check");
   });
 
   it("names blocking values after the blocking kinds", () => {
     const warnings = dialogItems(collectOpenItems({ ...empty, defaulted: [{ annotationId: "d", term: "D", axisId: "x" }] }));
     expect(submitBlockedReason(warnings, 3)).toBe("Confirm or choose 3 values before submitting.");
-    expect(submitBlockedReason(warnings, 1)).toBe("Confirm or choose 1 values before submitting.");
+    expect(submitBlockedReason(warnings, 1)).toBe("Confirm or choose 1 value before submitting.");
     expect(submitBlockedReason(warnings, 0)).toBeNull();
     expect(submitBlockedReason(dialogItems(mixed()), 3)).toBe("Check 1 carried finding before submitting.");
   });
@@ -131,16 +121,13 @@ describe("modifier items (R3, R10, R12)", () => {
     expect(dialogItems(list)).toEqual([]);
   });
 
-  it("summarises per finding; nothing blocks", () => {
-    expect(summaryLine(items())).toBe("1 finding has unconfirmed clinical values, 1 finding uses a modifier term, "
-      + "1 finding has a cohort term as modifier, 1 finding has two modifiers of one kind");
+  it("nothing blocks", () => {
     expect(submitBlockedReason(items())).toBeNull();
     const onsets = collectOpenItems({ ...empty, modifierWarnings: [
       { annotationId: "a", term: "A", kind: "exclusive-modifiers", key: "exclusive:onset", labels: [], exclusiveClass: "onset" },
       { annotationId: "a", term: "A", kind: "cohort-modifier", key: "cohort:x", labels: ["Frequent"] },
       { annotationId: "a", term: "A", kind: "cohort-modifier", key: "cohort:y", labels: ["Very frequent"] }] });
     expect(onsets[0].line).toBe("Two onsets.");
-    expect(summaryLine(onsets)).toBe("1 finding has a cohort term as modifier, 1 finding has two modifiers of one kind");
     expect(submitBlockedReason(onsets)).toBeNull();
   });
 

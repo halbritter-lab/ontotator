@@ -1453,10 +1453,47 @@
   gap: var(--space-1);
 }
 
-/* The actions always take their own row, so the text starts at the same height in every task,
-   whichever buttons (guidelines badge, next open item) a task shows. */
+/* One bar (S5): navigation, name, language and mode on the left; status, "More" and the one primary
+   action on the right. The title gives way (ellipsis), the actions never wrap, so the text sheet starts
+   at the same height in every task, editable or submitted. */
+.case-toolbar {
+  flex-wrap: nowrap;
+}
+.case-toolbar > .app-title {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+}
 .case-toolbar > .app-actions {
-  flex-basis: 100%;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.case-mode {
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-regular);
+  white-space: nowrap;
+}
+.case-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-right: var(--space-2);
+}
+.case-status__note {
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+  line-height: var(--leading-sm);
+}
+@media (max-width: 1023px) {
+  .case-mode { display: none; }
+  /* "Saved" keeps its dot; the word stays for assistive technology. */
+  .status-badge__text,
+  .case-status__note { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+@media (max-width: 700px) {
+  .case-toolbar { flex-wrap: wrap; }
+  .case-toolbar > .app-actions { flex-wrap: wrap; white-space: normal; }
 }
 
 /* A notice in the actions row (submitted, paused) is as high as the buttons beside it. */
@@ -2238,9 +2275,6 @@ details.case-version-controls > .btn { vertical-align: bottom; }
 .my-submissions__pending { color: var(--text-muted); }
 
 /* Submit dialog summary (#51: tokens instead of inline values). */
-.submit-summary { margin: var(--space-2) 0 var(--space-3); padding-left: var(--space-5); font-size: var(--size-md); }
-.submit-summary__open { color: var(--danger); }
-.submit-open-items { padding-left: var(--space-5); }
 
 /* Case screen render error (CaseErrorBoundary). */
 .case-error { max-width: 40rem; margin: var(--space-6) auto; padding: var(--space-6); }
@@ -2550,7 +2584,36 @@ details.case-version-controls > .btn { vertical-align: bottom; }
   padding: var(--space-1) var(--space-3);
 }
 
+/* "2 of 5 ▾": the transparent native select covers the label and opens the list of texts. */
+.case-navigation__picker {
+  position: relative;
+  display: inline-flex;
+  align-self: stretch;
+  align-items: center;
+}
+.case-navigation__picker > .form-group {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+}
+.case-navigation__select.form-select {
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.case-navigation__picker:has(.case-navigation__select:focus-visible) .case-navigation__label {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-width));
+}
+.case-navigation__caret {
+  font-size: 0.7em;
+  margin-left: var(--space-1);
+}
 .case-navigation__label {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
   padding: 0 var(--space-3);
   border-inline: 1px solid var(--border);
   font-size: var(--size-sm);

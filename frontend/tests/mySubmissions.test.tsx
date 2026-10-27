@@ -171,7 +171,8 @@ describe("TaskEditor round identity wiring", () => {
     expect(badge.getAttribute("title")).toBe(`Round 3, continued from Round 2 submission (${formatTime(round2At)}), de v1`);
     expect(await within(mine()).findByText("Round 3, not submitted yet")).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "Work rounds" }));
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Work rounds" }));
     const rounds = await screen.findByRole("dialog", { name: "Work rounds: doc de" });
     await within(rounds).findByText("You are here");
     fireEvent.click(within(rounds.querySelector(".modal-actions") as HTMLElement).getByRole("button", { name: "Close" }));

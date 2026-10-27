@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { loginExisting, selectText, submitCase } from "./helpers";
+import { loginExisting, moreAction, selectText, submitCase } from "./helpers";
 
 /**
  * Carried-finding review in the editor (editor spec "Testing", plan F10): the T5 data shape
@@ -153,7 +153,7 @@ test("T5: check, edit after check, dismiss and undo, delete, link, Go to and sub
   // The submit dialog lists the open check with its own "Go to", which focuses "Mark as checked".
   await submitButton(page).click();
   const dialog = page.getByRole("dialog", { name: "Submit text" });
-  await expect(dialog).toContainText("1 carried finding still needs a check");
+  await expect(dialog.getByRole("heading", { name: "Carried findings to check", exact: true })).toBeVisible();
   await expect(dialog.locator("[data-open-item]")).toHaveCount(1);
   await expect(dialog.locator("[data-open-item]")).toContainText("Seizure");
   const submit = dialog.getByRole("button", { name: "Submit text", exact: true });
@@ -254,7 +254,7 @@ test("rounds3: Work rounds table, the still-open reason and My submissions acros
   const s = await openTask(page, "rounds3");
   await expect(page.getByText(/^Round 3\W+continued from Round 2$/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Work rounds", exact: true }).click();
+  await moreAction(page, "Work rounds");
   const dialog = page.getByRole("dialog", { name: new RegExp(`^Work rounds\\W+${s.documents[0]}\\W+de$`) });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Each round keeps its starting point and its submissions. Starting a round does not change the final result.");

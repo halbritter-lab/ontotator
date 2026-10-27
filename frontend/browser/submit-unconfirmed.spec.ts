@@ -1,7 +1,7 @@
 /**
  * Submit dialog with unconfirmed values in a real browser (annotator acceptance UI, spec F2, D1):
- * confirm in place with the focus moving on, "Confirm all", and the one-click acknowledgement that
- * resends once with the server's acknowledgement.
+ * "Confirm as shown" in place with the focus moving on, "Confirm all as shown", and the one click on
+ * "Submit with N warnings" that resends once with the server's acknowledgement.
  *
  * Every test builds a fresh ``ANNOTATION_LOOP`` project: rule off, creation defaults Present /
  * Patient / Current for hpo phenotype, so every new finding has three defaulted values.
@@ -61,7 +61,7 @@ function countSubmits(page: Page) {
 
 const submitDialog = (page: Page) => page.getByRole("dialog", { name: "Submit text", exact: true });
 
-test("confirm one row, then the rest with Confirm all, and submit without a warning round", async ({ page }) => {
+test("confirm one row as shown, then the rest with Confirm all, and submit without a warning round", async ({ page }) => {
   const s = await openLoop(page);
   await addFinding(page, s, "patient", "areflexia", "Areflexia");
   await addFinding(page, s, "seizure", "seizure", "Seizure");
@@ -70,30 +70,30 @@ test("confirm one row, then the rest with Confirm all, and submit without a warn
 
   await page.getByRole("button", { name: /^Finish & submit/ }).click();
   const dialog = submitDialog(page);
+  await expect(dialog.getByText("3 findings. 3 things are still open:", { exact: true })).toBeVisible();
   const section = dialog.locator("[data-unconfirmed-values]");
-  await expect(section.getByRole("heading", { name: "Unconfirmed values (3 findings)", exact: true })).toBeVisible();
+  await expect(section.getByRole("heading", { name: "Values not chosen yet", exact: true })).toBeVisible();
   await expect(section.getByRole("listitem")).toHaveCount(3);
-  await expect(section.getByText(/^Assertion: Present\W+.+: Patient\W+Temporality: Current$/).first()).toBeVisible();
+  await expect(section.getByRole("listitem").first().locator(".submit-item__values")).toHaveText(/^Assertion: Present.*: Patient.*Temporality: Current$/);
   await evidence(page, "submit-unconfirmed.png");
 
-  const confirms = section.getByRole("button", { name: /^Confirm values of / });
+  const confirms = section.getByRole("button", { name: /^Confirm as shown: / });
   await confirms.first().click();
   await expect(section.getByRole("listitem")).toHaveCount(2);
-  await expect(section.getByRole("heading", { name: "Unconfirmed values (2 findings)", exact: true })).toBeVisible();
-  // The focus moves to the next row's "Confirm", never to the page body.
+  // The focus moves to the next row's "Confirm as shown", never to the page body.
   await expect(confirms.first()).toBeFocused();
 
-  await section.getByRole("button", { name: "Confirm all (2)", exact: true }).click();
-  await expect(dialog.getByRole("status").filter({ hasText: "All values are confirmed." })).toBeVisible();
+  await section.getByRole("button", { name: "Confirm all as shown (2)", exact: true }).click();
   await expect(section).toHaveCount(0);
-  await expect(dialog.getByRole("checkbox", { name: /^Submit with \d+ unconfirmed values?$/ })).toHaveCount(0);
+  await expect(dialog.getByText("3 findings, nothing open.", { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/Afterwards only the project lead can reopen it\.$/)).toBeVisible();
 
   await dialog.getByRole("button", { name: "Submit text", exact: true }).click();
   await expectSubmitted(page);
   expect(submits).toHaveLength(1);
 });
 
-test("one click submits with the ticked unconfirmed values", async ({ page }) => {
+test("one click on Submit with N warnings submits with the values shown by default", async ({ page }) => {
   const s = await openLoop(page);
   await addFinding(page, s, "seizure", "seizure", "Seizure");
   await addFinding(page, s, "hypotonia", "hypotonia", "Hypotonia");
@@ -101,12 +101,10 @@ test("one click submits with the ticked unconfirmed values", async ({ page }) =>
 
   await page.getByRole("button", { name: /^Finish & submit/ }).click();
   const dialog = submitDialog(page);
-  await expect(dialog.getByRole("heading", { name: "Unconfirmed values (2 findings)", exact: true })).toBeVisible();
-  const submit = dialog.getByRole("button", { name: "Submit text", exact: true });
-  await expect(submit).toHaveAttribute("aria-disabled", "true");
-  await dialog.getByRole("checkbox", { name: "Submit with 6 unconfirmed values", exact: true }).check();
-  await expect(dialog.getByText("Acknowledging does not confirm the values; they stay marked as defaults.")).toBeVisible();
-  await submit.click();
+  await expect(dialog.getByRole("heading", { name: "Values not chosen yet", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Submit text", exact: true })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Submit with 2 warnings", exact: true }).click();
   await expectSubmitted(page);
   // One user action: the advisory warning is answered by one resend with the server's acknowledgement.
   expect(submits).toHaveLength(2);

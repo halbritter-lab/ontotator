@@ -8,7 +8,7 @@
  */
 import { expect, test, type Browser, type Locator, type Page } from "@playwright/test";
 import type { components } from "../src/api/generated";
-import { authenticatedRequest, loginExisting } from "./helpers";
+import { authenticatedRequest, loginExisting, moreAction } from "./helpers";
 import { problemReportScenario, type ProblemReportScenario } from "./problemReportHelpers";
 
 /** Leads see display names with the pseudonym (F4): "Name (ann-…)"; others keep pseudonyms. */
@@ -37,9 +37,14 @@ async function openTask(page: Page, id: number) {
   await expect(entry(page)).toBeVisible();
 }
 
-/** The toolbar "Report a text problem" button (outside any dialog, so located by its class). */
-const entry = (page: Page) => page.locator("button.problem-entry");
-const badge = (page: Page) => entry(page).locator(".problem-badge");
+/** The editor's "More actions" button; its menu holds the "Report a text problem…" item. */
+const entry = (page: Page) => page.getByRole("button", { name: "More actions", exact: true });
+/** Opens the "More" menu, expects the text-problem item named ``name`` (label plus badge), closes the menu. */
+async function expectEntry(page: Page, name: string) {
+  await entry(page).click();
+  await expect(page.getByRole("menuitem", { name, exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+}
 /** The editor's "Task paused: {reason}" banner. */
 const banner = (page: Page) => page.getByText(/^Task paused: /);
 const reportsDialog = (page: Page, task: number) => page.getByRole("dialog", { name: `Problems with Task ${task}`, exact: true });
@@ -51,7 +56,7 @@ const group = (scope: Locator | Page, title: string) => scope.getByRole("group",
 
 /** Open the reporter dialog from the toolbar; it loads reports and task on open. */
 async function openReports(page: Page, task: number): Promise<Locator> {
-  await entry(page).click();
+  await moreAction(page, /^(Report a text problem…|Text problems)/);
   const dialog = reportsDialog(page, task);
   await expect(dialog).toBeVisible();
   return dialog;
@@ -66,8 +71,7 @@ async function closeReports(page: Page, task: number) {
 /** File a report as the reporter (no report yet: the dialog opens in the form view). Leaves the list dialog open. */
 async function fileReport(page: Page, s: ProblemReportScenario, text = REPORT_TEXT): Promise<Locator> {
   const task = s.tasks.reporter;
-  await expect(entry(page)).toHaveAccessibleName("Report a text problem for this task");
-  await entry(page).click();
+  await moreAction(page, "Report a text problem…");
   const form = page.getByRole("dialog", { name: "New problem report", exact: true });
   await expect(form).toBeVisible();
   const field = form.getByRole("textbox", { name: /What is the problem\?/ });
@@ -81,8 +85,7 @@ async function fileReport(page: Page, s: ProblemReportScenario, text = REPORT_TE
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Paused");
   await expect(fact(dialog, "Report")).toHaveText("Open");
   await expect(fact(dialog, "Your task")).toContainText("Paused since");
-  await expect(badge(page)).toHaveText(/^Paused\W+1 open$/);
-  await expect(entry(page)).toHaveAccessibleName("Report a text problem Task paused, 1 open report");
+  // The menu entry ("… (Paused, 1 open)") cannot be checked while this dialog stays open (dropped here).
   await expect(banner(page)).toBeVisible();
   return dialog;
 }
@@ -143,8 +146,8 @@ test("report, resume with a reason, lead sees it and closes, reporter sees Close
   await expect(fact(dialog, "Report")).toHaveText("Open");
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Active");
   await expect(banner(page)).toHaveCount(0);
-  await expect(badge(page)).toHaveText("1 open");
   await closeReports(page, task);
+  await expectEntry(page, "Report a text problem… (1 open)");
 
   const lead = await actor(browser, s.users.lead);
   try {
@@ -168,7 +171,8 @@ test("report, resume with a reason, lead sees it and closes, reporter sees Close
   await expect(fact(dialog, "Your task")).toContainText("Resumed by you");
   await expect(dialog.getByRole("button", { name: "Resume my task…" })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Withdraw report…" })).toHaveCount(0);
-  await expect(badge(page)).toHaveCount(0);
+  await closeReports(page, task);
+  await expectEntry(page, "Report a text problem…");
 });
 
 test("withdraw an untouched report, lead reopens it: Open, no withdraw, task stays active", async ({ page, browser }) => {
@@ -190,8 +194,8 @@ test("withdraw an untouched report, lead reopens it: Open, no withdraw, task sta
   await expect(fact(dialog, "Your task")).toContainText("Resumed when you withdrew the report");
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Active");
   await expect(banner(page)).toHaveCount(0);
-  await expect(badge(page)).toHaveCount(0);
   await closeReports(page, task);
+  await expectEntry(page, "Report a text problem…");
 
   const lead = await actor(browser, s.users.lead);
   try {
@@ -210,7 +214,7 @@ test("withdraw an untouched report, lead reopens it: Open, no withdraw, task sta
 
   // Window focus reloads the toolbar; reopening the dialog shows the reopened report.
   await refocus(page);
-  await expect(badge(page)).toHaveText("1 open");
+  await expectEntry(page, "Report a text problem… (1 open)");
   dialog = await openReports(page, task);
   await expect(fact(dialog, "Report")).toHaveText("Open");
   await expect(dialog.getByRole("button", { name: "Withdraw report…" })).toHaveCount(0);
@@ -218,7 +222,7 @@ test("withdraw an untouched report, lead reopens it: Open, no withdraw, task sta
   await expect(dialog.locator(".problem-task-status")).toContainText("Your task: Active");
   await expect(dialog).toContainText("A project lead has acted on this report. Resume your task with a reason and ask a project lead to close it.");
   await expect(banner(page)).toHaveCount(0);
-  await expect(entry(page)).toHaveAccessibleName("Report a text problem 1 open report");
+  // The entry name ("… (1 open)") was checked above before the dialog opened.
 });
 
 test("a lead releases the pause in another window: the open dialog and editor update on window focus", async ({ page, browser }) => {
@@ -248,7 +252,8 @@ test("a lead releases the pause in another window: the open dialog and editor up
   await expect(fact(dialog, "Your task")).toContainText(`Resumed by ${s.labels.lead}`);
   await expect(dialog.getByRole("button", { name: "Resume my task…" })).toHaveCount(0);
   await expect(banner(page)).toHaveCount(0);
-  await expect(badge(page)).toHaveText("1 open");
+  await closeReports(page, task);
+  await expectEntry(page, "Report a text problem… (1 open)");
 });
 
 test("the lead pauses the same-text task: its owner sees only the lead's reason, the reporter sees nothing of it", async ({ page, browser }) => {
@@ -283,11 +288,10 @@ test("the lead pauses the same-text task: its owner sees only the lead's reason,
     await openTask(owner.page, other);
     await expect(banner(owner.page)).toContainText(leadReason);
     await expect(owner.page.getByText(REPORT_TEXT)).toHaveCount(0);
-    await expect(badge(owner.page)).toHaveText("Paused");
-    await expect(entry(owner.page)).toHaveAccessibleName("Report a text problem Task paused");
+    await expectEntry(owner.page, "Report a text problem… (Paused)");
     await expect(owner.page.locator("body")).not.toContainText(s.labels.reporter);
     // The owner has no report of their own: the dialog opens in the new report view.
-    await entry(owner.page).click();
+    await moreAction(owner.page, "Report a text problem… (Paused)");
     const ownerForm = owner.page.getByRole("dialog", { name: "New problem report", exact: true });
     await expect(ownerForm).toBeVisible();
     await expect(ownerForm).not.toContainText(REPORT_TEXT);

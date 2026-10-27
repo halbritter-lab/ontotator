@@ -46,11 +46,11 @@ describe("unconfirmedRows", () => {
     expect(row.reason).toBe("Choose a value in the finding.");
   });
 
-  it("a mixed row confirms only the defaulted non-empty axes", () => {
+  it("a mixed row (an empty value among defaults) is not confirmable in one click (#33)", () => {
     const [row] = unconfirmedRows(input([snapshot("m", { assertion: "present", experiencer: null, temporality: "current" }, ["assertion", "experiencer"])]));
     expect(row.values.map(value => value.axisId)).toEqual(["assertion", "experiencer"]);
-    expect(row.confirmableAxisIds).toEqual(["assertion"]);
-    expect(row.reason).toBeNull();
+    expect(row.confirmableAxisIds).toEqual([]);
+    expect(row.reason).toBe(UNCONFIRMED_REASONS.emptyOnly);
   });
 
   it("a proposal keeps Go to only with its reason and the target key", () => {
@@ -80,7 +80,8 @@ describe("unconfirmedRows", () => {
     }));
     expect(rows.map(row => row.annotationId)).toEqual(["a", "b"]);
     expect(rows[0].values.map(value => [value.axisId, value.axisLabel])).toEqual([["assertion", "Assertion"], ["custom", "custom"]]);
-    expect(rows[0].confirmableAxisIds).toEqual(["assertion"]);
+    // The server-only axis has no value here, so the row is chosen in the finding (#33).
+    expect(rows[0].confirmableAxisIds).toEqual([]);
     expect(rows[1].values).toEqual([{ axisId: "temporality", axisLabel: "Temporality", value: "current", defaulted: false }]);
     expect(rows[1].confirmableAxisIds).toEqual([]);
     expect(rows[1].reason).toBe(UNCONFIRMED_REASONS.emptyOnly);
