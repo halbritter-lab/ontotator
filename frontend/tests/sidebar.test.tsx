@@ -176,7 +176,8 @@ describe("continuous sidebar", () => {
     const original = (Element.prototype as any).scrollIntoView;
     (Element.prototype as any).scrollIntoView = function (this: HTMLElement, options: unknown) {
       expect(options).toEqual({ block: "nearest" });
-      scrolled.push(this.dataset.listKey ?? "");
+      // The text pane also scrolls the selected mark: only list entries count here.
+      if (this.dataset.listKey) scrolled.push(this.dataset.listKey);
     };
     try {
       const { container } = renderCase(reviewView());
@@ -185,6 +186,29 @@ describe("continuous sidebar", () => {
       expect(scrolled).toEqual([itemFor(container, "HP:0002").dataset.listKey]);
       fireEvent.click(itemFor(container, "HP:0003"));
       expect(scrolled[1]).toBe(itemFor(container, "HP:0003").dataset.listKey);
+      expect(scrolled.length).toBe(2);
+    } finally {
+      (Element.prototype as any).scrollIntoView = original;
+    }
+  });
+
+  it("a list click scrolls the text to the selected mark if needed; a click on the mark itself does not (N-5)", () => {
+    const scrolled: string[] = [];
+    const original = (Element.prototype as any).scrollIntoView;
+    (Element.prototype as any).scrollIntoView = function (this: HTMLElement, options: unknown) {
+      if (this.dataset.mentions !== undefined) scrolled.push(JSON.stringify(options));
+    };
+    try {
+      const { container } = renderCase(reviewView([snapshot("mine", "HP:0004", HUMAN)]));
+      fireEvent.click(itemFor(container, "HP:0002"));
+      expect(scrolled).toEqual(['{"block":"nearest"}']);
+      fireEvent.click(itemFor(container, "HP:0004"));
+      expect(scrolled).toEqual(['{"block":"nearest"}', '{"block":"nearest"}']);
+      // N-6: a click on the selected row clears it and scrolls nothing.
+      fireEvent.click(itemFor(container, "HP:0004"));
+      expect(scrolled.length).toBe(2);
+      // A click on the mark in the text selects without scrolling the text.
+      fireEvent.click(container.querySelector<HTMLElement>(".text-container .run[data-mentions]")!);
       expect(scrolled.length).toBe(2);
     } finally {
       (Element.prototype as any).scrollIntoView = original;

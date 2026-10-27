@@ -122,6 +122,27 @@ it("1 and 2 move on to the next open proposal and name what was decided; the las
   expect(document.activeElement).toBe(document.querySelector("[data-finish-submit]"));
 });
 
+it("the advance after a decision scrolls the text to the next proposal's mark if needed (N-5)", async () => {
+  const view = proposalView();
+  const p3 = view.available_inputs!.find(s => s.annotation.annotation_id === "p-3")!;
+  view.available_inputs = view.available_inputs!.map(s => s !== p3 ? s : { ...s,
+    evidence: [{ mention: { evidence_id: "ev-p3", segments: [{ start: 44, end: 51 }], cue_segments: [] }, version: "ev-v", document_id: "doc-pc-1", text_sha256: "text" }] } as never);
+  view.draft.decisions = [{ decision_id: "d", target: { annotation_id: "p-2", version: "p-2-v1" }, outcome: "confirmed", reviewer_id: "user-test" }] as never;
+  recordDecisions(view);
+  const scroll = vi.fn();
+  Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, writable: true, value: scroll });
+  try {
+    render(<CaseScreen view={view} workspaceId="ws-pc" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('[data-list-key^="target:"]')!);
+    scroll.mockClear();
+    fireEvent.keyDown(window, { key: "1" });
+    await waitFor(() => expect(scroll.mock.contexts.some(el => (el as HTMLElement).dataset.mentions?.includes("ev-p3"))).toBe(true));
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+  } finally {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  }
+});
+
 it("a repeated outcome moves on like a new decision and saves nothing (F7)", async () => {
   const view = proposalView();
   view.draft.decisions = [

@@ -1064,6 +1064,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   };
 
   /** Selects a proposal and its first mark, as a click on its list row does. */
+  const [textScrollRequest, setTextScrollRequest] = useState<{ evidenceId: string; nonce: number; ifNeeded?: boolean } | null>(null);
+  /** A selection from the list scrolls the text to its first mark, only when that mark is off-screen; spanless items do nothing. */
+  const revealInText = (evidenceId: string | null | undefined) => {
+    if (evidenceId) setTextScrollRequest(previous => ({ evidenceId, nonce: (previous?.nonce ?? 0) + 1, ifNeeded: true }));
+  };
   const selectProposal = (t: TargetProposal) => {
     setSelectedTargetId(refKey(t));
     setSelectedAnnotationId(null);
@@ -1071,7 +1076,10 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     cancelPending();
     setMobilePane("details");
     const firstEv = targetSnapshotOf(t)?.evidence?.[0];
-    setSelectedEvidenceId(firstEv ? `target:${t.annotation_id}:${t.version}:${firstEv.mention.evidence_id}:${firstEv.version}` : null);
+    const evidenceId = firstEv ? `target:${t.annotation_id}:${t.version}:${firstEv.mention.evidence_id}:${firstEv.version}` : null;
+    setSelectedEvidenceId(evidenceId);
+    // Only the list and the decision advance select through here, never a click on the mark.
+    revealInText(evidenceId);
   };
 
   const handleDeselectAll = () => {
@@ -1370,8 +1378,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
   const revealLayerOf = (ann: { layer_id: string; type_id: string }) =>
     setLayerSelection(previous => ({ ...previous, activeLayerId: ann.layer_id, activeTypeId: ann.type_id,
       visibleLayerIds: [...new Set([...previous.visibleLayerIds, ann.layer_id])] }));
-  /** The one selection entry point of the findings list: selects a row and clears every other selection. */
-  const selectListKey = (key: string | null) => {
+  /** The one selection entry point of the findings list: selects a row and clears every other selection; `reveal` scrolls the text to it. */
+  const selectListKey = (key: string | null, reveal = false) => {
     cancelPending();
     setSelectedTargetId(null); setSelectedSourceId(null); setSelectedAnnotationId(null); setSelectedInputId(null); setSelectedEvidenceId(null);
     if (!key) return;
@@ -1379,7 +1387,9 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const kind = key.slice(0, separator), id = key.slice(separator + 1);
     if (kind === "annotation") {
       setSelectedAnnotationId(id);
-      setSelectedEvidenceId(latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === id)?.annotation.evidence_refs?.[0]?.evidence_id ?? null);
+      const evidenceId = latestDraft.current.annotations?.find(snapshot => snapshot.annotation.annotation_id === id)?.annotation.evidence_refs?.[0]?.evidence_id ?? null;
+      setSelectedEvidenceId(evidenceId);
+      if (reveal) revealInText(evidenceId);
     } else if (kind === "input") setSelectedInputId(id);
     else if (kind === "target") setSelectedTargetId(id);
     else if (kind === "source") setSelectedSourceId(id);
@@ -2751,7 +2761,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     // Proposals show their values read-only: focus the values section instead (rendered with tabIndex -1).
     return root.querySelector<HTMLElement>('[data-testid="axes-section"], .review-actions__proposal');
   };
-  const [textScrollRequest, setTextScrollRequest] = useState<{ evidenceId: string; nonce: number; ifNeeded?: boolean } | null>(null);
   const lastOpenItem = useRef<string | null>(null);
   /** "Go to {term}": close the dialog, select the row, scroll the text to its mark and focus the resolving control. */
   const goToOpenItem = (item: OpenItem) => {
@@ -3147,9 +3156,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     const back = step < 0 && advanceStatus?.listKey === selectedListKey ? reviewTargets.findIndex(t => refKey(t) === advanceStatus.decidedKey) : -1;
     if (back >= 0) index = back;
     if (step > 0) for (let i = 1; i <= n; i++) if (!decisionsMap[refKey(reviewTargets[at(i)])]) { index = at(i); break; }
-    setSelectedTargetId(refKey(reviewTargets[index]));
-    setSelectedAnnotationId(null);
-    setSelectedSourceId(null);
+    selectProposal(reviewTargets[index]);
   }, { ...shortcutOptions, enabled: isReviewLike(view.key.mode) && reviewTargets.length > 0,
     group: "Decisions", description: "Next / previous review proposal" });
   const reviewShortcutOptions = { ...shortcutOptions, enabled: !readOnly && isReviewLike(view.key.mode) && !!selectedTarget, group: "Decisions" };
@@ -3511,10 +3518,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                     {index > 0 && " "}
                                     <Button type="button" size="sm" title="Jump to this finding in the draft" onClick={(e) => {
                                       e.stopPropagation();
-                                      setSelectedTargetId(null); setSelectedSourceId(null);
-                                      setSelectedAnnotationId(snap.annotation.annotation_id);
-                                      setSelectedEvidenceId(snap.annotation.evidence_refs?.[0]?.evidence_id ?? null);
-                                      setMobilePane("details");
+                                      selectListKey(`annotation:${snap.annotation.annotation_id}`, true);
                                     }}>“{firstQuoteOf(snap)}”</Button>
                                   </React.Fragment>)}
                                   {" "}<AiBadge provenance={t.provenance} source={sourceForTarget(t)} />
@@ -3527,13 +3531,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      if (dec.replacement?.annotation_id) {
-                                        setSelectedTargetId(null);
-                                        setSelectedSourceId(null);
-                                        setSelectedAnnotationId(dec.replacement.annotation_id);
-                                        setSelectedEvidenceId(replSnap?.annotation.evidence_refs?.[0]?.evidence_id ?? null);
-                                        setMobilePane("details");
-                                      }
+                                      if (dec.replacement?.annotation_id) selectListKey(`annotation:${dec.replacement.annotation_id}`, true);
                                     }}
                                     title="Jump to replacement annotation in draft"
                                   >
@@ -3609,7 +3607,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                       termText={carriedTermText(source)} instruction={recreated ? null : carriedInstruction(state)}
                       selected={selectedInputId === state.input.input_id}
                       linkedTo={linked ? carriedTermText(linked) : undefined}
-                      onActivate={() => { if (selectedInputId === state.input.input_id) handleDeselectAll(); else selectListKey(key); }} />;
+                      onActivate={() => { if (selectedInputId === state.input.input_id) handleDeselectAll(); else selectListKey(key, true); }} />;
                   }
                   const annSnap = visibleAnnotationById.get(listKey.slice("annotation:".length));
                   if (!annSnap) return null;
@@ -3649,7 +3647,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
                           handleDeselectAll();
                           return;
                         }
-                        selectListKey(`annotation:${annSnap.annotation.annotation_id}`);
+                        selectListKey(`annotation:${annSnap.annotation.annotation_id}`, true);
                       }}
                     >
                       {carriedExtras(annSnap.annotation.annotation_id)}
