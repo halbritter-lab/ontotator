@@ -19,7 +19,7 @@ import { useTermLabels } from "../editor/useTermLabels";
 import { Button, Checkbox, InlineConfirm, MenuButton, Select, Textarea } from "../ui";
 import { IconUndo, IconWarning } from "../ui/icons";
 import { ComparisonTable } from "./ComparisonTable";
-import { axisLabel, duplicateTermHint, groupStatus, labelWithQuote, keepLabel, namesOf, NO_ATTACH_TARGET, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneResult, standaloneWarning } from "./consolidationText";
+import { axisLabel, duplicateTermHint, groupStatus, labelWithQuote, keepLabel, namesOf, NOT_IN_RESULT, partialText, REOPEN_EDITED_WARNING, standaloneWarning } from "./consolidationText";
 import { absentPeople, attachCandidates, choicesComplete, choose, comparisonRows, groupName, hasKind, isStandalone, memberSets, needsTerm, presentPeople, resolvePayload, resultLine, sameTermGroups, standaloneText, storedResult, type Choices, type ComparisonRow, type OtherTerm } from "./groupModel";
 import { crossLinks, setText, type ModifierView } from "./modifierSets";
 import { ResultLine } from "./ResultLine";
@@ -162,7 +162,7 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
   const rows = useMemo(() => comparisonRows(group, people, text, choices), [group, people, text, choices]);
   const line = resultLine(group, people, text, choices, otherTerm);
   const standalone = isStandalone(group);
-  const conflicts = standalone ? 0 : rows.filter(row => row.conflict).length;
+  const conflicts = rows.filter(row => row.conflict).length;
   const complete = !conflicts || choicesComplete(rows, choices);
   const staged = Object.keys(choices).length > 0 || otherTerm !== null;
   const allGroups = useMemo(() => props.groups ?? [group], [props.groups, group]);
@@ -227,9 +227,8 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
       }} />
   </div>;
 
-  // A standalone modifier has no axes and cannot be taken as a finding: its table keeps term, text and notes.
   // M-7d: no "Whole finding" shortcut row; a choice per row stages the same result.
-  const shownRows = (all: readonly ComparisonRow[]) => all.filter(row => row.kind !== "whole" && !(standalone && row.kind === "axis"));
+  const shownRows = (all: readonly ComparisonRow[]) => all.filter(row => row.kind !== "whole");
   const table = (tableReadOnly: boolean, tableRows = shownRows(rows)) => <ComparisonTable name={name} group={group} people={people} rows={tableRows} readOnly={tableReadOnly}
     busy={busy} onChoose={onChoose} />;
 
@@ -240,18 +239,6 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
 
   const attachTargets = standalone ? attachCandidates(group, allGroups, text) : [];
   const modifier = standalone ? standaloneText(group, text) : "";
-  const standaloneBody = <>
-    <ResultLine line={{ saved: standaloneResult(modifier), notTaken: null }} />
-    {noteAndFlag(false)}
-    <div className="cons-actions">
-      {attachTargets.length
-        ? <MenuButton label="Attach to a finding…" buttonLabel="Attach to a finding…" size="md" items={attachTargets.map(target => ({ id: target.annotationId, label: target.label,
-          onSelect: () => { if (!busy) resolve({ action: "leave_out", attach_to: target.annotationId }, `${modifier} to ${target.label}`); } }))} />
-        : <><Button aria-disabled="true" aria-describedby={`${noteId}-attach`}>Attach to a finding…</Button>
-          <span id={`${noteId}-attach`} className="cons-muted">{NO_ATTACH_TARGET}</span></>}
-      <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, NOT_IN_RESULT); }}>Not in result</Button>
-    </div>
-  </>;
   // Modifiers attached to this group's finding from a standalone card (S18).
   const attached = allGroups.filter(value => value.attached_to && group.annotation_ids.includes(value.attached_to));
 
@@ -259,10 +246,9 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
     {partial && <p className="cons-partial">{partialText(present, absent)}</p>}
     {standalone && <p className="cons-partial"><IconWarning className="cons-conflict-mark" /><span className="visually-hidden">Warning: </span>
       {standaloneWarning(present, group.members[0].term_label || group.members[0].term_id)}</p>}
-    {table(readOnly || standalone)}
-    {!readOnly && !standalone && crossLinkHints}
-    {!readOnly && standalone && standaloneBody}
-    {!readOnly && !standalone && <>
+    {table(readOnly)}
+    {!readOnly && crossLinkHints}
+    {!readOnly && <>
       <ResultLine line={line} staged={staged} />
       {sameTerm.length > 0 && <p className="cons-partial"><IconWarning className="cons-conflict-mark" /><span className="visually-hidden">Warning: </span>
         {duplicateTermHint(termName ?? "", sameTerm.map(other => groupName(other, text)))}</p>}
@@ -273,6 +259,9 @@ export function GroupCard(props: GroupCardProps): JSX.Element {
           <Button variant="primary" loading={busy} aria-disabled={!complete || undefined} aria-describedby={!complete ? `${noteId}-keep` : undefined}
             onClick={() => { if (complete && !busy) resolve(resolvePayload(group, choices), line.finding); }}>{partial && !conflicts ? keepLabel(present) : "Keep"}</Button>
           <Button aria-disabled={busy || undefined} onClick={() => { if (!busy) resolve({ action: "leave_out" }, NOT_IN_RESULT); }}>Not in result</Button>
+          {attachTargets.length > 0 && <MenuButton label="Attach to a finding…" buttonLabel="Attach to a finding…" size="md" items={attachTargets.map(target => ({
+            id: target.annotationId, label: target.label,
+            onSelect: () => { if (!busy) resolve({ action: "leave_out", attach_to: target.annotationId }, `${modifier} to ${target.label}`); } }))} />}
           {workspace && (!conflicts || needsTerm(group)) && <span ref={moreRef} className="cons-more"><MenuButton label={`More actions, ${name}`} buttonLabel="More…" size="md" items={[
             ...(!conflicts ? [{ id: "edit-values", label: "Edit values…", onSelect: () => setEditing(true) }] : []),
             { id: "other-term", label: "Other term…", onSelect: () => setPicking(true) },

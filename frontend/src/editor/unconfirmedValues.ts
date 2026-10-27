@@ -127,22 +127,22 @@ export function valueCount(rows: readonly UnconfirmedRow[]): number {
 }
 
 /**
- * An acknowledgeable modifier warning (R10 `cohort_modifier`, R12 `exclusive_modifier_class`). Its `key`
- * ("cohort:<term id>", "exclusive:<class>") joins the axis ids in the acknowledged pair set.
+ * An acknowledgeable modifier warning (R3 `modifier_as_finding`, R10 `cohort_modifier`, R12 `exclusive_modifier_class`).
+ * Its `key` ("term:<term id>", "cohort:<term id>", "exclusive:<class>") joins the axis ids in the acknowledged pair set.
  */
 export interface ModifierWarning {
   annotationId: string;
-  kind: "cohort-modifier" | "exclusive-modifiers";
+  kind: "modifier-as-finding" | "cohort-modifier" | "exclusive-modifiers";
   key: string;
-  /** Cohort: the modifier's label; exclusive: the labels of the class, sorted. */
+  /** Modifier as finding, cohort: the term's label; exclusive: the labels of the class, sorted. */
   labels: string[];
   exclusiveClass?: "severity" | "onset";
 }
-export const isModifierWarningKey = (axis: string): boolean => axis.startsWith("cohort:") || axis.startsWith("exclusive:");
+export const isModifierWarningKey = (axis: string): boolean => axis.startsWith("term:") || axis.startsWith("cohort:") || axis.startsWith("exclusive:");
 
 /**
  * The server's modifier warnings computed from the draft (`modifier_warnings`, `domain/project_rules.py`):
- * per finding a cohort warning per Frequency modifier, then one per exclusive class with two or more
+ * per finding one for a modifier term as its own term, a cohort warning per Frequency modifier, then one per exclusive class with two or more
  * modifiers. Server pairs the client did not compute are added (the server set wins).
  */
 export function modifierWarnings(
@@ -157,6 +157,10 @@ export function modifierWarnings(
   const warnings = snapshots.flatMap((snapshot): ModifierWarning[] => {
     const annotationId = snapshot.annotation.annotation_id;
     const modifiers = snapshot.annotation.modifiers ?? [];
+    const termId = snapshot.annotation.term_id;
+    const role = info(snapshot, termId)?.role;
+    const own: ModifierWarning[] = role === "modifier" || role === "cohort"
+      ? [{ annotationId, kind: "modifier-as-finding", key: `term:${termId}`, labels: [label(snapshot, termId)] }] : [];
     const cohort = modifiers.filter(modifier => info(snapshot, modifier.term_id)?.role === "cohort").map((modifier): ModifierWarning => ({
       annotationId, kind: "cohort-modifier", key: `cohort:${modifier.term_id}`, labels: [label(snapshot, modifier.term_id)],
     }));
@@ -164,7 +168,7 @@ export function modifierWarnings(
     const exclusive = classes.filter(cls => classLabels(snapshot, cls).length >= 2).map((cls): ModifierWarning => ({
       annotationId, kind: "exclusive-modifiers", key: `exclusive:${cls}`, labels: classLabels(snapshot, cls), exclusiveClass: cls,
     }));
-    return [...cohort, ...exclusive];
+    return [...own, ...cohort, ...exclusive];
   });
   const known = new Set(warnings.map(warning => pairKey(warning.annotationId, warning.key)));
   for (const pair of serverPairs) {
@@ -172,8 +176,9 @@ export function modifierWarnings(
     known.add(pairKey(pair.annotationId, pair.axis));
     const snapshot = snapshots.find(candidate => candidate.annotation.annotation_id === pair.annotationId);
     const value = pair.axis.slice(pair.axis.indexOf(":") + 1);
-    warnings.push(pair.axis.startsWith("cohort:")
-      ? { annotationId: pair.annotationId, kind: "cohort-modifier", key: pair.axis, labels: [snapshot ? label(snapshot, value) : value] }
+    warnings.push(pair.axis.startsWith("term:") || pair.axis.startsWith("cohort:")
+      ? { annotationId: pair.annotationId, kind: pair.axis.startsWith("term:") ? "modifier-as-finding" : "cohort-modifier", key: pair.axis,
+        labels: [snapshot ? label(snapshot, value) : value] }
       : { annotationId: pair.annotationId, kind: "exclusive-modifiers", key: pair.axis, labels: snapshot ? classLabels(snapshot, value) : [],
         exclusiveClass: value === "onset" ? "onset" : "severity" });
   }

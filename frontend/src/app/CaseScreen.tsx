@@ -179,8 +179,9 @@ function submissionAxisWarning(error: unknown): AxisWarning | null {
   const warnings = Array.isArray(error.details.warnings) ? error.details.warnings.flatMap((warning: unknown) => {
     if (!warning || typeof warning !== "object") return [];
     const item = warning as { annotation_id?: unknown; rule?: unknown; detail?: { axis?: unknown; term_id?: unknown; class?: unknown } };
-    // Modifier warnings keep their own key next to the axis ids: "cohort:<term id>", "exclusive:<class>".
-    const axis = item.rule === "cohort_modifier" ? typeof item.detail?.term_id === "string" ? `cohort:${item.detail.term_id}` : null
+    // Modifier warnings keep their own key next to the axis ids: "term:<term id>", "cohort:<term id>", "exclusive:<class>".
+    const axis = item.rule === "modifier_as_finding" ? typeof item.detail?.term_id === "string" ? `term:${item.detail.term_id}` : null
+      : item.rule === "cohort_modifier" ? typeof item.detail?.term_id === "string" ? `cohort:${item.detail.term_id}` : null
       : item.rule === "exclusive_modifier_class" ? typeof item.detail?.class === "string" ? `exclusive:${item.detail.class}` : null
       : typeof item.detail?.axis === "string" ? item.detail.axis : null;
     return typeof item.annotation_id === "string" && axis ? [{ annotationId: item.annotation_id, axis }] : [];
@@ -2702,7 +2703,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
     evidenceId: firstEvidenceId,
     serverPairs: currentServerPairs.filter(pair => !isModifierWarningKey(pair.axis)),
   });
-  // R10, R12: acknowledged with the values (one list and digest on the server).
+  // R3, R10, R12: acknowledged with the values (one list and digest on the server).
   const modifierWarningList = modifierWarnings(completionResults,
     (snapshot, termId) => termLabel.info(snapshot.annotation.layer_id, termId), currentServerPairs);
   /** Every acknowledged pair: unconfirmed values (as the server lists them) and modifier warnings. */
@@ -2764,8 +2765,6 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       const snapshot = (view.available_inputs ?? []).find(s => s.annotation.annotation_id === target.annotation_id && s.version === target.version);
       return { key: refKey(target), term: snapshot ? snapshotTerm(snapshot) : target.annotation_id, evidenceId: snapshot ? firstEvidenceId(snapshot) : undefined };
     }) : [],
-    // R3: old data with a modifier term standing alone (the server blocks it as `modifier_as_finding`).
-    modifierAsFinding: completionResults.filter(snapshot => isModifierTerm(snapshot)).map(snapshot => ({ ...findingRef(snapshot) })),
     modifierWarnings: modifierWarningList.map(warning => {
       const snapshot = completionResults.find(candidate => candidate.annotation.annotation_id === warning.annotationId);
       return { ...warning, ...(snapshot ? findingRef(snapshot) : { term: warning.annotationId }) };
@@ -3809,6 +3808,11 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               showCancel={panesLayout}
               onAttach={annotationId => { void attachTo(annotationId); }}
               onReplace={annotationId => { void attachTo(annotationId, true); }}
+              onUseAsFinding={attachModifier.mode === "attach" ? () => {
+                const { termId, termLabel: label } = attachModifier;
+                setAttachModifier(null); setAttachFocusId(null); setAttachReplaceId(null);
+                void createPendingAnnotation(termId, undefined, label);
+              } : undefined}
               onCancel={attachActive || attachModifier.mode === "convert" ? cancelAttachModifier : discardPending} />
           ) : pendingAnnotation ? (
             <section className="detail-pane" aria-label="New finding">

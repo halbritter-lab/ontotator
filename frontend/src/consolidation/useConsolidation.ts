@@ -21,7 +21,7 @@ export type AxisWarning = {
   modifiers: number;
 };
 
-const MODIFIER_RULES = new Set(["cohort_modifier", "exclusive_modifier_class"]);
+const MODIFIER_RULES = new Set(["modifier_as_finding", "cohort_modifier", "exclusive_modifier_class"]);
 
 export type SubmitResult = { kind: "submitted"; submission: Submission } | { kind: "warning"; warning: AxisWarning };
 

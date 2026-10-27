@@ -193,7 +193,7 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
     return role === "modifier" || role === "cohort";
   };
   const selectedIsModifier = selectedTermId !== null && isModifier(selectedTermId);
-  const canUse = canAssign && browseId !== null && selectedTermId !== null && !isCurrent && !saving && !selectedIsModifier;
+  const canUse = canAssign && browseId !== null && selectedTermId !== null && !isCurrent && !saving;
 
   const assignTerm = async () => {
     if (!canUse || !selectedTermId || !browseId) return;
@@ -255,7 +255,6 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
                 onCollapse={collapse}
                 onSelect={select}
                 onClose={onClose}
-                isUnavailable={isModifier}
               />
             )}
           </div>
@@ -337,9 +336,7 @@ export const TreeBrowser: React.FC<TreeBrowserProps> = ({
               <Button
                 type="button"
                 variant="primary"
-                // A modifier term stays focusable with its reason (aria-disabled); other states keep `disabled`.
-                disabled={!canUse && !selectedIsModifier}
-                aria-disabled={selectedIsModifier ? true : undefined}
+                disabled={!canUse}
                 aria-describedby={hint ? "tree-use-hint" : undefined}
                 onClick={() => {
                   void assignTerm();

@@ -1,7 +1,7 @@
 /**
  * Submit check with finding modifiers (modifiers plan M7): "Two severities" and the cohort term are listed as
- * acknowledgeable modifier warnings and never block; a standalone modifier finding (old data, R3) blocks with a
- * way to fix it.
+ * acknowledgeable modifier warnings and never block; so is a modifier term as a finding's own term (R3: some name a
+ * finding, e.g. Stillbirth), with "Turn into modifier…" as the way to fix it.
  *
  * Every test builds a fresh project through ``POST /__test_modifiers__`` (tests/browser_modifier_scenarios.py):
  * German text, Seizure on "Krampfanfälle" (``with_finding=1``), a standalone Severe on "schwere" (``standalone=1``).
@@ -67,13 +67,16 @@ test("Frequent: the cohort term is listed as a modifier warning", async ({ page 
   await expect(warnings).toContainText("Seizure: Frequent is a cohort term.");
 });
 
-test("a standalone modifier blocks the submit; Go to Severe focuses Turn into modifier…", async ({ page }) => {
+test("a standalone modifier only warns; Go to Severe focuses Turn into modifier…; the ticked box submits", async ({ page }) => {
   await open(page, { with_finding: "1", standalone: "1" });
   await page.getByRole("button", { name: /^Finish & Submit/ }).click();
   const dialog = submitDialog(page);
-  const item = dialog.locator('[data-open-item="modifier-as-finding"]');
-  await expect(item).toContainText("Severe is a modifier. Turn it into a modifier of another finding.");
-  await expect(dialog.locator("[data-submit-blocked-reason]")).toHaveText("Turn 1 modifier used as a finding into a modifier before submitting.");
+  const item = dialog.getByRole("region", { name: "Modifier warnings (1)" }).locator('[data-open-item="modifier-as-finding"]');
+  await expect(item).toContainText("Severe: Severe is a modifier term. Keep it only if it names the finding itself.");
   await item.getByRole("button", { name: "Go to Severe" }).click();
   await expect(page.getByRole("button", { name: "Turn into modifier…" })).toBeFocused();
+  await page.getByRole("button", { name: /^Finish & Submit/ }).click();
+  await dialog.getByRole("checkbox", { name: /^Submit with .*1 modifier warning$/ }).check();
+  await dialog.getByRole("button", { name: "Submit case", exact: true }).click();
+  await expectSubmitted(page);
 });

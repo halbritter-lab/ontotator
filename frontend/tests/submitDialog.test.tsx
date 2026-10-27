@@ -432,7 +432,7 @@ describe("Unconfirmed values section", () => {
         { annotationId: "s", term: "Seizure", kind: "cohort-modifier", key: "cohort:HP:0040283", labels: ["Frequent"] }],
     });
     const standalone = collectOpenItems({ carried: [], evidence: [], reanchor: [], unconfirmed: [], openTargets: [], defaulted: [],
-      modifierAsFinding: [{ annotationId: "sev", term: "Severe" }] });
+      modifierWarnings: [{ annotationId: "sev", term: "Severe", kind: "modifier-as-finding", key: "term:HP:0012828", labels: ["Severe"] }] });
 
     it("lists the warnings in their own section after the values, before the acknowledgement", () => {
       const onGoTo = vi.fn();
@@ -462,15 +462,15 @@ describe("Unconfirmed values section", () => {
       expect(onConfirm).toHaveBeenCalledTimes(1);
     });
 
-    it("lists a modifier used as a finding in the generic list with Go to, and blocks", () => {
+    it("lists a modifier used as a finding as a modifier warning with Go to; ticking the box submits", () => {
       const onGoTo = vi.fn();
       render(<SubmitCaseDialog {...dialogProps({ items: standalone, unconfirmed: [], onGoTo })} />);
-      const item = document.querySelector<HTMLElement>('[data-open-item="modifier-as-finding"]')!;
-      expect(item.textContent).toContain("Severe is a modifier. Turn it into a modifier of another finding.");
+      const section = screen.getByRole("region", { name: "Modifier warnings (1)" });
+      const item = section.querySelector<HTMLElement>('[data-open-item="modifier-as-finding"]')!;
+      expect(item.textContent).toContain("Severe is a modifier term. Keep it only if it names the finding itself.");
       fireEvent.click(within(item).getByRole("button", { name: "Go to Severe" }));
       expect(onGoTo).toHaveBeenCalledWith(standalone[0]);
-      expect(reasonOf(submitButton())).toBe("Turn 1 modifier used as a finding into a modifier before submitting.");
-      expect(screen.queryByRole("region", { name: /Modifier warnings/ })).toBeNull();
+      expect(reasonOf(submitButton())).toBe("Tick \u201cSubmit with 1 modifier warning\u201d before submitting.");
     });
   });
 });
