@@ -195,7 +195,7 @@ it("reloads a task read-only after another session submitted it, with a visible 
   await screen.findByText(/Another session submitted this task/);
   await screen.findByText("Submitted. The project lead can reopen it for changes.");
   expect(open).toHaveBeenCalledTimes(2);
-  fireEvent.click(screen.getByRole("button", { name: /Add finding without a text span/ }));
+  expect(screen.queryByRole("button", { name: /Add finding without a text span/ })).toBeNull();
   expect(command).toHaveBeenCalledTimes(1);
 });
 

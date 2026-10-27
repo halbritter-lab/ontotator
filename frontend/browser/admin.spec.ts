@@ -284,8 +284,8 @@ test.describe("Administration through real accounts and jobs", () => {
     await tasks.getByRole("link", { name: /^(Start|Continue|View)$/ }).click();
     await page.reload();
     await expect(page.getByText("Submitted. The project lead can reopen it for changes.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Finish & Submit/ })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Add finding without a text span", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Finish & Submit/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Add finding without a text span", exact: true })).toHaveCount(0);
     await logout(page);
     await loginExisting(page, setup.lead);
     await selectProject(page, setup.key);

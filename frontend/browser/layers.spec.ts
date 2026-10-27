@@ -55,12 +55,12 @@ test.describe("Layered Annotations & Case Navigation (Browser Scenarios A/B/C)",
     await expect(page.getByRole("button", { name: "Next Case" })).toBeEnabled();
 
     // Submitted neighbors remain navigable in actual server order, with their
-    // saved findings intact and every editing entry point disabled.
+    // saved findings intact and every editing entry point hidden.
     await page.getByRole("button", { name: "Next Case" }).click();
     await expect(page.locator(".case-navigation select option:checked")).toHaveText(/Case 2 of 2:.*doc-beta/i);
     await expect(page.locator(".sidebar .doc-item")).toContainText("HP:0001250");
-    await expect(page.getByRole("button", { name: "Add finding without a text span" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: /^Finish & Submit/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Add finding without a text span" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Finish & Submit/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Next Case" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Previous Case" })).toBeEnabled();
   });

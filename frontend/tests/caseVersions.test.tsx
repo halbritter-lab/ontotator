@@ -45,7 +45,7 @@ it('resolves real case metadata and displays history separately from the unchang
   expect(api.getVariantMetadata).toHaveBeenCalledWith('pkg', 'target');
   expect(api.getCase).toHaveBeenCalledWith('pkg', caseDetail.case_id);
   expect(api.listAnnotationVersions).toHaveBeenCalledWith('pkg', 'target', 1);
-  expect((screen.getByRole('button', { name: /Finish & Submit/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('button', { name: /Finish & Submit/ })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
   await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
   expect(screen.queryByText('HP:old')).toBeNull();
@@ -58,7 +58,7 @@ it('returning from history never unlocks a submitted server task', async () => {
   await screen.findByText('HP:old');
   fireEvent.click(screen.getByRole('button', { name: 'Back to my draft' }));
   await waitFor(() => expect((screen.getByLabelText('Annotations') as HTMLSelectElement).value).toBe('draft'));
-  expect((screen.getByRole('button', { name: /Finish & Submit/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole('button', { name: /Finish & Submit/ })).toBeNull();
 });
 it('preserves draft display, selection and focus when an unsaved snapshot transition is cancelled', async () => {
   vi.spyOn(api, 'applyCommand').mockRejectedValue(new TypeError('Offline'));
