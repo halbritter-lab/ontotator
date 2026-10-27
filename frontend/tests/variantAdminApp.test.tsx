@@ -127,6 +127,7 @@ it("uses the refreshed current role after an existing settings save reloads proj
   render(<App user={lead} />);
   fireEvent.click(await screen.findByRole("link", { name: "Settings" }));
   fireEvent.click(await screen.findByRole("link", { name: "General" }));
+  fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: "Renamed" } });
   fireEvent.click(await screen.findByRole("button", { name: "Save changes" }));
   await waitFor(() => expect(api.listProjects).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(screen.queryByRole("link", { name: "Documents" })).toBeNull());
