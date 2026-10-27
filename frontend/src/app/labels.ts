@@ -67,6 +67,14 @@ export function plural(count: number, singular: string, pluralForm = `${singular
 
 const dateTime = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
+const shortDateTime = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+/** Day, month and time for dense tables, e.g. "27 Oct, 10:18"; pair it with `formatDateTime` in a title. */
+export function formatShortDateTime(value: string | number | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : shortDateTime.format(date);
+}
+
 /** One English date format for workflow pages, e.g. "16 Oct 2026, 19:17". Invalid input is returned unchanged. */
 export function formatDateTime(value: string | number | Date): string {
   const date = value instanceof Date ? value : new Date(value);

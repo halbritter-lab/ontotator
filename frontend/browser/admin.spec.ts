@@ -37,6 +37,7 @@ async function loginExisting(page: Page, actor: Actor) {
 }
 
 async function createUser(page: Page, username: string): Promise<Actor> {
+  await page.getByRole("button", { name: "New user…", exact: true }).click();
   const form = page.getByRole("form", { name: "New user" });
   await form.getByLabel(/^Username/).fill(username);
   await form.getByLabel(/^Display name/).fill(username);

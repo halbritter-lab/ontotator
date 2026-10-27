@@ -4,7 +4,7 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError, AuthError, type AdminUser, type CodeResponse, type CreatedUser, type CurrentUser } from "../src/api/client";
 import { auditDetails, UsersPage } from "../src/admin/UsersPage";
-import { formatDateTime } from "../src/app/labels";
+import { formatDateTime, formatShortDateTime } from "../src/app/labels";
 
 const currentUser: CurrentUser = { username: "root", display_name: "Root", pseudonym: "ann-root", is_system_admin: true, csrf_token: "csrf" };
 const root: AdminUser = { qualification: null, username: "root", display_name: "Root", email: null, pseudonym: "ann-root", is_system_admin: true, active: true, languages: ["de"], projects: [], setup_pending: false, anonymised: false };
@@ -15,6 +15,11 @@ const deferred = <T,>() => { let resolve!: (value: T) => void; let reject!: (err
 const load = () => screen.findByText("Alex Smith");
 const newForm = () => within(screen.getByRole("form", { name: "New user" }));
 const editForm = () => within(screen.getByRole("form", { name: "Edit user" }));
+/** Opens a row's More menu; with `item`, chooses that action. */
+const more = (username: string, item?: string) => {
+  fireEvent.click(screen.getByRole("button", { name: `More actions for ${username}` }));
+  if (item) fireEvent.click(screen.getByRole("menuitem", { name: item }));
+};
 
 beforeEach(() => {
   vi.spyOn(api, "adminListUsers").mockResolvedValue([root, alex]);
@@ -26,6 +31,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 async function fillCreate() {
+  fireEvent.click(screen.getByRole("button", { name: "New user…" }));
   fireEvent.change(newForm().getByLabelText("Username (required)"), { target: { value: "bea" } });
   fireEvent.change(newForm().getByLabelText("Display name (required)"), { target: { value: "Bea" } });
 }
@@ -36,6 +42,7 @@ describe("users administration", () => {
     const table = within(screen.getByRole("table", { name: "Users" }));
     expect(table.getByText("ann-alex")).toBeTruthy(); expect(table.getByText("Study One: Lead, Annotator")).toBeTruthy();
     expect(table.getByText("en")).toBeTruthy();
+    expect(screen.queryByRole("form", { name: "New user" })).toBeNull(); expect(screen.getByRole("group", { name: "Users actions" }).textContent).toContain("New user…");
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "SMITH" } }); expect(table.queryByText("Root")).toBeNull();
     fireEvent.change(screen.getByLabelText("Filter users"), { target: { value: "root" } }); expect(table.queryByText("Alex Smith")).toBeNull();
   });
@@ -58,11 +65,11 @@ describe("users administration", () => {
 
   it("issues a reset code for the selected actual username only after confirmation", async () => {
     render(<UsersPage currentUser={currentUser} />); await load();
-    fireEvent.click(screen.getByRole("button", { name: "Reset code for alex" }));
+    more("alex", "Reset code");
     let confirm = screen.getByRole("dialog", { name: "Issue a new reset code for Alex Smith?" });
     expect(confirm.textContent).toContain("Any unused code stops working.");
     fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" })); expect(api.adminIssueResetCode).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Reset code for alex" }));
+    more("alex", "Reset code");
     confirm = screen.getByRole("dialog", { name: "Issue a new reset code for Alex Smith?" });
     fireEvent.click(within(confirm).getByRole("button", { name: "Reset code" }));
     const dialog = await screen.findByRole("dialog", { name: "Reset code for alex" });
@@ -72,7 +79,7 @@ describe("users administration", () => {
   it("offers a new setup code to a user whose setup is pending", async () => {
     vi.mocked(api.adminListUsers).mockResolvedValue([root, { ...alex, setup_pending: true }]);
     render(<UsersPage currentUser={currentUser} />); await load();
-    fireEvent.click(screen.getByRole("button", { name: "New setup code for alex" }));
+    more("alex", "New setup code");
     const confirm = screen.getByRole("dialog", { name: "Issue a new setup code for Alex Smith?" });
     expect(confirm.textContent).toContain("The current setup code stops working.");
     fireEvent.click(within(confirm).getByRole("button", { name: "New setup code" }));
@@ -83,25 +90,27 @@ describe("users administration", () => {
   it("confirms deactivation, cancels safely and updates from the real response", async () => {
     vi.mocked(api.adminUpdateUser).mockResolvedValue({ ...alex, active: false });
     render(<UsersPage currentUser={currentUser} />); await load();
-    fireEvent.click(screen.getByRole("button", { name: "Deactivate alex" }));
+    more("alex", "Deactivate…");
     let dialog = screen.getByRole("dialog", { name: "Deactivate alex" });
     expect(within(dialog).getByText("This logs the user out everywhere.")).toBeTruthy();
     expect(api.adminUpdateUser).not.toHaveBeenCalled(); fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    fireEvent.click(screen.getByRole("button", { name: "Deactivate alex" })); dialog = screen.getByRole("dialog", { name: "Deactivate alex" });
+    more("alex", "Deactivate…"); dialog = screen.getByRole("dialog", { name: "Deactivate alex" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Deactivate" }));
-    await screen.findByRole("button", { name: "Activate alex" }); expect(api.adminUpdateUser).toHaveBeenCalledWith("alex", { active: false });
+    await waitFor(() => expect(api.adminUpdateUser).toHaveBeenCalledWith("alex", { active: false }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull()); more("alex"); expect(screen.getByRole("menuitem", { name: "Activate" })).toBeTruthy();
   });
 
   it("activates an inactive user without a deactivation confirmation", async () => {
     vi.mocked(api.adminListUsers).mockResolvedValue([root, { ...alex, active: false }]); vi.mocked(api.adminUpdateUser).mockResolvedValue(alex);
-    render(<UsersPage currentUser={currentUser} />); await load(); fireEvent.click(screen.getByRole("button", { name: "Activate alex" }));
-    await screen.findByRole("button", { name: "Deactivate alex" }); expect(api.adminUpdateUser).toHaveBeenCalledWith("alex", { active: true });
+    render(<UsersPage currentUser={currentUser} />); await load(); more("alex", "Activate");
+    await waitFor(() => expect(api.adminUpdateUser).toHaveBeenCalledWith("alex", { active: true }));
+    await waitFor(() => expect(within(screen.getByRole("table", { name: "Users" })).queryByText("No")).toBeNull());
   });
 
-  it("disables self-deactivation and own administrator checkbox with explanations", async () => {
+  it("offers no self-deactivation and disables the own administrator checkbox with an explanation", async () => {
     render(<UsersPage currentUser={currentUser} />); await load();
-    const deactivate = screen.getByRole("button", { name: "Deactivate root" }) as HTMLButtonElement;
-    expect(deactivate.disabled).toBe(true); expect(deactivate.title).toContain("yourself");
+    more("root"); expect(screen.queryByRole("menuitem", { name: "Deactivate…" })).toBeNull(); expect(screen.getByRole("menuitem", { name: "History" })).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
     fireEvent.click(screen.getByRole("button", { name: "Edit root" }));
     const admin = editForm().getByLabelText("System administrator") as HTMLInputElement;
     expect(admin.disabled).toBe(true); expect(admin.title).toContain("own administrator");
@@ -179,7 +188,7 @@ describe("users administration", () => {
     const leave = { current: null as (() => Promise<boolean>) | null };
     render(<UsersPage currentUser={currentUser} routeLeaveRef={leave} />); await load();
     if (operation === "create") { await fillCreate(); fireEvent.click(newForm().getByRole("button", { name: "Create user" })); }
-    else { fireEvent.click(screen.getByRole("button", { name: "Reset code for alex" })); fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Reset code" })); }
+    else { more("alex", "Reset code"); fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Reset code" })); }
     expect(await leave.current?.()).toBe(false);
     await act(async () => pending.reject(new Error("Issuance failed")));
     await screen.findByText("Issuance failed"); expect(await leave.current?.()).toBe(true);
@@ -213,10 +222,12 @@ describe("account status, projects at creation, history and erasure", () => {
     expect(table.getByRole("columnheader", { name: /Setup/ })).toBeTruthy();
     expect(table.getByText("Pending")).toBeTruthy();
     expect(table.getByText("Never")).toBeTruthy();
-    expect(table.getByText(formatDateTime("2026-10-20T08:00:00Z"))).toBeTruthy();
-    const reset = screen.getByRole("button", { name: "New setup code for alex" }) as HTMLButtonElement;
-    expect(reset.disabled).toBe(true);
-    expect(reset.title).toBe("Activate the account before issuing a new code.");
+    const login = table.getByText(formatShortDateTime("2026-10-20T08:00:00Z"));
+    expect(login.getAttribute("title")).toBe(formatDateTime("2026-10-20T08:00:00Z"));
+    more("alex");
+    expect(screen.queryByRole("menuitem", { name: "New setup code" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Activate" }).getAttribute("aria-describedby")).toBeTruthy();
+    expect(screen.getByText("Needed before a new code can be issued.")).toBeTruthy();
   });
 
   it("adds the new user to the chosen projects with roles", async () => {
@@ -235,7 +246,7 @@ describe("account status, projects at creation, history and erasure", () => {
       { at: "2026-10-19T08:00:00Z", actor: "cli:ops", action: "user.create", target_type: "user", target_id: "alex", project_key: null, details: { pseudonym: "ann-alex", system_admin: false } },
     ]);
     render(<UsersPage currentUser={currentUser} />); await load();
-    fireEvent.click(screen.getByRole("button", { name: "History of alex" }));
+    more("alex", "History");
     const dialog = await screen.findByRole("dialog", { name: "History of alex" });
     await within(dialog).findByText("Roles added");
     expect(within(dialog).getByText("Consolidator")).toBeTruthy();
@@ -248,8 +259,8 @@ describe("account status, projects at creation, history and erasure", () => {
     vi.mocked(api.adminListUsers).mockResolvedValue([root, { ...alex, active: false }]);
     vi.spyOn(api, "adminAnonymiseUser").mockResolvedValue(erased);
     render(<UsersPage currentUser={currentUser} />); await load();
-    expect(screen.queryByRole("button", { name: "Anonymise root" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Anonymise alex" }));
+    more("root"); expect(screen.queryByRole("menuitem", { name: "Anonymise…" })).toBeNull(); fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    more("alex", "Anonymise…");
     const dialog = screen.getByRole("dialog", { name: "Anonymise alex" });
     expect(dialog.textContent).toContain("cannot be undone");
     const confirm = within(dialog).getByRole("button", { name: "Anonymise permanently" }) as HTMLButtonElement;

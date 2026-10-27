@@ -25,6 +25,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); api.se
 const link = (name: string | RegExp) => fireEvent.click(screen.getByRole("link", { name }));
 const logout = () => fireEvent.click(screen.getByRole("button", { name: "Log out" }));
 async function create() {
+  if (!screen.queryByRole("form", { name: "New user" })) fireEvent.click(await screen.findByRole("button", { name: "New user…" }));
   const form = await screen.findByRole("form", { name: "New user" });
   fireEvent.change(within(form).getByLabelText("Username (required)"), { target: { value: "bea" } });
   fireEvent.change(within(form).getByLabelText("Display name (required)"), { target: { value: "Bea" } });
@@ -81,7 +82,8 @@ it("restores native history during reset issuance and acknowledged code, then pe
   render(<App user={user} />);
   await screen.findByRole("heading", { name: "My tasks" });
   link("Users");
-  fireEvent.click(await screen.findByRole("button", { name: "Reset code for alex" }));
+  fireEvent.click(await screen.findByRole("button", { name: "More actions for alex" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Reset code" }));
   fireEvent.click(within(screen.getByRole("dialog", { name: "Issue a new reset code for Alex?" })).getByRole("button", { name: "Reset code" }));
   act(() => window.history.back());
   // Native traversal and the controller's return traversal both run asynchronously.
@@ -176,6 +178,7 @@ it("sends actual Users writes with CSRF and keeps its form through the existing 
   const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ code: "NOT_AUTHENTICATED" }) });
   vi.stubGlobal("fetch", fetchMock);
   render(<AuthGate />);
+  fireEvent.click(await screen.findByRole("button", { name: "New user…" }));
   const form = await screen.findByRole("form", { name: "New user" });
   await create();
   await screen.findByText("Your session has ended. Please log in again.");
