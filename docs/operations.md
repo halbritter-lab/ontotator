@@ -4,7 +4,7 @@ This guide describes the image and Compose files in this repository. Commands ru
 
 ## Deployment boundary
 
-`docker-compose.yml` provides PostgreSQL, a one-shot `migrate` service and `app`. TLS, DNS, host provisioning and the reverse proxy (such as Nginx Proxy Manager) belong in the deployment repository. The proxy must join the Compose `edge` network (`ontotator-edge` by default). App listens on port 8000 inside that network and has **no published host port**. PostgreSQL is only on the internal backend network.
+`docker-compose.yml` provides PostgreSQL, a one-shot `migrate` service and `app`. TLS, DNS, host provisioning and the reverse proxy belong to the host. Like Phentrieve, the stack runs behind Nginx Proxy Manager (NPM): app joins NPM's existing external Docker network (`NPM_SHARED_NETWORK_NAME`, for example `npm_default`) under the network alias `ontotator_app`, so NPM forwards to `http://ontotator_app:8000` without colliding with another stack's `app`. App has **no published host port**. PostgreSQL is only on the internal backend network. Compose does not create the NPM network; it must exist before `up`.
 
 Services use read-only roots, writable data volumes and bounded tmpfs, dropped capabilities, `no-new-privileges`, rotated logs and resource limits. The image runs as UID/GID `1001:1001` with tini as PID 1. PostgreSQL runs as `70:70`. App and PostgreSQL restart unless stopped; migrations are one-shot. Connect PostgreSQL directly or use session-mode pooling: servers hold a PostgreSQL advisory runtime lease, which transaction-mode pooling would break.
 
@@ -47,11 +47,11 @@ docker buildx imagetools inspect postgres:16.15-alpine3.24
 
 Record the manifest digest, check the required architecture is present, update every corresponding `tag@sha256:...` reference and rebuild. Mutable tags alone are not verification. Run the local and container checks against the rebuilt image before approving it.
 
-Publish the approved image through your deployment process, then inspect its registry digest with `docker buildx imagetools inspect REGISTRY/ontotator:RELEASE`. Set `ONTOTATOR_IMAGE=REGISTRY/ontotator@sha256:VERIFIED_MANIFEST_DIGEST` in the private `.env`. A local image ID is useful for local tests; a registry digest is the portable deployment input. Keep release identity and check results in the deployment record.
+There is no CI. Publish an approved commit from a clean working tree with `bash scripts/publish-image.sh VERSION` (needs `docker login ghcr.io` with a token that may write packages; the build token comes from `GITHUB_TOKEN_FILE` or `gh auth token`). It builds the image as above, tags `ghcr.io/janpower/ontotator:VERSION` and `:latest`, pushes both and prints `ONTOTATOR_IMAGE=ghcr.io/janpower/ontotator@sha256:...`. Put that digest reference, not `:latest`, in the private `.env.docker`. The image is built for the local machine's architecture; check it matches the server with `docker buildx imagetools inspect`. A local image ID is useful for local tests; a registry digest is the portable deployment input. Keep release identity and check results in the deployment record.
 
 ## Configuration and secrets
 
-Copy `docker/env.example` to `.env` and set the verified image, exact HTTPS public origin, exact proxy peer IPs and edge network name. `.env` holds private deployment configuration; passwords belong in separate files. Production secrets use the relevant `*_FILE` settings. App gets only its database password and initial admin hash. The schema owner's URL/password are available only to `migrate`; the bootstrap role is only for PostgreSQL initialization.
+As for Phentrieve, copy `.env.docker.template` to `.env.docker`, link it as `.env` (`ln -sf .env.docker .env`, Compose reads `.env`) and set the verified image, exact HTTPS public origin, NPM network name and NPM's fixed IP. `.env.docker` holds private deployment configuration; passwords belong in separate files. Production secrets use the relevant `*_FILE` settings. App gets only its database password and initial admin hash. The schema owner's URL/password are available only to `migrate`; the bootstrap role is only for PostgreSQL initialization.
 
 On the Linux host, generate three independent 64-character hexadecimal passwords, and copy the same role password into each consuming directory:
 
@@ -234,7 +234,8 @@ restore_dir=/absolute/private/isolated-restore
 restore_project=ontotator-restore-unique
 (cd "$backup_dir" && sha256sum --check SHA256SUMS)
 export ONTOTATOR_IMAGE="$(cat "$backup_dir/image-reference.txt")"
-export ONTOTATOR_EDGE_NETWORK="${restore_project}-edge"
+export NPM_SHARED_NETWORK_NAME="${restore_project}-npm" # never the live NPM network
+docker network create "$NPM_SHARED_NETWORK_NAME"
 restore_compose=(docker compose --project-name "$restore_project" --env-file "$restore_dir/.env" --file "$restore_dir/docker-compose.yml")
 test -z "$("${restore_compose[@]}" ps --all --quiet)"
 test -z "$(docker volume ls --quiet --filter "label=com.docker.compose.project=$restore_project")"
@@ -255,7 +256,7 @@ docker run --rm -i --network none --read-only --user 0:0 --security-opt no-new-p
 
 The schema owner printed above must be `ontotator_owner`. `pg_restore` retains the dump's ownership and grants; do not add `--no-owner` or `--no-acl`. The bootstrap role restores as superuser inside PostgreSQL, while app continues to receive only its application-role secret. Archive extraction preserves numeric ownership (including app UID/GID 1001) and modes. Keep both app and migrations stopped if any restore command fails.
 
-Only after both halves restore successfully, start the matching migration/app services and check status. Run this in the same shell: it needs `restore_compose` and the exported `ONTOTATOR_IMAGE`/`ONTOTATOR_EDGE_NETWORK`. Later commands against the target (including `down --volumes` of a test restore) need them too; without them Compose addresses a different edge network and leaves the target's network behind.
+Only after both halves restore successfully, start the matching migration/app services and check status. Run this in the same shell: it needs `restore_compose` and the exported `ONTOTATOR_IMAGE`/`NPM_SHARED_NETWORK_NAME`. Later commands against the target need them too; without them Compose reads the network name from the target's `.env` and may address the live NPM network. After `down --volumes` of a test restore, remove the separate network with `docker network rm "$NPM_SHARED_NETWORK_NAME"`.
 
 ```bash
 "${restore_compose[@]}" up -d --wait
@@ -286,23 +287,59 @@ Recovery audits operator/reason and ends all sessions for that administrator. Co
 
 ## Reverse proxy settings
 
-Set `ONTOTATOR_PUBLIC_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://editor.example.org` (include a nondefault port if used). Set `ONTOTATOR_TRUSTED_PROXIES` to comma-separated exact proxy peer IPs on `edge`, never `*` or a subnet. Allocate stable peer addresses in the deployment network so replacement does not silently change trust.
+Set `ONTOTATOR_PUBLIC_ORIGIN` to the exact browser-facing HTTPS origin, for example `https://editor.example.org` (include a nondefault port if used). Set `ONTOTATOR_TRUSTED_PROXIES` to NPM's exact IP on the shared network, never `*` or a subnet: Phentrieve's containers share that network and could otherwise set `X-Forwarded-For` themselves. Docker assigns container IPs dynamically, so give NPM a fixed one in the NPM stack's Compose file. The network needs an explicit subnet for that; changing the subnet of an existing network means recreating it, which briefly disconnects every stack on it (reconnect them with `docker compose up -d`):
 
-Forward the original `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`. For nginx, configure `proxy_set_header Host $host;`, `proxy_set_header X-Forwarded-For $remote_addr;` (at the first proxy; `$proxy_add_x_forwarded_for` only behind another trusted proxy) and `proxy_set_header X-Forwarded-Proto $scheme;`. For a public nondefault port preserve its authority in Host. Ensure the first trusted proxy replaces untrusted incoming forwarded headers and any proxy chain is explicitly configured. Host validation, HTTPS session cookies, same-origin writes and per-client login throttling depend on these settings. Verify through the public origin after provisioning; TLS/proxy configuration is maintained outside this repository.
+```yaml
+# NPM stack, not this repository
+services:
+  app: # the NPM service
+    networks:
+      default:
+        ipv4_address: 172.30.0.10 # = ONTOTATOR_TRUSTED_PROXIES
+networks:
+  default:
+    name: npm_default
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+```
+
+Check with `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' NPM_CONTAINER`. If NPM ever gets another IP, the app no longer trusts its forwarded headers and sees NPM itself as the client for login throttling; fix the pin, do not widen the trust.
+
+NPM proxy host (Hosts, Proxy Hosts, Add Proxy Host):
+
+- Details: domain `editor.example.org`, scheme `http`, forward hostname `ontotator_app`, port `8000`. "Websockets Support" is not needed (the app uses none); "Block Common Exploits" may be on.
+- SSL: a Let's Encrypt certificate, "Force SSL" and "HTTP/2 Support" on. Leave NPM's "HSTS Enabled" off; the app sends its own HSTS header.
+- NPM already sets `Host $host`, `X-Forwarded-Proto $scheme` and `X-Forwarded-For $remote_addr` (it overwrites the client's header, as required). Nothing must be added for correctness; the Advanced tab takes the hardening below.
+
+For another proxy in front of app, forward the original `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`. For nginx, configure `proxy_set_header Host $host;`, `proxy_set_header X-Forwarded-For $remote_addr;` (at the first proxy; `$proxy_add_x_forwarded_for` only behind another trusted proxy) and `proxy_set_header X-Forwarded-Proto $scheme;`. For a public nondefault port preserve its authority in Host. Ensure the first trusted proxy replaces untrusted incoming forwarded headers and any proxy chain is explicitly configured. Host validation, HTTPS session cookies, same-origin writes and per-client login throttling depend on these settings. Verify through the public origin after provisioning; TLS/proxy configuration is maintained outside this repository.
 
 ## Internet exposure
 
-The app sets its own security headers (CSP with `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, HSTS for an https origin) and refuses request bodies over its limits with 413: 50 MiB for document uploads, 300 MiB for ontology uploads, about 116 MiB for the bulk selection routes of a project (work plans, batch assignment, selection summaries; derived from their 200,000-row maximum), 1 MiB for every other request. A login locks a username from one client address after 5 failures in 15 minutes, and a client address after 100 failures for any names; locks end with the window, so no CLI unlock exists (a locked user can still log in from another address; see Lost admin password otherwise). The proxy owner should still:
+The app sets its own security headers (CSP with `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`, HSTS for an https origin) and refuses request bodies over its limits with 413: 50 MiB for document uploads, 300 MiB for ontology uploads, about 116 MiB for the bulk selection routes of a project (work plans, batch assignment, selection summaries; derived from their 200,000-row maximum), 1 MiB for every other request. A login locks a username from one client address after 5 failures in 15 minutes, and a client address after 100 failures for any names; locks end with the window, so no CLI unlock exists (a locked user can still log in from another address; see Lost admin password otherwise). The proxy owner should still do the following. In NPM, `limit_req_zone` goes into `/data/nginx/custom/http_top.conf` in NPM's data volume and the rest into the proxy host's Advanced tab, where a `location` uses `include conf.d/include/proxy.conf;` instead of `proxy_pass`:
 
 - Rate-limit `POST /api/v1/auth/login` and `/api/v1/auth/redeem-code` per client address, since the per-address lock does not stop attempts spread over many addresses, for example:
   ```nginx
   limit_req_zone $binary_remote_addr zone=ontotator_auth:10m rate=10r/m;
-  location ~ ^/api/v1/auth/(login|redeem-code)$ { limit_req zone=ontotator_auth burst=10 nodelay; proxy_pass http://ontotator; }
+  location ~ ^/api/v1/auth/(login|redeem-code)$ { limit_req zone=ontotator_auth burst=10 nodelay; include conf.d/include/proxy.conf; }
   ```
 - Set `client_max_body_size 1m;` by default and `300m` on `/api/v1/admin/ontologies` and `/api/v1/projects/` (uploads and bulk selections; the app enforces the exact limits).
 - Overwrite, never append to, `X-Forwarded-For` at the first proxy (`proxy_set_header X-Forwarded-For $remote_addr;`), so clients cannot choose the address the lockout counts.
 - Block `/livez` and `/readyz` from outside (`location ~ ^/(livez|readyz)$ { deny all; }`); Docker health checks reach them directly.
 - Terminate TLS with a current configuration and redirect HTTP to HTTPS.
+
+## Deploy on a VPS next to Phentrieve
+
+On the host, with NPM and Phentrieve already running:
+
+1. Network: `docker network ls` shows NPM's network (the `NPM_SHARED_NETWORK_NAME` Phentrieve uses). Pin NPM's IP as in [Reverse proxy settings](#reverse-proxy-settings).
+2. Checkout: clone `janpower/ontotator` into its own directory next to the Phentrieve checkout; only the Compose files, `docker/postgres-init.sh` and the template are used.
+3. Secrets: create `secrets/` as in [Configuration and secrets](#configuration-and-secrets).
+4. Settings: `cp .env.docker.template .env.docker && ln -sf .env.docker .env`, then set `ONTOTATOR_IMAGE` (digest printed by `scripts/publish-image.sh`), `ONTOTATOR_PUBLIC_ORIGIN`, `NPM_SHARED_NETWORK_NAME` and `ONTOTATOR_TRUSTED_PROXIES` (NPM's fixed IP). If the GHCR package is private, `docker login ghcr.io` with a read-only package token.
+5. Start: `docker compose config --quiet && docker compose pull && docker compose up -d --wait && docker compose ps --all`, then finish the admin bootstrap as in [First start](#first-start).
+6. NPM: add the proxy host as in [Reverse proxy settings](#reverse-proxy-settings), first without the Advanced hardening.
+7. Verify: `curl -fsS https://editor.example.org/readyz` reports every check true, and sign-in works in a browser. Then add the Advanced hardening: `/readyz` must now answer 403 from outside while `docker compose ps` keeps app healthy.
+8. Update: publish a new version, set its digest in `.env.docker` and follow [Upgrades](#upgrades). Phentrieve is not touched; the stacks share only the NPM network.
 
 ## Workers and resource limits
 

@@ -336,6 +336,7 @@ def main() -> int:
                 "ONTOTATOR_IMAGE": args.image or "ontotator-dev:local",
                 "ONTOTATOR_PUBLIC_ORIGIN": "https://container-check.invalid",
                 "ONTOTATOR_TRUSTED_PROXIES": "127.0.0.1",
+                "NPM_SHARED_NETWORK_NAME": "container-check-npm",
             }
             production = run(
                 [

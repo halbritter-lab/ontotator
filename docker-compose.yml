@@ -1,4 +1,5 @@
-# Deploy behind an external HTTPS proxy joined to the edge network.
+# Deploy behind Nginx Proxy Manager on its shared external network; NPM forwards to
+# http://ontotator_app:8000. See docs/operations.md.
 x-runtime: &runtime
   restart: unless-stopped
   read_only: true
@@ -88,14 +89,19 @@ services:
     pids_limit: 256
     stop_grace_period: 35s
     # /readyz healthcheck is inherited from the verified image.
-    networks: [edge, backend]
+    networks:
+      backend:
+      npm_proxy_network:
+        # Unique name for NPM: other stacks on this network may also have an app.
+        aliases: [ontotator_app]
 
 volumes:
   postgres-data:
   ontotator-data:
 
 networks:
-  edge:
-    name: ${ONTOTATOR_EDGE_NETWORK:-ontotator-edge}
   backend:
     internal: true
+  npm_proxy_network:
+    external: true
+    name: ${NPM_SHARED_NETWORK_NAME:?Set the external Nginx Proxy Manager network}
