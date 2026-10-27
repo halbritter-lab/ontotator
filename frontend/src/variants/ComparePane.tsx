@@ -12,7 +12,7 @@ import { VariantSelectors } from './VariantSelectors';
 import { ReadOnlyAnnotationView } from './ReadOnlyAnnotationView';
 import { VersionSelect } from './VersionSelect';
 import { ShowSelect } from './ShowSelect';
-import { LayerFindings } from './LayerFindings';
+import { LayerFindings, layerTerms } from './LayerFindings';
 import { layerKey, layerRefs, refForLayer } from './useTextLayers';
 
 export interface ComparePaneProps {
@@ -72,7 +72,7 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
   const [payload, setPayload] = useState<{ identity: object; value?: AnnotationVersion; error?: unknown } | null>(null);
   const snapshot = payload?.identity === payloadIdentity && ref ? payload.value : undefined;
   const payloadError = payload?.identity === payloadIdentity ? payload.error : undefined;
-  const labelFor = useTermLabels(projectKey, (snapshot?.annotations ?? []).map(row => ({ layer_id: row.annotation.layer_id, term_id: row.annotation.term_id })));
+  const labelFor = useTermLabels(projectKey, layerTerms(snapshot?.annotations ?? []));
   const [rightElement, setRightElement] = useState<HTMLDivElement | null>(null);
   const couplingIdentity = useMemo(() => ({}), [identity, selectedId, selection, leftText, editing, suspended]);
   const [requestedCoupling, setRequestedCoupling] = useState<object | null>(null);
@@ -140,7 +140,7 @@ export function ComparePane({ projectKey, username, caseDetail, leftDocumentId, 
     {current?.text ? <ReadOnlyAnnotationView key={JSON.stringify([username, projectKey, caseDetail.case_id, selectedId, selection, retry, leftContext])}
       text={current.text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} onTextElement={setRightElement} proposalContext={ref?.kind === "proposals" && snapshot ? {projectKey,documentId:selectedId!,scope:JSON.stringify([username,projectKey,caseDetail.case_id,selectedId,selection,retry,leftContext]),setId:ref.id} : undefined} />
       : available && !suspended && !current?.textError ? <InlineMessage tone="info">Loading comparison text...</InlineMessage> : null}
-    {layers && ref && snapshot && <LayerFindings key={selection} labelFor={labelFor} annotations={snapshot.annotations}
+    {layers && ref && snapshot && <LayerFindings key={selection} labelFor={labelFor} annotations={snapshot.annotations} text={current?.text?.text ?? ''}
       label={current?.entries?.find(entry => entry.ref && layerKey(entry.ref) === selection)?.label ?? ref.label} />}
   </section>;
 }

@@ -20,7 +20,7 @@ import { LanguageFlag } from '../ui/LanguageTag';
 import { TextViewToolbar } from './TextViewToolbar';
 import { VersionSelect } from './VersionSelect';
 import { ShowSelect } from './ShowSelect';
-import { LayerFindings } from './LayerFindings';
+import { LayerFindings, layerTerms } from './LayerFindings';
 import { layerKey, legacyLayerKey, refForLayer, useTextLayers } from './useTextLayers';
 import './textView.css';
 import { onSpaceActivate } from '../ui/spaceActivates';
@@ -119,14 +119,18 @@ export function CaseViewer({ projectKey, caseId, variant, show, annotations, com
       leftElement?.focus();
     }
   }, [access.allowed]);
-  // Old links carry `annotations=` (a JSON ref key); an unreadable value matches no layer.
-  const selection = show ?? (annotations !== undefined ? legacyLayerKey(annotations) ?? annotations : 'text');
   const [detailState, setDetail] = useState<{ identity: object; retry: number; value: CaseDetail } | null>(null);
   const [caseError, setCaseError] = useState<{ identity: object; error: unknown } | null>(null);
   const detail = detailState?.identity === identity ? detailState.value : null;
   const detailFresh = detailState?.identity === identity && detailState.retry === retry;
   const selectedId = variant !== undefined ? variant : detail ? pickVariant(detail, languagesOf(detail)[0] ?? '') : null;
   const current = detail?.variants.find(row => row.document_id === selectedId);
+  // The server leaves out other people's work for non-leads (D3); leads also get older refs for the history links.
+  const layers = useTextLayers(projectKey, access.loading || !current ? null : current.document_id, access.allowed, JSON.stringify([username, caseId, retry]));
+  // Old links carry `annotations=` (a JSON ref key); an unreadable value matches no layer. Without either, a text with
+  // an accepted final result opens on it (R-4).
+  const finalLayer = layers.entries?.find(entry => entry.kind === 'final' && entry.available && entry.ref)?.ref;
+  const selection = show ?? (annotations !== undefined ? legacyLayerKey(annotations) ?? annotations : finalLayer ? layerKey(finalLayer) : 'text');
   const closeComparison = () => {
     setCompareIdentity(null);
     if (compare !== undefined) onNavigate({ name: 'projectCase', key: projectKey, caseId, ...(variant !== undefined ? { variant } : {}),
@@ -137,14 +141,12 @@ export function CaseViewer({ projectKey, caseId, variant, show, annotations, com
   const [textError, setTextError] = useState<{ identity: object; error: unknown } | null>(null);
   const [tasks, setTasks] = useState<{ identity: object; value: TaskSummary[] } | null>(null);
   const [taskError, setTaskError] = useState<{ identity: object; error: unknown } | null>(null);
-  // The server leaves out other people's work for non-leads (D3); leads also get older refs for the history links.
-  const layers = useTextLayers(projectKey, access.loading || !current ? null : current.document_id, access.allowed, JSON.stringify([username, caseId, retry]));
   const ref = layers.refs ? refForLayer(selection, layers.refs) : null;
   const payloadIdentity = useMemo(() => ({ contentIdentity, selection }), [contentIdentity, selection]);
   const [payload, setPayload] = useState<{ identity: object; value: AnnotationVersion } | null>(null);
   const [payloadError, setPayloadError] = useState<{ identity: object; error: unknown } | null>(null);
   const snapshot = ref && payload?.identity === payloadIdentity ? payload.value : null;
-  const labelFor = useTermLabels(projectKey, (snapshot?.annotations ?? []).map(row => ({ layer_id: row.annotation.layer_id, term_id: row.annotation.term_id })));
+  const labelFor = useTermLabels(projectKey, layerTerms(snapshot?.annotations ?? []));
   useEffect(() => {
     let active = true;
     setCaseError(null); setTaskError(null); setTasks(null);
@@ -209,7 +211,7 @@ export function CaseViewer({ projectKey, caseId, variant, show, annotations, com
       {ref && !snapshot && !payloadFailed && <InlineMessage tone="info">Loading annotation version...</InlineMessage>}
       <ReadOnlyAnnotationView onTextElement={setLeftElement} key={JSON.stringify([username, projectKey, caseId, selectedId, selection, retry])} text={text.text} annotations={snapshot?.annotations ?? []} evidence={snapshot?.evidence ?? []} labelFor={labelFor} proposalContext={ref?.kind === "proposals" && snapshot ? {projectKey,documentId:current.document_id,scope:JSON.stringify([username,projectKey,caseId,selectedId,selection,retry]),setId:ref.id} : undefined} />
     </> : <InlineMessage tone="info">Loading text...</InlineMessage>}
-    {snapshot && <LayerFindings key={selection} label={layerLabel} annotations={snapshot.annotations} labelFor={labelFor} />}
+    {snapshot && <LayerFindings key={selection} label={layerLabel} annotations={snapshot.annotations} labelFor={labelFor} text={text?.text ?? ''} />}
       {compareOpen && <ComparePane layers projectKey={projectKey} username={username} caseDetail={detail} leftDocumentId={current.document_id}
         leftText={text?.text ?? ""} leftElement={text ? leftElement : null} suspended={!text || !detailFresh} leftContext={JSON.stringify([selectedId, selection, retry])} onClose={closeComparison} toolbarHost={comparisonToolbar}
         initialRight={compare !== undefined ? { documentId: compare, refKey: compareShow ?? 'text' } : undefined} />}

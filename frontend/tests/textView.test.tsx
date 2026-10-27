@@ -155,3 +155,27 @@ it('the language is plain text with a flag, not a link', async () => {
   expect(language.closest('a')).toBeNull();
   expect(toolbar.querySelector('.language-flag')).toBeTruthy();
 });
+
+it('a text with an accepted final opens on it and lists modifiers, the note and "No text span" (R-4)', async () => {
+  const finalRef: VersionRef = { kind: 'final', id: 'sel-1', label: 'Final result, accepted 27 Oct', created_at };
+  vi.mocked(api.listTextLayers).mockResolvedValue([...leadLayers.slice(0, 3), { kind: 'final', ref: finalRef, label: finalRef.label, state: 'accepted', available: true }]);
+  const base = historical.annotations[0];
+  vi.mocked(api.getAnnotationVersion).mockResolvedValue({ ...historical, annotations: [{ ...base, annotation: { ...base.annotation,
+    modifiers: [{ term_id: 'HP:0012825', segments: [{ start: 0, end: 9 }] }], note: 'Mentioned by the nurse.' } }] });
+  vi.mocked(api.resolveTermLabels).mockResolvedValue([{ layer_id: 'phenotype', term_id: 'HP:0012825', label: 'Mild' } as never]);
+  await viewer();
+  const findings = await screen.findByRole('region', { name: 'Findings' });
+  expect(api.getAnnotationVersion).toHaveBeenCalledWith('pkg', 'target', 'final', 'sel-1');
+  expect(screen.getByLabelText<HTMLSelectElement>('Show').value).toBe('final:sel-1');
+  await waitFor(() => expect(within(findings).getByText('Modifiers: Mild · “Immutable”')).toBeTruthy());
+  expect(within(findings).getByText('No text span')).toBeTruthy();
+  expect(within(findings).getByText('Note: Mentioned by the nurse.')).toBeTruthy();
+});
+
+it('an explicit "Text only" stays on the text even with a final result', async () => {
+  const finalRef: VersionRef = { kind: 'final', id: 'sel-1', label: 'Final result, accepted 27 Oct', created_at };
+  vi.mocked(api.listTextLayers).mockResolvedValue([...leadLayers.slice(0, 3), { kind: 'final', ref: finalRef, label: finalRef.label, state: 'accepted', available: true }]);
+  await viewer({ show: 'text' });
+  expect(screen.getByLabelText<HTMLSelectElement>('Show').value).toBe('text');
+  expect(api.getAnnotationVersion).not.toHaveBeenCalled();
+});
