@@ -645,6 +645,7 @@ a.shell-product { color: inherit; text-decoration: none; }
 /* Admin Users is a wide data table: it takes the whole main area. */
 .shell-page:has(> .users-page) { max-width: none; }
 .users-page > .detail-section > .toolbar { align-items: end; }
+.users-page td .toolbar { flex-wrap: nowrap; }
 /* The row of the last (de)activation or anonymisation (its result is the notice above the table). */
 .users-page .users-row--changed > td { background: var(--accent-light); }
 .ui-dialog.audit-history-dialog { width: calc(100vw - 2 * var(--space-4)); max-width: 1200px; }
@@ -720,6 +721,8 @@ ul.task-counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space
 /* Keeps a row's action column in view while the rest of a wide table scrolls. */
 .data-table--pin-end :is(th, td:not([colspan])):last-child { position: sticky; right: 0; background: var(--surface); box-shadow: inset 1px 0 var(--border); }
 .data-table--pin-end th:last-child { background: var(--surface-sunken); }
+/* Each sticky cell stacks its own content: an open menu lifts its cell above the pinned cells of later rows. */
+.data-table--pin-end td:last-child:has(.ui-menu) { z-index: 2; }
 
 /* Below 900 px the compact sidebar becomes a wrapping band above the content. */
 @media (max-width: 899px) {
