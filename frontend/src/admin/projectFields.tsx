@@ -165,7 +165,7 @@ export function WorkflowFields({ projectKey, value, saved, onChange, disabled }:
         </label>)}
       </div>
     </SettingsCard>
-    <SettingsCard title="Annotation and consolidation"
+    <SettingsCard title="Annotation and consolidation" hint="Checked when you assign."
       why={<><p>Native source texts are never held back by the translation review; the Assign dialog can override this for one assignment.</p><p>The consolidator rule is checked when you assign consolidation.</p></>}>
       <div className="settings-card-row">
         <TextInput id={`${prefix}-annotations`} label="Annotators per text" type="number" min={1} max={5} step={1} required hint="Upper limit; fewer is fine." value={Number.isFinite(target) ? String(target) : ""} disabled={disabled}

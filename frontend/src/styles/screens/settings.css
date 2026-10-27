@@ -238,3 +238,19 @@ summary.settings-card-title {
 .new-user-projects-row[aria-hidden="true"] { color: var(--text-muted); font-size: var(--size-sm); }
 .new-user-projects-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .new-user-projects-row .form-group { margin: 0; }
+
+/* A collapsed topic is the card itself: no extra space around its summary. */
+.settings-card > details,
+.settings-card > details > summary {
+  margin: 0;
+  padding-block: 0;
+}
+
+.settings-card > .btn {
+  justify-self: start;
+}
+
+.settings-prefill-group {
+  display: grid;
+  gap: var(--space-3);
+}
