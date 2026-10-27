@@ -10,6 +10,7 @@ import { ErrorNotice } from "../admin/ErrorNotice";
 import { Button, Checkbox, Dialog, InlineMessage, Textarea } from "../ui";
 import { IconCheck } from "../ui/icons";
 import { shortName } from "./stageLabels";
+import { RemoveAssignmentDialog } from "./textCard/RemoveAssignmentDialog";
 import { ACCEPT_EXTERNAL_LABEL, ACCEPTANCE_RECORDED, consequenceLines, PLAN_CHANGED_MESSAGE, WITHDRAW_CHECKBOX, type PlanSaves } from "./PlanChips";
 
 export type PlanMode = "proposals" | "scratch";
@@ -209,17 +210,20 @@ export function cardChoiceLine(step: "review" | "annotation", choice: string, co
  * another saves at once through the plan save of `TextPlanDialog`, one line below says what the choice means. A locked
  * mode or a missing proposal set keeps the choices focusable (`aria-disabled`) and says why.
  */
-export function CardPlanSelect({ row, step, groupRevision, saves }: {
+export function CardPlanSelect({ row, step, groupRevision, saves, onChanged }: {
   row: DocumentRowView;
   step: "review" | "annotation";
   groupRevision: number;
   saves: PlanSaves;
+  /** An assignment was removed from the lock line: refetch the rows. */
+  onChanged?: () => void;
 }): JSX.Element | null {
   const id = useId().replace(/:/g, "");
   const plan = usePlanRowSave(row, groupRevision, saves);
   const current: PlanStepsValue = { ...saves.flagsOf(row, groupRevision), mode: row.plan_row?.annotation_mode ?? "project" };
   const [chosen, setChosen] = useState<PlanStepsValue | null>(null);
   const [saved, setSaved] = useState(false);
+  const [removing, setRemoving] = useState<DocumentRowView["work"][number] | null>(null);
   // The refetched row carries the saved plan: the local choice gives way to it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setChosen(previous => (saved ? null : previous)); }, [row]);
@@ -235,6 +239,9 @@ export function CardPlanSelect({ row, step, groupRevision, saves }: {
 
   const selected = step === "review" ? (value.review ? "on" : "off") : value.annotate ? shownMode : "off";
   const starter = row.work.find(item => item.task === "annotate" && item.moved_to_version == null);
+  // Unsubmitted work fixes the mode only while it exists (#17.1): the lock line offers to remove it. Submitted work keeps it fixed.
+  const annotations = row.work.filter(item => item.task === "annotate" && item.moved_to_version == null);
+  const removable = locked && !annotations.some(item => item.status === "submitted") ? annotations : [];
   const lockLine = locked ? `Fixed: ${starter ? (starter.person ? shortName(starter.person) : starter.author_label) : "an annotator"} has started ${textMode?.mode === "scratch" ? "from scratch" : "from proposals"}. Remove all unsubmitted work to change it.` : null;
   const choices = step === "review"
     ? [{ value: "on", label: "On" }, { value: "off", label: "Off" }]
@@ -283,6 +290,16 @@ export function CardPlanSelect({ row, step, groupRevision, saves }: {
     </span>
     <p id={lineId} className="text-card-muted text-card-plan-help">{lockLine ?? cardChoiceLine(step, selected, count)}
       {!lockLine && step === "annotation" && count === 0 && selected !== "proposals" && selected !== "scratch" ? ` ${NO_PROPOSALS_REASON}` : ""}</p>
+    {removable.length > 0 && <div className="text-card-actions">
+      {removable.map(item => {
+        const name = item.person ? shortName(item.person) : item.author_label;
+        return <Button key={item.assignment_id} size="sm" variant="danger" onClick={() => setRemoving(item)}>
+          {removable.length === 1 ? "Remove assignment…" : `Remove ${name}'s assignment…`}</Button>;
+      })}
+    </div>}
+    {removing && <RemoveAssignmentDialog assignmentId={removing.assignment_id} caseId={`${row.case_id} ${row.language}`}
+      name={removing.person ? shortName(removing.person) : removing.author_label}
+      onCancel={() => setRemoving(null)} onRemoved={() => { setRemoving(null); onChanged?.(); }} />}
     {plan.open && <div className="text-card-plan-refusal">
       {plan.extras}
       {plan.needsMore && <div className="text-card-actions">
