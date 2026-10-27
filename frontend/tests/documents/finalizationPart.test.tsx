@@ -19,11 +19,13 @@ it("shows the open groups, opens the consolidation and offers the lead only remo
   const onNavigate = vi.fn();
   const item = work({ assignment_id: 9, document_id: "doc-w07", author_label: "ann-0007", task: "review", status: "in_progress", person: carla });
   render(<FinalizationPart row={consolidating({ consolidation_progress: { round_id: "r-7", open: 2, total: 3 }, work: [item] })} projectKey="p" query={{}}
-    onNavigate={onNavigate} now={now} canManage tools={{ assignments: [{ id: 9 }], members: [], onAssignmentsChanged: vi.fn() } as never} />);
+    onNavigate={onNavigate} now={now} canManage tools={{ assignments: [{ id: 9, task: "review", status: "in_progress", document_id: "doc-w07", pseudonym: "ann-0007", username: "carla" }], members: [], onAssignmentsChanged: vi.fn() } as never} />);
   expect(screen.getByText("Consolidating with Carla Consolidator · 2 of 3 groups open")).toBeTruthy();
   fireEvent.click(screen.getByText("Open consolidation"));
   expect(onNavigate).toHaveBeenCalledWith({ name: "projectConsolidation", key: "p", roundId: "r-7" });
-  fireEvent.click(screen.getByRole("button", { name: /Carla Consolidator, in progress: actions/ }));
-  expect(screen.getByText("Remove assignment…")).toBeTruthy();
+  // The consolidator is named in plain text only; the lead's one action is a button of its own (no chip, no Reassign).
+  expect(screen.queryByRole("button", { name: /Carla Consolidator/ })).toBeNull();
   expect(screen.queryByText("Reassign to someone else…")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Remove assignment…" }));
+  expect(screen.getByRole("dialog", { name: /Remove assignment/ })).toBeTruthy();
 });
