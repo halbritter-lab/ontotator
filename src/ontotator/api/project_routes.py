@@ -1,10 +1,11 @@
 """Project settings, membership administration, progress and export requests."""
 
+from collections.abc import Iterable
 from typing import Literal
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import Connection, func, or_, select
 
 from ontotator.api.document_projection import Assignee
 from ontotator.api.identity import PrincipalDep
@@ -32,6 +33,7 @@ from ontotator.projects.service import (
 from ontotator.storage.tables import (
     AssignmentRow,
     DocumentRow,
+    PasswordCredentialRow,
     ProjectMembershipRow,
     ProjectRow,
     UserLanguageRow,
@@ -73,6 +75,29 @@ class OpenTasksView(BaseModel):
     review: int = 0
 
 
+AccountStatus = Literal["active", "inactive", "anonymised", "setup_pending"]
+
+
+def _account_status(
+    active: bool, anonymised: bool, has_password: bool
+) -> AccountStatus:
+    if anonymised:
+        return "anonymised"
+    if not active:
+        return "inactive"
+    return "active" if has_password else "setup_pending"
+
+
+def _with_password(conn: Connection, user_ids: Iterable[int]) -> set[int]:
+    return set(
+        conn.execute(
+            select(PasswordCredentialRow.user_id).where(
+                PasswordCredentialRow.user_id.in_(list(user_ids))
+            )
+        ).scalars()
+    )
+
+
 class Member(BaseModel):
     """For non-lead callers ``username`` and ``display_name`` of other people
     are empty (pseudonym only, D1); the caller's own record is complete."""
@@ -83,6 +108,8 @@ class Member(BaseModel):
     roles: list[str]
     languages: list[str]
     open_tasks: OpenTasksView = Field(default_factory=OpenTasksView)
+    # Shown to leads only; None for other callers.
+    account: AccountStatus | None = None
 
 
 class MemberCandidate(BaseModel):
@@ -427,6 +454,8 @@ def members(key: str, principal: PrincipalDep, request: Request) -> list[Member]
                 UserRow.username,
                 UserRow.display_name,
                 UserRow.pseudonym,
+                UserRow.active,
+                UserRow.anonymised_at,
                 ProjectMembershipRow.role,
             )
             .join(ProjectMembershipRow, UserRow.id == ProjectMembershipRow.user_id)
@@ -434,6 +463,9 @@ def members(key: str, principal: PrincipalDep, request: Request) -> list[Member]
             .order_by(UserRow.username, ProjectMembershipRow.role)
         ).all()
         by_id: dict[int, Member] = {}
+        with_password = (
+            _with_password(conn, {row.id for row in rows}) if is_lead else set()
+        )
         for row in rows:
             member = by_id.setdefault(
                 row.id,
@@ -443,6 +475,13 @@ def members(key: str, principal: PrincipalDep, request: Request) -> list[Member]
                     pseudonym=row.pseudonym,
                     roles=[],
                     languages=[],
+                    account=_account_status(
+                        row.active,
+                        row.anonymised_at is not None,
+                        row.id in with_password,
+                    )
+                    if is_lead
+                    else None,
                 ),
             )
             member.roles.append(row.role)
@@ -536,7 +575,7 @@ def set_member(
 ) -> Member:
     _guard(request, Action.MANAGE_MEMBERS, key)
     accounts = request.app.state.accounts
-    with accounts.db.transaction():
+    with accounts.db.transaction() as conn:
         roles = request.app.state.memberships.set_roles(
             Actor.user(principal.user_id, principal.username),
             key,
@@ -553,4 +592,7 @@ def set_member(
             pseudonym=user.pseudonym,
             roles=sorted(roles),
             languages=sorted(languages[user.id]),
+            account=_account_status(
+                user.active, user.anonymised, user.id in _with_password(conn, [user.id])
+            ),
         )

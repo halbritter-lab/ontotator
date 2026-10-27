@@ -1,12 +1,19 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type Member, type MemberCandidate } from "../api/client";
-import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, TextInput, type Column } from "../ui";
+import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, StatusBadge, TextInput, type Column, type StatusTone } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { labelFor, roleLabels, taskLabels } from "../app/labels";
 import { personLabel } from "../app/identity";
 export interface MembersSectionProps { projectKey: string; isSystemAdmin: boolean }
 
 const roles = ["lead", "annotator", "adjudicator"] as const;
+/** Accounts that cannot work right now are marked, as in the Assign dialog; active ones read plainly. */
+const accountBadges: Record<string, [string, StatusTone]> = {
+  inactive: ["Inactive", "warning"],
+  anonymised: ["Anonymised", "neutral"],
+  setup_pending: ["Setup pending", "info"],
+};
+const anonymisedTitle = "This account is anonymised and gets no new roles. Use Remove… to take it off the project.";
 
 /** M2 M-8d: each role change saves at once and is confirmed in words ("Ana Weber is now Consolidator."). */
 export function roleChangeText(name: string, before: readonly string[], after: readonly string[]): string {
@@ -89,20 +96,26 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
   };
   const blocked = busy || pending !== null || removal !== null || members === null;
   const closeAdd = () => { setAdding(false); setUsername(""); setNewRoles([]); setSuggestions([]); requestAnimationFrame(() => addButton.current?.focus()); };
+  const memberName = (member: Member) => member.display_name?.trim() || member.username || personLabel(member);
   const columns: Column<Member>[] = [
     { id: "person", header: "Person", cell: member => personLabel(member) },
     { id: "username", header: "Username", cell: member => member.username },
+    { id: "status", header: "Status", cell: member => member.account && accountBadges[member.account] ? <StatusBadge tone={accountBadges[member.account][1]}>{accountBadges[member.account][0]}</StatusBadge> : member.account ? "Active" : "" },
     { id: "languages", header: "Languages", cell: member => member.languages.join(", ") || "None" },
-    ...roles.map(role => ({ id: role, header: roleLabels[role], cell: (member: Member) => <Checkbox id={`${id}-${member.username}-${role}`} label={<span className="visually-hidden">{member.username}: {roleLabels[role]}</span>} checked={member.roles.includes(role)} disabled={blocked} onChange={event => {
+    ...roles.map(role => ({ id: role, header: roleLabels[role], cell: (member: Member) => <Checkbox id={`${id}-${member.username}-${role}`} label={<span className="visually-hidden">{member.username}: {roleLabels[role]}</span>} checked={member.roles.includes(role)} disabled={blocked || member.account === "anonymised"} title={member.account === "anonymised" ? anonymisedTitle : undefined} onChange={event => {
       if (blocked) return;
       if (event.target.checked) { void change(member.username, [...member.roles, role], false); return; }
       // Taking a role away ends the person's sessions, so it is never a silent single click.
       setError(undefined);
-      setRemoval({ username: member.username, name: member.display_name?.trim() || member.username || personLabel(member), roles: member.roles.filter(item => item !== role), removed: role });
+      setRemoval({ username: member.username, name: memberName(member), roles: member.roles.filter(item => item !== role), removed: role });
     }} /> })),
+    { id: "actions", header: <span className="visually-hidden">Actions</span>, cell: member => <Button size="sm" disabled={blocked} aria-label={`Remove ${memberName(member)} from the project`} onClick={() => {
+      setError(undefined);
+      setRemoval({ username: member.username, name: memberName(member), roles: [], removed: "" });
+    }}>Remove…</Button> },
   ];
   return <section aria-label="Members"><h2>Members</h2>
-    <p className="field-hint">Role changes save immediately. Leads manage the project, annotators annotate texts and review translations, consolidators merge the annotations of a text.</p>
+    <p className="field-hint">Role changes save immediately. Leads manage the project, annotators annotate texts and review translations, consolidators merge the annotations of a text. Remove… takes someone off the project. Inactive and anonymised accounts cannot log in; setup pending means the person has not set a password yet.</p>
     {members === null && loadError === undefined && <InlineMessage tone="info">Loading members…</InlineMessage>}
     {loadError !== undefined && <><ErrorNotice error={loadError} /><Button onClick={() => setRetry(value => value + 1)}>Try again</Button></>}
     {members !== null && (members.length ? <DataTable label="Project members" columns={columns} rows={members} rowKey={member => member.username} /> : <EmptyState title="No project members." />)}
