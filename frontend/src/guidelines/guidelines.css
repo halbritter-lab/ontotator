@@ -30,9 +30,7 @@
   gap: var(--space-4);
 }
 
-.guidelines-settings > h2,
-.guidelines-versions > h2,
-.guidelines-publish > h3 {
+.guidelines-versions > h2 {
   margin: 0;
 }
 
@@ -46,26 +44,83 @@
   border-radius: var(--radius);
 }
 
-.guidelines-current,
-.guidelines-not-seen {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.guidelines-current p,
-.guidelines-not-seen p,
-.guidelines-facts p,
 .guidelines-file-facts,
 .guidelines-empty {
   margin: 0;
 }
 
-.guidelines-current-facts {
+/* Settings › Guidelines: the version in force first, as one card (title, actions, facts). */
+.guidelines-in-force-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.guidelines-in-force-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: last baseline;
+}
+
+.guidelines-card-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--size-xl);
+  line-height: var(--leading-xl);
+  font-weight: var(--weight-regular);
+}
+
+/* Nothing published yet: the upload card stays narrow. */
+.guidelines-publish--first {
+  max-width: 640px;
+}
+
+.guidelines-file {
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.guidelines-in-force-file {
+  color: var(--text-muted);
+  font-size: var(--size-sm);
+}
+
+.guidelines-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--size-md);
   font-variant-numeric: tabular-nums;
 }
 
-.guidelines-not-seen summary {
+.guidelines-facts dt {
+  color: var(--text-muted);
+}
+
+.guidelines-facts dd {
+  margin: 0;
+}
+
+/* "who not yet?": the names open in place, on demand. */
+.guidelines-not-seen {
+  display: inline;
+}
+
+.guidelines-not-seen > summary {
+  display: inline;
   cursor: pointer;
+  color: var(--accent);
+  font-size: var(--size-sm);
+}
+
+.guidelines-not-seen[open] > span {
+  display: block;
+  margin-top: var(--space-1);
 }
 
 .guidelines-current-actions,
@@ -77,15 +132,9 @@
   align-items: center;
 }
 
-.guidelines-publish,
 .guidelines-versions {
   display: grid;
   gap: var(--space-3);
-}
-
-.guidelines-facts {
-  display: grid;
-  gap: var(--space-1);
 }
 
 /* Publish and Discard above the preview; the bar stays at the top of the scroll area while the preview is read. */
@@ -97,7 +146,7 @@
   gap: var(--space-2);
   padding-block: var(--space-2);
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-raised);
 }
 
 /* The preview shows the text as annotators will see it, in a bounded scroll box. */

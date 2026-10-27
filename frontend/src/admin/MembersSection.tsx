@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type Member, type MemberCandidate } from "../api/client";
 import { Button, Checkbox, ConfirmDialog, DataTable, EmptyState, InlineMessage, StatusBadge, SuggestInput, type Column, type StatusTone, EmptyValue } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { SettingsHint } from "./SettingsCard";
 import { labelFor, roleLabels, taskLabels } from "../app/labels";
 import { personLabel } from "../app/identity";
 export interface MembersSectionProps { projectKey: string; isSystemAdmin: boolean }
@@ -114,8 +115,8 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
       setRemoval({ username: member.username, name: memberName(member), roles: [], removed: "" });
     }}>Remove…</Button> },
   ];
-  return <section aria-label="Members"><h2>Members</h2>
-    <p className="field-hint">Role changes save immediately. Leads manage the project, annotators annotate texts and review translations, consolidators merge the annotations of a text. Remove… takes someone off the project. Inactive and anonymised accounts cannot log in; setup pending means the person has not set a password yet.</p>
+  return <section aria-label="Members" className="settings-card"><h2 className="settings-card-title">Members</h2>
+    <SettingsHint why={<><p>Leads manage the project, annotators annotate texts and review translations, consolidators merge the annotations of a text. Remove… takes someone off the project.</p><p>Inactive and anonymised accounts cannot log in; setup pending means the person has not set a password yet.</p></>}>Role changes save immediately.</SettingsHint>
     {members === null && loadError === undefined && <InlineMessage tone="info">Loading members…</InlineMessage>}
     {loadError !== undefined && <><ErrorNotice error={loadError} /><Button onClick={() => setRetry(value => value + 1)}>Try again</Button></>}
     {members !== null && (members.length ? <DataTable label="Project members" columns={columns} rows={members} rowKey={member => member.username} /> : <EmptyState title="No project members." />)}
@@ -126,7 +127,7 @@ function MemberEditor({ projectKey, isSystemAdmin }: MembersSectionProps): JSX.E
       if (!event.currentTarget.reportValidity() || blocked) return;
       if (!newRoles.length) { setError(new Error("Choose at least one role for the new member.")); return; }
       void change(username, newRoles, false, true);
-    }}><fieldset disabled={blocked}><legend>Add member</legend>
+    }}><fieldset disabled={blocked}><legend className="settings-subheading">Add member</legend>
       <SuggestInput id={`${id}-username`} label="Username" hint="Type at least three letters of the name of someone from your projects, or the exact username or e-mail of anyone else." value={username} required autoFocus onChange={event => typeUsername(event.target.value)}
         suggestions={suggestions.filter(user => user.username !== username).map(user => ({ value: user.username, label: user.display_name }))} onPick={typeUsername} />
       {roles.map(role => <Checkbox key={role} id={`${id}-new-${role}`} label={roleLabels[role]} aria-label={`New member: ${roleLabels[role]}`} checked={newRoles.includes(role)} onChange={event => setNewRoles(event.target.checked ? [...newRoles, role] : newRoles.filter(item => item !== role))} />)}

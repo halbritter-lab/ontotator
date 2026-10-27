@@ -7,6 +7,7 @@ import { GuidelinesSection } from "./GuidelinesSection";
 import { hiddenCount, HiddenAxisValuesField } from "./HiddenAxisValuesField";
 import { LanguagesField } from "./LanguagesField";
 import { MembersSection } from "./MembersSection";
+import { SettingsCard, SettingsHint } from "./SettingsCard";
 import { draftPins, PinFields, ProfileUpload, serializePins, ANNOTATION_SCHEME_LABELS, WorkflowFields, workflowOf, type UploadedProfile } from "./projectFields";
 import { axisOptionLabel } from "../editor/axisLabels";
 export interface ProjectSettingsPageProps {
@@ -31,9 +32,10 @@ export function ProjectSettingsPage(props: ProjectSettingsPageProps): JSX.Elemen
     }).catch((failure: unknown) => { if (active) setError(failure); });
     return () => { active = false; };
   }, [props.projectKey, retry]);
-  return <section><h1>Project settings</h1>
-    {error !== undefined ? <><ErrorNotice error={error} /><Button onClick={() => setRetry(value => value + 1)}>Try again</Button></> : loaded?.key === props.projectKey ?
-      <SettingsEditor key={`${props.projectKey}-${retry}`} {...props} initial={loaded.settings} ontologies={loaded.ontologies} /> : <InlineMessage tone="info">Loading project settings…</InlineMessage>}
+  // The editor names the page "{project} · Settings" once the project is known.
+  return <section>
+    {error !== undefined ? <><h1 className="settings-title">Project settings</h1><ErrorNotice error={error} /><Button onClick={() => setRetry(value => value + 1)}>Try again</Button></> : loaded?.key === props.projectKey ?
+      <SettingsEditor key={`${props.projectKey}-${retry}`} {...props} initial={loaded.settings} ontologies={loaded.ontologies} /> : <><h1 className="settings-title">Project settings</h1><InlineMessage tone="info">Loading project settings…</InlineMessage></>}
   </section>;
 }
 
@@ -197,100 +199,111 @@ function SettingsEditor({ initial, ontologies, projectKey, currentUser, onSaved,
   switch (section) {
     case "people": content = <div ref={bindSection} tabIndex={-1} className="settings-section"><MembersSection projectKey={projectKey} isSystemAdmin={currentUser.is_system_admin} /></div>; break;
     case "workflow": content = <form ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Workflow" onSubmit={event => submit(event, "Workflow")}>
-      <fieldset disabled={busy !== null}><legend>Workflow</legend>
+      <fieldset disabled={busy !== null}><legend className="visually-hidden">Workflow</legend>
         <WorkflowFields projectKey={projectKey} value={workflow} saved={workflowOf(model)} disabled={busy !== null} onChange={value => { setWorkflow(value); setSaved(null); }} />
         {saveBar("Workflow")}
       </fieldset>
     </form>; break;
     case "annotation": content = <form ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Annotation" onSubmit={event => submit(event, "Annotation")}>
-      <fieldset disabled={busy !== null}><legend>Annotation</legend>
-        <h2 className="settings-subheading">When submitting</h2>
-        <p className="field-hint">Applies to every submission from now on, in annotation and in consolidation. Submitted work is unchanged. Text evidence the task profile requires is still required.</p>
-        <Select id="project-rule-spanless" label="Findings that point to no text passage"
-          value={!annotation.allow_spanless_findings ? "prohibited" : annotation.require_spanless_note ? "required" : "optional"}
-          onChange={event => { const mode = event.target.value; editAnnotation({ allow_spanless_findings: mode !== "prohibited", require_spanless_note: mode === "prohibited" ? annotation.require_spanless_note : mode === "required" }); }}>
-          <option value="prohibited">Not allowed</option>
-          <option value="required">Allowed with a reason</option>
-          <option value="optional">Allowed, reason optional</option>
-        </Select>
-        <Checkbox id="project-rule-chosen" label="Annotators must confirm every value before submitting" hint="Off: prefilled values that were not confirmed are submitted marked as prefilled, after a warning." checked={annotation.require_chosen_axes} onChange={event => editAnnotation({ require_chosen_axes: event.target.checked })} />
-        <Checkbox id="project-rule-contiguous" label="A finding must be one continuous passage" checked={annotation.contiguous_mentions_only} onChange={event => editAnnotation({ contiguous_mentions_only: event.target.checked })} />
-        <h2 className="settings-subheading">Prefilled values</h2>
-        <p className="field-hint">New findings start with these values, marked as not confirmed until the annotator confirms or changes them. Existing findings, proposals and carried findings keep their values.</p>
-        {prefillGroups.map(({ layer, type, heading }) => <div key={`${layer.layer_id}/${type.type_id}`} role="group" aria-label={heading} className="settings-prefill-group">
-          {prefillGroups.length > 1 && <h3 className="settings-subheading">{heading}</h3>}
-          {(type.axes ?? []).map(axis => {
-            const defaults = annotation.creation_defaults;
-            const current = defaults[layer.layer_id]?.[type.type_id]?.[axis.id] ?? "";
-            const options = axis.options.filter(option => !(annotation.hidden_axis_values[layer.layer_id]?.[axis.id] ?? []).includes(option));
-            return <Select key={axis.id} id={`default-${layer.layer_id}-${type.type_id}-${axis.id}`} label={axis.label} value={current}
-              onChange={event => {
-                const next = structuredClone(defaults);
-                const values = { ...next[layer.layer_id]?.[type.type_id] };
-                if (event.target.value) values[axis.id] = event.target.value; else delete values[axis.id];
-                next[layer.layer_id] = { ...next[layer.layer_id], [type.type_id]: values };
-                if (!Object.keys(values).length) delete next[layer.layer_id][type.type_id];
-                if (!Object.keys(next[layer.layer_id]).length) delete next[layer.layer_id];
-                editAnnotation({ creation_defaults: next });
-              }}>
-              <option value="">No prefill</option>
-              {current && !options.includes(current) && <option value={current} disabled>{axisOptionLabel(current)} (hidden)</option>}
-              {options.map(option => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
-            </Select>;
-          })}
-        </div>)}
-        {!prefillGroups.length && <p>This profile has no values to prefill.</p>}
-        <details className="settings-secondary-rules"><summary>Values annotators can choose{hidden ? ` (${hidden} hidden)` : ""}</summary>
-          <p className="field-hint">Switch a value off to hide it from the editor's choices. Existing findings keep their values; a finding with a hidden value must be changed before it is saved again.</p>
-          <HiddenAxisValuesField profile={model.profile} axisDefaults={model.axis_defaults} value={annotation.hidden_axis_values} onChange={hidden_axis_values => editAnnotation({ hidden_axis_values })} disabled={busy !== null} />
-        </details>
+      <fieldset disabled={busy !== null}><legend className="visually-hidden">Annotation</legend>
+        <SettingsCard title="When submitting" hint="Applies to every submission from now on."
+          why="In annotation and in consolidation. Submitted work is unchanged. Text evidence the task profile requires is still required.">
+          <Select id="project-rule-spanless" label="Findings that point to no text passage"
+            value={!annotation.allow_spanless_findings ? "prohibited" : annotation.require_spanless_note ? "required" : "optional"}
+            onChange={event => { const mode = event.target.value; editAnnotation({ allow_spanless_findings: mode !== "prohibited", require_spanless_note: mode === "prohibited" ? annotation.require_spanless_note : mode === "required" }); }}>
+            <option value="prohibited">Not allowed</option>
+            <option value="required">Allowed with a reason</option>
+            <option value="optional">Allowed, reason optional</option>
+          </Select>
+          <Checkbox id="project-rule-chosen" label="Annotators must confirm every value before submitting" hint="Off: unconfirmed prefilled values are submitted marked as prefilled, after a warning." checked={annotation.require_chosen_axes} onChange={event => editAnnotation({ require_chosen_axes: event.target.checked })} />
+          <Checkbox id="project-rule-contiguous" label="A finding must be one continuous passage" checked={annotation.contiguous_mentions_only} onChange={event => editAnnotation({ contiguous_mentions_only: event.target.checked })} />
+        </SettingsCard>
+        <SettingsCard title="Prefilled values" hint="New findings start with these values, marked as not confirmed."
+          why="The mark stays until the annotator confirms or changes the value. Existing findings, proposals and carried findings keep their values.">
+          {prefillGroups.map(({ layer, type, heading }) => <div key={`${layer.layer_id}/${type.type_id}`} role="group" aria-label={heading} className="settings-prefill-group">
+            {prefillGroups.length > 1 && <h3 className="settings-subheading">{heading}</h3>}
+            {(type.axes ?? []).map(axis => {
+              const defaults = annotation.creation_defaults;
+              const current = defaults[layer.layer_id]?.[type.type_id]?.[axis.id] ?? "";
+              const options = axis.options.filter(option => !(annotation.hidden_axis_values[layer.layer_id]?.[axis.id] ?? []).includes(option));
+              return <Select key={axis.id} id={`default-${layer.layer_id}-${type.type_id}-${axis.id}`} label={axis.label} value={current}
+                onChange={event => {
+                  const next = structuredClone(defaults);
+                  const values = { ...next[layer.layer_id]?.[type.type_id] };
+                  if (event.target.value) values[axis.id] = event.target.value; else delete values[axis.id];
+                  next[layer.layer_id] = { ...next[layer.layer_id], [type.type_id]: values };
+                  if (!Object.keys(values).length) delete next[layer.layer_id][type.type_id];
+                  if (!Object.keys(next[layer.layer_id]).length) delete next[layer.layer_id];
+                  editAnnotation({ creation_defaults: next });
+                }}>
+                <option value="">No prefill</option>
+                {current && !options.includes(current) && <option value={current} disabled>{axisOptionLabel(current)} (hidden)</option>}
+                {options.map(option => <option key={option} value={option}>{axisOptionLabel(option)}</option>)}
+              </Select>;
+            })}
+          </div>)}
+          {!prefillGroups.length && <p className="settings-card-text">This profile has no values to prefill.</p>}
+        </SettingsCard>
+        <section className="settings-card" aria-label="Values annotators can choose">
+          <details className="settings-secondary-rules"><summary className="settings-card-title">Values annotators can choose{hidden ? ` (${hidden} hidden)` : ""}</summary>
+            <SettingsHint why="Existing findings keep their values; a finding with a hidden value must be changed before it is saved again.">Switch a value off to hide it from the editor's choices.</SettingsHint>
+            <HiddenAxisValuesField profile={model.profile} axisDefaults={model.axis_defaults} value={annotation.hidden_axis_values} onChange={hidden_axis_values => editAnnotation({ hidden_axis_values })} disabled={busy !== null} />
+          </details>
+        </section>
         {saveBar("Annotation")}
       </fieldset>
     </form>; break;
     case "guidelines": content = <section ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Guidelines"><GuidelinesSection projectKey={projectKey} /></section>; break;
     case "general": content = <form ref={bindSection} tabIndex={-1} className="settings-section" aria-label="General" onSubmit={event => submit(event, "General")}>
-      <fieldset disabled={busy !== null}><legend>General</legend>
-        <TextInput id="project-name" label="Name" required value={general.name} onChange={event => { setGeneral({ ...general, name: event.target.value }); setSaved(null); }} />
-        <Textarea id="project-description" label="Description" hint="Shown under the project name on Projects." value={general.description} onChange={event => { setGeneral({ ...general, description: event.target.value }); setSaved(null); }} />
-        <LanguagesField id="project-languages" label="Languages of the texts" hint="An import refuses texts in other languages. Empty: any language." value={general.languages} onChange={languages => { setGeneral({ ...general, languages }); setSaved(null); }} disabled={busy !== null} />
+      <fieldset disabled={busy !== null}><legend className="visually-hidden">General</legend>
+        <SettingsCard title="Name and description">
+          <TextInput id="project-name" label="Name" required value={general.name} onChange={event => { setGeneral({ ...general, name: event.target.value }); setSaved(null); }} />
+          <Textarea id="project-description" label="Description" hint="Shown under the project name on Projects." value={general.description} onChange={event => { setGeneral({ ...general, description: event.target.value }); setSaved(null); }} />
+        </SettingsCard>
+        <SettingsCard title="Languages" hint="Empty: any language." why="An import refuses texts in other languages.">
+          <LanguagesField id="project-languages" label="Languages of the texts" value={general.languages} onChange={languages => { setGeneral({ ...general, languages }); setSaved(null); }} disabled={busy !== null} />
+        </SettingsCard>
         {saveBar("General")}
       </fieldset>
     </form>; break;
-    case "ontology": content = <section ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Ontology"><h2>Ontology</h2>
-      {model.locked ? <>
+    case "ontology": content = <section ref={bindSection} tabIndex={-1} className="settings-section" aria-label="Ontology">
+      {model.locked ? <SettingsCard title="Ontology" hint="Fixed once work has been submitted."
+        why="The ontology cannot change once work has been submitted. Start a new project for another ontology version.">
         {/* D8: a plain summary; the technical details collapsed. */}
-        <ul aria-label="Ontologies">{model.pins.map(pin => <li key={pin.ontology_id}>
+        <ul aria-label="Ontologies" className="settings-card-list">{model.pins.map(pin => <li key={pin.ontology_id}>
           {model.profile.ontologies.find(item => item.ontology_id === pin.ontology_id)?.label ?? pin.ontology_id} ({pin.ontology_id}), release {pin.release}
         </li>)}</ul>
-        <p>Layers: {model.profile.layers.map(layer => layer.label).join(", ")}.</p>
-        <InlineMessage tone="info">The ontology cannot change once work has been submitted. Start a new project for another ontology version.</InlineMessage>
+        <p className="settings-card-text">Layers: {model.profile.layers.map(layer => layer.label).join(", ")}.</p>
         <details className="settings-advanced"><summary>Technical details</summary>
           <ul>{model.pins.map(pin => <li key={pin.ontology_id}>{pin.ontology_id} {pin.release}: file checksum (SHA-256) <code>{pin.sha256}</code>; branches: {(pin.allowed_roots ?? []).join(", ") || "every term"}; annotation scheme: {ANNOTATION_SCHEME_LABELS[pin.t1_profile] ?? pin.t1_profile}</li>)}</ul>
           <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>
         </details>
-      </> : <>
-        <form aria-label="Ontology version" onSubmit={event => submit(event, "Pins")}>
-          <fieldset disabled={busy !== null}><legend>Ontology version</legend>
+      </SettingsCard> : <>
+        <form className="settings-card" aria-label="Ontology version" onSubmit={event => submit(event, "Pins")}>
+          <fieldset disabled={busy !== null}><legend className="settings-card-title">Ontology version</legend>
             <PinFields plain ids={ids} ontologies={ontologies} value={pins} onChange={value => { setPins(value); setSaved(null); }} disabled={busy !== null} />
+            <SettingsHint>Can change until work has been submitted.</SettingsHint>
             {saveBar("Pins")}
           </fieldset>
         </form>
-        <details className="settings-advanced"><summary>Advanced: task profile</summary>
-          <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>
-          <form aria-label="Task profile" onSubmit={event => { event.preventDefault(); if (uploaded && event.currentTarget.reportValidity()) void save("Profile", work.Profile); }}>
-            <fieldset disabled={busy !== null}><legend>Task profile</legend>
-              <p className="field-hint">The layers, finding types and values annotators work with. Replace it with a profile file (JSON) only before work starts.</p>
-              <ProfileUpload key={profileGeneration} label="Profile file (JSON)" onChange={setUploaded} disabled={busy !== null} />
-              {saveBar("Profile")}
-            </fieldset>
-          </form>
-        </details>
+        <section className="settings-card" aria-label="Task profile">
+          <details className="settings-advanced"><summary className="settings-card-title">Advanced: task profile</summary>
+            <ul aria-label="Current profile layers">{model.profile.layers.map(layer => <li key={layer.layer_id}>{layer.label} ({layer.layer_id})</li>)}</ul>
+            <form aria-label="Task profile" onSubmit={event => { event.preventDefault(); if (uploaded && event.currentTarget.reportValidity()) void save("Profile", work.Profile); }}>
+              <fieldset disabled={busy !== null}><legend className="visually-hidden">Task profile</legend>
+                <SettingsHint why="The layers, finding types and values annotators work with.">Replace it with a profile file (JSON) only before work starts.</SettingsHint>
+                <ProfileUpload key={profileGeneration} label="Profile file (JSON)" onChange={setUploaded} disabled={busy !== null} />
+                {saveBar("Profile")}
+              </fieldset>
+            </form>
+          </details>
+        </section>
       </>}
     </section>; break;
   }
 
   return <div className="project-settings-sections">
-    <p>{model.name} ({model.project_key})</p>
+    <h1 className="settings-title">{model.name} · Settings</h1>
     <nav aria-label="Settings sections" className="settings-tabs">{SETTINGS_SECTIONS.map(id => {
       const destination = settingsRoute(projectKey, id);
       return <a key={id} href={routeHref(destination)} className="settings-tab" aria-current={id === section ? "page" : undefined}
