@@ -493,6 +493,20 @@ def test_reviewer_with_an_editable_round_is_refused(env):
     assert receipts(env) == 1
 
 
+def test_a_second_person_cannot_consolidate_a_text_already_in_consolidation(env):
+    first = env.lead.post(URL, json=body(env, reviewer="adj"))
+    assert first.status_code == 200, first.text
+    second = env.lead.post(URL, json=body(env, request_id="start-2"))
+    assert second.status_code == 409, second.text
+    assert second.json() == {
+        "code": "CONSOLIDATION_ACTIVE",
+        "details": {"username": "adj"},
+    }
+    assert len(consolidation_rounds(env)) == 1
+    assert review_assignments(env, "leader") == []
+    assert "adjudicator" not in roles(env, "leader")
+
+
 def test_repeated_sources_are_refused(env):
     response = env.lead.post(URL, json=body(env, source_submission_ids=[FIRST, FIRST]))
     assert response.status_code == 422, response.text

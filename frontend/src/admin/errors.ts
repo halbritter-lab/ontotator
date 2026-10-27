@@ -56,6 +56,7 @@ export const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   REPORT_REASON_REQUIRED: "Explain the problem or the action before continuing.",
   REPORT_SUBMISSION_INVALID: "Choose a submission from this exact task and round.",
   RESTART_AGREEMENT_REQUIRED: "Ask the project lead to agree to a clean restart through the problem report.",
+  CONSOLIDATION_ACTIVE: "Someone else is already consolidating this text. Open their consolidation from the text card.",
   ROUND_ACTIVE: "This task already has unfinished work. Complete it or agree on a clean restart first.",
   ROUND_ALREADY_EXISTS: "This task already has a work round. Open it from the round history.",
   ROUND_INPUTS_INCOMPLETE: "Check every carried finding before submitting. Complete it or dismiss it with a reason.",

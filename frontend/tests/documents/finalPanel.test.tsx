@@ -9,7 +9,7 @@ import { notifyFinalSelectionChanged } from "../../src/variants/finalSelectionSt
 import { refKey } from "../../src/variants/versionState";
 import { guidelineListing, guidelineSummary } from "../projectFixtures";
 import { assignment } from "../assignmentFixtures";
-import { agreement, bar, final, finalPanel, group, item, page, panelSubmission, round, rowKey, stepOf, translationReview, version } from "./fixtures";
+import { agreement, bar, final, finalPanel, group, item, page, panelSubmission, round, rowKey, stageCell, stages, stepOf, translationReview, version } from "./fixtures";
 import { acceptPanel, ana, anaSubmission, chooseRow, comparePanel, luc, panelRowSubmissions, reviewRow, tom, tomSubmission } from "./panelFixtures";
 
 const OWN_REASON = "In this project the consolidator of a text may not be one of its annotators. Another lead must choose this result.";
@@ -149,6 +149,14 @@ describe("choose", () => {
     const consolidate = screen.getByRole("button", { name: "Consolidate…" });
     expect(consolidate.classList.contains("btn-primary")).toBe(true);
     expect(document.getElementById(consolidate.getAttribute("aria-describedby")!)!.textContent).toBe("Resolve the 2 differences together");
+  });
+
+  it("offers no Consolidate… while someone consolidates the text (R-1)", async () => {
+    panels[rowKey("case-109", "de")] = comparePanel("case-109", "de");
+    const running = stages({ annotation: stageCell("consolidating", "running", { people: [{ pseudonym: "ann-0007", display_name: "Carla Consolidator", is_me: false }] }) });
+    renderPanel("case-109:de", page([group("case-109", [chooseRow("case-109", "de", { stages: running })])]));
+    expect(await screen.findByText("2 annotations submitted on v1, 6 findings in total")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Consolidate…" })).toBeNull();
   });
 
   it("table Submission, Findings, Only here; other version shows on v1, not compared and stays selectable", async () => {

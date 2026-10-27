@@ -470,6 +470,8 @@ function Consolidate(props: ContentProps & { listed: FinalPanelSubmissionView[];
     // Only the launcher's open state counts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+  // R-1: one consolidation per text at a time (the server refuses a second one).
+  if (row.stages?.annotation.state === "consolidating") return null;
   const documents = consolidationDocuments(listed);
   const compared = listed.find(item => item.comparable)?.document_id;
   const documentId = compared && documents.includes(compared) ? compared : documents[0];

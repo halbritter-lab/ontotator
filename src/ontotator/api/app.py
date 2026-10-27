@@ -421,6 +421,7 @@ def create_app(config: AppConfig | None = None, *, expose_docs: bool = True) -> 
                     "ROUND_INPUT_CARRIED_FINDING_PRESENT": 409,
                     "ROUND_NOT_EDITABLE": 409,
                     "ROUND_ACTIVE": 409,
+                    "CONSOLIDATION_ACTIVE": 409,
                     "ROUND_ALREADY_EXISTS": 409,
                     "TASK_HELD": 409,
                     "TEXT_CHANGE_CHANGED": 409,

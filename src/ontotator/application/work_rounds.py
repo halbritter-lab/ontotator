@@ -467,6 +467,31 @@ class WorkRoundService:
             raise DomainError(
                 "ROUND_ACTIVE", "Finish or explicitly restart existing work first"
             )
+        if kind == "consolidation":
+            # R-1: one consolidation per text at a time, whoever does it.
+            other = conn.execute(
+                select(UserRow.username)
+                .select_from(WorkRoundRow)
+                .join(
+                    WorkRoundStateRow,
+                    WorkRoundStateRow.round_id == WorkRoundRow.round_id,
+                )
+                .join(
+                    AssignmentRow,
+                    AssignmentRow.active_round_id == WorkRoundRow.round_id,
+                )
+                .join(UserRow, UserRow.id == AssignmentRow.user_id)
+                .where(
+                    WorkRoundRow.project_id == pid,
+                    WorkRoundRow.document_id == assignment["document_id"],
+                    WorkRoundRow.kind == "consolidation",
+                    WorkRoundStateRow.state == "editable",
+                    AssignmentRow.revoked_at.is_(None),
+                    AssignmentRow.id != assignment_id,
+                )
+            ).scalar()
+            if other is not None:
+                raise DomainError("CONSOLIDATION_ACTIVE", {"username": other})
         require_task_writable(conn, assignment_id)
         if kind == "clean_restart" and not lead:
             raise AccessDenied("RESTART_AGREEMENT_REQUIRED")

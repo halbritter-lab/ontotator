@@ -8,6 +8,7 @@ from ontotator.assignments.service import AssignmentService
 from ontotator.auth.audit import Actor
 from ontotator.authz.policy import Access
 from ontotator.storage.tables import ProjectMembershipRow, UserLanguageRow, UserRow
+from ontotator.storage.workflow_tables import WorkRoundStateRow
 
 
 @pytest.fixture
@@ -186,9 +187,15 @@ def test_consolidation_rechecks_actual_contributor_and_profile(rounds, changed):
     from ontotator.domain.errors import DomainError
     from ontotator.storage.tables import ProjectRow
 
-    repo, _, _, _, sources, lead, actor = create_consolidation_fixture(rounds)
+    repo, _, _, first, sources, lead, actor = create_consolidation_fixture(rounds)
     with repo.db.transaction() as conn:
         pid = repo._require_project(conn, "pkg-1")
+        # Only one consolidation per text may be editable (R-1).
+        conn.execute(
+            update(WorkRoundStateRow)
+            .where(WorkRoundStateRow.round_id == first.round_id)
+            .values(state="submitted")
+        )
         conn.execute(
             update(ProjectRow)
             .where(ProjectRow.id == pid)
