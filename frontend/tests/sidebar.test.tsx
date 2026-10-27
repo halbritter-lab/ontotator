@@ -177,7 +177,10 @@ describe("continuous sidebar", () => {
     view.draft.decisions = [{ decision_id: "d1", target: { annotation_id: "tool-prop", version: "tool-prop-v1" }, outcome: "confirmed", reviewer_id: "dr-a" }] as never;
     const { container } = renderCase(view);
     expect(container.querySelector(".sidebar-header--actions")!.textContent).toContain("Your own findings (1)");
-    expect(container.querySelector("[data-result-count]")!.textContent).toBe("In the result: 2 (1 proposal, 1 own finding)");
+    expect(container.querySelector("[data-result-count]")!.textContent).toBe("1 confirmed proposal, 1 own finding");
+    cleanup();
+    // Nothing in the result: no line of zeros (#26).
+    expect(renderCase(reviewView([])).container.querySelector("[data-result-count]")).toBeNull();
   });
 
   it("scrolls the selected entry into view", () => {

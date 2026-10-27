@@ -3635,14 +3635,16 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               </div>
               {isReviewLike(view.key.mode) && (() => {
                 const proposals = completionResults.filter(s => reviewTargets.some(t => t.annotation_id === s.annotation.annotation_id && t.version === s.version)).length;
-                return <p className="field-hint" data-result-count>
-                  In the result: {completionResults.length} ({plural(proposals, "proposal")}, {plural(completionResults.length - proposals, "own finding")})
-                </p>;
+                const own = completionResults.length - proposals;
+                // #35/#26: only the non-zero parts; nothing in the result shows no line.
+                const parts = [...(proposals ? [plural(proposals, "confirmed proposal")] : []), ...(own ? [plural(own, "own finding")] : [])];
+                return parts.length > 0 && <p className="field-hint" data-result-count>{parts.join(", ")}</p>;
               })()}
               {spanlessBlockedReason && <p className="field-hint">{spanlessBlockedReason}</p>}
               {legacySubmissionHint && <p className="field-hint">{legacySubmissionHint}</p>}
               {carriedActive && <CarriedProgress text={carried.progress} showNext={carried.openKeys.size > 0} onNext={() => { goToUnchecked(1); }} />}
-              {readOnly && carriedListOrder.length === 0 && <p className="field-hint">{isReviewLike(view.key.mode) ? "No own findings." : "No findings in this text."}</p>}
+              {/* In review the header's "(0)" says it already. */}
+              {readOnly && carriedListOrder.length === 0 && !isReviewLike(view.key.mode) && <p className="field-hint">No findings in this text.</p>}
               <ul className="doc-list">
                 {carriedListOrder.map(listKey => {
                   if (listKey.startsWith("input:")) {
