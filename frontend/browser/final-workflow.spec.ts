@@ -140,7 +140,12 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await view.getByRole('button', { name: 'Submit consolidation', exact: true }).click();
     const summary = view.getByRole('dialog', { name: 'Submit consolidation?' });
     await summary.getByRole('button', { name: 'Submit', exact: true }).click();
-    await expect(view.getByText('Consolidation submitted. The lead then accepts the result.', { exact: true })).toBeVisible();
+    // Values filled in by default are listed in the dialog first (AXIS_CONFIRMATION_WARNING); the second click acknowledges them.
+    const withWarnings = summary.getByRole('button', { name: /^Submit with \d+ warnings?$/ });
+    const submitted = view.getByText('Consolidation submitted. The lead then accepts the result.', { exact: true });
+    await expect(withWarnings.or(submitted)).toBeVisible();
+    if (await withWarnings.isVisible()) await withWarnings.click();
+    await expect(submitted).toBeVisible();
     const consolidated = await value<Opened>(reviewer.page, `/api/v1/assignments/${consolidation.assignment_id}/open`, 'POST');
     const finalId = consolidated.assignment.last_submission_id!;
     await page.reload(); await documentsReady(page);

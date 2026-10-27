@@ -298,7 +298,7 @@ describe("ConsolidationScreen", () => {
     expect(within(dialog).getByText("More than one finding with the same term: Fatigue.")).toBeTruthy();
   });
 
-  it("submits after the one summary step, acknowledging an axis warning itself, and offers the next task", async () => {
+  it("submits after the summary, shows an axis warning in it, acknowledges it on the second click and offers the next task", async () => {
     load(decidedView());
     const warning = new ApiError(409, "Check values", "AXIS_CONFIRMATION_WARNING", {
       acknowledgement: { draft_revision: 3, policy_revision: 1, warning_digest: "abc" }, warnings: [{ annotation_id: "cons-1", detail: { axis: "assertion" } }],
@@ -314,8 +314,12 @@ describe("ConsolidationScreen", () => {
     expect(within(dialog).getByText("8 groups, 7 findings, 1 not in result")).toBeTruthy();
     expect(within(dialog).queryByText(/same term/)).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
-    await screen.findByText("Consolidation submitted. The lead then accepts the result.");
+    // Nothing is acknowledged silently: the warning is listed in the same dialog first.
+    expect(await within(dialog).findByText("1 finding has values filled in by default, not chosen.")).toBeTruthy();
+    expect(submit).toHaveBeenCalledTimes(1);
     expect(submit.mock.calls[0][1].payload).toEqual({ command: "submit_workspace", document_checked: true });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 1 warning" }));
+    await screen.findByText("Consolidation submitted. The lead then accepts the result.");
     expect(submit.mock.calls[1][1].payload).toEqual({ command: "submit_workspace", document_checked: true,
       warning_acknowledgement: { draft_revision: 3, policy_revision: 1, warning_digest: "abc" } });
     fireEvent.click(await screen.findByRole("button", { name: "Next task: case-108 de" }));
@@ -551,17 +555,26 @@ describe("ConsolidationScreen, modifiers", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /^schwere to decide/ })).toBeTruthy());
   });
 
-  it("a warning that changes between the two submit calls is shown, nothing is submitted", async () => {
+  it("the summary lists modifier-term, modifier and value warnings in plain words before acknowledging (#57, D-f)", async () => {
     load(decidedView());
-    const warning = (digest: string) => new ApiError(409, "Check values", "AXIS_CONFIRMATION_WARNING", {
-      acknowledgement: { draft_revision: 3, policy_revision: 1, warning_digest: digest }, warnings: [{ annotation_id: "cons-1", rule: "cohort_modifier" }],
+    const warning = new ApiError(409, "Check values", "AXIS_CONFIRMATION_WARNING", {
+      acknowledgement: { draft_revision: 3, policy_revision: 1, warning_digest: "abc" }, warnings: [
+        { annotation_id: "cons-1", rule: "cohort_modifier", detail: { term_id: "HP:0040282" } },
+        { annotation_id: "cons-1", rule: "exclusive_modifier_class", detail: { class: "severity" } },
+        { annotation_id: "cons-2", rule: "cohort_modifier", detail: { term_id: "HP:0040282" } },
+        { annotation_id: "cons-3", rule: "modifier_as_finding", detail: { term_id: "HP:0012828" } },
+      ],
     });
-    vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(warning("abc")).mockRejectedValueOnce(warning("def"));
+    const submit = vi.spyOn(api, "submitWorkspace").mockRejectedValueOnce(warning).mockResolvedValue({ submission_id: "s-1" } as never);
     await renderScreen({ assignmentId: 42 });
     fireEvent.click(screen.getByRole("button", { name: "Submit consolidation" }));
     const dialog = screen.getByRole("dialog", { name: "Submit consolidation?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Submit" }));
-    expect(await within(dialog).findByText("The consolidation changed while submitting. Submit again.")).toBeTruthy();
-    expect(screen.queryByText(/^Consolidation submitted/)).toBeNull();
+    expect(await within(dialog).findByText("1 finding uses a modifier term (such as Severe) as the finding itself.")).toBeTruthy();
+    expect(within(dialog).getByText("2 findings have a modifier warning: a cohort term, or two of one kind.")).toBeTruthy();
+    expect(within(dialog).queryByText(/filled in by default/)).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit with 2 warnings" }));
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(2));
+    expect(submit.mock.calls[1][1].payload).toMatchObject({ warning_acknowledgement: { warning_digest: "abc" } });
   });
 });
