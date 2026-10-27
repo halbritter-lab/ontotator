@@ -67,7 +67,7 @@ const row = (stage: Stage, key: string, label: string, warning?: boolean): Stage
 /** R-13: annotation "done" is a text with at least one submitted annotation; the per-text limit is no target. */
 export function stageCards(stages: ProgressStagesView): StageCard[] {
   const review = stages.translation_review, annotation = stages.annotation, final = stages.final;
-  return [
+  const cards: StageCard[] = [
     {
       id: "translation_review", title: "Translation review",
       scope: `${countLabel(review.total, "translation")} selected for review`,
@@ -105,4 +105,6 @@ export function stageCards(stages: ProgressStagesView): StageCard[] {
       footer: `(${final.counts.final ?? 0} final, ${final.counts.would_be_omitted ?? 0} would be omitted)`,
     },
   ];
+  // No translation selected for review (e.g. a project without translations): no all-zero card (#47 A-23).
+  return cards.filter(card => card.id !== "translation_review" || card.total > 0);
 }

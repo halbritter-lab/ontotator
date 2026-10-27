@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { components } from "../api/generated";
-import { Button, Checkbox, Dialog, InlineMessage } from "../ui";
+import { Button, Checkbox, Dialog, InlineMessage, Toolbar } from "../ui";
 import { formatDateTime } from "../app/labels";
 
 export type CodeOnceDialogProps = components["schemas"]["CodeResponse"] & {
@@ -62,10 +62,12 @@ function CodeSession(props: CodeOnceDialogProps): JSX.Element {
   return <Dialog open title={`${kind === "setup" ? "Setup code" : "Reset code"}${username ? ` for ${username}` : ""}`} size="sm" onClose={acknowledged ? close : undefined} closeOnBackdrop
     footer={<Button variant="primary" disabled={!acknowledged} onClick={close}>Close</Button>}>
     <p>This code is shown only once. Hand it over in person or by a secure channel.</p>
-    <p><code>{code}</code></p>
+    <p className="code-once-value"><code>{code}</code></p>
     <p>Expires (local time): <time dateTime={expires_at}>{formatDateTime(expires_at)}</time></p>
-    <Button loading={state("code") === "pending"} onClick={() => { void copyValue("code"); }}>{state("code") === "copied" ? "Copied" : "Copy"}</Button>
-    <Button loading={state("text") === "pending"} onClick={() => { void copyValue("text"); }}>{state("text") === "copied" ? "Hand-over text copied" : "Copy hand-over text"}</Button>
+    <Toolbar label="Copy">
+      <Button loading={state("code") === "pending"} onClick={() => { void copyValue("code"); }}>{state("code") === "copied" ? "Copied" : "Copy"}</Button>
+      <Button loading={state("text") === "pending"} onClick={() => { void copyValue("text"); }}>{state("text") === "copied" ? "Hand-over text copied" : "Copy hand-over text"}</Button>
+    </Toolbar>
     {copy?.state === "copied" && <InlineMessage tone="success">Copied to clipboard.</InlineMessage>}
     {copy?.state === "failed" && <InlineMessage tone="error">Could not copy to the clipboard. Select and copy the code manually.</InlineMessage>}
     <details><summary>Hand-over text</summary><pre className="handover-text">{text}</pre></details>

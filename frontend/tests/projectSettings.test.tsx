@@ -51,6 +51,15 @@ describe("project creation", () => {
     expect(navigate).toHaveBeenCalledWith({ name: "projectSettings", key: settings.project_key, section: "people" });
   });
 
+  it("preselects the only loaded version of an ontology; several stay a choice (#47 A-18)", async () => {
+    vi.mocked(api.listOntologies).mockResolvedValue([ontologies[0]!]);
+    render(<ProjectNewPage onNavigate={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText(/^Built-in template/), { target: { value: "template" } });
+    expect((screen.getByLabelText(/^Ontology file for HP/) as HTMLSelectElement).value).toBe(ontologies[0]!.sha256);
+    // The key pattern compiles under the `v` flag browsers use for `pattern` (an unescaped "-" in a class does not).
+    expect(() => new RegExp((screen.getByLabelText(/^Project key/) as HTMLInputElement).pattern, "v")).not.toThrow();
+  });
+
   it("retains the uploaded JSON object while previewing actual layer labels", async () => {
     render(<ProjectNewPage onNavigate={vi.fn()} />);
     fireEvent.change(await screen.findByLabelText("Profile source"), { target: { value: "upload" } });

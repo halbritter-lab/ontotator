@@ -5,7 +5,7 @@ import { Button, InlineMessage, Select, Textarea, TextInput } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
 import { fieldError } from "./errors";
 import { LanguagesField } from "./LanguagesField";
-import { PinFields, ProfileUpload, serializePins, type PinDraft, type UploadedProfile } from "./projectFields";
+import { PinFields, preselectOnlyVersions, ProfileUpload, serializePins, type PinDraft, type UploadedProfile } from "./projectFields";
 
 export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => void }): JSX.Element {
   const [metadata, setMetadata] = useState<{ templates: TemplateInfo[]; ontologies: OntologyInfo[] } | null>(null);
@@ -32,6 +32,8 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
     return () => { lifetime.current++; };
   }, [retry]);
   const ids = source === "template" ? metadata?.templates.find(item => item.id === template)?.required_ontology_ids ?? [] : uploaded?.ids ?? [];
+  // An ontology with one loaded version starts with it chosen (#47 A-18).
+  const shownPins = metadata ? preselectOnlyVersions(ids, metadata.ontologies, pins) : pins;
   const keyError = fieldError(error, ["PROJECT_EXISTS", "PROJECT_KEY_INVALID"]);
   const keyInput = useRef<HTMLInputElement>(null);
   // A refusal about the key moves focus to the key field, where its message is shown.
@@ -41,7 +43,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
     const epoch = lifetime.current;
     writing.current = true; setBusy(true); setError(undefined);
     try {
-      const result = await api.createProject({ key, name, description: description.trim() ? description : null, languages, pins: serializePins(ids, pins), ...(source === "template" ? { template } : { profile: uploaded!.profile }) });
+      const result = await api.createProject({ key, name, description: description.trim() ? description : null, languages, pins: serializePins(ids, shownPins), ...(source === "template" ? { template } : { profile: uploaded!.profile }) });
       // A new project needs its people next (B6-1: the bare address opens General).
       if (epoch === lifetime.current) onNavigate({ name: "projectSettings", key: result.project_key, section: "people" });
     } catch (failure: unknown) { if (epoch === lifetime.current) setError(failure); }
@@ -52,7 +54,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
     {loadError !== undefined && <><ErrorNotice error={loadError} /><Button onClick={() => setRetry(value => value + 1)}>Try again</Button></>}
     {metadata && <form onSubmit={event => { event.preventDefault(); if (event.currentTarget.reportValidity()) void create(); }}>
       <fieldset disabled={busy}><legend>Project</legend>
-        <TextInput ref={keyInput} id="new-project-key" label="Project key" value={key} error={keyError} onChange={event => { setKey(event.target.value); if (keyError) setError(undefined); }} required pattern="[a-z0-9][a-z0-9-]{1,62}" minLength={2} maxLength={63} hint="Use 2–63 lower-case letters, digits or hyphens; start with a letter or digit." />
+        <TextInput ref={keyInput} id="new-project-key" label="Project key" value={key} error={keyError} onChange={event => { setKey(event.target.value); if (keyError) setError(undefined); }} required pattern="[a-z0-9][a-z0-9\-]{1,62}" minLength={2} maxLength={63} hint="Use 2–63 lower-case letters, digits or hyphens; start with a letter or digit." />
         <TextInput id="new-project-name" label="Name" value={name} required onChange={event => setName(event.target.value)} />
         <Textarea id="new-project-description" label="Description" value={description} onChange={event => setDescription(event.target.value)} />
         <LanguagesField id="new-project-languages" label="Document languages" value={languages} onChange={setLanguages} disabled={busy} />
@@ -62,7 +64,7 @@ export function ProjectNewPage({ onNavigate }: { onNavigate: (route: Route) => v
         {source === "template" ? <Select id="new-project-template" label="Built-in template" required value={template} onChange={event => setTemplate(event.target.value)}>
           <option value="">Choose a template</option>{metadata.templates.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
         </Select> : <ProfileUpload onChange={setUploaded} disabled={busy} />}
-        <PinFields ids={ids} ontologies={metadata.ontologies} value={pins} onChange={setPins} disabled={busy} />
+        <PinFields ids={ids} ontologies={metadata.ontologies} value={shownPins} onChange={setPins} disabled={busy} />
         <Button type="submit" variant="primary" loading={busy} disabled={source === "upload" && uploaded === null}>Create project</Button>
       </fieldset>
       {error !== undefined && !keyError && <ErrorNotice error={error} />}

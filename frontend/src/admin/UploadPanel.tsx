@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { api, ApiError, type UploadView, type StatusOverride } from "../api/client";
 import { Button, Checkbox, Field, InlineMessage, Select, TextInput, Toolbar } from "../ui";
 import { ErrorNotice } from "./ErrorNotice";
+import { commonLanguageCodes } from "./LanguagesField";
 import { UploadPreview } from "./UploadPreview";
 import { importLabel, type UploadWorkPlanResult } from "./UploadWorkPlan";
 import { useJob } from "./useJob";
@@ -157,9 +158,15 @@ export function UploadPanel({ projectKey, languages, onImported, canOverrideTran
   return <section aria-label="Upload documents">
     <form onSubmit={event => { event.preventDefault(); void check(); }}>
       <Select id="upload-kind" label="Format" value={kind} disabled={busy} onChange={event => { setKind(event.target.value as "t1" | "text"); changed(); }}><option value="t1">{uploadKindLabels.t1}: .zip or .json</option><option value="text">{uploadKindLabels.text}: .txt or .zip</option></Select>
-      {kind === "text" && (languages.length ? <Select id="upload-language" label="Upload language" required value={language} disabled={busy} onChange={event => { setLanguage(event.target.value); changed(); }}><option value="">Choose language</option>{languages.map(value => <option key={value} value={value}>{value}</option>)}</Select> : <TextInput id="upload-language" label="Upload language" hint="BCP-47 language tag, for example en or de." required value={language} disabled={busy} onChange={event => { setLanguage(event.target.value); changed(); }} />)}
+      {kind === "text" && (languages.length ? <Select id="upload-language" label="Upload language" required value={language} disabled={busy} onChange={event => { setLanguage(event.target.value); changed(); }}><option value="">Choose language</option>{languages.map(value => <option key={value} value={value}>{value}</option>)}</Select> : <>
+        {/* A language code, not a name ("english" is refused, #47 A-22); the suggestions are the common codes of the languages field. */}
+        <TextInput id="upload-language" label="Upload language" hint="BCP-47 language tag, for example en or de." required pattern="[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*"
+          title="A language code such as en, de or pt-BR" list="upload-language-suggestions" autoComplete="off" value={language} disabled={busy} onChange={event => { setLanguage(event.target.value); changed(); }} />
+        <datalist id="upload-language-suggestions">{commonLanguageCodes.map(code => <option key={code} value={code} />)}</datalist>
+      </>)}
       <Field id="upload-files" label="Files" hint={kind === "t1" ? "Documents, plus any annotation proposals from people or tools, in the ontospan (T1) exchange format that other annotation tools read and write. Choose one or more JSON files or ZIP archives. Files are checked before import." : "Choose UTF-8 text files or ZIP archives. Files are checked before import."}><input type="file" multiple required accept={kind === "t1" ? ".json,.zip" : ".txt,.zip"} disabled={busy} onChange={event => { setFiles(Array.from(event.target.files ?? [])); changed(); }} /></Field>
-      {!!files.length && <p>{files.map(file => file.name).join(", ")}</p>}
+      {/* The file input names a single file itself; several files are listed here. */}
+      {files.length > 1 && <p>{files.map(file => file.name).join(", ")}</p>}
       <Button type="submit" loading={busy && operation?.stage !== "commit"} disabled={busy || !files.length}>{busy && operation?.stage !== "commit" ? "Checking …" : "Check"}</Button>
     </form>
     {error !== undefined && !stale && <ErrorNotice error={error} />}

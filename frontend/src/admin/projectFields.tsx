@@ -11,6 +11,20 @@ export const serializePins = (ids: string[], pins: Record<string, PinDraft>): Pr
   return { ontology_id: id, sha256: pin.sha256, allowed_roots: pin.rootsText.split(",").map(root => root.trim()).filter(Boolean), t1_profile: pin.t1_profile };
 });
 
+/** Loaded versions of the ontology `id`. */
+const versionChoices = (id: string, ontologies: OntologyInfo[]): OntologyInfo[] =>
+  ontologies.filter(item => item.status !== "failed" && item.ontology_id.toLowerCase() === id.toLowerCase());
+
+/** `pins` with the only loaded version of an ontology chosen where none is chosen yet (no guess among several). */
+export function preselectOnlyVersions(ids: string[], ontologies: OntologyInfo[], pins: Record<string, PinDraft>): Record<string, PinDraft> {
+  const next = { ...pins };
+  for (const id of ids) {
+    const choices = versionChoices(id, ontologies);
+    if (!next[id]?.sha256 && choices.length === 1) next[id] = { ...(next[id] ?? emptyPin(id)), sha256: choices[0].sha256 };
+  }
+  return next;
+}
+
 /** Checks named in plain words (Settings › Ontology › Advanced, M2 D8). */
 export const T1_PROFILE_LABELS: Readonly<Record<ProjectPin["t1_profile"], string>> = {
   generic: "General checks",
@@ -27,7 +41,7 @@ export function PinFields({ ids, ontologies, value, onChange, disabled, plain = 
   const prefix = useId();
   return <>{ids.map((id, index) => {
     const pin = value[id] ?? emptyPin(id);
-    const choices = ontologies.filter(item => item.status !== "failed" && item.ontology_id.toLowerCase() === id.toLowerCase());
+    const choices = versionChoices(id, ontologies);
     const change = (patch: Partial<PinDraft>) => onChange({ ...value, [id]: { ...pin, ...patch } });
     const roots = <TextInput id={`${prefix}-${index}-roots`} label={plain ? `Limit ${id} terms to these branches` : `Allowed roots for ${id}`}
       hint={plain ? "Term codes separated by commas, for example HP:0000118. Empty: every term." : "Comma-separated CURIEs; leave empty to allow all roots."}

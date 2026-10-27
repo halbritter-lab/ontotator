@@ -15,7 +15,7 @@ export interface LanguagesFieldProps {
   hint?: string;
 }
 
-const commonCodes = ["de", "en", "es", "fr", "it", "nl", "pt", "pl"];
+export const commonLanguageCodes = ["de", "en", "es", "fr", "it", "nl", "pt", "pl"];
 const invalidCode = "Use a two-letter language code, e.g. de.";
 const pendingCode = "Add this language code before saving.";
 
@@ -66,7 +66,7 @@ export function LanguagesField({ id, label, value, onChange, disabled = false, h
         commit();
       }} />
     <datalist id={`${id}-suggestions`}>
-      {commonCodes.map((code) => <option key={code} value={code} />)}
+      {commonLanguageCodes.map((code) => <option key={code} value={code} />)}
     </datalist>
     <div className="toolbar">
       <Button type="button" size="sm" disabled={disabled || !draft.trim()} onClick={commit}>Add language</Button>

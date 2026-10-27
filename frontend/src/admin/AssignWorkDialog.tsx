@@ -79,7 +79,7 @@ function LimitInfo({ projectKey, current, textName, onSaved }: { projectKey: str
       aria-expanded={open} aria-controls={open ? `${id}-limit` : undefined} onClick={() => open ? close() : setOpen(true)} />
     <Popover open={open} anchorRef={anchor} label="Annotators per text" onClose={close} footer={<>
       <Button size="sm" disabled={busy} onClick={close}>Cancel</Button>
-      <Button size="sm" variant="primary" loading={busy} aria-disabled={!valid || undefined} onClick={() => { void save(); }}>Change for all texts</Button>
+      <Button size="sm" variant="primary" loading={busy} aria-disabled={!valid || target === current || undefined} onClick={() => { void save(); }}>Change for all texts</Button>
     </>}>
       <div id={`${id}-limit`} className="assign-limit-popover">
         <h3>{`Up to ${current === 1 ? "1 annotator" : `${current} annotators`} per text`}</h3>
@@ -291,7 +291,8 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   const assign = () => {
     if (reason || busy) return;
     if (mismatched.length && !confirming) { setConfirming(true); return; }
-    void commit(mismatched.length > 0);
+    // While confirming (also after the server asked for it), this is "Assign anyway".
+    void commit(confirming || mismatched.length > 0);
   };
 
   // One roving tab stop for the member radios; arrow keys skip aria-disabled members.
@@ -320,7 +321,6 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
     if (chosenPeople.length && assignments) {
       for (const person of sortMembers(chosenPeople)) summaryLines.push(onePersonSummary({ person: person.person, gets: person.gets, task, language, openBefore: person.open_before, openAfter: person.open_after }));
     }
-    for (const person of mismatched) summaryLines.push(`${personName(person.person)} ${person.reads.includes(language) ? "does not read the source language" : `does not read ${language}`}.`);
     if (!isRow) summaryLines.push(...partlyAssignedLines(fresh.targets, fresh.per_text));
     summaryLines.push(...skippedLines(fresh.skipped, language));
   }
@@ -358,7 +358,7 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
   return <Dialog open title={title} size="md" onClose={closing} footer={<>
     {reason && <span id={reasonId} className="assign-footer-reason">{reason}</span>}
     <Button disabled={busy} onClick={props.onClose}>Cancel</Button>
-    <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{rowMulti
+    <Button variant="primary" loading={busy} aria-disabled={reason ? "true" : undefined} aria-describedby={reason ? reasonId : undefined} onClick={assign}>{confirming ? "Assign anyway" : rowMulti
       ? (picked ? `Assign ${picked === 1 ? "1 person" : `${picked} people`}` : "Assign") : isRow && !usernames.length ? "Assign" : `Assign ${count}`}</Button>
   </>}>
     <div className="assign-dialog">
@@ -459,8 +459,9 @@ function AssignWorkEditor(props: AssignWorkDialogProps): JSX.Element {
       {confirming && <section className="assign-confirm" aria-label="Confirm languages">
         {!mismatched.length && <p>Some chosen people do not read every language this task needs.</p>}
         {mismatched.map(person => <p key={person.username}>{personName(person.person)} {person.reads.includes(language) ? "does not read the source language" : `does not read ${language}`}.</p>)}
+        {/* The footer's primary button turns into "Assign anyway" (one primary action); Back keeps the choice open. */}
         <p>Assign anyway?</p>
-        <span className="assign-confirm-actions"><Button disabled={busy} onClick={() => setConfirming(false)}>Back</Button><Button loading={busy} onClick={() => { void commit(true); }}>Assign anyway</Button></span>
+        <span className="assign-confirm-actions"><Button disabled={busy} onClick={() => setConfirming(false)}>Back</Button></span>
       </section>}
     </div>
     {randomOpen && fresh && task && <DistributionDialog projectKey={props.projectKey} task={task} confirmUnreviewedTranslation={acknowledged}

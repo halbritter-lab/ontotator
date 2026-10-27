@@ -6,7 +6,8 @@
 .assign-context { display: flex; flex-direction: column; gap: var(--space-1); }
 .assign-field { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .assign-field .form-group { margin-bottom: 0; flex: 1 1 16rem; }
-.assign-step { font-weight: var(--weight-strong); padding: var(--space-1) var(--space-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-sunken); }
+/* A static value in plain text: a border would make it look like a button (#47 A-21). */
+.assign-step { font-weight: var(--weight-strong); }
 
 /* Members table: Person, Reads, Open tasks (+ Gets). */
 .assign-members { width: 100%; border-collapse: collapse; font-size: var(--size-sm); }

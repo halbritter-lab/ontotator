@@ -97,7 +97,11 @@ describe("users administration", () => {
     more("alex", "Deactivate…"); dialog = screen.getByRole("dialog", { name: "Deactivate alex" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Deactivate" }));
     await waitFor(() => expect(api.adminUpdateUser).toHaveBeenCalledWith("alex", { active: false }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull()); more("alex"); expect(screen.getByRole("menuitem", { name: "Activate" })).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // The result is announced and its row marked (#47 A-14).
+    expect(screen.getByRole("status").textContent).toContain("alex is deactivated.");
+    expect(screen.getByText("Alex Smith").closest("tr")!.className).toContain("users-row--changed");
+    more("alex"); expect(screen.getByRole("menuitem", { name: "Activate" })).toBeTruthy();
   });
 
   it("activates an inactive user without a deactivation confirmation", async () => {
@@ -282,6 +286,8 @@ describe("account status, projects at creation, history and erasure", () => {
     expect(api.adminAnonymiseUser).toHaveBeenCalledWith("alex", "alex");
     const table = within(screen.getByRole("table", { name: "Users" }));
     expect(table.getByText("anonymised-7")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("alex is now anonymised-7.");
+    expect(table.getByText("anonymised-7").closest("tr")!.className).toContain("users-row--changed");
     expect(table.queryByText("Alex Smith")).toBeNull();
     expect(table.getByText("Anonymised")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Edit anonymised-7" })).toBeNull();

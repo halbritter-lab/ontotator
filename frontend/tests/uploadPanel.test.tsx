@@ -42,6 +42,16 @@ it("requires text language and obtains the persisted preview after the job", asy
   expect(api.getUpload).toHaveBeenCalledWith("p", 7);
   expect(screen.getByText(/8 documents added/)).toBeTruthy();
 });
+it("takes a language code, not a name, while the project has no languages (#47 A-22)", () => {
+  render(<UploadPanel projectKey="p" languages={[]} onImported={vi.fn()} />);
+  fireEvent.change(screen.getByLabelText("Format"), { target: { value: "text" } });
+  const input = screen.getByLabelText(/^Upload language/) as HTMLInputElement;
+  const valid = (value: string) => { fireEvent.change(input, { target: { value } }); return input.checkValidity(); };
+  expect(valid("english")).toBe(false);
+  expect(valid("en")).toBe(true);
+  expect(valid("pt-BR")).toBe(true);
+  expect(() => new RegExp(input.pattern, "v")).not.toThrow();
+});
 it("commits the exact persisted hash and reports actual final job counts", async () => {
   const imported = vi.fn(); render(<UploadPanel projectKey="p" languages={["en"]} onImported={imported} />);
   await check();

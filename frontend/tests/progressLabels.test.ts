@@ -53,6 +53,11 @@ describe("progress labels", () => {
     expect(stageCards(stages).flatMap(card => card.rows).every(row => row.query === undefined)).toBe(true);
   });
 
+  it("leaves out the Translation review card while no translation is selected for review (#47 A-23)", () => {
+    const none = { ...stages, translation_review: { ...stages.translation_review, total: 0, done: 0 } };
+    expect(stageCards(none).map(card => card.id)).toEqual(["annotation", "final"]);
+  });
+
   it("describes the three stage cards", () => {
     const cards = stageCards(stages);
     expect(cards.map(card => card.title)).toEqual(["Translation review", "Annotation", "Final result"]);

@@ -105,6 +105,14 @@
 /* The hand-over text keeps its line breaks and wraps in the narrow code dialog. */
 .handover-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--size-sm); }
 
-/* New user: one line per project, its name then the role checkboxes. */
-.new-user-projects [role="group"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
-.new-user-projects [role="group"] > span { min-width: 12rem; }
+/* The one-time code: large, letter-spaced, in a sunken box, so it reads aloud and copies by hand without slips. */
+.code-once-value code { display: block; padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); background: var(--surface-sunken);
+  font-size: var(--size-xl); letter-spacing: 0.15em; text-align: center; overflow-wrap: anywhere; }
+
+/* New user: a grid of projects (rows) and roles (columns, named once in the head row). */
+.new-user-projects { margin: 0 0 var(--space-4); padding: 0; border: 0; }
+.new-user-projects > legend { margin-bottom: var(--space-2); padding: 0; font-weight: var(--weight-strong); }
+.new-user-projects-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 7.5rem); align-items: center; gap: var(--space-3); min-height: 32px; }
+.new-user-projects-row[aria-hidden="true"] { color: var(--text-muted); font-size: var(--size-sm); }
+.new-user-projects-row > span:first-child { overflow-wrap: anywhere; }
+.new-user-projects-row .form-group { margin: 0; }
