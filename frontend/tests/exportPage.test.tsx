@@ -6,8 +6,8 @@ import { ExportPage } from "../src/admin/ExportPage";
 const user: CurrentUser = { username: "lead", display_name: "Lead", pseudonym: "L", csrf_token: "csrf", is_system_admin: false };
 const job = (id: number, kind = "t1_export", status: JobView["status"] = "succeeded"): JobView => ({ id, kind, status, result: { path: "never-use-this-path" }, error: status === "failed" ? "EXPORT_FAILED: source missing" : null, created_at: "2026-10-16T10:00:00Z", finished_at: "2026-10-16T10:01:00Z" });
 const storageKey = (username = "lead", project = "p", kind = "t1") => `ontotator:export:${JSON.stringify([username, project, kind])}`;
-const card = (title = "Annotation results") => within(screen.getByRole("region", { name: title }));
-const finals = () => within(screen.getByRole("region", { name: "Selected final results" }));
+const card = (title = "Annotation results") => within(screen.getByRole("row", { name: title }));
+const finals = () => within(screen.getByRole("region", { name: "Final results" }));
 const emptyPreflight: FinalPreflight = { project: "p", selections: [], warnings: [], omissions: [], state_digest: "0".repeat(64) };
 const selection = { case_id: "case-1", language: "de", document_id: "d", submission_id: "s", revision: 1 };
 const warning = { id: "w", code: "OPEN_PROBLEM_REPORT", cause_revision: 2, case_id: "case-1", language: "de", reason: "Wording under review", destination: "#/tasks/1" };
@@ -22,12 +22,12 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); sessionStorage.clear(); });
 it("starts actual export kinds, remembers namespaced IDs and downloads freshly authorized binary payloads", async () => {
   render(<ExportPage projectKey="p" currentUser={user} />);
-  fireEvent.click(card().getByRole("button", { name: "Create export" }));
+  fireEvent.click(card().getByRole("button", { name: "Create" }));
   fireEvent.click(await card().findByRole("button", { name: "Download" }));
   await waitFor(() => expect(downloads.saveDownload).toHaveBeenCalledWith(expect.objectContaining({ filename: "actual-server.zip" }), expect.stringMatching(/\.zip$/)));
   expect(api.startExport).toHaveBeenCalledWith("p", "t1"); expect(api.downloadJob).toHaveBeenCalledWith(11);
   expect(sessionStorage.getItem(storageKey())).toBe("11");
-  fireEvent.click(card("Edit log").getByRole("button", { name: "Create export" }));
+  fireEvent.click(card("Edit log").getByRole("button", { name: "Create" }));
   await card("Edit log").findByRole("button", { name: "Download" });
   expect(api.startExport).toHaveBeenCalledWith("p", "edit_log"); expect(sessionStorage.getItem(storageKey("lead", "p", "edit_log"))).toBe("22");
 });
@@ -75,8 +75,8 @@ it.each([403, 404])("clears refused remembered jobs on HTTP %s and stops polling
 it("shows current refusal at creation and at download without saving a stale file", async () => {
   vi.mocked(api.startExport).mockRejectedValueOnce(new AuthError("Forbidden"));
   render(<ExportPage projectKey="p" currentUser={user} />);
-  fireEvent.click(card().getByRole("button", { name: "Create export" })); await screen.findByText("You do not have access to this page.");
-  fireEvent.click(card().getByRole("button", { name: "Create export" })); await card().findByRole("button", { name: "Download" });
+  fireEvent.click(card().getByRole("button", { name: "Create" })); await screen.findByText("You do not have access to this page.");
+  fireEvent.click(card().getByRole("button", { name: "Create" })); await card().findByRole("button", { name: "Download" });
   vi.mocked(api.downloadJob).mockRejectedValueOnce(new AuthError("Revoked"));
   fireEvent.click(card().getByRole("button", { name: "Download" })); await screen.findByText("You do not have access to this page.");
   expect(downloads.saveDownload).not.toHaveBeenCalled(); expect(sessionStorage.getItem(storageKey())).toBeNull();
@@ -85,7 +85,7 @@ it("isolates remembered jobs across users, projects and kind, rejecting stale cr
   let resolve!: (value: { job_id: number }) => void;
   vi.mocked(api.startExport).mockImplementationOnce(() => new Promise(r => { resolve = r; }));
   const { rerender } = render(<ExportPage projectKey="old" currentUser={user} />);
-  fireEvent.click(card().getByRole("button", { name: "Create export" }));
+  fireEvent.click(card().getByRole("button", { name: "Create" }));
   rerender(<ExportPage projectKey="new" currentUser={{ ...user, username: "other" }} />);
   await act(async () => { resolve({ job_id: 11 }); });
   expect(api.getJob).not.toHaveBeenCalled(); expect(sessionStorage.getItem(storageKey("lead", "old"))).toBeNull();
@@ -97,7 +97,7 @@ it("blocks duplicate creates/downloads and ignores binary replies after unmount"
   let resolveCreate!: (value: { job_id: number }) => void;
   vi.mocked(api.startExport).mockImplementationOnce(() => new Promise(r => { resolveCreate = r; }));
   const { unmount } = render(<ExportPage projectKey="p" currentUser={user} />);
-  const create = card().getByRole("button", { name: "Create export" }); fireEvent.click(create); fireEvent.click(create); expect(api.startExport).toHaveBeenCalledOnce();
+  const create = card().getByRole("button", { name: "Create" }); fireEvent.click(create); fireEvent.click(create); expect(api.startExport).toHaveBeenCalledOnce();
   await act(async () => { resolveCreate({ job_id: 11 }); });
   let resolveDownload!: (value: downloads.DownloadPayload) => void;
   vi.mocked(api.downloadJob).mockImplementationOnce(() => new Promise(r => { resolveDownload = r; }));
@@ -108,7 +108,7 @@ it("works when sessionStorage is blocked", async () => {
   vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("Storage blocked"); });
   vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Storage blocked"); });
   render(<ExportPage projectKey="p" currentUser={user} />);
-  fireEvent.click(card().getByRole("button", { name: "Create export" })); await card().findByRole("button", { name: "Download" });
+  fireEvent.click(card().getByRole("button", { name: "Create" })); await card().findByRole("button", { name: "Download" });
   expect(screen.getAllByText(/cannot remember export jobs/).length).toBeGreaterThan(0);
 });
 it("does not offer a download for a restored upload job", async () => {
@@ -117,9 +117,13 @@ it("does not offer a download for a restored upload job", async () => {
   expect(screen.queryByRole("button", { name: "Download" })).toBeNull(); expect(sessionStorage.getItem(storageKey())).toBeNull();
 });
 
-it("explains reviewer flags without changing clinical uncertainty", () => {
+it("shows research exports as a table with plain format lines and the limits in a disclosure", () => {
   render(<ExportPage projectKey="p" currentUser={user} />);
-  expect(card().getByText(/Unresolved proposals are included in exports with a separate reviewer flag and note\. Clinical axis values are unchanged\./)).toBeDefined();
+  expect(card().getByText("ZIP, ontospan format")).toBeDefined();
+  expect(card("Edit log").getByText("JSONL, one record per line")).toBeDefined();
+  expect(card("Translation reviews").getByText("JSONL, one record per line")).toBeDefined();
+  expect(screen.getByText(/Unresolved proposals are included with a reviewer flag and note; clinical values are unchanged\./).closest("details")).toBeTruthy();
+  expect(document.body.textContent).not.toMatch(/T1|preflight/);
 });
 
 it("explains included reviewer flags, omitted rejections and historical missing-note warnings", async () => {
@@ -128,9 +132,9 @@ it("explains included reviewer flags, omitted rejections and historical missing-
     { code: "LEGACY_UNRESOLVED_NOTE_MISSING", annotation_id: "old-result", version: "original-version" },
   ] } });
   render(<ExportPage projectKey="p" currentUser={user} />);
-  expect(card().getByText(/Clinical axis values are unchanged/)).toBeTruthy();
-  expect(card().getByText(/cannot currently be imported again as proposals/)).toBeTruthy();
-  await card().findByText(/2 unresolved result\(s\) included with reviewer flags; 3 rejected result\(s\) omitted/);
+  expect(screen.getByText(/cannot be imported back as proposals/)).toBeTruthy();
+  await card().findByText(/2 unresolved included with reviewer flags, 3 rejected left out/);
+  expect(card().getByRole("button", { name: "Create again" })).toBeTruthy();
   expect(card().getByText(/old-result \(original-version\) has no reviewer note/)).toBeTruthy();
   expect(card().queryByText(/excludes unresolved/)).toBeNull();
 });
@@ -149,10 +153,10 @@ it("links each preflight warning and omission to its Documents row", async () =>
     omissions: [{ case_id: "GSC18", language: "en" }], state_digest: "a".repeat(64) });
   render(<ExportPage projectKey="p/a" currentUser={user} />);
   await screen.findByText("Text wording needs review");
-  expect(screen.getByRole("link", { name: "Show GSC 17 de" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=de&case=GSC+17");
-  expect(screen.getByRole("link", { name: "Show GSC18 en" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=en&case=GSC18");
+  expect(screen.getByRole("link", { name: "Open in Documents, GSC 17 de" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=de&case=GSC+17");
+  expect(screen.getByRole("link", { name: "Open in Documents, GSC18 en" }).getAttribute("href")).toBe("#/projects/p%2Fa/documents?language=en&case=GSC18");
   expect(screen.queryByRole("link", { name: "Review issue" })).toBeNull();
-  expect(screen.getByText(/Omitted without a final selection/)).toBeTruthy();
+  expect(screen.getByRole("rowgroup", { name: "Left out: no final result" })).toBeTruthy();
 });
 
 it("runs the preflight on open", async () => {
@@ -176,13 +180,13 @@ it("Check again reruns it and final-selection changes rerun it while visible", a
   const preflight = vi.mocked(api.finalExportPreflight).mockResolvedValue({ ...emptyPreflight, selections: [selection], warnings: [warning] });
   const changed = (projectKey = "p") => act(() => { window.dispatchEvent(new CustomEvent("ontotator:final-selection-changed", { detail: { projectKey } })); });
   render(<ExportPage projectKey="p" currentUser={user} />);
-  const ack = await finals().findByLabelText("Export these selected results with the listed warnings and omissions");
+  const ack = await finals().findByLabelText(/^Export the 1 result as it is/);
   fireEvent.click(ack);
   const again = finals().getByRole("button", { name: "Check again" });
   again.focus();
   fireEvent.click(again);
   await waitFor(() => expect(preflight).toHaveBeenCalledTimes(2));
-  expect((await finals().findByLabelText("Export these selected results with the listed warnings and omissions") as HTMLInputElement).checked).toBe(false);
+  expect((await finals().findByLabelText(/^Export the 1 result as it is/) as HTMLInputElement).checked).toBe(false);
   expect(document.activeElement).toBe(again);
 
   changed("other");
@@ -205,9 +209,8 @@ it("Check again reruns it and final-selection changes rerun it while visible", a
 it("lists Not planned, not exported as information", async () => {
   vi.mocked(api.finalExportPreflight).mockResolvedValue({ ...emptyPreflight, project: "p", selections: [selection], not_in_plan: [{ case_id: "case-9", language: "fr" }] });
   render(<ExportPage projectKey="p" currentUser={user} />);
-  const list = await finals().findByRole("list", { name: "Not planned, not exported" });
-  expect(within(list).getByRole("link", { name: "Show case-9 fr" }).getAttribute("href")).toBe("#/projects/p/documents?language=fr&case=case-9");
-  expect(finals().getByText("1 selected result, 0 warnings, 0 omitted, 1 not planned")).toBeTruthy();
+  const list = await finals().findByRole("rowgroup", { name: "Not planned, not exported" });
+  expect(within(list).getByRole("link", { name: "Open in Documents, case-9 fr" }).getAttribute("href")).toBe("#/projects/p/documents?language=fr&case=case-9");
   expect(finals().getByText(/Annotate is off in the work plan/)).toBeTruthy();
   expect(finals().queryByRole("checkbox")).toBeNull();
   expect(finals().getByRole("button", { name: "Create final export" }).getAttribute("aria-disabled")).toBeNull();
@@ -223,18 +226,18 @@ it.each([
   let activations = 1; // opening Export
   const activate = (element: HTMLElement) => { activations += 1; fireEvent.click(element); };
   render(<ExportPage projectKey="p" currentUser={user} />);
-  const primaries = () => [...screen.getByRole("region", { name: "Selected final results" }).querySelectorAll(".btn-primary")].map(b => b.textContent);
+  const primaries = () => [...screen.getByRole("region", { name: "Final results" }).querySelectorAll(".btn-primary")].map(b => b.textContent);
   await finals().findByRole("region", { name: "Export check" });
   expect(primaries()).toEqual(["Create final export"]);
-  if (warnings.length) activate(finals().getByLabelText("Export these selected results with the listed warnings and omissions"));
+  if (warnings.length) activate(finals().getByLabelText(/^Export the 1 result as it is/));
   activate(finals().getByRole("button", { name: "Create final export" }));
   await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
-  const download = await finals().findByRole("button", { name: "Download final export" });
+  const download = await finals().findByRole("button", { name: "Download (ZIP)" });
   await waitFor(() => expect(download.getAttribute("aria-disabled")).toBeNull());
-  expect(primaries()).toEqual(["Download final export"]);
+  expect(primaries()).toEqual(["Download (ZIP)"]);
   expect(api.downloadJob).not.toHaveBeenCalled();
   expect(downloads.saveDownload).not.toHaveBeenCalled();
-  activate(finals().getByRole("button", { name: "Download final export" }));
+  activate(finals().getByRole("button", { name: "Download (ZIP)" }));
   await waitFor(() => expect(downloads.saveDownload).toHaveBeenCalledWith(expect.anything(), "p-final.zip"));
   expect(api.downloadJob).toHaveBeenCalledWith(8);
   expect(activations).toBe(expected);

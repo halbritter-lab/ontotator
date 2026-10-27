@@ -170,13 +170,13 @@ test('ordinary human carry-forward stays private, then exact consolidation is ex
     await expect(rowCell(textRow(page, s.case_id, language), 'finalization')).toContainText('accepted');
     await page.goto(`/#/projects/${encodeURIComponent(s.project)}/export`);
     // D8: the preflight runs on opening Export.
-    await expect(page.getByRole('heading', { name: 'Export check' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Export check' })).toBeVisible();
     const create = page.getByRole('button', { name: 'Create final export', exact: true });
     await expect(create).toHaveAttribute('aria-disabled', 'true');
-    await page.getByLabel('Export these selected results with the listed warnings and omissions').check();
+    await page.getByLabel(/^Export the \d+ results? as (they are|it is)/).check();
     const exportResponse = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/exports/final'));
     await create.click(); expect((await exportResponse).ok()).toBeTruthy();
-    await expect(page.getByRole('button', { name: 'Download final export' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Download (ZIP)' })).toBeVisible({ timeout: 30_000 });
     const state = await value<Preflight>(page, `${root(s)}/exports/final/preflight`, 'POST');
     expect(state.selections.map(selection => selection.submission_id)).toEqual([finalId]);
     const historyRows = await value<Submission[]>(page, `${root(s)}/documents/${encodeURIComponent(s.documents.source)}/submissions`);
