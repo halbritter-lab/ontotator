@@ -874,6 +874,21 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
     db, key, upload_id = ctx.db, job.payload["project"], job.payload["upload_id"]
     try:
         actor, _ = requester(db, job)
+        # Parse before waiting for the global import lock, as run_import does;
+        # under the lock the result is reused only if nothing it read changed.
+        with db.transaction() as conn:
+            state = project_state(conn, key)
+            parsed_id = Repository(db)._require_project(conn, key)
+            source = conn.execute(
+                select(UploadRow.kind, UploadRow.language, UploadRow.files).where(
+                    UploadRow.id == upload_id, UploadRow.project_id == parsed_id
+                )
+            ).one_or_none()
+            prepared = (
+                read_sources(db, conn, key, parsed_id, *source)
+                if source is not None
+                else None
+            )
         with db.transaction() as conn:
             project_id = lock_import(conn, key, actor)
             row = conn.execute(
@@ -892,8 +907,21 @@ def _upload_job(job: Job, ctx: JobContext, *, commit: bool) -> dict[str, Any]:
                 raise DomainError(
                     "UPLOAD_STALE", "Upload is no longer in the expected state."
                 )
+            reuse = (
+                source is not None
+                and project_id == parsed_id
+                and tuple(source) == (row.kind, row.language, row.files)
+                and project_state(conn, key) == state
+            )
             plan, sources, plan_ctx = _prepare(
-                db, conn, key, project_id, row.kind, row.language, row.files
+                db,
+                conn,
+                key,
+                project_id,
+                row.kind,
+                row.language,
+                row.files,
+                prepared=prepared if reuse else None,
             )
             if commit:
                 if plan.plan_sha256 != row.plan_sha256:
