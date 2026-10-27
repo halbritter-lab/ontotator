@@ -763,7 +763,7 @@ function LeadDocuments({ projectKey, query: route, onNavigate, canOverrideTransl
 
   /** No rows: the tab is empty (tab counts ignore facets and search), or the filters exclude every row of the tab. */
   const emptyState = (bar: DocumentRowsPage["bar"]): JSX.Element => {
-    if (tabCount(bar, tab) === 0) return <TabEmptyState tab={tab} projectKey={projectKey} onNavigate={navigateLink} onUpload={uploadButton} />;
+    if (tabCount(bar, tab) === 0) return <TabEmptyState tab={emptyProject ? "all" : tab} projectKey={projectKey} onNavigate={navigateLink} onUpload={uploadButton} />;
     return <EmptyState title="No texts match these filters." action={<Button size="sm" onClick={clearAll}>Clear all</Button>} />;
   };
 

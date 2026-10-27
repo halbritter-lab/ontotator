@@ -84,7 +84,7 @@ test("a fresh Edit & Replace copy is an attach target in the list and in the tex
   expect((await created).ok()).toBeTruthy();
   await expect(ownRows(page)).toHaveCount(1);
   // The copy equals the proposal: no decision yet, the proposal stays open.
-  await expect(proposalRow(page)).toContainText("open");
+  await expect(proposalRow(page)).toContainText("Pending");
   await attachSevere(page, s);
   // Only the copy is the target (the proposal with a copy is not offered twice), in the list and in the text.
   const target = page.getByRole("button", { name: "Attach Severe to Seizure" });

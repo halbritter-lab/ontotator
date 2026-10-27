@@ -40,7 +40,8 @@ export const documentsTabs = (page: Page): Locator => page.getByRole("tablist", 
 
 /** Wait until Documents shows its tabs (the page has loaded its first rows page). */
 export async function documentsReady(page: Page): Promise<void> {
-  await expect(documentsTabs(page)).toBeVisible({ timeout: 30_000 });
+  // A project without texts shows no tabs, only "No texts yet" (#46).
+  await expect(documentsTabs(page).or(page.getByRole("heading", { name: "No texts yet", exact: true }))).toBeVisible({ timeout: 30_000 });
 }
 
 /** One tab: with ``count`` the exact name "{label}, {count}", else any count. */
