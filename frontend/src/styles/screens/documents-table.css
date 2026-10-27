@@ -31,8 +31,7 @@
 .ui-popover-sheet .documents-filter-groups { grid-template-columns: minmax(0, 1fr); }
 .documents-filter-empty { grid-column: 1 / -1; margin: 0; }
 .ui-popover-body:has(> .documents-filter-groups) { max-height: min(70vh, 32rem); overflow-y: auto; }
-/* Below 900 px (V7): one filter column; the table drops Waiting on and Last activity (both in the text card)
-   so it fits 768 px without horizontal scroll. */
+/* Below 900 px (V7): one filter column; the table drops Waiting on (in the text card). */
 @media (max-width: 899px) {
   .documents-filter-groups { grid-template-columns: minmax(0, 1fr); }
   .documents-table th:has(.documents-col-wide), .documents-table td:has(> .documents-col-wide) { display: none; }
@@ -85,10 +84,9 @@ button.documents-text-name { min-height: 24px; padding: 0; border: 0; background
 /* `display: block` overrides the stacked .stage-cell column (icon, label, who on one line). */
 .documents-status.stage-cell { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .documents-status-who { color: var(--text-muted); }
-/* Below 1400 px (#10): Last activity goes (the text card shows it) and the status and Waiting on cells cut
-   earlier (ellipsis, full text in title), so Next step stays in view at 1280 px. */
+/* Below 1400 px (#10): the status and Waiting on cells cut earlier (ellipsis, full text in title); Last activity
+   stays and the table scrolls sideways with the Text column pinned (#8). */
 @media (max-width: 1399px) {
-  .documents-table th:has(.documents-col-last), .documents-table td:has(> .documents-col-last) { display: none; }
   .documents-status-cell { max-width: 9rem; }
   .documents-waiting-on { max-width: 7rem; }
 }
