@@ -12,7 +12,7 @@ const updatedFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute
 const WORKLOAD_COLUMNS = [
   ["translation_reviews_open", "Translation reviews open"],
   ["annotations_open", "Annotations open"],
-  ["reviews_open", "Reviews open"],
+  ["reviews_open", "Consolidations open"],
   ["paused", "Paused"],
   ["submitted", "Submitted"],
 ] as const;
@@ -103,6 +103,7 @@ function ProgressContent({ projectKey, onNavigate }: ProgressPageProps): JSX.Ele
         <ol className="progress-pipeline" aria-labelledby="progress-pipeline-heading">
           {stageCards(progress.stages).map((card, index, all) => stageCard(card, index === all.length - 1))}
         </ol>
+        <p className="muted progress-people-note">Stage counts count a text in every stage it is in; the Documents tabs count each text once, by its next step.</p>
       </section>}
       <section className="progress-people" aria-labelledby="progress-people-heading">
         <h2 id="progress-people-heading">People</h2>
