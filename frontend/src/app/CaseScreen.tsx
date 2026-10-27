@@ -110,6 +110,7 @@ import { IconButton } from "../ui/IconButton";
 import { openShortcutHelp, ShortcutHelpHost } from "../ui/ShortcutHelp";
 import { isTextEntryTarget, isTypingTarget, useShortcut, useShortcutHint } from "../ui/shortcuts";
 import { CaseNavigation } from "./CaseNavigation";
+import { taskText } from "./identity";
 import { adjacentCase, nextOpenTask, orderTasks } from "./caseOrder";
 import type { RouteLeaveGuard } from "./router";
 import { isReviewLike, modeBadge } from "../editor/modes";
@@ -2948,7 +2949,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
       } catch {
         // list refresh is best effort
       }
-      afterSubmit?.({ label: assignmentNavigation!.current.external_id || view.document.document_id,
+      afterSubmit?.({ label: taskText(assignmentNavigation!.current),
         assignmentId: assignmentNavigation!.current.assignment_id, next });
     } catch (err: unknown) {
       setSubmitDialogOpen(false);
@@ -3290,8 +3291,8 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
             </Button>
           )}
           {assignmentNavigation && assignmentTasks?.length ? (
-            <CaseNavigation documents={assignmentTasks.map((task, index) => ({ document_id: task.document_id,
-              position: index + 1, language: task.language, text_length: 0, status: task.status === "submitted" ? "completed" : task.status === "in_progress" ? "in_progress" : "not_started" }))}
+            <CaseNavigation documents={assignmentTasks.map((task, index) => ({ document_id: task.document_id, case_id: task.case_id ?? task.external_id ?? undefined,
+              version: task.version ?? undefined, origin: task.origin as DocumentSummary["origin"], position: index + 1, language: task.language, text_length: 0, status: task.status === "submitted" ? "completed" : task.status === "in_progress" ? "in_progress" : "not_started" }))}
               currentDocumentId={view.document.document_id}
               navigationIds={assignmentTasks.map(task => String(task.assignment_id))}
               currentNavigationId={String(assignmentNavigation.current.assignment_id)}
@@ -3304,7 +3305,7 @@ export const CaseScreen: React.FC<CaseScreenProps> = ({
               disabled={queueState === "saving"}
             />
           ) : null}
-          <h1 className="case-title" title={view.document.document_id}>{assignmentNavigation?.current.external_id || view.document.document_id}</h1>
+          <h1 className="case-title" title={view.document.document_id}>{assignmentNavigation ? taskText(assignmentNavigation.current) : view.document.document_id}</h1>
           <LanguageTag code={view.document.language} />
           <span
             title={roundTitle ?? (roundKind !== "consolidation" && !isCarryKind(roundKind) ? badge.title : undefined)}

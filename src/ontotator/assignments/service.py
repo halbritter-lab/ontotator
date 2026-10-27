@@ -117,8 +117,11 @@ class TaskSummary:
     hold_reason: str | None = None
     source_language: str | None = None
     target_language: str | None = None
-    # The text label's case ID (spec "Text label").
+    # The text label's case ID (spec "Text label"), and the version and its
+    # origin ("v2 corrected", R-11).
     case_id: str | None = None
+    version: int | None = None
+    origin: str | None = None
     # Spec A.7: failed automatic checks of the reviewed variant's translation run
     # (the list ReviewWorkspace.failed_checks shows); None for other tasks.
     failed_check_count: int | None = None
@@ -1046,6 +1049,8 @@ class AssignmentService:
                 DocumentRow.case_id,
                 DocumentRow.language,
                 DocumentRow.external_id,
+                DocumentRow.version,
+                DocumentRow.origin,
                 AssignmentRow.task,
                 AssignmentRow.status,
                 AssignmentRow.updated_at,

@@ -4,6 +4,7 @@ import { Select } from "../ui/Select";
 import React from "react";
 import type { DocumentSummary } from "../api/client";
 import { adjacentCase, canOpenCase, sharedIdPrefix } from "./caseOrder";
+import { taskText } from "./identity";
 
 export interface CaseNavigationProps {
   documents: DocumentSummary[];
@@ -93,7 +94,8 @@ export const CaseNavigation: React.FC<CaseNavigationProps> = ({
         >
           {documents.map((doc, index) => {
             const statusLabel = statusLabels[doc.status] ?? doc.status;
-            const shownId = idPrefix ? `…${doc.document_id.slice(idPrefix.length)}` : doc.document_id;
+            // The text's name as in My tasks and the heading (R-11); a bare document ID only without a case ID.
+            const shownId = doc.case_id ? taskText(doc) : idPrefix ? `…${doc.document_id.slice(idPrefix.length)}` : doc.document_id;
             const openable = canOpenCase(doc);
             return (
               <option key={idAt(index)} value={idAt(index)} disabled={!openable}>

@@ -15,6 +15,7 @@ import { SourceObligationReview } from './SourceObligationReview';
 import { notifyFinalSelectionChanged } from '../variants/finalSelectionState';
 import { ChecksSummary, ReviewSummary, SubmitSummary } from "./ReviewParts";
 import { ReviewForm } from "./ReviewForm";
+import { taskText } from "../app/identity";
 import { autoNoteText, chooseDecision, reactToTextEdit, USER_ORIGIN, type DecisionState } from "./decisionOrigin";
 import { categoryLabels, comparisonCountsDiffer, couplingEditingNote, couplingNote, decisionKeyHint, decisionLabels, decisionOutcomes, formatReviewDate, issueMessages, languageName, leadCorrectionKeyHint, leadCorrectionNote, matchingParagraphStatus, nextTaskLabel, paragraphCountChanged, paragraphCountsDiffer, remainingTasksText, reviewIssueMessage, showMatchingLabel, showMatchingShortcut, showMatchingTitle } from "./labels";
 import { checkReview, type ClinicalCategory, type ReviewDecisionCode, type ReviewForm as FormValue } from "./reviewRules";
@@ -534,7 +535,7 @@ function ReviewEditor({ workspace, onReload, ...props }: TranslationReviewScreen
     {!readOnly && props.guidelineNotice}
     <Button className="translation-skip" onClick={focusDecision}>Skip to decision</Button>
     <div className="translation-review-bar density-compact">
-      <h1>{workspace.variant.external_id}</h1>
+      <h1>{taskText(workspace.variant)}</h1>
       <div className="translation-review-meta">
         <p><LanguageTag code={sourceLanguage}>{languageName(sourceLanguage)}</LanguageTag> <span aria-hidden="true">→</span><span className="review-sr-only">{" to "}</span> <LanguageTag code={targetLanguage}>{languageName(targetLanguage)}</LanguageTag></p>
         <details className="translation-details" ref={detailsRef} onKeyDown={closeDetails}>

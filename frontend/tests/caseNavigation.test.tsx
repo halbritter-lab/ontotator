@@ -188,6 +188,16 @@ describe("CaseNavigation Component", () => {
     expect(screen.getByRole("option", { name: /Case 2 of 3/ }).textContent).toBe("Case 2 of 3: doc-alpha (In Progress)");
   });
 
+  it("names a text by case ID, language and corrected version, never by its document ID (R-11)", () => {
+    const documents: DocumentSummary[] = [
+      { ...sampleDocuments[0], document_id: "ready-translation~de~v1", case_id: "synthetic-ready", version: 1 },
+      { ...sampleDocuments[1], document_id: "ready-translation~de~v2", case_id: "synthetic-ready", version: 2, origin: "correction", position: 2 },
+    ];
+    render(<CaseNavigation documents={documents} currentDocumentId={documents[1].document_id} onNavigate={vi.fn()} />);
+    expect(screen.getByRole("option", { name: /Case 1 of 2/ }).textContent).toBe("Case 1 of 2: synthetic-ready de (Completed)");
+    expect(screen.getByRole("option", { name: /Case 2 of 2/ }).textContent).toBe("Case 2 of 2: synthetic-ready de v2 corrected (In Progress)");
+  });
+
   it("shows Case n of m without the document id", () => {
     render(<CaseNavigation documents={[sampleDocuments[0]]} currentDocumentId="doc-beta" onNavigate={vi.fn()} />);
     const label = screen.getByText("Case 1 of 1");

@@ -938,7 +938,7 @@ it("shows the key hint line in the rail footer", async () => {
 it("puts the document name, meta and tools in one bar without a back link", async () => {
   setup();
   await screen.findByRole("textbox", { name: "Translation (de)" });
-  const title = screen.getByRole("heading", { level: 1, name: "EN 1/7" });
+  const title = screen.getByRole("heading", { level: 1, name: "case de v3 corrected" });
   const bar = title.closest(".translation-review-bar") as HTMLElement;
   expect(bar).not.toBeNull();
   expect(screen.queryByRole("link", { name: "Back to my tasks" })).toBeNull();
@@ -1124,7 +1124,7 @@ it("offers the next task focused after submit and opens it", async () => {
     taskSummary(30, { project_key: "other", external_id: "elsewhere" }), taskSummary(18, { external_id: "case-2", task: "annotate" })]);
   await submitAcceptedUnchanged();
   expect(tasks).toHaveBeenCalledTimes(1);
-  const next = screen.getByRole("button", { name: "Next task: case-2 (de)" });
+  const next = screen.getByRole("button", { name: "Next task: case-2 de" });
   expect(document.activeElement).toBe(next);
   expect(screen.getByRole("link", { name: "Back to my tasks" })).toBeDefined();
   expect(screen.getByText("1 more open task in this project.").getAttribute("role")).toBe("status");
@@ -1157,7 +1157,7 @@ it("shows loading and an error with Retry for the task list", async () => {
   tasks.mockResolvedValueOnce([taskSummary(18, { external_id: "case-2" })]);
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Retry" })); });
   expect(tasks).toHaveBeenCalledTimes(2);
-  expect(screen.getByRole("button", { name: "Next task: case-2 (de)" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Next task: case-2 de" })).toBeDefined();
   expect(screen.queryByText(/Network down/)).toBeNull();
 });
 const leadWorkspace = () => reviewWorkspace({ lead_correction: true, assignment: { ...reviewWorkspace().assignment, lead_correction: true } });

@@ -394,7 +394,7 @@ describe("CaseScreen integration", () => {
         assignmentNavigation={{ tasks: [current], current, onNavigate: vi.fn(), onSubmitted }} />);
       const dialog = await openSubmit();
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
-      await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith({ label: "EN100068", assignmentId: 9, next: undefined }));
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith({ label: "EN100068 de", assignmentId: 9, next: undefined }));
       expect(screen.queryByRole("dialog", { name: "Case submitted" })).toBeNull();
     });
 
@@ -409,7 +409,7 @@ describe("CaseScreen integration", () => {
         assignmentNavigation={{ tasks: [task(7, "submitted"), task(8, "assigned"), current], current, onNavigate: vi.fn(), onSubmitted }} />);
       const dialog = await openSubmit();
       fireEvent.click(within(dialog).getByRole("button", { name: "Submit case" }));
-      await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith({ label: "EN9", assignmentId: 9, next: 8 }));
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith({ label: "EN9 de", assignmentId: 9, next: 8 }));
     });
 
     it("row Confirm sends one set_axes with the row's defaulted axes", async () => {
@@ -2446,7 +2446,7 @@ describe("CaseScreen integration", () => {
     it("renders the document name as h1 and the plain case navigation", () => {
       const rendered = render(<CaseScreen view={sampleView} workspaceId="ws" onClose={vi.fn()} assignmentNavigation={assignmentNavigation} />);
       const title = screen.getByRole("heading", { level: 1 });
-      expect(title.textContent).toBe("accepted-translation");
+      expect(title.textContent).toBe("accepted-translation de");
       expect(title.classList.contains("case-title")).toBe(true);
       expect(screen.getByText("Case 1 of 1")).toBeDefined();
       // Below 700 px the CSS hides a one-case navigation through this class.
