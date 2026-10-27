@@ -44,7 +44,7 @@ describe("users administration", () => {
     const leave = { current: null as (() => Promise<boolean>) | null };
     render(<UsersPage currentUser={currentUser} routeLeaveRef={leave} />); await load(); await fillCreate();
     fireEvent.click(newForm().getByRole("button", { name: "Create user" }));
-    const dialog = await screen.findByRole("dialog", { name: "Setup code" });
+    const dialog = await screen.findByRole("dialog", { name: "Setup code for bea" });
     expect(within(dialog).getByText(created.code)).toBeTruthy();
     expect(api.adminCreateUser).toHaveBeenCalledWith({ username: "bea", display_name: "Bea", email: null, languages: [], system_admin: false, projects: [] });
     expect(await leave.current?.()).toBe(false);
@@ -56,11 +56,28 @@ describe("users administration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh users" })); await load(); expect(screen.queryByText(created.code)).toBeNull();
   });
 
-  it("issues a reset code for the selected actual username", async () => {
+  it("issues a reset code for the selected actual username only after confirmation", async () => {
     render(<UsersPage currentUser={currentUser} />); await load();
     fireEvent.click(screen.getByRole("button", { name: "Reset code for alex" }));
-    const dialog = await screen.findByRole("dialog", { name: "Reset code" });
+    let confirm = screen.getByRole("dialog", { name: "Issue a new reset code for Alex Smith?" });
+    expect(confirm.textContent).toContain("Any unused code stops working.");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" })); expect(api.adminIssueResetCode).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Reset code for alex" }));
+    confirm = screen.getByRole("dialog", { name: "Issue a new reset code for Alex Smith?" });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Reset code" }));
+    const dialog = await screen.findByRole("dialog", { name: "Reset code for alex" });
     expect(within(dialog).getByText(reset.code)).toBeTruthy(); expect(api.adminIssueResetCode).toHaveBeenCalledWith("alex");
+  });
+
+  it("offers a new setup code to a user whose setup is pending", async () => {
+    vi.mocked(api.adminListUsers).mockResolvedValue([root, { ...alex, setup_pending: true }]);
+    render(<UsersPage currentUser={currentUser} />); await load();
+    fireEvent.click(screen.getByRole("button", { name: "New setup code for alex" }));
+    const confirm = screen.getByRole("dialog", { name: "Issue a new setup code for Alex Smith?" });
+    expect(confirm.textContent).toContain("The current setup code stops working.");
+    fireEvent.click(within(confirm).getByRole("button", { name: "New setup code" }));
+    const dialog = await screen.findByRole("dialog", { name: "Setup code for alex" });
+    expect(dialog.textContent).toContain("Your Ontotator account is ready.");
   });
 
   it("confirms deactivation, cancels safely and updates from the real response", async () => {
@@ -132,7 +149,7 @@ describe("users administration", () => {
     fireEvent.change(language, { target: { value: "invalid" } });
     act(() => (screen.getByRole("form", { name: "New user" }) as HTMLFormElement).requestSubmit()); expect(api.adminCreateUser).not.toHaveBeenCalled();
     fireEvent.change(language, { target: { value: "DE" } }); fireEvent.keyDown(language, { key: "Enter" });
-    fireEvent.click(newForm().getByRole("button", { name: "Create user" })); await screen.findByRole("dialog", { name: "Setup code" });
+    fireEvent.click(newForm().getByRole("button", { name: "Create user" })); await screen.findByRole("dialog", { name: "Setup code for bea" });
     expect(api.adminCreateUser).toHaveBeenCalledWith(expect.objectContaining({ languages: ["de"] }));
   });
 
@@ -162,7 +179,7 @@ describe("users administration", () => {
     const leave = { current: null as (() => Promise<boolean>) | null };
     render(<UsersPage currentUser={currentUser} routeLeaveRef={leave} />); await load();
     if (operation === "create") { await fillCreate(); fireEvent.click(newForm().getByRole("button", { name: "Create user" })); }
-    else fireEvent.click(screen.getByRole("button", { name: "Reset code for alex" }));
+    else { fireEvent.click(screen.getByRole("button", { name: "Reset code for alex" })); fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Reset code" })); }
     expect(await leave.current?.()).toBe(false);
     await act(async () => pending.reject(new Error("Issuance failed")));
     await screen.findByText("Issuance failed"); expect(await leave.current?.()).toBe(true);
@@ -197,9 +214,9 @@ describe("account status, projects at creation, history and erasure", () => {
     expect(table.getByText("Pending")).toBeTruthy();
     expect(table.getByText("Never")).toBeTruthy();
     expect(table.getByText(formatDateTime("2026-10-20T08:00:00Z"))).toBeTruthy();
-    const reset = screen.getByRole("button", { name: "Reset code for alex" }) as HTMLButtonElement;
+    const reset = screen.getByRole("button", { name: "New setup code for alex" }) as HTMLButtonElement;
     expect(reset.disabled).toBe(true);
-    expect(reset.title).toBe("Activate the account before issuing a reset code.");
+    expect(reset.title).toBe("Activate the account before issuing a new code.");
   });
 
   it("adds the new user to the chosen projects with roles", async () => {
@@ -208,7 +225,7 @@ describe("account status, projects at creation, history and erasure", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "Study One: Consolidator" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Study One: Annotator" }));
     fireEvent.click(newForm().getByRole("button", { name: "Create user" }));
-    await screen.findByRole("dialog", { name: "Setup code" });
+    await screen.findByRole("dialog", { name: "Setup code for bea" });
     expect(api.adminCreateUser).toHaveBeenCalledWith(expect.objectContaining({ projects: [{ project_key: "study-one", roles: ["adjudicator", "annotator"] }] }));
   });
 

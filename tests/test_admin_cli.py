@@ -120,7 +120,8 @@ def test_reset_deactivate_and_admin_flag(tmp_path: Path) -> None:
 
     reset = _admin(tmp_path, "users", "reset-code", "bob")
     assert reset.exit_code == 0, reset.output
-    code = _code(reset, "Reset", "bob")
+    # bob never set a password, so the new code is a fresh setup code.
+    code = _code(reset, "Setup", "bob")
     accounts = AccountService(database_for(tmp_path / "editor.db"))
     accounts.redeem_code("bob", code, PASSWORD)
 

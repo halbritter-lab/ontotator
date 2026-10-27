@@ -35,7 +35,7 @@ export function CodeOnceDialog(props: CodeOnceDialogProps): JSX.Element | null {
 type CopyState = { what: "code" | "text"; state: "pending" | "copied" | "failed" } | null;
 
 function CodeSession(props: CodeOnceDialogProps): JSX.Element {
-  const { code, expires_at, kind, onClose } = props;
+  const { code, expires_at, kind, username, onClose } = props;
   const checkboxId = useId();
   const [acknowledged, setAcknowledged] = useState(false);
   const [copy, setCopy] = useState<CopyState>(null);
@@ -59,7 +59,7 @@ function CodeSession(props: CodeOnceDialogProps): JSX.Element {
   };
   const state = (what: "code" | "text") => copy?.what === what ? copy.state : "idle";
 
-  return <Dialog open title={kind === "setup" ? "Setup code" : "Reset code"} size="sm" onClose={acknowledged ? close : undefined} closeOnBackdrop
+  return <Dialog open title={`${kind === "setup" ? "Setup code" : "Reset code"}${username ? ` for ${username}` : ""}`} size="sm" onClose={acknowledged ? close : undefined} closeOnBackdrop
     footer={<Button variant="primary" disabled={!acknowledged} onClick={close}>Close</Button>}>
     <p>This code is shown only once. Hand it over in person or by a secure channel.</p>
     <p><code>{code}</code></p>

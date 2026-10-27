@@ -42,6 +42,8 @@ export function auditDetails(event: AuditEvent): string {
   return Object.keys(details).length ? JSON.stringify(details) : "";
 }
 
+const codeLabel = (user: AdminUser) => user.setup_pending ? "New setup code" : "Reset code";
+
 const accessMessage = "Only system administrators can see and manage user accounts. Ask an administrator if someone needs an account or a new sign-in code.";
 
 export function UsersPage(props: UsersPageProps): JSX.Element {
@@ -64,6 +66,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [history, setHistory] = useState<History | null>(null);
   const [erase, setErase] = useState<{ username: string; typed: string; error?: unknown } | null>(null);
+  const [reissue, setReissue] = useState<AdminUser | null>(null);
   const [busy, setBusy] = useState(false);
   const lifetime = useRef(0);
   const generation = useRef(0);
@@ -104,7 +107,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
   };
   const closeCode = () => { pendingCode.current = null; setCode(null); };
   const replaceUser = (user: AdminUser) => setUsers(rows => rows && (rows.some(row => row.username === user.username) ? rows.map(row => row.username === user.username ? user : row) : [...rows, user]));
-  const blocked = busy || loading || users === null || code !== null || confirmation !== null || erase !== null;
+  const blocked = busy || loading || users === null || code !== null || confirmation !== null || erase !== null || reissue !== null;
   const pageBlocked = blocked || editing !== null;
 
   const createUser = async () => {
@@ -121,15 +124,16 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       if (epoch === lifetime.current) { writing.current = false; setBusy(false); }
     }
   };
-  const issueReset = async (username: string) => {
-    if (writing.current || pageBlocked) return;
+  const issueReset = async (user: AdminUser) => {
+    if (writing.current || editing !== null) return;
     const epoch = lifetime.current;
     writing.current = true; setBusy(true); setActionError(undefined);
     try {
-      const issued = await api.adminIssueResetCode(username);
-      if (epoch === lifetime.current) showCode(issued, "reset", username);
+      const issued = await api.adminIssueResetCode(user.username);
+      // The server issues a setup code to someone who never set a password, as setup_pending reports.
+      if (epoch === lifetime.current) { setReissue(null); showCode(issued, user.setup_pending ? "setup" : "reset", user.username); }
     } catch (error: unknown) {
-      if (epoch === lifetime.current) setActionError(error);
+      if (epoch === lifetime.current) { setReissue(null); setActionError(error); }
     } finally {
       if (epoch === lifetime.current) { writing.current = false; setBusy(false); }
     }
@@ -211,7 +215,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
     { id: "actions", header: "Actions", cell: user => user.anonymised ? <Toolbar label={`Actions for ${user.username}`}>
       <Button size="sm" disabled={pageBlocked} aria-label={`History of ${user.username}`} onClick={() => { void showHistory(user.username); }}>History</Button>
     </Toolbar> : <Toolbar label={`Actions for ${user.username}`}>
-      <Button size="sm" disabled={pageBlocked || !user.active} title={user.active ? undefined : "Activate the account before issuing a reset code."} aria-label={`Reset code for ${user.username}`} onClick={() => { void issueReset(user.username); }}>Reset code</Button>
+      <Button size="sm" disabled={pageBlocked || !user.active} title={user.active ? undefined : "Activate the account before issuing a new code."} aria-label={`${codeLabel(user)} for ${user.username}`} onClick={() => { setActionError(undefined); setReissue(user); }}>{codeLabel(user)}</Button>
       <Button size="sm" disabled={pageBlocked} aria-label={`Edit ${user.username}`} onClick={() => { setEditError(undefined); setEditing({ baseline: user, draft: { ...user, languages: [...user.languages] } }); }}>Edit</Button>
       <Button size="sm" variant={user.active ? "danger" : "secondary"} disabled={pageBlocked || user.username === currentUser.username} title={user.username === currentUser.username ? "You cannot deactivate yourself." : undefined} aria-label={`${user.active ? "Deactivate" : "Activate"} ${user.username}`} onClick={() => {
         if (user.active) setConfirmation({ username: user.username, change: { active: false }, kind: "deactivate", fromEdit: false });
@@ -263,6 +267,7 @@ function UsersContent({ currentUser, routeLeaveRef }: UsersPageProps): JSX.Eleme
       </form>
     </Dialog>}
     {confirmation && <ConfirmDialog open title={confirmation.kind === "admin" ? "Change administrator role" : `Deactivate ${confirmation.username}`} message="This logs the user out everywhere." confirmLabel={confirmation.kind === "admin" ? "Save changes" : "Deactivate"} tone={confirmation.kind === "deactivate" ? "danger" : "primary"} busy={busy} onCancel={() => setConfirmation(null)} onConfirm={() => { void update(confirmation.username, confirmation.change, confirmation.fromEdit); }} />}
+    {reissue && <ConfirmDialog open title={`Issue a new ${reissue.setup_pending ? "setup" : "reset"} code for ${reissue.display_name || reissue.username}?`} message={reissue.setup_pending ? "The current setup code stops working." : "Any unused code stops working. The current password keeps working until the new code is used."} confirmLabel={codeLabel(reissue)} busy={busy} onCancel={() => setReissue(null)} onConfirm={() => { void issueReset(reissue); }} />}
     {code && <CodeOnceDialog open {...code} onClose={closeCode} />}
     {history && <Dialog open title={`History of ${history.username}`} size="lg" onClose={() => setHistory(null)} closeOnBackdrop>
       {history.events === null ? <InlineMessage tone="info">Loading history…</InlineMessage> : history.error !== undefined ? <ErrorNotice error={history.error} /> :
