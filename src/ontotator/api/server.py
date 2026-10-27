@@ -29,7 +29,7 @@ def _web_dir() -> Path | None:
 
 
 def app_from_env() -> FastAPI:
-    """Build one worker; DB outages expose health alone until a restart."""
+    """Build one worker; a pending migration exposes health alone until a restart."""
     runtime = server_settings()
     production = runtime.environment == "production"
     hosts = ["localhost", "127.0.0.1", "::1"]
@@ -59,10 +59,15 @@ def app_from_env() -> FastAPI:
     except OperationalError:
         if not production:
             raise
+        # Exit so the supervisor retries until the database is up (host reboot).
+        # ``from None`` keeps psycopg's message (host, user) out of the log.
+        raise RuntimeError(
+            "Database unavailable at startup; exiting so the process is restarted."
+        ) from None
     # No accounts, sessions, static assets, or API routes are initialized.
     # Logs and HTTP output deliberately omit exception/connection details.
     logger.warning(
-        "Database unavailable or migration required; serving health checks only. Restart after recovery."
+        "Database migration required; serving health checks only. Restart after migrating."
     )
     app = FastAPI(
         docs_url=None, redoc_url=None, openapi_url=None, lifespan=_runtime_lease
